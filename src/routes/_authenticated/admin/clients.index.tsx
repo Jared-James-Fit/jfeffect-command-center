@@ -10,8 +10,12 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Search } from "lucide-react";
+import { Plus, Search, MoreHorizontal, Mail, Archive, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { useServerFn } from "@tanstack/react-start";
+import { inviteClient, archiveClient, deleteClient } from "@/lib/clients.functions";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
 export const Route = createFileRoute("/_authenticated/admin/clients/")({
   component: ClientsPage,
@@ -25,6 +29,44 @@ function ClientsPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [open, setOpen] = useState(false);
+  const [deleteState, setDeleteState] = useState<{ id: string; name: string; step: 1 | 2 } | null>(null);
+
+  const inviteFn = useServerFn(inviteClient);
+  const archiveFn = useServerFn(archiveClient);
+  const deleteFn = useServerFn(deleteClient);
+
+  const sendSetup = async (id: string) => {
+    const t = toast.loading("Sending setup link…");
+    try {
+      const redirectTo = `${window.location.origin}/auth?setup=1`;
+      await inviteFn({ data: { clientId: id, redirectTo } });
+      toast.success("Setup link sent", { id: t });
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to send setup link", { id: t });
+    }
+  };
+
+  const toggleArchive = async (id: string, archived: boolean) => {
+    try {
+      await archiveFn({ data: { clientId: id, archived: !archived } });
+      toast.success(archived ? "Restored" : "Archived");
+      qc.invalidateQueries({ queryKey: ["clients"] });
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed");
+    }
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteState) return;
+    try {
+      await deleteFn({ data: { clientId: deleteState.id, deleteAuthUser: true } });
+      toast.success("Client deleted");
+      setDeleteState(null);
+      qc.invalidateQueries({ queryKey: ["clients"] });
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to delete");
+    }
+  };
 
   const { data: clients = [], isLoading } = useQuery({
     queryKey: ["clients"],
@@ -53,7 +95,13 @@ function ClientsPage() {
                 <Plus className="mr-2 h-4 w-4" /> Add Client
               </Button>
             </DialogTrigger>
-            <NewClientDialog onClose={() => setOpen(false)} onCreated={() => qc.invalidateQueries({ queryKey: ["clients"] })} />
+            <NewClientDialog
+              onClose={() => setOpen(false)}
+              onCreated={(newId, email) => {
+                qc.invalidateQueries({ queryKey: ["clients"] });
+                if (email) sendSetup(newId);
+              }}
+            />
           </Dialog>
         }
       />
@@ -87,6 +135,7 @@ function ClientsPage() {
                     <th className="px-4 py-3">Status</th>
                     <th className="px-4 py-3">Payment</th>
                     <th className="px-4 py-3">Renewal</th>
+                    <th className="px-4 py-3 w-12"></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -100,6 +149,25 @@ function ClientsPage() {
                       <td className="px-4 py-3"><Badge variant="outline">{c.status}</Badge></td>
                       <td className="px-4 py-3 text-muted-foreground">{c.payment_status ?? "—"}</td>
                       <td className="px-4 py-3 text-muted-foreground">{c.renewal_date ?? "—"}</td>
+                      <td className="px-4 py-3 text-right">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8"><MoreHorizontal className="h-4 w-4" /></Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => sendSetup(c.id)} disabled={!c.email}>
+                              <Mail className="mr-2 h-4 w-4" /> Send setup link
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => toggleArchive(c.id, c.archived)}>
+                              <Archive className="mr-2 h-4 w-4" /> {c.archived ? "Restore" : "Archive"}
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setDeleteState({ id: c.id, name: c.full_name, step: 1 })}>
+                              <Trash2 className="mr-2 h-4 w-4" /> Delete account
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -108,11 +176,43 @@ function ClientsPage() {
           )}
         </Card>
       </div>
+
+      <AlertDialog open={!!deleteState} onOpenChange={(o) => !o && setDeleteState(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {deleteState?.step === 1 ? `Delete ${deleteState?.name}?` : "Are you absolutely sure?"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteState?.step === 1
+                ? "This will permanently remove the client record and their login. You'll be asked to confirm one more time."
+                : "This action cannot be undone. The client's account, login, and all associated records will be permanently deleted."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            {deleteState?.step === 1 ? (
+              <AlertDialogAction
+                onClick={(e) => { e.preventDefault(); setDeleteState((s) => s ? { ...s, step: 2 } : s); }}
+              >
+                Continue
+              </AlertDialogAction>
+            ) : (
+              <AlertDialogAction
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                onClick={(e) => { e.preventDefault(); confirmDelete(); }}
+              >
+                Yes, delete permanently
+              </AlertDialogAction>
+            )}
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
 
-function NewClientDialog({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
+function NewClientDialog({ onClose, onCreated }: { onClose: () => void; onCreated: (id: string, email: string) => void }) {
   const [form, setForm] = useState({
     full_name: "", email: "", phone: "", instagram: "",
     coaching_type: TYPES[0], status: "New Client", coaching_package: "",
@@ -122,11 +222,11 @@ function NewClientDialog({ onClose, onCreated }: { onClose: () => void; onCreate
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setBusy(true);
-    const { error } = await supabase.from("clients").insert(form);
+    const { data, error } = await supabase.from("clients").insert(form).select("id").single();
     setBusy(false);
     if (error) return toast.error(error.message);
     toast.success("Client created");
-    onCreated();
+    onCreated(data!.id, form.email);
     onClose();
   };
 
