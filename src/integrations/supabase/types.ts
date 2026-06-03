@@ -44,6 +44,89 @@ export type Database = {
         }
         Relationships: []
       }
+      cardio_targets: {
+        Row: {
+          admin_notes: string | null
+          cardio_type: string
+          client_id: string
+          client_notes: string | null
+          created_at: string
+          custom_type: string | null
+          duration_minutes: number | null
+          end_date: string | null
+          ending_soon_days: number
+          frequency_per_week: number | null
+          goal: string | null
+          heart_rate_zone: string | null
+          id: string
+          intensity: string | null
+          last_updated_at: string
+          machine_preference: string | null
+          phase_id: string | null
+          start_date: string
+          status: string
+          step_target: number | null
+          updated_at: string
+          visible_to_client: boolean
+        }
+        Insert: {
+          admin_notes?: string | null
+          cardio_type?: string
+          client_id: string
+          client_notes?: string | null
+          created_at?: string
+          custom_type?: string | null
+          duration_minutes?: number | null
+          end_date?: string | null
+          ending_soon_days?: number
+          frequency_per_week?: number | null
+          goal?: string | null
+          heart_rate_zone?: string | null
+          id?: string
+          intensity?: string | null
+          last_updated_at?: string
+          machine_preference?: string | null
+          phase_id?: string | null
+          start_date: string
+          status?: string
+          step_target?: number | null
+          updated_at?: string
+          visible_to_client?: boolean
+        }
+        Update: {
+          admin_notes?: string | null
+          cardio_type?: string
+          client_id?: string
+          client_notes?: string | null
+          created_at?: string
+          custom_type?: string | null
+          duration_minutes?: number | null
+          end_date?: string | null
+          ending_soon_days?: number
+          frequency_per_week?: number | null
+          goal?: string | null
+          heart_rate_zone?: string | null
+          id?: string
+          intensity?: string | null
+          last_updated_at?: string
+          machine_preference?: string | null
+          phase_id?: string | null
+          start_date?: string
+          status?: string
+          step_target?: number | null
+          updated_at?: string
+          visible_to_client?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cardio_targets_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       clients: {
         Row: {
           account_created_at: string | null
@@ -56,6 +139,7 @@ export type Database = {
           coaching_package: string | null
           coaching_type: string | null
           created_at: string
+          default_session_location: string | null
           drive_folder_link: string | null
           email: string | null
           full_name: string
@@ -71,16 +155,20 @@ export type Database = {
           needs_admin_help: boolean
           next_program_update: string | null
           nutrition_notes: string | null
+          package_tracking_enabled: boolean
           password_reset_sent_at: string | null
           payment_status: string | null
           phone: string | null
           program_phase: string | null
           program_sheet_link: string | null
           renewal_date: string | null
+          sessions_purchased: number
+          sessions_used: number
           start_date: string | null
           status: string
           stripe_link: string | null
           tags: string[]
+          timezone: string
           training_notes: string | null
           updated_at: string
           user_id: string | null
@@ -96,6 +184,7 @@ export type Database = {
           coaching_package?: string | null
           coaching_type?: string | null
           created_at?: string
+          default_session_location?: string | null
           drive_folder_link?: string | null
           email?: string | null
           full_name: string
@@ -111,16 +200,20 @@ export type Database = {
           needs_admin_help?: boolean
           next_program_update?: string | null
           nutrition_notes?: string | null
+          package_tracking_enabled?: boolean
           password_reset_sent_at?: string | null
           payment_status?: string | null
           phone?: string | null
           program_phase?: string | null
           program_sheet_link?: string | null
           renewal_date?: string | null
+          sessions_purchased?: number
+          sessions_used?: number
           start_date?: string | null
           status?: string
           stripe_link?: string | null
           tags?: string[]
+          timezone?: string
           training_notes?: string | null
           updated_at?: string
           user_id?: string | null
@@ -136,6 +229,7 @@ export type Database = {
           coaching_package?: string | null
           coaching_type?: string | null
           created_at?: string
+          default_session_location?: string | null
           drive_folder_link?: string | null
           email?: string | null
           full_name?: string
@@ -151,16 +245,20 @@ export type Database = {
           needs_admin_help?: boolean
           next_program_update?: string | null
           nutrition_notes?: string | null
+          package_tracking_enabled?: boolean
           password_reset_sent_at?: string | null
           payment_status?: string | null
           phone?: string | null
           program_phase?: string | null
           program_sheet_link?: string | null
           renewal_date?: string | null
+          sessions_purchased?: number
+          sessions_used?: number
           start_date?: string | null
           status?: string
           stripe_link?: string | null
           tags?: string[]
+          timezone?: string
           training_notes?: string | null
           updated_at?: string
           user_id?: string | null
@@ -253,6 +351,130 @@ export type Database = {
         }
         Relationships: []
       }
+      nutrition_target_days: {
+        Row: {
+          calories: number | null
+          carbs: number | null
+          created_at: string
+          day_label: string
+          fats: number | null
+          fibre: number | null
+          id: string
+          notes: string | null
+          protein: number | null
+          sort_order: number
+          steps: number | null
+          target_id: string
+          water: number | null
+        }
+        Insert: {
+          calories?: number | null
+          carbs?: number | null
+          created_at?: string
+          day_label?: string
+          fats?: number | null
+          fibre?: number | null
+          id?: string
+          notes?: string | null
+          protein?: number | null
+          sort_order?: number
+          steps?: number | null
+          target_id: string
+          water?: number | null
+        }
+        Update: {
+          calories?: number | null
+          carbs?: number | null
+          created_at?: string
+          day_label?: string
+          fats?: number | null
+          fibre?: number | null
+          id?: string
+          notes?: string | null
+          protein?: number | null
+          sort_order?: number
+          steps?: number | null
+          target_id?: string
+          water?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nutrition_target_days_target_id_fkey"
+            columns: ["target_id"]
+            isOneToOne: false
+            referencedRelation: "nutrition_targets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      nutrition_targets: {
+        Row: {
+          admin_notes: string | null
+          client_id: string
+          client_notes: string | null
+          created_at: string
+          custom_goal: string | null
+          custom_phase: string | null
+          end_date: string | null
+          ending_soon_days: number
+          goal: string
+          id: string
+          last_updated_at: string
+          phase: string
+          start_date: string
+          status: string
+          structure: string
+          updated_at: string
+          visible_to_client: boolean
+        }
+        Insert: {
+          admin_notes?: string | null
+          client_id: string
+          client_notes?: string | null
+          created_at?: string
+          custom_goal?: string | null
+          custom_phase?: string | null
+          end_date?: string | null
+          ending_soon_days?: number
+          goal?: string
+          id?: string
+          last_updated_at?: string
+          phase?: string
+          start_date: string
+          status?: string
+          structure?: string
+          updated_at?: string
+          visible_to_client?: boolean
+        }
+        Update: {
+          admin_notes?: string | null
+          client_id?: string
+          client_notes?: string | null
+          created_at?: string
+          custom_goal?: string | null
+          custom_phase?: string | null
+          end_date?: string | null
+          ending_soon_days?: number
+          goal?: string
+          id?: string
+          last_updated_at?: string
+          phase?: string
+          start_date?: string
+          status?: string
+          structure?: string
+          updated_at?: string
+          visible_to_client?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nutrition_targets_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       offers: {
         Row: {
           cancel_url: string | null
@@ -342,6 +564,92 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      pt_sessions: {
+        Row: {
+          client_id: string
+          client_visible_notes: boolean
+          confirmation_sent_at: string | null
+          created_at: string
+          custom_type: string | null
+          end_time: string
+          ends_at: string | null
+          id: string
+          location: string
+          notes: string | null
+          reminder_1h_sent_at: string | null
+          reminder_24h_sent_at: string | null
+          reminders_enabled: boolean
+          send_confirmation_email: boolean
+          session_date: string
+          session_type: string
+          start_time: string
+          starts_at: string | null
+          status: string
+          timezone: string
+          title: string
+          updated_at: string
+          visible_to_client: boolean
+        }
+        Insert: {
+          client_id: string
+          client_visible_notes?: boolean
+          confirmation_sent_at?: string | null
+          created_at?: string
+          custom_type?: string | null
+          end_time: string
+          ends_at?: string | null
+          id?: string
+          location?: string
+          notes?: string | null
+          reminder_1h_sent_at?: string | null
+          reminder_24h_sent_at?: string | null
+          reminders_enabled?: boolean
+          send_confirmation_email?: boolean
+          session_date: string
+          session_type?: string
+          start_time: string
+          starts_at?: string | null
+          status?: string
+          timezone?: string
+          title: string
+          updated_at?: string
+          visible_to_client?: boolean
+        }
+        Update: {
+          client_id?: string
+          client_visible_notes?: boolean
+          confirmation_sent_at?: string | null
+          created_at?: string
+          custom_type?: string | null
+          end_time?: string
+          ends_at?: string | null
+          id?: string
+          location?: string
+          notes?: string | null
+          reminder_1h_sent_at?: string | null
+          reminder_24h_sent_at?: string | null
+          reminders_enabled?: boolean
+          send_confirmation_email?: boolean
+          session_date?: string
+          session_type?: string
+          start_time?: string
+          starts_at?: string | null
+          status?: string
+          timezone?: string
+          title?: string
+          updated_at?: string
+          visible_to_client?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pt_sessions_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       training_phases: {
         Row: {
