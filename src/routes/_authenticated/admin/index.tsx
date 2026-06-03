@@ -7,8 +7,9 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
   Users, UserPlus, AlertTriangle, Calendar, DollarSign,
-  Plus, Zap, ExternalLink, Activity, Dumbbell, Package,
+  Plus, Zap, ExternalLink, Activity, Dumbbell, Package, Timer,
 } from "lucide-react";
+import { derivePhase, displayTitle, toneClasses, type TrainingPhase } from "@/lib/training-phases";
 
 export const Route = createFileRoute("/_authenticated/admin/")({
   component: AdminDashboard,
@@ -42,6 +43,23 @@ function AdminDashboard() {
       return data;
     },
   });
+
+  const { data: phaseRows = [] } = useQuery({
+    queryKey: ["training-phases"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("training_phases")
+        .select("*, clients(id, full_name)")
+        .order("end_date", { ascending: true });
+      if (error) throw error;
+      return data as Array<TrainingPhase & { clients: { id: string; full_name: string } | null }>;
+    },
+  });
+
+  const deadlines = phaseRows
+    .map((r) => ({ ...r, derived: derivePhase(r) }))
+    .filter((r) => ["ending-soon", "due-today", "past-due"].includes(r.derived.state))
+    .slice(0, 8);
 
   const active = clients.length;
   const newClients = clients.filter((c) => c.status === "New Client").length;
@@ -84,6 +102,39 @@ function AdminDashboard() {
           <StatCard label="Needs Attention" value={needsAttention} icon={AlertTriangle} tone="warn" />
           <StatCard label="Payment Overdue" value={overdue} icon={DollarSign} tone="warn" />
         </div>
+
+        <Card className="border-border bg-card p-6">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-muted-foreground">
+              <Timer className="h-4 w-4" /> Training Phase Deadlines
+            </h2>
+            <Link to="/admin/training-phases" className="text-xs font-semibold text-primary hover:underline">View all →</Link>
+          </div>
+          {deadlines.length === 0 ? (
+            <div className="rounded-md border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+              No phases ending soon. You're ahead.
+            </div>
+          ) : (
+            <ul className="divide-y divide-border">
+              {deadlines.map((p) => (
+                <li key={p.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5">
+                  <div className="flex items-center gap-3">
+                    <Badge variant="outline" className={toneClasses(p.derived.tone)}>{p.derived.label}</Badge>
+                    {p.clients && (
+                      <Link to="/admin/clients/$id" params={{ id: p.clients.id }} className="text-sm font-semibold hover:underline">
+                        {p.clients.full_name}
+                      </Link>
+                    )}
+                    <span className="text-xs text-muted-foreground">{displayTitle(p)}</span>
+                  </div>
+                  <span className="text-xs text-muted-foreground">
+                    {p.derived.daysRemaining < 0 ? `${Math.abs(p.derived.daysRemaining)}d past due` : `${p.derived.daysRemaining}d left`}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
 
         <div className="grid gap-6 lg:grid-cols-3">
           <Card className="border-border bg-card p-6 lg:col-span-2">

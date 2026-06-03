@@ -1,7 +1,7 @@
 import {
   LayoutDashboard, Users, UserPlus, PhoneCall, ClipboardCheck, CreditCard,
   Package, FileText, Dumbbell, FolderOpen, Calendar, Layers, Star,
-  Lightbulb, BookOpen, Workflow, Settings,
+  Lightbulb, BookOpen, Workflow, Settings, Timer,
 } from "lucide-react";
 import type { NavItem } from "@/components/app-shell";
 
@@ -11,6 +11,7 @@ export const adminNav: NavItem[] = [
   { to: "/admin/leads", label: "Leads", icon: UserPlus },
   { to: "/admin/sales-calls", label: "Sales Calls", icon: PhoneCall },
   { to: "/admin/check-ins", label: "Check-Ins", icon: ClipboardCheck },
+  { to: "/admin/training-phases", label: "Training Phases", icon: Timer },
   { to: "/admin/payments", label: "Payments", icon: CreditCard },
   { to: "/admin/offers", label: "Offers / Products", icon: Package },
   { to: "/admin/programs", label: "Programs", icon: FileText },
