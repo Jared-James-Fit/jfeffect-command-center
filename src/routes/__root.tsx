@@ -79,14 +79,18 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Lovable App" },
-      { name: "description", content: "Lovable Generated Project" },
+      { title: "JF Effect" },
+      { name: "description", content: "A modern web app for fitness coaches to manage clients, leads, and business operations." },
       { name: "author", content: "Lovable" },
-      { property: "og:title", content: "Lovable App" },
-      { property: "og:description", content: "Lovable Generated Project" },
+      { property: "og:title", content: "JF Effect" },
+      { property: "og:description", content: "A modern web app for fitness coaches to manage clients, leads, and business operations." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
       { name: "twitter:site", content: "@Lovable" },
+      { name: "twitter:title", content: "JF Effect" },
+      { name: "twitter:description", content: "A modern web app for fitness coaches to manage clients, leads, and business operations." },
+      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/97b92026-bcb7-47e6-b437-76274e9cd66c/id-preview-7cb8a0f5--5f1f340c-5afa-4262-90c8-1f9406568c6c.lovable.app-1780514679340.png" },
+      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/97b92026-bcb7-47e6-b437-76274e9cd66c/id-preview-7cb8a0f5--5f1f340c-5afa-4262-90c8-1f9406568c6c.lovable.app-1780514679340.png" },
     ],
     links: [
       {
