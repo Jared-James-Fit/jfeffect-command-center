@@ -35,10 +35,12 @@ import { Route as AuthenticatedAdminResourcesRouteImport } from './routes/_authe
 import { Route as AuthenticatedAdminProgramsRouteImport } from './routes/_authenticated/admin/programs'
 import { Route as AuthenticatedAdminPaymentsRouteImport } from './routes/_authenticated/admin/payments'
 import { Route as AuthenticatedAdminOffersRouteImport } from './routes/_authenticated/admin/offers'
+import { Route as AuthenticatedAdminNutritionTargetsRouteImport } from './routes/_authenticated/admin/nutrition-targets'
 import { Route as AuthenticatedAdminLeadsRouteImport } from './routes/_authenticated/admin/leads'
 import { Route as AuthenticatedAdminExercisesRouteImport } from './routes/_authenticated/admin/exercises'
 import { Route as AuthenticatedAdminContentIdeasRouteImport } from './routes/_authenticated/admin/content-ideas'
 import { Route as AuthenticatedAdminCheckInsRouteImport } from './routes/_authenticated/admin/check-ins'
+import { Route as AuthenticatedAdminCardioTargetsRouteImport } from './routes/_authenticated/admin/cardio-targets'
 import { Route as AuthenticatedAdminCalendarRouteImport } from './routes/_authenticated/admin/calendar'
 import { Route as AuthenticatedAdminAutomationsRouteImport } from './routes/_authenticated/admin/automations'
 import { Route as AuthenticatedAdminAppsRouteImport } from './routes/_authenticated/admin/apps'
@@ -191,6 +193,12 @@ const AuthenticatedAdminOffersRoute =
     path: '/offers',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
+const AuthenticatedAdminNutritionTargetsRoute =
+  AuthenticatedAdminNutritionTargetsRouteImport.update({
+    id: '/nutrition-targets',
+    path: '/nutrition-targets',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
 const AuthenticatedAdminLeadsRoute = AuthenticatedAdminLeadsRouteImport.update({
   id: '/leads',
   path: '/leads',
@@ -212,6 +220,12 @@ const AuthenticatedAdminCheckInsRoute =
   AuthenticatedAdminCheckInsRouteImport.update({
     id: '/check-ins',
     path: '/check-ins',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
+const AuthenticatedAdminCardioTargetsRoute =
+  AuthenticatedAdminCardioTargetsRouteImport.update({
+    id: '/cardio-targets',
+    path: '/cardio-targets',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
 const AuthenticatedAdminCalendarRoute =
@@ -255,10 +269,12 @@ export interface FileRoutesByFullPath {
   '/admin/apps': typeof AuthenticatedAdminAppsRoute
   '/admin/automations': typeof AuthenticatedAdminAutomationsRoute
   '/admin/calendar': typeof AuthenticatedAdminCalendarRoute
+  '/admin/cardio-targets': typeof AuthenticatedAdminCardioTargetsRoute
   '/admin/check-ins': typeof AuthenticatedAdminCheckInsRoute
   '/admin/content-ideas': typeof AuthenticatedAdminContentIdeasRoute
   '/admin/exercises': typeof AuthenticatedAdminExercisesRoute
   '/admin/leads': typeof AuthenticatedAdminLeadsRoute
+  '/admin/nutrition-targets': typeof AuthenticatedAdminNutritionTargetsRoute
   '/admin/offers': typeof AuthenticatedAdminOffersRoute
   '/admin/payments': typeof AuthenticatedAdminPaymentsRoute
   '/admin/programs': typeof AuthenticatedAdminProgramsRoute
@@ -289,10 +305,12 @@ export interface FileRoutesByTo {
   '/admin/apps': typeof AuthenticatedAdminAppsRoute
   '/admin/automations': typeof AuthenticatedAdminAutomationsRoute
   '/admin/calendar': typeof AuthenticatedAdminCalendarRoute
+  '/admin/cardio-targets': typeof AuthenticatedAdminCardioTargetsRoute
   '/admin/check-ins': typeof AuthenticatedAdminCheckInsRoute
   '/admin/content-ideas': typeof AuthenticatedAdminContentIdeasRoute
   '/admin/exercises': typeof AuthenticatedAdminExercisesRoute
   '/admin/leads': typeof AuthenticatedAdminLeadsRoute
+  '/admin/nutrition-targets': typeof AuthenticatedAdminNutritionTargetsRoute
   '/admin/offers': typeof AuthenticatedAdminOffersRoute
   '/admin/payments': typeof AuthenticatedAdminPaymentsRoute
   '/admin/programs': typeof AuthenticatedAdminProgramsRoute
@@ -327,10 +345,12 @@ export interface FileRoutesById {
   '/_authenticated/admin/apps': typeof AuthenticatedAdminAppsRoute
   '/_authenticated/admin/automations': typeof AuthenticatedAdminAutomationsRoute
   '/_authenticated/admin/calendar': typeof AuthenticatedAdminCalendarRoute
+  '/_authenticated/admin/cardio-targets': typeof AuthenticatedAdminCardioTargetsRoute
   '/_authenticated/admin/check-ins': typeof AuthenticatedAdminCheckInsRoute
   '/_authenticated/admin/content-ideas': typeof AuthenticatedAdminContentIdeasRoute
   '/_authenticated/admin/exercises': typeof AuthenticatedAdminExercisesRoute
   '/_authenticated/admin/leads': typeof AuthenticatedAdminLeadsRoute
+  '/_authenticated/admin/nutrition-targets': typeof AuthenticatedAdminNutritionTargetsRoute
   '/_authenticated/admin/offers': typeof AuthenticatedAdminOffersRoute
   '/_authenticated/admin/payments': typeof AuthenticatedAdminPaymentsRoute
   '/_authenticated/admin/programs': typeof AuthenticatedAdminProgramsRoute
@@ -365,10 +385,12 @@ export interface FileRouteTypes {
     | '/admin/apps'
     | '/admin/automations'
     | '/admin/calendar'
+    | '/admin/cardio-targets'
     | '/admin/check-ins'
     | '/admin/content-ideas'
     | '/admin/exercises'
     | '/admin/leads'
+    | '/admin/nutrition-targets'
     | '/admin/offers'
     | '/admin/payments'
     | '/admin/programs'
@@ -399,10 +421,12 @@ export interface FileRouteTypes {
     | '/admin/apps'
     | '/admin/automations'
     | '/admin/calendar'
+    | '/admin/cardio-targets'
     | '/admin/check-ins'
     | '/admin/content-ideas'
     | '/admin/exercises'
     | '/admin/leads'
+    | '/admin/nutrition-targets'
     | '/admin/offers'
     | '/admin/payments'
     | '/admin/programs'
@@ -436,10 +460,12 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/apps'
     | '/_authenticated/admin/automations'
     | '/_authenticated/admin/calendar'
+    | '/_authenticated/admin/cardio-targets'
     | '/_authenticated/admin/check-ins'
     | '/_authenticated/admin/content-ideas'
     | '/_authenticated/admin/exercises'
     | '/_authenticated/admin/leads'
+    | '/_authenticated/admin/nutrition-targets'
     | '/_authenticated/admin/offers'
     | '/_authenticated/admin/payments'
     | '/_authenticated/admin/programs'
@@ -655,6 +681,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminOffersRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
+    '/_authenticated/admin/nutrition-targets': {
+      id: '/_authenticated/admin/nutrition-targets'
+      path: '/nutrition-targets'
+      fullPath: '/admin/nutrition-targets'
+      preLoaderRoute: typeof AuthenticatedAdminNutritionTargetsRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
     '/_authenticated/admin/leads': {
       id: '/_authenticated/admin/leads'
       path: '/leads'
@@ -681,6 +714,13 @@ declare module '@tanstack/react-router' {
       path: '/check-ins'
       fullPath: '/admin/check-ins'
       preLoaderRoute: typeof AuthenticatedAdminCheckInsRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
+    '/_authenticated/admin/cardio-targets': {
+      id: '/_authenticated/admin/cardio-targets'
+      path: '/cardio-targets'
+      fullPath: '/admin/cardio-targets'
+      preLoaderRoute: typeof AuthenticatedAdminCardioTargetsRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
     '/_authenticated/admin/calendar': {
@@ -725,10 +765,12 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminAppsRoute: typeof AuthenticatedAdminAppsRoute
   AuthenticatedAdminAutomationsRoute: typeof AuthenticatedAdminAutomationsRoute
   AuthenticatedAdminCalendarRoute: typeof AuthenticatedAdminCalendarRoute
+  AuthenticatedAdminCardioTargetsRoute: typeof AuthenticatedAdminCardioTargetsRoute
   AuthenticatedAdminCheckInsRoute: typeof AuthenticatedAdminCheckInsRoute
   AuthenticatedAdminContentIdeasRoute: typeof AuthenticatedAdminContentIdeasRoute
   AuthenticatedAdminExercisesRoute: typeof AuthenticatedAdminExercisesRoute
   AuthenticatedAdminLeadsRoute: typeof AuthenticatedAdminLeadsRoute
+  AuthenticatedAdminNutritionTargetsRoute: typeof AuthenticatedAdminNutritionTargetsRoute
   AuthenticatedAdminOffersRoute: typeof AuthenticatedAdminOffersRoute
   AuthenticatedAdminPaymentsRoute: typeof AuthenticatedAdminPaymentsRoute
   AuthenticatedAdminProgramsRoute: typeof AuthenticatedAdminProgramsRoute
@@ -748,10 +790,13 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
     AuthenticatedAdminAppsRoute: AuthenticatedAdminAppsRoute,
     AuthenticatedAdminAutomationsRoute: AuthenticatedAdminAutomationsRoute,
     AuthenticatedAdminCalendarRoute: AuthenticatedAdminCalendarRoute,
+    AuthenticatedAdminCardioTargetsRoute: AuthenticatedAdminCardioTargetsRoute,
     AuthenticatedAdminCheckInsRoute: AuthenticatedAdminCheckInsRoute,
     AuthenticatedAdminContentIdeasRoute: AuthenticatedAdminContentIdeasRoute,
     AuthenticatedAdminExercisesRoute: AuthenticatedAdminExercisesRoute,
     AuthenticatedAdminLeadsRoute: AuthenticatedAdminLeadsRoute,
+    AuthenticatedAdminNutritionTargetsRoute:
+      AuthenticatedAdminNutritionTargetsRoute,
     AuthenticatedAdminOffersRoute: AuthenticatedAdminOffersRoute,
     AuthenticatedAdminPaymentsRoute: AuthenticatedAdminPaymentsRoute,
     AuthenticatedAdminProgramsRoute: AuthenticatedAdminProgramsRoute,
@@ -824,3 +869,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
