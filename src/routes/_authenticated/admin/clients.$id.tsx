@@ -10,8 +10,11 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, ExternalLink, Save, Trash2 } from "lucide-react";
+import { ArrowLeft, ExternalLink, Save, Trash2, Mail, Archive } from "lucide-react";
 import { toast } from "sonner";
+import { useServerFn } from "@tanstack/react-start";
+import { inviteClient, deleteClient } from "@/lib/clients.functions";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
 export const Route = createFileRoute("/_authenticated/admin/clients/$id")({
   component: ClientDetail,
@@ -25,6 +28,9 @@ function ClientDetail() {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const [form, setForm] = useState<any>(null);
+  const [deleteStep, setDeleteStep] = useState<0 | 1 | 2>(0);
+  const inviteFn = useServerFn(inviteClient);
+  const deleteFn = useServerFn(deleteClient);
 
   const { data } = useQuery({
     queryKey: ["client", id],
@@ -55,6 +61,30 @@ function ClientDetail() {
     navigate({ to: "/admin/clients" });
   };
 
+  const sendSetup = async () => {
+    if (!form.email) return toast.error("Add an email first");
+    const t = toast.loading("Sending setup link…");
+    try {
+      const redirectTo = `${window.location.origin}/auth?setup=1`;
+      await inviteFn({ data: { clientId: id, redirectTo } });
+      toast.success("Setup link sent", { id: t });
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed", { id: t });
+    }
+  };
+
+  const confirmDelete = async () => {
+    try {
+      await deleteFn({ data: { clientId: id, deleteAuthUser: true } });
+      toast.success("Client deleted");
+      setDeleteStep(0);
+      qc.invalidateQueries({ queryKey: ["clients"] });
+      navigate({ to: "/admin/clients" });
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to delete");
+    }
+  };
+
   const set = (k: string, v: any) => setForm({ ...form, [k]: v });
 
   const links = [
@@ -74,7 +104,9 @@ function ClientDetail() {
         actions={
           <>
             <Link to="/admin/clients"><Button variant="ghost" size="sm"><ArrowLeft className="mr-2 h-4 w-4" />Back</Button></Link>
-            <Button variant="outline" size="sm" onClick={archive}><Trash2 className="mr-2 h-4 w-4" />{form.archived ? "Restore" : "Archive"}</Button>
+            <Button variant="outline" size="sm" onClick={sendSetup}><Mail className="mr-2 h-4 w-4" />Send setup link</Button>
+            <Button variant="outline" size="sm" onClick={archive}><Archive className="mr-2 h-4 w-4" />{form.archived ? "Restore" : "Archive"}</Button>
+            <Button variant="outline" size="sm" className="text-destructive hover:text-destructive" onClick={() => setDeleteStep(1)}><Trash2 className="mr-2 h-4 w-4" />Delete</Button>
             <Button size="sm" className="bg-gradient-primary uppercase font-bold" onClick={save}><Save className="mr-2 h-4 w-4" />Save</Button>
           </>
         }
@@ -144,6 +176,29 @@ function ClientDetail() {
           <Textarea rows={10} value={form.coach_notes ?? ""} onChange={(e) => set("coach_notes", e.target.value)} placeholder="Internal notes the client never sees…" />
         </Card>
       </div>
+
+      <AlertDialog open={deleteStep > 0} onOpenChange={(o) => !o && setDeleteStep(0)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{deleteStep === 1 ? `Delete ${form.full_name}?` : "Are you absolutely sure?"}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteStep === 1
+                ? "This will permanently remove the client record and their login. You'll be asked to confirm one more time."
+                : "This action cannot be undone. The client's account, login, and all associated records will be permanently deleted."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            {deleteStep === 1 ? (
+              <AlertDialogAction onClick={(e) => { e.preventDefault(); setDeleteStep(2); }}>Continue</AlertDialogAction>
+            ) : (
+              <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={(e) => { e.preventDefault(); confirmDelete(); }}>
+                Yes, delete permanently
+              </AlertDialogAction>
+            )}
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
