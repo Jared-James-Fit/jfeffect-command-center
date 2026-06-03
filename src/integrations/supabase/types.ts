@@ -46,6 +46,8 @@ export type Database = {
       }
       clients: {
         Row: {
+          account_created_at: string | null
+          account_status: string
           agreement_link: string | null
           archived: boolean
           calendar_link: string | null
@@ -61,10 +63,15 @@ export type Database = {
           id: string
           injuries: string | null
           instagram: string | null
+          invite_expires_at: string | null
+          invite_last_resent_at: string | null
+          invite_sent_at: string | null
           last_program_update: string | null
           lifestyle_notes: string | null
+          needs_admin_help: boolean
           next_program_update: string | null
           nutrition_notes: string | null
+          password_reset_sent_at: string | null
           payment_status: string | null
           phone: string | null
           program_phase: string | null
@@ -79,6 +86,8 @@ export type Database = {
           user_id: string | null
         }
         Insert: {
+          account_created_at?: string | null
+          account_status?: string
           agreement_link?: string | null
           archived?: boolean
           calendar_link?: string | null
@@ -94,10 +103,15 @@ export type Database = {
           id?: string
           injuries?: string | null
           instagram?: string | null
+          invite_expires_at?: string | null
+          invite_last_resent_at?: string | null
+          invite_sent_at?: string | null
           last_program_update?: string | null
           lifestyle_notes?: string | null
+          needs_admin_help?: boolean
           next_program_update?: string | null
           nutrition_notes?: string | null
+          password_reset_sent_at?: string | null
           payment_status?: string | null
           phone?: string | null
           program_phase?: string | null
@@ -112,6 +126,8 @@ export type Database = {
           user_id?: string | null
         }
         Update: {
+          account_created_at?: string | null
+          account_status?: string
           agreement_link?: string | null
           archived?: boolean
           calendar_link?: string | null
@@ -127,10 +143,15 @@ export type Database = {
           id?: string
           injuries?: string | null
           instagram?: string | null
+          invite_expires_at?: string | null
+          invite_last_resent_at?: string | null
+          invite_sent_at?: string | null
           last_program_update?: string | null
           lifestyle_notes?: string | null
+          needs_admin_help?: boolean
           next_program_update?: string | null
           nutrition_notes?: string | null
+          password_reset_sent_at?: string | null
           payment_status?: string | null
           phone?: string | null
           program_phase?: string | null
