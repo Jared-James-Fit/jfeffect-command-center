@@ -22,6 +22,7 @@ import { Route as AuthenticatedAdminIndexRouteImport } from './routes/_authentic
 import { Route as AuthenticatedPortalResourcesRouteImport } from './routes/_authenticated/portal/resources'
 import { Route as AuthenticatedPortalProgramRouteImport } from './routes/_authenticated/portal/program'
 import { Route as AuthenticatedPortalPaymentsRouteImport } from './routes/_authenticated/portal/payments'
+import { Route as AuthenticatedPortalNutritionTargetsRouteImport } from './routes/_authenticated/portal/nutrition-targets'
 import { Route as AuthenticatedPortalExercisesRouteImport } from './routes/_authenticated/portal/exercises'
 import { Route as AuthenticatedPortalDocumentsRouteImport } from './routes/_authenticated/portal/documents'
 import { Route as AuthenticatedPortalCheckInRouteImport } from './routes/_authenticated/portal/check-in'
@@ -35,10 +36,12 @@ import { Route as AuthenticatedAdminResourcesRouteImport } from './routes/_authe
 import { Route as AuthenticatedAdminProgramsRouteImport } from './routes/_authenticated/admin/programs'
 import { Route as AuthenticatedAdminPaymentsRouteImport } from './routes/_authenticated/admin/payments'
 import { Route as AuthenticatedAdminOffersRouteImport } from './routes/_authenticated/admin/offers'
+import { Route as AuthenticatedAdminNutritionTargetsRouteImport } from './routes/_authenticated/admin/nutrition-targets'
 import { Route as AuthenticatedAdminLeadsRouteImport } from './routes/_authenticated/admin/leads'
 import { Route as AuthenticatedAdminExercisesRouteImport } from './routes/_authenticated/admin/exercises'
 import { Route as AuthenticatedAdminContentIdeasRouteImport } from './routes/_authenticated/admin/content-ideas'
 import { Route as AuthenticatedAdminCheckInsRouteImport } from './routes/_authenticated/admin/check-ins'
+import { Route as AuthenticatedAdminCardioTargetsRouteImport } from './routes/_authenticated/admin/cardio-targets'
 import { Route as AuthenticatedAdminCalendarRouteImport } from './routes/_authenticated/admin/calendar'
 import { Route as AuthenticatedAdminAutomationsRouteImport } from './routes/_authenticated/admin/automations'
 import { Route as AuthenticatedAdminAppsRouteImport } from './routes/_authenticated/admin/apps'
@@ -112,6 +115,12 @@ const AuthenticatedPortalPaymentsRoute =
   AuthenticatedPortalPaymentsRouteImport.update({
     id: '/payments',
     path: '/payments',
+    getParentRoute: () => AuthenticatedPortalRouteRoute,
+  } as any)
+const AuthenticatedPortalNutritionTargetsRoute =
+  AuthenticatedPortalNutritionTargetsRouteImport.update({
+    id: '/nutrition-targets',
+    path: '/nutrition-targets',
     getParentRoute: () => AuthenticatedPortalRouteRoute,
   } as any)
 const AuthenticatedPortalExercisesRoute =
@@ -191,6 +200,12 @@ const AuthenticatedAdminOffersRoute =
     path: '/offers',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
+const AuthenticatedAdminNutritionTargetsRoute =
+  AuthenticatedAdminNutritionTargetsRouteImport.update({
+    id: '/nutrition-targets',
+    path: '/nutrition-targets',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
 const AuthenticatedAdminLeadsRoute = AuthenticatedAdminLeadsRouteImport.update({
   id: '/leads',
   path: '/leads',
@@ -212,6 +227,12 @@ const AuthenticatedAdminCheckInsRoute =
   AuthenticatedAdminCheckInsRouteImport.update({
     id: '/check-ins',
     path: '/check-ins',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
+const AuthenticatedAdminCardioTargetsRoute =
+  AuthenticatedAdminCardioTargetsRouteImport.update({
+    id: '/cardio-targets',
+    path: '/cardio-targets',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
 const AuthenticatedAdminCalendarRoute =
@@ -255,10 +276,12 @@ export interface FileRoutesByFullPath {
   '/admin/apps': typeof AuthenticatedAdminAppsRoute
   '/admin/automations': typeof AuthenticatedAdminAutomationsRoute
   '/admin/calendar': typeof AuthenticatedAdminCalendarRoute
+  '/admin/cardio-targets': typeof AuthenticatedAdminCardioTargetsRoute
   '/admin/check-ins': typeof AuthenticatedAdminCheckInsRoute
   '/admin/content-ideas': typeof AuthenticatedAdminContentIdeasRoute
   '/admin/exercises': typeof AuthenticatedAdminExercisesRoute
   '/admin/leads': typeof AuthenticatedAdminLeadsRoute
+  '/admin/nutrition-targets': typeof AuthenticatedAdminNutritionTargetsRoute
   '/admin/offers': typeof AuthenticatedAdminOffersRoute
   '/admin/payments': typeof AuthenticatedAdminPaymentsRoute
   '/admin/programs': typeof AuthenticatedAdminProgramsRoute
@@ -272,6 +295,7 @@ export interface FileRoutesByFullPath {
   '/portal/check-in': typeof AuthenticatedPortalCheckInRoute
   '/portal/documents': typeof AuthenticatedPortalDocumentsRoute
   '/portal/exercises': typeof AuthenticatedPortalExercisesRoute
+  '/portal/nutrition-targets': typeof AuthenticatedPortalNutritionTargetsRoute
   '/portal/payments': typeof AuthenticatedPortalPaymentsRoute
   '/portal/program': typeof AuthenticatedPortalProgramRoute
   '/portal/resources': typeof AuthenticatedPortalResourcesRoute
@@ -289,10 +313,12 @@ export interface FileRoutesByTo {
   '/admin/apps': typeof AuthenticatedAdminAppsRoute
   '/admin/automations': typeof AuthenticatedAdminAutomationsRoute
   '/admin/calendar': typeof AuthenticatedAdminCalendarRoute
+  '/admin/cardio-targets': typeof AuthenticatedAdminCardioTargetsRoute
   '/admin/check-ins': typeof AuthenticatedAdminCheckInsRoute
   '/admin/content-ideas': typeof AuthenticatedAdminContentIdeasRoute
   '/admin/exercises': typeof AuthenticatedAdminExercisesRoute
   '/admin/leads': typeof AuthenticatedAdminLeadsRoute
+  '/admin/nutrition-targets': typeof AuthenticatedAdminNutritionTargetsRoute
   '/admin/offers': typeof AuthenticatedAdminOffersRoute
   '/admin/payments': typeof AuthenticatedAdminPaymentsRoute
   '/admin/programs': typeof AuthenticatedAdminProgramsRoute
@@ -306,6 +332,7 @@ export interface FileRoutesByTo {
   '/portal/check-in': typeof AuthenticatedPortalCheckInRoute
   '/portal/documents': typeof AuthenticatedPortalDocumentsRoute
   '/portal/exercises': typeof AuthenticatedPortalExercisesRoute
+  '/portal/nutrition-targets': typeof AuthenticatedPortalNutritionTargetsRoute
   '/portal/payments': typeof AuthenticatedPortalPaymentsRoute
   '/portal/program': typeof AuthenticatedPortalProgramRoute
   '/portal/resources': typeof AuthenticatedPortalResourcesRoute
@@ -327,10 +354,12 @@ export interface FileRoutesById {
   '/_authenticated/admin/apps': typeof AuthenticatedAdminAppsRoute
   '/_authenticated/admin/automations': typeof AuthenticatedAdminAutomationsRoute
   '/_authenticated/admin/calendar': typeof AuthenticatedAdminCalendarRoute
+  '/_authenticated/admin/cardio-targets': typeof AuthenticatedAdminCardioTargetsRoute
   '/_authenticated/admin/check-ins': typeof AuthenticatedAdminCheckInsRoute
   '/_authenticated/admin/content-ideas': typeof AuthenticatedAdminContentIdeasRoute
   '/_authenticated/admin/exercises': typeof AuthenticatedAdminExercisesRoute
   '/_authenticated/admin/leads': typeof AuthenticatedAdminLeadsRoute
+  '/_authenticated/admin/nutrition-targets': typeof AuthenticatedAdminNutritionTargetsRoute
   '/_authenticated/admin/offers': typeof AuthenticatedAdminOffersRoute
   '/_authenticated/admin/payments': typeof AuthenticatedAdminPaymentsRoute
   '/_authenticated/admin/programs': typeof AuthenticatedAdminProgramsRoute
@@ -344,6 +373,7 @@ export interface FileRoutesById {
   '/_authenticated/portal/check-in': typeof AuthenticatedPortalCheckInRoute
   '/_authenticated/portal/documents': typeof AuthenticatedPortalDocumentsRoute
   '/_authenticated/portal/exercises': typeof AuthenticatedPortalExercisesRoute
+  '/_authenticated/portal/nutrition-targets': typeof AuthenticatedPortalNutritionTargetsRoute
   '/_authenticated/portal/payments': typeof AuthenticatedPortalPaymentsRoute
   '/_authenticated/portal/program': typeof AuthenticatedPortalProgramRoute
   '/_authenticated/portal/resources': typeof AuthenticatedPortalResourcesRoute
@@ -365,10 +395,12 @@ export interface FileRouteTypes {
     | '/admin/apps'
     | '/admin/automations'
     | '/admin/calendar'
+    | '/admin/cardio-targets'
     | '/admin/check-ins'
     | '/admin/content-ideas'
     | '/admin/exercises'
     | '/admin/leads'
+    | '/admin/nutrition-targets'
     | '/admin/offers'
     | '/admin/payments'
     | '/admin/programs'
@@ -382,6 +414,7 @@ export interface FileRouteTypes {
     | '/portal/check-in'
     | '/portal/documents'
     | '/portal/exercises'
+    | '/portal/nutrition-targets'
     | '/portal/payments'
     | '/portal/program'
     | '/portal/resources'
@@ -399,10 +432,12 @@ export interface FileRouteTypes {
     | '/admin/apps'
     | '/admin/automations'
     | '/admin/calendar'
+    | '/admin/cardio-targets'
     | '/admin/check-ins'
     | '/admin/content-ideas'
     | '/admin/exercises'
     | '/admin/leads'
+    | '/admin/nutrition-targets'
     | '/admin/offers'
     | '/admin/payments'
     | '/admin/programs'
@@ -416,6 +451,7 @@ export interface FileRouteTypes {
     | '/portal/check-in'
     | '/portal/documents'
     | '/portal/exercises'
+    | '/portal/nutrition-targets'
     | '/portal/payments'
     | '/portal/program'
     | '/portal/resources'
@@ -436,10 +472,12 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/apps'
     | '/_authenticated/admin/automations'
     | '/_authenticated/admin/calendar'
+    | '/_authenticated/admin/cardio-targets'
     | '/_authenticated/admin/check-ins'
     | '/_authenticated/admin/content-ideas'
     | '/_authenticated/admin/exercises'
     | '/_authenticated/admin/leads'
+    | '/_authenticated/admin/nutrition-targets'
     | '/_authenticated/admin/offers'
     | '/_authenticated/admin/payments'
     | '/_authenticated/admin/programs'
@@ -453,6 +491,7 @@ export interface FileRouteTypes {
     | '/_authenticated/portal/check-in'
     | '/_authenticated/portal/documents'
     | '/_authenticated/portal/exercises'
+    | '/_authenticated/portal/nutrition-targets'
     | '/_authenticated/portal/payments'
     | '/_authenticated/portal/program'
     | '/_authenticated/portal/resources'
@@ -564,6 +603,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedPortalPaymentsRouteImport
       parentRoute: typeof AuthenticatedPortalRouteRoute
     }
+    '/_authenticated/portal/nutrition-targets': {
+      id: '/_authenticated/portal/nutrition-targets'
+      path: '/nutrition-targets'
+      fullPath: '/portal/nutrition-targets'
+      preLoaderRoute: typeof AuthenticatedPortalNutritionTargetsRouteImport
+      parentRoute: typeof AuthenticatedPortalRouteRoute
+    }
     '/_authenticated/portal/exercises': {
       id: '/_authenticated/portal/exercises'
       path: '/exercises'
@@ -655,6 +701,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminOffersRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
+    '/_authenticated/admin/nutrition-targets': {
+      id: '/_authenticated/admin/nutrition-targets'
+      path: '/nutrition-targets'
+      fullPath: '/admin/nutrition-targets'
+      preLoaderRoute: typeof AuthenticatedAdminNutritionTargetsRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
     '/_authenticated/admin/leads': {
       id: '/_authenticated/admin/leads'
       path: '/leads'
@@ -681,6 +734,13 @@ declare module '@tanstack/react-router' {
       path: '/check-ins'
       fullPath: '/admin/check-ins'
       preLoaderRoute: typeof AuthenticatedAdminCheckInsRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
+    '/_authenticated/admin/cardio-targets': {
+      id: '/_authenticated/admin/cardio-targets'
+      path: '/cardio-targets'
+      fullPath: '/admin/cardio-targets'
+      preLoaderRoute: typeof AuthenticatedAdminCardioTargetsRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
     '/_authenticated/admin/calendar': {
@@ -725,10 +785,12 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminAppsRoute: typeof AuthenticatedAdminAppsRoute
   AuthenticatedAdminAutomationsRoute: typeof AuthenticatedAdminAutomationsRoute
   AuthenticatedAdminCalendarRoute: typeof AuthenticatedAdminCalendarRoute
+  AuthenticatedAdminCardioTargetsRoute: typeof AuthenticatedAdminCardioTargetsRoute
   AuthenticatedAdminCheckInsRoute: typeof AuthenticatedAdminCheckInsRoute
   AuthenticatedAdminContentIdeasRoute: typeof AuthenticatedAdminContentIdeasRoute
   AuthenticatedAdminExercisesRoute: typeof AuthenticatedAdminExercisesRoute
   AuthenticatedAdminLeadsRoute: typeof AuthenticatedAdminLeadsRoute
+  AuthenticatedAdminNutritionTargetsRoute: typeof AuthenticatedAdminNutritionTargetsRoute
   AuthenticatedAdminOffersRoute: typeof AuthenticatedAdminOffersRoute
   AuthenticatedAdminPaymentsRoute: typeof AuthenticatedAdminPaymentsRoute
   AuthenticatedAdminProgramsRoute: typeof AuthenticatedAdminProgramsRoute
@@ -748,10 +810,13 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
     AuthenticatedAdminAppsRoute: AuthenticatedAdminAppsRoute,
     AuthenticatedAdminAutomationsRoute: AuthenticatedAdminAutomationsRoute,
     AuthenticatedAdminCalendarRoute: AuthenticatedAdminCalendarRoute,
+    AuthenticatedAdminCardioTargetsRoute: AuthenticatedAdminCardioTargetsRoute,
     AuthenticatedAdminCheckInsRoute: AuthenticatedAdminCheckInsRoute,
     AuthenticatedAdminContentIdeasRoute: AuthenticatedAdminContentIdeasRoute,
     AuthenticatedAdminExercisesRoute: AuthenticatedAdminExercisesRoute,
     AuthenticatedAdminLeadsRoute: AuthenticatedAdminLeadsRoute,
+    AuthenticatedAdminNutritionTargetsRoute:
+      AuthenticatedAdminNutritionTargetsRoute,
     AuthenticatedAdminOffersRoute: AuthenticatedAdminOffersRoute,
     AuthenticatedAdminPaymentsRoute: AuthenticatedAdminPaymentsRoute,
     AuthenticatedAdminProgramsRoute: AuthenticatedAdminProgramsRoute,
@@ -777,6 +842,7 @@ interface AuthenticatedPortalRouteRouteChildren {
   AuthenticatedPortalCheckInRoute: typeof AuthenticatedPortalCheckInRoute
   AuthenticatedPortalDocumentsRoute: typeof AuthenticatedPortalDocumentsRoute
   AuthenticatedPortalExercisesRoute: typeof AuthenticatedPortalExercisesRoute
+  AuthenticatedPortalNutritionTargetsRoute: typeof AuthenticatedPortalNutritionTargetsRoute
   AuthenticatedPortalPaymentsRoute: typeof AuthenticatedPortalPaymentsRoute
   AuthenticatedPortalProgramRoute: typeof AuthenticatedPortalProgramRoute
   AuthenticatedPortalResourcesRoute: typeof AuthenticatedPortalResourcesRoute
@@ -789,6 +855,8 @@ const AuthenticatedPortalRouteRouteChildren: AuthenticatedPortalRouteRouteChildr
     AuthenticatedPortalCheckInRoute: AuthenticatedPortalCheckInRoute,
     AuthenticatedPortalDocumentsRoute: AuthenticatedPortalDocumentsRoute,
     AuthenticatedPortalExercisesRoute: AuthenticatedPortalExercisesRoute,
+    AuthenticatedPortalNutritionTargetsRoute:
+      AuthenticatedPortalNutritionTargetsRoute,
     AuthenticatedPortalPaymentsRoute: AuthenticatedPortalPaymentsRoute,
     AuthenticatedPortalProgramRoute: AuthenticatedPortalProgramRoute,
     AuthenticatedPortalResourcesRoute: AuthenticatedPortalResourcesRoute,

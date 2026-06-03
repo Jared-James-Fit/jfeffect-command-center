@@ -7,9 +7,11 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
   Users, UserPlus, AlertTriangle, Calendar, DollarSign,
-  Plus, Zap, ExternalLink, Activity, Dumbbell, Package, Timer, UserCheck,
+  Plus, Zap, ExternalLink, Activity, Dumbbell, Package, Timer, UserCheck, Apple,
 } from "lucide-react";
 import { derivePhase, displayTitle, toneClasses, type TrainingPhase } from "@/lib/training-phases";
+import { deriveTarget } from "@/lib/nutrition-cardio";
+import { statusTone, fmtTimeRange } from "@/lib/pt-sessions";
 
 export const Route = createFileRoute("/_authenticated/admin/")({
   component: AdminDashboard,
@@ -59,6 +61,45 @@ function AdminDashboard() {
   const deadlines = phaseRows
     .map((r) => ({ ...r, derived: derivePhase(r) }))
     .filter((r) => ["ending-soon", "due-today", "past-due"].includes(r.derived.state))
+    .slice(0, 8);
+
+  const { data: ptSessions = [] } = useQuery({
+    queryKey: ["pt-sessions"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("pt_sessions")
+        .select("*, clients(id, full_name)")
+        .order("session_date", { ascending: true })
+        .order("start_time", { ascending: true });
+      return data ?? [];
+    },
+  });
+
+  const { data: nutritionTargets = [] } = useQuery({
+    queryKey: ["nutrition-targets"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("nutrition_targets")
+        .select("id, client_id, start_date, end_date, status, ending_soon_days, phase, custom_phase, clients(id, full_name)")
+        .neq("status", "Archived")
+        .order("end_date", { ascending: true });
+      return data ?? [];
+    },
+  });
+
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const todayStr = today.toISOString().slice(0, 10);
+  const inSevenDays = new Date(today.getTime() + 7 * 86400000).toISOString().slice(0, 10);
+
+  const sessionsToday = ptSessions.filter((s: any) => s.session_date === todayStr && s.status === "Scheduled");
+  const sessionsThisWeek = ptSessions.filter((s: any) => s.session_date >= todayStr && s.session_date <= inSevenDays && s.status === "Scheduled");
+  const sessionsNeedMarking = ptSessions.filter((s: any) => s.session_date < todayStr && s.status === "Scheduled");
+  const sessionsMissedOrCancelled = ptSessions.filter((s: any) => s.status === "Missed" || s.status === "Cancelled").slice(0, 5);
+  const nextSession = sessionsThisWeek[0];
+
+  const nutritionAlerts = nutritionTargets
+    .map((t: any) => ({ ...t, derived: deriveTarget(t) }))
+    .filter((t: any) => ["ending-soon", "due-today", "past-due"].includes(t.derived.state))
     .slice(0, 8);
 
   // Account setup alerts
@@ -122,6 +163,73 @@ function AdminDashboard() {
           <StatCard label="Needs Attention" value={needsAttention} icon={AlertTriangle} tone="warn" />
           <StatCard label="Payment Overdue" value={overdue} icon={DollarSign} tone="warn" />
         </div>
+
+        <Card className="border-border bg-card p-6">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-muted-foreground">
+              <Calendar className="h-4 w-4" /> Upcoming Personal Training Sessions
+            </h2>
+            <Link to="/admin/calendar" className="text-xs font-semibold text-primary hover:underline">View calendar →</Link>
+          </div>
+          <div className="mb-4 grid gap-3 sm:grid-cols-4 text-xs">
+            <MiniStat label="Today" value={sessionsToday.length} />
+            <MiniStat label="This week" value={sessionsThisWeek.length} />
+            <MiniStat label="Needs marking" value={sessionsNeedMarking.length} tone={sessionsNeedMarking.length > 0 ? "warn" : undefined} />
+            <MiniStat label="Missed / cancelled" value={sessionsMissedOrCancelled.length} />
+          </div>
+          {nextSession && (
+            <div className="mb-3 rounded-md border border-primary/30 bg-primary/5 p-3 text-sm">
+              <span className="text-[10px] uppercase tracking-widest text-primary">Next up</span>
+              <div className="mt-1 flex flex-wrap items-center gap-2">
+                <Link to="/admin/clients/$id" params={{ id: nextSession.clients?.id }} className="font-semibold hover:underline">{nextSession.clients?.full_name}</Link>
+                <span className="text-xs text-muted-foreground">{nextSession.title} · {new Date(nextSession.session_date + "T00:00:00").toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })} · {fmtTimeRange(nextSession.start_time, nextSession.end_time)} · {nextSession.location}</span>
+              </div>
+            </div>
+          )}
+          {sessionsThisWeek.length === 0 && sessionsNeedMarking.length === 0 ? (
+            <div className="rounded-md border border-dashed border-border p-6 text-center text-sm text-muted-foreground">No upcoming sessions in the next 7 days.</div>
+          ) : (
+            <ul className="divide-y divide-border">
+              {[...sessionsNeedMarking, ...sessionsThisWeek].slice(0, 8).map((s: any) => (
+                <li key={s.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5">
+                  <div className="flex items-center gap-3">
+                    <Badge variant="outline" className={statusTone(s.status)}>{s.status}</Badge>
+                    {s.clients && <Link to="/admin/clients/$id" params={{ id: s.clients.id }} className="text-sm font-semibold hover:underline">{s.clients.full_name}</Link>}
+                    <span className="text-xs text-muted-foreground">{s.title}</span>
+                  </div>
+                  <span className="text-xs text-muted-foreground">
+                    {new Date(s.session_date + "T00:00:00").toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })} · {fmtTimeRange(s.start_time, s.end_time)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+
+        <Card className="border-border bg-card p-6">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-muted-foreground">
+              <Apple className="h-4 w-4" /> Nutrition Targets Needing Updates
+            </h2>
+            <Link to="/admin/nutrition-targets" className="text-xs font-semibold text-primary hover:underline">View all →</Link>
+          </div>
+          {nutritionAlerts.length === 0 ? (
+            <div className="rounded-md border border-dashed border-border p-6 text-center text-sm text-muted-foreground">All clients' nutrition targets are current.</div>
+          ) : (
+            <ul className="divide-y divide-border">
+              {nutritionAlerts.map((t: any) => (
+                <li key={t.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5">
+                  <div className="flex items-center gap-3">
+                    <Badge variant="outline" className={t.derived.tone}>{t.derived.label}</Badge>
+                    {t.clients && <Link to="/admin/clients/$id" params={{ id: t.clients.id }} className="text-sm font-semibold hover:underline">{t.clients.full_name}</Link>}
+                    <span className="text-xs text-muted-foreground">{t.phase === "Custom" ? t.custom_phase : t.phase}</span>
+                  </div>
+                  <span className="text-xs text-muted-foreground">{t.derived.daysRemaining < 0 ? `${Math.abs(t.derived.daysRemaining)}d past due` : `${t.derived.daysRemaining}d left`}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
 
         <Card className="border-border bg-card p-6">
           <div className="mb-4 flex items-center justify-between">
@@ -255,3 +363,12 @@ function AdminDashboard() {
 }
 
 void Calendar;
+
+function MiniStat({ label, value, tone }: { label: string; value: number; tone?: "warn" }) {
+  return (
+    <div className={`rounded-md border px-3 py-2 ${tone === "warn" ? "border-warning/40 bg-warning/10" : "border-border bg-secondary/40"}`}>
+      <div className="text-[10px] uppercase tracking-widest text-muted-foreground">{label}</div>
+      <div className="text-lg font-black">{value}</div>
+    </div>
+  );
+}
