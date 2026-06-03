@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
   Users, UserPlus, AlertTriangle, Calendar, DollarSign,
-  Plus, Zap, ExternalLink, Activity, Dumbbell, Package, Timer,
+  Plus, Zap, ExternalLink, Activity, Dumbbell, Package, Timer, UserCheck,
 } from "lucide-react";
 import { derivePhase, displayTitle, toneClasses, type TrainingPhase } from "@/lib/training-phases";
 
@@ -61,6 +61,26 @@ function AdminDashboard() {
     .filter((r) => ["ending-soon", "due-today", "past-due"].includes(r.derived.state))
     .slice(0, 8);
 
+  // Account setup alerts
+  const now = Date.now();
+  const setupAlerts = clients
+    .map((c) => {
+      const expired = c.invite_expires_at && new Date(c.invite_expires_at).getTime() < now && !c.account_created_at;
+      const notCreated = !c.account_created_at;
+      const needsHelp = c.needs_admin_help;
+      const recentReset = c.password_reset_sent_at && (now - new Date(c.password_reset_sent_at).getTime()) < 7 * 24 * 60 * 60 * 1000;
+      let tone: "warn" | "primary" | "default" | null = null;
+      let label = "";
+      if (needsHelp) { tone = "warn"; label = "Needs admin help"; }
+      else if (expired) { tone = "warn"; label = "Invite expired"; }
+      else if (notCreated && c.invite_sent_at) { tone = "primary"; label = "Setup pending"; }
+      else if (notCreated && c.email) { tone = "default"; label = "No invite sent"; }
+      else if (recentReset) { tone = "primary"; label = "Reset email sent"; }
+      return tone ? { ...c, _tone: tone, _label: label } : null;
+    })
+    .filter((x): x is NonNullable<typeof x> => !!x)
+    .slice(0, 8);
+
   const active = clients.length;
   const newClients = clients.filter((c) => c.status === "New Client").length;
   const overdue = clients.filter((c) => c.status === "Payment Overdue" || c.payment_status === "Overdue").length;
@@ -102,6 +122,46 @@ function AdminDashboard() {
           <StatCard label="Needs Attention" value={needsAttention} icon={AlertTriangle} tone="warn" />
           <StatCard label="Payment Overdue" value={overdue} icon={DollarSign} tone="warn" />
         </div>
+
+        <Card className="border-border bg-card p-6">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-muted-foreground">
+              <UserCheck className="h-4 w-4" /> Account Setup Alerts
+            </h2>
+            <Link to="/admin/clients" className="text-xs font-semibold text-primary hover:underline">View all →</Link>
+          </div>
+          {setupAlerts.length === 0 ? (
+            <div className="rounded-md border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+              Every client has set up their account. Nice.
+            </div>
+          ) : (
+            <ul className="divide-y divide-border">
+              {setupAlerts.map((c) => (
+                <li key={c.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5">
+                  <div className="flex items-center gap-3">
+                    <Badge
+                      variant="outline"
+                      className={
+                        c._tone === "warn"
+                          ? "border-warning/40 bg-warning/10 text-warning"
+                          : c._tone === "primary"
+                          ? "border-primary/40 bg-primary/10 text-primary"
+                          : "border-border text-muted-foreground"
+                      }
+                    >
+                      {c._label}
+                    </Badge>
+                    <Link to="/admin/clients/$id" params={{ id: c.id }} className="text-sm font-semibold hover:underline">
+                      {c.full_name}
+                    </Link>
+                    <span className="text-xs text-muted-foreground">{c.email ?? "no email"}</span>
+                  </div>
+                  <span className="text-xs text-muted-foreground">{c.account_status}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
 
         <Card className="border-border bg-card p-6">
           <div className="mb-4 flex items-center justify-between">
