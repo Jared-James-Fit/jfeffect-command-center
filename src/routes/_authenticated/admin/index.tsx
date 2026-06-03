@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
   Users, UserPlus, AlertTriangle, Calendar, DollarSign,
-  Plus, Zap, ExternalLink, Activity, Dumbbell,
+  Plus, Zap, ExternalLink, Activity, Dumbbell, Package,
 } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/admin/")({
@@ -143,7 +143,4 @@ function AdminDashboard() {
   );
 }
 
-// avoid unused-import noise:
-import { Package } from "lucide-react";
-// (used inline above)
 void Calendar;
