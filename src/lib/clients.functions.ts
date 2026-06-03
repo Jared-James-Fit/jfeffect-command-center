@@ -51,23 +51,21 @@ export const inviteClient = createServerFn({ method: "POST" })
     const expires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
     if (inviteErr) {
-      // If user already exists, fall back to a password recovery / magic link
-      const { data: link, error: linkErr } =
-        await supabaseAdmin.auth.admin.generateLink({
-          type: "magiclink",
-          email: client.email,
-          options: { redirectTo: data.redirectTo },
-        });
-      if (linkErr) throw new Error(inviteErr.message);
+      // If user already exists, fall back to a password recovery email.
+      // resetPasswordForEmail actually SENDS the email (admin.generateLink does not).
+      const { error: resetErr } = await supabaseAdmin.auth.resetPasswordForEmail(
+        client.email,
+        { redirectTo: data.redirectTo },
+      );
+      if (resetErr) throw new Error(resetErr.message);
       const patch: ClientUpdate = {
         invite_last_resent_at: now,
         invite_expires_at: expires,
-        account_status: client.invite_sent_at ? "Invite Sent" : "Invite Sent",
+        account_status: "Invite Sent",
       };
       if (!client.invite_sent_at) patch.invite_sent_at = now;
-      if (link.user && !client.user_id) patch.user_id = link.user.id;
       await supabaseAdmin.from("clients").update(patch).eq("id", client.id);
-      return { ok: true, resent: true, actionLink: (link as any)?.properties?.action_link ?? null };
+      return { ok: true, resent: true, actionLink: null };
     }
 
     const patch: ClientUpdate = {
@@ -118,17 +116,17 @@ export const sendPasswordReset = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     if (!client?.email) throw new Error("Client has no email address");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data: link, error: lErr } = await supabaseAdmin.auth.admin.generateLink({
-      type: "recovery",
-      email: client.email,
-      options: { redirectTo: data.redirectTo },
-    });
+    // resetPasswordForEmail SENDS the email; admin.generateLink only generates a URL.
+    const { error: lErr } = await supabaseAdmin.auth.resetPasswordForEmail(
+      client.email,
+      { redirectTo: data.redirectTo },
+    );
     if (lErr) throw new Error(lErr.message);
     await supabaseAdmin.from("clients").update({
       password_reset_sent_at: new Date().toISOString(),
       account_status: "Password Reset Sent",
     }).eq("id", client.id);
-    return { ok: true, url: (link as any)?.properties?.action_link as string };
+    return { ok: true, url: null as string | null };
   });
 
 // Admin manual toggles

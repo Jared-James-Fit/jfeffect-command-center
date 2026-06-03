@@ -105,11 +105,10 @@ function ClientDetail() {
 
   const copyResetLink = async () => {
     if (!form.email) return toast.error("Add an email first");
-    const t = toast.loading("Generating link…");
+    const t = toast.loading("Sending reset link…");
     try {
-      const { url } = await sendResetFn({ data: { clientId: id, redirectTo: `${window.location.origin}/reset-password` } });
-      await navigator.clipboard.writeText(url);
-      toast.success("Reset link copied", { id: t });
+      await sendResetFn({ data: { clientId: id, redirectTo: `${window.location.origin}/reset-password` } });
+      toast.success("Reset email sent to client", { id: t });
       qc.invalidateQueries({ queryKey: ["client", id] });
     } catch (e: any) {
       toast.error(e?.message ?? "Failed", { id: t });
