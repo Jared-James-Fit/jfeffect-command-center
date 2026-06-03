@@ -10,10 +10,10 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, ExternalLink, Save, Trash2, Mail, Archive } from "lucide-react";
+import { ArrowLeft, ExternalLink, Save, Trash2, Mail, Archive, KeyRound, Copy, CheckCircle2, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
-import { inviteClient, deleteClient } from "@/lib/clients.functions";
+import { inviteClient, deleteClient, getSetupLink, sendPasswordReset, markSetupComplete, setNeedsAdminHelp } from "@/lib/clients.functions";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { TrainingPhasesPanel } from "@/components/training-phases-panel";
 
@@ -32,6 +32,10 @@ function ClientDetail() {
   const [deleteStep, setDeleteStep] = useState<0 | 1 | 2>(0);
   const inviteFn = useServerFn(inviteClient);
   const deleteFn = useServerFn(deleteClient);
+  const getSetupLinkFn = useServerFn(getSetupLink);
+  const sendResetFn = useServerFn(sendPasswordReset);
+  const markCompleteFn = useServerFn(markSetupComplete);
+  const needsHelpFn = useServerFn(setNeedsAdminHelp);
 
   const { data } = useQuery({
     queryKey: ["client", id],
@@ -66,12 +70,62 @@ function ClientDetail() {
     if (!form.email) return toast.error("Add an email first");
     const t = toast.loading("Sending setup link…");
     try {
-      const redirectTo = `${window.location.origin}/auth?setup=1`;
+      const redirectTo = `${window.location.origin}/setup`;
       await inviteFn({ data: { clientId: id, redirectTo } });
       toast.success("Setup link sent", { id: t });
+      qc.invalidateQueries({ queryKey: ["client", id] });
     } catch (e: any) {
       toast.error(e?.message ?? "Failed", { id: t });
     }
+  };
+
+  const copySetupLink = async () => {
+    if (!form.email) return toast.error("Add an email first");
+    const t = toast.loading("Generating link…");
+    try {
+      const { url } = await getSetupLinkFn({ data: { clientId: id, redirectTo: `${window.location.origin}/setup` } });
+      await navigator.clipboard.writeText(url);
+      toast.success("Setup link copied", { id: t });
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed", { id: t });
+    }
+  };
+
+  const sendReset = async () => {
+    if (!form.email) return toast.error("Add an email first");
+    const t = toast.loading("Sending reset link…");
+    try {
+      await sendResetFn({ data: { clientId: id, redirectTo: `${window.location.origin}/reset-password` } });
+      toast.success("Reset email sent", { id: t });
+      qc.invalidateQueries({ queryKey: ["client", id] });
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed", { id: t });
+    }
+  };
+
+  const copyResetLink = async () => {
+    if (!form.email) return toast.error("Add an email first");
+    const t = toast.loading("Generating link…");
+    try {
+      const { url } = await sendResetFn({ data: { clientId: id, redirectTo: `${window.location.origin}/reset-password` } });
+      await navigator.clipboard.writeText(url);
+      toast.success("Reset link copied", { id: t });
+      qc.invalidateQueries({ queryKey: ["client", id] });
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed", { id: t });
+    }
+  };
+
+  const markComplete = async () => {
+    await markCompleteFn({ data: { clientId: id } });
+    toast.success("Marked as account created");
+    qc.invalidateQueries({ queryKey: ["client", id] });
+  };
+
+  const toggleNeedsHelp = async () => {
+    await needsHelpFn({ data: { clientId: id, value: !form.needs_admin_help } });
+    toast.success(form.needs_admin_help ? "Cleared admin help flag" : "Flagged as needs help");
+    qc.invalidateQueries({ queryKey: ["client", id] });
   };
 
   const confirmDelete = async () => {
@@ -178,6 +232,35 @@ function ClientDetail() {
         </Card>
 
         <TrainingPhasesPanel clientId={id} />
+
+        <Card className="border-border bg-card p-6 md:col-span-3 space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Account Access</h3>
+            <AccountStatusBadge status={form.account_status} needsHelp={form.needs_admin_help} />
+          </div>
+
+          <div className="grid gap-3 text-sm md:grid-cols-2 lg:grid-cols-4">
+            <Field label="Email" value={form.email ?? "—"} />
+            <Field label="Invite sent" value={fmtDate(form.invite_sent_at)} />
+            <Field label="Last resent" value={fmtDate(form.invite_last_resent_at)} />
+            <Field label="Account created" value={fmtDate(form.account_created_at)} />
+            <Field label="Invite expires" value={fmtDate(form.invite_expires_at)} />
+            <Field label="Password reset sent" value={fmtDate(form.password_reset_sent_at)} />
+            <Field label="Linked auth user" value={form.user_id ? "Yes" : "No"} />
+            <Field label="Needs admin help" value={form.needs_admin_help ? "Yes" : "No"} />
+          </div>
+
+          <div className="flex flex-wrap gap-2 pt-2">
+            <Button size="sm" variant="outline" onClick={sendSetup}><Mail className="mr-2 h-4 w-4" />{form.invite_sent_at ? "Resend setup email" : "Send setup email"}</Button>
+            <Button size="sm" variant="outline" onClick={copySetupLink}><Copy className="mr-2 h-4 w-4" />Copy setup link</Button>
+            <Button size="sm" variant="outline" onClick={sendReset}><KeyRound className="mr-2 h-4 w-4" />Send password reset</Button>
+            <Button size="sm" variant="outline" onClick={copyResetLink}><Copy className="mr-2 h-4 w-4" />Copy reset link</Button>
+            <Button size="sm" variant="outline" onClick={markComplete}><CheckCircle2 className="mr-2 h-4 w-4" />Mark setup complete</Button>
+            <Button size="sm" variant={form.needs_admin_help ? "default" : "outline"} onClick={toggleNeedsHelp}>
+              <AlertCircle className="mr-2 h-4 w-4" />{form.needs_admin_help ? "Clear admin help flag" : "Mark needs admin help"}
+            </Button>
+          </div>
+        </Card>
       </div>
 
       <AlertDialog open={deleteStep > 0} onOpenChange={(o) => !o && setDeleteStep(0)}>
@@ -204,4 +287,28 @@ function ClientDetail() {
       </AlertDialog>
     </>
   );
+}
+
+function Field({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div>
+      <div className="text-[10px] uppercase tracking-widest text-muted-foreground">{label}</div>
+      <div className="mt-0.5 font-semibold">{value}</div>
+    </div>
+  );
+}
+
+function fmtDate(v?: string | null) {
+  if (!v) return "—";
+  return new Date(v).toLocaleString();
+}
+
+function AccountStatusBadge({ status, needsHelp }: { status?: string; needsHelp?: boolean }) {
+  const s = needsHelp ? "Needs Admin Help" : (status ?? "Invite Not Sent");
+  const tone =
+    s === "Account Created" || s === "Password Reset Completed" ? "border-success/40 text-success bg-success/10" :
+    s === "Invite Sent" || s === "Password Reset Sent" ? "border-primary/40 text-primary bg-primary/10" :
+    s === "Invite Expired" || s === "Needs Admin Help" ? "border-warning/40 text-warning bg-warning/10" :
+    "border-border text-muted-foreground bg-secondary/40";
+  return <Badge variant="outline" className={tone}>{s}</Badge>;
 }

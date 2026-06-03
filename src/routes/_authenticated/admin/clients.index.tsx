@@ -10,12 +10,13 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Search, MoreHorizontal, Mail, Archive, Trash2 } from "lucide-react";
+import { Plus, Search, MoreHorizontal, Mail, Archive, Trash2, KeyRound } from "lucide-react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
-import { inviteClient, archiveClient, deleteClient } from "@/lib/clients.functions";
+import { inviteClient, archiveClient, deleteClient, sendPasswordReset } from "@/lib/clients.functions";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Checkbox } from "@/components/ui/checkbox";
 
 export const Route = createFileRoute("/_authenticated/admin/clients/")({
   component: ClientsPage,
@@ -34,15 +35,28 @@ function ClientsPage() {
   const inviteFn = useServerFn(inviteClient);
   const archiveFn = useServerFn(archiveClient);
   const deleteFn = useServerFn(deleteClient);
+  const resetFn = useServerFn(sendPasswordReset);
 
   const sendSetup = async (id: string) => {
     const t = toast.loading("Sending setup link…");
     try {
-      const redirectTo = `${window.location.origin}/auth?setup=1`;
+      const redirectTo = `${window.location.origin}/setup`;
       await inviteFn({ data: { clientId: id, redirectTo } });
       toast.success("Setup link sent", { id: t });
+      qc.invalidateQueries({ queryKey: ["clients"] });
     } catch (e: any) {
       toast.error(e?.message ?? "Failed to send setup link", { id: t });
+    }
+  };
+
+  const sendReset = async (id: string) => {
+    const t = toast.loading("Sending reset link…");
+    try {
+      await resetFn({ data: { clientId: id, redirectTo: `${window.location.origin}/reset-password` } });
+      toast.success("Password reset email sent", { id: t });
+      qc.invalidateQueries({ queryKey: ["clients"] });
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed", { id: t });
     }
   };
 
@@ -97,9 +111,9 @@ function ClientsPage() {
             </DialogTrigger>
             <NewClientDialog
               onClose={() => setOpen(false)}
-              onCreated={(newId, email) => {
+              onCreated={(newId, email, sendInvite) => {
                 qc.invalidateQueries({ queryKey: ["clients"] });
-                if (email) sendSetup(newId);
+                if (email && sendInvite) sendSetup(newId);
               }}
             />
           </Dialog>
@@ -158,6 +172,9 @@ function ClientsPage() {
                             <DropdownMenuItem onClick={() => sendSetup(c.id)} disabled={!c.email}>
                               <Mail className="mr-2 h-4 w-4" /> Send setup link
                             </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => sendReset(c.id)} disabled={!c.email}>
+                              <KeyRound className="mr-2 h-4 w-4" /> Send password reset
+                            </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => toggleArchive(c.id, c.archived)}>
                               <Archive className="mr-2 h-4 w-4" /> {c.archived ? "Restore" : "Archive"}
                             </DropdownMenuItem>
@@ -212,11 +229,12 @@ function ClientsPage() {
   );
 }
 
-function NewClientDialog({ onClose, onCreated }: { onClose: () => void; onCreated: (id: string, email: string) => void }) {
+function NewClientDialog({ onClose, onCreated }: { onClose: () => void; onCreated: (id: string, email: string, sendInvite: boolean) => void }) {
   const [form, setForm] = useState({
     full_name: "", email: "", phone: "", instagram: "",
     coaching_type: TYPES[0], status: "New Client", coaching_package: "",
   });
+  const [sendInvite, setSendInvite] = useState(true);
   const [busy, setBusy] = useState(false);
 
   const submit = async (e: React.FormEvent) => {
@@ -226,7 +244,7 @@ function NewClientDialog({ onClose, onCreated }: { onClose: () => void; onCreate
     setBusy(false);
     if (error) return toast.error(error.message);
     toast.success("Client created");
-    onCreated(data!.id, form.email);
+    onCreated(data!.id, form.email, sendInvite);
     onClose();
   };
 
@@ -258,6 +276,11 @@ function NewClientDialog({ onClose, onCreated }: { onClose: () => void; onCreate
           </div>
           <div className="col-span-2"><Label>Coaching package</Label><Input value={form.coaching_package} onChange={(e) => setForm({ ...form, coaching_package: e.target.value })} /></div>
         </div>
+        <label className="flex items-center gap-2 rounded-md border border-border bg-secondary/30 px-3 py-2.5 text-sm">
+          <Checkbox checked={sendInvite} onCheckedChange={(v) => setSendInvite(v === true)} />
+          <span className="font-medium">Send account setup email now</span>
+          <span className="ml-auto text-xs text-muted-foreground">Requires email</span>
+        </label>
         <DialogFooter>
           <Button type="button" variant="ghost" onClick={onClose}>Cancel</Button>
           <Button type="submit" disabled={busy} className="bg-gradient-primary font-bold uppercase">{busy ? "Saving…" : "Create"}</Button>

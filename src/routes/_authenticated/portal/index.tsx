@@ -5,12 +5,27 @@ import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { FileText, ClipboardCheck, Dumbbell, CreditCard, Calendar, ExternalLink } from "lucide-react";
+import { FileText, ClipboardCheck, Dumbbell, CreditCard, Calendar, ExternalLink, CheckCircle2, Circle } from "lucide-react";
+import { useEffect, useState } from "react";
 
 export const Route = createFileRoute("/_authenticated/portal/")({ component: PortalHome });
 
 function PortalHome() {
   const { user } = useAuth();
+  const userId = user?.id ?? "anon";
+  const checklistKey = `jf-checklist-${userId}`;
+  const [checks, setChecks] = useState<Record<string, boolean>>({});
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(checklistKey);
+      if (raw) setChecks(JSON.parse(raw));
+    } catch {}
+  }, [checklistKey]);
+  const toggle = (k: string) => {
+    const next = { ...checks, [k]: !checks[k] };
+    setChecks(next);
+    try { localStorage.setItem(checklistKey, JSON.stringify(next)); } catch {}
+  };
 
   const { data: client } = useQuery({
     queryKey: ["my-client", user?.id],
@@ -22,6 +37,16 @@ function PortalHome() {
   });
 
   const firstName = (client?.full_name ?? user?.email?.split("@")[0] ?? "").split(" ")[0];
+
+  const checklist = [
+    { key: "program", label: "Access your program" },
+    { key: "checkin", label: "Submit your intake / check-in form" },
+    { key: "resources", label: "Review your resources" },
+    { key: "save", label: "Save your dashboard login" },
+    { key: "book", label: "Book a call if needed" },
+  ];
+  const completed = checklist.filter((c) => checks[c.key]).length;
+  const showChecklist = completed < checklist.length;
 
   const actions = [
     { to: "/portal/program", label: "My Program", icon: FileText },
@@ -40,6 +65,33 @@ function PortalHome() {
         {!client && (
           <Card className="border-primary/30 bg-primary/5 p-6">
             <p className="text-sm">Your coach hasn't set up your client profile yet. Once they do, you'll see your program, check-in form and resources here.</p>
+          </Card>
+        )}
+
+        {showChecklist && (
+          <Card className="border-primary/30 bg-primary/5 p-6">
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-xs uppercase tracking-widest text-primary">Get Started</h3>
+              <span className="text-xs text-muted-foreground">{completed} / {checklist.length}</span>
+            </div>
+            <ul className="space-y-1.5">
+              {checklist.map((item) => {
+                const done = !!checks[item.key];
+                return (
+                  <li key={item.key}>
+                    <button
+                      onClick={() => toggle(item.key)}
+                      className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition hover:bg-secondary/40"
+                    >
+                      {done
+                        ? <CheckCircle2 className="h-4 w-4 text-primary" />
+                        : <Circle className="h-4 w-4 text-muted-foreground" />}
+                      <span className={done ? "line-through text-muted-foreground" : ""}>{item.label}</span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
           </Card>
         )}
 
