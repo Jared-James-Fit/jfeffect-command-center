@@ -1,6 +1,9 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import type { Database } from "@/integrations/supabase/types";
+
+type ClientUpdate = Database["public"]["Tables"]["clients"]["Update"];
 
 async function assertAdmin(supabase: any, userId: string) {
   const { data, error } = await supabase
@@ -56,7 +59,7 @@ export const inviteClient = createServerFn({ method: "POST" })
           options: { redirectTo: data.redirectTo },
         });
       if (linkErr) throw new Error(inviteErr.message);
-      const patch: Record<string, any> = {
+      const patch: ClientUpdate = {
         invite_last_resent_at: now,
         invite_expires_at: expires,
         account_status: client.invite_sent_at ? "Invite Sent" : "Invite Sent",
@@ -67,7 +70,7 @@ export const inviteClient = createServerFn({ method: "POST" })
       return { ok: true, resent: true, actionLink: (link as any)?.properties?.action_link ?? null };
     }
 
-    const patch: Record<string, any> = {
+    const patch: ClientUpdate = {
       invite_sent_at: now,
       invite_expires_at: expires,
       account_status: "Invite Sent",
@@ -154,7 +157,7 @@ export const setNeedsAdminHelp = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
     await assertAdmin(supabase, userId);
-    const patch: Record<string, any> = { needs_admin_help: data.value };
+    const patch: ClientUpdate = { needs_admin_help: data.value };
     if (data.value) patch.account_status = "Needs Admin Help";
     const { error } = await supabase.from("clients").update(patch).eq("id", data.clientId);
     if (error) throw new Error(error.message);
