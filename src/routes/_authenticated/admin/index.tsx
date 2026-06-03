@@ -363,3 +363,12 @@ function AdminDashboard() {
 }
 
 void Calendar;
+
+function MiniStat({ label, value, tone }: { label: string; value: number; tone?: "warn" }) {
+  return (
+    <div className={`rounded-md border px-3 py-2 ${tone === "warn" ? "border-warning/40 bg-warning/10" : "border-border bg-secondary/40"}`}>
+      <div className="text-[10px] uppercase tracking-widest text-muted-foreground">{label}</div>
+      <div className="text-lg font-black">{value}</div>
+    </div>
+  );
+}
