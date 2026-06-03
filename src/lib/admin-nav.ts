@@ -1,7 +1,7 @@
 import {
   LayoutDashboard, Users, UserPlus, PhoneCall, ClipboardCheck, CreditCard,
   Package, FileText, Dumbbell, FolderOpen, Calendar, Layers, Star,
-  Lightbulb, BookOpen, Workflow, Settings, Timer,
+  Lightbulb, BookOpen, Workflow, Settings, Timer, Apple, Heart,
 } from "lucide-react";
 import type { NavItem } from "@/components/app-shell";
 
@@ -12,12 +12,14 @@ export const adminNav: NavItem[] = [
   { to: "/admin/sales-calls", label: "Sales Calls", icon: PhoneCall },
   { to: "/admin/check-ins", label: "Check-Ins", icon: ClipboardCheck },
   { to: "/admin/training-phases", label: "Training Phases", icon: Timer },
+  { to: "/admin/nutrition-targets", label: "Nutrition Targets", icon: Apple },
+  { to: "/admin/cardio-targets", label: "Cardio Targets", icon: Heart },
+  { to: "/admin/calendar", label: "PT Calendar", icon: Calendar },
   { to: "/admin/payments", label: "Payments", icon: CreditCard },
   { to: "/admin/offers", label: "Offers / Products", icon: Package },
   { to: "/admin/programs", label: "Programs", icon: FileText },
   { to: "/admin/exercises", label: "Exercise Library", icon: Dumbbell },
   { to: "/admin/resources", label: "Resources", icon: FolderOpen },
-  { to: "/admin/calendar", label: "Calendar", icon: Calendar },
   { to: "/admin/apps", label: "Apps & Tools", icon: Layers },
   { to: "/admin/testimonials", label: "Testimonials", icon: Star },
   { to: "/admin/content-ideas", label: "Content Ideas", icon: Lightbulb },
@@ -29,6 +31,7 @@ export const adminNav: NavItem[] = [
 export const clientNav: NavItem[] = [
   { to: "/portal", label: "Dashboard", icon: LayoutDashboard },
   { to: "/portal/program", label: "My Program", icon: FileText },
+  { to: "/portal/nutrition-targets", label: "Nutrition Targets", icon: Apple },
   { to: "/portal/check-in", label: "Check-In", icon: ClipboardCheck },
   { to: "/portal/exercises", label: "Exercises", icon: Dumbbell },
   { to: "/portal/payments", label: "Payments", icon: CreditCard },
