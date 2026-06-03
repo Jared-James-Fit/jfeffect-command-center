@@ -22,6 +22,7 @@ import { Route as AuthenticatedAdminIndexRouteImport } from './routes/_authentic
 import { Route as AuthenticatedPortalResourcesRouteImport } from './routes/_authenticated/portal/resources'
 import { Route as AuthenticatedPortalProgramRouteImport } from './routes/_authenticated/portal/program'
 import { Route as AuthenticatedPortalPaymentsRouteImport } from './routes/_authenticated/portal/payments'
+import { Route as AuthenticatedPortalNutritionTargetsRouteImport } from './routes/_authenticated/portal/nutrition-targets'
 import { Route as AuthenticatedPortalExercisesRouteImport } from './routes/_authenticated/portal/exercises'
 import { Route as AuthenticatedPortalDocumentsRouteImport } from './routes/_authenticated/portal/documents'
 import { Route as AuthenticatedPortalCheckInRouteImport } from './routes/_authenticated/portal/check-in'
@@ -114,6 +115,12 @@ const AuthenticatedPortalPaymentsRoute =
   AuthenticatedPortalPaymentsRouteImport.update({
     id: '/payments',
     path: '/payments',
+    getParentRoute: () => AuthenticatedPortalRouteRoute,
+  } as any)
+const AuthenticatedPortalNutritionTargetsRoute =
+  AuthenticatedPortalNutritionTargetsRouteImport.update({
+    id: '/nutrition-targets',
+    path: '/nutrition-targets',
     getParentRoute: () => AuthenticatedPortalRouteRoute,
   } as any)
 const AuthenticatedPortalExercisesRoute =
@@ -288,6 +295,7 @@ export interface FileRoutesByFullPath {
   '/portal/check-in': typeof AuthenticatedPortalCheckInRoute
   '/portal/documents': typeof AuthenticatedPortalDocumentsRoute
   '/portal/exercises': typeof AuthenticatedPortalExercisesRoute
+  '/portal/nutrition-targets': typeof AuthenticatedPortalNutritionTargetsRoute
   '/portal/payments': typeof AuthenticatedPortalPaymentsRoute
   '/portal/program': typeof AuthenticatedPortalProgramRoute
   '/portal/resources': typeof AuthenticatedPortalResourcesRoute
@@ -324,6 +332,7 @@ export interface FileRoutesByTo {
   '/portal/check-in': typeof AuthenticatedPortalCheckInRoute
   '/portal/documents': typeof AuthenticatedPortalDocumentsRoute
   '/portal/exercises': typeof AuthenticatedPortalExercisesRoute
+  '/portal/nutrition-targets': typeof AuthenticatedPortalNutritionTargetsRoute
   '/portal/payments': typeof AuthenticatedPortalPaymentsRoute
   '/portal/program': typeof AuthenticatedPortalProgramRoute
   '/portal/resources': typeof AuthenticatedPortalResourcesRoute
@@ -364,6 +373,7 @@ export interface FileRoutesById {
   '/_authenticated/portal/check-in': typeof AuthenticatedPortalCheckInRoute
   '/_authenticated/portal/documents': typeof AuthenticatedPortalDocumentsRoute
   '/_authenticated/portal/exercises': typeof AuthenticatedPortalExercisesRoute
+  '/_authenticated/portal/nutrition-targets': typeof AuthenticatedPortalNutritionTargetsRoute
   '/_authenticated/portal/payments': typeof AuthenticatedPortalPaymentsRoute
   '/_authenticated/portal/program': typeof AuthenticatedPortalProgramRoute
   '/_authenticated/portal/resources': typeof AuthenticatedPortalResourcesRoute
@@ -404,6 +414,7 @@ export interface FileRouteTypes {
     | '/portal/check-in'
     | '/portal/documents'
     | '/portal/exercises'
+    | '/portal/nutrition-targets'
     | '/portal/payments'
     | '/portal/program'
     | '/portal/resources'
@@ -440,6 +451,7 @@ export interface FileRouteTypes {
     | '/portal/check-in'
     | '/portal/documents'
     | '/portal/exercises'
+    | '/portal/nutrition-targets'
     | '/portal/payments'
     | '/portal/program'
     | '/portal/resources'
@@ -479,6 +491,7 @@ export interface FileRouteTypes {
     | '/_authenticated/portal/check-in'
     | '/_authenticated/portal/documents'
     | '/_authenticated/portal/exercises'
+    | '/_authenticated/portal/nutrition-targets'
     | '/_authenticated/portal/payments'
     | '/_authenticated/portal/program'
     | '/_authenticated/portal/resources'
@@ -588,6 +601,13 @@ declare module '@tanstack/react-router' {
       path: '/payments'
       fullPath: '/portal/payments'
       preLoaderRoute: typeof AuthenticatedPortalPaymentsRouteImport
+      parentRoute: typeof AuthenticatedPortalRouteRoute
+    }
+    '/_authenticated/portal/nutrition-targets': {
+      id: '/_authenticated/portal/nutrition-targets'
+      path: '/nutrition-targets'
+      fullPath: '/portal/nutrition-targets'
+      preLoaderRoute: typeof AuthenticatedPortalNutritionTargetsRouteImport
       parentRoute: typeof AuthenticatedPortalRouteRoute
     }
     '/_authenticated/portal/exercises': {
@@ -822,6 +842,7 @@ interface AuthenticatedPortalRouteRouteChildren {
   AuthenticatedPortalCheckInRoute: typeof AuthenticatedPortalCheckInRoute
   AuthenticatedPortalDocumentsRoute: typeof AuthenticatedPortalDocumentsRoute
   AuthenticatedPortalExercisesRoute: typeof AuthenticatedPortalExercisesRoute
+  AuthenticatedPortalNutritionTargetsRoute: typeof AuthenticatedPortalNutritionTargetsRoute
   AuthenticatedPortalPaymentsRoute: typeof AuthenticatedPortalPaymentsRoute
   AuthenticatedPortalProgramRoute: typeof AuthenticatedPortalProgramRoute
   AuthenticatedPortalResourcesRoute: typeof AuthenticatedPortalResourcesRoute
@@ -834,6 +855,8 @@ const AuthenticatedPortalRouteRouteChildren: AuthenticatedPortalRouteRouteChildr
     AuthenticatedPortalCheckInRoute: AuthenticatedPortalCheckInRoute,
     AuthenticatedPortalDocumentsRoute: AuthenticatedPortalDocumentsRoute,
     AuthenticatedPortalExercisesRoute: AuthenticatedPortalExercisesRoute,
+    AuthenticatedPortalNutritionTargetsRoute:
+      AuthenticatedPortalNutritionTargetsRoute,
     AuthenticatedPortalPaymentsRoute: AuthenticatedPortalPaymentsRoute,
     AuthenticatedPortalProgramRoute: AuthenticatedPortalProgramRoute,
     AuthenticatedPortalResourcesRoute: AuthenticatedPortalResourcesRoute,
@@ -869,3 +892,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
