@@ -16,6 +16,11 @@ import { useServerFn } from "@tanstack/react-start";
 import { inviteClient, deleteClient, getSetupLink, sendPasswordReset, markSetupComplete, setNeedsAdminHelp } from "@/lib/clients.functions";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { TrainingPhasesPanel } from "@/components/training-phases-panel";
+import { PtSessionsPanel } from "@/components/pt-sessions-panel";
+import { NutritionTargetsPanel } from "@/components/nutrition-targets-panel";
+import { CardioTargetsPanel } from "@/components/cardio-targets-panel";
+import { Switch } from "@/components/ui/switch";
+import { COMMON_TIMEZONES } from "@/lib/pt-sessions";
 
 export const Route = createFileRoute("/_authenticated/admin/clients/$id")({
   component: ClientDetail,
@@ -231,6 +236,45 @@ function ClientDetail() {
         </Card>
 
         <TrainingPhasesPanel clientId={id} />
+
+        <PtSessionsPanel clientId={id} client={form} />
+        <NutritionTargetsPanel clientId={id} />
+        <CardioTargetsPanel clientId={id} />
+
+        <Card className="border-border bg-card p-6 md:col-span-3 space-y-4">
+          <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Time Zone & Sessions</h3>
+          <div className="grid gap-3 md:grid-cols-4">
+            <div>
+              <Label>Client time zone</Label>
+              <Select value={form.timezone ?? "America/Winnipeg"} onValueChange={(v) => set("timezone", v)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>{COMMON_TIMEZONES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Default session location</Label>
+              <Input value={form.default_session_location ?? ""} onChange={(e) => set("default_session_location", e.target.value)} placeholder="Iron Image Gym" />
+            </div>
+            <div className="flex items-end justify-between rounded-md border border-border bg-secondary/30 px-3 py-2">
+              <Label className="text-xs">Session package tracking</Label>
+              <Switch checked={!!form.package_tracking_enabled} onCheckedChange={(v) => set("package_tracking_enabled", v)} />
+            </div>
+            <div />
+            <div>
+              <Label>Sessions purchased</Label>
+              <Input type="number" value={form.sessions_purchased ?? 0} onChange={(e) => set("sessions_purchased", Number(e.target.value))} />
+            </div>
+            <div>
+              <Label>Sessions used</Label>
+              <Input type="number" value={form.sessions_used ?? 0} onChange={(e) => set("sessions_used", Number(e.target.value))} />
+            </div>
+            <div>
+              <Label>Remaining</Label>
+              <Input value={Math.max((form.sessions_purchased ?? 0) - (form.sessions_used ?? 0), 0)} readOnly className="bg-secondary/40" />
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground">Reminder emails are sent in the client's time zone. Defaults to America/Winnipeg if not set.</p>
+        </Card>
 
         <Card className="border-border bg-card p-6 md:col-span-3 space-y-4">
           <div className="flex items-center justify-between">
