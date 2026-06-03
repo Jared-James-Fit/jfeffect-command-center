@@ -39,6 +39,7 @@ import { Route as AuthenticatedAdminLeadsRouteImport } from './routes/_authentic
 import { Route as AuthenticatedAdminExercisesRouteImport } from './routes/_authenticated/admin/exercises'
 import { Route as AuthenticatedAdminContentIdeasRouteImport } from './routes/_authenticated/admin/content-ideas'
 import { Route as AuthenticatedAdminCheckInsRouteImport } from './routes/_authenticated/admin/check-ins'
+import { Route as AuthenticatedAdminCalendarRouteImport } from './routes/_authenticated/admin/calendar'
 import { Route as AuthenticatedAdminAutomationsRouteImport } from './routes/_authenticated/admin/automations'
 import { Route as AuthenticatedAdminAppsRouteImport } from './routes/_authenticated/admin/apps'
 import { Route as AuthenticatedAdminClientsIndexRouteImport } from './routes/_authenticated/admin/clients.index'
@@ -213,6 +214,12 @@ const AuthenticatedAdminCheckInsRoute =
     path: '/check-ins',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
+const AuthenticatedAdminCalendarRoute =
+  AuthenticatedAdminCalendarRouteImport.update({
+    id: '/calendar',
+    path: '/calendar',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
 const AuthenticatedAdminAutomationsRoute =
   AuthenticatedAdminAutomationsRouteImport.update({
     id: '/automations',
@@ -247,6 +254,7 @@ export interface FileRoutesByFullPath {
   '/portal': typeof AuthenticatedPortalRouteRouteWithChildren
   '/admin/apps': typeof AuthenticatedAdminAppsRoute
   '/admin/automations': typeof AuthenticatedAdminAutomationsRoute
+  '/admin/calendar': typeof AuthenticatedAdminCalendarRoute
   '/admin/check-ins': typeof AuthenticatedAdminCheckInsRoute
   '/admin/content-ideas': typeof AuthenticatedAdminContentIdeasRoute
   '/admin/exercises': typeof AuthenticatedAdminExercisesRoute
@@ -280,6 +288,7 @@ export interface FileRoutesByTo {
   '/sitemap': typeof SitemapRoute
   '/admin/apps': typeof AuthenticatedAdminAppsRoute
   '/admin/automations': typeof AuthenticatedAdminAutomationsRoute
+  '/admin/calendar': typeof AuthenticatedAdminCalendarRoute
   '/admin/check-ins': typeof AuthenticatedAdminCheckInsRoute
   '/admin/content-ideas': typeof AuthenticatedAdminContentIdeasRoute
   '/admin/exercises': typeof AuthenticatedAdminExercisesRoute
@@ -317,6 +326,7 @@ export interface FileRoutesById {
   '/_authenticated/portal': typeof AuthenticatedPortalRouteRouteWithChildren
   '/_authenticated/admin/apps': typeof AuthenticatedAdminAppsRoute
   '/_authenticated/admin/automations': typeof AuthenticatedAdminAutomationsRoute
+  '/_authenticated/admin/calendar': typeof AuthenticatedAdminCalendarRoute
   '/_authenticated/admin/check-ins': typeof AuthenticatedAdminCheckInsRoute
   '/_authenticated/admin/content-ideas': typeof AuthenticatedAdminContentIdeasRoute
   '/_authenticated/admin/exercises': typeof AuthenticatedAdminExercisesRoute
@@ -354,6 +364,7 @@ export interface FileRouteTypes {
     | '/portal'
     | '/admin/apps'
     | '/admin/automations'
+    | '/admin/calendar'
     | '/admin/check-ins'
     | '/admin/content-ideas'
     | '/admin/exercises'
@@ -387,6 +398,7 @@ export interface FileRouteTypes {
     | '/sitemap'
     | '/admin/apps'
     | '/admin/automations'
+    | '/admin/calendar'
     | '/admin/check-ins'
     | '/admin/content-ideas'
     | '/admin/exercises'
@@ -423,6 +435,7 @@ export interface FileRouteTypes {
     | '/_authenticated/portal'
     | '/_authenticated/admin/apps'
     | '/_authenticated/admin/automations'
+    | '/_authenticated/admin/calendar'
     | '/_authenticated/admin/check-ins'
     | '/_authenticated/admin/content-ideas'
     | '/_authenticated/admin/exercises'
@@ -670,6 +683,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminCheckInsRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
+    '/_authenticated/admin/calendar': {
+      id: '/_authenticated/admin/calendar'
+      path: '/calendar'
+      fullPath: '/admin/calendar'
+      preLoaderRoute: typeof AuthenticatedAdminCalendarRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
     '/_authenticated/admin/automations': {
       id: '/_authenticated/admin/automations'
       path: '/automations'
@@ -704,6 +724,7 @@ declare module '@tanstack/react-router' {
 interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminAppsRoute: typeof AuthenticatedAdminAppsRoute
   AuthenticatedAdminAutomationsRoute: typeof AuthenticatedAdminAutomationsRoute
+  AuthenticatedAdminCalendarRoute: typeof AuthenticatedAdminCalendarRoute
   AuthenticatedAdminCheckInsRoute: typeof AuthenticatedAdminCheckInsRoute
   AuthenticatedAdminContentIdeasRoute: typeof AuthenticatedAdminContentIdeasRoute
   AuthenticatedAdminExercisesRoute: typeof AuthenticatedAdminExercisesRoute
@@ -726,6 +747,7 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
   {
     AuthenticatedAdminAppsRoute: AuthenticatedAdminAppsRoute,
     AuthenticatedAdminAutomationsRoute: AuthenticatedAdminAutomationsRoute,
+    AuthenticatedAdminCalendarRoute: AuthenticatedAdminCalendarRoute,
     AuthenticatedAdminCheckInsRoute: AuthenticatedAdminCheckInsRoute,
     AuthenticatedAdminContentIdeasRoute: AuthenticatedAdminContentIdeasRoute,
     AuthenticatedAdminExercisesRoute: AuthenticatedAdminExercisesRoute,
