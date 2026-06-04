@@ -127,6 +127,46 @@ function AdminDashboard() {
     })
     .slice(0, 8);
 
+  const { data: convStates = [] } = useQuery({
+    queryKey: ["conversation-states"],
+    queryFn: async () => {
+      const { data } = await (supabase.from("conversation_state") as any).select("*");
+      return (data ?? []) as ConversationState[];
+    },
+  });
+
+  const { data: recentMsgs = [] } = useQuery({
+    queryKey: ["recent-client-messages-dash"],
+    queryFn: async () => {
+      const { data } = await (supabase.from("messages") as any)
+        .select("client_id, body, created_at, sender_role, is_internal_note")
+        .eq("is_internal_note", false)
+        .eq("sender_role", "client")
+        .order("created_at", { ascending: false })
+        .limit(200);
+      return (data ?? []) as Message[];
+    },
+  });
+
+  const clientNameById = new Map(clients.map((c) => [c.id, c.full_name]));
+  const stateMap = new Map(convStates.map((s) => [s.client_id, s]));
+  const seenC = new Set<string>();
+  const messagesNeedingResponse = recentMsgs
+    .filter((m) => {
+      if (seenC.has(m.client_id)) return false;
+      const st = stateMap.get(m.client_id);
+      const lr = st?.admin_last_read_at ? new Date(st.admin_last_read_at).getTime() : 0;
+      const unread = new Date(m.created_at).getTime() > lr;
+      const needs = st?.status === "needs_response";
+      const highPriority = st?.priority === "High Priority" || st?.priority === "Important";
+      if (unread || needs || highPriority) {
+        seenC.add(m.client_id);
+        return true;
+      }
+      return false;
+    })
+    .slice(0, 8);
+
   // Account setup alerts
   const now = Date.now();
   const setupAlerts = clients
