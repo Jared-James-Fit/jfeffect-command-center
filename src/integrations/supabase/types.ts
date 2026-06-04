@@ -127,6 +127,36 @@ export type Database = {
           },
         ]
       }
+      client_activity_log: {
+        Row: {
+          action: string
+          actor_role: string
+          actor_user_id: string | null
+          client_id: string
+          created_at: string
+          details: Json
+          id: string
+        }
+        Insert: {
+          action: string
+          actor_role: string
+          actor_user_id?: string | null
+          client_id: string
+          created_at?: string
+          details?: Json
+          id?: string
+        }
+        Update: {
+          action?: string
+          actor_role?: string
+          actor_user_id?: string | null
+          client_id?: string
+          created_at?: string
+          details?: Json
+          id?: string
+        }
+        Relationships: []
+      }
       clients: {
         Row: {
           account_created_at: string | null
@@ -134,6 +164,7 @@ export type Database = {
           address: string | null
           agreement_link: string | null
           archived: boolean
+          assigned_coach_id: string | null
           calendar_link: string | null
           checkin_form_link: string | null
           city: string | null
@@ -165,6 +196,7 @@ export type Database = {
           needs_admin_help: boolean
           next_program_update: string | null
           nutrition_notes: string | null
+          onboarded_by_coach_id: string | null
           package_tracking_enabled: boolean
           password_reset_sent_at: string | null
           payment_status: string | null
@@ -194,6 +226,7 @@ export type Database = {
           address?: string | null
           agreement_link?: string | null
           archived?: boolean
+          assigned_coach_id?: string | null
           calendar_link?: string | null
           checkin_form_link?: string | null
           city?: string | null
@@ -225,6 +258,7 @@ export type Database = {
           needs_admin_help?: boolean
           next_program_update?: string | null
           nutrition_notes?: string | null
+          onboarded_by_coach_id?: string | null
           package_tracking_enabled?: boolean
           password_reset_sent_at?: string | null
           payment_status?: string | null
@@ -254,6 +288,7 @@ export type Database = {
           address?: string | null
           agreement_link?: string | null
           archived?: boolean
+          assigned_coach_id?: string | null
           calendar_link?: string | null
           checkin_form_link?: string | null
           city?: string | null
@@ -285,6 +320,7 @@ export type Database = {
           needs_admin_help?: boolean
           next_program_update?: string | null
           nutrition_notes?: string | null
+          onboarded_by_coach_id?: string | null
           package_tracking_enabled?: boolean
           password_reset_sent_at?: string | null
           payment_status?: string | null
@@ -305,6 +341,93 @@ export type Database = {
           timezone?: string
           timezone_confirmed_at?: string | null
           training_notes?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      coach_invites: {
+        Row: {
+          accepted_at: string | null
+          coach_id: string
+          created_at: string
+          created_by: string | null
+          email: string
+          expires_at: string
+          id: string
+          token: string
+        }
+        Insert: {
+          accepted_at?: string | null
+          coach_id: string
+          created_at?: string
+          created_by?: string | null
+          email: string
+          expires_at?: string
+          id?: string
+          token: string
+        }
+        Update: {
+          accepted_at?: string | null
+          coach_id?: string
+          created_at?: string
+          created_by?: string | null
+          email?: string
+          expires_at?: string
+          id?: string
+          token?: string
+        }
+        Relationships: []
+      }
+      coaches: {
+        Row: {
+          archived: boolean
+          created_at: string
+          email: string
+          first_name: string | null
+          full_name: string
+          id: string
+          last_login_at: string | null
+          last_name: string | null
+          notes: string | null
+          phone: string | null
+          profile_picture_url: string | null
+          start_date: string | null
+          status: string
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          archived?: boolean
+          created_at?: string
+          email: string
+          first_name?: string | null
+          full_name: string
+          id?: string
+          last_login_at?: string | null
+          last_name?: string | null
+          notes?: string | null
+          phone?: string | null
+          profile_picture_url?: string | null
+          start_date?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          archived?: boolean
+          created_at?: string
+          email?: string
+          first_name?: string | null
+          full_name?: string
+          id?: string
+          last_login_at?: string | null
+          last_name?: string | null
+          notes?: string | null
+          phone?: string | null
+          profile_picture_url?: string | null
+          start_date?: string | null
+          status?: string
           updated_at?: string
           user_id?: string | null
         }
@@ -1097,6 +1220,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      current_coach_id: { Args: never; Returns: string }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -1104,9 +1228,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_assigned_coach: { Args: { _client_id: string }; Returns: boolean }
     }
     Enums: {
-      app_role: "admin" | "client"
+      app_role: "admin" | "client" | "coach"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1234,7 +1359,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["admin", "client"],
+      app_role: ["admin", "client", "coach"],
     },
   },
 } as const

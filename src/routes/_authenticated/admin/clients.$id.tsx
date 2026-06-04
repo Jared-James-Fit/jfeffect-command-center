@@ -29,6 +29,27 @@ import { ProfilePictureCapture } from "@/components/profile-picture-capture";
 import { MessageThread } from "@/components/message-thread";
 import type { ConversationState } from "@/lib/messages";
 
+function AssignedCoachSelect({ value, onChange }: { value: string | null; onChange: (v: string | null) => void }) {
+  const { data: coaches = [] } = useQuery({
+    queryKey: ["coaches-select"],
+    queryFn: async () => {
+      const { data } = await supabase.from("coaches").select("id, full_name, status").eq("archived", false).order("full_name");
+      return data ?? [];
+    },
+  });
+  return (
+    <Select value={value ?? "none"} onValueChange={(v) => onChange(v === "none" ? null : v)}>
+      <SelectTrigger><SelectValue placeholder="Unassigned" /></SelectTrigger>
+      <SelectContent>
+        <SelectItem value="none">— Unassigned —</SelectItem>
+        {coaches.map((c) => (
+          <SelectItem key={c.id} value={c.id}>{c.full_name}{c.status !== "Active" ? ` (${c.status})` : ""}</SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
 const TAB_VALUES = ["summary", "training", "nutrition", "cardio", "messages", "lift-videos", "documents", "sessions", "notes", "info", "account"] as const;
 type TabValue = typeof TAB_VALUES[number];
 
@@ -267,6 +288,13 @@ function ClientDetail() {
             <div><Label>Renewal date</Label><Input type="date" value={form.renewal_date ?? ""} onChange={(e) => set("renewal_date", e.target.value || null)} /></div>
             <div><Label>Coaching package</Label><Input value={form.coaching_package ?? ""} onChange={(e) => set("coaching_package", e.target.value)} /></div>
             <div><Label>Program phase</Label><Input value={form.program_phase ?? ""} onChange={(e) => set("program_phase", e.target.value)} /></div>
+            <div className="col-span-2">
+              <Label>Assigned coach</Label>
+              <AssignedCoachSelect
+                value={form.assigned_coach_id ?? null}
+                onChange={(v) => set("assigned_coach_id", v)}
+              />
+            </div>
             <div>
               <Label>Status</Label>
               <Select value={form.status} onValueChange={(v) => set("status", v)}>

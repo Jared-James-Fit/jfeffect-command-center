@@ -49,7 +49,9 @@ import { Route as AuthenticatedAdminCalendarRouteImport } from './routes/_authen
 import { Route as AuthenticatedAdminBusinessSystemsRouteImport } from './routes/_authenticated/admin/business-systems'
 import { Route as AuthenticatedAdminAutomationsRouteImport } from './routes/_authenticated/admin/automations'
 import { Route as AuthenticatedAdminAppsRouteImport } from './routes/_authenticated/admin/apps'
+import { Route as AuthenticatedAdminCoachesIndexRouteImport } from './routes/_authenticated/admin/coaches.index'
 import { Route as AuthenticatedAdminClientsIndexRouteImport } from './routes/_authenticated/admin/clients.index'
+import { Route as AuthenticatedAdminCoachesIdRouteImport } from './routes/_authenticated/admin/coaches.$id'
 import { Route as AuthenticatedAdminClientsIdRouteImport } from './routes/_authenticated/admin/clients.$id'
 
 const SitemapRoute = SitemapRouteImport.update({
@@ -281,10 +283,22 @@ const AuthenticatedAdminAppsRoute = AuthenticatedAdminAppsRouteImport.update({
   path: '/apps',
   getParentRoute: () => AuthenticatedAdminRouteRoute,
 } as any)
+const AuthenticatedAdminCoachesIndexRoute =
+  AuthenticatedAdminCoachesIndexRouteImport.update({
+    id: '/coaches/',
+    path: '/coaches/',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
 const AuthenticatedAdminClientsIndexRoute =
   AuthenticatedAdminClientsIndexRouteImport.update({
     id: '/clients/',
     path: '/clients/',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
+const AuthenticatedAdminCoachesIdRoute =
+  AuthenticatedAdminCoachesIdRouteImport.update({
+    id: '/coaches/$id',
+    path: '/coaches/$id',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
 const AuthenticatedAdminClientsIdRoute =
@@ -335,7 +349,9 @@ export interface FileRoutesByFullPath {
   '/admin/': typeof AuthenticatedAdminIndexRoute
   '/portal/': typeof AuthenticatedPortalIndexRoute
   '/admin/clients/$id': typeof AuthenticatedAdminClientsIdRoute
+  '/admin/coaches/$id': typeof AuthenticatedAdminCoachesIdRoute
   '/admin/clients/': typeof AuthenticatedAdminClientsIndexRoute
+  '/admin/coaches/': typeof AuthenticatedAdminCoachesIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -376,7 +392,9 @@ export interface FileRoutesByTo {
   '/admin': typeof AuthenticatedAdminIndexRoute
   '/portal': typeof AuthenticatedPortalIndexRoute
   '/admin/clients/$id': typeof AuthenticatedAdminClientsIdRoute
+  '/admin/coaches/$id': typeof AuthenticatedAdminCoachesIdRoute
   '/admin/clients': typeof AuthenticatedAdminClientsIndexRoute
+  '/admin/coaches': typeof AuthenticatedAdminCoachesIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -421,7 +439,9 @@ export interface FileRoutesById {
   '/_authenticated/admin/': typeof AuthenticatedAdminIndexRoute
   '/_authenticated/portal/': typeof AuthenticatedPortalIndexRoute
   '/_authenticated/admin/clients/$id': typeof AuthenticatedAdminClientsIdRoute
+  '/_authenticated/admin/coaches/$id': typeof AuthenticatedAdminCoachesIdRoute
   '/_authenticated/admin/clients/': typeof AuthenticatedAdminClientsIndexRoute
+  '/_authenticated/admin/coaches/': typeof AuthenticatedAdminCoachesIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -466,7 +486,9 @@ export interface FileRouteTypes {
     | '/admin/'
     | '/portal/'
     | '/admin/clients/$id'
+    | '/admin/coaches/$id'
     | '/admin/clients/'
+    | '/admin/coaches/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -507,7 +529,9 @@ export interface FileRouteTypes {
     | '/admin'
     | '/portal'
     | '/admin/clients/$id'
+    | '/admin/coaches/$id'
     | '/admin/clients'
+    | '/admin/coaches'
   id:
     | '__root__'
     | '/'
@@ -551,7 +575,9 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/'
     | '/_authenticated/portal/'
     | '/_authenticated/admin/clients/$id'
+    | '/_authenticated/admin/coaches/$id'
     | '/_authenticated/admin/clients/'
+    | '/_authenticated/admin/coaches/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -845,11 +871,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminAppsRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
+    '/_authenticated/admin/coaches/': {
+      id: '/_authenticated/admin/coaches/'
+      path: '/coaches'
+      fullPath: '/admin/coaches/'
+      preLoaderRoute: typeof AuthenticatedAdminCoachesIndexRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
     '/_authenticated/admin/clients/': {
       id: '/_authenticated/admin/clients/'
       path: '/clients'
       fullPath: '/admin/clients/'
       preLoaderRoute: typeof AuthenticatedAdminClientsIndexRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
+    '/_authenticated/admin/coaches/$id': {
+      id: '/_authenticated/admin/coaches/$id'
+      path: '/coaches/$id'
+      fullPath: '/admin/coaches/$id'
+      preLoaderRoute: typeof AuthenticatedAdminCoachesIdRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
     '/_authenticated/admin/clients/$id': {
@@ -884,7 +924,9 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminTrainingPhasesRoute: typeof AuthenticatedAdminTrainingPhasesRoute
   AuthenticatedAdminIndexRoute: typeof AuthenticatedAdminIndexRoute
   AuthenticatedAdminClientsIdRoute: typeof AuthenticatedAdminClientsIdRoute
+  AuthenticatedAdminCoachesIdRoute: typeof AuthenticatedAdminCoachesIdRoute
   AuthenticatedAdminClientsIndexRoute: typeof AuthenticatedAdminClientsIndexRoute
+  AuthenticatedAdminCoachesIndexRoute: typeof AuthenticatedAdminCoachesIndexRoute
 }
 
 const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren =
@@ -913,7 +955,9 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
       AuthenticatedAdminTrainingPhasesRoute,
     AuthenticatedAdminIndexRoute: AuthenticatedAdminIndexRoute,
     AuthenticatedAdminClientsIdRoute: AuthenticatedAdminClientsIdRoute,
+    AuthenticatedAdminCoachesIdRoute: AuthenticatedAdminCoachesIdRoute,
     AuthenticatedAdminClientsIndexRoute: AuthenticatedAdminClientsIndexRoute,
+    AuthenticatedAdminCoachesIndexRoute: AuthenticatedAdminCoachesIndexRoute,
   }
 
 const AuthenticatedAdminRouteRouteWithChildren =
@@ -982,13 +1026,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
