@@ -669,6 +669,7 @@ export type Database = {
           title: string
           training_goal: string | null
           updated_at: string
+          visible_to_client: boolean
         }
         Insert: {
           client_id: string
@@ -687,6 +688,7 @@ export type Database = {
           title: string
           training_goal?: string | null
           updated_at?: string
+          visible_to_client?: boolean
         }
         Update: {
           client_id?: string
@@ -705,6 +707,7 @@ export type Database = {
           title?: string
           training_goal?: string | null
           updated_at?: string
+          visible_to_client?: boolean
         }
         Relationships: [
           {
