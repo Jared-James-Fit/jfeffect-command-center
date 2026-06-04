@@ -25,8 +25,10 @@ import { Switch } from "@/components/ui/switch";
 import { COMMON_TIMEZONES } from "@/lib/pt-sessions";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ProfilePictureCapture } from "@/components/profile-picture-capture";
+import { MessageThread } from "@/components/message-thread";
+import type { ConversationState } from "@/lib/messages";
 
-const TAB_VALUES = ["summary", "training", "nutrition", "cardio", "documents", "sessions", "notes", "info", "account"] as const;
+const TAB_VALUES = ["summary", "training", "nutrition", "cardio", "messages", "documents", "sessions", "notes", "info", "account"] as const;
 type TabValue = typeof TAB_VALUES[number];
 
 export const Route = createFileRoute("/_authenticated/admin/clients/$id")({
