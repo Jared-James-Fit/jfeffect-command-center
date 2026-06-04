@@ -26,6 +26,8 @@ export type Message = {
   read_by_client_at: string | null;
   created_at: string;
   updated_at: string;
+  transcript?: string | null;
+  transcript_status?: string | null;
 };
 
 export type ConversationState = {
