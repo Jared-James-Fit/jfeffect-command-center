@@ -338,9 +338,27 @@ function useVoiceRecorder() {
   const mediaRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<BlobPart[]>([]);
   const startedAtRef = useRef<number>(0);
+  const tickRef = useRef<number | null>(null);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const rafRef = useRef<number | null>(null);
+  const liveLevelsRef = useRef<number[]>([]);
+  const accumulatedPeaksRef = useRef<number[]>([]);
+  const sinceLastPeakRef = useRef<number>(0);
+
   const [recording, setRecording] = useState(false);
   const [elapsed, setElapsed] = useState(0);
-  const tickRef = useRef<number | null>(null);
+  const [liveLevels, setLiveLevels] = useState<number[]>([]);
+
+  const LIVE_BAR_COUNT = 40;
+
+  const teardownAudioGraph = () => {
+    if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = null; }
+    analyserRef.current?.disconnect();
+    analyserRef.current = null;
+    audioCtxRef.current?.close().catch(() => {});
+    audioCtxRef.current = null;
+  };
 
   const start = async () => {
     if (!navigator.mediaDevices?.getUserMedia) throw new Error("Recording not supported on this device.");
@@ -355,10 +373,56 @@ function useVoiceRecorder() {
     startedAtRef.current = Date.now();
     setRecording(true);
     setElapsed(0);
-    tickRef.current = window.setInterval(() => setElapsed((Date.now() - startedAtRef.current) / 1000), 250);
+    liveLevelsRef.current = [];
+    accumulatedPeaksRef.current = [];
+    sinceLastPeakRef.current = Date.now();
+    setLiveLevels([]);
+
+    // Web Audio analyser for live levels
+    try {
+      const ACtx: typeof AudioContext = (window as any).AudioContext || (window as any).webkitAudioContext;
+      const ctx = new ACtx();
+      const source = ctx.createMediaStreamSource(stream);
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 512;
+      source.connect(analyser);
+      audioCtxRef.current = ctx;
+      analyserRef.current = analyser;
+      const buf = new Uint8Array(analyser.frequencyBinCount);
+      const tick = () => {
+        if (!analyserRef.current) return;
+        analyserRef.current.getByteTimeDomainData(buf);
+        // RMS
+        let sum = 0;
+        for (let i = 0; i < buf.length; i++) {
+          const v = (buf[i] - 128) / 128;
+          sum += v * v;
+        }
+        const rms = Math.sqrt(sum / buf.length);
+        const level = Math.min(1, Math.max(0.05, rms * 2.8));
+        const next = [...liveLevelsRef.current, level].slice(-LIVE_BAR_COUNT);
+        liveLevelsRef.current = next;
+        // Accumulate peaks for saved waveform every ~80ms
+        if (Date.now() - sinceLastPeakRef.current > 80) {
+          accumulatedPeaksRef.current.push(level);
+          sinceLastPeakRef.current = Date.now();
+        }
+        setLiveLevels(next);
+        rafRef.current = requestAnimationFrame(tick);
+      };
+      rafRef.current = requestAnimationFrame(tick);
+    } catch (e) {
+      // analyser optional; recording still works
+      console.warn("analyser unavailable", e);
+    }
+
+    tickRef.current = window.setInterval(
+      () => setElapsed((Date.now() - startedAtRef.current) / 1000),
+      200,
+    );
   };
 
-  const stop = async (): Promise<{ blob: Blob; duration: number } | null> => {
+  const stop = async (): Promise<{ blob: Blob; duration: number; peaks: number[] } | null> => {
     const mr = mediaRef.current;
     if (!mr) return null;
     if (tickRef.current) { clearInterval(tickRef.current); tickRef.current = null; }
@@ -371,7 +435,22 @@ function useVoiceRecorder() {
     mediaRef.current = null;
     setRecording(false);
     const blob = await done;
-    return { blob, duration };
+    // downsample accumulated peaks to ~48 bars
+    const raw = accumulatedPeaksRef.current;
+    const targetCount = 48;
+    const peaks: number[] = [];
+    if (raw.length > 0) {
+      const step = raw.length / targetCount;
+      for (let i = 0; i < targetCount; i++) {
+        const a = Math.floor(i * step);
+        const b = Math.min(raw.length, Math.floor((i + 1) * step));
+        let max = 0;
+        for (let j = a; j < b; j++) if (raw[j] > max) max = raw[j];
+        peaks.push(Number(max.toFixed(3)));
+      }
+    }
+    teardownAudioGraph();
+    return { blob, duration, peaks };
   };
 
   const cancel = () => {
@@ -383,11 +462,30 @@ function useVoiceRecorder() {
     }
     mediaRef.current = null;
     chunksRef.current = [];
+    accumulatedPeaksRef.current = [];
+    liveLevelsRef.current = [];
+    setLiveLevels([]);
+    teardownAudioGraph();
     setRecording(false);
     setElapsed(0);
   };
 
-  return { recording, elapsed, start, stop, cancel };
+  return { recording, elapsed, liveLevels, start, stop, cancel };
+}
+
+function LiveWaveform({ levels }: { levels: number[] }) {
+  const padded = Array.from({ length: 40 }, (_, i) => levels[levels.length - 40 + i] ?? 0);
+  return (
+    <div className="flex h-7 flex-1 items-center gap-[2px]">
+      {padded.map((v, i) => (
+        <span
+          key={i}
+          className="w-[3px] flex-1 rounded-full bg-destructive transition-[height] duration-75"
+          style={{ height: `${Math.max(8, v * 100)}%`, opacity: v > 0 ? 1 : 0.25 }}
+        />
+      ))}
+    </div>
+  );
 }
 
 export function MessageThread({
