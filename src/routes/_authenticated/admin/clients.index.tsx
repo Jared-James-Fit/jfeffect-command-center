@@ -199,23 +199,65 @@ function ClientsPage() {
                   <tr className="border-b border-border text-left text-xs uppercase tracking-widest text-muted-foreground">
                     <th className="px-4 py-3">Client</th>
                     <th className="px-4 py-3">Type</th>
-                    <th className="px-4 py-3">Status</th>
+                    <th className="px-4 py-3 min-w-[260px]">Current Phase</th>
+                    <th className="px-4 py-3">Next Phase</th>
+                    <th className="px-4 py-3">Nutrition</th>
+                    <th className="px-4 py-3">Cardio</th>
                     <th className="px-4 py-3">Payment</th>
-                    <th className="px-4 py-3">Renewal</th>
+                    <th className="px-4 py-3">Status</th>
                     <th className="px-4 py-3 w-12"></th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((c) => (
-                    <tr key={c.id} className="border-b border-border/50 transition hover:bg-secondary/30">
+                  {filtered.map((c) => {
+                    const ph = phaseByClient.get(c.id);
+                    const current = ph?.current;
+                    const next = ph?.next;
+                    const dCur = current ? derivePhase(current) : null;
+                    const nut = nutByClient.get(c.id);
+                    const card = cardByClient.get(c.id);
+                    const dNut = nut ? deriveTarget(nut) : null;
+                    const dCard = card ? deriveTarget(card) : null;
+                    return (
+                    <tr key={c.id} className="border-b border-border/50 transition hover:bg-secondary/30 align-top">
                       <td className="px-4 py-3">
                         <Link to="/admin/clients/$id" params={{ id: c.id }} className="font-semibold hover:text-primary">{c.full_name}</Link>
                         <div className="text-xs text-muted-foreground">{c.email}</div>
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">{c.coaching_type ?? "—"}</td>
-                      <td className="px-4 py-3"><Badge variant="outline">{c.status}</Badge></td>
+                      <td className="px-4 py-3">
+                        {current && dCur ? (
+                          <div className="space-y-1.5 min-w-[240px]">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-semibold truncate max-w-[160px]">{displayTitle(current)}</span>
+                              <Badge variant="outline" className={toneClasses(dCur.tone)}>{dCur.label}</Badge>
+                            </div>
+                            <div className="text-[10px] text-muted-foreground">
+                              {format(parseISO(current.start_date), "MMM d")} → {format(parseISO(current.end_date), "MMM d")}
+                              {" · "}
+                              {dCur.daysRemaining < 0 ? `${Math.abs(dCur.daysRemaining)}d over` : `${dCur.daysRemaining}d left`}
+                              {" · "}{dCur.percentComplete}%
+                            </div>
+                            <Progress value={dCur.percentComplete} className="h-1" />
+                          </div>
+                        ) : <span className="text-xs text-muted-foreground">—</span>}
+                      </td>
+                      <td className="px-4 py-3 text-xs">
+                        {next ? (
+                          <div>
+                            <div className="font-medium truncate max-w-[140px]">{displayTitle(next)}</div>
+                            <div className="text-[10px] text-muted-foreground">{format(parseISO(next.start_date), "MMM d")}</div>
+                          </div>
+                        ) : <span className="text-muted-foreground">—</span>}
+                      </td>
+                      <td className="px-4 py-3">
+                        {dNut ? <Badge variant="outline" className={dNut.tone}>{dNut.label}</Badge> : <span className="text-xs text-muted-foreground">—</span>}
+                      </td>
+                      <td className="px-4 py-3">
+                        {dCard ? <Badge variant="outline" className={dCard.tone}>{dCard.label}</Badge> : <span className="text-xs text-muted-foreground">—</span>}
+                      </td>
                       <td className="px-4 py-3 text-muted-foreground">{c.payment_status ?? "—"}</td>
-                      <td className="px-4 py-3 text-muted-foreground">{c.renewal_date ?? "—"}</td>
+                      <td className="px-4 py-3"><Badge variant="outline">{c.status}</Badge></td>
                       <td className="px-4 py-3 text-right">
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
@@ -239,7 +281,7 @@ function ClientsPage() {
                         </DropdownMenu>
                       </td>
                     </tr>
-                  ))}
+                  );})}
                 </tbody>
               </table>
             </div>
