@@ -146,7 +146,13 @@ function AgreementsAdminPage() {
         </Card>
       </div>
 
-      <TemplateDialog open={editing !== null} onOpenChange={(o) => !o && setEditing(null)} initial={editing ?? {}} onSubmit={save} />
+      <TemplateDialog
+        key={editing?.id ?? (editing ? "new" : "closed")}
+        open={editing !== null}
+        onOpenChange={(o) => !o && setEditing(null)}
+        initial={editing ?? {}}
+        onSubmit={save}
+      />
     </>
   );
 }
@@ -160,10 +166,6 @@ function TemplateDialog({
 }) {
   const [form, setForm] = useState<Partial<AgreementTemplate>>(initial);
   const [busy, setBusy] = useState(false);
-  // reset when reopened
-  if (open && form !== initial && !form.name && initial.name) {
-    setForm(initial);
-  }
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) setForm({}); onOpenChange(o); }}>
