@@ -122,9 +122,9 @@ function AdminDashboard() {
     queryKey: ["dashboard-agreements"],
     queryFn: async () => {
       const { data } = await supabase.from("agreements")
-        .select("id, template_name, status, sent_at, client_id, clients(id, full_name)")
-        .in("status", ["Sent", "Opened", "In Progress", "Waiting On Client", "Waiting On Coach", "Expired", "Needs Update"])
-        .order("sent_at", { ascending: false })
+        .select("id, template_name, agreement_type, status, sent_at, client_id, signer_mismatch, verification_status, clients(id, full_name)")
+        .or("signer_mismatch.eq.true,status.in.(Sent,Opened,Waiting on Client,Expired,Needs Resend,Needs Manual Verification,Error)")
+        .order("created_at", { ascending: false })
         .limit(8);
       return (data ?? []) as any[];
     },
