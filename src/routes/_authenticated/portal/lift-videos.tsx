@@ -7,7 +7,7 @@ import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Plus, Video } from "lucide-react";
-import { listLiftVideos, type LiftVideo } from "@/lib/lift-videos";
+import { listLiftVideos, markClientViewed, type LiftVideo } from "@/lib/lift-videos";
 import { LiftVideoDialog } from "@/components/lift-video-dialog";
 import { LiftVideoCard } from "@/components/lift-video-card";
 
@@ -35,6 +35,22 @@ function ClientLiftVideos() {
     enabled: !!client?.id,
     queryFn: () => listLiftVideos({ clientId: client!.id }),
   });
+
+  // Clear bell notifications: mark videos with new coach activity as viewed.
+  useEffect(() => {
+    if (!videos.length) return;
+    const stale = videos.filter((v) => {
+      const seen = v.client_last_viewed_at ? new Date(v.client_last_viewed_at).getTime() : 0;
+      const latest = Math.max(
+        v.watched_at ? +new Date(v.watched_at) : 0,
+        v.liked_at ? +new Date(v.liked_at) : 0,
+        v.reviewed_at ? +new Date(v.reviewed_at) : 0,
+      );
+      return latest > seen;
+    });
+    if (!stale.length) return;
+    Promise.all(stale.map((v) => markClientViewed(v.id))).catch(() => {});
+  }, [videos]);
 
   useEffect(() => {
     if (!client?.id) return;

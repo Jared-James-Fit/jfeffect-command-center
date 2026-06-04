@@ -12,13 +12,18 @@ import {
   listComments, addComment, markWatched, toggleLike, markReviewed, setStatus,
   getSignedVideoUrl, deleteLiftVideo,
   isYouTube, isDrive, youTubeEmbed, drivePreview,
+  LIFT_VIDEO_QUICK_REPLIES,
 } from "@/lib/lift-videos";
 import { format, parseISO, formatDistanceToNow } from "date-fns";
 import {
   Eye, ThumbsUp, CheckCircle2, MessageSquare, AlertTriangle, ExternalLink, Trash2, Edit3, Loader2,
+  AlertCircle, Archive, Zap,
 } from "lucide-react";
 import { toast } from "sonner";
 import { LiftVideoPlayer } from "@/components/lift-video-player";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 type Props = {
   video: LiftVideo;
@@ -175,6 +180,12 @@ export function LiftVideoCard({ video, role, userId, onChanged, onEdit }: Props)
           <Button size="sm" variant="outline" onClick={() => act(() => markReviewed(video.id, userId), "Marked reviewed")}>
             <CheckCircle2 className="mr-1 h-3 w-3" /> Reviewed
           </Button>
+          <Button size="sm" variant="outline" onClick={() => act(() => setStatus(video.id, "Needs Follow-Up"), "Marked needs follow-up")}>
+            <AlertCircle className="mr-1 h-3 w-3" /> Needs Follow-Up
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => act(() => setStatus(video.id, "Archived"), "Archived")}>
+            <Archive className="mr-1 h-3 w-3" /> Archive
+          </Button>
           <div className="ml-auto flex items-center gap-2">
             <Label className="text-xs">Status</Label>
             <Select value={video.status} onValueChange={(v) => act(() => setStatus(video.id, v as any), "Status updated")}>
@@ -208,9 +219,25 @@ export function LiftVideoCard({ video, role, userId, onChanged, onEdit }: Props)
         <Textarea rows={2} placeholder={role === "admin" ? "Reply to client…" : "Reply to coach…"} value={commentBody} onChange={(e) => setCommentBody(e.target.value)} />
         <div className="flex items-center justify-between">
           {role === "admin" ? (
-            <label className="flex items-center gap-2 text-xs text-muted-foreground">
-              <Switch checked={isInternal} onCheckedChange={setIsInternal} /> Internal note (hidden from client)
-            </label>
+            <div className="flex items-center gap-3">
+              <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Switch checked={isInternal} onCheckedChange={setIsInternal} /> Internal note
+              </label>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button size="sm" variant="outline" type="button">
+                    <Zap className="mr-1 h-3 w-3" /> Quick reply
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-72">
+                  {LIFT_VIDEO_QUICK_REPLIES.map((q) => (
+                    <DropdownMenuItem key={q} onClick={() => setCommentBody((b) => (b ? `${b}\n${q}` : q))}>
+                      <span className="text-xs">{q}</span>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           ) : <div />}
           <Button size="sm" onClick={post} disabled={posting || !commentBody.trim()}>
             {posting ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : null}

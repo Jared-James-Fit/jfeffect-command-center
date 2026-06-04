@@ -253,3 +253,23 @@ export function drivePreview(url: string) {
   const m = url.match(/\/file\/d\/([\w-]+)/) || url.match(/[?&]id=([\w-]+)/);
   return m ? `https://drive.google.com/file/d/${m[1]}/preview` : null;
 }
+
+export const LIFT_VIDEO_QUICK_REPLIES: string[] = [
+  "Good lift. Keep this same setup next week.",
+  "Better position here.",
+  "Send me another angle next time.",
+  "Film from a 45-degree angle next set.",
+  "Keep the bar closer.",
+  "Slow the eccentric down.",
+  "Good control. No major changes.",
+  "This needs a program adjustment.",
+  "I watched this and updated your notes.",
+];
+
+export async function markClientViewed(videoId: string) {
+  await updateLiftVideo(videoId, { client_last_viewed_at: new Date().toISOString() } as any);
+}
+
+export async function markAdminViewed(videoId: string) {
+  await updateLiftVideo(videoId, { admin_last_viewed_at: new Date().toISOString() } as any);
+}
