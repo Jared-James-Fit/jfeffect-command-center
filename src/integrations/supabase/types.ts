@@ -131,25 +131,35 @@ export type Database = {
         Row: {
           account_created_at: string | null
           account_status: string
+          address: string | null
           agreement_link: string | null
           archived: boolean
           calendar_link: string | null
           checkin_form_link: string | null
+          city: string | null
           coach_notes: string | null
           coaching_package: string | null
           coaching_type: string | null
+          country: string | null
           created_at: string
           default_session_location: string | null
           drive_folder_link: string | null
           email: string | null
+          first_name: string | null
           full_name: string
           goals: string | null
           id: string
+          info_last_updated_at: string | null
+          info_last_updated_by: string | null
+          info_last_updated_fields: string[] | null
+          info_update_requested: boolean
+          info_update_requested_at: string | null
           injuries: string | null
           instagram: string | null
           invite_expires_at: string | null
           invite_last_resent_at: string | null
           invite_sent_at: string | null
+          last_name: string | null
           last_program_update: string | null
           lifestyle_notes: string | null
           needs_admin_help: boolean
@@ -159,8 +169,12 @@ export type Database = {
           password_reset_sent_at: string | null
           payment_status: string | null
           phone: string | null
+          postal_code: string | null
+          profile_picture_updated_at: string | null
+          profile_picture_url: string | null
           program_phase: string | null
           program_sheet_link: string | null
+          province: string | null
           renewal_date: string | null
           sessions_purchased: number
           sessions_used: number
@@ -169,6 +183,7 @@ export type Database = {
           stripe_link: string | null
           tags: string[]
           timezone: string
+          timezone_confirmed_at: string | null
           training_notes: string | null
           updated_at: string
           user_id: string | null
@@ -176,25 +191,35 @@ export type Database = {
         Insert: {
           account_created_at?: string | null
           account_status?: string
+          address?: string | null
           agreement_link?: string | null
           archived?: boolean
           calendar_link?: string | null
           checkin_form_link?: string | null
+          city?: string | null
           coach_notes?: string | null
           coaching_package?: string | null
           coaching_type?: string | null
+          country?: string | null
           created_at?: string
           default_session_location?: string | null
           drive_folder_link?: string | null
           email?: string | null
+          first_name?: string | null
           full_name: string
           goals?: string | null
           id?: string
+          info_last_updated_at?: string | null
+          info_last_updated_by?: string | null
+          info_last_updated_fields?: string[] | null
+          info_update_requested?: boolean
+          info_update_requested_at?: string | null
           injuries?: string | null
           instagram?: string | null
           invite_expires_at?: string | null
           invite_last_resent_at?: string | null
           invite_sent_at?: string | null
+          last_name?: string | null
           last_program_update?: string | null
           lifestyle_notes?: string | null
           needs_admin_help?: boolean
@@ -204,8 +229,12 @@ export type Database = {
           password_reset_sent_at?: string | null
           payment_status?: string | null
           phone?: string | null
+          postal_code?: string | null
+          profile_picture_updated_at?: string | null
+          profile_picture_url?: string | null
           program_phase?: string | null
           program_sheet_link?: string | null
+          province?: string | null
           renewal_date?: string | null
           sessions_purchased?: number
           sessions_used?: number
@@ -214,6 +243,7 @@ export type Database = {
           stripe_link?: string | null
           tags?: string[]
           timezone?: string
+          timezone_confirmed_at?: string | null
           training_notes?: string | null
           updated_at?: string
           user_id?: string | null
@@ -221,25 +251,35 @@ export type Database = {
         Update: {
           account_created_at?: string | null
           account_status?: string
+          address?: string | null
           agreement_link?: string | null
           archived?: boolean
           calendar_link?: string | null
           checkin_form_link?: string | null
+          city?: string | null
           coach_notes?: string | null
           coaching_package?: string | null
           coaching_type?: string | null
+          country?: string | null
           created_at?: string
           default_session_location?: string | null
           drive_folder_link?: string | null
           email?: string | null
+          first_name?: string | null
           full_name?: string
           goals?: string | null
           id?: string
+          info_last_updated_at?: string | null
+          info_last_updated_by?: string | null
+          info_last_updated_fields?: string[] | null
+          info_update_requested?: boolean
+          info_update_requested_at?: string | null
           injuries?: string | null
           instagram?: string | null
           invite_expires_at?: string | null
           invite_last_resent_at?: string | null
           invite_sent_at?: string | null
+          last_name?: string | null
           last_program_update?: string | null
           lifestyle_notes?: string | null
           needs_admin_help?: boolean
@@ -249,8 +289,12 @@ export type Database = {
           password_reset_sent_at?: string | null
           payment_status?: string | null
           phone?: string | null
+          postal_code?: string | null
+          profile_picture_updated_at?: string | null
+          profile_picture_url?: string | null
           program_phase?: string | null
           program_sheet_link?: string | null
+          province?: string | null
           renewal_date?: string | null
           sessions_purchased?: number
           sessions_used?: number
@@ -259,6 +303,7 @@ export type Database = {
           stripe_link?: string | null
           tags?: string[]
           timezone?: string
+          timezone_confirmed_at?: string | null
           training_notes?: string | null
           updated_at?: string
           user_id?: string | null
