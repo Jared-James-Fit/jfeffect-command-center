@@ -8,9 +8,10 @@ import { Badge } from "@/components/ui/badge";
 import {
   Users, UserPlus, AlertTriangle, Calendar, DollarSign,
   Plus, Zap, ExternalLink, Activity, Dumbbell, Package, Timer, UserCheck, Apple,
-  ClipboardCheck, Heart, FileText,
+  ClipboardCheck, Heart, FileText, Target,
 } from "lucide-react";
 import { derivePhase, displayTitle, toneClasses, type TrainingPhase } from "@/lib/training-phases";
+import { deriveImportantDate, dateTypeLabel, importantToneClasses, type ImportantDate } from "@/lib/important-dates";
 import { deriveTarget } from "@/lib/nutrition-cardio";
 import { statusTone, fmtTimeRange } from "@/lib/pt-sessions";
 
@@ -101,6 +102,27 @@ function AdminDashboard() {
   const nutritionAlerts = nutritionTargets
     .map((t: any) => ({ ...t, derived: deriveTarget(t) }))
     .filter((t: any) => ["ending-soon", "due-today", "past-due"].includes(t.derived.state))
+    .slice(0, 8);
+
+  const { data: importantDates = [] } = useQuery({
+    queryKey: ["important-dates"],
+    queryFn: async () => {
+      const { data } = await (supabase.from("important_dates") as any)
+        .select("*, clients(id, full_name)")
+        .neq("status", "Archived")
+        .order("target_date", { ascending: true });
+      return (data ?? []) as Array<ImportantDate & { clients: { id: string; full_name: string } | null }>;
+    },
+  });
+
+  const importantAlerts = importantDates
+    .map((d) => ({ ...d, derived: deriveImportantDate(d) }))
+    .filter((d) => {
+      const s = d.derived.state;
+      if (["past-due", "due-today", "approaching"].includes(s)) return true;
+      if (s === "active" && d.derived.daysRemaining <= 30) return true;
+      return false;
+    })
     .slice(0, 8);
 
   // Account setup alerts
