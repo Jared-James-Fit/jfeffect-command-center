@@ -30,7 +30,6 @@ import { Route as AuthenticatedPortalExercisesRouteImport } from './routes/_auth
 import { Route as AuthenticatedPortalDocumentsRouteImport } from './routes/_authenticated/portal/documents'
 import { Route as AuthenticatedPortalCheckInRouteImport } from './routes/_authenticated/portal/check-in'
 import { Route as AuthenticatedPortalCalendarRouteImport } from './routes/_authenticated/portal/calendar'
-import { Route as AuthenticatedPortalAgreementsRouteImport } from './routes/_authenticated/portal/agreements'
 import { Route as AuthenticatedPortalAccountRouteImport } from './routes/_authenticated/portal/account'
 import { Route as AuthenticatedAdminTrainingPhasesRouteImport } from './routes/_authenticated/admin/training-phases'
 import { Route as AuthenticatedAdminTestimonialsRouteImport } from './routes/_authenticated/admin/testimonials'
@@ -52,6 +51,7 @@ import { Route as AuthenticatedAdminCalendarRouteImport } from './routes/_authen
 import { Route as AuthenticatedAdminBusinessSystemsRouteImport } from './routes/_authenticated/admin/business-systems'
 import { Route as AuthenticatedAdminAutomationsRouteImport } from './routes/_authenticated/admin/automations'
 import { Route as AuthenticatedAdminAppsRouteImport } from './routes/_authenticated/admin/apps'
+import { Route as AuthenticatedPortalAgreementsIndexRouteImport } from './routes/_authenticated/portal/agreements.index'
 import { Route as AuthenticatedAdminCoachesIndexRouteImport } from './routes/_authenticated/admin/coaches.index'
 import { Route as AuthenticatedAdminClientsIndexRouteImport } from './routes/_authenticated/admin/clients.index'
 import { Route as AuthenticatedAdminAgreementsIndexRouteImport } from './routes/_authenticated/admin/agreements.index'
@@ -180,12 +180,6 @@ const AuthenticatedPortalCalendarRoute =
     path: '/calendar',
     getParentRoute: () => AuthenticatedPortalRouteRoute,
   } as any)
-const AuthenticatedPortalAgreementsRoute =
-  AuthenticatedPortalAgreementsRouteImport.update({
-    id: '/agreements',
-    path: '/agreements',
-    getParentRoute: () => AuthenticatedPortalRouteRoute,
-  } as any)
 const AuthenticatedPortalAccountRoute =
   AuthenticatedPortalAccountRouteImport.update({
     id: '/account',
@@ -310,6 +304,12 @@ const AuthenticatedAdminAppsRoute = AuthenticatedAdminAppsRouteImport.update({
   path: '/apps',
   getParentRoute: () => AuthenticatedAdminRouteRoute,
 } as any)
+const AuthenticatedPortalAgreementsIndexRoute =
+  AuthenticatedPortalAgreementsIndexRouteImport.update({
+    id: '/agreements/',
+    path: '/agreements/',
+    getParentRoute: () => AuthenticatedPortalRouteRoute,
+  } as any)
 const AuthenticatedAdminCoachesIndexRoute =
   AuthenticatedAdminCoachesIndexRouteImport.update({
     id: '/coaches/',
@@ -336,9 +336,9 @@ const AuthenticatedPortalPurchasesIdRoute =
   } as any)
 const AuthenticatedPortalAgreementsIdRoute =
   AuthenticatedPortalAgreementsIdRouteImport.update({
-    id: '/$id',
-    path: '/$id',
-    getParentRoute: () => AuthenticatedPortalAgreementsRoute,
+    id: '/agreements/$id',
+    path: '/agreements/$id',
+    getParentRoute: () => AuthenticatedPortalRouteRoute,
   } as any)
 const AuthenticatedAdminPurchasesIdRoute =
   AuthenticatedAdminPurchasesIdRouteImport.update({
@@ -400,7 +400,6 @@ export interface FileRoutesByFullPath {
   '/admin/testimonials': typeof AuthenticatedAdminTestimonialsRoute
   '/admin/training-phases': typeof AuthenticatedAdminTrainingPhasesRoute
   '/portal/account': typeof AuthenticatedPortalAccountRoute
-  '/portal/agreements': typeof AuthenticatedPortalAgreementsRouteWithChildren
   '/portal/calendar': typeof AuthenticatedPortalCalendarRoute
   '/portal/check-in': typeof AuthenticatedPortalCheckInRoute
   '/portal/documents': typeof AuthenticatedPortalDocumentsRoute
@@ -423,6 +422,7 @@ export interface FileRoutesByFullPath {
   '/admin/agreements/': typeof AuthenticatedAdminAgreementsIndexRoute
   '/admin/clients/': typeof AuthenticatedAdminClientsIndexRoute
   '/admin/coaches/': typeof AuthenticatedAdminCoachesIndexRoute
+  '/portal/agreements/': typeof AuthenticatedPortalAgreementsIndexRoute
   '/admin/agreements/instance/$id': typeof AuthenticatedAdminAgreementsInstanceIdRoute
 }
 export interface FileRoutesByTo {
@@ -452,7 +452,6 @@ export interface FileRoutesByTo {
   '/admin/testimonials': typeof AuthenticatedAdminTestimonialsRoute
   '/admin/training-phases': typeof AuthenticatedAdminTrainingPhasesRoute
   '/portal/account': typeof AuthenticatedPortalAccountRoute
-  '/portal/agreements': typeof AuthenticatedPortalAgreementsRouteWithChildren
   '/portal/calendar': typeof AuthenticatedPortalCalendarRoute
   '/portal/check-in': typeof AuthenticatedPortalCheckInRoute
   '/portal/documents': typeof AuthenticatedPortalDocumentsRoute
@@ -475,6 +474,7 @@ export interface FileRoutesByTo {
   '/admin/agreements': typeof AuthenticatedAdminAgreementsIndexRoute
   '/admin/clients': typeof AuthenticatedAdminClientsIndexRoute
   '/admin/coaches': typeof AuthenticatedAdminCoachesIndexRoute
+  '/portal/agreements': typeof AuthenticatedPortalAgreementsIndexRoute
   '/admin/agreements/instance/$id': typeof AuthenticatedAdminAgreementsInstanceIdRoute
 }
 export interface FileRoutesById {
@@ -508,7 +508,6 @@ export interface FileRoutesById {
   '/_authenticated/admin/testimonials': typeof AuthenticatedAdminTestimonialsRoute
   '/_authenticated/admin/training-phases': typeof AuthenticatedAdminTrainingPhasesRoute
   '/_authenticated/portal/account': typeof AuthenticatedPortalAccountRoute
-  '/_authenticated/portal/agreements': typeof AuthenticatedPortalAgreementsRouteWithChildren
   '/_authenticated/portal/calendar': typeof AuthenticatedPortalCalendarRoute
   '/_authenticated/portal/check-in': typeof AuthenticatedPortalCheckInRoute
   '/_authenticated/portal/documents': typeof AuthenticatedPortalDocumentsRoute
@@ -531,6 +530,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/agreements/': typeof AuthenticatedAdminAgreementsIndexRoute
   '/_authenticated/admin/clients/': typeof AuthenticatedAdminClientsIndexRoute
   '/_authenticated/admin/coaches/': typeof AuthenticatedAdminCoachesIndexRoute
+  '/_authenticated/portal/agreements/': typeof AuthenticatedPortalAgreementsIndexRoute
   '/_authenticated/admin/agreements/instance/$id': typeof AuthenticatedAdminAgreementsInstanceIdRoute
 }
 export interface FileRouteTypes {
@@ -564,7 +564,6 @@ export interface FileRouteTypes {
     | '/admin/testimonials'
     | '/admin/training-phases'
     | '/portal/account'
-    | '/portal/agreements'
     | '/portal/calendar'
     | '/portal/check-in'
     | '/portal/documents'
@@ -587,6 +586,7 @@ export interface FileRouteTypes {
     | '/admin/agreements/'
     | '/admin/clients/'
     | '/admin/coaches/'
+    | '/portal/agreements/'
     | '/admin/agreements/instance/$id'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -616,7 +616,6 @@ export interface FileRouteTypes {
     | '/admin/testimonials'
     | '/admin/training-phases'
     | '/portal/account'
-    | '/portal/agreements'
     | '/portal/calendar'
     | '/portal/check-in'
     | '/portal/documents'
@@ -639,6 +638,7 @@ export interface FileRouteTypes {
     | '/admin/agreements'
     | '/admin/clients'
     | '/admin/coaches'
+    | '/portal/agreements'
     | '/admin/agreements/instance/$id'
   id:
     | '__root__'
@@ -671,7 +671,6 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/testimonials'
     | '/_authenticated/admin/training-phases'
     | '/_authenticated/portal/account'
-    | '/_authenticated/portal/agreements'
     | '/_authenticated/portal/calendar'
     | '/_authenticated/portal/check-in'
     | '/_authenticated/portal/documents'
@@ -694,6 +693,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/agreements/'
     | '/_authenticated/admin/clients/'
     | '/_authenticated/admin/coaches/'
+    | '/_authenticated/portal/agreements/'
     | '/_authenticated/admin/agreements/instance/$id'
   fileRoutesById: FileRoutesById
 }
@@ -855,13 +855,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedPortalCalendarRouteImport
       parentRoute: typeof AuthenticatedPortalRouteRoute
     }
-    '/_authenticated/portal/agreements': {
-      id: '/_authenticated/portal/agreements'
-      path: '/agreements'
-      fullPath: '/portal/agreements'
-      preLoaderRoute: typeof AuthenticatedPortalAgreementsRouteImport
-      parentRoute: typeof AuthenticatedPortalRouteRoute
-    }
     '/_authenticated/portal/account': {
       id: '/_authenticated/portal/account'
       path: '/account'
@@ -1009,6 +1002,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminAppsRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
+    '/_authenticated/portal/agreements/': {
+      id: '/_authenticated/portal/agreements/'
+      path: '/agreements'
+      fullPath: '/portal/agreements/'
+      preLoaderRoute: typeof AuthenticatedPortalAgreementsIndexRouteImport
+      parentRoute: typeof AuthenticatedPortalRouteRoute
+    }
     '/_authenticated/admin/coaches/': {
       id: '/_authenticated/admin/coaches/'
       path: '/coaches'
@@ -1039,10 +1039,10 @@ declare module '@tanstack/react-router' {
     }
     '/_authenticated/portal/agreements/$id': {
       id: '/_authenticated/portal/agreements/$id'
-      path: '/$id'
+      path: '/agreements/$id'
       fullPath: '/portal/agreements/$id'
       preLoaderRoute: typeof AuthenticatedPortalAgreementsIdRouteImport
-      parentRoute: typeof AuthenticatedPortalAgreementsRoute
+      parentRoute: typeof AuthenticatedPortalRouteRoute
     }
     '/_authenticated/admin/purchases/$id': {
       id: '/_authenticated/admin/purchases/$id'
@@ -1170,20 +1170,6 @@ const AuthenticatedAdminRouteRouteWithChildren =
     AuthenticatedAdminRouteRouteChildren,
   )
 
-interface AuthenticatedPortalAgreementsRouteChildren {
-  AuthenticatedPortalAgreementsIdRoute: typeof AuthenticatedPortalAgreementsIdRoute
-}
-
-const AuthenticatedPortalAgreementsRouteChildren: AuthenticatedPortalAgreementsRouteChildren =
-  {
-    AuthenticatedPortalAgreementsIdRoute: AuthenticatedPortalAgreementsIdRoute,
-  }
-
-const AuthenticatedPortalAgreementsRouteWithChildren =
-  AuthenticatedPortalAgreementsRoute._addFileChildren(
-    AuthenticatedPortalAgreementsRouteChildren,
-  )
-
 interface AuthenticatedPortalPurchasesRouteChildren {
   AuthenticatedPortalPurchasesIdRoute: typeof AuthenticatedPortalPurchasesIdRoute
 }
@@ -1200,7 +1186,6 @@ const AuthenticatedPortalPurchasesRouteWithChildren =
 
 interface AuthenticatedPortalRouteRouteChildren {
   AuthenticatedPortalAccountRoute: typeof AuthenticatedPortalAccountRoute
-  AuthenticatedPortalAgreementsRoute: typeof AuthenticatedPortalAgreementsRouteWithChildren
   AuthenticatedPortalCalendarRoute: typeof AuthenticatedPortalCalendarRoute
   AuthenticatedPortalCheckInRoute: typeof AuthenticatedPortalCheckInRoute
   AuthenticatedPortalDocumentsRoute: typeof AuthenticatedPortalDocumentsRoute
@@ -1213,13 +1198,13 @@ interface AuthenticatedPortalRouteRouteChildren {
   AuthenticatedPortalPurchasesRoute: typeof AuthenticatedPortalPurchasesRouteWithChildren
   AuthenticatedPortalResourcesRoute: typeof AuthenticatedPortalResourcesRoute
   AuthenticatedPortalIndexRoute: typeof AuthenticatedPortalIndexRoute
+  AuthenticatedPortalAgreementsIdRoute: typeof AuthenticatedPortalAgreementsIdRoute
+  AuthenticatedPortalAgreementsIndexRoute: typeof AuthenticatedPortalAgreementsIndexRoute
 }
 
 const AuthenticatedPortalRouteRouteChildren: AuthenticatedPortalRouteRouteChildren =
   {
     AuthenticatedPortalAccountRoute: AuthenticatedPortalAccountRoute,
-    AuthenticatedPortalAgreementsRoute:
-      AuthenticatedPortalAgreementsRouteWithChildren,
     AuthenticatedPortalCalendarRoute: AuthenticatedPortalCalendarRoute,
     AuthenticatedPortalCheckInRoute: AuthenticatedPortalCheckInRoute,
     AuthenticatedPortalDocumentsRoute: AuthenticatedPortalDocumentsRoute,
@@ -1234,6 +1219,9 @@ const AuthenticatedPortalRouteRouteChildren: AuthenticatedPortalRouteRouteChildr
       AuthenticatedPortalPurchasesRouteWithChildren,
     AuthenticatedPortalResourcesRoute: AuthenticatedPortalResourcesRoute,
     AuthenticatedPortalIndexRoute: AuthenticatedPortalIndexRoute,
+    AuthenticatedPortalAgreementsIdRoute: AuthenticatedPortalAgreementsIdRoute,
+    AuthenticatedPortalAgreementsIndexRoute:
+      AuthenticatedPortalAgreementsIndexRoute,
   }
 
 const AuthenticatedPortalRouteRouteWithChildren =
@@ -1265,3 +1253,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
