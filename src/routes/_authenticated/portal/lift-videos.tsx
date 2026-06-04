@@ -103,6 +103,7 @@ function ClientLiftVideos() {
           userId={user?.id ?? null}
           initial={editing}
           onSaved={refresh}
+          role="client"
         />
       )}
     </>
