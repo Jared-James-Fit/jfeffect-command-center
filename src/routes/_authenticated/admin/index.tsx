@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   Users, UserPlus, AlertTriangle, Calendar, DollarSign,
   Plus, Zap, ExternalLink, Activity, Dumbbell, Package, Timer, UserCheck, Apple,
-  ClipboardCheck, Heart, FileText, Target, MessageCircle, Video,
+  ClipboardCheck, Heart, FileText, Target, MessageCircle, Video, FileSignature,
 } from "lucide-react";
 import { derivePhase, displayTitle, toneClasses, type TrainingPhase } from "@/lib/training-phases";
 import { deriveImportantDate, dateTypeLabel, importantToneClasses, type ImportantDate } from "@/lib/important-dates";
@@ -115,6 +115,18 @@ function AdminDashboard() {
         .neq("status", "Archived")
         .order("target_date", { ascending: true });
       return (data ?? []) as Array<ImportantDate & { clients: { id: string; full_name: string } | null }>;
+    },
+  });
+
+  const { data: agreementsNeedingAttention = [] } = useQuery({
+    queryKey: ["dashboard-agreements"],
+    queryFn: async () => {
+      const { data } = await supabase.from("agreements")
+        .select("id, template_name, status, sent_at, client_id, clients(id, full_name)")
+        .in("status", ["Sent", "Opened", "In Progress", "Waiting On Client", "Waiting On Coach", "Expired", "Needs Update"])
+        .order("sent_at", { ascending: false })
+        .limit(8);
+      return (data ?? []) as any[];
     },
   });
 
