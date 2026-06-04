@@ -1,4 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { z } from "zod";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -23,7 +24,11 @@ import { Switch } from "@/components/ui/switch";
 import { COMMON_TIMEZONES } from "@/lib/pt-sessions";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
+const TAB_VALUES = ["summary", "training", "nutrition", "cardio", "documents", "sessions", "notes", "account"] as const;
+type TabValue = typeof TAB_VALUES[number];
+
 export const Route = createFileRoute("/_authenticated/admin/clients/$id")({
+  validateSearch: (s) => z.object({ tab: z.enum(TAB_VALUES).optional() }).parse(s),
   component: ClientDetail,
 });
 
@@ -32,6 +37,7 @@ const PAY_STATUSES = ["Not Sent", "Sent", "Paid", "Failed", "Overdue", "Cancelle
 
 function ClientDetail() {
   const { id } = Route.useParams();
+  const { tab } = Route.useSearch();
   const qc = useQueryClient();
   const navigate = useNavigate();
   const [form, setForm] = useState<any>(null);
@@ -172,13 +178,18 @@ function ClientDetail() {
         }
       />
       <div className="p-6 md:p-8">
-      <Tabs defaultValue="summary">
+      <Tabs
+        value={tab ?? "summary"}
+        onValueChange={(v) => navigate({ to: ".", params: { id }, search: { tab: v as TabValue }, replace: true })}
+      >
         <TabsList className="mb-6 flex flex-wrap h-auto">
           <TabsTrigger value="summary">Summary</TabsTrigger>
-          <TabsTrigger value="programs">Programs & Phases</TabsTrigger>
-          <TabsTrigger value="nutrition">Nutrition</TabsTrigger>
-          <TabsTrigger value="cardio">Cardio</TabsTrigger>
+          <TabsTrigger value="training">Training</TabsTrigger>
+          <TabsTrigger value="nutrition">Nutrition Targets</TabsTrigger>
+          <TabsTrigger value="cardio">Cardio Targets</TabsTrigger>
+          <TabsTrigger value="documents">Documents</TabsTrigger>
           <TabsTrigger value="sessions">Sessions</TabsTrigger>
+          <TabsTrigger value="notes">Notes</TabsTrigger>
           <TabsTrigger value="account">Account & Access</TabsTrigger>
         </TabsList>
 
@@ -212,43 +223,20 @@ function ClientDetail() {
         </Card>
 
         <Card className="border-border bg-card p-6 space-y-3">
-          <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Linked Resources</h3>
-          <div className="space-y-3">
-            <div><Label>Program sheet</Label><Input value={form.program_sheet_link ?? ""} onChange={(e) => set("program_sheet_link", e.target.value)} placeholder="https://sheets.google.com/…" /></div>
-            <div><Label>Drive folder</Label><Input value={form.drive_folder_link ?? ""} onChange={(e) => set("drive_folder_link", e.target.value)} /></div>
-            <div><Label>Check-in form</Label><Input value={form.checkin_form_link ?? ""} onChange={(e) => set("checkin_form_link", e.target.value)} /></div>
-            <div><Label>Agreement</Label><Input value={form.agreement_link ?? ""} onChange={(e) => set("agreement_link", e.target.value)} /></div>
-            <div><Label>Calendar / booking link</Label><Input value={form.calendar_link ?? ""} onChange={(e) => set("calendar_link", e.target.value)} /></div>
-            <div><Label>Stripe payment link</Label><Input value={form.stripe_link ?? ""} onChange={(e) => set("stripe_link", e.target.value)} /></div>
+          <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Quick Jump</h3>
+          <p className="text-xs text-muted-foreground">Open a management area for this client.</p>
+          <div className="grid gap-2">
+            <Link to="/admin/clients/$id" params={{ id }} search={{ tab: "training" }}><Button variant="outline" size="sm" className="w-full justify-start">Manage Training</Button></Link>
+            <Link to="/admin/clients/$id" params={{ id }} search={{ tab: "nutrition" }}><Button variant="outline" size="sm" className="w-full justify-start">Manage Nutrition Targets</Button></Link>
+            <Link to="/admin/clients/$id" params={{ id }} search={{ tab: "cardio" }}><Button variant="outline" size="sm" className="w-full justify-start">Manage Cardio Targets</Button></Link>
+            <Link to="/admin/clients/$id" params={{ id }} search={{ tab: "documents" }}><Button variant="outline" size="sm" className="w-full justify-start">Manage Documents</Button></Link>
+            <Link to="/admin/clients/$id" params={{ id }} search={{ tab: "sessions" }}><Button variant="outline" size="sm" className="w-full justify-start">Book PT Session</Button></Link>
+            <Link to="/admin/clients/$id" params={{ id }} search={{ tab: "account" }}><Button variant="outline" size="sm" className="w-full justify-start">Account & Access</Button></Link>
           </div>
-          <div className="flex flex-wrap gap-1.5 pt-2">
-            {links.filter(([, v]) => v).map(([n, v]) => (
-              <a key={n} href={v as string} target="_blank" rel="noreferrer">
-                <Badge variant="outline" className="cursor-pointer hover:border-primary">{n} <ExternalLink className="ml-1 h-3 w-3" /></Badge>
-              </a>
-            ))}
-          </div>
-        </Card>
-
-        <Card className="border-border bg-card p-6 md:col-span-2 space-y-3">
-          <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Coaching Notes</h3>
-          <div><Label>Goals</Label><Textarea rows={2} value={form.goals ?? ""} onChange={(e) => set("goals", e.target.value)} /></div>
-          <div className="grid gap-3 md:grid-cols-2">
-            <div><Label>Injuries / limitations</Label><Textarea rows={3} value={form.injuries ?? ""} onChange={(e) => set("injuries", e.target.value)} /></div>
-            <div><Label>Training notes</Label><Textarea rows={3} value={form.training_notes ?? ""} onChange={(e) => set("training_notes", e.target.value)} /></div>
-            <div><Label>Nutrition notes</Label><Textarea rows={3} value={form.nutrition_notes ?? ""} onChange={(e) => set("nutrition_notes", e.target.value)} /></div>
-            <div><Label>Lifestyle notes</Label><Textarea rows={3} value={form.lifestyle_notes ?? ""} onChange={(e) => set("lifestyle_notes", e.target.value)} /></div>
-          </div>
-        </Card>
-
-        <Card className="border-primary/30 bg-primary/5 p-6 space-y-3">
-          <h3 className="text-xs uppercase tracking-widest text-primary">Private Coach Notes</h3>
-          <p className="text-xs text-muted-foreground">Only visible to admin.</p>
-          <Textarea rows={10} value={form.coach_notes ?? ""} onChange={(e) => set("coach_notes", e.target.value)} placeholder="Internal notes the client never sees…" />
         </Card>
         </TabsContent>
 
-        <TabsContent value="programs" className="grid gap-6 md:grid-cols-3">
+        <TabsContent value="training" className="grid gap-6 md:grid-cols-3">
           <TrainingPhasesPanel clientId={id} />
         </TabsContent>
 
@@ -258,6 +246,28 @@ function ClientDetail() {
 
         <TabsContent value="cardio" className="grid gap-6 md:grid-cols-3">
           <CardioTargetsPanel clientId={id} />
+        </TabsContent>
+
+        <TabsContent value="documents" className="grid gap-6 md:grid-cols-3">
+          <Card className="border-border bg-card p-6 md:col-span-3 space-y-3">
+            <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Linked Resources & Uploads</h3>
+            <p className="text-xs text-muted-foreground">Attach Google Sheets, Drive folders, PDFs, and external links. Save to apply.</p>
+            <div className="grid gap-3 md:grid-cols-2">
+              <div><Label>Program sheet (Google Sheets)</Label><Input value={form.program_sheet_link ?? ""} onChange={(e) => set("program_sheet_link", e.target.value)} placeholder="https://sheets.google.com/…" /></div>
+              <div><Label>Drive folder</Label><Input value={form.drive_folder_link ?? ""} onChange={(e) => set("drive_folder_link", e.target.value)} placeholder="https://drive.google.com/…" /></div>
+              <div><Label>Check-in form</Label><Input value={form.checkin_form_link ?? ""} onChange={(e) => set("checkin_form_link", e.target.value)} /></div>
+              <div><Label>Agreement / contract</Label><Input value={form.agreement_link ?? ""} onChange={(e) => set("agreement_link", e.target.value)} /></div>
+              <div><Label>Calendar / booking link</Label><Input value={form.calendar_link ?? ""} onChange={(e) => set("calendar_link", e.target.value)} /></div>
+              <div><Label>Stripe payment link</Label><Input value={form.stripe_link ?? ""} onChange={(e) => set("stripe_link", e.target.value)} /></div>
+            </div>
+            <div className="flex flex-wrap gap-1.5 pt-2">
+              {links.filter(([, v]) => v).map(([n, v]) => (
+                <a key={n} href={v as string} target="_blank" rel="noreferrer">
+                  <Badge variant="outline" className="cursor-pointer hover:border-primary">{n} <ExternalLink className="ml-1 h-3 w-3" /></Badge>
+                </a>
+              ))}
+            </div>
+          </Card>
         </TabsContent>
 
         <TabsContent value="sessions" className="grid gap-6 md:grid-cols-3">
@@ -297,6 +307,24 @@ function ClientDetail() {
           </div>
           <p className="text-xs text-muted-foreground">Reminder emails are sent in the client's time zone. Defaults to America/Winnipeg if not set.</p>
         </Card>
+        </TabsContent>
+
+        <TabsContent value="notes" className="grid gap-6 md:grid-cols-3">
+          <Card className="border-border bg-card p-6 md:col-span-2 space-y-3">
+            <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Coaching Notes</h3>
+            <div><Label>Goals</Label><Textarea rows={2} value={form.goals ?? ""} onChange={(e) => set("goals", e.target.value)} /></div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <div><Label>Injuries / limitations</Label><Textarea rows={3} value={form.injuries ?? ""} onChange={(e) => set("injuries", e.target.value)} /></div>
+              <div><Label>Training notes</Label><Textarea rows={3} value={form.training_notes ?? ""} onChange={(e) => set("training_notes", e.target.value)} /></div>
+              <div><Label>Nutrition notes</Label><Textarea rows={3} value={form.nutrition_notes ?? ""} onChange={(e) => set("nutrition_notes", e.target.value)} /></div>
+              <div><Label>Lifestyle notes</Label><Textarea rows={3} value={form.lifestyle_notes ?? ""} onChange={(e) => set("lifestyle_notes", e.target.value)} /></div>
+            </div>
+          </Card>
+          <Card className="border-primary/30 bg-primary/5 p-6 space-y-3">
+            <h3 className="text-xs uppercase tracking-widest text-primary">Private Coach Notes</h3>
+            <p className="text-xs text-muted-foreground">Only visible to admin.</p>
+            <Textarea rows={12} value={form.coach_notes ?? ""} onChange={(e) => set("coach_notes", e.target.value)} placeholder="Internal notes the client never sees…" />
+          </Card>
         </TabsContent>
 
         <TabsContent value="account" className="grid gap-6 md:grid-cols-3">
