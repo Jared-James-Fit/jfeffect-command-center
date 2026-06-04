@@ -124,7 +124,65 @@ function VideoAttachment({ att }: { att: MessageAttachment }) {
   return <video src={src} controls playsInline className="max-h-80 w-full max-w-[280px] rounded-md bg-black" />;
 }
 
-function AudioAttachment({ att, mine }: { att: MessageAttachment; mine: boolean }) {
+function fakePeaks(n = 40, seed = 1) {
+  const out: number[] = [];
+  let x = seed;
+  for (let i = 0; i < n; i++) {
+    x = (x * 9301 + 49297) % 233280;
+    out.push(0.25 + (x / 233280) * 0.75);
+  }
+  return out;
+}
+
+function WaveformBars({
+  peaks,
+  progress,
+  onSeek,
+  mine,
+}: {
+  peaks: number[];
+  progress: number; // 0..1
+  onSeek?: (ratio: number) => void;
+  mine: boolean;
+}) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  return (
+    <div
+      ref={ref}
+      className={cn("flex h-7 cursor-pointer items-center gap-[2px]", onSeek ? "" : "cursor-default")}
+      onClick={(e) => {
+        if (!onSeek || !ref.current) return;
+        const r = ref.current.getBoundingClientRect();
+        const x = (e.clientX - r.left) / r.width;
+        onSeek(Math.max(0, Math.min(1, x)));
+      }}
+    >
+      {peaks.map((p, i) => {
+        const played = i / peaks.length <= progress;
+        return (
+          <span
+            key={i}
+            className={cn(
+              "w-[2.5px] flex-1 rounded-full transition-colors",
+              played
+                ? mine ? "bg-primary-foreground" : "bg-primary"
+                : mine ? "bg-primary-foreground/35" : "bg-foreground/25",
+            )}
+            style={{ height: `${Math.max(10, p * 100)}%` }}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+function AudioAttachment({
+  att, mine, message,
+}: {
+  att: MessageAttachment;
+  mine: boolean;
+  message?: Message;
+}) {
   const signed = useSignedUrl(att.storage_path);
   const src = att.storage_path ? signed : att.url;
   const ref = useRef<HTMLAudioElement | null>(null);
@@ -132,39 +190,99 @@ function AudioAttachment({ att, mine }: { att: MessageAttachment; mine: boolean 
   const [progress, setProgress] = useState(0);
   const [duration, setDuration] = useState(att.duration ?? 0);
   const [rate, setRate] = useState(1);
+  const [showTx, setShowTx] = useState(false);
+
+  const peaks = useMemo(
+    () => (att.peaks && att.peaks.length ? att.peaks : fakePeaks(48, (att.duration ?? 1) * 13 + (att.size ?? 1))),
+    [att.peaks, att.duration, att.size],
+  );
 
   if (!src) return <div className="text-xs opacity-70">Loading voice message…</div>;
 
+  const ratio = duration > 0 ? progress / duration : 0;
+  const txStatus = message?.transcript_status;
+  const txText = message?.transcript;
+
   return (
     <div className={cn(
-      "flex w-[240px] items-center gap-2 rounded-md p-2",
+      "w-[260px] rounded-2xl p-2",
       mine ? "bg-primary-foreground/10" : "bg-background/60",
     )}>
-      <Button type="button" size="sm" variant="secondary" className="h-8 w-8 shrink-0 p-0" onClick={() => {
-        const a = ref.current; if (!a) return;
-        if (a.paused) { a.play(); setPlaying(true); } else { a.pause(); setPlaying(false); }
-      }}>
-        {playing ? <Pause className="h-3 w-3" /> : <Play className="h-3 w-3" />}
-      </Button>
-      <div className="flex-1">
-        <div className="h-1.5 w-full rounded-full bg-foreground/15">
-          <div className="h-full rounded-full bg-current opacity-70" style={{ width: `${(progress / (duration || 1)) * 100}%` }} />
-        </div>
-        <div className="mt-1 flex items-center justify-between text-[10px] opacity-80">
-          <span>{fmtDuration(progress)} / {fmtDuration(duration)}</span>
-          <button type="button" className="inline-flex items-center gap-0.5 hover:underline" onClick={() => {
-            const speeds = [1, 1.25, 1.5, 2];
-            const next = speeds[(speeds.indexOf(rate) + 1) % speeds.length];
-            setRate(next); if (ref.current) ref.current.playbackRate = next;
-          }}>
-            <Gauge className="h-2.5 w-2.5" />{rate}x
-          </button>
+      <div className="flex items-center gap-2">
+        <Button
+          type="button"
+          size="sm"
+          variant={mine ? "secondary" : "default"}
+          className="h-9 w-9 shrink-0 rounded-full p-0"
+          onClick={() => {
+            const a = ref.current; if (!a) return;
+            if (a.paused) { a.play(); setPlaying(true); } else { a.pause(); setPlaying(false); }
+          }}
+        >
+          {playing ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4 translate-x-[1px]" />}
+        </Button>
+        <div className="flex-1">
+          <WaveformBars
+            peaks={peaks}
+            progress={ratio}
+            mine={mine}
+            onSeek={(r) => {
+              const a = ref.current; if (!a || !duration) return;
+              a.currentTime = r * duration;
+              setProgress(r * duration);
+            }}
+          />
+          <div className="mt-1 flex items-center justify-between text-[10px] opacity-80">
+            <span>{fmtDuration(progress)} / {fmtDuration(duration)}</span>
+            <button
+              type="button"
+              className="inline-flex items-center gap-0.5 hover:underline"
+              onClick={() => {
+                const speeds = [1, 1.25, 1.5, 2];
+                const next = speeds[(speeds.indexOf(rate) + 1) % speeds.length];
+                setRate(next);
+                if (ref.current) ref.current.playbackRate = next;
+              }}
+            >
+              <Gauge className="h-2.5 w-2.5" />{rate}x
+            </button>
+          </div>
         </div>
       </div>
+
+      {message && (
+        <div className="mt-1.5 border-t border-current/10 pt-1.5">
+          <button
+            type="button"
+            onClick={() => setShowTx((s) => !s)}
+            className="flex w-full items-center gap-1 text-[10px] opacity-80 hover:opacity-100"
+          >
+            <FileTextIcon className="h-3 w-3" />
+            <span>
+              {txStatus === "processing" || txStatus === null || txStatus === undefined
+                ? "Transcript processing…"
+                : txStatus === "failed"
+                ? "Transcript unavailable"
+                : txStatus === "empty"
+                ? "No speech detected"
+                : showTx ? "Hide transcript" : "View transcript"}
+            </span>
+            {txStatus === "ready" && (showTx ? <ChevronUp className="ml-auto h-3 w-3" /> : <ChevronDown className="ml-auto h-3 w-3" />)}
+          </button>
+          {showTx && txStatus === "ready" && txText && (
+            <div className="mt-1 rounded-md bg-background/40 p-1.5 text-[11px] leading-snug whitespace-pre-wrap">
+              {txText}
+            </div>
+          )}
+        </div>
+      )}
+
       <audio
         ref={ref} src={src} preload="metadata"
         onLoadedMetadata={(e) => { const d = (e.currentTarget.duration); if (isFinite(d)) setDuration(d); }}
         onTimeUpdate={(e) => setProgress(e.currentTarget.currentTime)}
+        onPause={() => setPlaying(false)}
+        onPlay={() => setPlaying(true)}
         onEnded={() => { setPlaying(false); setProgress(0); }}
       />
     </div>
