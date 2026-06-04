@@ -245,6 +245,7 @@ function ClientDetail() {
           <TabsTrigger value="training">Training</TabsTrigger>
           <TabsTrigger value="nutrition">Nutrition Targets</TabsTrigger>
           <TabsTrigger value="cardio">Cardio Targets</TabsTrigger>
+          <TabsTrigger value="messages">Messages</TabsTrigger>
           <TabsTrigger value="documents">Documents</TabsTrigger>
           <TabsTrigger value="sessions">Sessions</TabsTrigger>
           <TabsTrigger value="notes">Notes</TabsTrigger>
@@ -306,6 +307,10 @@ function ClientDetail() {
 
         <TabsContent value="cardio" className="grid gap-6 md:grid-cols-3">
           <CardioTargetsPanel clientId={id} />
+        </TabsContent>
+
+        <TabsContent value="messages" className="grid gap-6">
+          <ClientMessagesTab clientId={id} />
         </TabsContent>
 
         <TabsContent value="documents" className="grid gap-6 md:grid-cols-3">
