@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,7 +11,7 @@ import {
   type LiftVideo,
 } from "@/lib/lift-videos";
 import { toast } from "sonner";
-import { Upload, Link as LinkIcon, Loader2, Video as VideoIcon, ChevronDown, ChevronRight, Send } from "lucide-react";
+import { Upload, Link as LinkIcon, Loader2, Video as VideoIcon, Send, X, AlertTriangle, ArrowUp, ArrowDown, Plus } from "lucide-react";
 
 type Props = {
   open: boolean;
