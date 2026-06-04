@@ -11,7 +11,7 @@ import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Search, MoreHorizontal, Mail, Archive, Trash2, KeyRound, Dumbbell, Apple, HeartPulse, Folder } from "lucide-react";
+import { Plus, Search, MoreHorizontal, Mail, Archive, Trash2, KeyRound, Dumbbell, Apple, HeartPulse, Folder, MessageCircle } from "lucide-react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import { inviteClient, archiveClient, deleteClient, sendPasswordReset } from "@/lib/clients.functions";
@@ -21,6 +21,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { derivePhase, displayTitle, toneClasses, type TrainingPhase } from "@/lib/training-phases";
 import { deriveTarget } from "@/lib/nutrition-cardio";
 import { format, parseISO } from "date-fns";
+import type { ConversationState, Message } from "@/lib/messages";
 function AddCell({ id, tab, label }: { id: string; tab: "training" | "nutrition" | "cardio"; label: string }) {
   return (
     <Link to="/admin/clients/$id" params={{ id }} search={{ tab }} className="text-xs font-semibold text-primary hover:underline">
@@ -128,6 +129,26 @@ function ClientsPage() {
     },
   });
 
+  const { data: convStates = [] } = useQuery({
+    queryKey: ["conversation-states"],
+    queryFn: async () => {
+      const { data } = await (supabase.from("conversation_state") as any).select("*");
+      return (data ?? []) as ConversationState[];
+    },
+  });
+
+  const { data: recentMsgs = [] } = useQuery({
+    queryKey: ["recent-client-messages"],
+    queryFn: async () => {
+      const { data } = await (supabase.from("messages") as any)
+        .select("client_id, created_at, sender_role, is_internal_note")
+        .eq("is_internal_note", false)
+        .order("created_at", { ascending: false })
+        .limit(500);
+      return (data ?? []) as Message[];
+    },
+  });
+
   const phaseByClient = useMemo(() => {
     const map = new Map<string, { current?: TrainingPhase; next?: TrainingPhase }>();
     for (const p of phases) {
@@ -151,6 +172,21 @@ function ClientsPage() {
     for (const t of cardTargets) if (!m.has(t.client_id)) m.set(t.client_id, t);
     return m;
   }, [cardTargets]);
+
+  const msgInfoByClient = useMemo(() => {
+    const stateMap = new Map(convStates.map((s) => [s.client_id, s]));
+    const last = new Map<string, Message>();
+    const unread = new Map<string, number>();
+    for (const m of recentMsgs) {
+      if (!last.has(m.client_id)) last.set(m.client_id, m);
+      if (m.sender_role === "client") {
+        const s = stateMap.get(m.client_id);
+        const lr = s?.admin_last_read_at ? new Date(s.admin_last_read_at).getTime() : 0;
+        if (new Date(m.created_at).getTime() > lr) unread.set(m.client_id, (unread.get(m.client_id) ?? 0) + 1);
+      }
+    }
+    return { stateMap, last, unread };
+  }, [convStates, recentMsgs]);
 
   const filtered = clients.filter((c) => {
     const matchesSearch = !search || c.full_name?.toLowerCase().includes(search.toLowerCase()) || c.email?.toLowerCase().includes(search.toLowerCase());
@@ -212,6 +248,7 @@ function ClientsPage() {
                     <th className="px-4 py-3">Nutrition</th>
                     <th className="px-4 py-3">Cardio</th>
                     <th className="px-4 py-3">Payment</th>
+                    <th className="px-4 py-3">Messages</th>
                     <th className="px-4 py-3">Status</th>
                     <th className="px-4 py-3 w-12"></th>
                   </tr>
@@ -273,6 +310,30 @@ function ClientsPage() {
                         ) : <AddCell id={c.id} tab="cardio" label="Add Cardio Targets" />}
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">{c.payment_status ?? "—"}</td>
+                      <td className="px-4 py-3">
+                        {(() => {
+                          const u = msgInfoByClient.unread.get(c.id) ?? 0;
+                          const last = msgInfoByClient.last.get(c.id);
+                          const s = msgInfoByClient.stateMap.get(c.id);
+                          return (
+                            <Link to="/admin/messages" search={{ client: c.id }} className="block space-y-0.5 hover:opacity-80">
+                              <div className="flex items-center gap-1.5">
+                                <MessageCircle className="h-3 w-3 text-muted-foreground" />
+                                {u > 0 ? (
+                                  <Badge className="h-4 min-w-4 rounded-full bg-primary px-1.5 text-[10px] font-bold text-primary-foreground">{u} unread</Badge>
+                                ) : last ? (
+                                  <span className="text-[10px] text-muted-foreground">{format(parseISO(last.created_at), "MMM d")}</span>
+                                ) : (
+                                  <span className="text-[10px] text-muted-foreground">—</span>
+                                )}
+                              </div>
+                              {s?.status === "needs_response" && (
+                                <Badge variant="outline" className="border-primary/40 bg-primary/10 text-primary text-[9px]">Needs Response</Badge>
+                              )}
+                            </Link>
+                          );
+                        })()}
+                      </td>
                       <td className="px-4 py-3"><Badge variant="outline">{c.status}</Badge></td>
                       <td className="px-4 py-3 text-right">
                         <DropdownMenu>

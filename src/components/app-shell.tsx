@@ -4,6 +4,7 @@ import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { NotificationBell } from "@/components/notification-bell";
 
 export interface NavItem {
   to: string;
@@ -110,7 +111,10 @@ export function PageHeader({ title, subtitle, actions }: { title: string; subtit
         <h1 className="text-2xl font-black tracking-tight md:text-3xl">{title}</h1>
         {subtitle ? <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p> : null}
       </div>
-      {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
+      <div className="flex flex-wrap items-center gap-2">
+        {actions}
+        <NotificationBell />
+      </div>
     </div>
   );
 }

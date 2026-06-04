@@ -25,8 +25,10 @@ import { Switch } from "@/components/ui/switch";
 import { COMMON_TIMEZONES } from "@/lib/pt-sessions";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ProfilePictureCapture } from "@/components/profile-picture-capture";
+import { MessageThread } from "@/components/message-thread";
+import type { ConversationState } from "@/lib/messages";
 
-const TAB_VALUES = ["summary", "training", "nutrition", "cardio", "documents", "sessions", "notes", "info", "account"] as const;
+const TAB_VALUES = ["summary", "training", "nutrition", "cardio", "messages", "documents", "sessions", "notes", "info", "account"] as const;
 type TabValue = typeof TAB_VALUES[number];
 
 export const Route = createFileRoute("/_authenticated/admin/clients/$id")({
@@ -243,6 +245,7 @@ function ClientDetail() {
           <TabsTrigger value="training">Training</TabsTrigger>
           <TabsTrigger value="nutrition">Nutrition Targets</TabsTrigger>
           <TabsTrigger value="cardio">Cardio Targets</TabsTrigger>
+          <TabsTrigger value="messages">Messages</TabsTrigger>
           <TabsTrigger value="documents">Documents</TabsTrigger>
           <TabsTrigger value="sessions">Sessions</TabsTrigger>
           <TabsTrigger value="notes">Notes</TabsTrigger>
@@ -304,6 +307,10 @@ function ClientDetail() {
 
         <TabsContent value="cardio" className="grid gap-6 md:grid-cols-3">
           <CardioTargetsPanel clientId={id} />
+        </TabsContent>
+
+        <TabsContent value="messages" className="grid gap-6">
+          <ClientMessagesTab clientId={id} />
         </TabsContent>
 
         <TabsContent value="documents" className="grid gap-6 md:grid-cols-3">
@@ -510,6 +517,17 @@ function Field({ label, value }: { label: string; value: React.ReactNode }) {
       <div className="mt-0.5 font-semibold">{value}</div>
     </div>
   );
+}
+
+function ClientMessagesTab({ clientId }: { clientId: string }) {
+  const { data: state } = useQuery({
+    queryKey: ["conversation-state", clientId],
+    queryFn: async () => {
+      const { data } = await (supabase.from("conversation_state") as any).select("*").eq("client_id", clientId).maybeSingle();
+      return (data ?? null) as ConversationState | null;
+    },
+  });
+  return <MessageThread clientId={clientId} role="admin" conversationState={state ?? null} />;
 }
 
 function fmtDate(v?: string | null) {
