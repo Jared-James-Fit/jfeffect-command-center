@@ -22,12 +22,12 @@ const MEDIA_TYPE_SUBFOLDERS = [
 ] as const;
 
 async function loadSettings(supabase: any) {
-  const { data } = await supabase.from("media_drive_settings").select("*").limit(1).maybeSingle();
+  const { data } = await supabase.from("media_drive_settings" as any).select("*").limit(1).maybeSingle();
   return data;
 }
 
 async function requireAdmin(supabase: any, userId: string) {
-  const { data } = await supabase.from("user_roles").select("role").eq("user_id", userId);
+  const { data } = await supabase.from("user_roles" as any).select("role").eq("user_id", userId);
   if (!data?.some((r: any) => r.role === "admin")) {
     throw new Error("Admin only");
   }
@@ -60,7 +60,7 @@ export const setupDriveRoot = createServerFn({ method: "POST" })
     }
     const existing = await loadSettings(context.supabase);
     if (existing) {
-      await context.supabase.from("media_drive_settings").update({
+      await (context.supabase.from("media_drive_settings" as any) as any).update({
         root_folder_id: folderId,
         root_folder_url: folderUrl,
         root_folder_name: folderName,
@@ -69,7 +69,7 @@ export const setupDriveRoot = createServerFn({ method: "POST" })
         last_test_result: "OK",
       }).eq("id", existing.id);
     } else {
-      await context.supabase.from("media_drive_settings").insert({
+      await (context.supabase.from("media_drive_settings" as any) as any).insert({
         root_folder_id: folderId, root_folder_url: folderUrl, root_folder_name: folderName,
         status: "Connected", last_test_at: new Date().toISOString(), last_test_result: "OK",
       });
@@ -83,7 +83,7 @@ export const setShareUploads = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await requireAdmin(context.supabase, context.userId);
     const s = await loadSettings(context.supabase);
-    if (s) await context.supabase.from("media_drive_settings").update({ share_uploads_with_link: data.enabled }).eq("id", s.id);
+    if (s) await (context.supabase.from("media_drive_settings" as any) as any).update({ share_uploads_with_link: data.enabled }).eq("id", s.id);
     return { ok: true };
   });
 
@@ -92,11 +92,11 @@ async function ensureClientFolder(supabase: any, clientId: string) {
   if (!settings?.root_folder_id) {
     throw new Error("Google Drive root folder is not set up. Open Settings → Google Drive and create it.");
   }
-  const { data: existing } = await supabase.from("client_drive_folders").select("*").eq("client_id", clientId).maybeSingle();
+  const { data: existing } = await supabase.from("client_drive_folders" as any).select("*").eq("client_id", clientId).maybeSingle();
   if (existing?.folder_id && existing.subfolders && Object.keys(existing.subfolders).length >= MEDIA_TYPE_SUBFOLDERS.length) {
     return existing;
   }
-  const { data: client } = await supabase.from("clients").select("id, full_name").eq("id", clientId).single();
+  const { data: client } = await supabase.from("clients" as any).select("id, full_name").eq("id", clientId).single();
   const folderName = `${client.full_name} (${String(clientId).slice(0, 8)})`;
   let folderId = existing?.folder_id as string | undefined;
   let folderUrl = existing?.folder_url as string | undefined;
@@ -121,9 +121,9 @@ async function ensureClientFolder(supabase: any, clientId: string) {
     last_error: null as string | null,
   };
   if (existing) {
-    await supabase.from("client_drive_folders").update(payload).eq("id", existing.id);
+    await supabase.from("client_drive_folders" as any).update(payload).eq("id", existing.id);
   } else {
-    await supabase.from("client_drive_folders").insert(payload);
+    await supabase.from("client_drive_folders" as any).insert(payload);
   }
   return payload;
 }
@@ -169,7 +169,7 @@ export const finalizeMediaUpload = createServerFn({ method: "POST" })
     if (settings?.share_uploads_with_link) {
       await driveShareAnyoneReader(data.driveFileId);
     }
-    const { data: row, error } = await context.supabase.from("media_items").insert({
+    const { data: row, error } = await (context.supabase.from("media_items" as any) as any).insert({
       submission_id: data.submissionId ?? null,
       client_id: data.clientId,
       media_type: data.mediaType,
@@ -200,7 +200,7 @@ export const createSubmission = createServerFn({ method: "POST" })
     urgent?: boolean; painNote?: string | null; clipCount: number; role: "admin" | "client";
   }) => d)
   .handler(async ({ data, context }) => {
-    const { data: row, error } = await context.supabase.from("media_submissions").insert({
+    const { data: row, error } = await (context.supabase.from("media_submissions" as any) as any).insert({
       client_id: data.clientId,
       submission_type: data.submissionType,
       title: data.title ?? null,
