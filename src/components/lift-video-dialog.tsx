@@ -11,7 +11,7 @@ import {
   type LiftVideo,
 } from "@/lib/lift-videos";
 import { toast } from "sonner";
-import { Upload, Link as LinkIcon, Loader2, Video as VideoIcon, ChevronDown, ChevronRight, Send } from "lucide-react";
+import { Upload, Link as LinkIcon, Loader2, Video as VideoIcon, Send, X, AlertTriangle, ArrowUp, ArrowDown, Plus } from "lucide-react";
 
 type Props = {
   open: boolean;
@@ -26,7 +26,6 @@ type Props = {
 
 export function LiftVideoDialog({ open, onOpenChange, clientId, userId, initial, onSaved, role = "admin" }: Props) {
   const [tab, setTab] = useState<"link" | "upload">("upload");
-  const [showAdvanced, setShowAdvanced] = useState(false);
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
   const recordInputRef = useRef<HTMLInputElement | null>(null);
   const [form, setForm] = useState<any>({
@@ -48,6 +47,23 @@ export function LiftVideoDialog({ open, onOpenChange, clientId, userId, initial,
   });
   const [file, setFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
+
+  // ---- Multi-clip client state ----
+  type Clip = {
+    id: string;
+    kind: "file" | "link";
+    file?: File;
+    url?: string;
+    previewUrl?: string;
+    note: string;
+  };
+  const [clips, setClips] = useState<Clip[]>([]);
+  const [noteMode, setNoteMode] = useState<"batch" | "perClip">("batch");
+  const [batchNote, setBatchNote] = useState("");
+  const [pasteLink, setPasteLink] = useState("");
+  const [urgentText, setUrgentText] = useState("");
+  const multiUploadRef = useRef<HTMLInputElement | null>(null);
+  const multiRecordRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     if (initial) {
@@ -71,19 +87,22 @@ export function LiftVideoDialog({ open, onOpenChange, clientId, userId, initial,
       setTab(initial.video_source === "upload" ? "upload" : "link");
     } else if (open) {
       setFile(null);
-      setShowAdvanced(false);
       setTab("upload");
+      setClips([]);
+      setBatchNote("");
+      setNoteMode("batch");
+      setPasteLink("");
+      setUrgentText("");
     }
   }, [initial, open]);
 
   const set = (k: string, v: any) => setForm((f: any) => ({ ...f, [k]: v }));
 
   const handleSave = async () => {
-    // Client flow: only require a video + notes.
-    if (role === "client") {
-      const hasVideo = !!file || !!form.video_url.trim() || !!initial?.video_storage_path || !!initial?.video_url;
-      if (!hasVideo) return toast.error("Add a video first.");
-      if (!form.client_notes.trim()) return toast.error("Add a note for Coach Jared.");
+    // Client multi-clip flow handled separately below.
+    if (role === "client" && !initial) return handleClientBatchSend();
+    if (role === "client" && initial) {
+      // Editing a single existing clip — keep using the simple per-clip form below.
     } else {
       if (!form.exercise.trim()) return toast.error("Add an exercise name.");
       if (tab === "link" && !form.video_url.trim() && !initial) return toast.error("Paste a video link or switch to upload.");
@@ -141,139 +160,332 @@ export function LiftVideoDialog({ open, onOpenChange, clientId, userId, initial,
     }
   };
 
-  // ---------- Client (simplified) view ----------
-  if (role === "client") {
+  // ---------- Multi-clip client send ----------
+  const addFiles = (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    const next: Clip[] = [];
+    for (const f of Array.from(files)) {
+      next.push({
+        id: crypto.randomUUID(),
+        kind: "file",
+        file: f,
+        previewUrl: URL.createObjectURL(f),
+        note: "",
+      });
+    }
+    setClips((c) => [...c, ...next]);
+  };
+
+  const addLinks = (raw: string) => {
+    const parts = raw.split(/[\s,]+/).map((s) => s.trim()).filter((s) => /^https?:\/\//i.test(s));
+    if (parts.length === 0) return toast.error("Paste a valid http(s) link.");
+    const next: Clip[] = parts.map((url) => ({
+      id: crypto.randomUUID(),
+      kind: "link",
+      url,
+      note: "",
+    }));
+    setClips((c) => [...c, ...next]);
+    setPasteLink("");
+  };
+
+  const removeClip = (id: string) => {
+    setClips((c) => {
+      const x = c.find((k) => k.id === id);
+      if (x?.previewUrl) URL.revokeObjectURL(x.previewUrl);
+      return c.filter((k) => k.id !== id);
+    });
+  };
+
+  const moveClip = (id: string, dir: -1 | 1) => {
+    setClips((c) => {
+      const i = c.findIndex((k) => k.id === id);
+      const j = i + dir;
+      if (i < 0 || j < 0 || j >= c.length) return c;
+      const copy = c.slice();
+      [copy[i], copy[j]] = [copy[j], copy[i]];
+      return copy;
+    });
+  };
+
+  const updateClipNote = (id: string, note: string) => {
+    setClips((c) => c.map((k) => (k.id === id ? { ...k, note } : k)));
+  };
+
+  const handleClientBatchSend = async () => {
+    if (clips.length === 0) return toast.error("Add at least one video.");
+    if (noteMode === "batch" && !batchNote.trim()) {
+      return toast.error("Add a note for Coach Jared, or switch to per-clip notes.");
+    }
+
+    setSaving(true);
+    try {
+      const batchId = crypto.randomUUID();
+      const total = clips.length;
+      const sharedNote = noteMode === "batch" ? batchNote.trim() : "";
+      const isUrgent = !!form.is_urgent;
+      const urgentNote = isUrgent ? urgentText.trim() : "";
+
+      for (let i = 0; i < clips.length; i++) {
+        const clip = clips[i];
+        let videoUrl: string | null = null;
+        let storagePath: string | null = null;
+        let source: "link" | "upload" = "link";
+
+        if (clip.kind === "file" && clip.file && userId) {
+          const res = await uploadVideoFile(clip.file, userId);
+          storagePath = res.path;
+          videoUrl = res.url;
+          source = "upload";
+        } else if (clip.kind === "link" && clip.url) {
+          videoUrl = clip.url;
+          source = "link";
+        }
+
+        const perClipNote = noteMode === "perClip" ? clip.note.trim() : "";
+        const combinedQuestion = [urgentNote && `⚠️ Pain / discomfort / urgent: ${urgentNote}`]
+          .filter(Boolean)
+          .join("\n");
+
+        await createLiftVideo({
+          client_id: clientId,
+          uploaded_by: userId,
+          exercise: "",
+          tag: isUrgent ? "Pain / Discomfort" : "Normal Review",
+          is_urgent: isUrgent,
+          client_notes: perClipNote || null,
+          question_for_coach: combinedQuestion || null,
+          video_url: videoUrl,
+          video_storage_path: storagePath,
+          video_source: source,
+          status: "New Upload",
+          batch_id: batchId,
+          batch_note: sharedNote || null,
+          batch_size: total,
+          batch_index: i + 1,
+        } as any);
+      }
+
+      toast.success(
+        clips.length === 1
+          ? "Video sent to Coach Jared."
+          : `${clips.length} clips sent to Coach Jared.`
+      );
+      onSaved?.();
+      onOpenChange(false);
+    } catch (e: any) {
+      toast.error(e.message ?? "Failed to send");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // ---------- Client (multi-clip DM-style) view ----------
+  if (role === "client" && !initial) {
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{initial ? "Edit lift video" : "Upload Lift Video"}</DialogTitle>
+            <DialogTitle>Upload Lift Video</DialogTitle>
           </DialogHeader>
 
           <div className="space-y-4">
+            {/* Add video buttons */}
             <div className="space-y-2">
               <Label className="text-xs uppercase tracking-widest text-muted-foreground">Add Video</Label>
               <input
-                ref={uploadInputRef}
+                ref={multiUploadRef}
                 type="file"
                 accept="video/mp4,video/quicktime,video/x-m4v,video/*"
+                multiple
                 className="hidden"
-                onChange={(e) => { setFile(e.target.files?.[0] ?? null); set("video_url", ""); }}
+                onChange={(e) => { addFiles(e.target.files); if (multiUploadRef.current) multiUploadRef.current.value = ""; }}
               />
               <input
-                ref={recordInputRef}
+                ref={multiRecordRef}
                 type="file"
                 accept="video/*"
                 capture="environment"
                 className="hidden"
-                onChange={(e) => { setFile(e.target.files?.[0] ?? null); set("video_url", ""); }}
+                onChange={(e) => { addFiles(e.target.files); if (multiRecordRef.current) multiRecordRef.current.value = ""; }}
               />
               <div className="grid grid-cols-3 gap-2">
-                <Button type="button" variant="outline" className="h-auto flex-col gap-1 py-3" onClick={() => uploadInputRef.current?.click()}>
+                <Button type="button" variant="outline" className="h-auto flex-col gap-1 py-3" onClick={() => multiUploadRef.current?.click()}>
                   <Upload className="h-4 w-4" />
-                  <span className="text-[11px] font-semibold">Upload from phone</span>
+                  <span className="text-[11px] font-semibold leading-tight">Upload from phone</span>
                 </Button>
-                <Button type="button" variant="outline" className="h-auto flex-col gap-1 py-3" onClick={() => recordInputRef.current?.click()}>
+                <Button type="button" variant="outline" className="h-auto flex-col gap-1 py-3" onClick={() => multiRecordRef.current?.click()}>
                   <VideoIcon className="h-4 w-4" />
-                  <span className="text-[11px] font-semibold">Record now</span>
+                  <span className="text-[11px] font-semibold leading-tight">Record now</span>
                 </Button>
-                <Button type="button" variant={form.video_url ? "default" : "outline"} className="h-auto flex-col gap-1 py-3" onClick={() => { setFile(null); set("video_url", form.video_url || ""); }}>
+                <Button type="button" variant="outline" className="h-auto flex-col gap-1 py-3" onClick={() => { const el = document.getElementById("clip-paste-link") as HTMLInputElement | null; el?.focus(); }}>
                   <LinkIcon className="h-4 w-4" />
-                  <span className="text-[11px] font-semibold">Paste link</span>
+                  <span className="text-[11px] font-semibold leading-tight">Paste link</span>
                 </Button>
               </div>
-              {file && (
-                <p className="text-xs text-muted-foreground">📎 {file.name} · {(file.size / 1024 / 1024).toFixed(1)} MB</p>
-              )}
-              {!file && (
+              <div className="flex gap-2">
                 <Input
-                  placeholder="Or paste a video link (Google Drive, YouTube unlisted, etc.)"
-                  value={form.video_url}
-                  onChange={(e) => set("video_url", e.target.value)}
+                  id="clip-paste-link"
+                  placeholder="Paste link(s) — Drive, YouTube, etc. Separate with space or comma"
+                  value={pasteLink}
+                  onChange={(e) => setPasteLink(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addLinks(pasteLink); } }}
                 />
-              )}
-              {initial && !file && !form.video_url && (
-                <p className="text-xs text-muted-foreground">Existing video kept unless you replace it.</p>
+                <Button type="button" variant="outline" size="sm" onClick={() => addLinks(pasteLink)} disabled={!pasteLink.trim()}>
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+
+            {/* Selected clips */}
+            {clips.length > 0 && (
+              <div className="space-y-2">
+                <Label className="text-xs uppercase tracking-widest text-muted-foreground">
+                  Selected clips ({clips.length})
+                </Label>
+                <div className="space-y-2">
+                  {clips.map((clip, idx) => (
+                    <div key={clip.id} className="rounded-md border border-border bg-card p-2 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <div className="flex h-16 w-24 shrink-0 items-center justify-center overflow-hidden rounded bg-muted">
+                          {clip.kind === "file" && clip.previewUrl ? (
+                            <video src={clip.previewUrl} className="h-full w-full object-cover" muted playsInline preload="metadata" />
+                          ) : (
+                            <LinkIcon className="h-5 w-5 text-muted-foreground" />
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="text-sm font-semibold">Clip {idx + 1}</div>
+                          <div className="truncate text-xs text-muted-foreground">
+                            {clip.kind === "file"
+                              ? `${clip.file?.name} · ${((clip.file?.size ?? 0) / 1024 / 1024).toFixed(1)} MB`
+                              : clip.url}
+                          </div>
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <Button type="button" size="icon" variant="ghost" className="h-7 w-7" onClick={() => moveClip(clip.id, -1)} disabled={idx === 0}>
+                            <ArrowUp className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button type="button" size="icon" variant="ghost" className="h-7 w-7" onClick={() => moveClip(clip.id, 1)} disabled={idx === clips.length - 1}>
+                            <ArrowDown className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                        <Button type="button" size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => removeClip(clip.id)}>
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                      {noteMode === "perClip" && (
+                        <Textarea
+                          rows={2}
+                          className="text-sm"
+                          placeholder="Add note for this clip. Example: Squat top set, 405 x 3 @ RPE 8. Felt slow out of the hole."
+                          value={clip.note}
+                          onChange={(e) => updateClipNote(clip.id, e.target.value)}
+                        />
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Notes mode toggle */}
+            <div className="space-y-2">
+              <Label className="text-xs uppercase tracking-widest text-muted-foreground">Notes</Label>
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  type="button"
+                  variant={noteMode === "batch" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setNoteMode("batch")}
+                >
+                  One message for all
+                </Button>
+                <Button
+                  type="button"
+                  variant={noteMode === "perClip" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setNoteMode("perClip")}
+                >
+                  Note per clip
+                </Button>
+              </div>
+              {noteMode === "batch" && (
+                <Textarea
+                  rows={5}
+                  className="min-h-[120px] text-base"
+                  placeholder={`Tell Coach Jared what these videos are.\n\nExample: Week 3 Day 2. First video is squat top set 405 x 3 @ RPE 8, second video is backoff set, third video is bench. Squat felt slow out of the hole.`}
+                  value={batchNote}
+                  onChange={(e) => setBatchNote(e.target.value)}
+                />
               )}
             </div>
 
+            {/* Pain / urgent toggle */}
+            <div className="space-y-2 rounded-md border border-border bg-secondary/30 p-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="flex items-center gap-2 text-sm font-semibold">
+                    <AlertTriangle className="h-4 w-4 text-warning" />
+                    Pain, discomfort, or urgent?
+                  </div>
+                  <div className="text-xs text-muted-foreground">Flag this for coach attention.</div>
+                </div>
+                <Switch checked={!!form.is_urgent} onCheckedChange={(v) => set("is_urgent", v)} />
+              </div>
+              {form.is_urgent && (
+                <Textarea
+                  rows={3}
+                  className="text-sm"
+                  placeholder="Example: left hip pinched during this set, or urgent technique concern before next session."
+                  value={urgentText}
+                  onChange={(e) => setUrgentText(e.target.value)}
+                />
+              )}
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>Cancel</Button>
+            <Button onClick={handleSave} disabled={saving || clips.length === 0} className="bg-gradient-primary font-bold uppercase">
+              {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+              {clips.length > 1 ? `Send ${clips.length} clips` : "Send Video"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
+  // ---------- Client edit (single existing clip) view ----------
+  if (role === "client" && initial) {
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit lift video</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
             <div className="space-y-2">
-              <Label className="text-xs uppercase tracking-widest text-muted-foreground">Notes for Coach Jared</Label>
+              <Label className="text-xs uppercase tracking-widest text-muted-foreground">Note for Coach Jared</Label>
               <Textarea
                 rows={6}
                 className="min-h-[140px] text-base"
-                placeholder={`Tell Coach Jared what this is.\n\nPlease include the lift, training day, load, reps, and RPE/RIR if you know it.\n\nExample: Week 3 Day 2 — Squat top set, 405 x 3 @ RPE 8. Felt slow out of the hole. Not sure if I'm losing position.`}
+                placeholder="Add or update your note for this clip."
                 value={form.client_notes}
                 onChange={(e) => set("client_notes", e.target.value)}
               />
             </div>
-
-            <div className="rounded-md border border-border">
-              <button
-                type="button"
-                className="flex w-full items-center justify-between p-3 text-left text-sm font-semibold"
-                onClick={() => setShowAdvanced((s) => !s)}
-              >
-                <span>Add more details (optional)</span>
-                {showAdvanced ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-              </button>
-              {showAdvanced && (
-                <div className="grid grid-cols-2 gap-3 border-t border-border p-3">
-                  <div className="col-span-2">
-                    <Label>Exercise</Label>
-                    <Input placeholder="e.g. Low-Bar Squat" value={form.exercise} onChange={(e) => set("exercise", e.target.value)} />
-                  </div>
-                  <div>
-                    <Label>Training day</Label>
-                    <Select value={form.training_day} onValueChange={(v) => set("training_day", v)}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {TRAINING_DAY_OPTIONS.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label>Date performed</Label>
-                    <Input type="date" value={form.date_performed} onChange={(e) => set("date_performed", e.target.value)} />
-                  </div>
-                  <div className="col-span-2">
-                    <Label>Program day</Label>
-                    <Input placeholder="e.g. Week 3 Day 2" value={form.program_day} onChange={(e) => set("program_day", e.target.value)} />
-                  </div>
-                  <div>
-                    <Label>Set #</Label>
-                    <Input type="number" value={form.set_number} onChange={(e) => set("set_number", e.target.value)} />
-                  </div>
-                  <div>
-                    <Label>Reps</Label>
-                    <Input type="number" value={form.reps} onChange={(e) => set("reps", e.target.value)} />
-                  </div>
-                  <div>
-                    <Label>Load</Label>
-                    <Input placeholder="e.g. 405 lbs" value={form.load_text} onChange={(e) => set("load_text", e.target.value)} />
-                  </div>
-                  <div>
-                    <Label>RPE / RIR</Label>
-                    <Input type="number" step="0.5" min="1" max="10" value={form.rpe} onChange={(e) => set("rpe", e.target.value)} />
-                  </div>
-                  <div className="col-span-2">
-                    <Label>Tag</Label>
-                    <Select value={form.tag} onValueChange={(v) => set("tag", v)}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {LIFT_VIDEO_TAGS.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="col-span-2 flex items-center justify-between rounded-md border border-border bg-secondary/30 p-3">
-                    <div>
-                      <div className="text-sm font-semibold">Pain / discomfort or urgent?</div>
-                      <div className="text-xs text-muted-foreground">Flag this for coach attention.</div>
-                    </div>
-                    <Switch checked={form.is_urgent} onCheckedChange={(v) => set("is_urgent", v)} />
-                  </div>
+            <div className="flex items-center justify-between rounded-md border border-border bg-secondary/30 p-3">
+              <div>
+                <div className="flex items-center gap-2 text-sm font-semibold">
+                  <AlertTriangle className="h-4 w-4 text-warning" />
+                  Pain, discomfort, or urgent?
                 </div>
-              )}
+                <div className="text-xs text-muted-foreground">Flag this for coach attention.</div>
+              </div>
+              <Switch checked={!!form.is_urgent} onCheckedChange={(v) => set("is_urgent", v)} />
             </div>
           </div>
 
@@ -281,7 +493,7 @@ export function LiftVideoDialog({ open, onOpenChange, clientId, userId, initial,
             <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>Cancel</Button>
             <Button onClick={handleSave} disabled={saving} className="bg-gradient-primary font-bold uppercase">
               {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-              {initial ? "Save" : "Send Video"}
+              Save
             </Button>
           </DialogFooter>
         </DialogContent>
