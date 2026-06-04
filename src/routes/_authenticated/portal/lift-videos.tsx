@@ -45,7 +45,6 @@ function ClientLiftVideos() {
         v.watched_at ? +new Date(v.watched_at) : 0,
         v.liked_at ? +new Date(v.liked_at) : 0,
         v.reviewed_at ? +new Date(v.reviewed_at) : 0,
-        +new Date(v.updated_at),
       );
       return latest > seen;
     });
