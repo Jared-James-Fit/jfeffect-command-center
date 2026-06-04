@@ -333,6 +333,38 @@ function AdminDashboard() {
           )}
         </Card>
 
+        <Card className="border-border bg-card p-6">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-muted-foreground">
+              <Target className="h-4 w-4" /> Important Training Dates
+            </h2>
+          </div>
+          {importantAlerts.length === 0 ? (
+            <div className="rounded-md border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+              No important dates in the next 30 days.
+            </div>
+          ) : (
+            <ul className="divide-y divide-border">
+              {importantAlerts.map((d) => (
+                <li key={d.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5">
+                  <div className="flex items-center gap-3">
+                    <Badge variant="outline" className={importantToneClasses(d.derived.tone)}>{d.derived.label}</Badge>
+                    {d.clients && (
+                      <Link to="/admin/clients/$id" params={{ id: d.clients.id }} search={{ tab: "training" }} className="text-sm font-semibold hover:underline">
+                        {d.clients.full_name}
+                      </Link>
+                    )}
+                    <span className="text-xs text-muted-foreground">{d.title} · {dateTypeLabel(d)}</span>
+                  </div>
+                  <span className="text-xs text-muted-foreground">
+                    {d.derived.daysRemaining < 0 ? `${Math.abs(d.derived.daysRemaining)}d past` : `${d.derived.daysRemaining}d left`}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+
         <div className="grid gap-6 lg:grid-cols-3">
           <Card className="border-border bg-card p-6 lg:col-span-2">
             <div className="mb-4 flex items-center justify-between">
