@@ -497,6 +497,45 @@ export type Database = {
         }
         Relationships: []
       }
+      client_drive_folders: {
+        Row: {
+          client_id: string
+          created_at: string
+          folder_id: string | null
+          folder_name: string | null
+          folder_url: string | null
+          id: string
+          last_error: string | null
+          status: string
+          subfolders: Json
+          updated_at: string
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          folder_id?: string | null
+          folder_name?: string | null
+          folder_url?: string | null
+          id?: string
+          last_error?: string | null
+          status?: string
+          subfolders?: Json
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          folder_id?: string | null
+          folder_name?: string | null
+          folder_url?: string | null
+          id?: string
+          last_error?: string | null
+          status?: string
+          subfolders?: Json
+          updated_at?: string
+        }
+        Relationships: []
+      }
       clients: {
         Row: {
           account_created_at: string | null
@@ -1191,6 +1230,243 @@ export type Database = {
           video_url?: string | null
           watched_at?: string | null
           watched_by?: string | null
+        }
+        Relationships: []
+      }
+      media_comments: {
+        Row: {
+          author_id: string | null
+          author_role: string
+          body: string
+          client_id: string
+          comment_type: string
+          created_at: string
+          id: string
+          is_internal_note: boolean
+          media_item_id: string
+          updated_at: string
+          video_timestamp_seconds: number | null
+        }
+        Insert: {
+          author_id?: string | null
+          author_role: string
+          body?: string
+          client_id: string
+          comment_type?: string
+          created_at?: string
+          id?: string
+          is_internal_note?: boolean
+          media_item_id: string
+          updated_at?: string
+          video_timestamp_seconds?: number | null
+        }
+        Update: {
+          author_id?: string | null
+          author_role?: string
+          body?: string
+          client_id?: string
+          comment_type?: string
+          created_at?: string
+          id?: string
+          is_internal_note?: boolean
+          media_item_id?: string
+          updated_at?: string
+          video_timestamp_seconds?: number | null
+        }
+        Relationships: []
+      }
+      media_drive_settings: {
+        Row: {
+          created_at: string
+          id: string
+          last_test_at: string | null
+          last_test_result: string | null
+          notes: string | null
+          root_folder_id: string | null
+          root_folder_name: string | null
+          root_folder_url: string | null
+          share_uploads_with_link: boolean
+          singleton: boolean
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          last_test_at?: string | null
+          last_test_result?: string | null
+          notes?: string | null
+          root_folder_id?: string | null
+          root_folder_name?: string | null
+          root_folder_url?: string | null
+          share_uploads_with_link?: boolean
+          singleton?: boolean
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          last_test_at?: string | null
+          last_test_result?: string | null
+          notes?: string | null
+          root_folder_id?: string | null
+          root_folder_name?: string | null
+          root_folder_url?: string | null
+          share_uploads_with_link?: boolean
+          singleton?: boolean
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      media_items: {
+        Row: {
+          admin_last_viewed_at: string | null
+          client_id: string
+          client_last_viewed_at: string | null
+          clip_note: string | null
+          clip_order: number
+          created_at: string
+          drive_embed_url: string | null
+          drive_file_id: string | null
+          drive_folder_id: string | null
+          drive_url: string | null
+          duration_seconds: number | null
+          external_link: string | null
+          file_name: string | null
+          id: string
+          liked_at: string | null
+          liked_by: string | null
+          media_type: string
+          mime_type: string | null
+          pain_note: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          size_bytes: number | null
+          status: string
+          submission_id: string | null
+          thumbnail_url: string | null
+          updated_at: string
+          uploaded_by: string | null
+          uploaded_by_role: string
+          urgent_flag: boolean
+          watched_at: string | null
+          watched_by: string | null
+        }
+        Insert: {
+          admin_last_viewed_at?: string | null
+          client_id: string
+          client_last_viewed_at?: string | null
+          clip_note?: string | null
+          clip_order?: number
+          created_at?: string
+          drive_embed_url?: string | null
+          drive_file_id?: string | null
+          drive_folder_id?: string | null
+          drive_url?: string | null
+          duration_seconds?: number | null
+          external_link?: string | null
+          file_name?: string | null
+          id?: string
+          liked_at?: string | null
+          liked_by?: string | null
+          media_type: string
+          mime_type?: string | null
+          pain_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          size_bytes?: number | null
+          status?: string
+          submission_id?: string | null
+          thumbnail_url?: string | null
+          updated_at?: string
+          uploaded_by?: string | null
+          uploaded_by_role?: string
+          urgent_flag?: boolean
+          watched_at?: string | null
+          watched_by?: string | null
+        }
+        Update: {
+          admin_last_viewed_at?: string | null
+          client_id?: string
+          client_last_viewed_at?: string | null
+          clip_note?: string | null
+          clip_order?: number
+          created_at?: string
+          drive_embed_url?: string | null
+          drive_file_id?: string | null
+          drive_folder_id?: string | null
+          drive_url?: string | null
+          duration_seconds?: number | null
+          external_link?: string | null
+          file_name?: string | null
+          id?: string
+          liked_at?: string | null
+          liked_by?: string | null
+          media_type?: string
+          mime_type?: string | null
+          pain_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          size_bytes?: number | null
+          status?: string
+          submission_id?: string | null
+          thumbnail_url?: string | null
+          updated_at?: string
+          uploaded_by?: string | null
+          uploaded_by_role?: string
+          urgent_flag?: boolean
+          watched_at?: string | null
+          watched_by?: string | null
+        }
+        Relationships: []
+      }
+      media_submissions: {
+        Row: {
+          batch_note: string | null
+          client_id: string
+          clip_count: number
+          created_at: string
+          created_by: string | null
+          created_by_role: string
+          id: string
+          pain_note: string | null
+          status: string
+          submission_type: string
+          title: string | null
+          updated_at: string
+          urgent_flag: boolean
+        }
+        Insert: {
+          batch_note?: string | null
+          client_id: string
+          clip_count?: number
+          created_at?: string
+          created_by?: string | null
+          created_by_role?: string
+          id?: string
+          pain_note?: string | null
+          status?: string
+          submission_type: string
+          title?: string | null
+          updated_at?: string
+          urgent_flag?: boolean
+        }
+        Update: {
+          batch_note?: string | null
+          client_id?: string
+          clip_count?: number
+          created_at?: string
+          created_by?: string | null
+          created_by_role?: string
+          id?: string
+          pain_note?: string | null
+          status?: string
+          submission_type?: string
+          title?: string | null
+          updated_at?: string
+          urgent_flag?: boolean
         }
         Relationships: []
       }

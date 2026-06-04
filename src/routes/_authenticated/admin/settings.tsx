@@ -14,7 +14,9 @@ import { Badge } from "@/components/ui/badge";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { sendTestEmail } from "@/lib/email-sender.functions";
-import { Mail, Send } from "lucide-react";
+import { setupDriveRoot } from "@/lib/drive.functions";
+import { Mail, Send, FolderOpen, ExternalLink } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 
 export const Route = createFileRoute("/_authenticated/admin/settings")({ component: SettingsPage });
 
@@ -203,9 +205,90 @@ function SettingsPage() {
                 Last test: {new Date(current.last_test_at).toLocaleString()} — {current.last_test_result}
               </p>
             )}
-          </div>
-        </Card>
+           </div>
+         </Card>
+
+         <DriveIntegrationCard />
+       </div>
+     </>
+   );
+ }
+
+function DriveIntegrationCard() {
+  const qc = useQueryClient();
+  const setupFn = useServerFn(setupDriveRoot);
+  const { data: drive } = useQuery({
+    queryKey: ["media-drive-settings"],
+    queryFn: async () => {
+      const { data } = await supabase.from("media_drive_settings" as any).select("*").limit(1).maybeSingle();
+      return data;
+    },
+  });
+  const [folderName, setFolderName] = useState("JF Effect Coaching Media");
+  const [existingId, setExistingId] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function run() {
+    setBusy(true);
+    try {
+      await setupFn({ data: { folderName, existingFolderId: existingId || undefined } });
+      toast.success("Drive folder connected");
+      qc.invalidateQueries({ queryKey: ["media-drive-settings"] });
+    } catch (e: any) { toast.error(e?.message || "Drive setup failed"); }
+    finally { setBusy(false); }
+  }
+
+  async function toggleShare(v: boolean) {
+    const { error } = await supabase.from("media_drive_settings" as any).update({ share_uploads_with_link: v }).eq("singleton", true);
+    if (error) return toast.error(error.message);
+    qc.invalidateQueries({ queryKey: ["media-drive-settings"] });
+  }
+
+  return (
+    <Card className="border-border bg-card p-5 space-y-3">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <FolderOpen className="h-5 w-5 text-primary" />
+          <h2 className="text-base font-bold">Google Drive (media storage)</h2>
+        </div>
+        <Badge variant="outline">{(drive as any)?.status ?? "Not Connected"}</Badge>
       </div>
-    </>
+      <p className="text-xs text-muted-foreground">
+        Client videos and photos are stored in your Google Drive — the app only saves metadata, comments, and review status. Each client gets their own folder with subfolders for Lift Videos, Check-Ins, Progress Photos, and more.
+      </p>
+      {(drive as any)?.root_folder_id ? (
+        <div className="rounded border border-border bg-secondary/40 p-3 text-sm">
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <div className="font-semibold">{(drive as any).root_folder_name}</div>
+              <div className="text-xs text-muted-foreground">Root folder ID: {(drive as any).root_folder_id}</div>
+            </div>
+            {(drive as any).root_folder_url && (
+              <Button asChild size="sm" variant="outline">
+                <a href={(drive as any).root_folder_url} target="_blank" rel="noopener noreferrer">Open <ExternalLink className="ml-1 h-3 w-3" /></a>
+              </Button>
+            )}
+          </div>
+        </div>
+      ) : (
+        <div className="grid gap-2 sm:grid-cols-2">
+          <div>
+            <Label className="text-xs">Create new root folder named</Label>
+            <Input value={folderName} onChange={(e) => setFolderName(e.target.value)} />
+          </div>
+          <div>
+            <Label className="text-xs">…or reuse existing folder ID</Label>
+            <Input value={existingId} onChange={(e) => setExistingId(e.target.value)} placeholder="(only folders the app created)" />
+          </div>
+        </div>
+      )}
+      <div className="flex flex-wrap items-center gap-3">
+        <Button onClick={run} disabled={busy}>{(drive as any)?.root_folder_id ? "Re-test connection" : "Create root folder"}</Button>
+        <label className="flex items-center gap-2 text-xs">
+          <Switch checked={!!(drive as any)?.share_uploads_with_link} onCheckedChange={toggleShare} />
+          Share uploaded files with link (lets clients view their own videos)
+        </label>
+      </div>
+    </Card>
   );
 }
