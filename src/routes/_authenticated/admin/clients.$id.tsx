@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, ExternalLink, Save, Trash2, Mail, Archive, KeyRound, Copy, CheckCircle2, AlertCircle, BellRing } from "lucide-react";
+import { ArrowLeft, ExternalLink, Save, Trash2, Mail, Archive, KeyRound, Copy, CheckCircle2, AlertCircle, BellRing, Tag } from "lucide-react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import { inviteClient, deleteClient, getSetupLink, sendPasswordReset, markSetupComplete, setNeedsAdminHelp } from "@/lib/clients.functions";
@@ -30,6 +30,7 @@ import { MessageThread } from "@/components/message-thread";
 import type { ConversationState } from "@/lib/messages";
 import { AgreementStatusPanel } from "@/components/agreement-status-panel";
 import { PurchaseRecordsPanel } from "@/components/purchase-records-panel";
+import { PriceCardPickerDialog } from "@/components/price-card-picker-dialog";
 import { AgreementsPanel } from "@/components/agreements-panel";
 
 function AssignedCoachSelect({ value, onChange }: { value: string | null; onChange: (v: string | null) => void }) {
