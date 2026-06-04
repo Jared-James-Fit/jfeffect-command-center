@@ -553,6 +553,7 @@ function ClientDetail() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      <PriceCardPickerDialog open={priceCardOpen} onClose={() => setPriceCardOpen(false)} fixedClientId={id} />
     </>
   );
 }
