@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, ExternalLink, Save, Trash2, Mail, Archive, KeyRound, Copy, CheckCircle2, AlertCircle } from "lucide-react";
+import { ArrowLeft, ExternalLink, Save, Trash2, Mail, Archive, KeyRound, Copy, CheckCircle2, AlertCircle, BellRing } from "lucide-react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import { inviteClient, deleteClient, getSetupLink, sendPasswordReset, markSetupComplete, setNeedsAdminHelp } from "@/lib/clients.functions";
@@ -24,8 +24,9 @@ import { CardioTargetsPanel } from "@/components/cardio-targets-panel";
 import { Switch } from "@/components/ui/switch";
 import { COMMON_TIMEZONES } from "@/lib/pt-sessions";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { ProfilePictureCapture } from "@/components/profile-picture-capture";
 
-const TAB_VALUES = ["summary", "training", "nutrition", "cardio", "documents", "sessions", "notes", "account"] as const;
+const TAB_VALUES = ["summary", "training", "nutrition", "cardio", "documents", "sessions", "notes", "info", "account"] as const;
 type TabValue = typeof TAB_VALUES[number];
 
 export const Route = createFileRoute("/_authenticated/admin/clients/$id")({
@@ -35,6 +36,8 @@ export const Route = createFileRoute("/_authenticated/admin/clients/$id")({
 
 const STATUSES = ["Active", "New Client", "Needs Attention", "Check-In Overdue", "Payment Overdue", "Injured / Modified Plan", "Paused", "Cancelling", "Archived", "High Priority"];
 const PAY_STATUSES = ["Not Sent", "Sent", "Paid", "Failed", "Overdue", "Cancelled", "Refunded"];
+const COUNTRIES = ["Canada", "United States", "United Kingdom", "Australia", "New Zealand", "Other"];
+const ACCOUNT_FIELDS = ["first_name", "last_name", "email", "phone", "address", "city", "province", "postal_code", "country", "timezone"] as const;
 
 function ClientDetail() {
   const { id } = Route.useParams();
@@ -154,6 +157,58 @@ function ClientDetail() {
 
   const set = (k: string, v: any) => setForm({ ...form, [k]: v });
 
+  const saveAccountInfo = async () => {
+    if (!data) return;
+    const updatedFields = ACCOUNT_FIELDS.filter((f) => form[f] !== (data as any)[f]);
+    const patch: any = {
+      first_name: form.first_name ?? null,
+      last_name: form.last_name ?? null,
+      full_name: [form.first_name, form.last_name].filter(Boolean).join(" ").trim() || form.full_name,
+      email: form.email ?? null,
+      phone: form.phone ?? null,
+      address: form.address ?? null,
+      city: form.city ?? null,
+      province: form.province ?? null,
+      postal_code: form.postal_code ?? null,
+      country: form.country ?? null,
+      timezone: form.timezone ?? "America/Winnipeg",
+      info_last_updated_at: new Date().toISOString(),
+      info_last_updated_by: "admin",
+      info_last_updated_fields: updatedFields,
+    };
+    const { error } = await supabase.from("clients").update(patch).eq("id", id);
+    if (error) return toast.error(error.message);
+    toast.success("Account info saved");
+    qc.invalidateQueries({ queryKey: ["client", id] });
+    qc.invalidateQueries({ queryKey: ["clients"] });
+  };
+
+  const requestUpdate = async () => {
+    const { error } = await supabase
+      .from("clients")
+      .update({ info_update_requested: true, info_update_requested_at: new Date().toISOString() })
+      .eq("id", id);
+    if (error) return toast.error(error.message);
+    toast.success("Client will see a reminder on their dashboard");
+    qc.invalidateQueries({ queryKey: ["client", id] });
+  };
+
+  const clearUpdateRequest = async () => {
+    const { error } = await supabase.from("clients").update({ info_update_requested: false }).eq("id", id);
+    if (error) return toast.error(error.message);
+    qc.invalidateQueries({ queryKey: ["client", id] });
+  };
+
+  const adminUpdatePicture = async (path: string) => {
+    const { error } = await supabase
+      .from("clients")
+      .update({ profile_picture_url: path, profile_picture_updated_at: new Date().toISOString() })
+      .eq("id", id);
+    if (error) return toast.error(error.message);
+    qc.invalidateQueries({ queryKey: ["client", id] });
+    setForm({ ...form, profile_picture_url: path });
+  };
+
   const links = [
     ["Program Sheet", form.program_sheet_link],
     ["Drive Folder", form.drive_folder_link],
@@ -191,6 +246,7 @@ function ClientDetail() {
           <TabsTrigger value="documents">Documents</TabsTrigger>
           <TabsTrigger value="sessions">Sessions</TabsTrigger>
           <TabsTrigger value="notes">Notes</TabsTrigger>
+          <TabsTrigger value="info">Account Info</TabsTrigger>
           <TabsTrigger value="account">Account & Access</TabsTrigger>
         </TabsList>
 
@@ -326,6 +382,65 @@ function ClientDetail() {
             <h3 className="text-xs uppercase tracking-widest text-primary">Private Coach Notes</h3>
             <p className="text-xs text-muted-foreground">Only visible to admin.</p>
             <Textarea rows={12} value={form.coach_notes ?? ""} onChange={(e) => set("coach_notes", e.target.value)} placeholder="Internal notes the client never sees…" />
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="info" className="grid gap-6 md:grid-cols-3">
+          <Card className="border-border bg-card p-6 md:col-span-2 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Account Information</h3>
+              <div className="flex gap-2">
+                {form.info_update_requested ? (
+                  <Button size="sm" variant="outline" onClick={clearUpdateRequest}>Clear update request</Button>
+                ) : (
+                  <Button size="sm" variant="outline" onClick={requestUpdate}><BellRing className="mr-2 h-4 w-4" />Request Account Info Update</Button>
+                )}
+                <Button size="sm" className="bg-gradient-primary uppercase font-bold" onClick={saveAccountInfo}><Save className="mr-2 h-4 w-4" />Save</Button>
+              </div>
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <div><Label>First name</Label><Input value={form.first_name ?? ""} onChange={(e) => set("first_name", e.target.value)} /></div>
+              <div><Label>Last name</Label><Input value={form.last_name ?? ""} onChange={(e) => set("last_name", e.target.value)} /></div>
+              <div><Label>Email</Label><Input value={form.email ?? ""} onChange={(e) => set("email", e.target.value)} /></div>
+              <div><Label>Phone</Label><Input value={form.phone ?? ""} onChange={(e) => set("phone", e.target.value)} /></div>
+              <div className="md:col-span-2"><Label>Mailing address</Label><Input value={form.address ?? ""} onChange={(e) => set("address", e.target.value)} /></div>
+              <div><Label>City</Label><Input value={form.city ?? ""} onChange={(e) => set("city", e.target.value)} /></div>
+              <div><Label>Province / State</Label><Input value={form.province ?? ""} onChange={(e) => set("province", e.target.value)} /></div>
+              <div><Label>Postal / ZIP code</Label><Input value={form.postal_code ?? ""} onChange={(e) => set("postal_code", e.target.value)} /></div>
+              <div>
+                <Label>Country</Label>
+                <Select value={form.country ?? ""} onValueChange={(v) => set("country", v)}>
+                  <SelectTrigger><SelectValue placeholder="Select…" /></SelectTrigger>
+                  <SelectContent>{COUNTRIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Time zone</Label>
+                <Select value={form.timezone ?? "America/Winnipeg"} onValueChange={(v) => set("timezone", v)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>{COMMON_TIMEZONES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="grid gap-2 rounded-md border border-border bg-secondary/30 p-3 text-xs md:grid-cols-2">
+              <div><span className="text-muted-foreground">Last account info update:</span> {fmtDate(form.info_last_updated_at)}</div>
+              <div><span className="text-muted-foreground">Updated by:</span> {form.info_last_updated_by ?? "—"}</div>
+              <div className="md:col-span-2"><span className="text-muted-foreground">Fields updated:</span> {form.info_last_updated_fields?.length ? form.info_last_updated_fields.join(", ") : "—"}</div>
+              <div><span className="text-muted-foreground">Profile picture updated:</span> {fmtDate(form.profile_picture_updated_at)}</div>
+              <div><span className="text-muted-foreground">Time zone confirmed:</span> {fmtDate(form.timezone_confirmed_at)}</div>
+              <div><span className="text-muted-foreground">Update requested:</span> {form.info_update_requested ? `Yes (${fmtDate(form.info_update_requested_at)})` : "No"}</div>
+            </div>
+          </Card>
+
+          <Card className="border-border bg-card p-6 space-y-3">
+            <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Profile Picture</h3>
+            <ProfilePictureCapture
+              userId={form.user_id ?? id}
+              currentUrl={form.profile_picture_url}
+              onUploaded={adminUpdatePicture}
+              allowFileUpload
+            />
+            <p className="text-[11px] text-muted-foreground">Admin can capture or upload on behalf of the client.</p>
           </Card>
         </TabsContent>
 

@@ -1,7 +1,7 @@
 import {
   LayoutDashboard, Users, CreditCard,
   Package, FileText, Dumbbell, FolderOpen, Calendar, Layers,
-  Settings, Briefcase, Apple, ClipboardCheck,
+  Settings, Briefcase, Apple, ClipboardCheck, UserCog,
 } from "lucide-react";
 import type { NavItem } from "@/components/app-shell";
 
@@ -28,4 +28,5 @@ export const clientNav: NavItem[] = [
   { to: "/portal/resources", label: "Resources", icon: FolderOpen },
   { to: "/portal/calendar", label: "Calendar", icon: Calendar },
   { to: "/portal/documents", label: "Documents", icon: FileText },
+  { to: "/portal/account", label: "Account Settings", icon: UserCog },
 ];

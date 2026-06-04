@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { FileText, ClipboardCheck, Dumbbell, CreditCard, Calendar, ExternalLink, CheckCircle2, Circle } from "lucide-react";
+import { FileText, ClipboardCheck, Dumbbell, CreditCard, Calendar, ExternalLink, CheckCircle2, Circle, ShieldAlert } from "lucide-react";
 import { useEffect, useState } from "react";
 
 export const Route = createFileRoute("/_authenticated/portal/")({ component: PortalHome });
@@ -62,6 +62,20 @@ function PortalHome() {
         subtitle="Your private coaching dashboard."
       />
       <div className="space-y-6 p-6 md:p-8">
+        {client?.info_update_requested && (
+          <Card className="border-warning/40 bg-warning/10 p-5">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <ShieldAlert className="h-5 w-5 text-warning" />
+                <div>
+                  <div className="font-bold">Please review and update your account information.</div>
+                  <div className="text-xs text-muted-foreground">Your coach asked you to confirm your contact details are current.</div>
+                </div>
+              </div>
+              <Link to="/portal/account"><Button size="sm" className="bg-gradient-primary uppercase font-bold">Update Account Information</Button></Link>
+            </div>
+          </Card>
+        )}
         {!client && (
           <Card className="border-primary/30 bg-primary/5 p-6">
             <p className="text-sm">Your coach hasn't set up your client profile yet. Once they do, you'll see your program, check-in form and resources here.</p>
