@@ -74,6 +74,7 @@ function ClientDetail() {
   const navigate = useNavigate();
   const [form, setForm] = useState<any>(null);
   const [deleteStep, setDeleteStep] = useState<0 | 1 | 2>(0);
+  const [priceCardOpen, setPriceCardOpen] = useState(false);
   const inviteFn = useServerFn(inviteClient);
   const deleteFn = useServerFn(deleteClient);
   const getSetupLinkFn = useServerFn(getSetupLink);
@@ -254,6 +255,7 @@ function ClientDetail() {
         actions={
           <>
             <Link to="/admin/clients"><Button variant="ghost" size="sm"><ArrowLeft className="mr-2 h-4 w-4" />Back</Button></Link>
+            <Button variant="outline" size="sm" onClick={() => setPriceCardOpen(true)}><Tag className="mr-2 h-4 w-4" />Assign Offer / View Price Card</Button>
             <Button variant="outline" size="sm" onClick={sendSetup}><Mail className="mr-2 h-4 w-4" />Send setup link</Button>
             <Button variant="outline" size="sm" onClick={archive}><Archive className="mr-2 h-4 w-4" />{form.archived ? "Restore" : "Archive"}</Button>
             <Button variant="outline" size="sm" className="text-destructive hover:text-destructive" onClick={() => setDeleteStep(1)}><Trash2 className="mr-2 h-4 w-4" />Delete</Button>
