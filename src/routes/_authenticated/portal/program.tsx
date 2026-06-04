@@ -7,8 +7,9 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { ExternalLink, FileText, Heart, Dumbbell } from "lucide-react";
+import { ExternalLink, FileText, Heart, Dumbbell, Target } from "lucide-react";
 import { derivePhase, displayTitle, toneClasses, type TrainingPhase } from "@/lib/training-phases";
+import { deriveImportantDate, dateTypeLabel, importantToneClasses, type ImportantDate } from "@/lib/important-dates";
 import { format, parseISO } from "date-fns";
 
 export const Route = createFileRoute("/_authenticated/portal/program")({ component: MyProgram });
@@ -51,6 +52,18 @@ function MyProgram() {
       return data ?? [];
     },
   });
+
+  const { data: importantDates = [] } = useQuery({
+    queryKey: ["my-important-dates", client?.id],
+    enabled: !!client?.id,
+    queryFn: async () => {
+      const { data } = await (supabase.from("important_dates") as any)
+        .select("*").eq("client_id", client!.id)
+        .neq("status", "Archived").order("target_date", { ascending: true });
+      return (data ?? []) as ImportantDate[];
+    },
+  });
+  const upcomingDates = importantDates.filter((d) => !["completed", "archived"].includes(deriveImportantDate(d).state));
 
   return (
     <>
@@ -112,6 +125,40 @@ function MyProgram() {
             <p className="text-sm text-muted-foreground">No active training phase yet. Your coach will assign one soon.</p>
           )}
         </Card>
+
+        {upcomingDates.length > 0 && (
+          <Card className="border-border bg-card p-6">
+            <h2 className="mb-4 flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-muted-foreground">
+              <Target className="h-4 w-4" /> Long-Term Goals
+            </h2>
+            <div className="space-y-3">
+              {upcomingDates.map((d) => {
+                const der = deriveImportantDate(d);
+                return (
+                  <div key={d.id} className="rounded-md border border-border bg-secondary/30 p-4">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-bold">{d.title}</span>
+                      <Badge variant="outline" className={importantToneClasses(der.tone)}>{der.label}</Badge>
+                      <Badge variant="outline" className="text-[10px]">{dateTypeLabel(d)}</Badge>
+                    </div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      Target: {format(parseISO(d.target_date), "MMM d, yyyy")}
+                      {d.start_date && ` · Prep started ${format(parseISO(d.start_date), "MMM d")}`}
+                    </div>
+                    <div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-4">
+                      <Item label="Days until" value={der.daysRemaining < 0 ? `${Math.abs(der.daysRemaining)}d past` : `${der.daysRemaining}d`} />
+                      <Item label="Weeks left" value={String(der.weeksRemaining)} />
+                      {der.currentWeek != null && der.totalWeeks != null && <Item label="Week" value={`${der.currentWeek} / ${der.totalWeeks}`} />}
+                      {der.percentComplete != null && <Item label="Progress" value={`${der.percentComplete}%`} />}
+                    </div>
+                    {der.percentComplete != null && <Progress value={der.percentComplete} className="mt-3 h-2" />}
+                    {d.notes && <p className="mt-3 text-xs text-muted-foreground whitespace-pre-wrap">{d.notes}</p>}
+                  </div>
+                );
+              })}
+            </div>
+          </Card>
+        )}
 
         {cardio.length > 0 && (
           <Card className="border-border bg-card p-6">

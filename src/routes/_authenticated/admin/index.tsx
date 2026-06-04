@@ -8,9 +8,10 @@ import { Badge } from "@/components/ui/badge";
 import {
   Users, UserPlus, AlertTriangle, Calendar, DollarSign,
   Plus, Zap, ExternalLink, Activity, Dumbbell, Package, Timer, UserCheck, Apple,
-  ClipboardCheck, Heart, FileText,
+  ClipboardCheck, Heart, FileText, Target,
 } from "lucide-react";
 import { derivePhase, displayTitle, toneClasses, type TrainingPhase } from "@/lib/training-phases";
+import { deriveImportantDate, dateTypeLabel, importantToneClasses, type ImportantDate } from "@/lib/important-dates";
 import { deriveTarget } from "@/lib/nutrition-cardio";
 import { statusTone, fmtTimeRange } from "@/lib/pt-sessions";
 
@@ -101,6 +102,27 @@ function AdminDashboard() {
   const nutritionAlerts = nutritionTargets
     .map((t: any) => ({ ...t, derived: deriveTarget(t) }))
     .filter((t: any) => ["ending-soon", "due-today", "past-due"].includes(t.derived.state))
+    .slice(0, 8);
+
+  const { data: importantDates = [] } = useQuery({
+    queryKey: ["important-dates"],
+    queryFn: async () => {
+      const { data } = await (supabase.from("important_dates") as any)
+        .select("*, clients(id, full_name)")
+        .neq("status", "Archived")
+        .order("target_date", { ascending: true });
+      return (data ?? []) as Array<ImportantDate & { clients: { id: string; full_name: string } | null }>;
+    },
+  });
+
+  const importantAlerts = importantDates
+    .map((d) => ({ ...d, derived: deriveImportantDate(d) }))
+    .filter((d) => {
+      const s = d.derived.state;
+      if (["past-due", "due-today", "approaching"].includes(s)) return true;
+      if (s === "active" && d.derived.daysRemaining <= 30) return true;
+      return false;
+    })
     .slice(0, 8);
 
   // Account setup alerts
@@ -311,10 +333,43 @@ function AdminDashboard() {
           )}
         </Card>
 
+        <Card className="border-border bg-card p-6">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-muted-foreground">
+              <Target className="h-4 w-4" /> Important Training Dates
+            </h2>
+          </div>
+          {importantAlerts.length === 0 ? (
+            <div className="rounded-md border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+              No important dates in the next 30 days.
+            </div>
+          ) : (
+            <ul className="divide-y divide-border">
+              {importantAlerts.map((d) => (
+                <li key={d.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5">
+                  <div className="flex items-center gap-3">
+                    <Badge variant="outline" className={importantToneClasses(d.derived.tone)}>{d.derived.label}</Badge>
+                    {d.clients && (
+                      <Link to="/admin/clients/$id" params={{ id: d.clients.id }} search={{ tab: "training" }} className="text-sm font-semibold hover:underline">
+                        {d.clients.full_name}
+                      </Link>
+                    )}
+                    <span className="text-xs text-muted-foreground">{d.title} · {dateTypeLabel(d)}</span>
+                  </div>
+                  <span className="text-xs text-muted-foreground">
+                    {d.derived.daysRemaining < 0 ? `${Math.abs(d.derived.daysRemaining)}d past` : `${d.derived.daysRemaining}d left`}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+
         <div className="grid gap-6 lg:grid-cols-3">
           <Card className="border-border bg-card p-6 lg:col-span-2">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">Recent Clients</h2>
+
               <Link to="/admin/clients" className="text-xs font-semibold text-primary hover:underline">View all →</Link>
             </div>
             {clients.length === 0 ? (

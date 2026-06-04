@@ -351,6 +351,66 @@ export type Database = {
         }
         Relationships: []
       }
+      important_dates: {
+        Row: {
+          approaching_soon_days: number
+          client_id: string
+          countdown_label: string | null
+          created_at: string
+          custom_type: string | null
+          date_type: string
+          id: string
+          notes: string | null
+          phase_id: string | null
+          program_link: string | null
+          sort_order: number
+          start_date: string | null
+          status: string
+          target_date: string
+          title: string
+          updated_at: string
+          visible_to_client: boolean
+        }
+        Insert: {
+          approaching_soon_days?: number
+          client_id: string
+          countdown_label?: string | null
+          created_at?: string
+          custom_type?: string | null
+          date_type?: string
+          id?: string
+          notes?: string | null
+          phase_id?: string | null
+          program_link?: string | null
+          sort_order?: number
+          start_date?: string | null
+          status?: string
+          target_date: string
+          title: string
+          updated_at?: string
+          visible_to_client?: boolean
+        }
+        Update: {
+          approaching_soon_days?: number
+          client_id?: string
+          countdown_label?: string | null
+          created_at?: string
+          custom_type?: string | null
+          date_type?: string
+          id?: string
+          notes?: string | null
+          phase_id?: string | null
+          program_link?: string | null
+          sort_order?: number
+          start_date?: string | null
+          status?: string
+          target_date?: string
+          title?: string
+          updated_at?: string
+          visible_to_client?: boolean
+        }
+        Relationships: []
+      }
       nutrition_target_days: {
         Row: {
           calories: number | null
