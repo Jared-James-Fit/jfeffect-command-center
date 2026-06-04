@@ -1,7 +1,7 @@
 import {
   LayoutDashboard, Users, CreditCard,
   Package, FileText, Dumbbell, FolderOpen, Calendar, Layers,
-  Settings, Briefcase, Apple, ClipboardCheck, UserCog, MessageCircle,
+  Settings, Briefcase, Apple, ClipboardCheck, UserCog, MessageCircle, Video,
 } from "lucide-react";
 import type { NavItem } from "@/components/app-shell";
 
@@ -9,6 +9,7 @@ export const adminNav: NavItem[] = [
   { to: "/admin", label: "Dashboard", icon: LayoutDashboard },
   { to: "/admin/clients", label: "Clients", icon: Users },
   { to: "/admin/messages", label: "Messages", icon: MessageCircle },
+  { to: "/admin/lift-videos", label: "Lift Videos", icon: Video },
   { to: "/admin/calendar", label: "Calendar", icon: Calendar },
   { to: "/admin/payments", label: "Payments", icon: CreditCard },
   { to: "/admin/offers", label: "Offers / Products", icon: Package },
@@ -23,6 +24,7 @@ export const clientNav: NavItem[] = [
   { to: "/portal", label: "Dashboard", icon: LayoutDashboard },
   { to: "/portal/messages", label: "Messages", icon: MessageCircle },
   { to: "/portal/program", label: "My Program", icon: FileText },
+  { to: "/portal/lift-videos", label: "Lift Videos", icon: Video },
   { to: "/portal/nutrition-targets", label: "Nutrition Targets", icon: Apple },
   { to: "/portal/check-in", label: "Check-In", icon: ClipboardCheck },
   { to: "/portal/exercises", label: "Exercises", icon: Dumbbell },

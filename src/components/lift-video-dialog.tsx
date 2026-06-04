@@ -1,0 +1,248 @@
+import { useEffect, useState } from "react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import {
+  TRAINING_DAY_OPTIONS, LIFT_VIDEO_TAGS, createLiftVideo, updateLiftVideo, uploadVideoFile,
+  type LiftVideo,
+} from "@/lib/lift-videos";
+import { toast } from "sonner";
+import { Upload, Link as LinkIcon, Loader2 } from "lucide-react";
+
+type Props = {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  clientId: string;
+  userId: string | null;
+  initial?: LiftVideo | null;
+  onSaved?: () => void;
+};
+
+export function LiftVideoDialog({ open, onOpenChange, clientId, userId, initial, onSaved }: Props) {
+  const [tab, setTab] = useState<"link" | "upload">("link");
+  const [form, setForm] = useState<any>({
+    exercise: "",
+    training_day: "Day 1",
+    custom_training_day: "",
+    program_day: "",
+    date_performed: new Date().toISOString().slice(0, 10),
+    set_number: "",
+    reps: "",
+    load_text: "",
+    rpe: "",
+    client_notes: "",
+    question_for_coach: "",
+    tag: "Normal Review",
+    custom_tag: "",
+    is_urgent: false,
+    video_url: "",
+  });
+  const [file, setFile] = useState<File | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (initial) {
+      setForm({
+        exercise: initial.exercise ?? "",
+        training_day: initial.training_day ?? "Day 1",
+        custom_training_day: initial.custom_training_day ?? "",
+        program_day: initial.program_day ?? "",
+        date_performed: initial.date_performed ?? new Date().toISOString().slice(0, 10),
+        set_number: initial.set_number ?? "",
+        reps: initial.reps ?? "",
+        load_text: initial.load_text ?? "",
+        rpe: initial.rpe ?? "",
+        client_notes: initial.client_notes ?? "",
+        question_for_coach: initial.question_for_coach ?? "",
+        tag: initial.tag ?? "Normal Review",
+        custom_tag: initial.custom_tag ?? "",
+        is_urgent: initial.is_urgent ?? false,
+        video_url: initial.video_url ?? "",
+      });
+      setTab(initial.video_source === "upload" ? "upload" : "link");
+    }
+  }, [initial, open]);
+
+  const set = (k: string, v: any) => setForm((f: any) => ({ ...f, [k]: v }));
+
+  const handleSave = async () => {
+    if (!form.exercise.trim()) return toast.error("Add an exercise name.");
+    if (tab === "link" && !form.video_url.trim() && !initial) return toast.error("Paste a video link or switch to upload.");
+    if (tab === "upload" && !file && !initial) return toast.error("Choose a video file.");
+
+    setSaving(true);
+    try {
+      let videoUrl: string | null = form.video_url || null;
+      let storagePath: string | null = initial?.video_storage_path ?? null;
+      let source: "link" | "upload" = tab;
+
+      if (tab === "upload" && file && userId) {
+        const res = await uploadVideoFile(file, userId);
+        storagePath = res.path;
+        videoUrl = res.url;
+        source = "upload";
+      }
+
+      const payload: any = {
+        client_id: clientId,
+        uploaded_by: userId,
+        exercise: form.exercise.trim(),
+        training_day: form.training_day,
+        custom_training_day: form.training_day === "Custom" ? form.custom_training_day : null,
+        program_day: form.program_day || null,
+        date_performed: form.date_performed || null,
+        set_number: form.set_number === "" ? null : Number(form.set_number),
+        reps: form.reps === "" ? null : Number(form.reps),
+        load_text: form.load_text || null,
+        rpe: form.rpe === "" ? null : Number(form.rpe),
+        client_notes: form.client_notes || null,
+        question_for_coach: form.question_for_coach || null,
+        tag: form.tag,
+        custom_tag: form.tag === "Custom" ? form.custom_tag : null,
+        is_urgent: !!form.is_urgent || form.tag === "Pain / Discomfort",
+        video_url: videoUrl,
+        video_storage_path: storagePath,
+        video_source: source,
+      };
+
+      if (initial) {
+        await updateLiftVideo(initial.id, payload);
+        toast.success("Updated");
+      } else {
+        await createLiftVideo(payload);
+        toast.success("Video submitted to your coach");
+      }
+      onSaved?.();
+      onOpenChange(false);
+    } catch (e: any) {
+      toast.error(e.message ?? "Failed to save");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>{initial ? "Edit lift video" : "Upload lift video"}</DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="col-span-2">
+              <Label>Exercise *</Label>
+              <Input placeholder="e.g. Low-Bar Squat" value={form.exercise} onChange={(e) => set("exercise", e.target.value)} />
+            </div>
+            <div>
+              <Label>Training day</Label>
+              <Select value={form.training_day} onValueChange={(v) => set("training_day", v)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {TRAINING_DAY_OPTIONS.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            {form.training_day === "Custom" && (
+              <div>
+                <Label>Custom training day</Label>
+                <Input value={form.custom_training_day} onChange={(e) => set("custom_training_day", e.target.value)} />
+              </div>
+            )}
+            <div className="col-span-2">
+              <Label>Program day (from your program sheet)</Label>
+              <Input placeholder="e.g. Week 3 Day 2 — Secondary Bench" value={form.program_day} onChange={(e) => set("program_day", e.target.value)} />
+            </div>
+            <div>
+              <Label>Date performed</Label>
+              <Input type="date" value={form.date_performed} onChange={(e) => set("date_performed", e.target.value)} />
+            </div>
+            <div>
+              <Label>Tag</Label>
+              <Select value={form.tag} onValueChange={(v) => set("tag", v)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {LIFT_VIDEO_TAGS.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            {form.tag === "Custom" && (
+              <div className="col-span-2">
+                <Label>Custom tag</Label>
+                <Input value={form.custom_tag} onChange={(e) => set("custom_tag", e.target.value)} />
+              </div>
+            )}
+            <div>
+              <Label>Set #</Label>
+              <Input type="number" value={form.set_number} onChange={(e) => set("set_number", e.target.value)} />
+            </div>
+            <div>
+              <Label>Reps</Label>
+              <Input type="number" value={form.reps} onChange={(e) => set("reps", e.target.value)} />
+            </div>
+            <div>
+              <Label>Load / weight</Label>
+              <Input placeholder="e.g. 405 lbs" value={form.load_text} onChange={(e) => set("load_text", e.target.value)} />
+            </div>
+            <div>
+              <Label>RPE</Label>
+              <Input type="number" step="0.5" min="1" max="10" value={form.rpe} onChange={(e) => set("rpe", e.target.value)} />
+            </div>
+          </div>
+
+          <div>
+            <Label>Notes for coach</Label>
+            <Textarea rows={3} placeholder="Add notes for Coach Jared. Example: top set felt heavy off the floor, not sure if my hips shot up too early." value={form.client_notes} onChange={(e) => set("client_notes", e.target.value)} />
+          </div>
+          <div>
+            <Label>Specific question for coach</Label>
+            <Textarea rows={2} placeholder="What do you want feedback on?" value={form.question_for_coach} onChange={(e) => set("question_for_coach", e.target.value)} />
+          </div>
+
+          <div className="flex items-center justify-between rounded-md border border-border bg-secondary/30 p-3">
+            <div>
+              <div className="text-sm font-semibold">Pain / discomfort or urgent?</div>
+              <div className="text-xs text-muted-foreground">Flag this for coach attention.</div>
+            </div>
+            <Switch checked={form.is_urgent} onCheckedChange={(v) => set("is_urgent", v)} />
+          </div>
+
+          <div className="rounded-md border border-border p-3 space-y-3">
+            <div className="flex gap-2">
+              <Button type="button" size="sm" variant={tab === "link" ? "default" : "outline"} onClick={() => setTab("link")}>
+                <LinkIcon className="mr-1 h-3 w-3" /> Paste link
+              </Button>
+              <Button type="button" size="sm" variant={tab === "upload" ? "default" : "outline"} onClick={() => setTab("upload")}>
+                <Upload className="mr-1 h-3 w-3" /> Upload file
+              </Button>
+            </div>
+            {tab === "link" ? (
+              <div>
+                <Label>Video link (Google Drive, YouTube unlisted, etc.)</Label>
+                <Input placeholder="https://drive.google.com/..." value={form.video_url} onChange={(e) => set("video_url", e.target.value)} />
+              </div>
+            ) : (
+              <div>
+                <Label>Video file (MP4, MOV, M4V)</Label>
+                <Input type="file" accept="video/mp4,video/quicktime,video/x-m4v,video/*" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+                {file && <p className="mt-1 text-xs text-muted-foreground">{file.name} · {(file.size / 1024 / 1024).toFixed(1)} MB</p>}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>Cancel</Button>
+          <Button onClick={handleSave} disabled={saving} className="bg-gradient-primary font-bold uppercase">
+            {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+            {initial ? "Save" : "Submit Video"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}

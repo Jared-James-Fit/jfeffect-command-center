@@ -21,6 +21,7 @@ import { ImportantDatesPanel } from "@/components/important-dates-panel";
 import { PtSessionsPanel } from "@/components/pt-sessions-panel";
 import { NutritionTargetsPanel } from "@/components/nutrition-targets-panel";
 import { CardioTargetsPanel } from "@/components/cardio-targets-panel";
+import { LiftVideosPanel } from "@/components/lift-videos-panel";
 import { Switch } from "@/components/ui/switch";
 import { COMMON_TIMEZONES } from "@/lib/pt-sessions";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -28,7 +29,7 @@ import { ProfilePictureCapture } from "@/components/profile-picture-capture";
 import { MessageThread } from "@/components/message-thread";
 import type { ConversationState } from "@/lib/messages";
 
-const TAB_VALUES = ["summary", "training", "nutrition", "cardio", "messages", "documents", "sessions", "notes", "info", "account"] as const;
+const TAB_VALUES = ["summary", "training", "nutrition", "cardio", "messages", "lift-videos", "documents", "sessions", "notes", "info", "account"] as const;
 type TabValue = typeof TAB_VALUES[number];
 
 export const Route = createFileRoute("/_authenticated/admin/clients/$id")({
@@ -246,6 +247,7 @@ function ClientDetail() {
           <TabsTrigger value="nutrition">Nutrition Targets</TabsTrigger>
           <TabsTrigger value="cardio">Cardio Targets</TabsTrigger>
           <TabsTrigger value="messages">Messages</TabsTrigger>
+          <TabsTrigger value="lift-videos">Lift Videos</TabsTrigger>
           <TabsTrigger value="documents">Documents</TabsTrigger>
           <TabsTrigger value="sessions">Sessions</TabsTrigger>
           <TabsTrigger value="notes">Notes</TabsTrigger>
@@ -311,6 +313,10 @@ function ClientDetail() {
 
         <TabsContent value="messages" className="grid gap-6">
           <ClientMessagesTab clientId={id} />
+        </TabsContent>
+
+        <TabsContent value="lift-videos" className="grid gap-6 md:grid-cols-3">
+          <LiftVideosPanel clientId={id} />
         </TabsContent>
 
         <TabsContent value="documents" className="grid gap-6 md:grid-cols-3">

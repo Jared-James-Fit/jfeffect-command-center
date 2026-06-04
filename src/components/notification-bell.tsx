@@ -26,6 +26,12 @@ export function NotificationBell() {
       .on("postgres_changes", { event: "*", schema: "public", table: "conversation_state" }, () => {
         qc.invalidateQueries({ queryKey: ["unread-counts"] });
       })
+      .on("postgres_changes", { event: "*", schema: "public", table: "lift_videos" }, () => {
+        qc.invalidateQueries({ queryKey: ["unread-counts"] });
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "lift_video_comments" }, () => {
+        qc.invalidateQueries({ queryKey: ["unread-counts"] });
+      })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [user, qc]);
