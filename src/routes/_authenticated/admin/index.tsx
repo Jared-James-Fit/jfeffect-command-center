@@ -518,6 +518,31 @@ function AdminDashboard() {
               </ul>
             )}
           </Card>
+          <Card className="border-border bg-card p-6">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-muted-foreground">
+                <FileSignature className="h-4 w-4" /> Agreements Needing Attention
+              </h2>
+              <Link to="/admin/agreements" className="text-xs font-semibold text-primary hover:underline">View all →</Link>
+            </div>
+            {agreementsNeedingAttention.length === 0 ? (
+              <div className="rounded-md border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+                All agreements are signed or up-to-date.
+              </div>
+            ) : (
+              <ul className="divide-y divide-border">
+                {agreementsNeedingAttention.map((a: any) => (
+                  <li key={a.id} className="py-2 flex items-center justify-between gap-2">
+                    <Link to="/admin/agreements/instance/$id" params={{ id: a.id }} className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold truncate">{a.clients?.full_name ?? "—"}</p>
+                      <p className="text-xs text-muted-foreground truncate">{a.template_name}</p>
+                    </Link>
+                    <Badge variant="outline" className="text-[10px] shrink-0">{a.status}</Badge>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
 
           <Card className="border-border bg-card p-6">
             <h2 className="mb-4 text-sm font-bold uppercase tracking-widest text-muted-foreground">Quick Tools</h2>
