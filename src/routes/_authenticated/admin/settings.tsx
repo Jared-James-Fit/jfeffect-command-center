@@ -294,3 +294,121 @@ function DriveIntegrationCard() {
     </Card>
   );
 }
+
+function SignNowIntegrationCard() {
+  const qc = useQueryClient();
+  const updateFn = useServerFn(updateSignNowSettings);
+  const testFn = useServerFn(testSignNowConnection);
+  const { data: s } = useQuery({
+    queryKey: ["signnow-settings"],
+    queryFn: async () => (await supabase.from("signnow_settings").select("*").limit(1).maybeSingle()).data,
+  });
+  const { data: templates = [] } = useQuery({
+    queryKey: ["signnow-templates-pick"],
+    queryFn: async () => (await supabase.from("agreement_templates").select("id, name").eq("archived", false).eq("is_active", true).order("name")).data ?? [],
+  });
+  const [form, setForm] = useState<any>(null);
+  const cur: any = form ?? s ?? {};
+  const setK = (k: string, v: any) => setForm({ ...(form ?? s ?? {}), [k]: v });
+  const [busy, setBusy] = useState(false);
+
+  async function save() {
+    setBusy(true);
+    try {
+      await updateFn({ data: {
+        status: cur.status, account_email: cur.account_email || null,
+        default_template_id: cur.default_template_id || null,
+        auto_reminders_enabled: !!cur.auto_reminders_enabled,
+        signnow_dashboard_url: cur.signnow_dashboard_url || null,
+        notes: cur.notes || null,
+      }});
+      toast.success("SignNow settings saved");
+      qc.invalidateQueries({ queryKey: ["signnow-settings"] });
+    } catch (e: any) { toast.error(e?.message ?? "Save failed"); }
+    finally { setBusy(false); }
+  }
+
+  async function test() {
+    setBusy(true);
+    try {
+      const r: any = await testFn({});
+      if (r.ok) toast.success(r.message); else toast.error(r.message);
+      qc.invalidateQueries({ queryKey: ["signnow-settings"] });
+    } catch (e: any) { toast.error(e?.message ?? "Test failed"); }
+    finally { setBusy(false); }
+  }
+
+  const status = cur.status ?? "Manual Mode";
+  const tone = status === "Connected" ? "border-emerald-500/40 text-emerald-500"
+    : status === "Error" ? "border-destructive/40 text-destructive"
+    : status === "Needs Setup" ? "border-amber-500/40 text-amber-500"
+    : "border-border text-muted-foreground";
+
+  return (
+    <Card className="border-border bg-card p-5 space-y-3 md:col-span-2">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="flex items-center gap-2">
+          <ShieldCheck className="h-5 w-5 text-primary" />
+          <h2 className="text-base font-bold">SignNow Integration</h2>
+        </div>
+        <Badge variant="outline" className={tone}>{status}</Badge>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        SignNow handles signing. The app tracks, organizes, labels, and verifies signed agreements per client. In <strong>Manual Mode</strong>, paste signing links and upload signed copies directly. To enable automatic API mode, add the <code>SIGNNOW_API_TOKEN</code> secret and run "Test connection".
+      </p>
+
+      <div className="grid gap-3 md:grid-cols-2">
+        <div className="space-y-1">
+          <Label>Account email</Label>
+          <Input type="email" value={cur.account_email ?? ""} onChange={(e) => setK("account_email", e.target.value)} placeholder="you@example.com" />
+        </div>
+        <div className="space-y-1">
+          <Label>Default template</Label>
+          <Select value={cur.default_template_id ?? ""} onValueChange={(v) => setK("default_template_id", v)}>
+            <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+            <SelectContent>
+              {(templates as any[]).map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1">
+          <Label>SignNow dashboard URL</Label>
+          <Input value={cur.signnow_dashboard_url ?? ""} onChange={(e) => setK("signnow_dashboard_url", e.target.value)} placeholder="https://app.signnow.com" />
+        </div>
+        <div className="space-y-1">
+          <Label>Integration status</Label>
+          <Select value={cur.status ?? "Manual Mode"} onValueChange={(v) => setK("status", v)}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {["Not Connected","Connected","Needs Setup","Error","Manual Mode"].map((v) => <SelectItem key={v} value={v}>{v}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="md:col-span-2 flex items-center justify-between rounded-md border border-border bg-secondary/30 px-3 py-2">
+          <div>
+            <Label className="text-xs">Auto reminders (1d / 3d / 7d)</Label>
+            <p className="text-[11px] text-muted-foreground">Sends reminders for unsigned agreements. Requires API mode.</p>
+          </div>
+          <Switch checked={!!cur.auto_reminders_enabled} onCheckedChange={(v) => setK("auto_reminders_enabled", v)} />
+        </div>
+        <div className="md:col-span-2 space-y-1">
+          <Label>Internal notes</Label>
+          <Textarea value={cur.notes ?? ""} onChange={(e) => setK("notes", e.target.value)} rows={2} />
+        </div>
+      </div>
+
+      <div className="flex flex-wrap gap-2 pt-2 border-t border-border/50">
+        <Button onClick={save} disabled={busy} className="bg-gradient-primary uppercase font-bold">Save SignNow settings</Button>
+        <Button onClick={test} disabled={busy} variant="outline"><Send className="mr-2 h-4 w-4" />Test connection</Button>
+        {cur.signnow_dashboard_url && (
+          <Button asChild variant="ghost">
+            <a href={cur.signnow_dashboard_url} target="_blank" rel="noreferrer">Open SignNow <ExternalLink className="ml-1 h-3 w-3" /></a>
+          </Button>
+        )}
+      </div>
+      {cur.last_test_at && (
+        <p className="text-xs text-muted-foreground">Last test: {new Date(cur.last_test_at).toLocaleString()} — {cur.last_test_result}</p>
+      )}
+    </Card>
+  );
+}
