@@ -717,7 +717,7 @@ export function MessageThread({
                 {m.attachments?.length > 0 && (
                   <div className={cn("mt-2 space-y-2", m.body ? "" : "")}>
                     {m.attachments.map((a, i) => (
-                      <AttachmentView key={i} att={a} mine={mine} />
+                      <AttachmentView key={i} att={a} mine={mine} message={m} />
                     ))}
                   </div>
                 )}
