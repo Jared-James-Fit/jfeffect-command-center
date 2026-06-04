@@ -18,6 +18,7 @@ import {
   Eye, ThumbsUp, CheckCircle2, MessageSquare, AlertTriangle, ExternalLink, Trash2, Edit3, Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
+import { LiftVideoPlayer } from "@/components/lift-video-player";
 
 type Props = {
   video: LiftVideo;
@@ -132,7 +133,7 @@ export function LiftVideoCard({ video, role, userId, onChanged, onEdit }: Props)
         {embedUrl ? (
           <iframe src={embedUrl} className="aspect-video w-full" allow="autoplay; encrypted-media" allowFullScreen />
         ) : signedUrl ? (
-          <video src={signedUrl} controls className="w-full" />
+          <LiftVideoPlayer src={signedUrl} />
         ) : video.video_url ? (
           <a href={video.video_url} target="_blank" rel="noreferrer" className="flex items-center justify-center gap-2 p-6 text-sm text-primary">
             Open video link <ExternalLink className="h-3 w-3" />

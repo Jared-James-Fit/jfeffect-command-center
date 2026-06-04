@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,7 +11,7 @@ import {
   type LiftVideo,
 } from "@/lib/lift-videos";
 import { toast } from "sonner";
-import { Upload, Link as LinkIcon, Loader2 } from "lucide-react";
+import { Upload, Link as LinkIcon, Loader2, Video as VideoIcon, ChevronDown, ChevronRight, Send } from "lucide-react";
 
 type Props = {
   open: boolean;
@@ -20,10 +20,15 @@ type Props = {
   userId: string | null;
   initial?: LiftVideo | null;
   onSaved?: () => void;
+  /** "client" = simplified flow (video + notes); "admin" = full form. Defaults to "admin". */
+  role?: "client" | "admin";
 };
 
-export function LiftVideoDialog({ open, onOpenChange, clientId, userId, initial, onSaved }: Props) {
-  const [tab, setTab] = useState<"link" | "upload">("link");
+export function LiftVideoDialog({ open, onOpenChange, clientId, userId, initial, onSaved, role = "admin" }: Props) {
+  const [tab, setTab] = useState<"link" | "upload">("upload");
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const uploadInputRef = useRef<HTMLInputElement | null>(null);
+  const recordInputRef = useRef<HTMLInputElement | null>(null);
   const [form, setForm] = useState<any>({
     exercise: "",
     training_day: "Day 1",
@@ -64,23 +69,34 @@ export function LiftVideoDialog({ open, onOpenChange, clientId, userId, initial,
         video_url: initial.video_url ?? "",
       });
       setTab(initial.video_source === "upload" ? "upload" : "link");
+    } else if (open) {
+      setFile(null);
+      setShowAdvanced(false);
+      setTab("upload");
     }
   }, [initial, open]);
 
   const set = (k: string, v: any) => setForm((f: any) => ({ ...f, [k]: v }));
 
   const handleSave = async () => {
-    if (!form.exercise.trim()) return toast.error("Add an exercise name.");
-    if (tab === "link" && !form.video_url.trim() && !initial) return toast.error("Paste a video link or switch to upload.");
-    if (tab === "upload" && !file && !initial) return toast.error("Choose a video file.");
+    // Client flow: only require a video + notes.
+    if (role === "client") {
+      const hasVideo = !!file || !!form.video_url.trim() || !!initial?.video_storage_path || !!initial?.video_url;
+      if (!hasVideo) return toast.error("Add a video first.");
+      if (!form.client_notes.trim()) return toast.error("Add a note for Coach Jared.");
+    } else {
+      if (!form.exercise.trim()) return toast.error("Add an exercise name.");
+      if (tab === "link" && !form.video_url.trim() && !initial) return toast.error("Paste a video link or switch to upload.");
+      if (tab === "upload" && !file && !initial) return toast.error("Choose a video file.");
+    }
 
     setSaving(true);
     try {
       let videoUrl: string | null = form.video_url || null;
       let storagePath: string | null = initial?.video_storage_path ?? null;
-      let source: "link" | "upload" = tab;
+      let source: "link" | "upload" = file ? "upload" : (form.video_url ? "link" : tab);
 
-      if (tab === "upload" && file && userId) {
+      if (file && userId) {
         const res = await uploadVideoFile(file, userId);
         storagePath = res.path;
         videoUrl = res.url;
@@ -114,7 +130,7 @@ export function LiftVideoDialog({ open, onOpenChange, clientId, userId, initial,
         toast.success("Updated");
       } else {
         await createLiftVideo(payload);
-        toast.success("Video submitted to your coach");
+        toast.success(role === "client" ? "Video sent to Coach Jared." : "Video submitted");
       }
       onSaved?.();
       onOpenChange(false);
@@ -125,6 +141,155 @@ export function LiftVideoDialog({ open, onOpenChange, clientId, userId, initial,
     }
   };
 
+  // ---------- Client (simplified) view ----------
+  if (role === "client") {
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{initial ? "Edit lift video" : "Upload Lift Video"}</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label className="text-xs uppercase tracking-widest text-muted-foreground">Add Video</Label>
+              <input
+                ref={uploadInputRef}
+                type="file"
+                accept="video/mp4,video/quicktime,video/x-m4v,video/*"
+                className="hidden"
+                onChange={(e) => { setFile(e.target.files?.[0] ?? null); set("video_url", ""); }}
+              />
+              <input
+                ref={recordInputRef}
+                type="file"
+                accept="video/*"
+                capture="environment"
+                className="hidden"
+                onChange={(e) => { setFile(e.target.files?.[0] ?? null); set("video_url", ""); }}
+              />
+              <div className="grid grid-cols-3 gap-2">
+                <Button type="button" variant="outline" className="h-auto flex-col gap-1 py-3" onClick={() => uploadInputRef.current?.click()}>
+                  <Upload className="h-4 w-4" />
+                  <span className="text-[11px] font-semibold">Upload from phone</span>
+                </Button>
+                <Button type="button" variant="outline" className="h-auto flex-col gap-1 py-3" onClick={() => recordInputRef.current?.click()}>
+                  <VideoIcon className="h-4 w-4" />
+                  <span className="text-[11px] font-semibold">Record now</span>
+                </Button>
+                <Button type="button" variant={form.video_url ? "default" : "outline"} className="h-auto flex-col gap-1 py-3" onClick={() => { setFile(null); set("video_url", form.video_url || ""); }}>
+                  <LinkIcon className="h-4 w-4" />
+                  <span className="text-[11px] font-semibold">Paste link</span>
+                </Button>
+              </div>
+              {file && (
+                <p className="text-xs text-muted-foreground">📎 {file.name} · {(file.size / 1024 / 1024).toFixed(1)} MB</p>
+              )}
+              {!file && (
+                <Input
+                  placeholder="Or paste a video link (Google Drive, YouTube unlisted, etc.)"
+                  value={form.video_url}
+                  onChange={(e) => set("video_url", e.target.value)}
+                />
+              )}
+              {initial && !file && !form.video_url && (
+                <p className="text-xs text-muted-foreground">Existing video kept unless you replace it.</p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-xs uppercase tracking-widest text-muted-foreground">Notes for Coach Jared</Label>
+              <Textarea
+                rows={6}
+                className="min-h-[140px] text-base"
+                placeholder={`Tell Coach Jared what this is.\n\nPlease include the lift, training day, load, reps, and RPE/RIR if you know it.\n\nExample: Week 3 Day 2 — Squat top set, 405 x 3 @ RPE 8. Felt slow out of the hole. Not sure if I'm losing position.`}
+                value={form.client_notes}
+                onChange={(e) => set("client_notes", e.target.value)}
+              />
+            </div>
+
+            <div className="rounded-md border border-border">
+              <button
+                type="button"
+                className="flex w-full items-center justify-between p-3 text-left text-sm font-semibold"
+                onClick={() => setShowAdvanced((s) => !s)}
+              >
+                <span>Add more details (optional)</span>
+                {showAdvanced ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+              </button>
+              {showAdvanced && (
+                <div className="grid grid-cols-2 gap-3 border-t border-border p-3">
+                  <div className="col-span-2">
+                    <Label>Exercise</Label>
+                    <Input placeholder="e.g. Low-Bar Squat" value={form.exercise} onChange={(e) => set("exercise", e.target.value)} />
+                  </div>
+                  <div>
+                    <Label>Training day</Label>
+                    <Select value={form.training_day} onValueChange={(v) => set("training_day", v)}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {TRAINING_DAY_OPTIONS.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>Date performed</Label>
+                    <Input type="date" value={form.date_performed} onChange={(e) => set("date_performed", e.target.value)} />
+                  </div>
+                  <div className="col-span-2">
+                    <Label>Program day</Label>
+                    <Input placeholder="e.g. Week 3 Day 2" value={form.program_day} onChange={(e) => set("program_day", e.target.value)} />
+                  </div>
+                  <div>
+                    <Label>Set #</Label>
+                    <Input type="number" value={form.set_number} onChange={(e) => set("set_number", e.target.value)} />
+                  </div>
+                  <div>
+                    <Label>Reps</Label>
+                    <Input type="number" value={form.reps} onChange={(e) => set("reps", e.target.value)} />
+                  </div>
+                  <div>
+                    <Label>Load</Label>
+                    <Input placeholder="e.g. 405 lbs" value={form.load_text} onChange={(e) => set("load_text", e.target.value)} />
+                  </div>
+                  <div>
+                    <Label>RPE / RIR</Label>
+                    <Input type="number" step="0.5" min="1" max="10" value={form.rpe} onChange={(e) => set("rpe", e.target.value)} />
+                  </div>
+                  <div className="col-span-2">
+                    <Label>Tag</Label>
+                    <Select value={form.tag} onValueChange={(v) => set("tag", v)}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {LIFT_VIDEO_TAGS.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="col-span-2 flex items-center justify-between rounded-md border border-border bg-secondary/30 p-3">
+                    <div>
+                      <div className="text-sm font-semibold">Pain / discomfort or urgent?</div>
+                      <div className="text-xs text-muted-foreground">Flag this for coach attention.</div>
+                    </div>
+                    <Switch checked={form.is_urgent} onCheckedChange={(v) => set("is_urgent", v)} />
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>Cancel</Button>
+            <Button onClick={handleSave} disabled={saving} className="bg-gradient-primary font-bold uppercase">
+              {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+              {initial ? "Save" : "Send Video"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
+  // ---------- Admin (full) view ----------
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
