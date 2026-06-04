@@ -25,6 +25,7 @@ import { Route as AuthenticatedPortalProgramRouteImport } from './routes/_authen
 import { Route as AuthenticatedPortalPaymentsRouteImport } from './routes/_authenticated/portal/payments'
 import { Route as AuthenticatedPortalNutritionTargetsRouteImport } from './routes/_authenticated/portal/nutrition-targets'
 import { Route as AuthenticatedPortalMessagesRouteImport } from './routes/_authenticated/portal/messages'
+import { Route as AuthenticatedPortalMediaRouteImport } from './routes/_authenticated/portal/media'
 import { Route as AuthenticatedPortalLiftVideosRouteImport } from './routes/_authenticated/portal/lift-videos'
 import { Route as AuthenticatedPortalExercisesRouteImport } from './routes/_authenticated/portal/exercises'
 import { Route as AuthenticatedPortalDocumentsRouteImport } from './routes/_authenticated/portal/documents'
@@ -42,6 +43,7 @@ import { Route as AuthenticatedAdminPaymentsRouteImport } from './routes/_authen
 import { Route as AuthenticatedAdminOffersRouteImport } from './routes/_authenticated/admin/offers'
 import { Route as AuthenticatedAdminNutritionTargetsRouteImport } from './routes/_authenticated/admin/nutrition-targets'
 import { Route as AuthenticatedAdminMessagesRouteImport } from './routes/_authenticated/admin/messages'
+import { Route as AuthenticatedAdminMediaReviewRouteImport } from './routes/_authenticated/admin/media-review'
 import { Route as AuthenticatedAdminLiftVideosRouteImport } from './routes/_authenticated/admin/lift-videos'
 import { Route as AuthenticatedAdminExercisesRouteImport } from './routes/_authenticated/admin/exercises'
 import { Route as AuthenticatedAdminContentIdeasRouteImport } from './routes/_authenticated/admin/content-ideas'
@@ -150,6 +152,12 @@ const AuthenticatedPortalMessagesRoute =
     path: '/messages',
     getParentRoute: () => AuthenticatedPortalRouteRoute,
   } as any)
+const AuthenticatedPortalMediaRoute =
+  AuthenticatedPortalMediaRouteImport.update({
+    id: '/media',
+    path: '/media',
+    getParentRoute: () => AuthenticatedPortalRouteRoute,
+  } as any)
 const AuthenticatedPortalLiftVideosRoute =
   AuthenticatedPortalLiftVideosRouteImport.update({
     id: '/lift-videos',
@@ -249,6 +257,12 @@ const AuthenticatedAdminMessagesRoute =
   AuthenticatedAdminMessagesRouteImport.update({
     id: '/messages',
     path: '/messages',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
+const AuthenticatedAdminMediaReviewRoute =
+  AuthenticatedAdminMediaReviewRouteImport.update({
+    id: '/media-review',
+    path: '/media-review',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
 const AuthenticatedAdminLiftVideosRoute =
@@ -388,6 +402,7 @@ export interface FileRoutesByFullPath {
   '/admin/content-ideas': typeof AuthenticatedAdminContentIdeasRoute
   '/admin/exercises': typeof AuthenticatedAdminExercisesRoute
   '/admin/lift-videos': typeof AuthenticatedAdminLiftVideosRoute
+  '/admin/media-review': typeof AuthenticatedAdminMediaReviewRoute
   '/admin/messages': typeof AuthenticatedAdminMessagesRoute
   '/admin/nutrition-targets': typeof AuthenticatedAdminNutritionTargetsRoute
   '/admin/offers': typeof AuthenticatedAdminOffersRoute
@@ -405,6 +420,7 @@ export interface FileRoutesByFullPath {
   '/portal/documents': typeof AuthenticatedPortalDocumentsRoute
   '/portal/exercises': typeof AuthenticatedPortalExercisesRoute
   '/portal/lift-videos': typeof AuthenticatedPortalLiftVideosRoute
+  '/portal/media': typeof AuthenticatedPortalMediaRoute
   '/portal/messages': typeof AuthenticatedPortalMessagesRoute
   '/portal/nutrition-targets': typeof AuthenticatedPortalNutritionTargetsRoute
   '/portal/payments': typeof AuthenticatedPortalPaymentsRoute
@@ -440,6 +456,7 @@ export interface FileRoutesByTo {
   '/admin/content-ideas': typeof AuthenticatedAdminContentIdeasRoute
   '/admin/exercises': typeof AuthenticatedAdminExercisesRoute
   '/admin/lift-videos': typeof AuthenticatedAdminLiftVideosRoute
+  '/admin/media-review': typeof AuthenticatedAdminMediaReviewRoute
   '/admin/messages': typeof AuthenticatedAdminMessagesRoute
   '/admin/nutrition-targets': typeof AuthenticatedAdminNutritionTargetsRoute
   '/admin/offers': typeof AuthenticatedAdminOffersRoute
@@ -457,6 +474,7 @@ export interface FileRoutesByTo {
   '/portal/documents': typeof AuthenticatedPortalDocumentsRoute
   '/portal/exercises': typeof AuthenticatedPortalExercisesRoute
   '/portal/lift-videos': typeof AuthenticatedPortalLiftVideosRoute
+  '/portal/media': typeof AuthenticatedPortalMediaRoute
   '/portal/messages': typeof AuthenticatedPortalMessagesRoute
   '/portal/nutrition-targets': typeof AuthenticatedPortalNutritionTargetsRoute
   '/portal/payments': typeof AuthenticatedPortalPaymentsRoute
@@ -496,6 +514,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/content-ideas': typeof AuthenticatedAdminContentIdeasRoute
   '/_authenticated/admin/exercises': typeof AuthenticatedAdminExercisesRoute
   '/_authenticated/admin/lift-videos': typeof AuthenticatedAdminLiftVideosRoute
+  '/_authenticated/admin/media-review': typeof AuthenticatedAdminMediaReviewRoute
   '/_authenticated/admin/messages': typeof AuthenticatedAdminMessagesRoute
   '/_authenticated/admin/nutrition-targets': typeof AuthenticatedAdminNutritionTargetsRoute
   '/_authenticated/admin/offers': typeof AuthenticatedAdminOffersRoute
@@ -513,6 +532,7 @@ export interface FileRoutesById {
   '/_authenticated/portal/documents': typeof AuthenticatedPortalDocumentsRoute
   '/_authenticated/portal/exercises': typeof AuthenticatedPortalExercisesRoute
   '/_authenticated/portal/lift-videos': typeof AuthenticatedPortalLiftVideosRoute
+  '/_authenticated/portal/media': typeof AuthenticatedPortalMediaRoute
   '/_authenticated/portal/messages': typeof AuthenticatedPortalMessagesRoute
   '/_authenticated/portal/nutrition-targets': typeof AuthenticatedPortalNutritionTargetsRoute
   '/_authenticated/portal/payments': typeof AuthenticatedPortalPaymentsRoute
@@ -552,6 +572,7 @@ export interface FileRouteTypes {
     | '/admin/content-ideas'
     | '/admin/exercises'
     | '/admin/lift-videos'
+    | '/admin/media-review'
     | '/admin/messages'
     | '/admin/nutrition-targets'
     | '/admin/offers'
@@ -569,6 +590,7 @@ export interface FileRouteTypes {
     | '/portal/documents'
     | '/portal/exercises'
     | '/portal/lift-videos'
+    | '/portal/media'
     | '/portal/messages'
     | '/portal/nutrition-targets'
     | '/portal/payments'
@@ -604,6 +626,7 @@ export interface FileRouteTypes {
     | '/admin/content-ideas'
     | '/admin/exercises'
     | '/admin/lift-videos'
+    | '/admin/media-review'
     | '/admin/messages'
     | '/admin/nutrition-targets'
     | '/admin/offers'
@@ -621,6 +644,7 @@ export interface FileRouteTypes {
     | '/portal/documents'
     | '/portal/exercises'
     | '/portal/lift-videos'
+    | '/portal/media'
     | '/portal/messages'
     | '/portal/nutrition-targets'
     | '/portal/payments'
@@ -659,6 +683,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/content-ideas'
     | '/_authenticated/admin/exercises'
     | '/_authenticated/admin/lift-videos'
+    | '/_authenticated/admin/media-review'
     | '/_authenticated/admin/messages'
     | '/_authenticated/admin/nutrition-targets'
     | '/_authenticated/admin/offers'
@@ -676,6 +701,7 @@ export interface FileRouteTypes {
     | '/_authenticated/portal/documents'
     | '/_authenticated/portal/exercises'
     | '/_authenticated/portal/lift-videos'
+    | '/_authenticated/portal/media'
     | '/_authenticated/portal/messages'
     | '/_authenticated/portal/nutrition-targets'
     | '/_authenticated/portal/payments'
@@ -820,6 +846,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedPortalMessagesRouteImport
       parentRoute: typeof AuthenticatedPortalRouteRoute
     }
+    '/_authenticated/portal/media': {
+      id: '/_authenticated/portal/media'
+      path: '/media'
+      fullPath: '/portal/media'
+      preLoaderRoute: typeof AuthenticatedPortalMediaRouteImport
+      parentRoute: typeof AuthenticatedPortalRouteRoute
+    }
     '/_authenticated/portal/lift-videos': {
       id: '/_authenticated/portal/lift-videos'
       path: '/lift-videos'
@@ -937,6 +970,13 @@ declare module '@tanstack/react-router' {
       path: '/messages'
       fullPath: '/admin/messages'
       preLoaderRoute: typeof AuthenticatedAdminMessagesRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
+    '/_authenticated/admin/media-review': {
+      id: '/_authenticated/admin/media-review'
+      path: '/media-review'
+      fullPath: '/admin/media-review'
+      preLoaderRoute: typeof AuthenticatedAdminMediaReviewRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
     '/_authenticated/admin/lift-videos': {
@@ -1106,6 +1146,7 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminContentIdeasRoute: typeof AuthenticatedAdminContentIdeasRoute
   AuthenticatedAdminExercisesRoute: typeof AuthenticatedAdminExercisesRoute
   AuthenticatedAdminLiftVideosRoute: typeof AuthenticatedAdminLiftVideosRoute
+  AuthenticatedAdminMediaReviewRoute: typeof AuthenticatedAdminMediaReviewRoute
   AuthenticatedAdminMessagesRoute: typeof AuthenticatedAdminMessagesRoute
   AuthenticatedAdminNutritionTargetsRoute: typeof AuthenticatedAdminNutritionTargetsRoute
   AuthenticatedAdminOffersRoute: typeof AuthenticatedAdminOffersRoute
@@ -1139,6 +1180,7 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
     AuthenticatedAdminContentIdeasRoute: AuthenticatedAdminContentIdeasRoute,
     AuthenticatedAdminExercisesRoute: AuthenticatedAdminExercisesRoute,
     AuthenticatedAdminLiftVideosRoute: AuthenticatedAdminLiftVideosRoute,
+    AuthenticatedAdminMediaReviewRoute: AuthenticatedAdminMediaReviewRoute,
     AuthenticatedAdminMessagesRoute: AuthenticatedAdminMessagesRoute,
     AuthenticatedAdminNutritionTargetsRoute:
       AuthenticatedAdminNutritionTargetsRoute,
@@ -1191,6 +1233,7 @@ interface AuthenticatedPortalRouteRouteChildren {
   AuthenticatedPortalDocumentsRoute: typeof AuthenticatedPortalDocumentsRoute
   AuthenticatedPortalExercisesRoute: typeof AuthenticatedPortalExercisesRoute
   AuthenticatedPortalLiftVideosRoute: typeof AuthenticatedPortalLiftVideosRoute
+  AuthenticatedPortalMediaRoute: typeof AuthenticatedPortalMediaRoute
   AuthenticatedPortalMessagesRoute: typeof AuthenticatedPortalMessagesRoute
   AuthenticatedPortalNutritionTargetsRoute: typeof AuthenticatedPortalNutritionTargetsRoute
   AuthenticatedPortalPaymentsRoute: typeof AuthenticatedPortalPaymentsRoute
@@ -1210,6 +1253,7 @@ const AuthenticatedPortalRouteRouteChildren: AuthenticatedPortalRouteRouteChildr
     AuthenticatedPortalDocumentsRoute: AuthenticatedPortalDocumentsRoute,
     AuthenticatedPortalExercisesRoute: AuthenticatedPortalExercisesRoute,
     AuthenticatedPortalLiftVideosRoute: AuthenticatedPortalLiftVideosRoute,
+    AuthenticatedPortalMediaRoute: AuthenticatedPortalMediaRoute,
     AuthenticatedPortalMessagesRoute: AuthenticatedPortalMessagesRoute,
     AuthenticatedPortalNutritionTargetsRoute:
       AuthenticatedPortalNutritionTargetsRoute,
@@ -1253,3 +1297,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
