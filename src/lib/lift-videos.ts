@@ -54,6 +54,10 @@ export type LiftVideo = {
   admin_last_viewed_at: string | null;
   created_at: string;
   updated_at: string;
+  batch_id?: string | null;
+  batch_note?: string | null;
+  batch_size?: number | null;
+  batch_index?: number | null;
 };
 
 export type LiftVideoComment = {
@@ -127,6 +131,10 @@ export async function createLiftVideo(input: Partial<LiftVideo> & { client_id: s
     video_source: input.video_source ?? "link",
     thumbnail_url: input.thumbnail_url ?? null,
     status: input.status ?? "New Upload",
+    batch_id: (input as any).batch_id ?? null,
+    batch_note: (input as any).batch_note ?? null,
+    batch_size: (input as any).batch_size ?? null,
+    batch_index: (input as any).batch_index ?? null,
   };
   const { data, error } = await db.from("lift_videos").insert(row).select().single();
   if (error) throw error;
