@@ -533,9 +533,9 @@ function AdminDashboard() {
               <ul className="divide-y divide-border">
                 {agreementsNeedingAttention.map((a: any) => (
                   <li key={a.id} className="py-2 flex items-center justify-between gap-2">
-                    <Link to="/admin/agreements/instance/$id" params={{ id: a.id }} className="min-w-0 flex-1">
+                    <Link to="/admin/clients/$id" params={{ id: a.client_id }} className="min-w-0 flex-1">
                       <p className="text-sm font-semibold truncate">{a.clients?.full_name ?? "—"}</p>
-                      <p className="text-xs text-muted-foreground truncate">{a.template_name}</p>
+                      <p className="text-xs text-muted-foreground truncate">{a.agreement_type ?? a.template_name}</p>
                     </Link>
                     <Badge variant="outline" className="text-[10px] shrink-0">{a.status}</Badge>
                   </li>
