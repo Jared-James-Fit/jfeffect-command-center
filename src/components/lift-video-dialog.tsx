@@ -345,9 +345,9 @@ export function LiftVideoDialog({ open, onOpenChange, clientId, userId, initial,
                 </Label>
                 <div className="space-y-2">
                   {clips.map((clip, idx) => (
-                    <div key={clip.id} className="rounded-md border border-border bg-card p-2 space-y-2">
-                      <div className="flex items-center gap-2">
-                        <div className="flex h-16 w-24 shrink-0 items-center justify-center overflow-hidden rounded bg-muted">
+                    <div key={clip.id} className="rounded-md border border-border bg-card p-2 space-y-2 overflow-hidden">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className="flex h-14 w-16 shrink-0 items-center justify-center overflow-hidden rounded bg-muted">
                           {clip.kind === "file" && clip.previewUrl ? (
                             <video src={clip.previewUrl} className="h-full w-full object-cover" muted playsInline preload="metadata" />
                           ) : (
@@ -356,21 +356,21 @@ export function LiftVideoDialog({ open, onOpenChange, clientId, userId, initial,
                         </div>
                         <div className="min-w-0 flex-1">
                           <div className="text-sm font-semibold">Clip {idx + 1}</div>
-                          <div className="truncate text-xs text-muted-foreground">
+                          <div className="truncate text-xs text-muted-foreground break-all">
                             {clip.kind === "file"
                               ? `${clip.file?.name} · ${((clip.file?.size ?? 0) / 1024 / 1024).toFixed(1)} MB`
                               : clip.url}
                           </div>
                         </div>
-                        <div className="flex flex-col gap-1">
-                          <Button type="button" size="icon" variant="ghost" className="h-7 w-7" onClick={() => moveClip(clip.id, -1)} disabled={idx === 0}>
+                        <div className="flex shrink-0 flex-col gap-1">
+                          <Button type="button" size="icon" variant="ghost" className="h-7 w-7 shrink-0" onClick={() => moveClip(clip.id, -1)} disabled={idx === 0}>
                             <ArrowUp className="h-3.5 w-3.5" />
                           </Button>
-                          <Button type="button" size="icon" variant="ghost" className="h-7 w-7" onClick={() => moveClip(clip.id, 1)} disabled={idx === clips.length - 1}>
+                          <Button type="button" size="icon" variant="ghost" className="h-7 w-7 shrink-0" onClick={() => moveClip(clip.id, 1)} disabled={idx === clips.length - 1}>
                             <ArrowDown className="h-3.5 w-3.5" />
                           </Button>
                         </div>
-                        <Button type="button" size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => removeClip(clip.id)}>
+                        <Button type="button" size="icon" variant="ghost" className="h-7 w-7 shrink-0 text-destructive" onClick={() => removeClip(clip.id)}>
                           <X className="h-4 w-4" />
                         </Button>
                       </div>
