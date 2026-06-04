@@ -411,6 +411,11 @@ function ClientDetail() {
         </Card>
         </TabsContent>
 
+        <TabsContent value="purchases" className="grid gap-6 md:grid-cols-3">
+          <AgreementStatusPanel client={form} />
+          <PurchaseRecordsPanel clientId={id} />
+        </TabsContent>
+
         <TabsContent value="notes" className="grid gap-6 md:grid-cols-3">
           <Card className="border-border bg-card p-6 md:col-span-2 space-y-3">
             <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Coaching Notes</h3>
