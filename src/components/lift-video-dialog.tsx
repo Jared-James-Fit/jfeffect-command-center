@@ -48,6 +48,23 @@ export function LiftVideoDialog({ open, onOpenChange, clientId, userId, initial,
   const [file, setFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
 
+  // ---- Multi-clip client state ----
+  type Clip = {
+    id: string;
+    kind: "file" | "link";
+    file?: File;
+    url?: string;
+    previewUrl?: string;
+    note: string;
+  };
+  const [clips, setClips] = useState<Clip[]>([]);
+  const [noteMode, setNoteMode] = useState<"batch" | "perClip">("batch");
+  const [batchNote, setBatchNote] = useState("");
+  const [pasteLink, setPasteLink] = useState("");
+  const [urgentText, setUrgentText] = useState("");
+  const multiUploadRef = useRef<HTMLInputElement | null>(null);
+  const multiRecordRef = useRef<HTMLInputElement | null>(null);
+
   useEffect(() => {
     if (initial) {
       setForm({
