@@ -2,7 +2,7 @@ import {
   LayoutDashboard, Users, CreditCard,
   Package, FileText, Dumbbell, FolderOpen, Calendar, Layers,
   Settings, Briefcase, Apple, ClipboardCheck, UserCog, MessageCircle, Video,
-  UserCheck, FileSignature,
+  UserCheck, FileSignature, Film,
 } from "lucide-react";
 import type { NavItem } from "@/components/app-shell";
 
@@ -12,6 +12,7 @@ export const adminNav: NavItem[] = [
   { to: "/admin/coaches", label: "Coaches", icon: UserCheck },
   { to: "/admin/messages", label: "Messages", icon: MessageCircle },
   { to: "/admin/lift-videos", label: "Lift Videos", icon: Video },
+  { to: "/admin/media-review", label: "Media Review", icon: Film },
   { to: "/admin/calendar", label: "Calendar", icon: Calendar },
   { to: "/admin/payments", label: "Payments", icon: CreditCard },
   { to: "/admin/offers", label: "Offers / Products", icon: Package },
@@ -30,6 +31,7 @@ export const coachNav: NavItem[] = [
   { to: "/admin/clients", label: "My Clients", icon: Users },
   { to: "/admin/messages", label: "Messages", icon: MessageCircle },
   { to: "/admin/lift-videos", label: "Lift Videos", icon: Video },
+  { to: "/admin/media-review", label: "Media Review", icon: Film },
   { to: "/admin/calendar", label: "Calendar", icon: Calendar },
   { to: "/admin/exercises", label: "Exercise Library", icon: Dumbbell },
   { to: "/admin/resources", label: "Resources", icon: FolderOpen },
@@ -40,6 +42,7 @@ export const clientNav: NavItem[] = [
   { to: "/portal/messages", label: "Messages", icon: MessageCircle },
   { to: "/portal/program", label: "My Program", icon: FileText },
   { to: "/portal/lift-videos", label: "Lift Videos", icon: Video },
+  { to: "/portal/media", label: "Media", icon: Film },
   { to: "/portal/nutrition-targets", label: "Nutrition Targets", icon: Apple },
   { to: "/portal/check-in", label: "Check-In", icon: ClipboardCheck },
   { to: "/portal/exercises", label: "Exercises", icon: Dumbbell },
