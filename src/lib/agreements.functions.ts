@@ -486,7 +486,7 @@ export const submitAgreement = createServerFn({ method: "POST" })
         .upload(signedPath, out, { contentType: "application/pdf", upsert: true });
       if (upRes.error) throw new Error("Failed to save signed PDF: " + upRes.error.message);
       // hash
-      const hash = await crypto.subtle.digest("SHA-256", out);
+      const hash = await crypto.subtle.digest("SHA-256", out as BufferSource);
       const hex = Array.from(new Uint8Array(hash)).map((b) => b.toString(16).padStart(2, "0")).join("");
       patch.signed_pdf_path = signedPath;
       patch.signed_pdf_sha256 = hex;
