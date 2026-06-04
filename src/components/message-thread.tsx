@@ -765,16 +765,44 @@ export function MessageThread({
 
         {recorder.recording ? (
           <div className="flex items-center gap-2 rounded-full border border-destructive/40 bg-destructive/5 px-3 py-2">
-            <span className="h-2 w-2 animate-pulse rounded-full bg-destructive" />
-            <span className="text-xs font-medium">Recording… {fmtDuration(recorder.elapsed)}</span>
-            <div className="ml-auto flex items-center gap-1">
-              <Button type="button" variant="ghost" size="sm" className="h-8 px-2" onClick={() => recorder.cancel()}>
-                <Trash2 className="mr-1 h-3 w-3" /> Cancel
-              </Button>
-              <Button type="button" size="sm" className="h-8 bg-primary" onClick={sendVoiceNote} disabled={uploading}>
-                <Send className="mr-1 h-3 w-3" /> Send
-              </Button>
+            <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-destructive" />
+            <span className="shrink-0 text-xs font-medium tabular-nums">{fmtDuration(recorder.elapsed)}</span>
+            <LiveWaveform levels={recorder.liveLevels} />
+            <Button type="button" variant="ghost" size="sm" className="h-8 shrink-0 px-2 text-muted-foreground" onClick={() => recorder.cancel()} title="Discard">
+              <Trash2 className="h-4 w-4" />
+            </Button>
+            <Button type="button" size="sm" className="h-8 shrink-0 bg-primary" onClick={stopForPreview} title="Stop">
+              <Square className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        ) : preview ? (
+          <div className="flex items-center gap-2 rounded-full border border-border bg-secondary/40 px-3 py-2">
+            <Button
+              type="button" size="icon" variant="default"
+              className="h-9 w-9 shrink-0 rounded-full"
+              onClick={() => {
+                const a = previewAudioRef.current; if (!a) return;
+                if (a.paused) { a.play(); setPreviewPlaying(true); } else { a.pause(); setPreviewPlaying(false); }
+              }}
+            >
+              {previewPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4 translate-x-[1px]" />}
+            </Button>
+            <div className="flex-1">
+              <WaveformBars peaks={preview.peaks.length ? preview.peaks : fakePeaks(40, preview.duration * 9)} progress={0} mine={false} />
+              <div className="mt-0.5 text-[10px] text-muted-foreground">Preview · {fmtDuration(preview.duration)}</div>
             </div>
+            <audio
+              ref={previewAudioRef} src={preview.url} preload="metadata"
+              onEnded={() => setPreviewPlaying(false)}
+              onPause={() => setPreviewPlaying(false)}
+              onPlay={() => setPreviewPlaying(true)}
+            />
+            <Button type="button" variant="ghost" size="sm" className="h-8 shrink-0 px-2 text-muted-foreground" onClick={discardPreview} title="Discard">
+              <Trash2 className="h-4 w-4" />
+            </Button>
+            <Button type="button" size="sm" className="h-8 shrink-0 bg-primary" onClick={sendPreview} disabled={uploading}>
+              <Send className="mr-1 h-3.5 w-3.5" /> Send
+            </Button>
           </div>
         ) : (
           <div className="flex items-end gap-1.5">
