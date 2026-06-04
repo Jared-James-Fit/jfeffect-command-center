@@ -113,6 +113,25 @@ export function TrainingPhasesPanel({ clientId }: { clientId: string }) {
                   )}
                 </div>
               )}
+              <div className="mt-2 flex flex-wrap gap-1.5 text-[10px]">
+                <Badge variant="outline" className="border-border text-muted-foreground">Assigned: Yes</Badge>
+                <Badge
+                  variant="outline"
+                  className={p.visible_to_client === false
+                    ? "border-warning/40 text-warning bg-warning/10"
+                    : "border-success/40 text-success bg-success/10"}
+                >
+                  Visible to client: {p.visible_to_client === false ? "No" : "Yes"}
+                </Badge>
+                <Badge
+                  variant="outline"
+                  className={["active","ending-soon","due-today"].includes(d.state)
+                    ? "border-success/40 text-success bg-success/10"
+                    : "border-border text-muted-foreground"}
+                >
+                  Active: {["active","ending-soon","due-today"].includes(d.state) ? "Yes" : "No"}
+                </Badge>
+              </div>
             </div>
           );
         })

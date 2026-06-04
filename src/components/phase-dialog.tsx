@@ -5,6 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -131,6 +132,7 @@ export function PhaseDialog({
       notes: form.notes ?? null,
       status: form.status ?? "Active",
       ending_soon_days: form.ending_soon_days ?? 7,
+      visible_to_client: form.visible_to_client ?? true,
     };
     const { error } = form.id
       ? await supabase.from("training_phases").update(payload).eq("id", form.id)
@@ -230,6 +232,13 @@ export function PhaseDialog({
           <div>
             <Label>Program link</Label>
             <Input value={form.program_link ?? ""} onChange={(e) => set("program_link", e.target.value)} placeholder="https://…" />
+          </div>
+          <div className="md:col-span-2 flex items-center justify-between rounded-md border border-border bg-secondary/30 px-3 py-2">
+            <div>
+              <Label className="text-xs">Visible to client</Label>
+              <p className="text-[11px] text-muted-foreground">When on, this phase appears in the client's dashboard.</p>
+            </div>
+            <Switch checked={form.visible_to_client ?? true} onCheckedChange={(v) => set("visible_to_client", v)} />
           </div>
           <div className="md:col-span-2">
             <Label>Training goal</Label>
