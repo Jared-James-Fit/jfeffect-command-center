@@ -30,6 +30,7 @@ import { MessageThread } from "@/components/message-thread";
 import type { ConversationState } from "@/lib/messages";
 import { AgreementStatusPanel } from "@/components/agreement-status-panel";
 import { PurchaseRecordsPanel } from "@/components/purchase-records-panel";
+import { AgreementsPanel } from "@/components/agreements-panel";
 
 function AssignedCoachSelect({ value, onChange }: { value: string | null; onChange: (v: string | null) => void }) {
   const { data: coaches = [] } = useQuery({
@@ -413,6 +414,7 @@ function ClientDetail() {
 
         <TabsContent value="purchases" className="grid gap-6 md:grid-cols-3">
           <AgreementStatusPanel client={form} />
+          <AgreementsPanel clientId={id} />
           <PurchaseRecordsPanel clientId={id} />
         </TabsContent>
 
