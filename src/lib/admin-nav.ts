@@ -1,5 +1,5 @@
 import {
-  LayoutDashboard, Users, UserPlus, CreditCard,
+  LayoutDashboard, Users, CreditCard,
   Package, FileText, Dumbbell, FolderOpen, Calendar, Layers,
   Settings, Briefcase, Apple, ClipboardCheck,
 } from "lucide-react";
