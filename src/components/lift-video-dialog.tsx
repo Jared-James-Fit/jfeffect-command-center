@@ -99,11 +99,10 @@ export function LiftVideoDialog({ open, onOpenChange, clientId, userId, initial,
   const set = (k: string, v: any) => setForm((f: any) => ({ ...f, [k]: v }));
 
   const handleSave = async () => {
-    // Client flow: only require a video + notes.
-    if (role === "client") {
-      const hasVideo = !!file || !!form.video_url.trim() || !!initial?.video_storage_path || !!initial?.video_url;
-      if (!hasVideo) return toast.error("Add a video first.");
-      if (!form.client_notes.trim()) return toast.error("Add a note for Coach Jared.");
+    // Client multi-clip flow handled separately below.
+    if (role === "client" && !initial) return handleClientBatchSend();
+    if (role === "client" && initial) {
+      // Editing a single existing clip — keep using the simple per-clip form below.
     } else {
       if (!form.exercise.trim()) return toast.error("Add an exercise name.");
       if (tab === "link" && !form.video_url.trim() && !initial) return toast.error("Paste a video link or switch to upload.");
@@ -156,6 +155,126 @@ export function LiftVideoDialog({ open, onOpenChange, clientId, userId, initial,
       onOpenChange(false);
     } catch (e: any) {
       toast.error(e.message ?? "Failed to save");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // ---------- Multi-clip client send ----------
+  const addFiles = (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    const next: Clip[] = [];
+    for (const f of Array.from(files)) {
+      next.push({
+        id: crypto.randomUUID(),
+        kind: "file",
+        file: f,
+        previewUrl: URL.createObjectURL(f),
+        note: "",
+      });
+    }
+    setClips((c) => [...c, ...next]);
+  };
+
+  const addLinks = (raw: string) => {
+    const parts = raw.split(/[\s,]+/).map((s) => s.trim()).filter((s) => /^https?:\/\//i.test(s));
+    if (parts.length === 0) return toast.error("Paste a valid http(s) link.");
+    const next: Clip[] = parts.map((url) => ({
+      id: crypto.randomUUID(),
+      kind: "link",
+      url,
+      note: "",
+    }));
+    setClips((c) => [...c, ...next]);
+    setPasteLink("");
+  };
+
+  const removeClip = (id: string) => {
+    setClips((c) => {
+      const x = c.find((k) => k.id === id);
+      if (x?.previewUrl) URL.revokeObjectURL(x.previewUrl);
+      return c.filter((k) => k.id !== id);
+    });
+  };
+
+  const moveClip = (id: string, dir: -1 | 1) => {
+    setClips((c) => {
+      const i = c.findIndex((k) => k.id === id);
+      const j = i + dir;
+      if (i < 0 || j < 0 || j >= c.length) return c;
+      const copy = c.slice();
+      [copy[i], copy[j]] = [copy[j], copy[i]];
+      return copy;
+    });
+  };
+
+  const updateClipNote = (id: string, note: string) => {
+    setClips((c) => c.map((k) => (k.id === id ? { ...k, note } : k)));
+  };
+
+  const handleClientBatchSend = async () => {
+    if (clips.length === 0) return toast.error("Add at least one video.");
+    if (noteMode === "batch" && !batchNote.trim()) {
+      return toast.error("Add a note for Coach Jared, or switch to per-clip notes.");
+    }
+
+    setSaving(true);
+    try {
+      const batchId = crypto.randomUUID();
+      const total = clips.length;
+      const sharedNote = noteMode === "batch" ? batchNote.trim() : "";
+      const isUrgent = !!form.is_urgent;
+      const urgentNote = isUrgent ? urgentText.trim() : "";
+
+      for (let i = 0; i < clips.length; i++) {
+        const clip = clips[i];
+        let videoUrl: string | null = null;
+        let storagePath: string | null = null;
+        let source: "link" | "upload" = "link";
+
+        if (clip.kind === "file" && clip.file && userId) {
+          const res = await uploadVideoFile(clip.file, userId);
+          storagePath = res.path;
+          videoUrl = res.url;
+          source = "upload";
+        } else if (clip.kind === "link" && clip.url) {
+          videoUrl = clip.url;
+          source = "link";
+        }
+
+        const perClipNote = noteMode === "perClip" ? clip.note.trim() : "";
+        const combinedQuestion = [urgentNote && `⚠️ Pain / discomfort / urgent: ${urgentNote}`]
+          .filter(Boolean)
+          .join("\n");
+
+        await createLiftVideo({
+          client_id: clientId,
+          uploaded_by: userId,
+          exercise: "",
+          tag: isUrgent ? "Pain / Discomfort" : "Normal Review",
+          is_urgent: isUrgent,
+          client_notes: perClipNote || null,
+          question_for_coach: combinedQuestion || null,
+          video_url: videoUrl,
+          video_storage_path: storagePath,
+          video_source: source,
+          status: "New Upload",
+          batch_id: batchId,
+          batch_note: sharedNote || null,
+          batch_size: total,
+          batch_index: i + 1,
+        } as any);
+      }
+
+      toast.success(
+        clips.length === 1
+          ? "Video sent to Coach Jared."
+          : `${clips.length} clips sent to Coach Jared.`
+      );
+      onSaved?.();
+      onOpenChange(false);
+    } catch (e: any) {
+      toast.error(e.message ?? "Failed to send");
     } finally {
       setSaving(false);
     }
