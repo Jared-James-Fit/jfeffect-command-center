@@ -31,14 +31,11 @@ import { Route as AuthenticatedAdminTrainingPhasesRouteImport } from './routes/_
 import { Route as AuthenticatedAdminTestimonialsRouteImport } from './routes/_authenticated/admin/testimonials'
 import { Route as AuthenticatedAdminSopsRouteImport } from './routes/_authenticated/admin/sops'
 import { Route as AuthenticatedAdminSettingsRouteImport } from './routes/_authenticated/admin/settings'
-import { Route as AuthenticatedAdminSalesCallsRouteImport } from './routes/_authenticated/admin/sales-calls'
-import { Route as AuthenticatedAdminSalesRouteImport } from './routes/_authenticated/admin/sales'
 import { Route as AuthenticatedAdminResourcesRouteImport } from './routes/_authenticated/admin/resources'
 import { Route as AuthenticatedAdminProgramsRouteImport } from './routes/_authenticated/admin/programs'
 import { Route as AuthenticatedAdminPaymentsRouteImport } from './routes/_authenticated/admin/payments'
 import { Route as AuthenticatedAdminOffersRouteImport } from './routes/_authenticated/admin/offers'
 import { Route as AuthenticatedAdminNutritionTargetsRouteImport } from './routes/_authenticated/admin/nutrition-targets'
-import { Route as AuthenticatedAdminLeadsRouteImport } from './routes/_authenticated/admin/leads'
 import { Route as AuthenticatedAdminExercisesRouteImport } from './routes/_authenticated/admin/exercises'
 import { Route as AuthenticatedAdminContentIdeasRouteImport } from './routes/_authenticated/admin/content-ideas'
 import { Route as AuthenticatedAdminCheckInsRouteImport } from './routes/_authenticated/admin/check-ins'
@@ -172,17 +169,6 @@ const AuthenticatedAdminSettingsRoute =
     path: '/settings',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
-const AuthenticatedAdminSalesCallsRoute =
-  AuthenticatedAdminSalesCallsRouteImport.update({
-    id: '/sales-calls',
-    path: '/sales-calls',
-    getParentRoute: () => AuthenticatedAdminRouteRoute,
-  } as any)
-const AuthenticatedAdminSalesRoute = AuthenticatedAdminSalesRouteImport.update({
-  id: '/sales',
-  path: '/sales',
-  getParentRoute: () => AuthenticatedAdminRouteRoute,
-} as any)
 const AuthenticatedAdminResourcesRoute =
   AuthenticatedAdminResourcesRouteImport.update({
     id: '/resources',
@@ -213,11 +199,6 @@ const AuthenticatedAdminNutritionTargetsRoute =
     path: '/nutrition-targets',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
-const AuthenticatedAdminLeadsRoute = AuthenticatedAdminLeadsRouteImport.update({
-  id: '/leads',
-  path: '/leads',
-  getParentRoute: () => AuthenticatedAdminRouteRoute,
-} as any)
 const AuthenticatedAdminExercisesRoute =
   AuthenticatedAdminExercisesRouteImport.update({
     id: '/exercises',
@@ -294,14 +275,11 @@ export interface FileRoutesByFullPath {
   '/admin/check-ins': typeof AuthenticatedAdminCheckInsRoute
   '/admin/content-ideas': typeof AuthenticatedAdminContentIdeasRoute
   '/admin/exercises': typeof AuthenticatedAdminExercisesRoute
-  '/admin/leads': typeof AuthenticatedAdminLeadsRoute
   '/admin/nutrition-targets': typeof AuthenticatedAdminNutritionTargetsRoute
   '/admin/offers': typeof AuthenticatedAdminOffersRoute
   '/admin/payments': typeof AuthenticatedAdminPaymentsRoute
   '/admin/programs': typeof AuthenticatedAdminProgramsRoute
   '/admin/resources': typeof AuthenticatedAdminResourcesRoute
-  '/admin/sales': typeof AuthenticatedAdminSalesRoute
-  '/admin/sales-calls': typeof AuthenticatedAdminSalesCallsRoute
   '/admin/settings': typeof AuthenticatedAdminSettingsRoute
   '/admin/sops': typeof AuthenticatedAdminSopsRoute
   '/admin/testimonials': typeof AuthenticatedAdminTestimonialsRoute
@@ -333,14 +311,11 @@ export interface FileRoutesByTo {
   '/admin/check-ins': typeof AuthenticatedAdminCheckInsRoute
   '/admin/content-ideas': typeof AuthenticatedAdminContentIdeasRoute
   '/admin/exercises': typeof AuthenticatedAdminExercisesRoute
-  '/admin/leads': typeof AuthenticatedAdminLeadsRoute
   '/admin/nutrition-targets': typeof AuthenticatedAdminNutritionTargetsRoute
   '/admin/offers': typeof AuthenticatedAdminOffersRoute
   '/admin/payments': typeof AuthenticatedAdminPaymentsRoute
   '/admin/programs': typeof AuthenticatedAdminProgramsRoute
   '/admin/resources': typeof AuthenticatedAdminResourcesRoute
-  '/admin/sales': typeof AuthenticatedAdminSalesRoute
-  '/admin/sales-calls': typeof AuthenticatedAdminSalesCallsRoute
   '/admin/settings': typeof AuthenticatedAdminSettingsRoute
   '/admin/sops': typeof AuthenticatedAdminSopsRoute
   '/admin/testimonials': typeof AuthenticatedAdminTestimonialsRoute
@@ -376,14 +351,11 @@ export interface FileRoutesById {
   '/_authenticated/admin/check-ins': typeof AuthenticatedAdminCheckInsRoute
   '/_authenticated/admin/content-ideas': typeof AuthenticatedAdminContentIdeasRoute
   '/_authenticated/admin/exercises': typeof AuthenticatedAdminExercisesRoute
-  '/_authenticated/admin/leads': typeof AuthenticatedAdminLeadsRoute
   '/_authenticated/admin/nutrition-targets': typeof AuthenticatedAdminNutritionTargetsRoute
   '/_authenticated/admin/offers': typeof AuthenticatedAdminOffersRoute
   '/_authenticated/admin/payments': typeof AuthenticatedAdminPaymentsRoute
   '/_authenticated/admin/programs': typeof AuthenticatedAdminProgramsRoute
   '/_authenticated/admin/resources': typeof AuthenticatedAdminResourcesRoute
-  '/_authenticated/admin/sales': typeof AuthenticatedAdminSalesRoute
-  '/_authenticated/admin/sales-calls': typeof AuthenticatedAdminSalesCallsRoute
   '/_authenticated/admin/settings': typeof AuthenticatedAdminSettingsRoute
   '/_authenticated/admin/sops': typeof AuthenticatedAdminSopsRoute
   '/_authenticated/admin/testimonials': typeof AuthenticatedAdminTestimonialsRoute
@@ -419,14 +391,11 @@ export interface FileRouteTypes {
     | '/admin/check-ins'
     | '/admin/content-ideas'
     | '/admin/exercises'
-    | '/admin/leads'
     | '/admin/nutrition-targets'
     | '/admin/offers'
     | '/admin/payments'
     | '/admin/programs'
     | '/admin/resources'
-    | '/admin/sales'
-    | '/admin/sales-calls'
     | '/admin/settings'
     | '/admin/sops'
     | '/admin/testimonials'
@@ -458,14 +427,11 @@ export interface FileRouteTypes {
     | '/admin/check-ins'
     | '/admin/content-ideas'
     | '/admin/exercises'
-    | '/admin/leads'
     | '/admin/nutrition-targets'
     | '/admin/offers'
     | '/admin/payments'
     | '/admin/programs'
     | '/admin/resources'
-    | '/admin/sales'
-    | '/admin/sales-calls'
     | '/admin/settings'
     | '/admin/sops'
     | '/admin/testimonials'
@@ -500,14 +466,11 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/check-ins'
     | '/_authenticated/admin/content-ideas'
     | '/_authenticated/admin/exercises'
-    | '/_authenticated/admin/leads'
     | '/_authenticated/admin/nutrition-targets'
     | '/_authenticated/admin/offers'
     | '/_authenticated/admin/payments'
     | '/_authenticated/admin/programs'
     | '/_authenticated/admin/resources'
-    | '/_authenticated/admin/sales'
-    | '/_authenticated/admin/sales-calls'
     | '/_authenticated/admin/settings'
     | '/_authenticated/admin/sops'
     | '/_authenticated/admin/testimonials'
@@ -691,20 +654,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminSettingsRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
-    '/_authenticated/admin/sales-calls': {
-      id: '/_authenticated/admin/sales-calls'
-      path: '/sales-calls'
-      fullPath: '/admin/sales-calls'
-      preLoaderRoute: typeof AuthenticatedAdminSalesCallsRouteImport
-      parentRoute: typeof AuthenticatedAdminRouteRoute
-    }
-    '/_authenticated/admin/sales': {
-      id: '/_authenticated/admin/sales'
-      path: '/sales'
-      fullPath: '/admin/sales'
-      preLoaderRoute: typeof AuthenticatedAdminSalesRouteImport
-      parentRoute: typeof AuthenticatedAdminRouteRoute
-    }
     '/_authenticated/admin/resources': {
       id: '/_authenticated/admin/resources'
       path: '/resources'
@@ -738,13 +687,6 @@ declare module '@tanstack/react-router' {
       path: '/nutrition-targets'
       fullPath: '/admin/nutrition-targets'
       preLoaderRoute: typeof AuthenticatedAdminNutritionTargetsRouteImport
-      parentRoute: typeof AuthenticatedAdminRouteRoute
-    }
-    '/_authenticated/admin/leads': {
-      id: '/_authenticated/admin/leads'
-      path: '/leads'
-      fullPath: '/admin/leads'
-      preLoaderRoute: typeof AuthenticatedAdminLeadsRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
     '/_authenticated/admin/exercises': {
@@ -829,14 +771,11 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminCheckInsRoute: typeof AuthenticatedAdminCheckInsRoute
   AuthenticatedAdminContentIdeasRoute: typeof AuthenticatedAdminContentIdeasRoute
   AuthenticatedAdminExercisesRoute: typeof AuthenticatedAdminExercisesRoute
-  AuthenticatedAdminLeadsRoute: typeof AuthenticatedAdminLeadsRoute
   AuthenticatedAdminNutritionTargetsRoute: typeof AuthenticatedAdminNutritionTargetsRoute
   AuthenticatedAdminOffersRoute: typeof AuthenticatedAdminOffersRoute
   AuthenticatedAdminPaymentsRoute: typeof AuthenticatedAdminPaymentsRoute
   AuthenticatedAdminProgramsRoute: typeof AuthenticatedAdminProgramsRoute
   AuthenticatedAdminResourcesRoute: typeof AuthenticatedAdminResourcesRoute
-  AuthenticatedAdminSalesRoute: typeof AuthenticatedAdminSalesRoute
-  AuthenticatedAdminSalesCallsRoute: typeof AuthenticatedAdminSalesCallsRoute
   AuthenticatedAdminSettingsRoute: typeof AuthenticatedAdminSettingsRoute
   AuthenticatedAdminSopsRoute: typeof AuthenticatedAdminSopsRoute
   AuthenticatedAdminTestimonialsRoute: typeof AuthenticatedAdminTestimonialsRoute
@@ -857,15 +796,12 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
     AuthenticatedAdminCheckInsRoute: AuthenticatedAdminCheckInsRoute,
     AuthenticatedAdminContentIdeasRoute: AuthenticatedAdminContentIdeasRoute,
     AuthenticatedAdminExercisesRoute: AuthenticatedAdminExercisesRoute,
-    AuthenticatedAdminLeadsRoute: AuthenticatedAdminLeadsRoute,
     AuthenticatedAdminNutritionTargetsRoute:
       AuthenticatedAdminNutritionTargetsRoute,
     AuthenticatedAdminOffersRoute: AuthenticatedAdminOffersRoute,
     AuthenticatedAdminPaymentsRoute: AuthenticatedAdminPaymentsRoute,
     AuthenticatedAdminProgramsRoute: AuthenticatedAdminProgramsRoute,
     AuthenticatedAdminResourcesRoute: AuthenticatedAdminResourcesRoute,
-    AuthenticatedAdminSalesRoute: AuthenticatedAdminSalesRoute,
-    AuthenticatedAdminSalesCallsRoute: AuthenticatedAdminSalesCallsRoute,
     AuthenticatedAdminSettingsRoute: AuthenticatedAdminSettingsRoute,
     AuthenticatedAdminSopsRoute: AuthenticatedAdminSopsRoute,
     AuthenticatedAdminTestimonialsRoute: AuthenticatedAdminTestimonialsRoute,
@@ -936,3 +872,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}

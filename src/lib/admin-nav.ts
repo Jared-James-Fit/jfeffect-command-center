@@ -8,9 +8,8 @@ import type { NavItem } from "@/components/app-shell";
 export const adminNav: NavItem[] = [
   { to: "/admin", label: "Dashboard", icon: LayoutDashboard },
   { to: "/admin/clients", label: "Clients", icon: Users },
-  { to: "/admin/leads", label: "Leads", icon: UserPlus },
-  { to: "/admin/sales", label: "Sales", icon: CreditCard },
   { to: "/admin/calendar", label: "Calendar", icon: Calendar },
+  { to: "/admin/payments", label: "Payments", icon: CreditCard },
   { to: "/admin/offers", label: "Offers / Products", icon: Package },
   { to: "/admin/exercises", label: "Exercise Library", icon: Dumbbell },
   { to: "/admin/resources", label: "Resources", icon: FolderOpen },
