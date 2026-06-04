@@ -27,6 +27,7 @@ import { Route as AuthenticatedPortalExercisesRouteImport } from './routes/_auth
 import { Route as AuthenticatedPortalDocumentsRouteImport } from './routes/_authenticated/portal/documents'
 import { Route as AuthenticatedPortalCheckInRouteImport } from './routes/_authenticated/portal/check-in'
 import { Route as AuthenticatedPortalCalendarRouteImport } from './routes/_authenticated/portal/calendar'
+import { Route as AuthenticatedPortalAccountRouteImport } from './routes/_authenticated/portal/account'
 import { Route as AuthenticatedAdminTrainingPhasesRouteImport } from './routes/_authenticated/admin/training-phases'
 import { Route as AuthenticatedAdminTestimonialsRouteImport } from './routes/_authenticated/admin/testimonials'
 import { Route as AuthenticatedAdminSopsRouteImport } from './routes/_authenticated/admin/sops'
@@ -144,6 +145,12 @@ const AuthenticatedPortalCalendarRoute =
   AuthenticatedPortalCalendarRouteImport.update({
     id: '/calendar',
     path: '/calendar',
+    getParentRoute: () => AuthenticatedPortalRouteRoute,
+  } as any)
+const AuthenticatedPortalAccountRoute =
+  AuthenticatedPortalAccountRouteImport.update({
+    id: '/account',
+    path: '/account',
     getParentRoute: () => AuthenticatedPortalRouteRoute,
   } as any)
 const AuthenticatedAdminTrainingPhasesRoute =
@@ -284,6 +291,7 @@ export interface FileRoutesByFullPath {
   '/admin/sops': typeof AuthenticatedAdminSopsRoute
   '/admin/testimonials': typeof AuthenticatedAdminTestimonialsRoute
   '/admin/training-phases': typeof AuthenticatedAdminTrainingPhasesRoute
+  '/portal/account': typeof AuthenticatedPortalAccountRoute
   '/portal/calendar': typeof AuthenticatedPortalCalendarRoute
   '/portal/check-in': typeof AuthenticatedPortalCheckInRoute
   '/portal/documents': typeof AuthenticatedPortalDocumentsRoute
@@ -320,6 +328,7 @@ export interface FileRoutesByTo {
   '/admin/sops': typeof AuthenticatedAdminSopsRoute
   '/admin/testimonials': typeof AuthenticatedAdminTestimonialsRoute
   '/admin/training-phases': typeof AuthenticatedAdminTrainingPhasesRoute
+  '/portal/account': typeof AuthenticatedPortalAccountRoute
   '/portal/calendar': typeof AuthenticatedPortalCalendarRoute
   '/portal/check-in': typeof AuthenticatedPortalCheckInRoute
   '/portal/documents': typeof AuthenticatedPortalDocumentsRoute
@@ -360,6 +369,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/sops': typeof AuthenticatedAdminSopsRoute
   '/_authenticated/admin/testimonials': typeof AuthenticatedAdminTestimonialsRoute
   '/_authenticated/admin/training-phases': typeof AuthenticatedAdminTrainingPhasesRoute
+  '/_authenticated/portal/account': typeof AuthenticatedPortalAccountRoute
   '/_authenticated/portal/calendar': typeof AuthenticatedPortalCalendarRoute
   '/_authenticated/portal/check-in': typeof AuthenticatedPortalCheckInRoute
   '/_authenticated/portal/documents': typeof AuthenticatedPortalDocumentsRoute
@@ -400,6 +410,7 @@ export interface FileRouteTypes {
     | '/admin/sops'
     | '/admin/testimonials'
     | '/admin/training-phases'
+    | '/portal/account'
     | '/portal/calendar'
     | '/portal/check-in'
     | '/portal/documents'
@@ -436,6 +447,7 @@ export interface FileRouteTypes {
     | '/admin/sops'
     | '/admin/testimonials'
     | '/admin/training-phases'
+    | '/portal/account'
     | '/portal/calendar'
     | '/portal/check-in'
     | '/portal/documents'
@@ -475,6 +487,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/sops'
     | '/_authenticated/admin/testimonials'
     | '/_authenticated/admin/training-phases'
+    | '/_authenticated/portal/account'
     | '/_authenticated/portal/calendar'
     | '/_authenticated/portal/check-in'
     | '/_authenticated/portal/documents'
@@ -624,6 +637,13 @@ declare module '@tanstack/react-router' {
       path: '/calendar'
       fullPath: '/portal/calendar'
       preLoaderRoute: typeof AuthenticatedPortalCalendarRouteImport
+      parentRoute: typeof AuthenticatedPortalRouteRoute
+    }
+    '/_authenticated/portal/account': {
+      id: '/_authenticated/portal/account'
+      path: '/account'
+      fullPath: '/portal/account'
+      preLoaderRoute: typeof AuthenticatedPortalAccountRouteImport
       parentRoute: typeof AuthenticatedPortalRouteRoute
     }
     '/_authenticated/admin/training-phases': {
@@ -818,6 +838,7 @@ const AuthenticatedAdminRouteRouteWithChildren =
   )
 
 interface AuthenticatedPortalRouteRouteChildren {
+  AuthenticatedPortalAccountRoute: typeof AuthenticatedPortalAccountRoute
   AuthenticatedPortalCalendarRoute: typeof AuthenticatedPortalCalendarRoute
   AuthenticatedPortalCheckInRoute: typeof AuthenticatedPortalCheckInRoute
   AuthenticatedPortalDocumentsRoute: typeof AuthenticatedPortalDocumentsRoute
@@ -831,6 +852,7 @@ interface AuthenticatedPortalRouteRouteChildren {
 
 const AuthenticatedPortalRouteRouteChildren: AuthenticatedPortalRouteRouteChildren =
   {
+    AuthenticatedPortalAccountRoute: AuthenticatedPortalAccountRoute,
     AuthenticatedPortalCalendarRoute: AuthenticatedPortalCalendarRoute,
     AuthenticatedPortalCheckInRoute: AuthenticatedPortalCheckInRoute,
     AuthenticatedPortalDocumentsRoute: AuthenticatedPortalDocumentsRoute,
