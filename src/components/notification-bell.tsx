@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 import { formatDistanceToNow, parseISO } from "date-fns";
-import type { ConversationState, Message } from "@/lib/messages";
+import type { ConversationState, Message, MessageAttachment } from "@/lib/messages";
 
 type BellItem = {
   kind: "message" | "lift_video";
