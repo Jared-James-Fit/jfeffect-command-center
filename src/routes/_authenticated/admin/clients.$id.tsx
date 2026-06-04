@@ -386,6 +386,69 @@ function ClientDetail() {
         </TabsContent>
 
         <TabsContent value="account" className="grid gap-6 md:grid-cols-3">
+        </TabsContent>
+        <TabsContent value="_placeholder_never" className="hidden" />
+        {/* injected above is harmless; real account tab continues */}
+        <TabsContent value="info" className="grid gap-6 md:grid-cols-3">
+          <Card className="border-border bg-card p-6 md:col-span-2 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Account Information</h3>
+              <div className="flex gap-2">
+                {form.info_update_requested ? (
+                  <Button size="sm" variant="outline" onClick={clearUpdateRequest}>Clear update request</Button>
+                ) : (
+                  <Button size="sm" variant="outline" onClick={requestUpdate}><BellRing className="mr-2 h-4 w-4" />Request Account Info Update</Button>
+                )}
+                <Button size="sm" className="bg-gradient-primary uppercase font-bold" onClick={saveAccountInfo}><Save className="mr-2 h-4 w-4" />Save</Button>
+              </div>
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <div><Label>First name</Label><Input value={form.first_name ?? ""} onChange={(e) => set("first_name", e.target.value)} /></div>
+              <div><Label>Last name</Label><Input value={form.last_name ?? ""} onChange={(e) => set("last_name", e.target.value)} /></div>
+              <div><Label>Email</Label><Input value={form.email ?? ""} onChange={(e) => set("email", e.target.value)} /></div>
+              <div><Label>Phone</Label><Input value={form.phone ?? ""} onChange={(e) => set("phone", e.target.value)} /></div>
+              <div className="md:col-span-2"><Label>Mailing address</Label><Input value={form.address ?? ""} onChange={(e) => set("address", e.target.value)} /></div>
+              <div><Label>City</Label><Input value={form.city ?? ""} onChange={(e) => set("city", e.target.value)} /></div>
+              <div><Label>Province / State</Label><Input value={form.province ?? ""} onChange={(e) => set("province", e.target.value)} /></div>
+              <div><Label>Postal / ZIP code</Label><Input value={form.postal_code ?? ""} onChange={(e) => set("postal_code", e.target.value)} /></div>
+              <div>
+                <Label>Country</Label>
+                <Select value={form.country ?? ""} onValueChange={(v) => set("country", v)}>
+                  <SelectTrigger><SelectValue placeholder="Select…" /></SelectTrigger>
+                  <SelectContent>{COUNTRIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Time zone</Label>
+                <Select value={form.timezone ?? "America/Winnipeg"} onValueChange={(v) => set("timezone", v)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>{COMMON_TIMEZONES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="grid gap-2 rounded-md border border-border bg-secondary/30 p-3 text-xs md:grid-cols-2">
+              <div><span className="text-muted-foreground">Last account info update:</span> {fmtDate(form.info_last_updated_at)}</div>
+              <div><span className="text-muted-foreground">Updated by:</span> {form.info_last_updated_by ?? "—"}</div>
+              <div className="md:col-span-2"><span className="text-muted-foreground">Fields updated:</span> {form.info_last_updated_fields?.length ? form.info_last_updated_fields.join(", ") : "—"}</div>
+              <div><span className="text-muted-foreground">Profile picture updated:</span> {fmtDate(form.profile_picture_updated_at)}</div>
+              <div><span className="text-muted-foreground">Time zone confirmed:</span> {fmtDate(form.timezone_confirmed_at)}</div>
+              <div><span className="text-muted-foreground">Update requested:</span> {form.info_update_requested ? `Yes (${fmtDate(form.info_update_requested_at)})` : "No"}</div>
+            </div>
+          </Card>
+
+          <Card className="border-border bg-card p-6 space-y-3">
+            <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Profile Picture</h3>
+            <ProfilePictureCapture
+              userId={form.user_id ?? id}
+              currentUrl={form.profile_picture_url}
+              onUploaded={adminUpdatePicture}
+              allowFileUpload
+            />
+            <p className="text-[11px] text-muted-foreground">Admin can capture or upload on behalf of the client.</p>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="account_real" className="grid gap-6 md:grid-cols-3">
         <Card className="border-border bg-card p-6 md:col-span-3 space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Account Access</h3>
