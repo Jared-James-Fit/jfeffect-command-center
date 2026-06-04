@@ -21,7 +21,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { derivePhase, displayTitle, toneClasses, type TrainingPhase } from "@/lib/training-phases";
 import { deriveTarget } from "@/lib/nutrition-cardio";
 import { format, parseISO } from "date-fns";
-function AddCell({ id, tab, label }: { id: string; tab: "training" | "nutrition" | "cardio" }) {
+function AddCell({ id, tab, label }: { id: string; tab: "training" | "nutrition" | "cardio"; label: string }) {
   return (
     <Link to="/admin/clients/$id" params={{ id }} search={{ tab }} className="text-xs font-semibold text-primary hover:underline">
       + {label}
