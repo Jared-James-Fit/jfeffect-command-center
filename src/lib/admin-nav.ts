@@ -2,12 +2,14 @@ import {
   LayoutDashboard, Users, CreditCard,
   Package, FileText, Dumbbell, FolderOpen, Calendar, Layers,
   Settings, Briefcase, Apple, ClipboardCheck, UserCog, MessageCircle, Video,
+  UserCheck,
 } from "lucide-react";
 import type { NavItem } from "@/components/app-shell";
 
 export const adminNav: NavItem[] = [
   { to: "/admin", label: "Dashboard", icon: LayoutDashboard },
   { to: "/admin/clients", label: "Clients", icon: Users },
+  { to: "/admin/coaches", label: "Coaches", icon: UserCheck },
   { to: "/admin/messages", label: "Messages", icon: MessageCircle },
   { to: "/admin/lift-videos", label: "Lift Videos", icon: Video },
   { to: "/admin/calendar", label: "Calendar", icon: Calendar },
@@ -18,6 +20,17 @@ export const adminNav: NavItem[] = [
   { to: "/admin/apps", label: "Apps & Tools", icon: Layers },
   { to: "/admin/business-systems", label: "Business Systems", icon: Briefcase },
   { to: "/admin/settings", label: "Settings", icon: Settings },
+];
+
+// Coach navigation: same client-coaching tools as admin, without business/admin sections.
+export const coachNav: NavItem[] = [
+  { to: "/admin", label: "Dashboard", icon: LayoutDashboard },
+  { to: "/admin/clients", label: "My Clients", icon: Users },
+  { to: "/admin/messages", label: "Messages", icon: MessageCircle },
+  { to: "/admin/lift-videos", label: "Lift Videos", icon: Video },
+  { to: "/admin/calendar", label: "Calendar", icon: Calendar },
+  { to: "/admin/exercises", label: "Exercise Library", icon: Dumbbell },
+  { to: "/admin/resources", label: "Resources", icon: FolderOpen },
 ];
 
 export const clientNav: NavItem[] = [

@@ -21,7 +21,7 @@ function IndexRedirect() {
   useEffect(() => {
     if (loading) return;
     if (user && role) {
-      navigate({ to: role === "admin" ? "/admin" : "/portal", replace: true });
+      navigate({ to: role === "client" ? "/portal" : "/admin", replace: true });
     } else {
       navigate({ to: "/auth", replace: true });
     }

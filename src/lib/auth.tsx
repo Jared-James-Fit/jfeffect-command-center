@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useRouter } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 
-export type AppRole = "admin" | "client";
+export type AppRole = "admin" | "coach" | "client";
 
 interface AuthState {
   user: User | null;
@@ -56,7 +56,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .then(({ data }) => {
         if (cancelled) return;
         const roles = (data ?? []).map((r) => r.role as AppRole);
-        setRole(roles.includes("admin") ? "admin" : roles.includes("client") ? "client" : null);
+        setRole(
+          roles.includes("admin") ? "admin"
+          : roles.includes("coach") ? "coach"
+          : roles.includes("client") ? "client"
+          : null,
+        );
       });
     return () => {
       cancelled = true;
