@@ -11,7 +11,7 @@ import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Search, MoreHorizontal, Mail, Archive, Trash2, KeyRound, Dumbbell, Apple, HeartPulse, Folder } from "lucide-react";
+import { Plus, Search, MoreHorizontal, Mail, Archive, Trash2, KeyRound, Dumbbell, Apple, HeartPulse, Folder, MessageCircle } from "lucide-react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import { inviteClient, archiveClient, deleteClient, sendPasswordReset } from "@/lib/clients.functions";
@@ -21,6 +21,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { derivePhase, displayTitle, toneClasses, type TrainingPhase } from "@/lib/training-phases";
 import { deriveTarget } from "@/lib/nutrition-cardio";
 import { format, parseISO } from "date-fns";
+import type { ConversationState, Message } from "@/lib/messages";
 function AddCell({ id, tab, label }: { id: string; tab: "training" | "nutrition" | "cardio"; label: string }) {
   return (
     <Link to="/admin/clients/$id" params={{ id }} search={{ tab }} className="text-xs font-semibold text-primary hover:underline">
@@ -128,6 +129,26 @@ function ClientsPage() {
     },
   });
 
+  const { data: convStates = [] } = useQuery({
+    queryKey: ["conversation-states"],
+    queryFn: async () => {
+      const { data } = await (supabase.from("conversation_state") as any).select("*");
+      return (data ?? []) as ConversationState[];
+    },
+  });
+
+  const { data: recentMsgs = [] } = useQuery({
+    queryKey: ["recent-client-messages"],
+    queryFn: async () => {
+      const { data } = await (supabase.from("messages") as any)
+        .select("client_id, created_at, sender_role, is_internal_note")
+        .eq("is_internal_note", false)
+        .order("created_at", { ascending: false })
+        .limit(500);
+      return (data ?? []) as Message[];
+    },
+  });
+
   const phaseByClient = useMemo(() => {
     const map = new Map<string, { current?: TrainingPhase; next?: TrainingPhase }>();
     for (const p of phases) {
@@ -151,6 +172,21 @@ function ClientsPage() {
     for (const t of cardTargets) if (!m.has(t.client_id)) m.set(t.client_id, t);
     return m;
   }, [cardTargets]);
+
+  const msgInfoByClient = useMemo(() => {
+    const stateMap = new Map(convStates.map((s) => [s.client_id, s]));
+    const last = new Map<string, Message>();
+    const unread = new Map<string, number>();
+    for (const m of recentMsgs) {
+      if (!last.has(m.client_id)) last.set(m.client_id, m);
+      if (m.sender_role === "client") {
+        const s = stateMap.get(m.client_id);
+        const lr = s?.admin_last_read_at ? new Date(s.admin_last_read_at).getTime() : 0;
+        if (new Date(m.created_at).getTime() > lr) unread.set(m.client_id, (unread.get(m.client_id) ?? 0) + 1);
+      }
+    }
+    return { stateMap, last, unread };
+  }, [convStates, recentMsgs]);
 
   const filtered = clients.filter((c) => {
     const matchesSearch = !search || c.full_name?.toLowerCase().includes(search.toLowerCase()) || c.email?.toLowerCase().includes(search.toLowerCase());
