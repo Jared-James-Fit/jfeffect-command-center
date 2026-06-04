@@ -149,6 +149,15 @@ function AdminDashboard() {
     },
   });
 
+  const { data: liftVideos = [] } = useQuery({
+    queryKey: ["lift-videos-admin"],
+    queryFn: () => listLiftVideos(),
+  });
+  const liftNeedReview = liftVideos
+    .filter((v) => !v.reviewed_at && v.status !== "Archived")
+    .sort((a, b) => (Number(b.is_urgent) - Number(a.is_urgent)) || (new Date(a.created_at).getTime() - new Date(b.created_at).getTime()))
+    .slice(0, 8);
+
   const clientNameById = new Map(clients.map((c) => [c.id, c.full_name]));
   const stateMap = new Map(convStates.map((s) => [s.client_id, s]));
   const seenC = new Set<string>();
