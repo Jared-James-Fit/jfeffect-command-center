@@ -71,27 +71,11 @@ export function MediaUploadDialog({
         const init = await initFn({ data: {
           clientId, mediaType, fileName: f.name, mimeType: f.type || "application/octet-stream", sizeBytes: f.size,
         }});
-        await uploadToDrive(init.uploadUrl, f, (pct) => {
+        const uploaded = await uploadToDrive(init.uploadUrl, f, (pct) => {
           setProgress((prev) => { const c = [...prev]; c[i] = pct; return c; });
         });
-        // Drive returns metadata in the PUT response; we fetch fresh via finalize using the file id.
-        // The PUT response body contains the file id when uploadType=resumable completes — but our XHR helper
-        // discards the body. Instead, ask Drive: we don't have id here. Workaround: use the upload URL's
-        // `upload_id`. Easier: rely on finalize to look it up by name in folder — but we don't have id.
-        // Pragmatic fix: parse the JSON body from a second XHR. We re-request the upload URL with no body to get
-        // the existing session status (returns 200 + body with id once complete).
-        const idRes = await fetch(init.uploadUrl, { method: "PUT", headers: { "Content-Range": `bytes */${f.size}` } }).catch(() => null);
-        let driveFileId = "";
-        if (idRes && idRes.ok) {
-          const j = await idRes.json().catch(() => null);
-          driveFileId = j?.id ?? "";
-        }
-        if (!driveFileId) {
-          // As a last resort, we cannot identify the file — surface clear error
-          throw new Error("Drive did not return a file id after upload");
-        }
         await finalizeFn({ data: {
-          clientId, submissionId: sub.id, mediaType, driveFileId,
+          clientId, submissionId: sub.id, mediaType, driveFileId: uploaded.id,
           clipNote: mode === "per-clip" ? (perClipNotes[i] || null) : null,
           clipOrder: i, urgent, painNote: urgent ? painNote : null, uploadedByRole: role,
         }});
