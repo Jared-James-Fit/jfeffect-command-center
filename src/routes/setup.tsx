@@ -6,6 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
+import { useServerFn } from "@tanstack/react-start";
+import { acceptCoachInvite } from "@/lib/coaches.functions";
 
 export const Route = createFileRoute("/setup")({
   head: () => ({ meta: [{ title: "Set up your account — JF Effect" }] }),
@@ -17,9 +19,11 @@ function SetupPage() {
   const [phase, setPhase] = useState<"loading" | "ready" | "expired" | "done">("loading");
   const [email, setEmail] = useState<string>("");
   const [fullName, setFullName] = useState<string>("");
+  const [isCoachInvite, setIsCoachInvite] = useState(false);
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [busy, setBusy] = useState(false);
+  const acceptCoachFn = useServerFn(acceptCoachInvite);
 
   useEffect(() => {
     // Supabase recovery / invite links return a session via URL hash and
@@ -28,6 +32,7 @@ function SetupPage() {
       if (session?.user) {
         setEmail(session.user.email ?? "");
         setFullName((session.user.user_metadata as any)?.full_name ?? "");
+        setIsCoachInvite(((session.user.user_metadata as any)?.invite_role) === "coach");
         setPhase("ready");
       }
     });
@@ -36,6 +41,7 @@ function SetupPage() {
       if (data.session?.user) {
         setEmail(data.session.user.email ?? "");
         setFullName((data.session.user.user_metadata as any)?.full_name ?? "");
+        setIsCoachInvite(((data.session.user.user_metadata as any)?.invite_role) === "coach");
         setPhase("ready");
       } else {
         // Give the hash exchange ~1.5s, then assume the link is invalid/expired
@@ -53,11 +59,14 @@ function SetupPage() {
     if (password !== confirm) return toast.error("Passwords don't match");
     setBusy(true);
     const { error } = await supabase.auth.updateUser({ password });
+    if (error) { setBusy(false); return toast.error(error.message); }
+    if (isCoachInvite) {
+      try { await acceptCoachFn({ data: undefined as any }); } catch { /* non-fatal */ }
+    }
     setBusy(false);
-    if (error) return toast.error(error.message);
     setPhase("done");
     toast.success("Account ready. Welcome to JF Effect.");
-    setTimeout(() => navigate({ to: "/portal", replace: true }), 600);
+    setTimeout(() => navigate({ to: isCoachInvite ? "/admin" : "/portal", replace: true }), 600);
   };
 
   return (
