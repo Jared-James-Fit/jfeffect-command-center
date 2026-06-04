@@ -14,6 +14,346 @@ export type Database = {
   }
   public: {
     Tables: {
+      agreement_audit_log: {
+        Row: {
+          actor_role: string
+          actor_user_id: string | null
+          agreement_id: string
+          created_at: string
+          details: Json
+          event: string
+          id: string
+          ip: string | null
+          signer_email: string | null
+          signer_name: string | null
+          user_agent: string | null
+        }
+        Insert: {
+          actor_role: string
+          actor_user_id?: string | null
+          agreement_id: string
+          created_at?: string
+          details?: Json
+          event: string
+          id?: string
+          ip?: string | null
+          signer_email?: string | null
+          signer_name?: string | null
+          user_agent?: string | null
+        }
+        Update: {
+          actor_role?: string
+          actor_user_id?: string | null
+          agreement_id?: string
+          created_at?: string
+          details?: Json
+          event?: string
+          id?: string
+          ip?: string | null
+          signer_email?: string | null
+          signer_name?: string | null
+          user_agent?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agreement_audit_log_agreement_id_fkey"
+            columns: ["agreement_id"]
+            isOneToOne: false
+            referencedRelation: "agreements"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agreement_field_values: {
+        Row: {
+          agreement_id: string
+          created_at: string
+          field_internal_name: string
+          field_type: string
+          id: string
+          signed_at: string | null
+          signer_email: string | null
+          signer_ip: string | null
+          signer_name: string | null
+          signer_role: string
+          signer_user_agent: string | null
+          updated_at: string
+          value_signature_data_url: string | null
+          value_text: string | null
+        }
+        Insert: {
+          agreement_id: string
+          created_at?: string
+          field_internal_name: string
+          field_type: string
+          id?: string
+          signed_at?: string | null
+          signer_email?: string | null
+          signer_ip?: string | null
+          signer_name?: string | null
+          signer_role: string
+          signer_user_agent?: string | null
+          updated_at?: string
+          value_signature_data_url?: string | null
+          value_text?: string | null
+        }
+        Update: {
+          agreement_id?: string
+          created_at?: string
+          field_internal_name?: string
+          field_type?: string
+          id?: string
+          signed_at?: string | null
+          signer_email?: string | null
+          signer_ip?: string | null
+          signer_name?: string | null
+          signer_role?: string
+          signer_user_agent?: string | null
+          updated_at?: string
+          value_signature_data_url?: string | null
+          value_text?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agreement_field_values_agreement_id_fkey"
+            columns: ["agreement_id"]
+            isOneToOne: false
+            referencedRelation: "agreements"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agreement_template_fields: {
+        Row: {
+          created_at: string
+          field_type: string
+          height: number
+          id: string
+          internal_name: string
+          label: string | null
+          options: Json
+          page: number
+          placeholder: string | null
+          required: boolean
+          signer_role: string
+          sort_order: number
+          template_id: string
+          updated_at: string
+          width: number
+          x: number
+          y: number
+        }
+        Insert: {
+          created_at?: string
+          field_type: string
+          height: number
+          id?: string
+          internal_name: string
+          label?: string | null
+          options?: Json
+          page?: number
+          placeholder?: string | null
+          required?: boolean
+          signer_role?: string
+          sort_order?: number
+          template_id: string
+          updated_at?: string
+          width: number
+          x: number
+          y: number
+        }
+        Update: {
+          created_at?: string
+          field_type?: string
+          height?: number
+          id?: string
+          internal_name?: string
+          label?: string | null
+          options?: Json
+          page?: number
+          placeholder?: string | null
+          required?: boolean
+          signer_role?: string
+          sort_order?: number
+          template_id?: string
+          updated_at?: string
+          width?: number
+          x?: number
+          y?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agreement_template_fields_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "agreement_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agreement_templates: {
+        Row: {
+          archived: boolean
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          is_active: boolean
+          name: string
+          page_count: number
+          pdf_storage_path: string
+          requires_coach_signature: boolean
+          supports_minor: boolean
+          supports_payor: boolean
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          archived?: boolean
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          page_count?: number
+          pdf_storage_path: string
+          requires_coach_signature?: boolean
+          supports_minor?: boolean
+          supports_payor?: boolean
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          archived?: boolean
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          page_count?: number
+          pdf_storage_path?: string
+          requires_coach_signature?: boolean
+          supports_minor?: boolean
+          supports_payor?: boolean
+          updated_at?: string
+          version?: number
+        }
+        Relationships: []
+      }
+      agreements: {
+        Row: {
+          admin_notes: string | null
+          cancelled_at: string | null
+          client_id: string
+          client_signed_at: string | null
+          coach_signed_at: string | null
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          expires_at: string | null
+          fields_snapshot: Json
+          id: string
+          last_reminder_at: string | null
+          minor_required: boolean
+          opened_at: string | null
+          payor_required: boolean
+          purchase_record_id: string | null
+          requires_coach_signature: boolean
+          sent_at: string | null
+          signed_pdf_path: string | null
+          signed_pdf_sha256: string | null
+          signing_token: string | null
+          status: string
+          template_id: string | null
+          template_name: string
+          template_pdf_path: string
+          template_version: number
+          updated_at: string
+        }
+        Insert: {
+          admin_notes?: string | null
+          cancelled_at?: string | null
+          client_id: string
+          client_signed_at?: string | null
+          coach_signed_at?: string | null
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string | null
+          fields_snapshot?: Json
+          id?: string
+          last_reminder_at?: string | null
+          minor_required?: boolean
+          opened_at?: string | null
+          payor_required?: boolean
+          purchase_record_id?: string | null
+          requires_coach_signature?: boolean
+          sent_at?: string | null
+          signed_pdf_path?: string | null
+          signed_pdf_sha256?: string | null
+          signing_token?: string | null
+          status?: string
+          template_id?: string | null
+          template_name: string
+          template_pdf_path: string
+          template_version?: number
+          updated_at?: string
+        }
+        Update: {
+          admin_notes?: string | null
+          cancelled_at?: string | null
+          client_id?: string
+          client_signed_at?: string | null
+          coach_signed_at?: string | null
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string | null
+          fields_snapshot?: Json
+          id?: string
+          last_reminder_at?: string | null
+          minor_required?: boolean
+          opened_at?: string | null
+          payor_required?: boolean
+          purchase_record_id?: string | null
+          requires_coach_signature?: boolean
+          sent_at?: string | null
+          signed_pdf_path?: string | null
+          signed_pdf_sha256?: string | null
+          signing_token?: string | null
+          status?: string
+          template_id?: string | null
+          template_name?: string
+          template_pdf_path?: string
+          template_version?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agreements_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agreements_purchase_record_id_fkey"
+            columns: ["purchase_record_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_records"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agreements_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "agreement_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       app_shortcuts: {
         Row: {
           created_at: string
