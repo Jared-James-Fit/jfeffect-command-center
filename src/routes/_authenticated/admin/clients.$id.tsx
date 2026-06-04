@@ -171,7 +171,18 @@ function ClientDetail() {
           </>
         }
       />
-      <div className="grid gap-6 p-6 md:grid-cols-3 md:p-8">
+      <div className="p-6 md:p-8">
+      <Tabs defaultValue="summary">
+        <TabsList className="mb-6 flex flex-wrap h-auto">
+          <TabsTrigger value="summary">Summary</TabsTrigger>
+          <TabsTrigger value="programs">Programs & Phases</TabsTrigger>
+          <TabsTrigger value="nutrition">Nutrition</TabsTrigger>
+          <TabsTrigger value="cardio">Cardio</TabsTrigger>
+          <TabsTrigger value="sessions">Sessions</TabsTrigger>
+          <TabsTrigger value="account">Account & Access</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="summary" className="grid gap-6 md:grid-cols-3">
         <Card className="border-border bg-card p-6 md:col-span-2 space-y-4">
           <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Profile</h3>
           <div className="grid grid-cols-2 gap-3">
@@ -235,12 +246,22 @@ function ClientDetail() {
           <p className="text-xs text-muted-foreground">Only visible to admin.</p>
           <Textarea rows={10} value={form.coach_notes ?? ""} onChange={(e) => set("coach_notes", e.target.value)} placeholder="Internal notes the client never sees…" />
         </Card>
+        </TabsContent>
 
-        <TrainingPhasesPanel clientId={id} />
+        <TabsContent value="programs" className="grid gap-6 md:grid-cols-3">
+          <TrainingPhasesPanel clientId={id} />
+        </TabsContent>
 
-        <PtSessionsPanel clientId={id} client={form} />
-        <NutritionTargetsPanel clientId={id} />
-        <CardioTargetsPanel clientId={id} />
+        <TabsContent value="nutrition" className="grid gap-6 md:grid-cols-3">
+          <NutritionTargetsPanel clientId={id} />
+        </TabsContent>
+
+        <TabsContent value="cardio" className="grid gap-6 md:grid-cols-3">
+          <CardioTargetsPanel clientId={id} />
+        </TabsContent>
+
+        <TabsContent value="sessions" className="grid gap-6 md:grid-cols-3">
+          <PtSessionsPanel clientId={id} client={form} />
 
         <Card className="border-border bg-card p-6 md:col-span-3 space-y-4">
           <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Time Zone & Sessions</h3>
@@ -276,7 +297,9 @@ function ClientDetail() {
           </div>
           <p className="text-xs text-muted-foreground">Reminder emails are sent in the client's time zone. Defaults to America/Winnipeg if not set.</p>
         </Card>
+        </TabsContent>
 
+        <TabsContent value="account" className="grid gap-6 md:grid-cols-3">
         <Card className="border-border bg-card p-6 md:col-span-3 space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Account Access</h3>
@@ -305,6 +328,8 @@ function ClientDetail() {
             </Button>
           </div>
         </Card>
+        </TabsContent>
+      </Tabs>
       </div>
 
       <AlertDialog open={deleteStep > 0} onOpenChange={(o) => !o && setDeleteStep(0)}>
