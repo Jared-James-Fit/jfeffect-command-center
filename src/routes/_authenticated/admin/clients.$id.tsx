@@ -315,6 +315,10 @@ function ClientDetail() {
           <ClientMessagesTab clientId={id} />
         </TabsContent>
 
+        <TabsContent value="lift-videos" className="grid gap-6 md:grid-cols-3">
+          <LiftVideosPanel clientId={id} />
+        </TabsContent>
+
         <TabsContent value="documents" className="grid gap-6 md:grid-cols-3">
           <Card className="border-border bg-card p-6 md:col-span-3 space-y-3">
             <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Linked Resources & Uploads</h3>
