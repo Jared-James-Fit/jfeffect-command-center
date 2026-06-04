@@ -36,12 +36,22 @@ function ClientLiftVideos() {
     queryFn: () => listLiftVideos({ clientId: client!.id }),
   });
 
-  // Clear bell notifications: mark all videos as viewed by the client when the page mounts.
+  // Clear bell notifications: mark videos with new coach activity as viewed.
   useEffect(() => {
     if (!videos.length) return;
-    Promise.all(videos.map((v) => markClientViewed(v.id))).catch(() => {});
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [videos.length]);
+    const stale = videos.filter((v) => {
+      const seen = v.client_last_viewed_at ? new Date(v.client_last_viewed_at).getTime() : 0;
+      const latest = Math.max(
+        v.watched_at ? +new Date(v.watched_at) : 0,
+        v.liked_at ? +new Date(v.liked_at) : 0,
+        v.reviewed_at ? +new Date(v.reviewed_at) : 0,
+        +new Date(v.updated_at),
+      );
+      return latest > seen;
+    });
+    if (!stale.length) return;
+    Promise.all(stale.map((v) => markClientViewed(v.id))).catch(() => {});
+  }, [videos]);
 
   useEffect(() => {
     if (!client?.id) return;
