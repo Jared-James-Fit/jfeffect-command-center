@@ -513,6 +513,12 @@ export function MessageThread({
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const recorder = useVoiceRecorder();
+  const transcribeFn = useServerFn(transcribeVoiceMessage);
+  const [preview, setPreview] = useState<{
+    blob: Blob; url: string; duration: number; peaks: number[];
+  } | null>(null);
+  const previewAudioRef = useRef<HTMLAudioElement | null>(null);
+  const [previewPlaying, setPreviewPlaying] = useState(false);
 
   const { data: messages = [] } = useQuery({
     queryKey: ["messages", clientId, role],
@@ -569,18 +575,40 @@ export function MessageThread({
     }
   };
 
-  const sendVoiceNote = async () => {
+  const stopForPreview = async () => {
     const result = await recorder.stop();
     if (!result) return;
     if (result.duration < 0.5) { toast.message("Voice message too short"); return; }
+    const url = URL.createObjectURL(result.blob);
+    setPreview({ blob: result.blob, url, duration: result.duration, peaks: result.peaks });
+  };
+
+  const discardPreview = () => {
+    if (preview) URL.revokeObjectURL(preview.url);
+    setPreview(null);
+    setPreviewPlaying(false);
+  };
+
+  const sendPreview = async () => {
+    if (!preview) return;
     setUploading(true);
     try {
-      const ext = result.blob.type.includes("mp4") ? "m4a" : "webm";
-      const file = new File([result.blob], `voice-${Date.now()}.${ext}`, { type: result.blob.type });
+      const ext = preview.blob.type.includes("mp4") ? "m4a" : "webm";
+      const file = new File([preview.blob], `voice-${Date.now()}.${ext}`, { type: preview.blob.type });
       const att = await uploadAttachment(clientId, file);
       att.type = "audio";
-      att.duration = result.duration;
-      await doSend({ body: "", extraAttachments: [att] });
+      att.duration = preview.duration;
+      att.peaks = preview.peaks;
+      const sent = await doSend({ body: "", extraAttachments: [att], returnMessage: true });
+      URL.revokeObjectURL(preview.url);
+      setPreview(null);
+      setPreviewPlaying(false);
+      // Fire and forget transcription
+      if (sent?.id && att.storage_path) {
+        transcribeFn({ data: { messageId: sent.id, storagePath: att.storage_path, mime: preview.blob.type } })
+          .then(() => qc.invalidateQueries({ queryKey: ["messages", clientId, role] }))
+          .catch((e) => console.warn("transcription failed", e));
+      }
     } catch (e: any) {
       toast.error(e?.message ?? "Failed to send voice message");
     } finally {
@@ -588,11 +616,11 @@ export function MessageThread({
     }
   };
 
-  const doSend = async (opts?: { body?: string; extraAttachments?: MessageAttachment[] }) => {
-    if (!user) return;
+  const doSend = async (opts?: { body?: string; extraAttachments?: MessageAttachment[]; returnMessage?: boolean }) => {
+    if (!user) return null;
     const text = (opts?.body ?? body).trim();
     const atts = [...attachments, ...(opts?.extraAttachments ?? [])];
-    if (!text && atts.length === 0) return;
+    if (!text && atts.length === 0) return null;
     // Auto-detect plain URLs typed inline → optional link attachments
     const linkAtts: MessageAttachment[] = [];
     const matches = text.match(LINK_RE);
@@ -604,7 +632,7 @@ export function MessageThread({
     }
     setSending(true);
     try {
-      await sendMessage({
+      const sent = await sendMessage({
         clientId,
         senderId: user.id,
         senderRole: role,
@@ -618,8 +646,10 @@ export function MessageThread({
       setAttachments([]);
       setInternalNote(false);
       qc.invalidateQueries({ queryKey: ["messages", clientId, role] });
+      return sent;
     } catch (e: any) {
       toast.error(e?.message ?? "Failed to send");
+      return null;
     } finally {
       setSending(false);
     }
