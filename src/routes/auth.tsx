@@ -1,5 +1,14 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import {
+  Mail,
+  Lock,
+  ShieldCheck,
+  Dumbbell,
+  ClipboardCheck,
+  Apple,
+  MessageSquare,
+} from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
@@ -12,6 +21,13 @@ export const Route = createFileRoute("/auth")({
   head: () => ({ meta: [{ title: "JF Effect — Private Coaching OS" }] }),
   component: AuthPage,
 });
+
+const FEATURES = [
+  { icon: Dumbbell, label: "Training" },
+  { icon: ClipboardCheck, label: "Check-ins" },
+  { icon: Apple, label: "Nutrition" },
+  { icon: MessageSquare, label: "Messages" },
+];
 
 function AuthPage() {
   const { user, role, loading } = useAuth();
@@ -37,7 +53,7 @@ function AuthPage() {
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-background text-foreground">
-      {/* subtle ambient glow top-right */}
+      {/* ambient glow */}
       <div className="pointer-events-none absolute -top-40 -right-40 h-[500px] w-[500px] rounded-full bg-primary/8 blur-[120px]" />
       <div className="pointer-events-none absolute -bottom-40 -left-40 h-[500px] w-[500px] rounded-full bg-primary/5 blur-[120px]" />
 
@@ -53,39 +69,59 @@ function AuthPage() {
         <div className="w-full max-w-sm">
           <div className="flex flex-col items-center text-center">
             <h1 className="text-balance text-xl font-black tracking-tight">
-              JF Effect Private Coaching OS
+              Private Coaching Hub
             </h1>
-            <p className="mt-2 max-w-xs text-sm text-muted-foreground">
-              Your private hub for coaching, check-ins, training, nutrition, progress, payments, and communication.
+            <p className="mt-1.5 max-w-[260px] text-sm text-muted-foreground leading-relaxed">
+              Training, nutrition, check-ins & coaching — all in one place.
             </p>
+
+            {/* Feature icons */}
+            <div className="mt-5 flex items-center gap-5">
+              {FEATURES.map(({ icon: Icon, label }) => (
+                <div key={label} className="flex flex-col items-center gap-1">
+                  <div className="grid h-8 w-8 place-items-center rounded-lg bg-muted/60">
+                    <Icon className="h-3.5 w-3.5 text-muted-foreground" />
+                  </div>
+                  <span className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+                    {label}
+                  </span>
+                </div>
+              ))}
+            </div>
 
             <form onSubmit={handleSignIn} className="mt-8 w-full space-y-4 text-left">
               <div>
                 <Label htmlFor="email" className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
                   Email
                 </Label>
-                <Input
-                  id="email"
-                  type="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="mt-1.5"
-                  placeholder="you@example.com"
-                />
+                <div className="relative mt-1.5">
+                  <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                  <Input
+                    id="email"
+                    type="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="pl-10"
+                    placeholder="you@example.com"
+                  />
+                </div>
               </div>
               <div>
                 <Label htmlFor="password" className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
                   Password
                 </Label>
-                <PasswordInput
-                  id="password"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="mt-1.5"
-                  placeholder="••••••••"
-                />
+                <div className="relative mt-1.5">
+                  <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground pointer-events-none z-10" />
+                  <PasswordInput
+                    id="password"
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="pl-10"
+                    placeholder="••••••••"
+                  />
+                </div>
               </div>
               <Button
                 type="submit"
@@ -96,9 +132,13 @@ function AuthPage() {
               </Button>
             </form>
 
-            <p className="mt-6 text-[10px] uppercase tracking-widest text-muted-foreground/60">
-              Private access for JF Effect clients only.
-            </p>
+            {/* Private access badge */}
+            <div className="mt-6 inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-muted/30 px-3 py-1.5">
+              <ShieldCheck className="h-3 w-3 text-primary" />
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Private Client Access
+              </span>
+            </div>
           </div>
         </div>
       </div>
