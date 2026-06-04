@@ -7,7 +7,7 @@ import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Plus, Video } from "lucide-react";
-import { listLiftVideos, type LiftVideo } from "@/lib/lift-videos";
+import { listLiftVideos, markClientViewed, type LiftVideo } from "@/lib/lift-videos";
 import { LiftVideoDialog } from "@/components/lift-video-dialog";
 import { LiftVideoCard } from "@/components/lift-video-card";
 
@@ -35,6 +35,13 @@ function ClientLiftVideos() {
     enabled: !!client?.id,
     queryFn: () => listLiftVideos({ clientId: client!.id }),
   });
+
+  // Clear bell notifications: mark all videos as viewed by the client when the page mounts.
+  useEffect(() => {
+    if (!videos.length) return;
+    Promise.all(videos.map((v) => markClientViewed(v.id))).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [videos.length]);
 
   useEffect(() => {
     if (!client?.id) return;
