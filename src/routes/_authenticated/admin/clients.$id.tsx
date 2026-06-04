@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, ExternalLink, Save, Trash2, Mail, Archive, KeyRound, Copy, CheckCircle2, AlertCircle } from "lucide-react";
+import { ArrowLeft, ExternalLink, Save, Trash2, Mail, Archive, KeyRound, Copy, CheckCircle2, AlertCircle, BellRing } from "lucide-react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import { inviteClient, deleteClient, getSetupLink, sendPasswordReset, markSetupComplete, setNeedsAdminHelp } from "@/lib/clients.functions";
@@ -24,8 +24,9 @@ import { CardioTargetsPanel } from "@/components/cardio-targets-panel";
 import { Switch } from "@/components/ui/switch";
 import { COMMON_TIMEZONES } from "@/lib/pt-sessions";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { ProfilePictureCapture } from "@/components/profile-picture-capture";
 
-const TAB_VALUES = ["summary", "training", "nutrition", "cardio", "documents", "sessions", "notes", "account"] as const;
+const TAB_VALUES = ["summary", "training", "nutrition", "cardio", "documents", "sessions", "notes", "info", "account"] as const;
 type TabValue = typeof TAB_VALUES[number];
 
 export const Route = createFileRoute("/_authenticated/admin/clients/$id")({
@@ -35,6 +36,8 @@ export const Route = createFileRoute("/_authenticated/admin/clients/$id")({
 
 const STATUSES = ["Active", "New Client", "Needs Attention", "Check-In Overdue", "Payment Overdue", "Injured / Modified Plan", "Paused", "Cancelling", "Archived", "High Priority"];
 const PAY_STATUSES = ["Not Sent", "Sent", "Paid", "Failed", "Overdue", "Cancelled", "Refunded"];
+const COUNTRIES = ["Canada", "United States", "United Kingdom", "Australia", "New Zealand", "Other"];
+const ACCOUNT_FIELDS = ["first_name", "last_name", "email", "phone", "address", "city", "province", "postal_code", "country", "timezone"] as const;
 
 function ClientDetail() {
   const { id } = Route.useParams();
@@ -154,6 +157,58 @@ function ClientDetail() {
 
   const set = (k: string, v: any) => setForm({ ...form, [k]: v });
 
+  const saveAccountInfo = async () => {
+    if (!data) return;
+    const updatedFields = ACCOUNT_FIELDS.filter((f) => form[f] !== (data as any)[f]);
+    const patch: any = {
+      first_name: form.first_name ?? null,
+      last_name: form.last_name ?? null,
+      full_name: [form.first_name, form.last_name].filter(Boolean).join(" ").trim() || form.full_name,
+      email: form.email ?? null,
+      phone: form.phone ?? null,
+      address: form.address ?? null,
+      city: form.city ?? null,
+      province: form.province ?? null,
+      postal_code: form.postal_code ?? null,
+      country: form.country ?? null,
+      timezone: form.timezone ?? "America/Winnipeg",
+      info_last_updated_at: new Date().toISOString(),
+      info_last_updated_by: "admin",
+      info_last_updated_fields: updatedFields,
+    };
+    const { error } = await supabase.from("clients").update(patch).eq("id", id);
+    if (error) return toast.error(error.message);
+    toast.success("Account info saved");
+    qc.invalidateQueries({ queryKey: ["client", id] });
+    qc.invalidateQueries({ queryKey: ["clients"] });
+  };
+
+  const requestUpdate = async () => {
+    const { error } = await supabase
+      .from("clients")
+      .update({ info_update_requested: true, info_update_requested_at: new Date().toISOString() })
+      .eq("id", id);
+    if (error) return toast.error(error.message);
+    toast.success("Client will see a reminder on their dashboard");
+    qc.invalidateQueries({ queryKey: ["client", id] });
+  };
+
+  const clearUpdateRequest = async () => {
+    const { error } = await supabase.from("clients").update({ info_update_requested: false }).eq("id", id);
+    if (error) return toast.error(error.message);
+    qc.invalidateQueries({ queryKey: ["client", id] });
+  };
+
+  const adminUpdatePicture = async (path: string) => {
+    const { error } = await supabase
+      .from("clients")
+      .update({ profile_picture_url: path, profile_picture_updated_at: new Date().toISOString() })
+      .eq("id", id);
+    if (error) return toast.error(error.message);
+    qc.invalidateQueries({ queryKey: ["client", id] });
+    setForm({ ...form, profile_picture_url: path });
+  };
+
   const links = [
     ["Program Sheet", form.program_sheet_link],
     ["Drive Folder", form.drive_folder_link],
@@ -191,6 +246,7 @@ function ClientDetail() {
           <TabsTrigger value="documents">Documents</TabsTrigger>
           <TabsTrigger value="sessions">Sessions</TabsTrigger>
           <TabsTrigger value="notes">Notes</TabsTrigger>
+          <TabsTrigger value="info">Account Info</TabsTrigger>
           <TabsTrigger value="account">Account & Access</TabsTrigger>
         </TabsList>
 
