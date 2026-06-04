@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -7,6 +8,7 @@ import {
   detectAttachmentType, MESSAGE_TYPES, PRIORITIES, QUICK_REPLIES, priorityTone,
   type Message, type MessageAttachment, type SenderRole, type ConversationState,
 } from "@/lib/messages";
+import { transcribeVoiceMessage } from "@/lib/voice-transcribe.functions";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
@@ -21,7 +23,7 @@ import { cn } from "@/lib/utils";
 import {
   Paperclip, Send, X, FileText, Image as ImageIcon, Video, Link as LinkIcon, ExternalLink,
   Mic, Trash2, Play, Pause, Camera, File as FileIcon, Flag, AlertCircle, AlertTriangle,
-  Gauge, Download,
+  Gauge, Download, FileText as FileTextIcon, ChevronDown, ChevronUp, Square,
 } from "lucide-react";
 import { format, parseISO, isToday, isYesterday } from "date-fns";
 import { toast } from "sonner";
