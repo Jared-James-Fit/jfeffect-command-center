@@ -1,63 +1,90 @@
-## Client ↔ Admin Messaging System
+## Google Drive media + coaching review system
 
-A simple, coaching-focused messaging system. Clients can only message admin/coach. Admin sees a unified inbox plus per-client threads.
+Files stored in Coach Jared's Google Drive (via the connected Drive account). The app stores only metadata, comments, status, and notifications.
 
-### Database (new migration)
+### How uploads work (Workers-safe pattern)
 
-**`messages`** table (one row per message; conversation = all messages for a `client_id`)
-- `client_id` (FK clients.id) — defines the thread
-- `sender_id` (auth user id), `sender_role` ('admin' | 'client')
-- `body` (text), `attachments` (jsonb: `[{type, url, name}]`)
-- `message_type` (General/Training/Nutrition/Cardio/Check-In/Payment/Scheduling/Tech/Injury/Custom)
-- `priority` (Normal/Important/High/NeedsResponse/Resolved) — admin-set only
-- `is_internal_note` (bool, admin-only, hidden from clients)
-- `read_by_admin_at`, `read_by_client_at`
-- `created_at`, `updated_at`
+Worker runtime can't proxy large videos. Instead:
 
-**`conversation_state`** table (per-client thread metadata)
-- `client_id` PK, `priority`, `status` ('open'|'needs_response'|'resolved'|'archived')
-- `admin_last_read_at`, `client_last_read_at`, `last_message_at`
+```text
+Browser file -> serverFn initUpload() -> Drive resumable session URI
+Browser PUTs file bytes directly to Drive session URI
+Browser -> serverFn finalizeUpload(driveFileId) -> save row in DB
+```
 
-**RLS**
-- Admin: full access via `has_role(auth.uid(), 'admin')`
-- Client SELECT/INSERT on `messages` where `client_id` belongs to them AND `is_internal_note = false`; client inserts force `sender_role='client'`, `is_internal_note=false`, `priority=null`
-- Client SELECT/UPDATE own `conversation_state` (only `client_last_read_at`)
+The server only touches small JSON (metadata, session creation, finalize). Drive accepts CORS for resumable upload sessions.
 
-**Storage**: reuse messaging via link attachments first; optional `message-attachments` bucket later.
+### Drive folder layout
 
-**Realtime**: add `messages` and `conversation_state` to `supabase_realtime` publication.
+```text
+[Root: configurable in Admin Settings]
+  /Clients
+    /{Client Full Name} ({clientId-short})
+      /Lift Videos
+      /Check-In Videos
+      /Progress Photos
+      /Training Videos
+      /Documents
+      /Other
+```
+
+Per-client folder + subfolders are auto-provisioned on first upload (or via "Create folder" button in client profile).
+
+### Database
+
+New tables (migration):
+
+- `media_drive_settings` (singleton) — root_folder_id, root_folder_url, status
+- `client_drive_folders` — client_id, root_folder_id, subfolder_ids jsonb (one entry per media type), folder_url, status, created_at
+- `media_submissions` — parent batch (client_id, submission_type, batch_note, urgent_flag, status, clip_count)
+- `media_items` — child files (submission_id, client_id, media_type, drive_file_id, drive_url, drive_embed_url, file_name, mime_type, size_bytes, duration_seconds, thumbnail_url, clip_note, clip_order, status, urgent_flag, pain_note)
+- `media_comments` — timestamped feedback (media_item_id, author_id, author_role, body, video_timestamp_seconds, comment_type, is_internal_note)
+- `media_view_state` — admin_last_viewed_at, client_last_viewed_at per media_item
+
+Statuses: `Pending Review | In Review | Reviewed | Needs Follow-Up | Archived`.
+
+RLS: admin full access; coach access via `is_assigned_coach`; client read own non-internal; client insert own submissions/items.
+
+### Server functions (createServerFn)
+
+`src/lib/drive.functions.ts`:
+
+- `getDriveSettings()` / `updateDriveSettings(rootFolderUrl)` — admin only
+- `provisionClientFolder(clientId)` — creates client + subfolders in Drive, stores IDs
+- `initMediaUpload({ clientId, mediaType, fileName, mimeType, sizeBytes })` — creates Drive resumable session, returns `{ uploadUrl, driveFolderId }`
+- `finalizeMediaUpload({ submissionId, driveFileId, mediaType, clipNote, clipOrder, fileName, mimeType, sizeBytes })` — fetches Drive metadata, inserts `media_items` row
+- `createSubmission({ clientId, submissionType, batchNote, urgent, painNote, clipCount })` — returns submissionId
+- `setMediaStatus(itemId, status)` — coach only
+- `addMediaComment({ itemId, body, timestampSeconds, commentType, isInternal })`
+
+All Drive HTTP calls go through `https://connector-gateway.lovable.dev/google_drive/...` with `Authorization: Bearer $LOVABLE_API_KEY` and `X-Connection-Api-Key: $GOOGLE_DRIVE_API_KEY`.
 
 ### Frontend
 
-**Shared**
-- `src/lib/messages.ts` — types, helpers (`sendMessage`, `markRead`, `setPriority`, etc. using `supabase` client; RLS enforces scope)
-- `src/components/message-thread.tsx` — reusable thread view (list + composer + attachment links + quick replies for admin)
-- `src/components/notification-bell.tsx` — bell in AppShell header showing unread counts; subscribes to realtime
+Shared:
+- `src/components/media-upload-dialog.tsx` — unified upload UI (multi-file, batch note vs per-clip notes, pain/urgent toggle). Drives the init→PUT→finalize flow with progress.
+- `src/components/media-item-card.tsx` — embedded Drive preview iframe (`https://drive.google.com/file/d/{id}/preview`), comments list, timestamped comment composer, status controls.
+- `src/components/media-inbox-list.tsx` — filterable list reused on admin route and dashboard widget.
 
-**Admin**
-- `src/routes/_authenticated/admin/messages.tsx` — Inbox: list of conversations (avatar, name, last msg preview, time, unread count, priority badge), search + filters (Unread/Read/Needs Response/High/Archived/client/date), split view with selected thread.
-- Add **Messages** tab to `src/routes/_authenticated/admin/clients.$id.tsx` with same thread component + internal-note toggle + priority/status controls.
-- Admin dashboard widget "Messages Needing Response" in `admin/index.tsx`.
-- Clients table (`clients.index.tsx`): add Messages indicator column (unread count, last msg date, needs-response chip) linking to thread.
-- Add "Messages" to `adminNav` in `src/lib/admin-nav.ts`.
+Admin:
+- `src/routes/_authenticated/admin/media-review.tsx` — "Media Review Inbox" route with filters (client, type, status, urgent, date).
+- Add "Media" tab to `clients.$id.tsx` (sub-tabs by type) + "Drive folder" panel with Create/Open buttons.
+- Add "Media Needing Review" widget to `admin/index.tsx`.
+- Add Drive integration card to `admin/settings.tsx` (root folder URL + test).
+- Add "Media Review" to `adminNav`.
 
-**Client**
-- `src/routes/_authenticated/portal/messages.tsx` — single thread with Coach (no internal notes, no priority controls).
-- Add "Messages" to `clientNav`.
-- Add "Message Coach Jared" shortcut card on `portal/index.tsx`.
-- Bell notifications for new coach replies.
+Client:
+- `src/routes/_authenticated/portal/media.tsx` — main client Media tab with sub-tabs (Lift Videos / Check-Ins / Progress Photos / Other).
+- Reused upload dialog from each sub-tab.
+- Add "Media" to `clientNav`; widget shortcut on `portal/index.tsx`.
 
-**Notifications**
-- Bell component fetches unread counts via `conversation_state` + realtime subscription; shows toast on new message.
+### Out of scope (kept as TODO comments where touched)
 
-### Out of scope (v1)
-- Push/email notifications (in-app bell only)
-- File uploads to storage (links only in v1)
-- Client-side priority controls
-- Quick-reply customization UI (hardcoded list first; editable later)
+- Migrating existing Supabase-stored lift videos — new uploads only.
+- Per-coach Drive accounts; only the single connected coach account is used.
+- Push notifications outside the existing in-app bell.
 
-### Tech details
-- All queries through `@/integrations/supabase/client` (RLS-scoped); no server fns needed for v1
-- Quick replies: hardcoded array in `message-thread.tsx`
-- Attachment input: paste URL → auto-detect type (image/video/pdf/link)
-- Use existing design tokens; no new colors
+### Risk notes
+
+- Drive `uploadType=resumable` returns the session URI in the `Location` header. The connector gateway forwards it. If CORS on `googleapis.com/upload/...` blocks the browser PUT we'll fall back to a server-streamed multipart upload limited to ~80 MB, with a clear UI message for larger files.
+- Drive embed (`/preview`) requires the file to be shared (or the viewer signed into the Drive account). For client-facing embeds we set each uploaded file to `anyoneWithLink: reader` after finalize (toggleable from Settings).
