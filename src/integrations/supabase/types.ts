@@ -677,6 +677,10 @@ export type Database = {
       lift_videos: {
         Row: {
           admin_last_viewed_at: string | null
+          batch_id: string | null
+          batch_index: number | null
+          batch_note: string | null
+          batch_size: number | null
           client_id: string
           client_last_viewed_at: string | null
           client_notes: string | null
@@ -713,6 +717,10 @@ export type Database = {
         }
         Insert: {
           admin_last_viewed_at?: string | null
+          batch_id?: string | null
+          batch_index?: number | null
+          batch_note?: string | null
+          batch_size?: number | null
           client_id: string
           client_last_viewed_at?: string | null
           client_notes?: string | null
@@ -749,6 +757,10 @@ export type Database = {
         }
         Update: {
           admin_last_viewed_at?: string | null
+          batch_id?: string | null
+          batch_index?: number | null
+          batch_note?: string | null
+          batch_size?: number | null
           client_id?: string
           client_last_viewed_at?: string | null
           client_notes?: string | null
