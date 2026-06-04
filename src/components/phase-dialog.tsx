@@ -12,6 +12,7 @@ import { PHASE_TYPES, CUSTOM_PHASE_SUGGESTIONS, type TrainingPhase } from "@/lib
 import { differenceInCalendarDays, parseISO, addDays, format } from "date-fns";
 
 const STATUSES = ["Active", "Upcoming", "Completed", "Archived"];
+const LENGTH_PRESETS = ["1", "2", "3", "4", "5", "6", "8", "10", "12", "custom"] as const;
 
 type Editing = Partial<TrainingPhase> & { client_id: string };
 
@@ -29,6 +30,7 @@ export function PhaseDialog({
   const qc = useQueryClient();
   const [form, setForm] = useState<Editing>({ client_id: clientId });
   const [weeks, setWeeks] = useState<string>("");
+  const [preset, setPreset] = useState<string>("4");
 
   useEffect(() => {
     if (open) {
@@ -44,10 +46,13 @@ export function PhaseDialog({
             ending_soon_days: 7,
           };
       setForm(init);
+      let w = "4";
       if (init.start_date && init.end_date) {
         const d = differenceInCalendarDays(parseISO(init.end_date), parseISO(init.start_date)) + 1;
-        setWeeks(String(Math.max(1, Math.round(d / 7))));
-      } else setWeeks("4");
+        w = String(Math.max(1, Math.round(d / 7)));
+      }
+      setWeeks(w);
+      setPreset((LENGTH_PRESETS as readonly string[]).includes(w) ? w : "custom");
     }
   }, [open, phase, clientId]);
 
@@ -60,16 +65,51 @@ export function PhaseDialog({
       const end = addDays(parseISO(form.start_date), n * 7 - 1);
       set("end_date", format(end, "yyyy-MM-dd"));
     }
+    setPreset((LENGTH_PRESETS as readonly string[]).includes(w) ? w : "custom");
+  };
+
+  const setPresetAndApply = (p: string) => {
+    setPreset(p);
+    if (p === "custom") return;
+    setWeeksAndEnd(p);
   };
 
   const setStart = (v: string) => {
     set("start_date", v);
-    const n = parseInt(weeks, 10);
-    if (!isNaN(n) && n > 0 && v) {
-      const end = addDays(parseISO(v), n * 7 - 1);
-      set("end_date", format(end, "yyyy-MM-dd"));
+    if (preset !== "custom") {
+      const n = parseInt(weeks, 10);
+      if (!isNaN(n) && n > 0 && v) {
+        const end = addDays(parseISO(v), n * 7 - 1);
+        set("end_date", format(end, "yyyy-MM-dd"));
+      }
     }
   };
+
+  const setEnd = (v: string) => {
+    set("end_date", v);
+    if (form.start_date && v) {
+      const d = differenceInCalendarDays(parseISO(v), parseISO(form.start_date)) + 1;
+      const w = String(Math.max(1, Math.round(d / 7)));
+      setWeeks(w);
+      setPreset((LENGTH_PRESETS as readonly string[]).includes(w) ? w : "custom");
+    }
+  };
+
+  const stats = (() => {
+    if (!form.start_date || !form.end_date) return null;
+    try {
+      const s = parseISO(form.start_date);
+      const e = parseISO(form.end_date);
+      const today = new Date();
+      const totalDays = Math.max(1, differenceInCalendarDays(e, s) + 1);
+      const totalWeeks = Math.max(1, Math.ceil(totalDays / 7));
+      const elapsed = differenceInCalendarDays(today, s) + 1;
+      const daysRemaining = differenceInCalendarDays(e, today);
+      const currentWeek = Math.min(totalWeeks, Math.max(1, Math.ceil(elapsed / 7)));
+      const percent = Math.min(100, Math.max(0, Math.round((elapsed / totalDays) * 100)));
+      return { totalDays, totalWeeks, currentWeek, daysRemaining, percent };
+    } catch { return null; }
+  })();
 
   const save = async () => {
     if (!form.phase_type || !form.start_date || !form.end_date) {
@@ -149,12 +189,36 @@ export function PhaseDialog({
           </div>
           <div>
             <Label>End date</Label>
-            <Input type="date" value={form.end_date ?? ""} onChange={(e) => set("end_date", e.target.value)} />
+            <Input type="date" value={form.end_date ?? ""} onChange={(e) => setEnd(e.target.value)} />
+          </div>
+          <div>
+            <Label>Quick length</Label>
+            <Select value={preset} onValueChange={setPresetAndApply}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {LENGTH_PRESETS.filter((p) => p !== "custom").map((p) => (
+                  <SelectItem key={p} value={p}>{p} {p === "1" ? "week" : "weeks"}</SelectItem>
+                ))}
+                <SelectItem value="custom">Custom</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           <div>
             <Label>Length (weeks)</Label>
             <Input type="number" min={1} value={weeks} onChange={(e) => setWeeksAndEnd(e.target.value)} />
           </div>
+          <p className="md:col-span-2 -mt-1 text-xs text-muted-foreground">
+            Dates auto-fill from phase length, but you can manually adjust them anytime.
+          </p>
+          {stats && (
+            <div className="md:col-span-2 grid grid-cols-2 md:grid-cols-5 gap-2 rounded-md border border-border bg-secondary/30 p-3 text-xs">
+              <div><div className="text-muted-foreground">Total days</div><div className="font-semibold">{stats.totalDays}</div></div>
+              <div><div className="text-muted-foreground">Total weeks</div><div className="font-semibold">{stats.totalWeeks}</div></div>
+              <div><div className="text-muted-foreground">Current week</div><div className="font-semibold">{stats.currentWeek}</div></div>
+              <div><div className="text-muted-foreground">Days remaining</div><div className="font-semibold">{stats.daysRemaining < 0 ? `${Math.abs(stats.daysRemaining)}d over` : stats.daysRemaining}</div></div>
+              <div><div className="text-muted-foreground">Complete</div><div className="font-semibold">{stats.percent}%</div></div>
+            </div>
+          )}
           <div>
             <Label>Current week</Label>
             <Input type="number" min={1} value={form.current_week ?? ""} onChange={(e) => set("current_week", e.target.value ? parseInt(e.target.value, 10) : null)} />
