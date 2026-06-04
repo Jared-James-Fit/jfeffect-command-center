@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   Users, UserPlus, AlertTriangle, Calendar, DollarSign,
   Plus, Zap, ExternalLink, Activity, Dumbbell, Package, Timer, UserCheck, Apple,
-  ClipboardCheck, Heart, FileText, Target, MessageCircle, Video,
+  ClipboardCheck, Heart, FileText, Target, MessageCircle, Video, FileSignature,
 } from "lucide-react";
 import { derivePhase, displayTitle, toneClasses, type TrainingPhase } from "@/lib/training-phases";
 import { deriveImportantDate, dateTypeLabel, importantToneClasses, type ImportantDate } from "@/lib/important-dates";
@@ -115,6 +115,18 @@ function AdminDashboard() {
         .neq("status", "Archived")
         .order("target_date", { ascending: true });
       return (data ?? []) as Array<ImportantDate & { clients: { id: string; full_name: string } | null }>;
+    },
+  });
+
+  const { data: agreementsNeedingAttention = [] } = useQuery({
+    queryKey: ["dashboard-agreements"],
+    queryFn: async () => {
+      const { data } = await supabase.from("agreements")
+        .select("id, template_name, status, sent_at, client_id, clients(id, full_name)")
+        .in("status", ["Sent", "Opened", "In Progress", "Waiting On Client", "Waiting On Coach", "Expired", "Needs Update"])
+        .order("sent_at", { ascending: false })
+        .limit(8);
+      return (data ?? []) as any[];
     },
   });
 
@@ -501,6 +513,31 @@ function AdminDashboard() {
                       </div>
                     </Link>
                     <Badge variant="outline" className="text-xs">{c.status}</Badge>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
+          <Card className="border-border bg-card p-6">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-muted-foreground">
+                <FileSignature className="h-4 w-4" /> Agreements Needing Attention
+              </h2>
+              <Link to="/admin/agreements" className="text-xs font-semibold text-primary hover:underline">View all →</Link>
+            </div>
+            {agreementsNeedingAttention.length === 0 ? (
+              <div className="rounded-md border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+                All agreements are signed or up-to-date.
+              </div>
+            ) : (
+              <ul className="divide-y divide-border">
+                {agreementsNeedingAttention.map((a: any) => (
+                  <li key={a.id} className="py-2 flex items-center justify-between gap-2">
+                    <Link to="/admin/agreements/instance/$id" params={{ id: a.id }} className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold truncate">{a.clients?.full_name ?? "—"}</p>
+                      <p className="text-xs text-muted-foreground truncate">{a.template_name}</p>
+                    </Link>
+                    <Badge variant="outline" className="text-[10px] shrink-0">{a.status}</Badge>
                   </li>
                 ))}
               </ul>

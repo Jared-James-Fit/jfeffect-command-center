@@ -51,12 +51,17 @@ import { Route as AuthenticatedAdminCalendarRouteImport } from './routes/_authen
 import { Route as AuthenticatedAdminBusinessSystemsRouteImport } from './routes/_authenticated/admin/business-systems'
 import { Route as AuthenticatedAdminAutomationsRouteImport } from './routes/_authenticated/admin/automations'
 import { Route as AuthenticatedAdminAppsRouteImport } from './routes/_authenticated/admin/apps'
+import { Route as AuthenticatedPortalAgreementsIndexRouteImport } from './routes/_authenticated/portal/agreements.index'
 import { Route as AuthenticatedAdminCoachesIndexRouteImport } from './routes/_authenticated/admin/coaches.index'
 import { Route as AuthenticatedAdminClientsIndexRouteImport } from './routes/_authenticated/admin/clients.index'
+import { Route as AuthenticatedAdminAgreementsIndexRouteImport } from './routes/_authenticated/admin/agreements.index'
 import { Route as AuthenticatedPortalPurchasesIdRouteImport } from './routes/_authenticated/portal/purchases.$id'
+import { Route as AuthenticatedPortalAgreementsIdRouteImport } from './routes/_authenticated/portal/agreements.$id'
 import { Route as AuthenticatedAdminPurchasesIdRouteImport } from './routes/_authenticated/admin/purchases.$id'
 import { Route as AuthenticatedAdminCoachesIdRouteImport } from './routes/_authenticated/admin/coaches.$id'
 import { Route as AuthenticatedAdminClientsIdRouteImport } from './routes/_authenticated/admin/clients.$id'
+import { Route as AuthenticatedAdminAgreementsIdRouteImport } from './routes/_authenticated/admin/agreements.$id'
+import { Route as AuthenticatedAdminAgreementsInstanceIdRouteImport } from './routes/_authenticated/admin/agreements.instance.$id'
 
 const SitemapRoute = SitemapRouteImport.update({
   id: '/sitemap',
@@ -299,6 +304,12 @@ const AuthenticatedAdminAppsRoute = AuthenticatedAdminAppsRouteImport.update({
   path: '/apps',
   getParentRoute: () => AuthenticatedAdminRouteRoute,
 } as any)
+const AuthenticatedPortalAgreementsIndexRoute =
+  AuthenticatedPortalAgreementsIndexRouteImport.update({
+    id: '/agreements/',
+    path: '/agreements/',
+    getParentRoute: () => AuthenticatedPortalRouteRoute,
+  } as any)
 const AuthenticatedAdminCoachesIndexRoute =
   AuthenticatedAdminCoachesIndexRouteImport.update({
     id: '/coaches/',
@@ -311,11 +322,23 @@ const AuthenticatedAdminClientsIndexRoute =
     path: '/clients/',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
+const AuthenticatedAdminAgreementsIndexRoute =
+  AuthenticatedAdminAgreementsIndexRouteImport.update({
+    id: '/agreements/',
+    path: '/agreements/',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
 const AuthenticatedPortalPurchasesIdRoute =
   AuthenticatedPortalPurchasesIdRouteImport.update({
     id: '/$id',
     path: '/$id',
     getParentRoute: () => AuthenticatedPortalPurchasesRoute,
+  } as any)
+const AuthenticatedPortalAgreementsIdRoute =
+  AuthenticatedPortalAgreementsIdRouteImport.update({
+    id: '/agreements/$id',
+    path: '/agreements/$id',
+    getParentRoute: () => AuthenticatedPortalRouteRoute,
   } as any)
 const AuthenticatedAdminPurchasesIdRoute =
   AuthenticatedAdminPurchasesIdRouteImport.update({
@@ -333,6 +356,18 @@ const AuthenticatedAdminClientsIdRoute =
   AuthenticatedAdminClientsIdRouteImport.update({
     id: '/clients/$id',
     path: '/clients/$id',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
+const AuthenticatedAdminAgreementsIdRoute =
+  AuthenticatedAdminAgreementsIdRouteImport.update({
+    id: '/agreements/$id',
+    path: '/agreements/$id',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
+const AuthenticatedAdminAgreementsInstanceIdRoute =
+  AuthenticatedAdminAgreementsInstanceIdRouteImport.update({
+    id: '/agreements/instance/$id',
+    path: '/agreements/instance/$id',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
 
@@ -378,12 +413,17 @@ export interface FileRoutesByFullPath {
   '/portal/resources': typeof AuthenticatedPortalResourcesRoute
   '/admin/': typeof AuthenticatedAdminIndexRoute
   '/portal/': typeof AuthenticatedPortalIndexRoute
+  '/admin/agreements/$id': typeof AuthenticatedAdminAgreementsIdRoute
   '/admin/clients/$id': typeof AuthenticatedAdminClientsIdRoute
   '/admin/coaches/$id': typeof AuthenticatedAdminCoachesIdRoute
   '/admin/purchases/$id': typeof AuthenticatedAdminPurchasesIdRoute
+  '/portal/agreements/$id': typeof AuthenticatedPortalAgreementsIdRoute
   '/portal/purchases/$id': typeof AuthenticatedPortalPurchasesIdRoute
+  '/admin/agreements/': typeof AuthenticatedAdminAgreementsIndexRoute
   '/admin/clients/': typeof AuthenticatedAdminClientsIndexRoute
   '/admin/coaches/': typeof AuthenticatedAdminCoachesIndexRoute
+  '/portal/agreements/': typeof AuthenticatedPortalAgreementsIndexRoute
+  '/admin/agreements/instance/$id': typeof AuthenticatedAdminAgreementsInstanceIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -425,12 +465,17 @@ export interface FileRoutesByTo {
   '/portal/resources': typeof AuthenticatedPortalResourcesRoute
   '/admin': typeof AuthenticatedAdminIndexRoute
   '/portal': typeof AuthenticatedPortalIndexRoute
+  '/admin/agreements/$id': typeof AuthenticatedAdminAgreementsIdRoute
   '/admin/clients/$id': typeof AuthenticatedAdminClientsIdRoute
   '/admin/coaches/$id': typeof AuthenticatedAdminCoachesIdRoute
   '/admin/purchases/$id': typeof AuthenticatedAdminPurchasesIdRoute
+  '/portal/agreements/$id': typeof AuthenticatedPortalAgreementsIdRoute
   '/portal/purchases/$id': typeof AuthenticatedPortalPurchasesIdRoute
+  '/admin/agreements': typeof AuthenticatedAdminAgreementsIndexRoute
   '/admin/clients': typeof AuthenticatedAdminClientsIndexRoute
   '/admin/coaches': typeof AuthenticatedAdminCoachesIndexRoute
+  '/portal/agreements': typeof AuthenticatedPortalAgreementsIndexRoute
+  '/admin/agreements/instance/$id': typeof AuthenticatedAdminAgreementsInstanceIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -476,12 +521,17 @@ export interface FileRoutesById {
   '/_authenticated/portal/resources': typeof AuthenticatedPortalResourcesRoute
   '/_authenticated/admin/': typeof AuthenticatedAdminIndexRoute
   '/_authenticated/portal/': typeof AuthenticatedPortalIndexRoute
+  '/_authenticated/admin/agreements/$id': typeof AuthenticatedAdminAgreementsIdRoute
   '/_authenticated/admin/clients/$id': typeof AuthenticatedAdminClientsIdRoute
   '/_authenticated/admin/coaches/$id': typeof AuthenticatedAdminCoachesIdRoute
   '/_authenticated/admin/purchases/$id': typeof AuthenticatedAdminPurchasesIdRoute
+  '/_authenticated/portal/agreements/$id': typeof AuthenticatedPortalAgreementsIdRoute
   '/_authenticated/portal/purchases/$id': typeof AuthenticatedPortalPurchasesIdRoute
+  '/_authenticated/admin/agreements/': typeof AuthenticatedAdminAgreementsIndexRoute
   '/_authenticated/admin/clients/': typeof AuthenticatedAdminClientsIndexRoute
   '/_authenticated/admin/coaches/': typeof AuthenticatedAdminCoachesIndexRoute
+  '/_authenticated/portal/agreements/': typeof AuthenticatedPortalAgreementsIndexRoute
+  '/_authenticated/admin/agreements/instance/$id': typeof AuthenticatedAdminAgreementsInstanceIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -527,12 +577,17 @@ export interface FileRouteTypes {
     | '/portal/resources'
     | '/admin/'
     | '/portal/'
+    | '/admin/agreements/$id'
     | '/admin/clients/$id'
     | '/admin/coaches/$id'
     | '/admin/purchases/$id'
+    | '/portal/agreements/$id'
     | '/portal/purchases/$id'
+    | '/admin/agreements/'
     | '/admin/clients/'
     | '/admin/coaches/'
+    | '/portal/agreements/'
+    | '/admin/agreements/instance/$id'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -574,12 +629,17 @@ export interface FileRouteTypes {
     | '/portal/resources'
     | '/admin'
     | '/portal'
+    | '/admin/agreements/$id'
     | '/admin/clients/$id'
     | '/admin/coaches/$id'
     | '/admin/purchases/$id'
+    | '/portal/agreements/$id'
     | '/portal/purchases/$id'
+    | '/admin/agreements'
     | '/admin/clients'
     | '/admin/coaches'
+    | '/portal/agreements'
+    | '/admin/agreements/instance/$id'
   id:
     | '__root__'
     | '/'
@@ -624,12 +684,17 @@ export interface FileRouteTypes {
     | '/_authenticated/portal/resources'
     | '/_authenticated/admin/'
     | '/_authenticated/portal/'
+    | '/_authenticated/admin/agreements/$id'
     | '/_authenticated/admin/clients/$id'
     | '/_authenticated/admin/coaches/$id'
     | '/_authenticated/admin/purchases/$id'
+    | '/_authenticated/portal/agreements/$id'
     | '/_authenticated/portal/purchases/$id'
+    | '/_authenticated/admin/agreements/'
     | '/_authenticated/admin/clients/'
     | '/_authenticated/admin/coaches/'
+    | '/_authenticated/portal/agreements/'
+    | '/_authenticated/admin/agreements/instance/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -937,6 +1002,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminAppsRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
+    '/_authenticated/portal/agreements/': {
+      id: '/_authenticated/portal/agreements/'
+      path: '/agreements'
+      fullPath: '/portal/agreements/'
+      preLoaderRoute: typeof AuthenticatedPortalAgreementsIndexRouteImport
+      parentRoute: typeof AuthenticatedPortalRouteRoute
+    }
     '/_authenticated/admin/coaches/': {
       id: '/_authenticated/admin/coaches/'
       path: '/coaches'
@@ -951,12 +1023,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminClientsIndexRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
+    '/_authenticated/admin/agreements/': {
+      id: '/_authenticated/admin/agreements/'
+      path: '/agreements'
+      fullPath: '/admin/agreements/'
+      preLoaderRoute: typeof AuthenticatedAdminAgreementsIndexRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
     '/_authenticated/portal/purchases/$id': {
       id: '/_authenticated/portal/purchases/$id'
       path: '/$id'
       fullPath: '/portal/purchases/$id'
       preLoaderRoute: typeof AuthenticatedPortalPurchasesIdRouteImport
       parentRoute: typeof AuthenticatedPortalPurchasesRoute
+    }
+    '/_authenticated/portal/agreements/$id': {
+      id: '/_authenticated/portal/agreements/$id'
+      path: '/agreements/$id'
+      fullPath: '/portal/agreements/$id'
+      preLoaderRoute: typeof AuthenticatedPortalAgreementsIdRouteImport
+      parentRoute: typeof AuthenticatedPortalRouteRoute
     }
     '/_authenticated/admin/purchases/$id': {
       id: '/_authenticated/admin/purchases/$id'
@@ -977,6 +1063,20 @@ declare module '@tanstack/react-router' {
       path: '/clients/$id'
       fullPath: '/admin/clients/$id'
       preLoaderRoute: typeof AuthenticatedAdminClientsIdRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
+    '/_authenticated/admin/agreements/$id': {
+      id: '/_authenticated/admin/agreements/$id'
+      path: '/agreements/$id'
+      fullPath: '/admin/agreements/$id'
+      preLoaderRoute: typeof AuthenticatedAdminAgreementsIdRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
+    '/_authenticated/admin/agreements/instance/$id': {
+      id: '/_authenticated/admin/agreements/instance/$id'
+      path: '/agreements/instance/$id'
+      fullPath: '/admin/agreements/instance/$id'
+      preLoaderRoute: typeof AuthenticatedAdminAgreementsInstanceIdRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
   }
@@ -1018,10 +1118,13 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminTestimonialsRoute: typeof AuthenticatedAdminTestimonialsRoute
   AuthenticatedAdminTrainingPhasesRoute: typeof AuthenticatedAdminTrainingPhasesRoute
   AuthenticatedAdminIndexRoute: typeof AuthenticatedAdminIndexRoute
+  AuthenticatedAdminAgreementsIdRoute: typeof AuthenticatedAdminAgreementsIdRoute
   AuthenticatedAdminClientsIdRoute: typeof AuthenticatedAdminClientsIdRoute
   AuthenticatedAdminCoachesIdRoute: typeof AuthenticatedAdminCoachesIdRoute
+  AuthenticatedAdminAgreementsIndexRoute: typeof AuthenticatedAdminAgreementsIndexRoute
   AuthenticatedAdminClientsIndexRoute: typeof AuthenticatedAdminClientsIndexRoute
   AuthenticatedAdminCoachesIndexRoute: typeof AuthenticatedAdminCoachesIndexRoute
+  AuthenticatedAdminAgreementsInstanceIdRoute: typeof AuthenticatedAdminAgreementsInstanceIdRoute
 }
 
 const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren =
@@ -1051,10 +1154,15 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
     AuthenticatedAdminTrainingPhasesRoute:
       AuthenticatedAdminTrainingPhasesRoute,
     AuthenticatedAdminIndexRoute: AuthenticatedAdminIndexRoute,
+    AuthenticatedAdminAgreementsIdRoute: AuthenticatedAdminAgreementsIdRoute,
     AuthenticatedAdminClientsIdRoute: AuthenticatedAdminClientsIdRoute,
     AuthenticatedAdminCoachesIdRoute: AuthenticatedAdminCoachesIdRoute,
+    AuthenticatedAdminAgreementsIndexRoute:
+      AuthenticatedAdminAgreementsIndexRoute,
     AuthenticatedAdminClientsIndexRoute: AuthenticatedAdminClientsIndexRoute,
     AuthenticatedAdminCoachesIndexRoute: AuthenticatedAdminCoachesIndexRoute,
+    AuthenticatedAdminAgreementsInstanceIdRoute:
+      AuthenticatedAdminAgreementsInstanceIdRoute,
   }
 
 const AuthenticatedAdminRouteRouteWithChildren =
@@ -1090,6 +1198,8 @@ interface AuthenticatedPortalRouteRouteChildren {
   AuthenticatedPortalPurchasesRoute: typeof AuthenticatedPortalPurchasesRouteWithChildren
   AuthenticatedPortalResourcesRoute: typeof AuthenticatedPortalResourcesRoute
   AuthenticatedPortalIndexRoute: typeof AuthenticatedPortalIndexRoute
+  AuthenticatedPortalAgreementsIdRoute: typeof AuthenticatedPortalAgreementsIdRoute
+  AuthenticatedPortalAgreementsIndexRoute: typeof AuthenticatedPortalAgreementsIndexRoute
 }
 
 const AuthenticatedPortalRouteRouteChildren: AuthenticatedPortalRouteRouteChildren =
@@ -1109,6 +1219,9 @@ const AuthenticatedPortalRouteRouteChildren: AuthenticatedPortalRouteRouteChildr
       AuthenticatedPortalPurchasesRouteWithChildren,
     AuthenticatedPortalResourcesRoute: AuthenticatedPortalResourcesRoute,
     AuthenticatedPortalIndexRoute: AuthenticatedPortalIndexRoute,
+    AuthenticatedPortalAgreementsIdRoute: AuthenticatedPortalAgreementsIdRoute,
+    AuthenticatedPortalAgreementsIndexRoute:
+      AuthenticatedPortalAgreementsIndexRoute,
   }
 
 const AuthenticatedPortalRouteRouteWithChildren =
@@ -1140,3 +1253,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}

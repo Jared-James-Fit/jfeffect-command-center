@@ -2,7 +2,7 @@ import {
   LayoutDashboard, Users, CreditCard,
   Package, FileText, Dumbbell, FolderOpen, Calendar, Layers,
   Settings, Briefcase, Apple, ClipboardCheck, UserCog, MessageCircle, Video,
-  UserCheck,
+  UserCheck, FileSignature,
 } from "lucide-react";
 import type { NavItem } from "@/components/app-shell";
 
@@ -16,6 +16,7 @@ export const adminNav: NavItem[] = [
   { to: "/admin/payments", label: "Payments", icon: CreditCard },
   { to: "/admin/offers", label: "Offers / Products", icon: Package },
   { to: "/admin/purchases", label: "Purchase Records", icon: ClipboardCheck },
+  { to: "/admin/agreements", label: "Agreements", icon: FileSignature },
   { to: "/admin/exercises", label: "Exercise Library", icon: Dumbbell },
   { to: "/admin/resources", label: "Resources", icon: FolderOpen },
   { to: "/admin/apps", label: "Apps & Tools", icon: Layers },
@@ -44,6 +45,7 @@ export const clientNav: NavItem[] = [
   { to: "/portal/exercises", label: "Exercises", icon: Dumbbell },
   { to: "/portal/payments", label: "Payments", icon: CreditCard },
   { to: "/portal/purchases", label: "My Purchases", icon: Package },
+  { to: "/portal/agreements", label: "Agreements", icon: FileSignature },
   { to: "/portal/resources", label: "Resources", icon: FolderOpen },
   { to: "/portal/calendar", label: "Calendar", icon: Calendar },
   { to: "/portal/documents", label: "Documents", icon: FileText },
