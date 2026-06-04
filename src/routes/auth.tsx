@@ -77,9 +77,8 @@ function AuthPage() {
                 <Label htmlFor="password" className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
                   Password
                 </Label>
-                <Input
+                <PasswordInput
                   id="password"
-                  type="password"
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
