@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
@@ -7,7 +7,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { ExternalLink, FileText, Heart, Dumbbell, Target } from "lucide-react";
+import { ExternalLink, FileText, Heart, Dumbbell, Target, Video } from "lucide-react";
 import { derivePhase, displayTitle, toneClasses, type TrainingPhase } from "@/lib/training-phases";
 import { deriveImportantDate, dateTypeLabel, importantToneClasses, type ImportantDate } from "@/lib/important-dates";
 import { format, parseISO } from "date-fns";
