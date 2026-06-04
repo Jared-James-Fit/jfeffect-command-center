@@ -41,6 +41,7 @@ export interface TrainingPhase {
   status: string;
   ending_soon_days: number;
   sort_order: number;
+  visible_to_client?: boolean;
   created_at: string;
   updated_at: string;
 }
