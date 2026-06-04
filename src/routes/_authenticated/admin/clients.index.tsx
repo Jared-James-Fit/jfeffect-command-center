@@ -11,16 +11,24 @@ import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Search, MoreHorizontal, Mail, Archive, Trash2, KeyRound } from "lucide-react";
+import { Plus, Search, MoreHorizontal, Mail, Archive, Trash2, KeyRound, Dumbbell, Apple, HeartPulse, Folder } from "lucide-react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import { inviteClient, archiveClient, deleteClient, sendPasswordReset } from "@/lib/clients.functions";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator, DropdownMenuLabel } from "@/components/ui/dropdown-menu";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { derivePhase, displayTitle, toneClasses, type TrainingPhase } from "@/lib/training-phases";
 import { deriveTarget } from "@/lib/nutrition-cardio";
 import { format, parseISO } from "date-fns";
+function AddCell({ id, tab, label }: { id: string; tab: "training" | "nutrition" | "cardio" }) {
+  return (
+    <Link to="/admin/clients/$id" params={{ id }} search={{ tab }} className="text-xs font-semibold text-primary hover:underline">
+      + {label}
+    </Link>
+  );
+}
+
 
 export const Route = createFileRoute("/_authenticated/admin/clients/")({
   component: ClientsPage,
@@ -227,7 +235,7 @@ function ClientsPage() {
                       <td className="px-4 py-3 text-muted-foreground">{c.coaching_type ?? "—"}</td>
                       <td className="px-4 py-3">
                         {current && dCur ? (
-                          <div className="space-y-1.5 min-w-[240px]">
+                          <Link to="/admin/clients/$id" params={{ id: c.id }} search={{ tab: "training" }} className="block space-y-1.5 min-w-[240px] hover:opacity-80">
                             <div className="flex items-center gap-2">
                               <span className="text-xs font-semibold truncate max-w-[160px]">{displayTitle(current)}</span>
                               <Badge variant="outline" className={toneClasses(dCur.tone)}>{dCur.label}</Badge>
@@ -239,22 +247,30 @@ function ClientsPage() {
                               {" · "}{dCur.percentComplete}%
                             </div>
                             <Progress value={dCur.percentComplete} className="h-1" />
-                          </div>
-                        ) : <span className="text-xs text-muted-foreground">—</span>}
+                          </Link>
+                        ) : <AddCell id={c.id} tab="training" label="Add Training Phase" />}
                       </td>
                       <td className="px-4 py-3 text-xs">
                         {next ? (
-                          <div>
+                          <Link to="/admin/clients/$id" params={{ id: c.id }} search={{ tab: "training" }} className="block hover:opacity-80">
                             <div className="font-medium truncate max-w-[140px]">{displayTitle(next)}</div>
                             <div className="text-[10px] text-muted-foreground">{format(parseISO(next.start_date), "MMM d")}</div>
-                          </div>
+                          </Link>
                         ) : <span className="text-muted-foreground">—</span>}
                       </td>
                       <td className="px-4 py-3">
-                        {dNut ? <Badge variant="outline" className={dNut.tone}>{dNut.label}</Badge> : <span className="text-xs text-muted-foreground">—</span>}
+                        {dNut ? (
+                          <Link to="/admin/clients/$id" params={{ id: c.id }} search={{ tab: "nutrition" }}>
+                            <Badge variant="outline" className={`${dNut.tone} cursor-pointer hover:opacity-80`}>{dNut.label}</Badge>
+                          </Link>
+                        ) : <AddCell id={c.id} tab="nutrition" label="Add Nutrition Targets" />}
                       </td>
                       <td className="px-4 py-3">
-                        {dCard ? <Badge variant="outline" className={dCard.tone}>{dCard.label}</Badge> : <span className="text-xs text-muted-foreground">—</span>}
+                        {dCard ? (
+                          <Link to="/admin/clients/$id" params={{ id: c.id }} search={{ tab: "cardio" }}>
+                            <Badge variant="outline" className={`${dCard.tone} cursor-pointer hover:opacity-80`}>{dCard.label}</Badge>
+                          </Link>
+                        ) : <AddCell id={c.id} tab="cardio" label="Add Cardio Targets" />}
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">{c.payment_status ?? "—"}</td>
                       <td className="px-4 py-3"><Badge variant="outline">{c.status}</Badge></td>
@@ -264,6 +280,28 @@ function ClientsPage() {
                             <Button variant="ghost" size="icon" className="h-8 w-8"><MoreHorizontal className="h-4 w-4" /></Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
+                            <DropdownMenuLabel>Manage</DropdownMenuLabel>
+                            <DropdownMenuItem asChild>
+                              <Link to="/admin/clients/$id" params={{ id: c.id }} search={{ tab: "training" }}>
+                                <Dumbbell className="mr-2 h-4 w-4" /> Manage Training
+                              </Link>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem asChild>
+                              <Link to="/admin/clients/$id" params={{ id: c.id }} search={{ tab: "nutrition" }}>
+                                <Apple className="mr-2 h-4 w-4" /> Manage Nutrition Targets
+                              </Link>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem asChild>
+                              <Link to="/admin/clients/$id" params={{ id: c.id }} search={{ tab: "cardio" }}>
+                                <HeartPulse className="mr-2 h-4 w-4" /> Manage Cardio Targets
+                              </Link>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem asChild>
+                              <Link to="/admin/clients/$id" params={{ id: c.id }} search={{ tab: "documents" }}>
+                                <Folder className="mr-2 h-4 w-4" /> Manage Documents
+                              </Link>
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
                             <DropdownMenuItem onClick={() => sendSetup(c.id)} disabled={!c.email}>
                               <Mail className="mr-2 h-4 w-4" /> Send setup link
                             </DropdownMenuItem>
