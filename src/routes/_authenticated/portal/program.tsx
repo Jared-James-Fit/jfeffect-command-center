@@ -6,7 +6,10 @@ import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ExternalLink, FileText, Heart } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
+import { ExternalLink, FileText, Heart, Dumbbell } from "lucide-react";
+import { derivePhase, displayTitle, toneClasses, type TrainingPhase } from "@/lib/training-phases";
+import { format, parseISO } from "date-fns";
 
 export const Route = createFileRoute("/_authenticated/portal/program")({ component: MyProgram });
 
@@ -21,6 +24,23 @@ function MyProgram() {
     },
   });
 
+  const { data: phases = [] } = useQuery({
+    queryKey: ["my-phases", client?.id],
+    enabled: !!client?.id,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("training_phases").select("*").eq("client_id", client!.id)
+        .order("start_date", { ascending: false });
+      return (data ?? []) as TrainingPhase[];
+    },
+  });
+
+  const activePhase = phases.find((p) => {
+    const s = derivePhase(p).state;
+    return s === "active" || s === "ending-soon" || s === "due-today";
+  }) ?? phases.find((p) => derivePhase(p).state === "upcoming") ?? null;
+  const phaseLink = activePhase?.program_link ?? client?.program_sheet_link ?? null;
+
   const { data: cardio = [] } = useQuery({
     queryKey: ["my-cardio", client?.id],
     enabled: !!client?.id,
@@ -34,25 +54,62 @@ function MyProgram() {
 
   return (
     <>
-      <PageHeader title="My Program" subtitle={client?.program_phase ?? "Current training phase"} />
+      <PageHeader title="My Program" subtitle={activePhase ? displayTitle(activePhase) : (client?.program_phase ?? "Current training phase")} />
       <div className="p-6 md:p-8 space-y-6">
-        <Card className="border-border bg-card p-8 text-center">
-          <FileText className="mx-auto h-10 w-10 text-primary" />
-          <h2 className="mt-4 text-xl font-black">Your Training Program</h2>
-          {client?.program_sheet_link ? (
-            <>
-              <p className="mt-2 text-sm text-muted-foreground">Opens in Google Sheets — bookmark it on your phone.</p>
-              <a href={client.program_sheet_link} target="_blank" rel="noreferrer">
-                <Button size="lg" className="mt-6 bg-gradient-primary font-bold uppercase">
-                  Access My Program <ExternalLink className="ml-2 h-4 w-4" />
+        <Card className="border-border bg-card p-6 md:p-8">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <FileText className="h-8 w-8 text-primary" />
+              <div>
+                <h2 className="text-xl font-black">Your Training Program</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {phaseLink ? "Opens your program sheet or file — bookmark it on your phone." : "Your coach hasn't linked your program yet. Check back soon."}
+                </p>
+              </div>
+            </div>
+            {phaseLink && (
+              <a href={phaseLink} target="_blank" rel="noreferrer">
+                <Button size="lg" className="bg-gradient-primary font-bold uppercase">
+                  Open My Program <ExternalLink className="ml-2 h-4 w-4" />
                 </Button>
               </a>
-              {client.last_program_update && (
-                <p className="mt-4 text-xs text-muted-foreground">Last updated {client.last_program_update}</p>
-              )}
-            </>
-          ) : (
-            <p className="mt-2 text-sm text-muted-foreground">Your coach hasn't linked your program yet. Check back soon.</p>
+            )}
+          </div>
+        </Card>
+
+        <Card className="border-border bg-card p-6">
+          <h2 className="mb-4 flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-muted-foreground">
+            <Dumbbell className="h-4 w-4" /> Current Training Phase
+          </h2>
+          {activePhase ? (() => {
+            const d = derivePhase(activePhase);
+            return (
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-lg font-bold">{displayTitle(activePhase)}</span>
+                  <Badge variant="outline" className={toneClasses(d.tone)}>{d.label}</Badge>
+                  <Badge variant="outline" className="text-[10px]">{activePhase.phase_type}</Badge>
+                </div>
+                <div className="mt-1 text-xs text-muted-foreground">
+                  {format(parseISO(activePhase.start_date), "MMM d, yyyy")} → {format(parseISO(activePhase.end_date), "MMM d, yyyy")}
+                </div>
+                <div className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-4">
+                  <Item label="Week" value={`${d.currentWeek} / ${d.totalWeeks}`} />
+                  <Item label="Days remaining" value={d.daysRemaining < 0 ? `${Math.abs(d.daysRemaining)}d over` : `${d.daysRemaining}d`} />
+                  <Item label="Weeks left" value={String(d.weeksRemaining)} />
+                  <Item label="Progress" value={`${d.percentComplete}%`} />
+                </div>
+                <Progress value={d.percentComplete} className="mt-3 h-2" />
+                {activePhase.training_goal && (
+                  <p className="mt-4 text-sm"><span className="text-muted-foreground">Goal: </span>{activePhase.training_goal}</p>
+                )}
+                {activePhase.notes && (
+                  <div className="mt-3 rounded-md border border-border bg-secondary/30 p-3 text-sm whitespace-pre-wrap">{activePhase.notes}</div>
+                )}
+              </div>
+            );
+          })() : (
+            <p className="text-sm text-muted-foreground">No active training phase yet. Your coach will assign one soon.</p>
           )}
         </Card>
 
