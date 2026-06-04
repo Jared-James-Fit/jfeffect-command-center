@@ -130,7 +130,6 @@ function AdminDashboard() {
 
   const quickActions = [
     { label: "Add Client", to: "/admin/clients", icon: Plus },
-    { label: "Add Lead", to: "/admin/leads", icon: UserPlus },
     { label: "Quick Sell", to: "/admin/offers", icon: Zap },
     { label: "Book PT Session", to: "/admin/calendar", icon: Calendar },
     { label: "Update Phase", to: "/admin/training-phases", icon: Timer },
