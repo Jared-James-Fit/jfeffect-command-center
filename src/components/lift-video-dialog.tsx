@@ -26,7 +26,6 @@ type Props = {
 
 export function LiftVideoDialog({ open, onOpenChange, clientId, userId, initial, onSaved, role = "admin" }: Props) {
   const [tab, setTab] = useState<"link" | "upload">("upload");
-  const [showAdvanced, setShowAdvanced] = useState(false);
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
   const recordInputRef = useRef<HTMLInputElement | null>(null);
   const [form, setForm] = useState<any>({
@@ -71,8 +70,12 @@ export function LiftVideoDialog({ open, onOpenChange, clientId, userId, initial,
       setTab(initial.video_source === "upload" ? "upload" : "link");
     } else if (open) {
       setFile(null);
-      setShowAdvanced(false);
       setTab("upload");
+      setClips([]);
+      setBatchNote("");
+      setNoteMode("batch");
+      setPasteLink("");
+      setUrgentText("");
     }
   }, [initial, open]);
 
