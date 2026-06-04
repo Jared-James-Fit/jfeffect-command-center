@@ -3,9 +3,13 @@ import { supabase } from "@/integrations/supabase/client";
 export type SenderRole = "admin" | "client";
 
 export type MessageAttachment = {
-  type: "image" | "video" | "pdf" | "link" | "drive" | "sheets" | "youtube";
+  type: "image" | "video" | "audio" | "pdf" | "file" | "link" | "drive" | "sheets" | "youtube";
   url: string;
   name?: string;
+  size?: number;
+  mime?: string;
+  duration?: number;
+  storage_path?: string;
 };
 
 export type Message = {
