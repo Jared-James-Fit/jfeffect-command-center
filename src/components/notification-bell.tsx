@@ -52,7 +52,7 @@ export function NotificationBell() {
     queryFn: async () => {
       if (role === "admin") {
         const [{ data: msgs }, { data: states }, { data: vids }] = await Promise.all([
-          (supabase.from("messages") as any).select("client_id, body, created_at, sender_role, is_internal_note").eq("sender_role", "client").eq("is_internal_note", false).order("created_at", { ascending: false }).limit(200),
+          (supabase.from("messages") as any).select("client_id, body, attachments, created_at, sender_role, is_internal_note").eq("sender_role", "client").eq("is_internal_note", false).order("created_at", { ascending: false }).limit(200),
           (supabase.from("conversation_state") as any).select("client_id, admin_last_read_at"),
           (supabase.from("lift_videos") as any)
             .select("id, client_id, exercise, client_notes, created_at, admin_last_viewed_at, status")
@@ -70,7 +70,14 @@ export function NotificationBell() {
           if (!lastRead || new Date(m.created_at).getTime() > new Date(lastRead).getTime()) {
             seen.add(m.client_id);
             const name = cMap.get(m.client_id) ?? "Client";
-            items.push({ kind: "message", clientId: m.client_id, name, title: `New message from ${name}`, body: m.body, created_at: m.created_at });
+            const atts = m.attachments ?? [];
+            const hasVoice = atts.some((a) => a.type === "audio");
+            const hasMedia = atts.some((a) => a.type === "image" || a.type === "video");
+            const title = hasVoice ? `${name} sent a voice message`
+              : hasMedia ? `${name} sent a photo/video`
+              : atts.length ? `${name} sent an attachment`
+              : `New message from ${name}`;
+            items.push({ kind: "message", clientId: m.client_id, name, title, body: m.body, created_at: m.created_at });
           }
         }
         for (const v of (vids ?? []) as any[]) {
@@ -92,7 +99,7 @@ export function NotificationBell() {
         const { data: client } = await supabase.from("clients").select("id").eq("user_id", user!.id).maybeSingle();
         if (!client) return { count: 0, items: [] };
         const [{ data: msgs }, { data: state }, { data: vids }, { data: vcomments }] = await Promise.all([
-          (supabase.from("messages") as any).select("body, created_at, sender_role").eq("client_id", client.id).eq("sender_role", "admin").eq("is_internal_note", false).order("created_at", { ascending: false }).limit(20),
+          (supabase.from("messages") as any).select("body, attachments, created_at, sender_role").eq("client_id", client.id).eq("sender_role", "admin").eq("is_internal_note", false).order("created_at", { ascending: false }).limit(20),
           (supabase.from("conversation_state") as any).select("client_last_read_at").eq("client_id", client.id).maybeSingle(),
           (supabase.from("lift_videos") as any)
             .select("id, exercise, watched_at, liked_at, reviewed_at, status, client_last_viewed_at, updated_at")
@@ -109,10 +116,16 @@ export function NotificationBell() {
         ]);
         const lastRead = state?.client_last_read_at;
         const unread = (msgs ?? []).filter((m: any) => !lastRead || new Date(m.created_at).getTime() > new Date(lastRead).getTime());
-        const items: BellItem[] = unread.map((m: any) => ({
-          kind: "message", clientId: client.id, name: "Coach Jared",
-          title: "New message from Coach Jared", body: m.body, created_at: m.created_at,
-        }));
+        const items: BellItem[] = unread.map((m: any) => {
+          const atts = (m.attachments ?? []) as MessageAttachment[];
+          const hasVoice = atts.some((a) => a.type === "audio");
+          const hasMedia = atts.some((a) => a.type === "image" || a.type === "video");
+          const title = hasVoice ? "Coach Jared sent a voice message"
+            : hasMedia ? "Coach Jared sent a photo/video"
+            : atts.length ? "Coach Jared sent an attachment"
+            : "New message from Coach Jared";
+          return { kind: "message", clientId: client.id, name: "Coach Jared", title, body: m.body, created_at: m.created_at };
+        });
         const vidMap = new Map<string, any>();
         for (const v of (vids ?? []) as any[]) {
           vidMap.set(v.id, v);
