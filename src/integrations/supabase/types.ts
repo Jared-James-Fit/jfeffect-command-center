@@ -351,6 +351,47 @@ export type Database = {
           },
         ]
       }
+      conversation_state: {
+        Row: {
+          admin_last_read_at: string | null
+          client_id: string
+          client_last_read_at: string | null
+          created_at: string
+          last_message_at: string | null
+          priority: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          admin_last_read_at?: string | null
+          client_id: string
+          client_last_read_at?: string | null
+          created_at?: string
+          last_message_at?: string | null
+          priority?: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          admin_last_read_at?: string | null
+          client_id?: string
+          client_last_read_at?: string | null
+          created_at?: string
+          last_message_at?: string | null
+          priority?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversation_state_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: true
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       exercises: {
         Row: {
           category: string | null
@@ -455,6 +496,62 @@ export type Database = {
           visible_to_client?: boolean
         }
         Relationships: []
+      }
+      messages: {
+        Row: {
+          attachments: Json
+          body: string
+          client_id: string
+          created_at: string
+          id: string
+          is_internal_note: boolean
+          message_type: string
+          priority: string | null
+          read_by_admin_at: string | null
+          read_by_client_at: string | null
+          sender_id: string | null
+          sender_role: string
+          updated_at: string
+        }
+        Insert: {
+          attachments?: Json
+          body?: string
+          client_id: string
+          created_at?: string
+          id?: string
+          is_internal_note?: boolean
+          message_type?: string
+          priority?: string | null
+          read_by_admin_at?: string | null
+          read_by_client_at?: string | null
+          sender_id?: string | null
+          sender_role: string
+          updated_at?: string
+        }
+        Update: {
+          attachments?: Json
+          body?: string
+          client_id?: string
+          created_at?: string
+          id?: string
+          is_internal_note?: boolean
+          message_type?: string
+          priority?: string | null
+          read_by_admin_at?: string | null
+          read_by_client_at?: string | null
+          sender_id?: string | null
+          sender_role?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "messages_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       nutrition_target_days: {
         Row: {
