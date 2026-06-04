@@ -11,6 +11,8 @@ import { Plus, Copy, ExternalLink, Trash2, Pencil, Sparkles, Archive } from "luc
 import { toast } from "sonner";
 import { OfferForm } from "@/components/offer-form";
 import { AssignOfferDialog } from "@/components/assign-offer-dialog";
+import { OfferDetailDialog } from "@/components/offer-detail-dialog";
+import { Eye } from "lucide-react";
 import { OFFER_TEMPLATES, blankOffer, type OfferLike } from "@/lib/offers";
 
 export const Route = createFileRoute("/_authenticated/admin/offers")({
@@ -21,6 +23,7 @@ function OffersPage() {
   const qc = useQueryClient();
   const [editing, setEditing] = useState<OfferLike | null>(null);
   const [assigning, setAssigning] = useState<any | null>(null);
+  const [viewing, setViewing] = useState<any | null>(null);
 
   const { data: offers = [] } = useQuery({
     queryKey: ["offers"],
@@ -79,7 +82,7 @@ function OffersPage() {
     <>
       <PageHeader
         title="Offers & Products"
-        subtitle="Define your services, set terms, snapshot purchases."
+        subtitle="Admin-only price card. Clients only see offers you assign to them."
         actions={
           <>
             <Link to="/admin/purchases"><Button variant="outline">Purchase Records</Button></Link>
@@ -109,7 +112,10 @@ function OffersPage() {
         </section>
 
         <section>
-          <h2 className="mb-3 text-xs uppercase tracking-widest text-muted-foreground">Your offers</h2>
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-xs uppercase tracking-widest text-muted-foreground">Price Card / Offer Menu</h2>
+            <span className="text-[10px] uppercase tracking-widest text-muted-foreground">Admin-only · {offers.length} active</span>
+          </div>
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {offers.length === 0 && (
               <div className="col-span-full rounded-md border border-dashed border-border p-10 text-center text-sm text-muted-foreground">
@@ -132,6 +138,7 @@ function OffersPage() {
                 {o.short_description && <p className="text-sm text-muted-foreground line-clamp-2">{o.short_description}</p>}
                 <div className="flex flex-wrap gap-2 pt-2">
                   <Button size="sm" className="bg-gradient-primary font-bold uppercase" onClick={() => setAssigning(o)}>Assign to client</Button>
+                  <Button size="sm" variant="outline" onClick={() => setViewing(o)}><Eye className="h-3 w-3" /></Button>
                   <Button size="sm" variant="outline" onClick={() => setEditing(o)}><Pencil className="h-3 w-3" /></Button>
                   <Button size="sm" variant="ghost" onClick={() => duplicate(o)}><Copy className="h-3 w-3" /></Button>
                   {o.stripe_payment_link && (
@@ -156,6 +163,12 @@ function OffersPage() {
       </Dialog>
 
       <AssignOfferDialog offer={assigning} onClose={() => setAssigning(null)} />
+      <OfferDetailDialog
+        offer={viewing}
+        onClose={() => setViewing(null)}
+        onAssign={(o) => { setViewing(null); setAssigning(o); }}
+        onEdit={(o) => { setViewing(null); setEditing(o); }}
+      />
     </>
   );
 }
