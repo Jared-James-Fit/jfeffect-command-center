@@ -88,16 +88,16 @@ function ClientPurchase() {
             <Field label="Location" v={r.location} />
           </Card>
 
-          {r.included_features?.length > 0 && (
+          {(r.included_features?.length ?? 0) > 0 && (
             <Card className="border-border bg-card p-6">
               <div className="text-xs uppercase tracking-widest text-muted-foreground mb-2">What's included</div>
-              <ul className="space-y-1 text-sm">{r.included_features.map((f: string, i: number) => <li key={i}>✓ {f}</li>)}</ul>
+              <ul className="space-y-1 text-sm">{r.included_features!.map((f: string, i: number) => <li key={i}>✓ {f}</li>)}</ul>
             </Card>
           )}
-          {r.excluded_features?.length > 0 && (
+          {(r.excluded_features?.length ?? 0) > 0 && (
             <Card className="border-border bg-card p-6">
               <div className="text-xs uppercase tracking-widest text-muted-foreground mb-2">Not included</div>
-              <ul className="space-y-1 text-sm text-muted-foreground">{r.excluded_features.map((f: string, i: number) => <li key={i}>• {f}</li>)}</ul>
+              <ul className="space-y-1 text-sm text-muted-foreground">{r.excluded_features!.map((f: string, i: number) => <li key={i}>• {f}</li>)}</ul>
             </Card>
           )}
           {(r.refund_policy || r.cancellation_policy || r.in_person_policy) && (
