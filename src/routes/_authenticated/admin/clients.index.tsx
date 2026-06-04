@@ -95,6 +95,55 @@ function ClientsPage() {
     },
   });
 
+  const { data: phases = [] } = useQuery({
+    queryKey: ["training-phases", "all"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("training_phases").select("*").order("start_date", { ascending: false });
+      if (error) throw error;
+      return data as TrainingPhase[];
+    },
+  });
+
+  const { data: nutTargets = [] } = useQuery({
+    queryKey: ["nutrition-targets", "all-status"],
+    queryFn: async () => {
+      const { data } = await supabase.from("nutrition_targets").select("id, client_id, start_date, end_date, status, ending_soon_days").neq("status", "Archived");
+      return data ?? [];
+    },
+  });
+
+  const { data: cardTargets = [] } = useQuery({
+    queryKey: ["cardio-targets", "all-status"],
+    queryFn: async () => {
+      const { data } = await supabase.from("cardio_targets").select("id, client_id, start_date, end_date, status, ending_soon_days").neq("status", "Archived");
+      return data ?? [];
+    },
+  });
+
+  const phaseByClient = useMemo(() => {
+    const map = new Map<string, { current?: TrainingPhase; next?: TrainingPhase }>();
+    for (const p of phases) {
+      const d = derivePhase(p);
+      const entry = map.get(p.client_id) ?? {};
+      if (!entry.current && ["active", "ending-soon", "due-today", "past-due"].includes(d.state)) entry.current = p;
+      else if (!entry.next && d.state === "upcoming") entry.next = p;
+      map.set(p.client_id, entry);
+    }
+    return map;
+  }, [phases]);
+
+  const nutByClient = useMemo(() => {
+    const m = new Map<string, any>();
+    for (const t of nutTargets) if (!m.has(t.client_id)) m.set(t.client_id, t);
+    return m;
+  }, [nutTargets]);
+
+  const cardByClient = useMemo(() => {
+    const m = new Map<string, any>();
+    for (const t of cardTargets) if (!m.has(t.client_id)) m.set(t.client_id, t);
+    return m;
+  }, [cardTargets]);
+
   const filtered = clients.filter((c) => {
     const matchesSearch = !search || c.full_name?.toLowerCase().includes(search.toLowerCase()) || c.email?.toLowerCase().includes(search.toLowerCase());
     const matchesStatus = statusFilter === "all" || c.status === statusFilter;
