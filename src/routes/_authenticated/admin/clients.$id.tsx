@@ -385,10 +385,6 @@ function ClientDetail() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="account" className="grid gap-6 md:grid-cols-3">
-        </TabsContent>
-        <TabsContent value="_placeholder_never" className="hidden" />
-        {/* injected above is harmless; real account tab continues */}
         <TabsContent value="info" className="grid gap-6 md:grid-cols-3">
           <Card className="border-border bg-card p-6 md:col-span-2 space-y-4">
             <div className="flex items-center justify-between">
@@ -448,7 +444,7 @@ function ClientDetail() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="account_real" className="grid gap-6 md:grid-cols-3">
+        <TabsContent value="account" className="grid gap-6 md:grid-cols-3">
         <Card className="border-border bg-card p-6 md:col-span-3 space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Account Access</h3>
