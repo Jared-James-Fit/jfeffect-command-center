@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { listLiftVideos, statusTone, LIFT_VIDEO_STATUSES, type LiftVideoStatus } from "@/lib/lift-videos";
+import { listLiftVideos, markAdminViewed, statusTone, LIFT_VIDEO_STATUSES, type LiftVideoStatus } from "@/lib/lift-videos";
 import { LiftVideoCard } from "@/components/lift-video-card";
 import { format, parseISO, formatDistanceToNow } from "date-fns";
 import { AlertTriangle, ExternalLink, Video } from "lucide-react";
@@ -64,6 +64,12 @@ function AdminLiftVideos() {
 
   const openVideo = openId ? videos.find((v) => v.id === openId) : null;
   const refresh = () => qc.invalidateQueries({ queryKey: ["lift-videos-admin"] });
+
+  // Mark as viewed (clears admin bell) when an admin opens a video
+  useEffect(() => {
+    if (!openId) return;
+    markAdminViewed(openId).catch(() => {});
+  }, [openId]);
 
   return (
     <>
