@@ -17,6 +17,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { inviteClient, deleteClient, getSetupLink, sendPasswordReset, markSetupComplete, setNeedsAdminHelp } from "@/lib/clients.functions";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { TrainingPhasesPanel } from "@/components/training-phases-panel";
+import { ImportantDatesPanel } from "@/components/important-dates-panel";
 import { PtSessionsPanel } from "@/components/pt-sessions-panel";
 import { NutritionTargetsPanel } from "@/components/nutrition-targets-panel";
 import { CardioTargetsPanel } from "@/components/cardio-targets-panel";
@@ -238,6 +239,7 @@ function ClientDetail() {
 
         <TabsContent value="training" className="grid gap-6 md:grid-cols-3">
           <TrainingPhasesPanel clientId={id} />
+          <ImportantDatesPanel clientId={id} />
         </TabsContent>
 
         <TabsContent value="nutrition" className="grid gap-6 md:grid-cols-3">
