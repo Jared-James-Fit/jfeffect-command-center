@@ -118,7 +118,8 @@ export async function markWatched(itemId: string, userId: string) {
 }
 
 // Upload a single file via resumable session URI returned by the server.
-export async function uploadToDrive(uploadUrl: string, file: File, onProgress?: (pct: number) => void): Promise<void> {
+// Returns the Drive file id from the final PUT response body.
+export async function uploadToDrive(uploadUrl: string, file: File, onProgress?: (pct: number) => void): Promise<{ id: string }> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open("PUT", uploadUrl, true);
@@ -129,8 +130,17 @@ export async function uploadToDrive(uploadUrl: string, file: File, onProgress?: 
       };
     }
     xhr.onload = () => {
-      if (xhr.status >= 200 && xhr.status < 300) resolve();
-      else reject(new Error(`Drive upload failed: ${xhr.status} ${xhr.responseText?.slice(0, 200) ?? ""}`));
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          const body = JSON.parse(xhr.responseText || "{}");
+          if (!body?.id) return reject(new Error("Drive upload completed but no file id was returned"));
+          resolve({ id: body.id });
+        } catch (e: any) {
+          reject(new Error("Drive upload completed but response was not JSON"));
+        }
+      } else {
+        reject(new Error(`Drive upload failed: ${xhr.status} ${xhr.responseText?.slice(0, 200) ?? ""}`));
+      }
     };
     xhr.onerror = () => reject(new Error("Network error during Drive upload"));
     xhr.send(file);
