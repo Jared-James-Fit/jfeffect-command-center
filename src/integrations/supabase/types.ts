@@ -163,6 +163,11 @@ export type Database = {
           account_status: string
           address: string | null
           agreement_link: string | null
+          agreement_signature_platform_link: string | null
+          agreement_signed: boolean
+          agreement_signed_date: string | null
+          agreement_status: string
+          agreement_version: string | null
           archived: boolean
           assigned_coach_id: string | null
           calendar_link: string | null
@@ -225,6 +230,11 @@ export type Database = {
           account_status?: string
           address?: string | null
           agreement_link?: string | null
+          agreement_signature_platform_link?: string | null
+          agreement_signed?: boolean
+          agreement_signed_date?: string | null
+          agreement_status?: string
+          agreement_version?: string | null
           archived?: boolean
           assigned_coach_id?: string | null
           calendar_link?: string | null
@@ -287,6 +297,11 @@ export type Database = {
           account_status?: string
           address?: string | null
           agreement_link?: string | null
+          agreement_signature_platform_link?: string | null
+          agreement_signed?: boolean
+          agreement_signed_date?: string | null
+          agreement_status?: string
+          agreement_version?: string | null
           archived?: boolean
           assigned_coach_id?: string | null
           calendar_link?: string | null
@@ -958,64 +973,220 @@ export type Database = {
       }
       offers: {
         Row: {
+          access_length: string | null
+          admin_notes: string | null
+          amount_due_today: number | null
+          archived: boolean
+          billing_day: number | null
           cancel_url: string | null
+          cancellation_policy: string | null
+          cancellation_window: string | null
           checkout_url: string | null
+          commitment_end_date: string | null
+          commitment_start_date: string | null
+          commitment_term_length: string | null
           created_at: string
           currency: string | null
+          delivery_assets: Json
           delivery_notes: string | null
+          deposit_amount: number | null
           description: string | null
+          excluded_features: string[] | null
+          expiration_date: string | null
+          final_payment_date: string | null
+          full_payable_amount: number | null
+          gym_access_note: string | null
           id: string
+          included_features: string[] | null
+          installment_amount: number | null
+          installment_due_day: number | null
+          installment_frequency: string | null
+          is_fixed_term_commitment: boolean | null
+          is_recurring: boolean | null
+          is_template: boolean
+          last_edited_at: string | null
+          late_arrival_policy: string | null
+          late_failed_policy: string | null
+          location: string | null
+          minimum_commitment_length: string | null
           name: string
+          no_show_policy: string | null
           notes: string | null
+          number_of_payments: number | null
           offer_type: string | null
+          package_expiry_date: string | null
+          payment_amount: number | null
+          payment_frequency: string | null
+          payment_processing_note: string | null
+          payment_start_date: string | null
           payment_structure: string | null
           price: number | null
+          purchase_disclaimer: string | null
+          refund_policy: string | null
+          renewal_date: string | null
+          requires_agreement: boolean | null
+          rescheduling_policy: string | null
+          session_length_minutes: number | null
+          sessions_included: number | null
+          short_description: string | null
           status: string
           stripe_payment_link: string | null
           stripe_price_id: string | null
           stripe_product_id: string | null
           success_url: string | null
+          taxes_included: boolean | null
+          template_source_id: string | null
+          term_duration: number | null
+          term_duration_unit: string | null
+          term_end_date: string | null
+          term_start_date: string | null
+          transferability_policy: string | null
           updated_at: string
+          version: number
         }
         Insert: {
+          access_length?: string | null
+          admin_notes?: string | null
+          amount_due_today?: number | null
+          archived?: boolean
+          billing_day?: number | null
           cancel_url?: string | null
+          cancellation_policy?: string | null
+          cancellation_window?: string | null
           checkout_url?: string | null
+          commitment_end_date?: string | null
+          commitment_start_date?: string | null
+          commitment_term_length?: string | null
           created_at?: string
           currency?: string | null
+          delivery_assets?: Json
           delivery_notes?: string | null
+          deposit_amount?: number | null
           description?: string | null
+          excluded_features?: string[] | null
+          expiration_date?: string | null
+          final_payment_date?: string | null
+          full_payable_amount?: number | null
+          gym_access_note?: string | null
           id?: string
+          included_features?: string[] | null
+          installment_amount?: number | null
+          installment_due_day?: number | null
+          installment_frequency?: string | null
+          is_fixed_term_commitment?: boolean | null
+          is_recurring?: boolean | null
+          is_template?: boolean
+          last_edited_at?: string | null
+          late_arrival_policy?: string | null
+          late_failed_policy?: string | null
+          location?: string | null
+          minimum_commitment_length?: string | null
           name: string
+          no_show_policy?: string | null
           notes?: string | null
+          number_of_payments?: number | null
           offer_type?: string | null
+          package_expiry_date?: string | null
+          payment_amount?: number | null
+          payment_frequency?: string | null
+          payment_processing_note?: string | null
+          payment_start_date?: string | null
           payment_structure?: string | null
           price?: number | null
+          purchase_disclaimer?: string | null
+          refund_policy?: string | null
+          renewal_date?: string | null
+          requires_agreement?: boolean | null
+          rescheduling_policy?: string | null
+          session_length_minutes?: number | null
+          sessions_included?: number | null
+          short_description?: string | null
           status?: string
           stripe_payment_link?: string | null
           stripe_price_id?: string | null
           stripe_product_id?: string | null
           success_url?: string | null
+          taxes_included?: boolean | null
+          template_source_id?: string | null
+          term_duration?: number | null
+          term_duration_unit?: string | null
+          term_end_date?: string | null
+          term_start_date?: string | null
+          transferability_policy?: string | null
           updated_at?: string
+          version?: number
         }
         Update: {
+          access_length?: string | null
+          admin_notes?: string | null
+          amount_due_today?: number | null
+          archived?: boolean
+          billing_day?: number | null
           cancel_url?: string | null
+          cancellation_policy?: string | null
+          cancellation_window?: string | null
           checkout_url?: string | null
+          commitment_end_date?: string | null
+          commitment_start_date?: string | null
+          commitment_term_length?: string | null
           created_at?: string
           currency?: string | null
+          delivery_assets?: Json
           delivery_notes?: string | null
+          deposit_amount?: number | null
           description?: string | null
+          excluded_features?: string[] | null
+          expiration_date?: string | null
+          final_payment_date?: string | null
+          full_payable_amount?: number | null
+          gym_access_note?: string | null
           id?: string
+          included_features?: string[] | null
+          installment_amount?: number | null
+          installment_due_day?: number | null
+          installment_frequency?: string | null
+          is_fixed_term_commitment?: boolean | null
+          is_recurring?: boolean | null
+          is_template?: boolean
+          last_edited_at?: string | null
+          late_arrival_policy?: string | null
+          late_failed_policy?: string | null
+          location?: string | null
+          minimum_commitment_length?: string | null
           name?: string
+          no_show_policy?: string | null
           notes?: string | null
+          number_of_payments?: number | null
           offer_type?: string | null
+          package_expiry_date?: string | null
+          payment_amount?: number | null
+          payment_frequency?: string | null
+          payment_processing_note?: string | null
+          payment_start_date?: string | null
           payment_structure?: string | null
           price?: number | null
+          purchase_disclaimer?: string | null
+          refund_policy?: string | null
+          renewal_date?: string | null
+          requires_agreement?: boolean | null
+          rescheduling_policy?: string | null
+          session_length_minutes?: number | null
+          sessions_included?: number | null
+          short_description?: string | null
           status?: string
           stripe_payment_link?: string | null
           stripe_price_id?: string | null
           stripe_product_id?: string | null
           success_url?: string | null
+          taxes_included?: boolean | null
+          template_source_id?: string | null
+          term_duration?: number | null
+          term_duration_unit?: string | null
+          term_end_date?: string | null
+          term_start_date?: string | null
+          transferability_policy?: string | null
           updated_at?: string
+          version?: number
         }
         Relationships: []
       }
@@ -1131,6 +1302,195 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      purchase_records: {
+        Row: {
+          admin_notes: string | null
+          agreement_link: string | null
+          agreement_signed_at_purchase: boolean | null
+          agreement_signed_date: string | null
+          agreement_version: string | null
+          amount_due_today: number | null
+          amount_paid: number | null
+          assigned_at: string
+          assigned_by: string | null
+          cancellation_policy: string | null
+          client_id: string
+          created_at: string
+          currency: string | null
+          deposit_amount: number | null
+          excluded_features: string[] | null
+          full_description: string | null
+          full_payable_amount: number | null
+          id: string
+          in_person_policy: string | null
+          included_features: string[] | null
+          installment_amount: number | null
+          is_fixed_term_commitment: boolean | null
+          is_recurring: boolean | null
+          location: string | null
+          number_of_payments: number | null
+          offer_id: string | null
+          offer_name: string
+          offer_type: string | null
+          offer_version: number | null
+          package_expiry_date: string | null
+          package_tracking_enabled: boolean | null
+          paid_at: string | null
+          payment_frequency: string | null
+          payment_status: string
+          payment_structure: string | null
+          purchase_disclaimer: string | null
+          purchased_at: string
+          refund_policy: string | null
+          session_length_minutes: number | null
+          sessions_booked: number | null
+          sessions_cancelled: number | null
+          sessions_completed: number | null
+          sessions_missed: number | null
+          sessions_purchased: number | null
+          sessions_used: number | null
+          short_description: string | null
+          status: string
+          stripe_checkout_session_id: string | null
+          stripe_payment_link: string | null
+          stripe_price_id: string | null
+          stripe_product_id: string | null
+          term_duration_text: string | null
+          term_end_date: string | null
+          term_start_date: string | null
+          terms_accepted: boolean | null
+          terms_accepted_at: string | null
+          terms_accepted_client_email: string | null
+          terms_accepted_client_name: string | null
+          timezone: string | null
+          updated_at: string
+        }
+        Insert: {
+          admin_notes?: string | null
+          agreement_link?: string | null
+          agreement_signed_at_purchase?: boolean | null
+          agreement_signed_date?: string | null
+          agreement_version?: string | null
+          amount_due_today?: number | null
+          amount_paid?: number | null
+          assigned_at?: string
+          assigned_by?: string | null
+          cancellation_policy?: string | null
+          client_id: string
+          created_at?: string
+          currency?: string | null
+          deposit_amount?: number | null
+          excluded_features?: string[] | null
+          full_description?: string | null
+          full_payable_amount?: number | null
+          id?: string
+          in_person_policy?: string | null
+          included_features?: string[] | null
+          installment_amount?: number | null
+          is_fixed_term_commitment?: boolean | null
+          is_recurring?: boolean | null
+          location?: string | null
+          number_of_payments?: number | null
+          offer_id?: string | null
+          offer_name: string
+          offer_type?: string | null
+          offer_version?: number | null
+          package_expiry_date?: string | null
+          package_tracking_enabled?: boolean | null
+          paid_at?: string | null
+          payment_frequency?: string | null
+          payment_status?: string
+          payment_structure?: string | null
+          purchase_disclaimer?: string | null
+          purchased_at?: string
+          refund_policy?: string | null
+          session_length_minutes?: number | null
+          sessions_booked?: number | null
+          sessions_cancelled?: number | null
+          sessions_completed?: number | null
+          sessions_missed?: number | null
+          sessions_purchased?: number | null
+          sessions_used?: number | null
+          short_description?: string | null
+          status?: string
+          stripe_checkout_session_id?: string | null
+          stripe_payment_link?: string | null
+          stripe_price_id?: string | null
+          stripe_product_id?: string | null
+          term_duration_text?: string | null
+          term_end_date?: string | null
+          term_start_date?: string | null
+          terms_accepted?: boolean | null
+          terms_accepted_at?: string | null
+          terms_accepted_client_email?: string | null
+          terms_accepted_client_name?: string | null
+          timezone?: string | null
+          updated_at?: string
+        }
+        Update: {
+          admin_notes?: string | null
+          agreement_link?: string | null
+          agreement_signed_at_purchase?: boolean | null
+          agreement_signed_date?: string | null
+          agreement_version?: string | null
+          amount_due_today?: number | null
+          amount_paid?: number | null
+          assigned_at?: string
+          assigned_by?: string | null
+          cancellation_policy?: string | null
+          client_id?: string
+          created_at?: string
+          currency?: string | null
+          deposit_amount?: number | null
+          excluded_features?: string[] | null
+          full_description?: string | null
+          full_payable_amount?: number | null
+          id?: string
+          in_person_policy?: string | null
+          included_features?: string[] | null
+          installment_amount?: number | null
+          is_fixed_term_commitment?: boolean | null
+          is_recurring?: boolean | null
+          location?: string | null
+          number_of_payments?: number | null
+          offer_id?: string | null
+          offer_name?: string
+          offer_type?: string | null
+          offer_version?: number | null
+          package_expiry_date?: string | null
+          package_tracking_enabled?: boolean | null
+          paid_at?: string | null
+          payment_frequency?: string | null
+          payment_status?: string
+          payment_structure?: string | null
+          purchase_disclaimer?: string | null
+          purchased_at?: string
+          refund_policy?: string | null
+          session_length_minutes?: number | null
+          sessions_booked?: number | null
+          sessions_cancelled?: number | null
+          sessions_completed?: number | null
+          sessions_missed?: number | null
+          sessions_purchased?: number | null
+          sessions_used?: number | null
+          short_description?: string | null
+          status?: string
+          stripe_checkout_session_id?: string | null
+          stripe_payment_link?: string | null
+          stripe_price_id?: string | null
+          stripe_product_id?: string | null
+          term_duration_text?: string | null
+          term_end_date?: string | null
+          term_start_date?: string | null
+          terms_accepted?: boolean | null
+          terms_accepted_at?: string | null
+          terms_accepted_client_email?: string | null
+          terms_accepted_client_name?: string | null
+          timezone?: string | null
+          updated_at?: string
+        }
+        Relationships: []
       }
       training_phases: {
         Row: {

@@ -28,6 +28,8 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ProfilePictureCapture } from "@/components/profile-picture-capture";
 import { MessageThread } from "@/components/message-thread";
 import type { ConversationState } from "@/lib/messages";
+import { AgreementStatusPanel } from "@/components/agreement-status-panel";
+import { PurchaseRecordsPanel } from "@/components/purchase-records-panel";
 
 function AssignedCoachSelect({ value, onChange }: { value: string | null; onChange: (v: string | null) => void }) {
   const { data: coaches = [] } = useQuery({
@@ -50,7 +52,7 @@ function AssignedCoachSelect({ value, onChange }: { value: string | null; onChan
   );
 }
 
-const TAB_VALUES = ["summary", "training", "nutrition", "cardio", "messages", "lift-videos", "documents", "sessions", "notes", "info", "account"] as const;
+const TAB_VALUES = ["summary", "training", "nutrition", "cardio", "messages", "lift-videos", "documents", "sessions", "purchases", "notes", "info", "account"] as const;
 type TabValue = typeof TAB_VALUES[number];
 
 export const Route = createFileRoute("/_authenticated/admin/clients/$id")({
@@ -271,6 +273,7 @@ function ClientDetail() {
           <TabsTrigger value="lift-videos">Lift Videos</TabsTrigger>
           <TabsTrigger value="documents">Documents</TabsTrigger>
           <TabsTrigger value="sessions">Sessions</TabsTrigger>
+          <TabsTrigger value="purchases">Purchases</TabsTrigger>
           <TabsTrigger value="notes">Notes</TabsTrigger>
           <TabsTrigger value="info">Account Info</TabsTrigger>
           <TabsTrigger value="account">Account & Access</TabsTrigger>
@@ -406,6 +409,11 @@ function ClientDetail() {
           </div>
           <p className="text-xs text-muted-foreground">Reminder emails are sent in the client's time zone. Defaults to America/Winnipeg if not set.</p>
         </Card>
+        </TabsContent>
+
+        <TabsContent value="purchases" className="grid gap-6 md:grid-cols-3">
+          <AgreementStatusPanel client={form} />
+          <PurchaseRecordsPanel clientId={id} />
         </TabsContent>
 
         <TabsContent value="notes" className="grid gap-6 md:grid-cols-3">
