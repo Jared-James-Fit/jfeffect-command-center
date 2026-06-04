@@ -310,6 +310,30 @@ function ClientsPage() {
                         ) : <AddCell id={c.id} tab="cardio" label="Add Cardio Targets" />}
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">{c.payment_status ?? "—"}</td>
+                      <td className="px-4 py-3">
+                        {(() => {
+                          const u = msgInfoByClient.unread.get(c.id) ?? 0;
+                          const last = msgInfoByClient.last.get(c.id);
+                          const s = msgInfoByClient.stateMap.get(c.id);
+                          return (
+                            <Link to="/admin/messages" search={{ client: c.id }} className="block space-y-0.5 hover:opacity-80">
+                              <div className="flex items-center gap-1.5">
+                                <MessageCircle className="h-3 w-3 text-muted-foreground" />
+                                {u > 0 ? (
+                                  <Badge className="h-4 min-w-4 rounded-full bg-primary px-1.5 text-[10px] font-bold text-primary-foreground">{u} unread</Badge>
+                                ) : last ? (
+                                  <span className="text-[10px] text-muted-foreground">{format(parseISO(last.created_at), "MMM d")}</span>
+                                ) : (
+                                  <span className="text-[10px] text-muted-foreground">—</span>
+                                )}
+                              </div>
+                              {s?.status === "needs_response" && (
+                                <Badge variant="outline" className="border-primary/40 bg-primary/10 text-primary text-[9px]">Needs Response</Badge>
+                              )}
+                            </Link>
+                          );
+                        })()}
+                      </td>
                       <td className="px-4 py-3"><Badge variant="outline">{c.status}</Badge></td>
                       <td className="px-4 py-3 text-right">
                         <DropdownMenu>
