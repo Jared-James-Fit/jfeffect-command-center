@@ -519,6 +519,17 @@ function Field({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
+function ClientMessagesTab({ clientId }: { clientId: string }) {
+  const { data: state } = useQuery({
+    queryKey: ["conversation-state", clientId],
+    queryFn: async () => {
+      const { data } = await (supabase.from("conversation_state") as any).select("*").eq("client_id", clientId).maybeSingle();
+      return (data ?? null) as ConversationState | null;
+    },
+  });
+  return <MessageThread clientId={clientId} role="admin" conversationState={state ?? null} />;
+}
+
 function fmtDate(v?: string | null) {
   if (!v) return "—";
   return new Date(v).toLocaleString();
