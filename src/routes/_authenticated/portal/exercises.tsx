@@ -7,15 +7,11 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Search, Play } from "lucide-react";
+import { getExerciseVideoSource } from "@/lib/exercise-video";
 
 export const Route = createFileRoute("/_authenticated/portal/exercises")({ component: ExerciseLibrary });
 
 const CATEGORIES = ["Squat", "Bench", "Deadlift", "Upper Body", "Lower Body", "Back", "Chest", "Shoulders", "Arms", "Glutes", "Core", "Mobility", "Warm-Ups", "Powerlifting", "Bodybuilding", "Cardio"];
-
-function youtubeEmbed(url: string): string | null {
-  const m = url.match(/(?:youtu\.be\/|v=|shorts\/|embed\/)([\w-]{11})/);
-  return m ? `https://www.youtube.com/embed/${m[1]}` : null;
-}
 
 function ExerciseLibrary() {
   const [search, setSearch] = useState("");
@@ -62,11 +58,7 @@ function ExerciseLibrary() {
               </div>
               <button className="text-xs text-muted-foreground hover:text-foreground" onClick={() => setSelected(null)}>Close</button>
             </div>
-            {selected.youtube_url && youtubeEmbed(selected.youtube_url) && (
-              <div className="mt-4 aspect-video w-full overflow-hidden rounded-md bg-black">
-                <iframe src={youtubeEmbed(selected.youtube_url)!} className="h-full w-full" allowFullScreen title={selected.name} />
-              </div>
-            )}
+            <ExerciseVideo exercise={selected} />
             {selected.cues && <div className="mt-4"><div className="text-xs font-bold uppercase text-muted-foreground">Cues</div><p className="mt-1 text-sm">{selected.cues}</p></div>}
             {selected.common_mistakes && <div className="mt-3"><div className="text-xs font-bold uppercase text-muted-foreground">Common mistakes</div><p className="mt-1 text-sm">{selected.common_mistakes}</p></div>}
           </Card>
@@ -92,5 +84,25 @@ function ExerciseLibrary() {
         </div>
       </div>
     </>
+  );
+}
+
+function ExerciseVideo({ exercise }: { exercise: any }) {
+  const src = getExerciseVideoSource(exercise);
+  if (src.status === "coming_soon") {
+    return (
+      <div className="mt-4 grid aspect-video w-full place-items-center rounded-xl border border-dashed border-border bg-black/40 text-sm text-muted-foreground">
+        Video coming soon.
+      </div>
+    );
+  }
+  return (
+    <iframe
+      src={src.url}
+      title={`${exercise.name} video`}
+      allow="autoplay; fullscreen; picture-in-picture"
+      allowFullScreen
+      className="mt-4 w-full aspect-video rounded-xl border border-border bg-black"
+    />
   );
 }

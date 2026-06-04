@@ -881,10 +881,26 @@ export type Database = {
           difficulty: string | null
           equipment: string | null
           id: string
+          legacy_youtube_url: string | null
           muscle_group: string | null
           name: string
+          quality_warning: string | null
+          safe_to_publish: boolean
+          source_quality: string | null
+          source_type: string | null
+          source_youtube_url: string | null
           tags: string[] | null
+          thumbnail_url: string | null
           updated_at: string
+          video_migration_status: string | null
+          video_provider: string | null
+          video_url: string | null
+          vimeo_embed_url: string | null
+          vimeo_url: string | null
+          vimeo_video_id: string | null
+          vimeo_working: boolean
+          youtube_fallback_allowed: boolean
+          youtube_replaced: boolean
           youtube_url: string | null
         }
         Insert: {
@@ -895,10 +911,26 @@ export type Database = {
           difficulty?: string | null
           equipment?: string | null
           id?: string
+          legacy_youtube_url?: string | null
           muscle_group?: string | null
           name: string
+          quality_warning?: string | null
+          safe_to_publish?: boolean
+          source_quality?: string | null
+          source_type?: string | null
+          source_youtube_url?: string | null
           tags?: string[] | null
+          thumbnail_url?: string | null
           updated_at?: string
+          video_migration_status?: string | null
+          video_provider?: string | null
+          video_url?: string | null
+          vimeo_embed_url?: string | null
+          vimeo_url?: string | null
+          vimeo_video_id?: string | null
+          vimeo_working?: boolean
+          youtube_fallback_allowed?: boolean
+          youtube_replaced?: boolean
           youtube_url?: string | null
         }
         Update: {
@@ -909,10 +941,26 @@ export type Database = {
           difficulty?: string | null
           equipment?: string | null
           id?: string
+          legacy_youtube_url?: string | null
           muscle_group?: string | null
           name?: string
+          quality_warning?: string | null
+          safe_to_publish?: boolean
+          source_quality?: string | null
+          source_type?: string | null
+          source_youtube_url?: string | null
           tags?: string[] | null
+          thumbnail_url?: string | null
           updated_at?: string
+          video_migration_status?: string | null
+          video_provider?: string | null
+          video_url?: string | null
+          vimeo_embed_url?: string | null
+          vimeo_url?: string | null
+          vimeo_video_id?: string | null
+          vimeo_working?: boolean
+          youtube_fallback_allowed?: boolean
+          youtube_replaced?: boolean
           youtube_url?: string | null
         }
         Relationships: []
