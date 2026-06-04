@@ -8,13 +8,14 @@ import { Badge } from "@/components/ui/badge";
 import {
   Users, UserPlus, AlertTriangle, Calendar, DollarSign,
   Plus, Zap, ExternalLink, Activity, Dumbbell, Package, Timer, UserCheck, Apple,
-  ClipboardCheck, Heart, FileText, Target, MessageCircle,
+  ClipboardCheck, Heart, FileText, Target, MessageCircle, Video,
 } from "lucide-react";
 import { derivePhase, displayTitle, toneClasses, type TrainingPhase } from "@/lib/training-phases";
 import { deriveImportantDate, dateTypeLabel, importantToneClasses, type ImportantDate } from "@/lib/important-dates";
 import { deriveTarget } from "@/lib/nutrition-cardio";
 import { statusTone, fmtTimeRange } from "@/lib/pt-sessions";
 import type { ConversationState, Message } from "@/lib/messages";
+import { listLiftVideos, statusTone as liftStatusTone } from "@/lib/lift-videos";
 import { formatDistanceToNow, parseISO } from "date-fns";
 
 export const Route = createFileRoute("/_authenticated/admin/")({
