@@ -71,7 +71,10 @@ export function NotificationBell() {
   });
 
   const count = data?.count ?? 0;
-  const items = useMemo(() => (data?.items ?? []).slice(0, 8), [data]);
+  const items = useMemo<{ clientId: string; name: string; body: string; created_at: string }[]>(
+    () => (data?.items ?? []).slice(0, 8),
+    [data],
+  );
 
   return (
     <DropdownMenu>
