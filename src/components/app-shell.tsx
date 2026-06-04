@@ -18,6 +18,17 @@ export function AppShell({ items, title, children }: { items: NavItem[]; title: 
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (r) => r.location.pathname });
 
+  // Pick the single best-matching nav item: longest `to` that equals or is a
+  // path-prefix of the current pathname. Prevents parents like `/admin` from
+  // staying active on `/admin/training-phases`.
+  const activeTo = items.reduce<string | null>((best, item) => {
+    const matches =
+      pathname === item.to || pathname.startsWith(item.to + "/");
+    if (!matches) return best;
+    if (best === null || item.to.length > best.length) return item.to;
+    return best;
+  }, null);
+
   const handleSignOut = async () => {
     await signOut();
     navigate({ to: "/auth", replace: true });
@@ -36,7 +47,7 @@ export function AppShell({ items, title, children }: { items: NavItem[]; title: 
         <nav className="flex-1 overflow-y-auto p-3">
           <ul className="space-y-0.5">
             {items.map((item) => {
-              const active = pathname === item.to || (item.to !== "/" && pathname.startsWith(item.to + "/"));
+              const active = item.to === activeTo;
               const Icon = item.icon;
               return (
                 <li key={item.to}>
