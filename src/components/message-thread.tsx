@@ -23,7 +23,7 @@ import { cn } from "@/lib/utils";
 import {
   Paperclip, Send, X, FileText, Image as ImageIcon, Video, Link as LinkIcon, ExternalLink,
   Mic, Trash2, Play, Pause, Camera, File as FileIcon, Flag, AlertCircle, AlertTriangle,
-  Gauge, Download, FileText as FileTextIcon, ChevronDown, ChevronUp, Square,
+  Gauge, Download, ChevronDown, ChevronUp, Square,
 } from "lucide-react";
 import { format, parseISO, isToday, isYesterday } from "date-fns";
 import { toast } from "sonner";
