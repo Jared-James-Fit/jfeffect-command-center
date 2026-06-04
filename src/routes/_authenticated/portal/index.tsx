@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { FileText, ClipboardCheck, Dumbbell, CreditCard, Calendar, ExternalLink, CheckCircle2, Circle, ShieldAlert, MessageCircle } from "lucide-react";
+import { FileText, ClipboardCheck, Dumbbell, CreditCard, Calendar, ExternalLink, CheckCircle2, Circle, ShieldAlert, MessageCircle, Video } from "lucide-react";
 import { useEffect, useState } from "react";
 
 export const Route = createFileRoute("/_authenticated/portal/")({ component: PortalHome });
@@ -51,6 +51,7 @@ function PortalHome() {
   const actions = [
     { to: "/portal/messages", label: "Message Coach Jared", icon: MessageCircle },
     { to: "/portal/program", label: "My Program", icon: FileText },
+    { to: "/portal/lift-videos", label: "Upload Lift Video", icon: Video },
     { to: "/portal/check-in", label: "Submit Check-In", icon: ClipboardCheck },
     { to: "/portal/exercises", label: "Exercises", icon: Dumbbell },
   ];
