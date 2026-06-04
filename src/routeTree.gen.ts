@@ -32,6 +32,7 @@ import { Route as AuthenticatedAdminTestimonialsRouteImport } from './routes/_au
 import { Route as AuthenticatedAdminSopsRouteImport } from './routes/_authenticated/admin/sops'
 import { Route as AuthenticatedAdminSettingsRouteImport } from './routes/_authenticated/admin/settings'
 import { Route as AuthenticatedAdminSalesCallsRouteImport } from './routes/_authenticated/admin/sales-calls'
+import { Route as AuthenticatedAdminSalesRouteImport } from './routes/_authenticated/admin/sales'
 import { Route as AuthenticatedAdminResourcesRouteImport } from './routes/_authenticated/admin/resources'
 import { Route as AuthenticatedAdminProgramsRouteImport } from './routes/_authenticated/admin/programs'
 import { Route as AuthenticatedAdminPaymentsRouteImport } from './routes/_authenticated/admin/payments'
@@ -43,6 +44,7 @@ import { Route as AuthenticatedAdminContentIdeasRouteImport } from './routes/_au
 import { Route as AuthenticatedAdminCheckInsRouteImport } from './routes/_authenticated/admin/check-ins'
 import { Route as AuthenticatedAdminCardioTargetsRouteImport } from './routes/_authenticated/admin/cardio-targets'
 import { Route as AuthenticatedAdminCalendarRouteImport } from './routes/_authenticated/admin/calendar'
+import { Route as AuthenticatedAdminBusinessSystemsRouteImport } from './routes/_authenticated/admin/business-systems'
 import { Route as AuthenticatedAdminAutomationsRouteImport } from './routes/_authenticated/admin/automations'
 import { Route as AuthenticatedAdminAppsRouteImport } from './routes/_authenticated/admin/apps'
 import { Route as AuthenticatedAdminClientsIndexRouteImport } from './routes/_authenticated/admin/clients.index'
@@ -176,6 +178,11 @@ const AuthenticatedAdminSalesCallsRoute =
     path: '/sales-calls',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
+const AuthenticatedAdminSalesRoute = AuthenticatedAdminSalesRouteImport.update({
+  id: '/sales',
+  path: '/sales',
+  getParentRoute: () => AuthenticatedAdminRouteRoute,
+} as any)
 const AuthenticatedAdminResourcesRoute =
   AuthenticatedAdminResourcesRouteImport.update({
     id: '/resources',
@@ -241,6 +248,12 @@ const AuthenticatedAdminCalendarRoute =
     path: '/calendar',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
+const AuthenticatedAdminBusinessSystemsRoute =
+  AuthenticatedAdminBusinessSystemsRouteImport.update({
+    id: '/business-systems',
+    path: '/business-systems',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
 const AuthenticatedAdminAutomationsRoute =
   AuthenticatedAdminAutomationsRouteImport.update({
     id: '/automations',
@@ -275,6 +288,7 @@ export interface FileRoutesByFullPath {
   '/portal': typeof AuthenticatedPortalRouteRouteWithChildren
   '/admin/apps': typeof AuthenticatedAdminAppsRoute
   '/admin/automations': typeof AuthenticatedAdminAutomationsRoute
+  '/admin/business-systems': typeof AuthenticatedAdminBusinessSystemsRoute
   '/admin/calendar': typeof AuthenticatedAdminCalendarRoute
   '/admin/cardio-targets': typeof AuthenticatedAdminCardioTargetsRoute
   '/admin/check-ins': typeof AuthenticatedAdminCheckInsRoute
@@ -286,6 +300,7 @@ export interface FileRoutesByFullPath {
   '/admin/payments': typeof AuthenticatedAdminPaymentsRoute
   '/admin/programs': typeof AuthenticatedAdminProgramsRoute
   '/admin/resources': typeof AuthenticatedAdminResourcesRoute
+  '/admin/sales': typeof AuthenticatedAdminSalesRoute
   '/admin/sales-calls': typeof AuthenticatedAdminSalesCallsRoute
   '/admin/settings': typeof AuthenticatedAdminSettingsRoute
   '/admin/sops': typeof AuthenticatedAdminSopsRoute
@@ -312,6 +327,7 @@ export interface FileRoutesByTo {
   '/sitemap': typeof SitemapRoute
   '/admin/apps': typeof AuthenticatedAdminAppsRoute
   '/admin/automations': typeof AuthenticatedAdminAutomationsRoute
+  '/admin/business-systems': typeof AuthenticatedAdminBusinessSystemsRoute
   '/admin/calendar': typeof AuthenticatedAdminCalendarRoute
   '/admin/cardio-targets': typeof AuthenticatedAdminCardioTargetsRoute
   '/admin/check-ins': typeof AuthenticatedAdminCheckInsRoute
@@ -323,6 +339,7 @@ export interface FileRoutesByTo {
   '/admin/payments': typeof AuthenticatedAdminPaymentsRoute
   '/admin/programs': typeof AuthenticatedAdminProgramsRoute
   '/admin/resources': typeof AuthenticatedAdminResourcesRoute
+  '/admin/sales': typeof AuthenticatedAdminSalesRoute
   '/admin/sales-calls': typeof AuthenticatedAdminSalesCallsRoute
   '/admin/settings': typeof AuthenticatedAdminSettingsRoute
   '/admin/sops': typeof AuthenticatedAdminSopsRoute
@@ -353,6 +370,7 @@ export interface FileRoutesById {
   '/_authenticated/portal': typeof AuthenticatedPortalRouteRouteWithChildren
   '/_authenticated/admin/apps': typeof AuthenticatedAdminAppsRoute
   '/_authenticated/admin/automations': typeof AuthenticatedAdminAutomationsRoute
+  '/_authenticated/admin/business-systems': typeof AuthenticatedAdminBusinessSystemsRoute
   '/_authenticated/admin/calendar': typeof AuthenticatedAdminCalendarRoute
   '/_authenticated/admin/cardio-targets': typeof AuthenticatedAdminCardioTargetsRoute
   '/_authenticated/admin/check-ins': typeof AuthenticatedAdminCheckInsRoute
@@ -364,6 +382,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/payments': typeof AuthenticatedAdminPaymentsRoute
   '/_authenticated/admin/programs': typeof AuthenticatedAdminProgramsRoute
   '/_authenticated/admin/resources': typeof AuthenticatedAdminResourcesRoute
+  '/_authenticated/admin/sales': typeof AuthenticatedAdminSalesRoute
   '/_authenticated/admin/sales-calls': typeof AuthenticatedAdminSalesCallsRoute
   '/_authenticated/admin/settings': typeof AuthenticatedAdminSettingsRoute
   '/_authenticated/admin/sops': typeof AuthenticatedAdminSopsRoute
@@ -394,6 +413,7 @@ export interface FileRouteTypes {
     | '/portal'
     | '/admin/apps'
     | '/admin/automations'
+    | '/admin/business-systems'
     | '/admin/calendar'
     | '/admin/cardio-targets'
     | '/admin/check-ins'
@@ -405,6 +425,7 @@ export interface FileRouteTypes {
     | '/admin/payments'
     | '/admin/programs'
     | '/admin/resources'
+    | '/admin/sales'
     | '/admin/sales-calls'
     | '/admin/settings'
     | '/admin/sops'
@@ -431,6 +452,7 @@ export interface FileRouteTypes {
     | '/sitemap'
     | '/admin/apps'
     | '/admin/automations'
+    | '/admin/business-systems'
     | '/admin/calendar'
     | '/admin/cardio-targets'
     | '/admin/check-ins'
@@ -442,6 +464,7 @@ export interface FileRouteTypes {
     | '/admin/payments'
     | '/admin/programs'
     | '/admin/resources'
+    | '/admin/sales'
     | '/admin/sales-calls'
     | '/admin/settings'
     | '/admin/sops'
@@ -471,6 +494,7 @@ export interface FileRouteTypes {
     | '/_authenticated/portal'
     | '/_authenticated/admin/apps'
     | '/_authenticated/admin/automations'
+    | '/_authenticated/admin/business-systems'
     | '/_authenticated/admin/calendar'
     | '/_authenticated/admin/cardio-targets'
     | '/_authenticated/admin/check-ins'
@@ -482,6 +506,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/payments'
     | '/_authenticated/admin/programs'
     | '/_authenticated/admin/resources'
+    | '/_authenticated/admin/sales'
     | '/_authenticated/admin/sales-calls'
     | '/_authenticated/admin/settings'
     | '/_authenticated/admin/sops'
@@ -673,6 +698,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminSalesCallsRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
+    '/_authenticated/admin/sales': {
+      id: '/_authenticated/admin/sales'
+      path: '/sales'
+      fullPath: '/admin/sales'
+      preLoaderRoute: typeof AuthenticatedAdminSalesRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
     '/_authenticated/admin/resources': {
       id: '/_authenticated/admin/resources'
       path: '/resources'
@@ -750,6 +782,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminCalendarRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
+    '/_authenticated/admin/business-systems': {
+      id: '/_authenticated/admin/business-systems'
+      path: '/business-systems'
+      fullPath: '/admin/business-systems'
+      preLoaderRoute: typeof AuthenticatedAdminBusinessSystemsRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
     '/_authenticated/admin/automations': {
       id: '/_authenticated/admin/automations'
       path: '/automations'
@@ -784,6 +823,7 @@ declare module '@tanstack/react-router' {
 interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminAppsRoute: typeof AuthenticatedAdminAppsRoute
   AuthenticatedAdminAutomationsRoute: typeof AuthenticatedAdminAutomationsRoute
+  AuthenticatedAdminBusinessSystemsRoute: typeof AuthenticatedAdminBusinessSystemsRoute
   AuthenticatedAdminCalendarRoute: typeof AuthenticatedAdminCalendarRoute
   AuthenticatedAdminCardioTargetsRoute: typeof AuthenticatedAdminCardioTargetsRoute
   AuthenticatedAdminCheckInsRoute: typeof AuthenticatedAdminCheckInsRoute
@@ -795,6 +835,7 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminPaymentsRoute: typeof AuthenticatedAdminPaymentsRoute
   AuthenticatedAdminProgramsRoute: typeof AuthenticatedAdminProgramsRoute
   AuthenticatedAdminResourcesRoute: typeof AuthenticatedAdminResourcesRoute
+  AuthenticatedAdminSalesRoute: typeof AuthenticatedAdminSalesRoute
   AuthenticatedAdminSalesCallsRoute: typeof AuthenticatedAdminSalesCallsRoute
   AuthenticatedAdminSettingsRoute: typeof AuthenticatedAdminSettingsRoute
   AuthenticatedAdminSopsRoute: typeof AuthenticatedAdminSopsRoute
@@ -809,6 +850,8 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
   {
     AuthenticatedAdminAppsRoute: AuthenticatedAdminAppsRoute,
     AuthenticatedAdminAutomationsRoute: AuthenticatedAdminAutomationsRoute,
+    AuthenticatedAdminBusinessSystemsRoute:
+      AuthenticatedAdminBusinessSystemsRoute,
     AuthenticatedAdminCalendarRoute: AuthenticatedAdminCalendarRoute,
     AuthenticatedAdminCardioTargetsRoute: AuthenticatedAdminCardioTargetsRoute,
     AuthenticatedAdminCheckInsRoute: AuthenticatedAdminCheckInsRoute,
@@ -821,6 +864,7 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
     AuthenticatedAdminPaymentsRoute: AuthenticatedAdminPaymentsRoute,
     AuthenticatedAdminProgramsRoute: AuthenticatedAdminProgramsRoute,
     AuthenticatedAdminResourcesRoute: AuthenticatedAdminResourcesRoute,
+    AuthenticatedAdminSalesRoute: AuthenticatedAdminSalesRoute,
     AuthenticatedAdminSalesCallsRoute: AuthenticatedAdminSalesCallsRoute,
     AuthenticatedAdminSettingsRoute: AuthenticatedAdminSettingsRoute,
     AuthenticatedAdminSopsRoute: AuthenticatedAdminSopsRoute,
@@ -892,3 +936,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
