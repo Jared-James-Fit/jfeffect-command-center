@@ -10,6 +10,7 @@ export type MessageAttachment = {
   mime?: string;
   duration?: number;
   storage_path?: string;
+  peaks?: number[];
 };
 
 export type Message = {
