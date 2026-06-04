@@ -15,7 +15,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { sendTestEmail } from "@/lib/email-sender.functions";
 import { setupDriveRoot } from "@/lib/drive.functions";
-import { Mail, Send, FolderOpen, ExternalLink } from "lucide-react";
+import { updateSignNowSettings, testSignNowConnection } from "@/lib/agreements.functions";
+import { Mail, Send, FolderOpen, ExternalLink, ShieldCheck } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 
 export const Route = createFileRoute("/_authenticated/admin/settings")({ component: SettingsPage });
@@ -209,6 +210,7 @@ function SettingsPage() {
          </Card>
 
          <DriveIntegrationCard />
+         <SignNowIntegrationCard />
        </div>
      </>
    );
