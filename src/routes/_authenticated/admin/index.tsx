@@ -337,6 +337,7 @@ function AdminDashboard() {
           <Card className="border-border bg-card p-6 lg:col-span-2">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">Recent Clients</h2>
+
               <Link to="/admin/clients" className="text-xs font-semibold text-primary hover:underline">View all →</Link>
             </div>
             {clients.length === 0 ? (
