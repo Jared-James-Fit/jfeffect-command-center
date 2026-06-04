@@ -88,6 +88,11 @@ function MyProgram() {
               </a>
             )}
           </div>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Link to="/portal/lift-videos">
+              <Button variant="outline" size="sm"><Video className="mr-1 h-4 w-4" /> Upload Lift Video</Button>
+            </Link>
+          </div>
         </Card>
 
         <Card className="border-border bg-card p-6">
