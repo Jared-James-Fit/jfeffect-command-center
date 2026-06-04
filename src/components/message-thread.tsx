@@ -324,10 +324,10 @@ function LinkAttachment({ att, mine }: { att: MessageAttachment; mine: boolean }
   );
 }
 
-function AttachmentView({ att, mine }: { att: MessageAttachment; mine: boolean }) {
+function AttachmentView({ att, mine, message }: { att: MessageAttachment; mine: boolean; message?: Message }) {
   if (att.type === "image") return <ImageAttachment att={att} />;
   if (att.type === "video") return <VideoAttachment att={att} />;
-  if (att.type === "audio") return <AudioAttachment att={att} mine={mine} />;
+  if (att.type === "audio") return <AudioAttachment att={att} mine={mine} message={message} />;
   if (att.type === "pdf" || att.type === "file") return <FileAttachment att={att} mine={mine} />;
   return <LinkAttachment att={att} mine={mine} />;
 }
