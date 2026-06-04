@@ -1,7 +1,7 @@
 import {
-  LayoutDashboard, Users, UserPlus, PhoneCall, ClipboardCheck, CreditCard,
-  Package, FileText, Dumbbell, FolderOpen, Calendar, Layers, Star,
-  Lightbulb, BookOpen, Workflow, Settings, Timer, Apple, Heart,
+  LayoutDashboard, Users, UserPlus, CreditCard,
+  Package, FileText, Dumbbell, FolderOpen, Calendar, Layers,
+  Settings, Briefcase, Apple, ClipboardCheck,
 } from "lucide-react";
 import type { NavItem } from "@/components/app-shell";
 
@@ -9,22 +9,13 @@ export const adminNav: NavItem[] = [
   { to: "/admin", label: "Dashboard", icon: LayoutDashboard },
   { to: "/admin/clients", label: "Clients", icon: Users },
   { to: "/admin/leads", label: "Leads", icon: UserPlus },
-  { to: "/admin/sales-calls", label: "Sales Calls", icon: PhoneCall },
-  { to: "/admin/check-ins", label: "Check-Ins", icon: ClipboardCheck },
-  { to: "/admin/training-phases", label: "Training Phases", icon: Timer },
-  { to: "/admin/nutrition-targets", label: "Nutrition Targets", icon: Apple },
-  { to: "/admin/cardio-targets", label: "Cardio Targets", icon: Heart },
-  { to: "/admin/calendar", label: "PT Calendar", icon: Calendar },
-  { to: "/admin/payments", label: "Payments", icon: CreditCard },
+  { to: "/admin/sales", label: "Sales", icon: CreditCard },
+  { to: "/admin/calendar", label: "Calendar", icon: Calendar },
   { to: "/admin/offers", label: "Offers / Products", icon: Package },
-  { to: "/admin/programs", label: "Programs", icon: FileText },
   { to: "/admin/exercises", label: "Exercise Library", icon: Dumbbell },
   { to: "/admin/resources", label: "Resources", icon: FolderOpen },
   { to: "/admin/apps", label: "Apps & Tools", icon: Layers },
-  { to: "/admin/testimonials", label: "Testimonials", icon: Star },
-  { to: "/admin/content-ideas", label: "Content Ideas", icon: Lightbulb },
-  { to: "/admin/sops", label: "SOPs", icon: BookOpen },
-  { to: "/admin/automations", label: "Automations", icon: Workflow },
+  { to: "/admin/business-systems", label: "Business Systems", icon: Briefcase },
   { to: "/admin/settings", label: "Settings", icon: Settings },
 ];
 

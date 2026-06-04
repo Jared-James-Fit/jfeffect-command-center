@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   Users, UserPlus, AlertTriangle, Calendar, DollarSign,
   Plus, Zap, ExternalLink, Activity, Dumbbell, Package, Timer, UserCheck, Apple,
+  ClipboardCheck, Heart, FileText,
 } from "lucide-react";
 import { derivePhase, displayTitle, toneClasses, type TrainingPhase } from "@/lib/training-phases";
 import { deriveTarget } from "@/lib/nutrition-cardio";
@@ -129,9 +130,16 @@ function AdminDashboard() {
 
   const quickActions = [
     { label: "Add Client", to: "/admin/clients", icon: Plus },
-    { label: "Create Offer", to: "/admin/offers", icon: Package },
-    { label: "Add Exercise", to: "/admin/exercises", icon: Dumbbell },
+    { label: "Add Lead", to: "/admin/leads", icon: UserPlus },
     { label: "Quick Sell", to: "/admin/offers", icon: Zap },
+    { label: "Book PT Session", to: "/admin/calendar", icon: Calendar },
+    { label: "Update Phase", to: "/admin/training-phases", icon: Timer },
+    { label: "Nutrition Targets", to: "/admin/nutrition-targets", icon: Apple },
+    { label: "Cardio Targets", to: "/admin/cardio-targets", icon: Heart },
+    { label: "Review Check-Ins", to: "/admin/check-ins", icon: ClipboardCheck },
+    { label: "Programs", to: "/admin/programs", icon: FileText },
+    { label: "Add Exercise", to: "/admin/exercises", icon: Dumbbell },
+    { label: "Create Offer", to: "/admin/offers", icon: Package },
   ];
 
   const shortcuts = [
