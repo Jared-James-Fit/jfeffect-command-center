@@ -870,6 +870,63 @@ export type Database = {
           },
         ]
       }
+      email_sender_settings: {
+        Row: {
+          created_at: string
+          id: string
+          last_test_at: string | null
+          last_test_result: string | null
+          notes: string | null
+          provider: string
+          reply_to_email: string
+          sender_email: string
+          sender_name: string
+          singleton: boolean
+          smtp_host: string | null
+          smtp_port: number | null
+          smtp_secure: boolean
+          smtp_user: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          last_test_at?: string | null
+          last_test_result?: string | null
+          notes?: string | null
+          provider?: string
+          reply_to_email?: string
+          sender_email?: string
+          sender_name?: string
+          singleton?: boolean
+          smtp_host?: string | null
+          smtp_port?: number | null
+          smtp_secure?: boolean
+          smtp_user?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          last_test_at?: string | null
+          last_test_result?: string | null
+          notes?: string | null
+          provider?: string
+          reply_to_email?: string
+          sender_email?: string
+          sender_name?: string
+          singleton?: boolean
+          smtp_host?: string | null
+          smtp_port?: number | null
+          smtp_secure?: boolean
+          smtp_user?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       exercises: {
         Row: {
           category: string | null
