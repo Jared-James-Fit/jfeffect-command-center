@@ -64,135 +64,9 @@ export type Database = {
           },
         ]
       }
-      agreement_field_values: {
-        Row: {
-          agreement_id: string
-          created_at: string
-          field_internal_name: string
-          field_type: string
-          id: string
-          signed_at: string | null
-          signer_email: string | null
-          signer_ip: string | null
-          signer_name: string | null
-          signer_role: string
-          signer_user_agent: string | null
-          updated_at: string
-          value_signature_data_url: string | null
-          value_text: string | null
-        }
-        Insert: {
-          agreement_id: string
-          created_at?: string
-          field_internal_name: string
-          field_type: string
-          id?: string
-          signed_at?: string | null
-          signer_email?: string | null
-          signer_ip?: string | null
-          signer_name?: string | null
-          signer_role: string
-          signer_user_agent?: string | null
-          updated_at?: string
-          value_signature_data_url?: string | null
-          value_text?: string | null
-        }
-        Update: {
-          agreement_id?: string
-          created_at?: string
-          field_internal_name?: string
-          field_type?: string
-          id?: string
-          signed_at?: string | null
-          signer_email?: string | null
-          signer_ip?: string | null
-          signer_name?: string | null
-          signer_role?: string
-          signer_user_agent?: string | null
-          updated_at?: string
-          value_signature_data_url?: string | null
-          value_text?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "agreement_field_values_agreement_id_fkey"
-            columns: ["agreement_id"]
-            isOneToOne: false
-            referencedRelation: "agreements"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      agreement_template_fields: {
-        Row: {
-          created_at: string
-          field_type: string
-          height: number
-          id: string
-          internal_name: string
-          label: string | null
-          options: Json
-          page: number
-          placeholder: string | null
-          required: boolean
-          signer_role: string
-          sort_order: number
-          template_id: string
-          updated_at: string
-          width: number
-          x: number
-          y: number
-        }
-        Insert: {
-          created_at?: string
-          field_type: string
-          height: number
-          id?: string
-          internal_name: string
-          label?: string | null
-          options?: Json
-          page?: number
-          placeholder?: string | null
-          required?: boolean
-          signer_role?: string
-          sort_order?: number
-          template_id: string
-          updated_at?: string
-          width: number
-          x: number
-          y: number
-        }
-        Update: {
-          created_at?: string
-          field_type?: string
-          height?: number
-          id?: string
-          internal_name?: string
-          label?: string | null
-          options?: Json
-          page?: number
-          placeholder?: string | null
-          required?: boolean
-          signer_role?: string
-          sort_order?: number
-          template_id?: string
-          updated_at?: string
-          width?: number
-          x?: number
-          y?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "agreement_template_fields_template_id_fkey"
-            columns: ["template_id"]
-            isOneToOne: false
-            referencedRelation: "agreement_templates"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       agreement_templates: {
         Row: {
+          agreement_type: string | null
           archived: boolean
           created_at: string
           created_by: string | null
@@ -200,15 +74,14 @@ export type Database = {
           id: string
           is_active: boolean
           name: string
-          page_count: number
-          pdf_storage_path: string
-          requires_coach_signature: boolean
-          supports_minor: boolean
-          supports_payor: boolean
+          notes: string | null
+          signnow_template_id: string | null
+          signnow_url: string | null
           updated_at: string
-          version: number
+          version: string
         }
         Insert: {
+          agreement_type?: string | null
           archived?: boolean
           created_at?: string
           created_by?: string | null
@@ -216,15 +89,14 @@ export type Database = {
           id?: string
           is_active?: boolean
           name: string
-          page_count?: number
-          pdf_storage_path: string
-          requires_coach_signature?: boolean
-          supports_minor?: boolean
-          supports_payor?: boolean
+          notes?: string | null
+          signnow_template_id?: string | null
+          signnow_url?: string | null
           updated_at?: string
-          version?: number
+          version?: string
         }
         Update: {
+          agreement_type?: string | null
           archived?: boolean
           created_at?: string
           created_by?: string | null
@@ -232,103 +104,137 @@ export type Database = {
           id?: string
           is_active?: boolean
           name?: string
-          page_count?: number
-          pdf_storage_path?: string
-          requires_coach_signature?: boolean
-          supports_minor?: boolean
-          supports_payor?: boolean
+          notes?: string | null
+          signnow_template_id?: string | null
+          signnow_url?: string | null
           updated_at?: string
-          version?: number
+          version?: string
         }
         Relationships: []
       }
       agreements: {
         Row: {
           admin_notes: string | null
+          agreement_type: string | null
           cancelled_at: string | null
+          client_address: string | null
+          client_dob: string | null
+          client_email: string | null
+          client_full_name: string | null
           client_id: string
-          client_signed_at: string | null
-          coach_signed_at: string | null
+          client_phone: string | null
           completed_at: string | null
+          correct_client_name: string | null
           created_at: string
           created_by: string | null
+          drive_file_id: string | null
+          drive_file_url: string | null
           expires_at: string | null
-          fields_snapshot: Json
           id: string
           last_reminder_at: string | null
-          minor_required: boolean
+          offer_name: string | null
           opened_at: string | null
-          payor_required: boolean
           purchase_record_id: string | null
-          requires_coach_signature: boolean
           sent_at: string | null
-          signed_pdf_path: string | null
-          signed_pdf_sha256: string | null
-          signing_token: string | null
+          signed_at: string | null
+          signed_copy_storage_path: string | null
+          signed_copy_url: string | null
+          signer_mismatch: boolean
+          signer_name_in_signnow: string | null
+          signnow_completed_link: string | null
+          signnow_document_id: string | null
+          signnow_signing_link: string | null
+          signnow_template_id: string | null
           status: string
           template_id: string | null
           template_name: string
-          template_pdf_path: string
-          template_version: number
           updated_at: string
+          verification_note: string | null
+          verification_status: string
+          verified_at: string | null
+          verified_by: string | null
         }
         Insert: {
           admin_notes?: string | null
+          agreement_type?: string | null
           cancelled_at?: string | null
+          client_address?: string | null
+          client_dob?: string | null
+          client_email?: string | null
+          client_full_name?: string | null
           client_id: string
-          client_signed_at?: string | null
-          coach_signed_at?: string | null
+          client_phone?: string | null
           completed_at?: string | null
+          correct_client_name?: string | null
           created_at?: string
           created_by?: string | null
+          drive_file_id?: string | null
+          drive_file_url?: string | null
           expires_at?: string | null
-          fields_snapshot?: Json
           id?: string
           last_reminder_at?: string | null
-          minor_required?: boolean
+          offer_name?: string | null
           opened_at?: string | null
-          payor_required?: boolean
           purchase_record_id?: string | null
-          requires_coach_signature?: boolean
           sent_at?: string | null
-          signed_pdf_path?: string | null
-          signed_pdf_sha256?: string | null
-          signing_token?: string | null
+          signed_at?: string | null
+          signed_copy_storage_path?: string | null
+          signed_copy_url?: string | null
+          signer_mismatch?: boolean
+          signer_name_in_signnow?: string | null
+          signnow_completed_link?: string | null
+          signnow_document_id?: string | null
+          signnow_signing_link?: string | null
+          signnow_template_id?: string | null
           status?: string
           template_id?: string | null
           template_name: string
-          template_pdf_path: string
-          template_version?: number
           updated_at?: string
+          verification_note?: string | null
+          verification_status?: string
+          verified_at?: string | null
+          verified_by?: string | null
         }
         Update: {
           admin_notes?: string | null
+          agreement_type?: string | null
           cancelled_at?: string | null
+          client_address?: string | null
+          client_dob?: string | null
+          client_email?: string | null
+          client_full_name?: string | null
           client_id?: string
-          client_signed_at?: string | null
-          coach_signed_at?: string | null
+          client_phone?: string | null
           completed_at?: string | null
+          correct_client_name?: string | null
           created_at?: string
           created_by?: string | null
+          drive_file_id?: string | null
+          drive_file_url?: string | null
           expires_at?: string | null
-          fields_snapshot?: Json
           id?: string
           last_reminder_at?: string | null
-          minor_required?: boolean
+          offer_name?: string | null
           opened_at?: string | null
-          payor_required?: boolean
           purchase_record_id?: string | null
-          requires_coach_signature?: boolean
           sent_at?: string | null
-          signed_pdf_path?: string | null
-          signed_pdf_sha256?: string | null
-          signing_token?: string | null
+          signed_at?: string | null
+          signed_copy_storage_path?: string | null
+          signed_copy_url?: string | null
+          signer_mismatch?: boolean
+          signer_name_in_signnow?: string | null
+          signnow_completed_link?: string | null
+          signnow_document_id?: string | null
+          signnow_signing_link?: string | null
+          signnow_template_id?: string | null
           status?: string
           template_id?: string | null
           template_name?: string
-          template_pdf_path?: string
-          template_version?: number
           updated_at?: string
+          verification_note?: string | null
+          verification_status?: string
+          verified_at?: string | null
+          verified_by?: string | null
         }
         Relationships: [
           {
@@ -1660,6 +1566,8 @@ export type Database = {
         Row: {
           access_length: string | null
           admin_notes: string | null
+          agreement_before_service: boolean
+          agreement_required: boolean
           amount_due_today: number | null
           archived: boolean
           billing_day: number | null
@@ -1709,6 +1617,7 @@ export type Database = {
           purchase_disclaimer: string | null
           refund_policy: string | null
           renewal_date: string | null
+          required_agreement_template_id: string | null
           requires_agreement: boolean | null
           rescheduling_policy: string | null
           session_length_minutes: number | null
@@ -1732,6 +1641,8 @@ export type Database = {
         Insert: {
           access_length?: string | null
           admin_notes?: string | null
+          agreement_before_service?: boolean
+          agreement_required?: boolean
           amount_due_today?: number | null
           archived?: boolean
           billing_day?: number | null
@@ -1781,6 +1692,7 @@ export type Database = {
           purchase_disclaimer?: string | null
           refund_policy?: string | null
           renewal_date?: string | null
+          required_agreement_template_id?: string | null
           requires_agreement?: boolean | null
           rescheduling_policy?: string | null
           session_length_minutes?: number | null
@@ -1804,6 +1716,8 @@ export type Database = {
         Update: {
           access_length?: string | null
           admin_notes?: string | null
+          agreement_before_service?: boolean
+          agreement_required?: boolean
           amount_due_today?: number | null
           archived?: boolean
           billing_day?: number | null
@@ -1853,6 +1767,7 @@ export type Database = {
           purchase_disclaimer?: string | null
           refund_policy?: string | null
           renewal_date?: string | null
+          required_agreement_template_id?: string | null
           requires_agreement?: boolean | null
           rescheduling_policy?: string | null
           session_length_minutes?: number | null
@@ -2173,6 +2088,54 @@ export type Database = {
           terms_accepted_client_email?: string | null
           terms_accepted_client_name?: string | null
           timezone?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      signnow_settings: {
+        Row: {
+          account_email: string | null
+          auto_reminders_enabled: boolean
+          created_at: string
+          default_template_id: string | null
+          id: string
+          last_test_at: string | null
+          last_test_result: string | null
+          notes: string | null
+          reminder_intervals_days: number[]
+          signnow_dashboard_url: string | null
+          singleton: boolean
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          account_email?: string | null
+          auto_reminders_enabled?: boolean
+          created_at?: string
+          default_template_id?: string | null
+          id?: string
+          last_test_at?: string | null
+          last_test_result?: string | null
+          notes?: string | null
+          reminder_intervals_days?: number[]
+          signnow_dashboard_url?: string | null
+          singleton?: boolean
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          account_email?: string | null
+          auto_reminders_enabled?: boolean
+          created_at?: string
+          default_template_id?: string | null
+          id?: string
+          last_test_at?: string | null
+          last_test_result?: string | null
+          notes?: string | null
+          reminder_intervals_days?: number[]
+          signnow_dashboard_url?: string | null
+          singleton?: boolean
+          status?: string
           updated_at?: string
         }
         Relationships: []

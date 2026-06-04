@@ -417,8 +417,8 @@ function ClientDetail() {
 
         <TabsContent value="purchases" className="grid gap-6 md:grid-cols-3">
           <AgreementStatusPanel client={form} />
-          <AgreementsPanel clientId={id} />
           <PurchaseRecordsPanel clientId={id} />
+          <AgreementsPanel clientId={id} clientName={form?.full_name} />
         </TabsContent>
 
         <TabsContent value="notes" className="grid gap-6 md:grid-cols-3">

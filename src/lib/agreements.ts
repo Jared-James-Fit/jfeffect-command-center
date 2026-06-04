@@ -1,86 +1,118 @@
 import type { Database } from "@/integrations/supabase/types";
 
 export type AgreementTemplate = Database["public"]["Tables"]["agreement_templates"]["Row"];
-export type AgreementTemplateField = Database["public"]["Tables"]["agreement_template_fields"]["Row"];
 export type Agreement = Database["public"]["Tables"]["agreements"]["Row"];
-export type AgreementFieldValue = Database["public"]["Tables"]["agreement_field_values"]["Row"];
 export type AgreementAuditEntry = Database["public"]["Tables"]["agreement_audit_log"]["Row"];
+export type SignNowSettings = Database["public"]["Tables"]["signnow_settings"]["Row"];
 
-export const FIELD_TYPES = [
-  "text",
-  "signature",
-  "initial",
-  "date",
-  "checkbox",
-  "dropdown",
-  "phone",
-  "email",
-  "address",
+export const AGREEMENT_TYPES = [
+  "Coaching Agreement + Liability Waiver",
+  "In-Person PT Agreement",
+  "Online Coaching Agreement",
+  "Hybrid Coaching Agreement",
+  "Minor / Parent Guardian Agreement",
+  "Payor Agreement",
+  "Custom Agreement",
 ] as const;
-export type FieldType = (typeof FIELD_TYPES)[number];
-
-export const SIGNER_ROLES = ["client", "coach", "payor", "parent_guardian"] as const;
-export type SignerRole = (typeof SIGNER_ROLES)[number];
-
-export const SIGNER_LABELS: Record<SignerRole, string> = {
-  client: "Client",
-  coach: "Coach / Admin",
-  payor: "Payor",
-  parent_guardian: "Parent / Guardian",
-};
-
-export const FIELD_LABELS: Record<FieldType, string> = {
-  text: "Text",
-  signature: "Signature",
-  initial: "Initials",
-  date: "Date",
-  checkbox: "Checkbox",
-  dropdown: "Dropdown",
-  phone: "Phone",
-  email: "Email",
-  address: "Address",
-};
+export type AgreementType = (typeof AGREEMENT_TYPES)[number];
 
 export const AGREEMENT_STATUSES = [
   "Not Sent",
   "Sent",
   "Opened",
-  "In Progress",
-  "Waiting On Client",
-  "Waiting On Coach",
+  "Waiting on Client",
+  "Signed",
   "Completed",
+  "Declined",
   "Expired",
   "Cancelled",
-  "Needs Update",
+  "Needs Resend",
+  "Needs Manual Verification",
+  "Verified",
+  "Error",
 ] as const;
 export type AgreementStatus = (typeof AGREEMENT_STATUSES)[number];
+
+export const VERIFICATION_STATUSES = [
+  "Not Verified",
+  "Auto-Matched",
+  "Manually Verified",
+  "Signer Name Mismatch",
+  "Needs Review",
+] as const;
+export type VerificationStatus = (typeof VERIFICATION_STATUSES)[number];
+
+export const SIGNNOW_INTEGRATION_STATUSES = [
+  "Not Connected",
+  "Connected",
+  "Needs Setup",
+  "Error",
+  "Manual Mode",
+] as const;
 
 export const STATUS_BADGE: Record<string, string> = {
   "Not Sent": "bg-muted text-muted-foreground",
   Sent: "bg-blue-500/15 text-blue-700 dark:text-blue-300",
   Opened: "bg-blue-500/15 text-blue-700 dark:text-blue-300",
-  "In Progress": "bg-amber-500/15 text-amber-700 dark:text-amber-300",
-  "Waiting On Client": "bg-amber-500/15 text-amber-700 dark:text-amber-300",
-  "Waiting On Coach": "bg-amber-500/15 text-amber-700 dark:text-amber-300",
+  "Waiting on Client": "bg-amber-500/15 text-amber-700 dark:text-amber-300",
+  Signed: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
   Completed: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
+  Verified: "bg-emerald-600/15 text-emerald-700 dark:text-emerald-300",
+  Declined: "bg-red-500/15 text-red-700 dark:text-red-300",
   Expired: "bg-red-500/15 text-red-700 dark:text-red-300",
   Cancelled: "bg-red-500/15 text-red-700 dark:text-red-300",
-  "Needs Update": "bg-red-500/15 text-red-700 dark:text-red-300",
+  Error: "bg-red-500/15 text-red-700 dark:text-red-300",
+  "Needs Resend": "bg-amber-500/15 text-amber-700 dark:text-amber-300",
+  "Needs Manual Verification": "bg-amber-500/15 text-amber-700 dark:text-amber-300",
 };
 
-export interface FieldSnapshot {
-  id: string;
-  page: number;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  field_type: FieldType;
-  signer_role: SignerRole;
-  label: string | null;
-  internal_name: string;
-  required: boolean;
-  placeholder: string | null;
-  options: string[];
-  sort_order: number;
+export const VERIFICATION_BADGE: Record<string, string> = {
+  "Not Verified": "bg-muted text-muted-foreground",
+  "Auto-Matched": "bg-blue-500/15 text-blue-700 dark:text-blue-300",
+  "Manually Verified": "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
+  "Signer Name Mismatch": "bg-amber-500/15 text-amber-700 dark:text-amber-300",
+  "Needs Review": "bg-amber-500/15 text-amber-700 dark:text-amber-300",
+};
+
+export function normalizeName(s: string | null | undefined): string {
+  return (s ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+export function detectMismatch(signerInSignNow: string | null | undefined, clientName: string | null | undefined): boolean {
+  const a = normalizeName(signerInSignNow);
+  const b = normalizeName(clientName);
+  if (!a || !b) return false;
+  return a !== b;
+}
+
+export function fileLabel(opts: {
+  clientName: string;
+  agreementType: string;
+  signedAt?: string | Date | null;
+  offerName?: string | null;
+}): string {
+  const d = opts.signedAt ? new Date(opts.signedAt) : null;
+  const datePart = d ? d.toISOString().slice(0, 10) : "Unsigned";
+  const timePart = d ? d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "";
+  const parts = [opts.clientName, opts.offerName, opts.agreementType, datePart, timePart].filter(Boolean);
+  return parts.join(" \u2014 ");
+}
+
+export function agreementNeedsAttention(a: Agreement): boolean {
+  if (a.signer_mismatch) return true;
+  if (
+    [
+      "Sent",
+      "Opened",
+      "Waiting on Client",
+      "Expired",
+      "Needs Resend",
+      "Needs Manual Verification",
+      "Error",
+    ].includes(a.status as string)
+  ) {
+    return true;
+  }
+  if (a.status === "Signed" && a.verification_status === "Not Verified") return true;
+  return false;
 }
