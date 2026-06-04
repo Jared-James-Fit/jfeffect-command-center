@@ -257,7 +257,7 @@ function AudioAttachment({
             onClick={() => setShowTx((s) => !s)}
             className="flex w-full items-center gap-1 text-[10px] opacity-80 hover:opacity-100"
           >
-            <FileTextIcon className="h-3 w-3" />
+            <FileText className="h-3 w-3" />
             <span>
               {txStatus === "processing" || txStatus === null || txStatus === undefined
                 ? "Transcript processing…"
