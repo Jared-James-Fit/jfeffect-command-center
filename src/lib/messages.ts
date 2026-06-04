@@ -10,6 +10,7 @@ export type MessageAttachment = {
   mime?: string;
   duration?: number;
   storage_path?: string;
+  peaks?: number[];
 };
 
 export type Message = {
@@ -26,6 +27,8 @@ export type Message = {
   read_by_client_at: string | null;
   created_at: string;
   updated_at: string;
+  transcript?: string | null;
+  transcript_status?: string | null;
 };
 
 export type ConversationState = {

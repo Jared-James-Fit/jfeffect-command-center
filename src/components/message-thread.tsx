@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -7,6 +8,7 @@ import {
   detectAttachmentType, MESSAGE_TYPES, PRIORITIES, QUICK_REPLIES, priorityTone,
   type Message, type MessageAttachment, type SenderRole, type ConversationState,
 } from "@/lib/messages";
+import { transcribeVoiceMessage } from "@/lib/voice-transcribe.functions";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
@@ -21,7 +23,7 @@ import { cn } from "@/lib/utils";
 import {
   Paperclip, Send, X, FileText, Image as ImageIcon, Video, Link as LinkIcon, ExternalLink,
   Mic, Trash2, Play, Pause, Camera, File as FileIcon, Flag, AlertCircle, AlertTriangle,
-  Gauge, Download,
+  Gauge, Download, ChevronDown, ChevronUp, Square,
 } from "lucide-react";
 import { format, parseISO, isToday, isYesterday } from "date-fns";
 import { toast } from "sonner";
@@ -122,7 +124,65 @@ function VideoAttachment({ att }: { att: MessageAttachment }) {
   return <video src={src} controls playsInline className="max-h-80 w-full max-w-[280px] rounded-md bg-black" />;
 }
 
-function AudioAttachment({ att, mine }: { att: MessageAttachment; mine: boolean }) {
+function fakePeaks(n = 40, seed = 1) {
+  const out: number[] = [];
+  let x = seed;
+  for (let i = 0; i < n; i++) {
+    x = (x * 9301 + 49297) % 233280;
+    out.push(0.25 + (x / 233280) * 0.75);
+  }
+  return out;
+}
+
+function WaveformBars({
+  peaks,
+  progress,
+  onSeek,
+  mine,
+}: {
+  peaks: number[];
+  progress: number; // 0..1
+  onSeek?: (ratio: number) => void;
+  mine: boolean;
+}) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  return (
+    <div
+      ref={ref}
+      className={cn("flex h-7 cursor-pointer items-center gap-[2px]", onSeek ? "" : "cursor-default")}
+      onClick={(e) => {
+        if (!onSeek || !ref.current) return;
+        const r = ref.current.getBoundingClientRect();
+        const x = (e.clientX - r.left) / r.width;
+        onSeek(Math.max(0, Math.min(1, x)));
+      }}
+    >
+      {peaks.map((p, i) => {
+        const played = i / peaks.length <= progress;
+        return (
+          <span
+            key={i}
+            className={cn(
+              "w-[2.5px] flex-1 rounded-full transition-colors",
+              played
+                ? mine ? "bg-primary-foreground" : "bg-primary"
+                : mine ? "bg-primary-foreground/35" : "bg-foreground/25",
+            )}
+            style={{ height: `${Math.max(10, p * 100)}%` }}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+function AudioAttachment({
+  att, mine, message,
+}: {
+  att: MessageAttachment;
+  mine: boolean;
+  message?: Message;
+}) {
   const signed = useSignedUrl(att.storage_path);
   const src = att.storage_path ? signed : att.url;
   const ref = useRef<HTMLAudioElement | null>(null);
@@ -130,39 +190,99 @@ function AudioAttachment({ att, mine }: { att: MessageAttachment; mine: boolean 
   const [progress, setProgress] = useState(0);
   const [duration, setDuration] = useState(att.duration ?? 0);
   const [rate, setRate] = useState(1);
+  const [showTx, setShowTx] = useState(false);
+
+  const peaks = useMemo(
+    () => (att.peaks && att.peaks.length ? att.peaks : fakePeaks(48, (att.duration ?? 1) * 13 + (att.size ?? 1))),
+    [att.peaks, att.duration, att.size],
+  );
 
   if (!src) return <div className="text-xs opacity-70">Loading voice message…</div>;
 
+  const ratio = duration > 0 ? progress / duration : 0;
+  const txStatus = message?.transcript_status;
+  const txText = message?.transcript;
+
   return (
     <div className={cn(
-      "flex w-[240px] items-center gap-2 rounded-md p-2",
+      "w-[260px] rounded-2xl p-2",
       mine ? "bg-primary-foreground/10" : "bg-background/60",
     )}>
-      <Button type="button" size="sm" variant="secondary" className="h-8 w-8 shrink-0 p-0" onClick={() => {
-        const a = ref.current; if (!a) return;
-        if (a.paused) { a.play(); setPlaying(true); } else { a.pause(); setPlaying(false); }
-      }}>
-        {playing ? <Pause className="h-3 w-3" /> : <Play className="h-3 w-3" />}
-      </Button>
-      <div className="flex-1">
-        <div className="h-1.5 w-full rounded-full bg-foreground/15">
-          <div className="h-full rounded-full bg-current opacity-70" style={{ width: `${(progress / (duration || 1)) * 100}%` }} />
-        </div>
-        <div className="mt-1 flex items-center justify-between text-[10px] opacity-80">
-          <span>{fmtDuration(progress)} / {fmtDuration(duration)}</span>
-          <button type="button" className="inline-flex items-center gap-0.5 hover:underline" onClick={() => {
-            const speeds = [1, 1.25, 1.5, 2];
-            const next = speeds[(speeds.indexOf(rate) + 1) % speeds.length];
-            setRate(next); if (ref.current) ref.current.playbackRate = next;
-          }}>
-            <Gauge className="h-2.5 w-2.5" />{rate}x
-          </button>
+      <div className="flex items-center gap-2">
+        <Button
+          type="button"
+          size="sm"
+          variant={mine ? "secondary" : "default"}
+          className="h-9 w-9 shrink-0 rounded-full p-0"
+          onClick={() => {
+            const a = ref.current; if (!a) return;
+            if (a.paused) { a.play(); setPlaying(true); } else { a.pause(); setPlaying(false); }
+          }}
+        >
+          {playing ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4 translate-x-[1px]" />}
+        </Button>
+        <div className="flex-1">
+          <WaveformBars
+            peaks={peaks}
+            progress={ratio}
+            mine={mine}
+            onSeek={(r) => {
+              const a = ref.current; if (!a || !duration) return;
+              a.currentTime = r * duration;
+              setProgress(r * duration);
+            }}
+          />
+          <div className="mt-1 flex items-center justify-between text-[10px] opacity-80">
+            <span>{fmtDuration(progress)} / {fmtDuration(duration)}</span>
+            <button
+              type="button"
+              className="inline-flex items-center gap-0.5 hover:underline"
+              onClick={() => {
+                const speeds = [1, 1.25, 1.5, 2];
+                const next = speeds[(speeds.indexOf(rate) + 1) % speeds.length];
+                setRate(next);
+                if (ref.current) ref.current.playbackRate = next;
+              }}
+            >
+              <Gauge className="h-2.5 w-2.5" />{rate}x
+            </button>
+          </div>
         </div>
       </div>
+
+      {message && (
+        <div className="mt-1.5 border-t border-current/10 pt-1.5">
+          <button
+            type="button"
+            onClick={() => setShowTx((s) => !s)}
+            className="flex w-full items-center gap-1 text-[10px] opacity-80 hover:opacity-100"
+          >
+            <FileText className="h-3 w-3" />
+            <span>
+              {txStatus === "processing" || txStatus === null || txStatus === undefined
+                ? "Transcript processing…"
+                : txStatus === "failed"
+                ? "Transcript unavailable"
+                : txStatus === "empty"
+                ? "No speech detected"
+                : showTx ? "Hide transcript" : "View transcript"}
+            </span>
+            {txStatus === "ready" && (showTx ? <ChevronUp className="ml-auto h-3 w-3" /> : <ChevronDown className="ml-auto h-3 w-3" />)}
+          </button>
+          {showTx && txStatus === "ready" && txText && (
+            <div className="mt-1 rounded-md bg-background/40 p-1.5 text-[11px] leading-snug whitespace-pre-wrap">
+              {txText}
+            </div>
+          )}
+        </div>
+      )}
+
       <audio
         ref={ref} src={src} preload="metadata"
         onLoadedMetadata={(e) => { const d = (e.currentTarget.duration); if (isFinite(d)) setDuration(d); }}
         onTimeUpdate={(e) => setProgress(e.currentTarget.currentTime)}
+        onPause={() => setPlaying(false)}
+        onPlay={() => setPlaying(true)}
         onEnded={() => { setPlaying(false); setProgress(0); }}
       />
     </div>
@@ -204,10 +324,10 @@ function LinkAttachment({ att, mine }: { att: MessageAttachment; mine: boolean }
   );
 }
 
-function AttachmentView({ att, mine }: { att: MessageAttachment; mine: boolean }) {
+function AttachmentView({ att, mine, message }: { att: MessageAttachment; mine: boolean; message?: Message }) {
   if (att.type === "image") return <ImageAttachment att={att} />;
   if (att.type === "video") return <VideoAttachment att={att} />;
-  if (att.type === "audio") return <AudioAttachment att={att} mine={mine} />;
+  if (att.type === "audio") return <AudioAttachment att={att} mine={mine} message={message} />;
   if (att.type === "pdf" || att.type === "file") return <FileAttachment att={att} mine={mine} />;
   return <LinkAttachment att={att} mine={mine} />;
 }
@@ -218,9 +338,27 @@ function useVoiceRecorder() {
   const mediaRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<BlobPart[]>([]);
   const startedAtRef = useRef<number>(0);
+  const tickRef = useRef<number | null>(null);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const rafRef = useRef<number | null>(null);
+  const liveLevelsRef = useRef<number[]>([]);
+  const accumulatedPeaksRef = useRef<number[]>([]);
+  const sinceLastPeakRef = useRef<number>(0);
+
   const [recording, setRecording] = useState(false);
   const [elapsed, setElapsed] = useState(0);
-  const tickRef = useRef<number | null>(null);
+  const [liveLevels, setLiveLevels] = useState<number[]>([]);
+
+  const LIVE_BAR_COUNT = 40;
+
+  const teardownAudioGraph = () => {
+    if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = null; }
+    analyserRef.current?.disconnect();
+    analyserRef.current = null;
+    audioCtxRef.current?.close().catch(() => {});
+    audioCtxRef.current = null;
+  };
 
   const start = async () => {
     if (!navigator.mediaDevices?.getUserMedia) throw new Error("Recording not supported on this device.");
@@ -235,10 +373,56 @@ function useVoiceRecorder() {
     startedAtRef.current = Date.now();
     setRecording(true);
     setElapsed(0);
-    tickRef.current = window.setInterval(() => setElapsed((Date.now() - startedAtRef.current) / 1000), 250);
+    liveLevelsRef.current = [];
+    accumulatedPeaksRef.current = [];
+    sinceLastPeakRef.current = Date.now();
+    setLiveLevels([]);
+
+    // Web Audio analyser for live levels
+    try {
+      const ACtx: typeof AudioContext = (window as any).AudioContext || (window as any).webkitAudioContext;
+      const ctx = new ACtx();
+      const source = ctx.createMediaStreamSource(stream);
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 512;
+      source.connect(analyser);
+      audioCtxRef.current = ctx;
+      analyserRef.current = analyser;
+      const buf = new Uint8Array(analyser.frequencyBinCount);
+      const tick = () => {
+        if (!analyserRef.current) return;
+        analyserRef.current.getByteTimeDomainData(buf);
+        // RMS
+        let sum = 0;
+        for (let i = 0; i < buf.length; i++) {
+          const v = (buf[i] - 128) / 128;
+          sum += v * v;
+        }
+        const rms = Math.sqrt(sum / buf.length);
+        const level = Math.min(1, Math.max(0.05, rms * 2.8));
+        const next = [...liveLevelsRef.current, level].slice(-LIVE_BAR_COUNT);
+        liveLevelsRef.current = next;
+        // Accumulate peaks for saved waveform every ~80ms
+        if (Date.now() - sinceLastPeakRef.current > 80) {
+          accumulatedPeaksRef.current.push(level);
+          sinceLastPeakRef.current = Date.now();
+        }
+        setLiveLevels(next);
+        rafRef.current = requestAnimationFrame(tick);
+      };
+      rafRef.current = requestAnimationFrame(tick);
+    } catch (e) {
+      // analyser optional; recording still works
+      console.warn("analyser unavailable", e);
+    }
+
+    tickRef.current = window.setInterval(
+      () => setElapsed((Date.now() - startedAtRef.current) / 1000),
+      200,
+    );
   };
 
-  const stop = async (): Promise<{ blob: Blob; duration: number } | null> => {
+  const stop = async (): Promise<{ blob: Blob; duration: number; peaks: number[] } | null> => {
     const mr = mediaRef.current;
     if (!mr) return null;
     if (tickRef.current) { clearInterval(tickRef.current); tickRef.current = null; }
@@ -251,7 +435,22 @@ function useVoiceRecorder() {
     mediaRef.current = null;
     setRecording(false);
     const blob = await done;
-    return { blob, duration };
+    // downsample accumulated peaks to ~48 bars
+    const raw = accumulatedPeaksRef.current;
+    const targetCount = 48;
+    const peaks: number[] = [];
+    if (raw.length > 0) {
+      const step = raw.length / targetCount;
+      for (let i = 0; i < targetCount; i++) {
+        const a = Math.floor(i * step);
+        const b = Math.min(raw.length, Math.floor((i + 1) * step));
+        let max = 0;
+        for (let j = a; j < b; j++) if (raw[j] > max) max = raw[j];
+        peaks.push(Number(max.toFixed(3)));
+      }
+    }
+    teardownAudioGraph();
+    return { blob, duration, peaks };
   };
 
   const cancel = () => {
@@ -263,11 +462,30 @@ function useVoiceRecorder() {
     }
     mediaRef.current = null;
     chunksRef.current = [];
+    accumulatedPeaksRef.current = [];
+    liveLevelsRef.current = [];
+    setLiveLevels([]);
+    teardownAudioGraph();
     setRecording(false);
     setElapsed(0);
   };
 
-  return { recording, elapsed, start, stop, cancel };
+  return { recording, elapsed, liveLevels, start, stop, cancel };
+}
+
+function LiveWaveform({ levels }: { levels: number[] }) {
+  const padded = Array.from({ length: 40 }, (_, i) => levels[levels.length - 40 + i] ?? 0);
+  return (
+    <div className="flex h-7 flex-1 items-center gap-[2px]">
+      {padded.map((v, i) => (
+        <span
+          key={i}
+          className="w-[3px] flex-1 rounded-full bg-destructive transition-[height] duration-75"
+          style={{ height: `${Math.max(8, v * 100)}%`, opacity: v > 0 ? 1 : 0.25 }}
+        />
+      ))}
+    </div>
+  );
 }
 
 export function MessageThread({
@@ -295,6 +513,12 @@ export function MessageThread({
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const recorder = useVoiceRecorder();
+  const transcribeFn = useServerFn(transcribeVoiceMessage);
+  const [preview, setPreview] = useState<{
+    blob: Blob; url: string; duration: number; peaks: number[];
+  } | null>(null);
+  const previewAudioRef = useRef<HTMLAudioElement | null>(null);
+  const [previewPlaying, setPreviewPlaying] = useState(false);
 
   const { data: messages = [] } = useQuery({
     queryKey: ["messages", clientId, role],
@@ -351,18 +575,40 @@ export function MessageThread({
     }
   };
 
-  const sendVoiceNote = async () => {
+  const stopForPreview = async () => {
     const result = await recorder.stop();
     if (!result) return;
     if (result.duration < 0.5) { toast.message("Voice message too short"); return; }
+    const url = URL.createObjectURL(result.blob);
+    setPreview({ blob: result.blob, url, duration: result.duration, peaks: result.peaks });
+  };
+
+  const discardPreview = () => {
+    if (preview) URL.revokeObjectURL(preview.url);
+    setPreview(null);
+    setPreviewPlaying(false);
+  };
+
+  const sendPreview = async () => {
+    if (!preview) return;
     setUploading(true);
     try {
-      const ext = result.blob.type.includes("mp4") ? "m4a" : "webm";
-      const file = new File([result.blob], `voice-${Date.now()}.${ext}`, { type: result.blob.type });
+      const ext = preview.blob.type.includes("mp4") ? "m4a" : "webm";
+      const file = new File([preview.blob], `voice-${Date.now()}.${ext}`, { type: preview.blob.type });
       const att = await uploadAttachment(clientId, file);
       att.type = "audio";
-      att.duration = result.duration;
-      await doSend({ body: "", extraAttachments: [att] });
+      att.duration = preview.duration;
+      att.peaks = preview.peaks;
+      const sent = await doSend({ body: "", extraAttachments: [att], returnMessage: true });
+      URL.revokeObjectURL(preview.url);
+      setPreview(null);
+      setPreviewPlaying(false);
+      // Fire and forget transcription
+      if (sent?.id && att.storage_path) {
+        transcribeFn({ data: { messageId: sent.id, storagePath: att.storage_path, mime: preview.blob.type } })
+          .then(() => qc.invalidateQueries({ queryKey: ["messages", clientId, role] }))
+          .catch((e) => console.warn("transcription failed", e));
+      }
     } catch (e: any) {
       toast.error(e?.message ?? "Failed to send voice message");
     } finally {
@@ -370,11 +616,11 @@ export function MessageThread({
     }
   };
 
-  const doSend = async (opts?: { body?: string; extraAttachments?: MessageAttachment[] }) => {
-    if (!user) return;
+  const doSend = async (opts?: { body?: string; extraAttachments?: MessageAttachment[]; returnMessage?: boolean }) => {
+    if (!user) return null;
     const text = (opts?.body ?? body).trim();
     const atts = [...attachments, ...(opts?.extraAttachments ?? [])];
-    if (!text && atts.length === 0) return;
+    if (!text && atts.length === 0) return null;
     // Auto-detect plain URLs typed inline → optional link attachments
     const linkAtts: MessageAttachment[] = [];
     const matches = text.match(LINK_RE);
@@ -386,7 +632,7 @@ export function MessageThread({
     }
     setSending(true);
     try {
-      await sendMessage({
+      const sent = await sendMessage({
         clientId,
         senderId: user.id,
         senderRole: role,
@@ -400,8 +646,10 @@ export function MessageThread({
       setAttachments([]);
       setInternalNote(false);
       qc.invalidateQueries({ queryKey: ["messages", clientId, role] });
+      return sent;
     } catch (e: any) {
       toast.error(e?.message ?? "Failed to send");
+      return null;
     } finally {
       setSending(false);
     }
@@ -469,7 +717,7 @@ export function MessageThread({
                 {m.attachments?.length > 0 && (
                   <div className={cn("mt-2 space-y-2", m.body ? "" : "")}>
                     {m.attachments.map((a, i) => (
-                      <AttachmentView key={i} att={a} mine={mine} />
+                      <AttachmentView key={i} att={a} mine={mine} message={m} />
                     ))}
                   </div>
                 )}
@@ -517,16 +765,44 @@ export function MessageThread({
 
         {recorder.recording ? (
           <div className="flex items-center gap-2 rounded-full border border-destructive/40 bg-destructive/5 px-3 py-2">
-            <span className="h-2 w-2 animate-pulse rounded-full bg-destructive" />
-            <span className="text-xs font-medium">Recording… {fmtDuration(recorder.elapsed)}</span>
-            <div className="ml-auto flex items-center gap-1">
-              <Button type="button" variant="ghost" size="sm" className="h-8 px-2" onClick={() => recorder.cancel()}>
-                <Trash2 className="mr-1 h-3 w-3" /> Cancel
-              </Button>
-              <Button type="button" size="sm" className="h-8 bg-primary" onClick={sendVoiceNote} disabled={uploading}>
-                <Send className="mr-1 h-3 w-3" /> Send
-              </Button>
+            <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-destructive" />
+            <span className="shrink-0 text-xs font-medium tabular-nums">{fmtDuration(recorder.elapsed)}</span>
+            <LiveWaveform levels={recorder.liveLevels} />
+            <Button type="button" variant="ghost" size="sm" className="h-8 shrink-0 px-2 text-muted-foreground" onClick={() => recorder.cancel()} title="Discard">
+              <Trash2 className="h-4 w-4" />
+            </Button>
+            <Button type="button" size="sm" className="h-8 shrink-0 bg-primary" onClick={stopForPreview} title="Stop">
+              <Square className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        ) : preview ? (
+          <div className="flex items-center gap-2 rounded-full border border-border bg-secondary/40 px-3 py-2">
+            <Button
+              type="button" size="icon" variant="default"
+              className="h-9 w-9 shrink-0 rounded-full"
+              onClick={() => {
+                const a = previewAudioRef.current; if (!a) return;
+                if (a.paused) { a.play(); setPreviewPlaying(true); } else { a.pause(); setPreviewPlaying(false); }
+              }}
+            >
+              {previewPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4 translate-x-[1px]" />}
+            </Button>
+            <div className="flex-1">
+              <WaveformBars peaks={preview.peaks.length ? preview.peaks : fakePeaks(40, preview.duration * 9)} progress={0} mine={false} />
+              <div className="mt-0.5 text-[10px] text-muted-foreground">Preview · {fmtDuration(preview.duration)}</div>
             </div>
+            <audio
+              ref={previewAudioRef} src={preview.url} preload="metadata"
+              onEnded={() => setPreviewPlaying(false)}
+              onPause={() => setPreviewPlaying(false)}
+              onPlay={() => setPreviewPlaying(true)}
+            />
+            <Button type="button" variant="ghost" size="sm" className="h-8 shrink-0 px-2 text-muted-foreground" onClick={discardPreview} title="Discard">
+              <Trash2 className="h-4 w-4" />
+            </Button>
+            <Button type="button" size="sm" className="h-8 shrink-0 bg-primary" onClick={sendPreview} disabled={uploading}>
+              <Send className="mr-1 h-3.5 w-3.5" /> Send
+            </Button>
           </div>
         ) : (
           <div className="flex items-end gap-1.5">

@@ -784,6 +784,8 @@ export type Database = {
           read_by_client_at: string | null
           sender_id: string | null
           sender_role: string
+          transcript: string | null
+          transcript_status: string | null
           updated_at: string
         }
         Insert: {
@@ -799,6 +801,8 @@ export type Database = {
           read_by_client_at?: string | null
           sender_id?: string | null
           sender_role: string
+          transcript?: string | null
+          transcript_status?: string | null
           updated_at?: string
         }
         Update: {
@@ -814,6 +818,8 @@ export type Database = {
           read_by_client_at?: string | null
           sender_id?: string | null
           sender_role?: string
+          transcript?: string | null
+          transcript_status?: string | null
           updated_at?: string
         }
         Relationships: [
