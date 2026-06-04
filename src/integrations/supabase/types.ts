@@ -497,6 +497,156 @@ export type Database = {
         }
         Relationships: []
       }
+      lift_video_comments: {
+        Row: {
+          author_id: string | null
+          author_role: string
+          body: string
+          client_id: string
+          created_at: string
+          id: string
+          is_internal_note: boolean
+          updated_at: string
+          video_id: string
+          video_timestamp_seconds: number | null
+        }
+        Insert: {
+          author_id?: string | null
+          author_role: string
+          body?: string
+          client_id: string
+          created_at?: string
+          id?: string
+          is_internal_note?: boolean
+          updated_at?: string
+          video_id: string
+          video_timestamp_seconds?: number | null
+        }
+        Update: {
+          author_id?: string | null
+          author_role?: string
+          body?: string
+          client_id?: string
+          created_at?: string
+          id?: string
+          is_internal_note?: boolean
+          updated_at?: string
+          video_id?: string
+          video_timestamp_seconds?: number | null
+        }
+        Relationships: []
+      }
+      lift_videos: {
+        Row: {
+          admin_last_viewed_at: string | null
+          client_id: string
+          client_last_viewed_at: string | null
+          client_notes: string | null
+          created_at: string
+          custom_tag: string | null
+          custom_training_day: string | null
+          date_performed: string | null
+          exercise: string
+          id: string
+          important_date_id: string | null
+          is_urgent: boolean
+          liked_at: string | null
+          liked_by: string | null
+          load_text: string | null
+          phase_id: string | null
+          program_day: string | null
+          question_for_coach: string | null
+          reps: number | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          rpe: number | null
+          set_number: number | null
+          status: string
+          tag: string
+          thumbnail_url: string | null
+          training_day: string | null
+          updated_at: string
+          uploaded_by: string | null
+          video_source: string
+          video_storage_path: string | null
+          video_url: string | null
+          watched_at: string | null
+          watched_by: string | null
+        }
+        Insert: {
+          admin_last_viewed_at?: string | null
+          client_id: string
+          client_last_viewed_at?: string | null
+          client_notes?: string | null
+          created_at?: string
+          custom_tag?: string | null
+          custom_training_day?: string | null
+          date_performed?: string | null
+          exercise?: string
+          id?: string
+          important_date_id?: string | null
+          is_urgent?: boolean
+          liked_at?: string | null
+          liked_by?: string | null
+          load_text?: string | null
+          phase_id?: string | null
+          program_day?: string | null
+          question_for_coach?: string | null
+          reps?: number | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          rpe?: number | null
+          set_number?: number | null
+          status?: string
+          tag?: string
+          thumbnail_url?: string | null
+          training_day?: string | null
+          updated_at?: string
+          uploaded_by?: string | null
+          video_source?: string
+          video_storage_path?: string | null
+          video_url?: string | null
+          watched_at?: string | null
+          watched_by?: string | null
+        }
+        Update: {
+          admin_last_viewed_at?: string | null
+          client_id?: string
+          client_last_viewed_at?: string | null
+          client_notes?: string | null
+          created_at?: string
+          custom_tag?: string | null
+          custom_training_day?: string | null
+          date_performed?: string | null
+          exercise?: string
+          id?: string
+          important_date_id?: string | null
+          is_urgent?: boolean
+          liked_at?: string | null
+          liked_by?: string | null
+          load_text?: string | null
+          phase_id?: string | null
+          program_day?: string | null
+          question_for_coach?: string | null
+          reps?: number | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          rpe?: number | null
+          set_number?: number | null
+          status?: string
+          tag?: string
+          thumbnail_url?: string | null
+          training_day?: string | null
+          updated_at?: string
+          uploaded_by?: string | null
+          video_source?: string
+          video_storage_path?: string | null
+          video_url?: string | null
+          watched_at?: string | null
+          watched_by?: string | null
+        }
+        Relationships: []
+      }
       messages: {
         Row: {
           attachments: Json
