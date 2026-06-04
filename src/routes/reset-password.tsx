@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
@@ -74,11 +75,11 @@ function ResetPage() {
                 <form onSubmit={submit} className="mt-6 w-full space-y-4">
                   <div>
                     <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">New password</Label>
-                    <Input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} className="mt-1.5" placeholder="Min 8 characters" />
+                    <PasswordInput required value={password} onChange={(e) => setPassword(e.target.value)} className="mt-1.5" placeholder="Min 8 characters" />
                   </div>
                   <div>
                     <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Confirm new password</Label>
-                    <Input type="password" required value={confirm} onChange={(e) => setConfirm(e.target.value)} className="mt-1.5" />
+                    <PasswordInput required value={confirm} onChange={(e) => setConfirm(e.target.value)} className="mt-1.5" />
                   </div>
                   <Button type="submit" disabled={busy} className="w-full bg-gradient-primary py-6 text-sm font-bold uppercase tracking-[0.15em] shadow-glow">
                     {busy ? "Resetting…" : "Reset password"}
