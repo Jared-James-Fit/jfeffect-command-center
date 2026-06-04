@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { AgreementStatusBadge } from "@/components/agreement-status-badge";
 import { FileText } from "lucide-react";
 
-export const Route = createFileRoute("/_authenticated/portal/agreements")({
+export const Route = createFileRoute("/_authenticated/portal/agreements/")({
   component: PortalAgreementsPage,
 });
 
