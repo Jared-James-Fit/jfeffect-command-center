@@ -312,10 +312,9 @@ function AgreementRow({
 }
 
 function SendAgreementDialog({
-  open, mode, onOpenChange, templates, clientName, onSubmit,
+  open, onOpenChange, templates, clientName, onSubmit,
 }: {
   open: boolean;
-  mode: "invite" | "in-person";
   onOpenChange: (o: boolean) => void;
   templates: AgreementTemplate[];
   clientName?: string;
@@ -334,23 +333,15 @@ function SendAgreementDialog({
   const [link, setLink] = useState("");
   const [offerName, setOfferName] = useState("");
   const [notes, setNotes] = useState("");
-  const [kiosk, setKiosk] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const tpl = templates.find((t) => t.id === templateId);
-  const inPerson = mode === "in-person";
-  const signingMethod: SigningMethod = inPerson
-    ? (kiosk ? "Kiosk Mode" : "In-Person / iPad")
-    : "Remote Invite";
+  const signingMethod: SigningMethod = "Remote Invite";
 
   async function go() {
     const finalLink = link.trim() || tpl?.signnow_url || null;
     if (!templateId && !finalLink) {
       toast.error("Pick a template or paste a SignNow signing link");
-      return;
-    }
-    if (inPerson && !finalLink) {
-      toast.error("Need a SignNow signing link to launch in-person signing");
       return;
     }
     setBusy(true);
@@ -372,13 +363,12 @@ function SendAgreementDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>{inPerson ? "Sign Template — In-Person / iPad" : "Invite to Sign — Remote"}</DialogTitle>
+          <DialogTitle>Invite to Sign — SignNow</DialogTitle>
         </DialogHeader>
         <div className="space-y-3">
           {clientName && (
             <p className="text-xs text-muted-foreground">
               Client: <strong className="text-foreground">{clientName}</strong>
-              {inPerson && " — they will sign on your device. The signed record will be attached to this client even if SignNow shows your name."}
             </p>
           )}
           <div>
@@ -404,9 +394,7 @@ function SendAgreementDialog({
             <Label className="text-xs">SignNow signing link</Label>
             <Input value={link} onChange={(e) => setLink(e.target.value)} placeholder={tpl?.signnow_url ?? "https://app.signnow.com/..."} />
             <p className="text-[11px] text-muted-foreground mt-1">
-              {inPerson
-                ? "We'll open this link in a new tab so the client can sign on this device, then prompt you to mark it signed."
-                : "Paste the signing link from your SignNow template. We'll save it on the record so you can copy/send it from the agreement row."}
+              Paste the signing link from your SignNow template. We'll save it on the record so you can copy/send it from the agreement row.
             </p>
           </div>
           <div>
@@ -417,21 +405,12 @@ function SendAgreementDialog({
             <Label className="text-xs">Internal admin notes</Label>
             <Textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} />
           </div>
-          {inPerson && (
-            <div className="flex items-center justify-between rounded-md border border-border bg-secondary/30 p-2">
-              <div>
-                <Label className="text-xs">Treat as Kiosk Mode</Label>
-                <p className="text-[11px] text-muted-foreground">SignNow may show your name as the signer — record will still attach to {clientName ?? "this client"}.</p>
-              </div>
-              <Switch checked={kiosk} onCheckedChange={setKiosk} />
-            </div>
-          )}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
           <Button onClick={go} disabled={busy}>
             {busy && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
-            {inPerson ? "Launch signing" : "Create invite"}
+            Create invite
           </Button>
         </DialogFooter>
       </DialogContent>
