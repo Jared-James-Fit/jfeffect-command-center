@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,6 +11,9 @@ import {
   TRAINING_DAY_OPTIONS, LIFT_VIDEO_TAGS, createLiftVideo, updateLiftVideo, uploadVideoFile,
   type LiftVideo,
 } from "@/lib/lift-videos";
+import { initMediaUpload, finalizeMediaUpload, createSubmission } from "@/lib/drive.functions";
+import { uploadLiftClipToDrive } from "@/lib/lift-video-drive-upload";
+import { friendlyDriveError } from "@/lib/drive-errors";
 import { toast } from "sonner";
 import { Upload, Link as LinkIcon, Loader2, Video as VideoIcon, Send, X, AlertTriangle, ArrowUp, ArrowDown, Plus } from "lucide-react";
 
@@ -18,13 +22,17 @@ type Props = {
   onOpenChange: (v: boolean) => void;
   clientId: string;
   userId: string | null;
+  clientName?: string | null;
   initial?: LiftVideo | null;
   onSaved?: () => void;
   /** "client" = simplified flow (video + notes); "admin" = full form. Defaults to "admin". */
   role?: "client" | "admin";
 };
 
-export function LiftVideoDialog({ open, onOpenChange, clientId, userId, initial, onSaved, role = "admin" }: Props) {
+export function LiftVideoDialog({ open, onOpenChange, clientId, userId, clientName, initial, onSaved, role = "admin" }: Props) {
+  const initFn = useServerFn(initMediaUpload);
+  const finalizeFn = useServerFn(finalizeMediaUpload);
+  const createSubFn = useServerFn(createSubmission);
   const [tab, setTab] = useState<"link" | "upload">("upload");
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
   const recordInputRef = useRef<HTMLInputElement | null>(null);
