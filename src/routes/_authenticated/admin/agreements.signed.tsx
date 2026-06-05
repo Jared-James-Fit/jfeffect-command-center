@@ -8,6 +8,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Download, ExternalLink, RefreshCw, FileText, Loader2, Search, User, Mail, DownloadCloud } from "lucide-react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
@@ -85,6 +95,7 @@ function SignedAgreementsPage() {
   const [src, setSrc] = useState<string>("all");
   const [refreshing, setRefreshing] = useState(false);
   const [importResult, setImportResult] = useState<ImportSummary | null>(null);
+  const [importConfirmOpen, setImportConfirmOpen] = useState(false);
   const [downloading, setDownloading] = useState<string | null>(null);
   const [rowRefreshing, setRowRefreshing] = useState<string | null>(null);
   const getUrlFn = useServerFn(getSignedAgreementUrl);
@@ -243,7 +254,13 @@ function SignedAgreementsPage() {
     e.preventDefault();
     e.stopPropagation();
     if (importMutation.isPending) return;
-    if (!confirm("Scan the first page of SignNow for signed documents not yet in this app and import them?")) return;
+    setImportConfirmOpen(true);
+  }
+
+  function confirmImportHistorical(e: React.MouseEvent<HTMLButtonElement>) {
+    e.preventDefault();
+    e.stopPropagation();
+    setImportConfirmOpen(false);
     importMutation.mutate();
   }
 
@@ -301,7 +318,7 @@ function SignedAgreementsPage() {
             <label className="text-xs uppercase tracking-widest text-muted-foreground">Signed to</label>
             <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
           </div>
-          <Button variant="outline" onClick={handleRefreshAll} disabled={refreshing}>
+          <Button type="button" variant="outline" onClick={handleRefreshAll} disabled={refreshing}>
             {refreshing ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-1" />}
             Refresh pending
           </Button>
@@ -309,6 +326,24 @@ function SignedAgreementsPage() {
             {importMutation.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <DownloadCloud className="h-4 w-4 mr-1" />}
             Import from SignNow
           </Button>
+          <AlertDialog open={importConfirmOpen} onOpenChange={setImportConfirmOpen}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Import signed documents from SignNow?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This scans the first page (up to ~100 most recent SignNow documents) for signed
+                  documents not yet in this app and imports the ones that match an existing client by
+                  email or name. You can re-run this safely; already-imported documents are skipped.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel type="button">Cancel</AlertDialogCancel>
+                <AlertDialogAction type="button" onClick={confirmImportHistorical}>
+                  Start import
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
           <Link to="/admin/agreements" className="text-sm text-primary hover:underline">
             ← Back to Agreements
           </Link>
