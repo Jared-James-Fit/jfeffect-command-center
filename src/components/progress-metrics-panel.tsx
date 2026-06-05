@@ -10,12 +10,15 @@ import { toast } from "sonner";
 import { format, parseISO } from "date-fns";
 import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid,
+  ReferenceLine, ReferenceArea,
 } from "recharts";
 import {
-  averageNumeric, averageOfLast, filterByRange, formatWeight, normalizedBodyweightSeries,
+  averageNumeric, averageOfLast, convertWeight, filterByRange, formatWeight, normalizedBodyweightSeries,
   RANGE_OPTIONS, toCsv, weeklyChange, type ProgressMetric, type RangeValue, type WeightUnit,
 } from "@/lib/progress-metrics";
 import { ProgressMetricDialog } from "@/components/progress-metric-dialog";
+import { BodyweightGoalCard } from "@/components/bodyweight-goal-card";
+import { useBodyweightGoal } from "@/lib/use-bodyweight-goal";
 
 interface Props {
   clientId: string;
@@ -58,6 +61,9 @@ export function ProgressMetricsPanel({
   const sleepAvg = averageNumeric(rows, "sleep_hours", 7);
 
   const recent = rows.slice(0, 10);
+  const { data: goal = null } = useBodyweightGoal(clientId);
+  const goalTarget = goal ? convertWeight(goal.value, goal.unit, unit) : null;
+  const goalMax = goal?.value_max != null ? convertWeight(goal.value_max, goal.unit, unit) : null;
 
   const remove = async (id: string) => {
     if (!confirm("Delete this entry? This cannot be undone.")) return;
@@ -144,20 +150,45 @@ export function ProgressMetricsPanel({
             <div className="h-[220px] w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={filtered.map((p) => ({ date: p.date, value: Number(p.value.toFixed(1)) }))}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                  <XAxis dataKey="date" tickFormatter={(d) => format(parseISO(d), "MMM d")} stroke="hsl(var(--muted-foreground))" fontSize={11} />
-                  <YAxis domain={["auto", "auto"]} stroke="hsl(var(--muted-foreground))" fontSize={11} width={40} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                  <XAxis dataKey="date" tickFormatter={(d) => format(parseISO(d), "MMM d")} stroke="var(--muted-foreground)" fontSize={11} />
+                  <YAxis domain={["auto", "auto"]} stroke="var(--muted-foreground)" fontSize={11} width={40} />
+                  {goal && goal.type === "maintain" && goalTarget != null && goalMax != null && (
+                    <ReferenceArea
+                      y1={Math.min(goalTarget, goalMax)}
+                      y2={Math.max(goalTarget, goalMax)}
+                      fill="var(--primary)"
+                      fillOpacity={0.08}
+                    />
+                  )}
+                  {goal && goal.type !== "maintain" && goalTarget != null && (
+                    <ReferenceLine
+                      y={goalTarget}
+                      stroke="var(--primary)"
+                      strokeDasharray="4 4"
+                      strokeOpacity={0.7}
+                      label={{ value: `Goal ${goalTarget.toFixed(1)}`, fill: "var(--primary)", fontSize: 10, position: "insideTopRight" }}
+                    />
+                  )}
                   <Tooltip
-                    contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8 }}
+                    contentStyle={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 8 }}
                     labelFormatter={(d) => format(parseISO(d as string), "MMM d, yyyy")}
-                    formatter={(v: any) => [`${v} ${unit}`, "Bodyweight"]}
+                    formatter={(v: unknown) => [`${v} ${unit}`, "Bodyweight"]}
                   />
-                  <Line type="monotone" dataKey="value" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ r: 2 }} />
+                  <Line type="monotone" dataKey="value" stroke="var(--primary)" strokeWidth={2} dot={{ r: 2 }} isAnimationActive={false} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
           )}
         </div>
+
+        <BodyweightGoalCard
+          clientId={clientId}
+          goal={goal}
+          series={series}
+          displayUnit={unit}
+          canEdit={canEdit}
+        />
 
         <div className="space-y-2">
           <div className="text-xs uppercase tracking-widest text-muted-foreground">Recent entries</div>
