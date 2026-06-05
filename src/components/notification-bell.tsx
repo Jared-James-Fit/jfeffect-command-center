@@ -217,9 +217,18 @@ export function NotificationBell() {
               to={
                 it.kind === "lift_video"
                   ? (role === "admin" ? "/admin/lift-videos" : "/portal/lift-videos")
+                  : it.kind === "agreement"
+                  ? (role === "admin" ? "/admin/clients/$id" : "/portal")
                   : (role === "admin" ? "/admin/messages" : "/portal/messages")
               }
-              search={role === "admin" && it.kind === "message" ? { client: it.clientId } : undefined}
+              params={it.kind === "agreement" && role === "admin" ? { id: it.clientId } : undefined as any}
+              search={
+                role === "admin" && it.kind === "message"
+                  ? { client: it.clientId }
+                  : role === "admin" && it.kind === "agreement"
+                  ? { tab: "agreements" as any }
+                  : undefined
+              }
               className="block"
             >
               <div className="text-xs font-semibold">{it.title}</div>
