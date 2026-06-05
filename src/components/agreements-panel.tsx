@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
-import { Plus, ExternalLink, Copy, ShieldCheck, AlertTriangle, FileText, Send, BellRing, Upload, Trash2, Loader2, UserPlus, Smartphone, RefreshCcw, Download } from "lucide-react";
+import { Plus, ExternalLink, Copy, ShieldCheck, AlertTriangle, FileText, Send, BellRing, Upload, Trash2, Loader2, UserPlus, Smartphone, RefreshCcw, Download, CheckCircle2, Flag, StickyNote } from "lucide-react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import { AgreementStatusBadge } from "@/components/agreement-status-badge";
@@ -87,6 +87,16 @@ export function AgreementsPanel({ clientId, clientName }: { clientId: string; cl
               onCancel={async () => {
                 if (!confirm("Cancel this agreement?")) return;
                 await cancelFn({ data: { id: a.id } }); toast.success("Cancelled"); invalidate();
+              }}
+              onMarkManuallySent={async () => {
+                await updateFn({ data: { id: a.id, status: "Sent", sent_at: new Date().toISOString() } as any });
+                toast.success("Marked as manually sent");
+                invalidate();
+              }}
+              onNeedsFollowUp={async () => {
+                await updateFn({ data: { id: a.id, status: "Needs Manual Verification" } as any });
+                toast.success("Flagged for follow-up");
+                invalidate();
               }}
               onRefresh={async () => {
                 const r: any = await refreshFn({ data: { id: a.id } });
@@ -193,7 +203,7 @@ export function AgreementsPanel({ clientId, clientName }: { clientId: string; cl
 }
 
 function AgreementRow({
-  ag, onUpdate, onMarkSigned, onVerify, onRemind, onCancel, onRefresh, onDownloadSigned,
+  ag, onUpdate, onMarkSigned, onVerify, onRemind, onCancel, onRefresh, onDownloadSigned, onMarkManuallySent, onNeedsFollowUp,
 }: {
   ag: Agreement;
   onUpdate: (patch: Partial<Agreement>) => Promise<void> | void;
@@ -203,6 +213,8 @@ function AgreementRow({
   onCancel: () => void;
   onRefresh: () => void;
   onDownloadSigned: () => void;
+  onMarkManuallySent: () => void;
+  onNeedsFollowUp: () => void;
 }) {
   const label = useMemo(() => fileLabel({
     clientName: ag.client_full_name ?? ag.correct_client_name ?? "Client",
@@ -210,6 +222,9 @@ function AgreementRow({
     signedAt: ag.signed_at ?? ag.completed_at,
     offerName: ag.offer_name,
   }), [ag]);
+
+  const isSignNowApi = !!ag.signnow_document_id;
+  const sourceLabel = isSignNowApi ? "SignNow API" : (ag.signing_method ?? "Manual");
 
   return (
     <li className="rounded-lg border border-border bg-secondary/30 p-3 space-y-2">
@@ -226,6 +241,7 @@ function AgreementRow({
           <Badge variant="secondary" className={`border-0 ${VERIFICATION_BADGE[ag.verification_status] ?? "bg-muted text-muted-foreground"}`}>
             {ag.verification_status}
           </Badge>
+          <Badge variant="outline" className="border-border text-[10px]">{sourceLabel}</Badge>
         </div>
       </div>
 
@@ -275,6 +291,10 @@ function AgreementRow({
           </>
         )}
         <Button size="sm" variant="ghost" onClick={onMarkSigned}><Upload className="h-3 w-3 mr-1" />Upload/Mark signed</Button>
+        {(!ag.sent_at || ag.status === "Not Sent") && (
+          <Button size="sm" variant="ghost" onClick={onMarkManuallySent}><CheckCircle2 className="h-3 w-3 mr-1" />Mark manually sent</Button>
+        )}
+        <Button size="sm" variant="ghost" onClick={onNeedsFollowUp}><Flag className="h-3 w-3 mr-1" />Needs follow-up</Button>
         {ag.status !== "Cancelled" && (
           <Button size="sm" variant="ghost" onClick={onCancel}><Trash2 className="h-3 w-3 mr-1" />Cancel</Button>
         )}
@@ -283,9 +303,18 @@ function AgreementRow({
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] text-muted-foreground pt-1">
         <div>Sent: {ag.sent_at ? new Date(ag.sent_at).toLocaleDateString() : "—"}</div>
         <div>Signed: {ag.signed_at ? new Date(ag.signed_at).toLocaleString() : "—"}</div>
+        <div>Verified: {ag.verified_at ? new Date(ag.verified_at).toLocaleDateString() : "—"}</div>
+        <div>Method: {ag.signing_method ?? "—"}</div>
         <div>Type: {ag.agreement_type ?? "—"}</div>
-        <div>Offer: {ag.offer_name ?? "—"}</div>
+        <div className="col-span-2 sm:col-span-2 truncate">Offer / Purchase: {ag.offer_name ?? "—"}{ag.purchase_record_id ? ` · #${ag.purchase_record_id.slice(0, 8)}` : ""}</div>
+        <div>Source: {sourceLabel}</div>
       </div>
+      {ag.admin_notes && (
+        <div className="rounded-md border border-border bg-background/40 p-2 text-[11px] text-muted-foreground flex items-start gap-2">
+          <StickyNote className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+          <div className="whitespace-pre-wrap">{ag.admin_notes}</div>
+        </div>
+      )}
     </li>
   );
 }
