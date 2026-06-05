@@ -60,9 +60,7 @@ function AuthPage() {
       <div className="flex min-h-screen flex-col items-center justify-center px-6 py-16">
         {/* Logo */}
         <div className="mb-6 flex items-center gap-3">
-          <div className="grid h-11 w-11 place-items-center rounded-full bg-gradient-primary text-sm font-black text-primary-foreground shadow-glow">
-            JF
-          </div>
+          <img src="/logo.png" alt="JF Effect" className="h-11 w-11 rounded-xl shadow-glow" />
           <span className="text-lg font-black tracking-tight">JF EFFECT</span>
         </div>
 
