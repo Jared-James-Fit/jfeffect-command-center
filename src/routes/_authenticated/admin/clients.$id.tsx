@@ -233,11 +233,50 @@ function ClientDetail() {
   const adminUpdatePicture = async (path: string) => {
     const { error } = await supabase
       .from("clients")
-      .update({ profile_picture_url: path, profile_picture_updated_at: new Date().toISOString() })
+      .update({
+        profile_picture_url: path,
+        profile_picture_updated_at: new Date().toISOString(),
+        profile_picture_updated_by: "admin",
+        profile_picture_source: "admin_override",
+        profile_picture_needs_update: false,
+        profile_picture_needs_update_at: null,
+        profile_picture_needs_update_reason: null,
+      })
       .eq("id", id);
     if (error) return toast.error(error.message);
     qc.invalidateQueries({ queryKey: ["client", id] });
-    setForm({ ...form, profile_picture_url: path });
+    setForm({
+      ...form,
+      profile_picture_url: path,
+      profile_picture_needs_update: false,
+      profile_picture_needs_update_at: null,
+      profile_picture_needs_update_reason: null,
+    });
+  };
+
+  const requestPictureUpdate = async () => {
+    const reason = window.prompt(
+      "Reason for requesting a new profile picture (optional, shown to the client):",
+      "Please take a new clear headshot.",
+    );
+    if (reason === null) return;
+    const { error } = await supabase
+      .from("clients")
+      .update({
+        profile_picture_needs_update: true,
+        profile_picture_needs_update_at: new Date().toISOString(),
+        profile_picture_needs_update_reason: reason || "Please take a new clear headshot.",
+      })
+      .eq("id", id);
+    if (error) return toast.error(error.message);
+    toast.success("Client will be asked to update their profile picture on next login.");
+    qc.invalidateQueries({ queryKey: ["client", id] });
+    setForm({
+      ...form,
+      profile_picture_needs_update: true,
+      profile_picture_needs_update_at: new Date().toISOString(),
+      profile_picture_needs_update_reason: reason || "Please take a new clear headshot.",
+    });
   };
 
   const links = [
@@ -562,7 +601,28 @@ function ClientDetail() {
               onUploaded={adminUpdatePicture}
               allowFileUpload
             />
-            <p className="text-[11px] text-muted-foreground">Admin can capture or upload on behalf of the client.</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button size="sm" variant="outline" onClick={requestPictureUpdate}>
+                {form.profile_picture_needs_update ? "Update reminder active" : "Request client to update"}
+              </Button>
+              <span className="text-[11px] text-muted-foreground">
+                Status:{" "}
+                {form.profile_picture_needs_update
+                  ? "Needs Update"
+                  : form.profile_picture_url
+                  ? "Complete"
+                  : "Required"}
+              </span>
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              Admin can capture or upload on behalf of the client. Source:{" "}
+              {form.profile_picture_source ?? "—"} · Updated by: {form.profile_picture_updated_by ?? "—"}
+            </p>
+            {form.profile_picture_needs_update && form.profile_picture_needs_update_reason && (
+              <p className="text-[11px] text-warning">
+                Reason shown to client: {form.profile_picture_needs_update_reason}
+              </p>
+            )}
           </Card>
         </TabsContent>
 
