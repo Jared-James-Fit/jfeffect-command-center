@@ -5,14 +5,39 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Link } from "@tanstack/react-router";
-import { ShoppingBag, Plus } from "lucide-react";
+import { ShoppingBag, Plus, CheckCircle2, Copy, ExternalLink, Send, AlertTriangle } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AssignOfferDialog } from "@/components/assign-offer-dialog";
 import { PurchaseAgreementInlineBadge } from "@/components/purchase-agreement-status";
+import { useServerFn } from "@tanstack/react-start";
+import { updatePurchasePayment, sendPaymentLinkEmail } from "@/lib/payments.functions";
+import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+
+function statusTone(s?: string | null) {
+  switch (s) {
+    case "Paid":
+    case "Active Subscription":
+      return "border-primary/40 text-primary bg-primary/5";
+    case "Overdue":
+    case "Failed":
+    case "Manual Payment Needed":
+      return "border-destructive/40 text-destructive bg-destructive/5";
+    case "Refunded":
+    case "Cancelled":
+    case "Expired":
+      return "border-border text-muted-foreground";
+    default:
+      return "border-warning/40 text-warning bg-warning/5";
+  }
+}
 
 export function PurchaseRecordsPanel({ clientId }: { clientId: string }) {
   const [picker, setPicker] = useState(false);
   const [chosenOffer, setChosenOffer] = useState<any | null>(null);
+  const qc = useQueryClient();
+  const updateFn = useServerFn(updatePurchasePayment);
+  const sendFn = useServerFn(sendPaymentLinkEmail);
 
   const { data: records = [] } = useQuery({
     queryKey: ["client-purchases", clientId],
@@ -44,6 +69,33 @@ export function PurchaseRecordsPanel({ clientId }: { clientId: string }) {
     queryFn: async () => (await supabase.from("offers").select("*").eq("archived", false).order("name")).data ?? [],
   });
 
+  const copyLink = (url?: string | null) => {
+    if (!url) return toast.error("No payment link");
+    navigator.clipboard.writeText(url);
+    toast.success("Copied");
+  };
+  const markPaid = async (r: any) => {
+    try {
+      await updateFn({ data: { id: r.id, payment_status: "Paid", amount_paid: Number(r.full_payable_amount ?? 0) } });
+      toast.success("Marked paid");
+      qc.invalidateQueries({ queryKey: ["client-purchases", clientId] });
+    } catch (e: any) { toast.error(e?.message ?? "Failed"); }
+  };
+  const markStatus = async (r: any, payment_status: string) => {
+    try {
+      await updateFn({ data: { id: r.id, payment_status } });
+      toast.success(`Marked ${payment_status}`);
+      qc.invalidateQueries({ queryKey: ["client-purchases", clientId] });
+    } catch (e: any) { toast.error(e?.message ?? "Failed"); }
+  };
+  const emailLink = async (id: string) => {
+    try {
+      const r: any = await sendFn({ data: { id } });
+      if (r?.sent) toast.success("Payment link emailed");
+      else toast.message(r?.reason ?? "Email skipped");
+    } catch (e: any) { toast.error(e?.message ?? "Failed"); }
+  };
+
   return (
     <Card className="border-border bg-card p-6 md:col-span-3 space-y-3">
       <div className="flex items-center justify-between">
@@ -55,27 +107,48 @@ export function PurchaseRecordsPanel({ clientId }: { clientId: string }) {
       ) : (
         <ul className="space-y-2">
           {records.map((r: any) => (
-            <li key={r.id}>
-              <Link to="/admin/purchases/$id" params={{ id: r.id }}>
-                <div className="rounded-md border border-border bg-secondary/20 p-3 hover:bg-secondary/40 transition flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <div className="font-semibold">{r.offer_name} <span className="text-xs text-muted-foreground font-normal">v{r.offer_version}</span></div>
-                    <div className="text-xs text-muted-foreground">{r.offer_type} · {new Date(r.purchased_at).toLocaleDateString()}</div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-mono">{r.currency} {Number(r.full_payable_amount ?? 0).toLocaleString()}</span>
-                    <Badge variant="outline">{r.payment_status}</Badge>
-                    <Badge variant="outline" className={r.terms_accepted ? "border-primary/40 text-primary" : ""}>{r.terms_accepted ? "Accepted" : "Pending"}</Badge>
-                    <PurchaseAgreementInlineBadge
-                      purchaseId={r.id}
-                      clientId={clientId}
-                      requiresAgreement={!!offerFlags[r.offer_id]?.requires_agreement}
-                      agreementBeforeService={!!offerFlags[r.offer_id]?.agreement_before_service}
-                      termStartDate={r.term_start_date}
-                    />
-                  </div>
+            <li key={r.id} className="rounded-md border border-border bg-secondary/20 p-3 space-y-2">
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <Link to="/admin/purchases/$id" params={{ id: r.id }} className="min-w-0 hover:underline">
+                  <div className="font-semibold">{r.offer_name} <span className="text-xs text-muted-foreground font-normal">v{r.offer_version}</span></div>
+                  <div className="text-xs text-muted-foreground">{r.offer_type} · {new Date(r.purchased_at).toLocaleDateString()}</div>
+                </Link>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="text-sm font-mono">{r.currency} {Number(r.full_payable_amount ?? 0).toLocaleString()}</span>
+                  <Badge variant="outline" className={statusTone(r.payment_status)}>{r.payment_status}</Badge>
+                  {r.service_status && r.service_status !== "Not Started" && <Badge variant="outline">{r.service_status}</Badge>}
+                  <PurchaseAgreementInlineBadge
+                    purchaseId={r.id}
+                    clientId={clientId}
+                    requiresAgreement={!!offerFlags[r.offer_id]?.requires_agreement}
+                    agreementBeforeService={!!offerFlags[r.offer_id]?.agreement_before_service}
+                    termStartDate={r.term_start_date}
+                  />
                 </div>
-              </Link>
+              </div>
+              {r.package_tracking_enabled && (
+                <div className="text-xs text-muted-foreground">
+                  Sessions: <span className="font-semibold text-foreground">{Math.max(0, (r.sessions_purchased ?? 0) - (r.sessions_used ?? 0))}</span> remaining of {r.sessions_purchased ?? 0}
+                </div>
+              )}
+              <div className="flex flex-wrap gap-1.5">
+                {r.payment_status !== "Paid" && r.payment_status !== "Active Subscription" && (
+                  <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => markPaid(r)}><CheckCircle2 className="mr-1 h-3 w-3" />Mark paid</Button>
+                )}
+                {r.payment_status !== "Overdue" && r.payment_status !== "Paid" && (
+                  <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => markStatus(r, "Overdue")}><AlertTriangle className="mr-1 h-3 w-3" />Overdue</Button>
+                )}
+                {r.stripe_payment_link && (
+                  <>
+                    <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => copyLink(r.stripe_payment_link)}><Copy className="mr-1 h-3 w-3" />Copy</Button>
+                    <a href={r.stripe_payment_link} target="_blank" rel="noreferrer"><Button size="sm" variant="ghost" className="h-7 text-xs"><ExternalLink className="mr-1 h-3 w-3" />Open</Button></a>
+                    <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => emailLink(r.id)}><Send className="mr-1 h-3 w-3" />Email</Button>
+                  </>
+                )}
+                {r.stripe_receipt_url && (
+                  <a href={r.stripe_receipt_url} target="_blank" rel="noreferrer"><Button size="sm" variant="ghost" className="h-7 text-xs">Receipt</Button></a>
+                )}
+              </div>
             </li>
           ))}
         </ul>

@@ -19,6 +19,7 @@ import { Route as AuthenticatedPortalRouteRouteImport } from './routes/_authenti
 import { Route as AuthenticatedAdminRouteRouteImport } from './routes/_authenticated/admin/route'
 import { Route as AuthenticatedPortalIndexRouteImport } from './routes/_authenticated/portal/index'
 import { Route as AuthenticatedAdminIndexRouteImport } from './routes/_authenticated/admin/index'
+import { Route as ApiPublicStripeWebhookRouteImport } from './routes/api/public/stripe-webhook'
 import { Route as ApiPublicSignnowWebhookRouteImport } from './routes/api/public/signnow-webhook'
 import { Route as AuthenticatedPortalResourcesRouteImport } from './routes/_authenticated/portal/resources'
 import { Route as AuthenticatedPortalPurchasesRouteImport } from './routes/_authenticated/portal/purchases'
@@ -39,6 +40,7 @@ import { Route as AuthenticatedAdminSettingsRouteImport } from './routes/_authen
 import { Route as AuthenticatedAdminResourcesRouteImport } from './routes/_authenticated/admin/resources'
 import { Route as AuthenticatedAdminPurchasesRouteImport } from './routes/_authenticated/admin/purchases'
 import { Route as AuthenticatedAdminProgramsRouteImport } from './routes/_authenticated/admin/programs'
+import { Route as AuthenticatedAdminPaymentsRouteImport } from './routes/_authenticated/admin/payments'
 import { Route as AuthenticatedAdminPaymentLinksRouteImport } from './routes/_authenticated/admin/payment-links'
 import { Route as AuthenticatedAdminOffersRouteImport } from './routes/_authenticated/admin/offers'
 import { Route as AuthenticatedAdminNutritionTargetsRouteImport } from './routes/_authenticated/admin/nutrition-targets'
@@ -114,6 +116,11 @@ const AuthenticatedAdminIndexRoute = AuthenticatedAdminIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => AuthenticatedAdminRouteRoute,
+} as any)
+const ApiPublicStripeWebhookRoute = ApiPublicStripeWebhookRouteImport.update({
+  id: '/api/public/stripe-webhook',
+  path: '/api/public/stripe-webhook',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const ApiPublicSignnowWebhookRoute = ApiPublicSignnowWebhookRouteImport.update({
   id: '/api/public/signnow-webhook',
@@ -231,6 +238,12 @@ const AuthenticatedAdminProgramsRoute =
   AuthenticatedAdminProgramsRouteImport.update({
     id: '/programs',
     path: '/programs',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
+const AuthenticatedAdminPaymentsRoute =
+  AuthenticatedAdminPaymentsRouteImport.update({
+    id: '/payments',
+    path: '/payments',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
 const AuthenticatedAdminPaymentLinksRoute =
@@ -399,6 +412,7 @@ export interface FileRoutesByFullPath {
   '/admin/nutrition-targets': typeof AuthenticatedAdminNutritionTargetsRoute
   '/admin/offers': typeof AuthenticatedAdminOffersRoute
   '/admin/payment-links': typeof AuthenticatedAdminPaymentLinksRoute
+  '/admin/payments': typeof AuthenticatedAdminPaymentsRoute
   '/admin/programs': typeof AuthenticatedAdminProgramsRoute
   '/admin/purchases': typeof AuthenticatedAdminPurchasesRouteWithChildren
   '/admin/resources': typeof AuthenticatedAdminResourcesRoute
@@ -419,6 +433,7 @@ export interface FileRoutesByFullPath {
   '/portal/purchases': typeof AuthenticatedPortalPurchasesRouteWithChildren
   '/portal/resources': typeof AuthenticatedPortalResourcesRoute
   '/api/public/signnow-webhook': typeof ApiPublicSignnowWebhookRoute
+  '/api/public/stripe-webhook': typeof ApiPublicStripeWebhookRoute
   '/admin/': typeof AuthenticatedAdminIndexRoute
   '/portal/': typeof AuthenticatedPortalIndexRoute
   '/admin/agreements/signed': typeof AuthenticatedAdminAgreementsSignedRoute
@@ -452,6 +467,7 @@ export interface FileRoutesByTo {
   '/admin/nutrition-targets': typeof AuthenticatedAdminNutritionTargetsRoute
   '/admin/offers': typeof AuthenticatedAdminOffersRoute
   '/admin/payment-links': typeof AuthenticatedAdminPaymentLinksRoute
+  '/admin/payments': typeof AuthenticatedAdminPaymentsRoute
   '/admin/programs': typeof AuthenticatedAdminProgramsRoute
   '/admin/purchases': typeof AuthenticatedAdminPurchasesRouteWithChildren
   '/admin/resources': typeof AuthenticatedAdminResourcesRoute
@@ -472,6 +488,7 @@ export interface FileRoutesByTo {
   '/portal/purchases': typeof AuthenticatedPortalPurchasesRouteWithChildren
   '/portal/resources': typeof AuthenticatedPortalResourcesRoute
   '/api/public/signnow-webhook': typeof ApiPublicSignnowWebhookRoute
+  '/api/public/stripe-webhook': typeof ApiPublicStripeWebhookRoute
   '/admin': typeof AuthenticatedAdminIndexRoute
   '/portal': typeof AuthenticatedPortalIndexRoute
   '/admin/agreements/signed': typeof AuthenticatedAdminAgreementsSignedRoute
@@ -509,6 +526,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/nutrition-targets': typeof AuthenticatedAdminNutritionTargetsRoute
   '/_authenticated/admin/offers': typeof AuthenticatedAdminOffersRoute
   '/_authenticated/admin/payment-links': typeof AuthenticatedAdminPaymentLinksRoute
+  '/_authenticated/admin/payments': typeof AuthenticatedAdminPaymentsRoute
   '/_authenticated/admin/programs': typeof AuthenticatedAdminProgramsRoute
   '/_authenticated/admin/purchases': typeof AuthenticatedAdminPurchasesRouteWithChildren
   '/_authenticated/admin/resources': typeof AuthenticatedAdminResourcesRoute
@@ -529,6 +547,7 @@ export interface FileRoutesById {
   '/_authenticated/portal/purchases': typeof AuthenticatedPortalPurchasesRouteWithChildren
   '/_authenticated/portal/resources': typeof AuthenticatedPortalResourcesRoute
   '/api/public/signnow-webhook': typeof ApiPublicSignnowWebhookRoute
+  '/api/public/stripe-webhook': typeof ApiPublicStripeWebhookRoute
   '/_authenticated/admin/': typeof AuthenticatedAdminIndexRoute
   '/_authenticated/portal/': typeof AuthenticatedPortalIndexRoute
   '/_authenticated/admin/agreements/signed': typeof AuthenticatedAdminAgreementsSignedRoute
@@ -566,6 +585,7 @@ export interface FileRouteTypes {
     | '/admin/nutrition-targets'
     | '/admin/offers'
     | '/admin/payment-links'
+    | '/admin/payments'
     | '/admin/programs'
     | '/admin/purchases'
     | '/admin/resources'
@@ -586,6 +606,7 @@ export interface FileRouteTypes {
     | '/portal/purchases'
     | '/portal/resources'
     | '/api/public/signnow-webhook'
+    | '/api/public/stripe-webhook'
     | '/admin/'
     | '/portal/'
     | '/admin/agreements/signed'
@@ -619,6 +640,7 @@ export interface FileRouteTypes {
     | '/admin/nutrition-targets'
     | '/admin/offers'
     | '/admin/payment-links'
+    | '/admin/payments'
     | '/admin/programs'
     | '/admin/purchases'
     | '/admin/resources'
@@ -639,6 +661,7 @@ export interface FileRouteTypes {
     | '/portal/purchases'
     | '/portal/resources'
     | '/api/public/signnow-webhook'
+    | '/api/public/stripe-webhook'
     | '/admin'
     | '/portal'
     | '/admin/agreements/signed'
@@ -675,6 +698,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/nutrition-targets'
     | '/_authenticated/admin/offers'
     | '/_authenticated/admin/payment-links'
+    | '/_authenticated/admin/payments'
     | '/_authenticated/admin/programs'
     | '/_authenticated/admin/purchases'
     | '/_authenticated/admin/resources'
@@ -695,6 +719,7 @@ export interface FileRouteTypes {
     | '/_authenticated/portal/purchases'
     | '/_authenticated/portal/resources'
     | '/api/public/signnow-webhook'
+    | '/api/public/stripe-webhook'
     | '/_authenticated/admin/'
     | '/_authenticated/portal/'
     | '/_authenticated/admin/agreements/signed'
@@ -716,6 +741,7 @@ export interface RootRouteChildren {
   SetupRoute: typeof SetupRoute
   SitemapRoute: typeof SitemapRoute
   ApiPublicSignnowWebhookRoute: typeof ApiPublicSignnowWebhookRoute
+  ApiPublicStripeWebhookRoute: typeof ApiPublicStripeWebhookRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -789,6 +815,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/admin/'
       preLoaderRoute: typeof AuthenticatedAdminIndexRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
+    '/api/public/stripe-webhook': {
+      id: '/api/public/stripe-webhook'
+      path: '/api/public/stripe-webhook'
+      fullPath: '/api/public/stripe-webhook'
+      preLoaderRoute: typeof ApiPublicStripeWebhookRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/api/public/signnow-webhook': {
       id: '/api/public/signnow-webhook'
@@ -928,6 +961,13 @@ declare module '@tanstack/react-router' {
       path: '/programs'
       fullPath: '/admin/programs'
       preLoaderRoute: typeof AuthenticatedAdminProgramsRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
+    '/_authenticated/admin/payments': {
+      id: '/_authenticated/admin/payments'
+      path: '/payments'
+      fullPath: '/admin/payments'
+      preLoaderRoute: typeof AuthenticatedAdminPaymentsRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
     '/_authenticated/admin/payment-links': {
@@ -1131,6 +1171,7 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminNutritionTargetsRoute: typeof AuthenticatedAdminNutritionTargetsRoute
   AuthenticatedAdminOffersRoute: typeof AuthenticatedAdminOffersRoute
   AuthenticatedAdminPaymentLinksRoute: typeof AuthenticatedAdminPaymentLinksRoute
+  AuthenticatedAdminPaymentsRoute: typeof AuthenticatedAdminPaymentsRoute
   AuthenticatedAdminProgramsRoute: typeof AuthenticatedAdminProgramsRoute
   AuthenticatedAdminPurchasesRoute: typeof AuthenticatedAdminPurchasesRouteWithChildren
   AuthenticatedAdminResourcesRoute: typeof AuthenticatedAdminResourcesRoute
@@ -1166,6 +1207,7 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
       AuthenticatedAdminNutritionTargetsRoute,
     AuthenticatedAdminOffersRoute: AuthenticatedAdminOffersRoute,
     AuthenticatedAdminPaymentLinksRoute: AuthenticatedAdminPaymentLinksRoute,
+    AuthenticatedAdminPaymentsRoute: AuthenticatedAdminPaymentsRoute,
     AuthenticatedAdminProgramsRoute: AuthenticatedAdminProgramsRoute,
     AuthenticatedAdminPurchasesRoute:
       AuthenticatedAdminPurchasesRouteWithChildren,
@@ -1269,6 +1311,7 @@ const rootRouteChildren: RootRouteChildren = {
   SetupRoute: SetupRoute,
   SitemapRoute: SitemapRoute,
   ApiPublicSignnowWebhookRoute: ApiPublicSignnowWebhookRoute,
+  ApiPublicStripeWebhookRoute: ApiPublicStripeWebhookRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
