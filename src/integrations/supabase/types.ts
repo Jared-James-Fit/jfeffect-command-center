@@ -1954,6 +1954,8 @@ export type Database = {
           goal: string
           id: string
           last_updated_at: string
+          pdf_name: string | null
+          pdf_url: string | null
           phase: string
           start_date: string
           status: string
@@ -1973,6 +1975,8 @@ export type Database = {
           goal?: string
           id?: string
           last_updated_at?: string
+          pdf_name?: string | null
+          pdf_url?: string | null
           phase?: string
           start_date: string
           status?: string
@@ -1992,6 +1996,8 @@ export type Database = {
           goal?: string
           id?: string
           last_updated_at?: string
+          pdf_name?: string | null
+          pdf_url?: string | null
           phase?: string
           start_date?: string
           status?: string

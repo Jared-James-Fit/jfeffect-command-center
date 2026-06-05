@@ -10,6 +10,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { NUTRITION_PHASES, NUTRITION_GOALS, NUTRITION_STRUCTURES, dayLabelsForStructure, TARGET_STATUSES } from "@/lib/nutrition-cardio";
+import { FileText, Upload, X } from "lucide-react";
 
 type Day = {
   id?: string;
@@ -62,6 +63,8 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
         client_notes: "",
         admin_notes: "",
         visible_to_client: true,
+        pdf_url: "",
+        pdf_name: "",
       };
       setForm(f);
       setDays(dayLabelsForStructure(f.structure).map((label, i) => ({ day_label: label, sort_order: i })));
@@ -70,6 +73,22 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
 
   if (!form) return null;
   const set = (k: string, v: any) => setForm({ ...form, [k]: v });
+
+  const uploadPdf = async (file: File) => {
+    if (!form.client_id) return toast.error("Pick a client first");
+    if (file.type !== "application/pdf") return toast.error("PDF files only");
+    if (file.size > 25 * 1024 * 1024) return toast.error("Max 25MB");
+    const path = `${form.client_id}/${Date.now()}-${file.name.replace(/[^a-z0-9.\-_]/gi, "_")}`;
+    const { error } = await supabase.storage.from("nutrition-plans").upload(path, file, { upsert: true, contentType: "application/pdf" });
+    if (error) return toast.error(error.message);
+    setForm({ ...form, pdf_url: path, pdf_name: file.name });
+    toast.success("PDF uploaded");
+  };
+
+  const removePdf = async () => {
+    if (form.pdf_url) await supabase.storage.from("nutrition-plans").remove([form.pdf_url]);
+    setForm({ ...form, pdf_url: "", pdf_name: "" });
+  };
 
   const updateStructure = (v: string) => {
     setForm({ ...form, structure: v });
@@ -102,6 +121,8 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
       client_notes: form.client_notes,
       admin_notes: form.admin_notes,
       visible_to_client: form.visible_to_client,
+      pdf_url: form.pdf_url || null,
+      pdf_name: form.pdf_name || null,
       last_updated_at: new Date().toISOString(),
     };
     let targetId = form.id;
@@ -205,6 +226,26 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
         <div className="grid gap-3 md:grid-cols-2">
           <div><Label>Coach notes (visible to client)</Label><Textarea rows={3} value={form.client_notes ?? ""} onChange={(e) => set("client_notes", e.target.value)} /></div>
           <div><Label>Private admin notes</Label><Textarea rows={3} value={form.admin_notes ?? ""} onChange={(e) => set("admin_notes", e.target.value)} /></div>
+        </div>
+
+        <div className="rounded-md border border-border bg-secondary/20 p-4 space-y-2">
+          <div className="flex items-center justify-between">
+            <Label className="text-xs uppercase tracking-widest text-muted-foreground">Nutrition Plan PDF (visible to client)</Label>
+            {form.pdf_url && (
+              <Button size="sm" variant="ghost" className="text-destructive" onClick={removePdf}><X className="mr-1 h-3 w-3" /> Remove</Button>
+            )}
+          </div>
+          {form.pdf_url ? (
+            <div className="flex items-center gap-2 rounded-md border border-border bg-card px-3 py-2 text-sm">
+              <FileText className="h-4 w-4 text-primary" />
+              <span className="font-semibold truncate">{form.pdf_name || "nutrition-plan.pdf"}</span>
+            </div>
+          ) : (
+            <label className="flex cursor-pointer items-center justify-center gap-2 rounded-md border border-dashed border-border bg-card px-3 py-6 text-sm text-muted-foreground hover:bg-secondary/30">
+              <Upload className="h-4 w-4" /> Click to upload PDF
+              <input type="file" accept="application/pdf" className="hidden" onChange={(e) => e.target.files?.[0] && uploadPdf(e.target.files[0])} />
+            </label>
+          )}
         </div>
 
         <DialogFooter>

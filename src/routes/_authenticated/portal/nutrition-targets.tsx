@@ -4,7 +4,9 @@ import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
-import { Apple, Beef, Wheat, Droplets, Footprints, Flame, Cookie } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Apple, Beef, Wheat, Droplets, Footprints, Flame, Cookie, FileText, Download, ExternalLink } from "lucide-react";
+import { useEffect, useState } from "react";
 
 export const Route = createFileRoute("/_authenticated/portal/nutrition-targets")({ component: NutritionTargets });
 
@@ -62,6 +64,8 @@ function NutritionTargets() {
               )}
             </Card>
 
+            {current.pdf_url && <PdfCard path={current.pdf_url} name={current.pdf_name} />}
+
             <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
               {(current.nutrition_target_days ?? []).sort((a: any, b: any) => a.sort_order - b.sort_order).map((day: any) => (
                 <DayCard key={day.id} day={day} />
@@ -71,6 +75,46 @@ function NutritionTargets() {
         )}
       </div>
     </>
+  );
+}
+
+function PdfCard({ path, name }: { path: string; name?: string | null }) {
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => {
+    let cancel = false;
+    supabase.storage.from("nutrition-plans").createSignedUrl(path, 60 * 60).then(({ data }) => {
+      if (!cancel) setUrl(data?.signedUrl ?? null);
+    });
+    return () => { cancel = true; };
+  }, [path]);
+
+  return (
+    <Card className="border-border bg-card p-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <FileText className="h-7 w-7 text-primary" />
+          <div>
+            <div className="text-xs uppercase tracking-widest text-muted-foreground">Your Nutrition Plan</div>
+            <div className="font-bold">{name || "Nutrition Plan.pdf"}</div>
+          </div>
+        </div>
+        {url && (
+          <div className="flex gap-2">
+            <a href={url} target="_blank" rel="noreferrer">
+              <Button size="sm" variant="outline"><ExternalLink className="mr-1 h-4 w-4" /> Open</Button>
+            </a>
+            <a href={url} download={name || "nutrition-plan.pdf"}>
+              <Button size="sm" className="bg-gradient-primary font-bold uppercase"><Download className="mr-1 h-4 w-4" /> Download</Button>
+            </a>
+          </div>
+        )}
+      </div>
+      {url && (
+        <div className="mt-4 overflow-hidden rounded-md border border-border bg-secondary/30">
+          <iframe src={url} title="Nutrition Plan" className="h-[70vh] w-full" />
+        </div>
+      )}
+    </Card>
   );
 }
 
