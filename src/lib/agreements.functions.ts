@@ -271,9 +271,6 @@ export const createAgreement = createServerFn({ method: "POST" })
       admin_notes: z.string().max(2000).optional().nullable(),
       signing_method: z.enum([
         "Remote Invite",
-        "In-Person / iPad",
-        "Kiosk Mode",
-        "Manual Upload",
         "Manual Link",
       ]).optional(),
       status_override: z.string().max(60).optional(),
