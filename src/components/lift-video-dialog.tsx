@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerDescription, DrawerFooter } from "@/components/ui/drawer";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -16,7 +17,7 @@ import { initMediaUpload, finalizeMediaUpload, createSubmission } from "@/lib/dr
 import { uploadLiftClipToDrive } from "@/lib/lift-video-drive-upload";
 import { friendlyDriveError } from "@/lib/drive-errors";
 import { toast } from "sonner";
-import { Upload, Link as LinkIcon, Loader2, Video as VideoIcon, Send, X, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { Upload, Link as LinkIcon, Loader2, Video as VideoIcon, Send, X, AlertTriangle, CheckCircle2, ChevronDown } from "lucide-react";
 
 type Props = {
   open: boolean;
