@@ -149,6 +149,7 @@ export type Database = {
           signed_copy_storage_path: string | null
           signed_copy_url: string | null
           signed_in_person: boolean
+          signed_pdf_pulled_at: string | null
           signer_mismatch: boolean
           signer_name_in_signnow: string | null
           signing_method: string | null
@@ -164,6 +165,8 @@ export type Database = {
           verification_status: string
           verified_at: string | null
           verified_by: string | null
+          webhook_last_event: string | null
+          webhook_last_event_at: string | null
         }
         Insert: {
           admin_notes?: string | null
@@ -192,6 +195,7 @@ export type Database = {
           signed_copy_storage_path?: string | null
           signed_copy_url?: string | null
           signed_in_person?: boolean
+          signed_pdf_pulled_at?: string | null
           signer_mismatch?: boolean
           signer_name_in_signnow?: string | null
           signing_method?: string | null
@@ -207,6 +211,8 @@ export type Database = {
           verification_status?: string
           verified_at?: string | null
           verified_by?: string | null
+          webhook_last_event?: string | null
+          webhook_last_event_at?: string | null
         }
         Update: {
           admin_notes?: string | null
@@ -235,6 +241,7 @@ export type Database = {
           signed_copy_storage_path?: string | null
           signed_copy_url?: string | null
           signed_in_person?: boolean
+          signed_pdf_pulled_at?: string | null
           signer_mismatch?: boolean
           signer_name_in_signnow?: string | null
           signing_method?: string | null
@@ -250,6 +257,8 @@ export type Database = {
           verification_status?: string
           verified_at?: string | null
           verified_by?: string | null
+          webhook_last_event?: string | null
+          webhook_last_event_at?: string | null
         }
         Relationships: [
           {
@@ -1643,6 +1652,7 @@ export type Database = {
           commitment_term_length: string | null
           created_at: string
           currency: string | null
+          default_agreement_template_id: string | null
           delivery_assets: Json
           delivery_notes: string | null
           deposit_amount: number | null
@@ -1718,6 +1728,7 @@ export type Database = {
           commitment_term_length?: string | null
           created_at?: string
           currency?: string | null
+          default_agreement_template_id?: string | null
           delivery_assets?: Json
           delivery_notes?: string | null
           deposit_amount?: number | null
@@ -1793,6 +1804,7 @@ export type Database = {
           commitment_term_length?: string | null
           created_at?: string
           currency?: string | null
+          default_agreement_template_id?: string | null
           delivery_assets?: Json
           delivery_notes?: string | null
           deposit_amount?: number | null
@@ -1851,7 +1863,15 @@ export type Database = {
           updated_at?: string
           version?: number
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "offers_default_agreement_template_id_fkey"
+            columns: ["default_agreement_template_id"]
+            isOneToOne: false
+            referencedRelation: "agreement_templates"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {
