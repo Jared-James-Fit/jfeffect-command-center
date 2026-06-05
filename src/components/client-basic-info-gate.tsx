@@ -21,11 +21,9 @@ export function ClientBasicInfoGate({ children }: { children: ReactNode }) {
   const [form, setForm] = useState<BasicInfoValues | null>(null);
   const [saving, setSaving] = useState(false);
 
-  if (isImpersonating) return <>{children}</>;
-
   const { data: client, isLoading } = useQuery({
     queryKey: ["my-client-basic-info-gate", user?.id],
-    enabled: !!user,
+    enabled: !!user && !isImpersonating,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("clients")
@@ -59,6 +57,7 @@ export function ClientBasicInfoGate({ children }: { children: ReactNode }) {
     });
   }, [client]);
 
+  if (isImpersonating) return <>{children}</>;
   // Admin/coach viewing portal w/o client record, or still loading
   if (!user || isLoading || !client) return <>{children}</>;
   if (isBasicInfoComplete(client)) return <>{children}</>;
