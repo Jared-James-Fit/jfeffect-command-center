@@ -374,7 +374,7 @@ export const createAgreement = createServerFn({ method: "POST" })
         ? `${data.admin_notes ? data.admin_notes + "\n\n" : ""}[SignNow API error] ${apiError}`
         : data.admin_notes ?? null,
       signing_method: data.signing_method ?? null,
-      signed_in_person: inPerson,
+      signed_in_person: false,
       created_by: userId,
     } as any).select("*").single();
     if (error) throw new Error(error.message);
