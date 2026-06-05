@@ -12,11 +12,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Plus, Edit2, Archive, ExternalLink, ShieldCheck, AlertTriangle, FileText, Loader2 } from "lucide-react";
+import { Plus, Edit2, Archive, ExternalLink, ShieldCheck, AlertTriangle, FileText, Loader2, UserPlus, Smartphone, Copy, Search } from "lucide-react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
-import { createTemplate, updateTemplate, archiveTemplate } from "@/lib/agreements.functions";
-import { AGREEMENT_TYPES, type AgreementTemplate, type Agreement, VERIFICATION_BADGE } from "@/lib/agreements";
+import { createTemplate, updateTemplate, archiveTemplate, createAgreement } from "@/lib/agreements.functions";
+import { AGREEMENT_TYPES, type AgreementTemplate, type Agreement, VERIFICATION_BADGE, type SigningMethod } from "@/lib/agreements";
 import { AgreementStatusBadge } from "@/components/agreement-status-badge";
 
 export const Route = createFileRoute("/_authenticated/admin/agreements/")({
@@ -26,6 +26,7 @@ export const Route = createFileRoute("/_authenticated/admin/agreements/")({
 function AgreementsAdminPage() {
   const qc = useQueryClient();
   const [editing, setEditing] = useState<Partial<AgreementTemplate> | null>(null);
+  const [actioning, setActioning] = useState<{ template: AgreementTemplate; mode: "invite" | "in-person" } | null>(null);
   const createFn = useServerFn(createTemplate);
   const updateFn = useServerFn(updateTemplate);
   const archiveFn = useServerFn(archiveTemplate);
@@ -124,20 +125,36 @@ function AgreementsAdminPage() {
                   </div>
                   {t.signnow_template_id && <p className="text-[11px] text-muted-foreground">SignNow ID: {t.signnow_template_id}</p>}
                   {t.notes && <p className="text-xs text-muted-foreground line-clamp-2">{t.notes}</p>}
-                  <div className="flex gap-2 pt-1">
-                    <Button size="sm" variant="outline" className="flex-1" onClick={() => setEditing(t)}>
-                      <Edit2 className="h-3 w-3 mr-1" /> Edit
+                  <div className="grid grid-cols-3 gap-2 text-[10px] text-muted-foreground py-1">
+                    <div>Sent: <span className="text-foreground font-medium">{(t as any).times_sent ?? 0}</span></div>
+                    <div>Signed: <span className="text-foreground font-medium">{(t as any).times_completed ?? 0}</span></div>
+                    <div>Last: <span className="text-foreground font-medium">{(t as any).last_used_at ? new Date((t as any).last_used_at).toLocaleDateString() : "—"}</span></div>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    <Button size="sm" className="flex-1 min-w-[120px]" onClick={() => setActioning({ template: t, mode: "invite" })}>
+                      <UserPlus className="h-3 w-3 mr-1" /> Invite to Sign
+                    </Button>
+                    <Button size="sm" variant="secondary" className="flex-1 min-w-[120px]" onClick={() => setActioning({ template: t, mode: "in-person" })}>
+                      <Smartphone className="h-3 w-3 mr-1" /> Sign Template
                     </Button>
                     {t.signnow_url && (
-                      <Button size="sm" variant="ghost" asChild>
-                        <a href={t.signnow_url} target="_blank" rel="noreferrer"><ExternalLink className="h-3 w-3" /></a>
+                      <Button size="sm" variant="ghost" onClick={() => { navigator.clipboard.writeText(t.signnow_url!); toast.success("Signing link copied"); }}>
+                        <Copy className="h-3 w-3 mr-1" /> Copy link
                       </Button>
                     )}
+                    {t.signnow_url && (
+                      <Button size="sm" variant="ghost" asChild>
+                        <a href={t.signnow_url} target="_blank" rel="noreferrer"><ExternalLink className="h-3 w-3 mr-1" /> SignNow</a>
+                      </Button>
+                    )}
+                    <Button size="sm" variant="ghost" onClick={() => setEditing(t)}>
+                      <Edit2 className="h-3 w-3 mr-1" /> Edit
+                    </Button>
                     <Button size="sm" variant="ghost" onClick={async () => {
-                      if (!confirm("Archive this template?")) return;
+                      if (!confirm(`${t.is_active ? "Deactivate" : "Archive"} this template?`)) return;
                       await archiveFn({ data: { id: t.id } });
                       qc.invalidateQueries({ queryKey: ["agreement-templates"] });
-                    }}><Archive className="h-3 w-3" /></Button>
+                    }}><Archive className="h-3 w-3 mr-1" /> Deactivate</Button>
                   </div>
                 </Card>
               ))}
@@ -152,6 +169,17 @@ function AgreementsAdminPage() {
         onOpenChange={(o) => !o && setEditing(null)}
         initial={editing ?? {}}
         onSubmit={save}
+      />
+
+      <TemplateActionDialog
+        open={actioning !== null}
+        action={actioning}
+        onOpenChange={(o) => !o && setActioning(null)}
+        onDone={() => {
+          qc.invalidateQueries({ queryKey: ["agreement-templates"] });
+          qc.invalidateQueries({ queryKey: ["agreements-needing-attention"] });
+          setActioning(null);
+        }}
       />
     </>
   );
