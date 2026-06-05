@@ -308,10 +308,11 @@ function TemplateDialog({
 }
 
 function TemplateActionDialog({
-  open, action, onOpenChange, onDone,
+  open, action, apiConnected, onOpenChange, onDone,
 }: {
   open: boolean;
   action: { template: AgreementTemplate; mode: "invite" | "in-person" } | null;
+  apiConnected: boolean;
   onOpenChange: (o: boolean) => void;
   onDone: () => void;
 }) {
@@ -347,6 +348,9 @@ function TemplateActionDialog({
     if (inPerson && !link) return toast.error("This template has no SignNow signing link saved");
     setBusy(true);
     try {
+      // Manual mode: remote "invite" doesn't actually send anything.
+      // Mark it accordingly so the dashboard doesn't claim the client was emailed.
+      const statusOverride = !apiConnected && !inPerson ? "Manual Action Needed" : undefined;
       const ag: any = await createAgreementFn({
         data: {
           client_id: clientId,
@@ -357,12 +361,19 @@ function TemplateActionDialog({
           admin_notes: notes.trim() || null,
           send_now: true,
           signing_method: signingMethod,
+          status_override: statusOverride,
         } as any,
       });
       if (inPerson && link) {
         window.open(link, "_blank", "noopener,noreferrer");
       }
-      toast.success(inPerson ? "Launched signing — finish on this device" : "Invite created for client");
+      toast.success(
+        inPerson
+          ? "Launched signing — finish on this device"
+          : apiConnected
+            ? "Invite sent to client via SignNow"
+            : "Record created. Send the signing link to the client manually — the app did not email them.",
+      );
       onDone();
       // Navigate to client profile so admin can mark signed afterward
       if (ag?.client_id) {
@@ -390,6 +401,12 @@ function TemplateActionDialog({
           )}
         </DialogHeader>
         <div className="space-y-3 text-sm">
+          {!apiConnected && !inPerson && (
+            <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2.5 text-[11px] text-amber-700 dark:text-amber-300">
+              <strong>Manual mode:</strong> SignNow API isn't connected, so the app cannot email this invite for you.
+              We'll save the record and the signing link — you must send it to the client yourself (email, text, copy/paste).
+            </div>
+          )}
           <div>
             <Label className="text-xs">Select client</Label>
             <div className="relative">
