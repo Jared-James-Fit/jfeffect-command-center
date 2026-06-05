@@ -6,7 +6,7 @@ import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { FileText, ClipboardCheck, Dumbbell, CreditCard, Calendar, ExternalLink, CheckCircle2, Circle, ShieldAlert, MessageCircle, Video, FileSignature } from "lucide-react";
+import { FileText, ClipboardCheck, Dumbbell, Calendar, ExternalLink, CheckCircle2, Circle, ShieldAlert, MessageCircle, Video, FileSignature, Target, Image } from "lucide-react";
 import { useEffect, useState } from "react";
 
 export const Route = createFileRoute("/_authenticated/portal/")({ component: PortalHome });
@@ -64,11 +64,13 @@ function PortalHome() {
   const showChecklist = completed < checklist.length;
 
   const actions = [
-    { to: "/portal/messages", label: "Message Coach Jared", icon: MessageCircle },
-    { to: "/portal/program", label: "My Program", icon: FileText },
-    { to: "/portal/lift-videos", label: "Upload Lift Video", icon: Video },
-    { to: "/portal/check-in", label: "Submit Check-In", icon: ClipboardCheck },
-    { to: "/portal/exercises", label: "Exercises", icon: Dumbbell },
+    { to: "/portal/messages", label: "Message Coach", icon: MessageCircle },
+    { to: "/portal/program", label: "Workout Program", icon: FileText },
+    { to: "/portal/lift-videos", label: "Send Lift Videos", icon: Video },
+    { to: "/portal/check-in", label: "Weekly Check-In", icon: ClipboardCheck },
+    { to: "/portal/exercises", label: "Exercise Library", icon: Dumbbell },
+    { to: "/portal/nutrition-targets", label: "Nutrition Targets", icon: Target },
+    { to: "/portal/media", label: "Media + Feedback", icon: Image },
   ];
 
   return (
