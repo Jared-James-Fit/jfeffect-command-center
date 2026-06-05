@@ -4,21 +4,54 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
+  DropdownMenuLabel, DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, ExternalLink, Copy, ShieldCheck, AlertTriangle, FileText, Send, BellRing, Upload, Trash2, Loader2, UserPlus, RefreshCcw, Download, CheckCircle2, Flag, StickyNote, BadgeCheck, RotateCcw } from "lucide-react";
+import {
+  ExternalLink, Copy, ShieldCheck, AlertTriangle, FileText, Send, BellRing, Upload, Trash2, Loader2,
+  UserPlus, RefreshCcw, Download, CheckCircle2, Flag, StickyNote, BadgeCheck, RotateCcw, MoreHorizontal,
+  Archive, ArchiveRestore, Search,
+} from "lucide-react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import { AgreementStatusBadge } from "@/components/agreement-status-badge";
+import { BulkActionBar } from "@/components/bulk-action-bar";
+import { DoubleConfirmDeleteDialog } from "@/components/double-confirm-delete-dialog";
+import { useBulkSelection } from "@/hooks/use-bulk-selection";
 import { fileLabel, AGREEMENT_TYPES, VERIFICATION_BADGE, type Agreement, type AgreementTemplate, type SigningMethod } from "@/lib/agreements";
 import {
   createAgreement, updateAgreement, markAgreementSigned, verifyAgreement,
   sendAgreementReminder, cancelAgreement, refreshAgreementStatus, getSignedAgreementUrl,
   approveSignedAgreement, setAgreementVerification, reopenAgreement,
+  archiveAgreement, unarchiveAgreement, deleteAgreement,
+  bulkArchiveAgreements, bulkDeleteAgreements, bulkUpdateAgreementStatus, bulkVerifyAgreements,
 } from "@/lib/agreements.functions";
+
+type AgreementBucket = "active" | "completed" | "terminal" | "archived";
+
+function bucketFor(a: Agreement): AgreementBucket {
+  if (a.archived) return "archived";
+  const status = a.status as string;
+  if (["Verified", "Completed", "Signed"].includes(status)) return "completed";
+  if (["Cancelled", "Declined", "Expired", "Error"].includes(status)) return "terminal";
+  return "active";
+}
+
+const FILTERS = [
+  { value: "all", label: "All active" },
+  { value: "active", label: "Waiting on Client" },
+  { value: "needs-verification", label: "Needs Verification" },
+  { value: "completed", label: "Signed / Verified" },
+  { value: "terminal", label: "Cancelled / Error" },
+  { value: "archived", label: "Archived" },
+] as const;
 
 export function AgreementsPanel({ clientId, clientName }: { clientId: string; clientName?: string }) {
   const qc = useQueryClient();
@@ -26,6 +59,10 @@ export function AgreementsPanel({ clientId, clientName }: { clientId: string; cl
   const [openUpload, setOpenUpload] = useState<Agreement | null>(null);
   const [openVerify, setOpenVerify] = useState<Agreement | null>(null);
   const [openApprove, setOpenApprove] = useState<Agreement | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Agreement | null>(null);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [filter, setFilter] = useState<string>("all");
+  const [search, setSearch] = useState("");
 
   const createFn = useServerFn(createAgreement);
   const updateFn = useServerFn(updateAgreement);
@@ -38,6 +75,13 @@ export function AgreementsPanel({ clientId, clientName }: { clientId: string; cl
   const getSignedUrlFn = useServerFn(getSignedAgreementUrl);
   const setVerificationFn = useServerFn(setAgreementVerification);
   const reopenFn = useServerFn(reopenAgreement);
+  const archiveFn = useServerFn(archiveAgreement);
+  const unarchiveFn = useServerFn(unarchiveAgreement);
+  const deleteFn = useServerFn(deleteAgreement);
+  const bulkArchiveFn = useServerFn(bulkArchiveAgreements);
+  const bulkDeleteFn = useServerFn(bulkDeleteAgreements);
+  const bulkStatusFn = useServerFn(bulkUpdateAgreementStatus);
+  const bulkVerifyFn = useServerFn(bulkVerifyAgreements);
 
   const { data: agreements = [] } = useQuery({
     queryKey: ["client-agreements", clientId],
@@ -49,22 +93,67 @@ export function AgreementsPanel({ clientId, clientName }: { clientId: string; cl
     },
   });
 
-  // Sort: signed/verified rows first (newest signed_at first), then in-flight
-  // (by sent_at desc), then terminal/legacy rows last. Keeps real signed
-  // documents prominent above old unsigned/test rows.
-  const SIGNED_STATUSES = new Set(["Signed", "Completed", "Verified"]);
-  const TERMINAL_STATUSES = new Set(["Cancelled", "Declined", "Expired", "Error"]);
-  const sortedAgreements = [...agreements].sort((a, b) => {
-    const bucket = (x: Agreement) =>
-      SIGNED_STATUSES.has(x.status as string) ? 0
-      : TERMINAL_STATUSES.has(x.status as string) ? 2
-      : 1;
-    const ba = bucket(a), bb = bucket(b);
-    if (ba !== bb) return ba - bb;
-    const ta = (a.signed_at ?? a.completed_at ?? a.sent_at ?? a.updated_at ?? a.created_at ?? "") as string;
-    const tb = (b.signed_at ?? b.completed_at ?? b.sent_at ?? b.updated_at ?? b.created_at ?? "") as string;
-    return tb.localeCompare(ta);
-  });
+  const summary = useMemo(() => {
+    const live = agreements.filter((a) => !a.archived);
+    const sorted = [...live].sort((a, b) => {
+      const ta = (a.signed_at ?? a.completed_at ?? a.sent_at ?? a.created_at ?? "") as string;
+      const tb = (b.signed_at ?? b.completed_at ?? b.sent_at ?? b.created_at ?? "") as string;
+      return tb.localeCompare(ta);
+    });
+    const latestSigned = sorted.find((a) => bucketFor(a) === "completed") ?? null;
+    const latest = sorted[0] ?? null;
+    const hasSignedCopy = !!(latestSigned?.signed_copy_url || latestSigned?.signed_copy_storage_path);
+    return {
+      total: agreements.length,
+      active: agreements.filter((a) => bucketFor(a) === "active").length,
+      completed: agreements.filter((a) => bucketFor(a) === "completed").length,
+      archived: agreements.filter((a) => a.archived).length,
+      latestSigned, latest, hasSignedCopy,
+    };
+  }, [agreements]);
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return agreements.filter((a) => {
+      const b = bucketFor(a);
+      if (filter === "archived") {
+        if (!a.archived) return false;
+      } else if (filter === "all") {
+        if (a.archived) return false;
+      } else if (filter === "active") {
+        if (a.archived || b !== "active") return false;
+      } else if (filter === "completed") {
+        if (a.archived || b !== "completed") return false;
+      } else if (filter === "terminal") {
+        if (a.archived || b !== "terminal") return false;
+      } else if (filter === "needs-verification") {
+        if (a.archived) return false;
+        const needs = a.status === "Needs Manual Verification" ||
+          a.verification_status === "Needs Review" || a.signer_mismatch ||
+          (a.status === "Signed" && a.verification_status === "Not Verified");
+        if (!needs) return false;
+      }
+      if (q) {
+        const hay = `${a.template_name ?? ""} ${a.agreement_type ?? ""} ${a.offer_name ?? ""} ${a.status ?? ""}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    }).sort((a, b) => {
+      const ta = (a.signed_at ?? a.completed_at ?? a.sent_at ?? a.updated_at ?? a.created_at ?? "") as string;
+      const tb = (b.signed_at ?? b.completed_at ?? b.sent_at ?? b.updated_at ?? b.created_at ?? "") as string;
+      return tb.localeCompare(ta);
+    });
+  }, [agreements, filter, search]);
+
+  const grouped = useMemo(() => {
+    const buckets: Record<AgreementBucket, Agreement[]> = {
+      active: [], completed: [], terminal: [], archived: [],
+    };
+    for (const a of filtered) buckets[bucketFor(a)].push(a);
+    return buckets;
+  }, [filtered]);
+
+  const sel = useBulkSelection(filtered.map((a) => a.id));
 
   const { data: templates = [] } = useQuery({
     queryKey: ["agreement-templates-active"],
@@ -76,6 +165,96 @@ export function AgreementsPanel({ clientId, clientName }: { clientId: string; cl
   });
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ["client-agreements", clientId] });
+
+  const selectedRows = useMemo(
+    () => agreements.filter((a) => sel.isSelected(a.id)),
+    [agreements, sel],
+  );
+  const selectedHasSignedCopy = selectedRows.some(
+    (a) => a.signed_copy_storage_path || a.signed_copy_url,
+  );
+
+  async function handleRowAction(action: string, a: Agreement) {
+    try {
+      switch (action) {
+        case "refresh": {
+          const r: any = await refreshFn({ data: { id: a.id } });
+          r?.ok ? toast.success(`Refreshed: ${r.status}`) : toast.error(r?.reason ?? "Refresh failed");
+          invalidate(); break;
+        }
+        case "open-signnow":
+          if (a.signnow_completed_link) window.open(a.signnow_completed_link, "_blank", "noopener,noreferrer");
+          else toast.error("No SignNow link on this record."); break;
+        case "upload":
+        case "mark-signed": setOpenUpload(a); break;
+        case "mark-verified": setOpenVerify(a); break;
+        case "approve": setOpenApprove(a); break;
+        case "remove-verification": {
+          const r: any = await setVerificationFn({ data: { id: a.id, verified: false } });
+          toast.success(`Verification removed · ${r?.newStatus ?? "Needs attention"}`);
+          invalidate(); break;
+        }
+        case "reopen":
+          await reopenFn({ data: { id: a.id } });
+          toast.success("Agreement reopened · client will see it again");
+          invalidate(); break;
+        case "remind":
+          await reminderFn({ data: { id: a.id } });
+          toast.success("Reminder logged"); invalidate(); break;
+        case "needs-followup":
+          await updateFn({ data: { id: a.id, status: "Needs Manual Verification" } as any });
+          toast.success("Flagged for follow-up"); invalidate(); break;
+        case "cancel":
+          await cancelFn({ data: { id: a.id } });
+          toast.success("Cancelled"); invalidate(); break;
+        case "archive":
+          await archiveFn({ data: { id: a.id } });
+          toast.success("Archived"); invalidate(); break;
+        case "unarchive":
+          await unarchiveFn({ data: { id: a.id } });
+          toast.success("Restored"); invalidate(); break;
+        case "delete": setDeleteTarget(a); break;
+        case "download-signed": {
+          const r: any = await getSignedUrlFn({ data: { id: a.id } });
+          if (r?.url) window.open(r.url, "_blank", "noopener,noreferrer");
+          else toast.error("No signed copy available.");
+          break;
+        }
+      }
+    } catch (e: any) {
+      toast.error(e?.message ?? "Action failed");
+    }
+  }
+
+  async function bulkAction(kind: "archive" | "delete" | "verify" | "follow-up" | "waiting" | "remind") {
+    const ids = sel.selectedIds;
+    if (ids.length === 0) return;
+    try {
+      if (kind === "archive") {
+        const r: any = await bulkArchiveFn({ data: { ids } });
+        toast.success(`Archived ${r.count}`); sel.clear(); invalidate();
+      } else if (kind === "verify") {
+        const r: any = await bulkVerifyFn({ data: { ids } });
+        toast.success(`Verified ${r.count}`); sel.clear(); invalidate();
+      } else if (kind === "follow-up") {
+        const r: any = await bulkStatusFn({ data: { ids, status: "Needs Manual Verification" } });
+        toast.success(`Flagged ${r.count}`); sel.clear(); invalidate();
+      } else if (kind === "waiting") {
+        const r: any = await bulkStatusFn({ data: { ids, status: "Waiting on Client" } });
+        toast.success(`Marked ${r.count} waiting`); sel.clear(); invalidate();
+      } else if (kind === "remind") {
+        let n = 0;
+        for (const id of ids) {
+          try { await reminderFn({ data: { id } }); n += 1; } catch { /* keep going */ }
+        }
+        toast.success(`Logged ${n} reminder${n === 1 ? "" : "s"}`); sel.clear(); invalidate();
+      } else if (kind === "delete") {
+        setBulkDeleteOpen(true);
+      }
+    } catch (e: any) {
+      toast.error(e?.message ?? "Bulk action failed");
+    }
+  }
 
   return (
     <Card className="border-border bg-card p-5 space-y-3 md:col-span-2">
@@ -92,72 +271,126 @@ export function AgreementsPanel({ clientId, clientName }: { clientId: string; cl
         </div>
       </div>
 
-      {sortedAgreements.length === 0 ? (
-        <p className="text-sm text-muted-foreground py-6 text-center">No agreements yet. Send one through SignNow or upload an existing signed copy.</p>
-      ) : (
-        <ul className="space-y-2">
-          {sortedAgreements.map((a) => (
-            <AgreementRow
-              key={a.id}
-              ag={a}
-              onUpdate={async (patch) => { await updateFn({ data: { id: a.id, ...patch } as any }); invalidate(); }}
-              onMarkSigned={() => setOpenUpload(a)}
-              onVerify={() => setOpenVerify(a)}
-              onApprove={() => setOpenApprove(a)}
-              onRemoveVerification={async () => {
-                if (!confirm("Remove verification? This agreement will be marked as needing attention again and may reappear on the client dashboard.")) return;
-                const r: any = await setVerificationFn({ data: { id: a.id, verified: false } });
-                toast.success(`Verification removed · ${r?.newStatus ?? "Needs attention"}`);
-                invalidate();
-              }}
-              onReopen={async () => {
-                if (!confirm("Reopen this agreement? This will mark the agreement as incomplete and show it on the client dashboard as needing signature.")) return;
-                await reopenFn({ data: { id: a.id } });
-                toast.success("Agreement reopened · client will see it again");
-                invalidate();
-              }}
-              onRemind={async () => { await reminderFn({ data: { id: a.id } }); toast.success("Reminder logged"); invalidate(); }}
-              onCancel={async () => {
-                if (!confirm("Cancel this agreement?")) return;
-                await cancelFn({ data: { id: a.id } }); toast.success("Cancelled"); invalidate();
-              }}
-              onMarkManuallySent={async () => {
-                await updateFn({ data: { id: a.id, status: "Sent", sent_at: new Date().toISOString() } as any });
-                toast.success("Marked as manually sent");
-                invalidate();
-              }}
-              onNeedsFollowUp={async () => {
-                await updateFn({ data: { id: a.id, status: "Needs Manual Verification" } as any });
-                toast.success("Flagged for follow-up");
-                invalidate();
-              }}
-              onRefresh={async () => {
-                const r: any = await refreshFn({ data: { id: a.id } });
-                if (r?.ok) {
-                  toast.success(`Refreshed: ${r.status}`);
-                } else {
-                  toast.error(r?.reason ?? "Refresh failed");
-                }
-                invalidate();
-              }}
-              onDownloadSigned={async () => {
-                try {
-                  const r: any = await getSignedUrlFn({ data: { id: a.id } });
-                  if (r?.url) {
-                    window.open(r.url, "_blank", "noopener,noreferrer");
-                  } else {
-                    toast.error("No signed copy available yet.");
-                  }
-                } catch (e: any) {
-                  toast.error(e?.message ?? "Couldn't fetch signed copy");
-                }
-              }}
+      <SummaryCard summary={summary} />
+
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative flex-1 min-w-[180px] max-w-xs">
+          <Search className="absolute left-2 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+          <Input className="pl-7 h-9" placeholder="Search template, offer, status…" value={search} onChange={(e) => setSearch(e.target.value)} />
+        </div>
+        <Select value={filter} onValueChange={setFilter}>
+          <SelectTrigger className="h-9 w-[200px]"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {FILTERS.map((f) => <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        {filtered.length > 0 && (
+          <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer ml-auto">
+            <Checkbox
+              checked={sel.allSelected ? true : sel.someSelected ? "indeterminate" : false}
+              onCheckedChange={() => sel.toggleAll()}
             />
-          ))}
-        </ul>
+            Select all visible
+          </label>
+        )}
+      </div>
+
+      {filtered.length === 0 ? (
+        <p className="text-sm text-muted-foreground py-6 text-center">
+          {agreements.length === 0
+            ? "No agreements yet. Send one through SignNow or upload an existing signed copy."
+            : "No agreements match the current filter."}
+        </p>
+      ) : (
+        <div className="space-y-4">
+          {(["active", "completed", "terminal", "archived"] as AgreementBucket[]).map((bucket) => {
+            const rows = grouped[bucket];
+            if (rows.length === 0) return null;
+            const label = ({
+              active: "Active / Pending",
+              completed: "Signed / Verified",
+              terminal: "Cancelled / Error",
+              archived: "Archived",
+            } as const)[bucket];
+            return (
+              <section key={bucket} className="space-y-2">
+                <h4 className="text-[11px] uppercase tracking-widest text-muted-foreground px-1">
+                  {label} <span className="opacity-60">({rows.length})</span>
+                </h4>
+                <ul className="space-y-2">
+                  {rows.map((a) => (
+                    <AgreementRow
+                      key={a.id}
+                      ag={a}
+                      selected={sel.isSelected(a.id)}
+                      onSelect={(c) => sel.setOne(a.id, c)}
+                      onAction={(act) => handleRowAction(act, a)}
+                    />
+                  ))}
+                </ul>
+              </section>
+            );
+          })}
+        </div>
       )}
 
-      {/* Send dialog */}
+      <BulkActionBar count={sel.count} onClear={sel.clear}>
+        <Button size="sm" variant="ghost" onClick={() => bulkAction("verify")}>
+          <ShieldCheck className="h-3.5 w-3.5 mr-1" />Verify
+        </Button>
+        <Button size="sm" variant="ghost" onClick={() => bulkAction("waiting")}>
+          <Send className="h-3.5 w-3.5 mr-1" />Waiting on Client
+        </Button>
+        <Button size="sm" variant="ghost" onClick={() => bulkAction("follow-up")}>
+          <Flag className="h-3.5 w-3.5 mr-1" />Follow-up
+        </Button>
+        <Button size="sm" variant="ghost" onClick={() => bulkAction("remind")}>
+          <BellRing className="h-3.5 w-3.5 mr-1" />Reminders
+        </Button>
+        <Button size="sm" variant="ghost" onClick={() => bulkAction("archive")}>
+          <Archive className="h-3.5 w-3.5 mr-1" />Archive
+        </Button>
+        <Button size="sm" variant="ghost" className="text-red-600 dark:text-red-400" onClick={() => bulkAction("delete")}>
+          <Trash2 className="h-3.5 w-3.5 mr-1" />Delete
+        </Button>
+      </BulkActionBar>
+
+      <DoubleConfirmDeleteDialog
+        open={!!deleteTarget}
+        onOpenChange={(o) => !o && setDeleteTarget(null)}
+        count={1}
+        title="Delete agreement record?"
+        message="Are you sure you want to delete this agreement record?"
+        strongWarning={
+          deleteTarget && (deleteTarget.signed_copy_storage_path || deleteTarget.signed_copy_url)
+            ? "This agreement has a signed document attached. Deleting it may remove access to an important client record."
+            : undefined
+        }
+        confirmLabel="Delete Agreement"
+        onConfirm={async () => {
+          if (!deleteTarget) return;
+          await deleteFn({ data: { id: deleteTarget.id } });
+          toast.success("Agreement deleted");
+          invalidate();
+        }}
+      />
+
+      <DoubleConfirmDeleteDialog
+        open={bulkDeleteOpen}
+        onOpenChange={setBulkDeleteOpen}
+        count={sel.count}
+        title={`Delete ${sel.count} agreement records?`}
+        message={`You are about to delete ${sel.count} agreement records.`}
+        strongWarning={selectedHasSignedCopy ? "One or more selected agreements have signed documents attached." : undefined}
+        confirmLabel="Delete Selected Agreements"
+        onConfirm={async () => {
+          const r: any = await bulkDeleteFn({ data: { ids: sel.selectedIds } });
+          toast.success(`Deleted ${r.count}`);
+          sel.clear();
+          invalidate();
+        }}
+      />
+
       <SendAgreementDialog
         open={sendMode !== null}
         onOpenChange={(o) => !o && setSendMode(null)}
@@ -168,13 +401,9 @@ export function AgreementsPanel({ clientId, clientName }: { clientId: string; cl
           const apiErr = (ag as any)?._api_error as string | null | undefined;
           const apiSent = (ag as any)?._api_document_id as string | null | undefined;
           if (payload.signing_method === "Remote Invite") {
-            if (apiErr) {
-              toast.error(`SignNow invite failed — saved as Manual Action Needed. ${apiErr}`);
-            } else if (apiSent) {
-              toast.success("SignNow invite sent. Client will receive an email from SignNow.");
-            } else {
-              toast.success("Invite logged. Open or copy the signing link to send it to the client.");
-            }
+            if (apiErr) toast.error(`SignNow invite failed — saved as Manual Action Needed. ${apiErr}`);
+            else if (apiSent) toast.success("SignNow invite sent. Client will receive an email from SignNow.");
+            else toast.success("Invite logged. Open or copy the signing link to send it to the client.");
           } else {
             toast.success("Agreement created");
           }
@@ -182,7 +411,6 @@ export function AgreementsPanel({ clientId, clientName }: { clientId: string; cl
         }}
       />
 
-      {/* Upload / mark signed dialog */}
       <UploadSignedDialog
         open={!!openUpload}
         onOpenChange={(o) => !o && setOpenUpload(null)}
@@ -212,7 +440,6 @@ export function AgreementsPanel({ clientId, clientName }: { clientId: string; cl
         }}
       />
 
-      {/* Manual verification */}
       <VerifyDialog
         open={!!openVerify}
         onOpenChange={(o) => !o && setOpenVerify(null)}
@@ -225,7 +452,6 @@ export function AgreementsPanel({ clientId, clientName }: { clientId: string; cl
         }}
       />
 
-      {/* Approve signed (one-click admin/coach approval) */}
       <ApproveSignedDialog
         open={!!openApprove}
         onOpenChange={(o) => !o && setOpenApprove(null)}
@@ -242,22 +468,62 @@ export function AgreementsPanel({ clientId, clientName }: { clientId: string; cl
   );
 }
 
+function SummaryCard({ summary }: {
+  summary: {
+    total: number; active: number; completed: number; archived: number;
+    latestSigned: Agreement | null; latest: Agreement | null; hasSignedCopy: boolean;
+  };
+}) {
+  const latest = summary.latestSigned ?? summary.latest;
+  const signed = !!summary.latestSigned;
+  return (
+    <div className="rounded-lg border border-border bg-secondary/20 p-3 grid gap-3 sm:grid-cols-2 md:grid-cols-4">
+      <div>
+        <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Latest agreement</p>
+        <p className="text-sm font-semibold mt-1 truncate">{latest?.template_name ?? "—"}</p>
+        {latest && <div className="mt-1"><AgreementStatusBadge status={latest.status} /></div>}
+      </div>
+      <div>
+        <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Signed?</p>
+        <p className={`text-sm font-semibold mt-1 ${signed ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"}`}>
+          {signed ? "Yes" : "No"}
+        </p>
+        {summary.latestSigned?.signed_at && (
+          <p className="text-[11px] text-muted-foreground mt-0.5">
+            {new Date(summary.latestSigned.signed_at).toLocaleDateString()}
+          </p>
+        )}
+      </div>
+      <div>
+        <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Verification</p>
+        <div className="mt-1">
+          {latest ? (
+            <Badge variant="secondary" className={`border-0 ${VERIFICATION_BADGE[latest.verification_status] ?? "bg-muted text-muted-foreground"}`}>
+              {latest.verification_status}
+            </Badge>
+          ) : <span className="text-sm text-muted-foreground">—</span>}
+        </div>
+      </div>
+      <div>
+        <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Signed copy</p>
+        <p className={`text-sm font-semibold mt-1 ${summary.hasSignedCopy ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground"}`}>
+          {summary.hasSignedCopy ? "Available" : "Missing"}
+        </p>
+        <p className="text-[11px] text-muted-foreground mt-0.5">
+          {summary.active} active · {summary.completed} signed · {summary.archived} archived
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function AgreementRow({
-  ag, onUpdate, onMarkSigned, onVerify, onApprove, onRemoveVerification, onReopen, onRemind, onCancel, onRefresh, onDownloadSigned, onMarkManuallySent, onNeedsFollowUp,
+  ag, selected, onSelect, onAction,
 }: {
   ag: Agreement;
-  onUpdate: (patch: Partial<Agreement>) => Promise<void> | void;
-  onMarkSigned: () => void;
-  onVerify: () => void;
-  onApprove: () => void;
-  onRemoveVerification: () => void;
-  onReopen: () => void;
-  onRemind: () => void;
-  onCancel: () => void;
-  onRefresh: () => void;
-  onDownloadSigned: () => void;
-  onMarkManuallySent: () => void;
-  onNeedsFollowUp: () => void;
+  selected: boolean;
+  onSelect: (checked: boolean) => void;
+  onAction: (action: string) => void;
 }) {
   const label = useMemo(() => fileLabel({
     clientName: ag.client_full_name ?? ag.correct_client_name ?? "Client",
@@ -268,107 +534,188 @@ function AgreementRow({
 
   const isSignNowApi = !!ag.signnow_document_id;
   const sourceLabel = isSignNowApi ? "SignNow API" : (ag.signing_method ?? "Manual");
+  const hasSignedCopy = !!(ag.signed_copy_url || ag.signed_copy_storage_path);
+  const isVerified = ag.status === "Verified" || ag.verification_status === "Manually Verified";
+  const isSigned = ["Signed", "Completed", "Verified"].includes(ag.status as string);
+  const isTerminal = ["Cancelled", "Declined", "Expired", "Error"].includes(ag.status as string);
+  const isWaiting = !isSigned && !isTerminal && !ag.archived;
 
   return (
-    <li className="rounded-lg border border-border bg-secondary/30 p-3 space-y-2">
-      <div className="flex items-start gap-2 flex-wrap">
-        <FileText className="h-4 w-4 text-muted-foreground mt-1" />
+    <li className={`rounded-lg border p-3 space-y-2 ${ag.archived ? "border-dashed border-border bg-muted/20 opacity-80" : "border-border bg-secondary/30"}`}>
+      <div className="flex items-start gap-2">
+        <Checkbox checked={selected} onCheckedChange={(c) => onSelect(c === true)} className="mt-1" />
+        <FileText className="h-4 w-4 text-muted-foreground mt-1 shrink-0" />
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold truncate">{label}</p>
           <p className="text-xs text-muted-foreground truncate">
-            {ag.template_name}{ag.signnow_template_id ? ` · SignNow ID: ${ag.signnow_template_id}` : ""}
+            {ag.template_name}{ag.agreement_type ? ` · ${ag.agreement_type}` : ""}
+            {ag.offer_name ? ` · ${ag.offer_name}` : ""}
           </p>
         </div>
-        <div className="flex items-center gap-1 flex-wrap">
+        <div className="flex items-center gap-1 flex-wrap shrink-0">
           <AgreementStatusBadge status={ag.status} />
-          <Badge variant="secondary" className={`border-0 ${VERIFICATION_BADGE[ag.verification_status] ?? "bg-muted text-muted-foreground"}`}>
-            {ag.verification_status}
-          </Badge>
+          {ag.verification_status && ag.verification_status !== "Not Verified" && (
+            <Badge variant="secondary" className={`border-0 ${VERIFICATION_BADGE[ag.verification_status] ?? "bg-muted text-muted-foreground"}`}>
+              {ag.verification_status}
+            </Badge>
+          )}
           <Badge variant="outline" className="border-border text-[10px]">{sourceLabel}</Badge>
+          {ag.archived && <Badge variant="outline" className="text-[10px]">Archived</Badge>}
         </div>
       </div>
 
       {ag.signer_mismatch && (
-        <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs flex items-start gap-2">
+        <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs flex items-start gap-2 ml-8">
           <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
           <div>
-            Signer name mismatch detected. SignNow showed <strong>{ag.signer_name_in_signnow}</strong> but this agreement belongs to <strong>{ag.correct_client_name}</strong>. Verify before relying on the record.
+            Signer name mismatch. SignNow showed <strong>{ag.signer_name_in_signnow}</strong> but the agreement belongs to <strong>{ag.correct_client_name}</strong>.
           </div>
         </div>
       )}
 
-      <div className="flex flex-wrap gap-1.5 text-xs">
-        {ag.signnow_signing_link && (
+      <div className="flex flex-wrap gap-1.5 ml-8">
+        {isWaiting && (
           <>
-            <Button size="sm" variant="outline" asChild>
-              <a href={ag.signnow_signing_link} target="_blank" rel="noreferrer"><ExternalLink className="h-3 w-3 mr-1" />Open signing link</a>
-            </Button>
-            <Button size="sm" variant="ghost" onClick={() => { navigator.clipboard.writeText(ag.signnow_signing_link!); toast.success("Link copied"); }}>
-              <Copy className="h-3 w-3 mr-1" />Copy
+            {ag.signnow_signing_link && (
+              <>
+                <Button size="sm" variant="outline" asChild>
+                  <a href={ag.signnow_signing_link} target="_blank" rel="noreferrer"><ExternalLink className="h-3 w-3 mr-1" />Open</a>
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => { navigator.clipboard.writeText(ag.signnow_signing_link!); toast.success("Link copied"); }}>
+                  <Copy className="h-3 w-3 mr-1" />Copy link
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => onAction("remind")}>
+                  <BellRing className="h-3 w-3 mr-1" />Reminder
+                </Button>
+              </>
+            )}
+            <Button size="sm" onClick={() => onAction("approve")}>
+              <BadgeCheck className="h-3 w-3 mr-1" />Approve Signed
             </Button>
           </>
         )}
-        {ag.signed_copy_url && (
-          <Button size="sm" variant="outline" asChild>
-            <a href={ag.signed_copy_url} target="_blank" rel="noreferrer"><ExternalLink className="h-3 w-3 mr-1" />View signed copy</a>
-          </Button>
-        )}
-        {ag.signed_copy_storage_path && (
-          <Button size="sm" variant="outline" onClick={onDownloadSigned}><Download className="h-3 w-3 mr-1" />Download signed PDF</Button>
-        )}
-        {ag.signnow_document_id && (
-          <Button size="sm" variant="ghost" onClick={onRefresh}><RefreshCcw className="h-3 w-3 mr-1" />Refresh status</Button>
-        )}
-        {ag.signnow_completed_link && (
-          <Button size="sm" variant="outline" asChild>
-            <a href={ag.signnow_completed_link} target="_blank" rel="noreferrer"><ExternalLink className="h-3 w-3 mr-1" />Open in SignNow</a>
-          </Button>
-        )}
-        {ag.status !== "Verified" && (ag.status === "Signed" || ag.signer_mismatch || ag.verification_status !== "Manually Verified") && (
-          <Button size="sm" variant="outline" onClick={onVerify}><ShieldCheck className="h-3 w-3 mr-1" />Mark verified</Button>
-        )}
-        {(ag.status === "Verified" || ag.verification_status === "Manually Verified") && (
-          <Button size="sm" variant="ghost" className="text-amber-600 dark:text-amber-400" onClick={onRemoveVerification}>
-            <ShieldCheck className="h-3 w-3 mr-1" />Remove verification
-          </Button>
-        )}
-        {["Signed", "Completed", "Verified"].includes(ag.status as string) && (
-          <Button size="sm" variant="ghost" className="text-amber-600 dark:text-amber-400" onClick={onReopen}>
-            <RotateCcw className="h-3 w-3 mr-1" />Reopen / Mark Unsigned
-          </Button>
-        )}
-        {!["Verified", "Cancelled"].includes(ag.status as string) && (
-          <Button size="sm" onClick={onApprove}>
-            <BadgeCheck className="h-3 w-3 mr-1" />Approve Signed Agreement
-          </Button>
-        )}
-        {!["Signed", "Completed", "Verified", "Cancelled"].includes(ag.status as string) && (
+
+        {isSigned && !isVerified && (
           <>
-            <Button size="sm" variant="ghost" onClick={onRemind}><BellRing className="h-3 w-3 mr-1" />Reminder</Button>
-            <Button size="sm" variant="ghost" onClick={() => onUpdate({ status: "Needs Resend" })}><Send className="h-3 w-3 mr-1" />Needs resend</Button>
+            {hasSignedCopy && ag.signed_copy_url && (
+              <Button size="sm" variant="outline" asChild>
+                <a href={ag.signed_copy_url} target="_blank" rel="noreferrer"><ExternalLink className="h-3 w-3 mr-1" />View signed copy</a>
+              </Button>
+            )}
+            {hasSignedCopy && ag.signed_copy_storage_path && !ag.signed_copy_url && (
+              <Button size="sm" variant="outline" onClick={() => onAction("download-signed")}>
+                <Download className="h-3 w-3 mr-1" />View signed copy
+              </Button>
+            )}
+            <Button size="sm" onClick={() => onAction("mark-verified")}>
+              <ShieldCheck className="h-3 w-3 mr-1" />Mark Verified
+            </Button>
           </>
         )}
-        <Button size="sm" variant="ghost" onClick={onMarkSigned}><Upload className="h-3 w-3 mr-1" />Upload/Mark signed</Button>
-        {(!ag.sent_at || ag.status === "Not Sent") && (
-          <Button size="sm" variant="ghost" onClick={onMarkManuallySent}><CheckCircle2 className="h-3 w-3 mr-1" />Mark manually sent</Button>
+
+        {isVerified && (
+          <>
+            {ag.signed_copy_url && (
+              <Button size="sm" variant="outline" asChild>
+                <a href={ag.signed_copy_url} target="_blank" rel="noreferrer"><ExternalLink className="h-3 w-3 mr-1" />View signed copy</a>
+              </Button>
+            )}
+            {ag.signed_copy_storage_path && (
+              <Button size="sm" variant="outline" onClick={() => onAction("download-signed")}>
+                <Download className="h-3 w-3 mr-1" />Download PDF
+              </Button>
+            )}
+          </>
         )}
-        <Button size="sm" variant="ghost" onClick={onNeedsFollowUp}><Flag className="h-3 w-3 mr-1" />Needs follow-up</Button>
-        {ag.status !== "Cancelled" && (
-          <Button size="sm" variant="ghost" onClick={onCancel}><Trash2 className="h-3 w-3 mr-1" />Cancel</Button>
+
+        {isTerminal && (
+          <>
+            {ag.signed_copy_url && (
+              <Button size="sm" variant="outline" asChild>
+                <a href={ag.signed_copy_url} target="_blank" rel="noreferrer"><ExternalLink className="h-3 w-3 mr-1" />View details</a>
+              </Button>
+            )}
+            <Button size="sm" variant="outline" onClick={() => onAction("reopen")}>
+              <RotateCcw className="h-3 w-3 mr-1" />Reopen
+            </Button>
+          </>
         )}
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button size="sm" variant="ghost" className="h-8 w-8 p-0"><MoreHorizontal className="h-4 w-4" /></Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-56">
+            <DropdownMenuLabel className="text-[10px] uppercase tracking-widest">Status</DropdownMenuLabel>
+            {ag.signnow_document_id && (
+              <DropdownMenuItem onClick={() => onAction("refresh")}>
+                <RefreshCcw className="h-3.5 w-3.5 mr-2" />Refresh status
+              </DropdownMenuItem>
+            )}
+            {ag.signnow_completed_link && (
+              <DropdownMenuItem onClick={() => onAction("open-signnow")}>
+                <ExternalLink className="h-3.5 w-3.5 mr-2" />Open in SignNow
+              </DropdownMenuItem>
+            )}
+            <DropdownMenuItem onClick={() => onAction("upload")}>
+              <Upload className="h-3.5 w-3.5 mr-2" />Upload signed copy
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel className="text-[10px] uppercase tracking-widest">Verification</DropdownMenuLabel>
+            {!isSigned && (
+              <DropdownMenuItem onClick={() => onAction("mark-signed")}>
+                <CheckCircle2 className="h-3.5 w-3.5 mr-2" />Mark signed
+              </DropdownMenuItem>
+            )}
+            {isSigned && !isTerminal && (
+              <DropdownMenuItem onClick={() => onAction("reopen")}>
+                <RotateCcw className="h-3.5 w-3.5 mr-2" />Mark unsigned / reopen
+              </DropdownMenuItem>
+            )}
+            {!isVerified && (
+              <DropdownMenuItem onClick={() => onAction("mark-verified")}>
+                <ShieldCheck className="h-3.5 w-3.5 mr-2" />Mark verified
+              </DropdownMenuItem>
+            )}
+            {isVerified && (
+              <DropdownMenuItem onClick={() => onAction("remove-verification")} className="text-amber-600 dark:text-amber-400">
+                <ShieldCheck className="h-3.5 w-3.5 mr-2" />Remove verification
+              </DropdownMenuItem>
+            )}
+            <DropdownMenuItem onClick={() => onAction("needs-followup")}>
+              <Flag className="h-3.5 w-3.5 mr-2" />Needs follow-up
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel className="text-[10px] uppercase tracking-widest">Record</DropdownMenuLabel>
+            {!isTerminal && (
+              <DropdownMenuItem onClick={() => onAction("cancel")}>
+                <Trash2 className="h-3.5 w-3.5 mr-2" />Cancel agreement
+              </DropdownMenuItem>
+            )}
+            {ag.archived ? (
+              <DropdownMenuItem onClick={() => onAction("unarchive")}>
+                <ArchiveRestore className="h-3.5 w-3.5 mr-2" />Restore from archive
+              </DropdownMenuItem>
+            ) : (
+              <DropdownMenuItem onClick={() => onAction("archive")}>
+                <Archive className="h-3.5 w-3.5 mr-2" />Archive
+              </DropdownMenuItem>
+            )}
+            <DropdownMenuItem onClick={() => onAction("delete")} className="text-red-600 dark:text-red-400">
+              <Trash2 className="h-3.5 w-3.5 mr-2" />Delete permanently
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] text-muted-foreground pt-1">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] text-muted-foreground pt-1 ml-8">
         <div>Sent: {ag.sent_at ? new Date(ag.sent_at).toLocaleDateString() : "—"}</div>
-        <div>Signed: {ag.signed_at ? new Date(ag.signed_at).toLocaleString() : "—"}</div>
+        <div>Signed: {ag.signed_at ? new Date(ag.signed_at).toLocaleDateString() : "—"}</div>
         <div>Verified: {ag.verified_at ? new Date(ag.verified_at).toLocaleDateString() : "—"}</div>
-        <div>Method: {ag.signing_method ?? "—"}</div>
-        <div>Type: {ag.agreement_type ?? "—"}</div>
-        <div className="col-span-2 sm:col-span-2 truncate">Offer / Purchase: {ag.offer_name ?? "—"}{ag.purchase_record_id ? ` · #${ag.purchase_record_id.slice(0, 8)}` : ""}</div>
-        <div>Source: {sourceLabel}</div>
+        <div className="truncate">Offer: {ag.offer_name ?? "—"}</div>
       </div>
       {ag.admin_notes && (
-        <div className="rounded-md border border-border bg-background/40 p-2 text-[11px] text-muted-foreground flex items-start gap-2">
+        <div className="rounded-md border border-border bg-background/40 p-2 text-[11px] text-muted-foreground flex items-start gap-2 ml-8">
           <StickyNote className="h-3.5 w-3.5 shrink-0 mt-0.5" />
           <div className="whitespace-pre-wrap">{ag.admin_notes}</div>
         </div>
@@ -376,7 +723,6 @@ function AgreementRow({
     </li>
   );
 }
-
 function SendAgreementDialog({
   open, onOpenChange, templates, clientName, onSubmit,
 }: {

@@ -125,6 +125,10 @@ export type Database = {
         Row: {
           admin_notes: string | null
           agreement_type: string | null
+          archive_reason: string | null
+          archived: boolean
+          archived_at: string | null
+          archived_by: string | null
           cancelled_at: string | null
           client_address: string | null
           client_dob: string | null
@@ -173,6 +177,10 @@ export type Database = {
         Insert: {
           admin_notes?: string | null
           agreement_type?: string | null
+          archive_reason?: string | null
+          archived?: boolean
+          archived_at?: string | null
+          archived_by?: string | null
           cancelled_at?: string | null
           client_address?: string | null
           client_dob?: string | null
@@ -221,6 +229,10 @@ export type Database = {
         Update: {
           admin_notes?: string | null
           agreement_type?: string | null
+          archive_reason?: string | null
+          archived?: boolean
+          archived_at?: string | null
+          archived_by?: string | null
           cancelled_at?: string | null
           client_address?: string | null
           client_dob?: string | null
