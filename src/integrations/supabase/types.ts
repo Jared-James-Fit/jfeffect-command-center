@@ -1989,6 +1989,10 @@ export type Database = {
       purchase_records: {
         Row: {
           admin_notes: string | null
+          agreement_block_override: boolean
+          agreement_block_override_at: string | null
+          agreement_block_override_by: string | null
+          agreement_block_override_reason: string | null
           agreement_link: string | null
           agreement_signed_at_purchase: boolean | null
           agreement_signed_date: string | null
@@ -2051,6 +2055,10 @@ export type Database = {
         }
         Insert: {
           admin_notes?: string | null
+          agreement_block_override?: boolean
+          agreement_block_override_at?: string | null
+          agreement_block_override_by?: string | null
+          agreement_block_override_reason?: string | null
           agreement_link?: string | null
           agreement_signed_at_purchase?: boolean | null
           agreement_signed_date?: string | null
@@ -2113,6 +2121,10 @@ export type Database = {
         }
         Update: {
           admin_notes?: string | null
+          agreement_block_override?: boolean
+          agreement_block_override_at?: string | null
+          agreement_block_override_by?: string | null
+          agreement_block_override_reason?: string | null
           agreement_link?: string | null
           agreement_signed_at_purchase?: boolean | null
           agreement_signed_date?: string | null
