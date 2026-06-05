@@ -17,7 +17,6 @@ export const adminNav: NavItem[] = [
   { to: "/admin/media-review", label: "Media Review Inbox", icon: Film, group: "Coaching" },
   { to: "/admin/exercises", label: "Exercise Library", icon: Dumbbell, group: "Coaching" },
   { to: "/admin/calendar", label: "Calendar", icon: Calendar, group: "Scheduling" },
-  { to: "/admin/offers", label: "Offers & Products", icon: Package, group: "Sales & Payments" },
   { to: "/admin/payment-links", label: "Stripe Payment Links", icon: CreditCard, group: "Sales & Payments" },
   { to: "/admin/payments", label: "Payments", icon: DollarSign, group: "Sales & Payments" },
   { to: "/admin/purchases", label: "Purchase Records", icon: ClipboardCheck, group: "Sales & Payments" },
