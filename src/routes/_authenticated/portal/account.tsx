@@ -9,11 +9,9 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Eye, EyeOff, Save, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
 import { ProfilePictureCapture } from "@/components/profile-picture-capture";
-import { COMMON_TIMEZONES } from "@/lib/pt-sessions";
 import { SocialHandlesEditor } from "@/components/social-handles-editor";
 import { SOCIAL_FIELDS } from "@/lib/social-handles";
 import { BasicInfoForm } from "@/components/basic-info-form";
@@ -23,7 +21,6 @@ export const Route = createFileRoute("/_authenticated/portal/account")({
   component: AccountPage,
 });
 
-const COUNTRIES = ["Canada", "United States", "United Kingdom", "Australia", "New Zealand", "Other"];
 const PROFILE_FIELDS = ["first_name", "last_name", "preferred_name", "phone", "address", "city", "province", "postal_code", "country", "timezone", "date_of_birth", "height_cm", "preferred_height_unit", "emergency_contact_name", "emergency_contact_phone", ...SOCIAL_FIELDS] as const;
 
 function AccountPage() {
