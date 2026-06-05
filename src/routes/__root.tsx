@@ -7,6 +7,7 @@ import {
   Link,
   createRootRouteWithContext,
   useRouter,
+  useRouterState,
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
@@ -137,10 +138,25 @@ function RootComponent() {
       <AuthProvider>
         <ClientImpersonationProvider>
           {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-          <Outlet />
+          <PageTransition>
+            <Outlet />
+          </PageTransition>
           <Toaster position="top-right" theme="dark" richColors />
         </ClientImpersonationProvider>
       </AuthProvider>
     </QueryClientProvider>
+  );
+}
+
+function PageTransition({ children }: { children: ReactNode }) {
+  // Re-key on top-level path segment so we get a subtle fade between
+  // major sections without animating every search-param change.
+  const segment = useRouterState({
+    select: (s) => "/" + (s.location.pathname.split("/")[1] ?? ""),
+  });
+  return (
+    <div key={segment} className="page-enter">
+      {children}
+    </div>
   );
 }
