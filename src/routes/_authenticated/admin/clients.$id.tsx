@@ -367,12 +367,16 @@ function ClientDetail() {
             <div className="flex items-center justify-between gap-3 flex-wrap">
               <div>
                 <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Weekly Check-In</h3>
-                <p className="text-xs text-muted-foreground mt-1">External check-in link the client opens from their portal.</p>
+                <p className="text-xs text-muted-foreground mt-1">Assign a reusable check-in link from your library, or paste a custom one below.</p>
               </div>
               <Badge variant="outline" className={form.checkin_form_link ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300" : "border-warning/40 bg-warning/10 text-warning"}>
                 Weekly check-in link: {form.checkin_form_link ? "Added" : "Missing"}
               </Badge>
             </div>
+            <AssignCheckInLibrary
+              value={form.assigned_check_in_link_id ?? null}
+              onChange={(v) => set("assigned_check_in_link_id", v)}
+            />
             <div className="grid gap-3 md:grid-cols-2">
               <div className="md:col-span-2">
                 <Label>Weekly Check-In Link</Label>
