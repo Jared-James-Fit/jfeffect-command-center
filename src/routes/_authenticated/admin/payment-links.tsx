@@ -239,9 +239,6 @@ function PaymentLinksPage() {
     });
   }, [items, searchQuery, statusFilter, typeFilter, structureFilter, linkFilter]);
 
-  const activeItems = useMemo(() => items.filter((p) => (p.status ?? (p.active ? "Active" : "Draft")) !== "Archived"), [items]);
-  const archivedItems = useMemo(() => items.filter((p) => (p.status ?? "") === "Archived"), [items]);
-  const [showArchived, setShowArchived] = useState(false);
   const visible = filteredItems;
 
   async function copyLink(url: string | null) {
