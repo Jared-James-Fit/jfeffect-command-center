@@ -12,9 +12,10 @@ import { formatDistanceToNow, parseISO } from "date-fns";
 import type { ConversationState, Message, MessageAttachment } from "@/lib/messages";
 
 type BellItem = {
-  kind: "message" | "lift_video";
+  kind: "message" | "lift_video" | "agreement";
   clientId: string;
   videoId?: string;
+  agreementId?: string;
   name: string;
   title: string;
   body: string;
@@ -42,6 +43,9 @@ export function NotificationBell() {
       .on("postgres_changes", { event: "*", schema: "public", table: "lift_video_comments" }, () => {
         qc.invalidateQueries({ queryKey: ["unread-counts"] });
       })
+      .on("postgres_changes", { event: "*", schema: "public", table: "agreements" }, () => {
+        qc.invalidateQueries({ queryKey: ["unread-counts"] });
+      })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [user, qc]);
@@ -51,13 +55,18 @@ export function NotificationBell() {
     enabled: !!user && !!role,
     queryFn: async () => {
       if (role === "admin") {
-        const [{ data: msgs }, { data: states }, { data: vids }] = await Promise.all([
+        const [{ data: msgs }, { data: states }, { data: vids }, { data: agreements }] = await Promise.all([
           (supabase.from("messages") as any).select("client_id, body, attachments, created_at, sender_role, is_internal_note").eq("sender_role", "client").eq("is_internal_note", false).order("created_at", { ascending: false }).limit(200),
           (supabase.from("conversation_state") as any).select("client_id, admin_last_read_at"),
           (supabase.from("lift_videos") as any)
             .select("id, client_id, exercise, client_notes, created_at, admin_last_viewed_at, status")
             .order("created_at", { ascending: false })
             .limit(50),
+          (supabase.from("agreements") as any)
+            .select("id, client_id, agreement_type, template_name, status, signer_mismatch, verification_status, webhook_last_event, updated_at")
+            .or("signer_mismatch.eq.true,status.in.(Error,Manual Action Needed,Needs Resend,Needs Manual Verification,Expired)")
+            .order("updated_at", { ascending: false })
+            .limit(20),
         ]);
         const stateMap = new Map<string, ConversationState>((states ?? []).map((s: any) => [s.client_id, s]));
         const { data: clients } = await supabase.from("clients").select("id, full_name");
@@ -91,6 +100,25 @@ export function NotificationBell() {
             title: `New lift video from ${name}`,
             body: v.client_notes || v.exercise || "Sent a lift video for review.",
             created_at: v.created_at,
+          });
+        }
+        for (const a of (agreements ?? []) as any[]) {
+          const name = cMap.get(a.client_id) ?? "Client";
+          const label = a.signer_mismatch ? "Signer name mismatch"
+            : a.status === "Error" ? "SignNow error"
+            : a.status === "Manual Action Needed" ? "Agreement needs manual action"
+            : a.status === "Needs Resend" ? "Agreement needs resend"
+            : a.status === "Needs Manual Verification" ? "Agreement needs verification"
+            : a.status === "Expired" ? "Agreement expired"
+            : `Agreement: ${a.status}`;
+          items.push({
+            kind: "agreement",
+            clientId: a.client_id,
+            agreementId: a.id,
+            name,
+            title: `${label} — ${name}`,
+            body: a.agreement_type ?? a.template_name ?? "Agreement",
+            created_at: a.updated_at,
           });
         }
         items.sort((a, b) => +new Date(b.created_at) - +new Date(a.created_at));
@@ -189,9 +217,18 @@ export function NotificationBell() {
               to={
                 it.kind === "lift_video"
                   ? (role === "admin" ? "/admin/lift-videos" : "/portal/lift-videos")
+                  : it.kind === "agreement"
+                  ? (role === "admin" ? "/admin/clients/$id" : "/portal")
                   : (role === "admin" ? "/admin/messages" : "/portal/messages")
               }
-              search={role === "admin" && it.kind === "message" ? { client: it.clientId } : undefined}
+              params={it.kind === "agreement" && role === "admin" ? { id: it.clientId } : undefined as any}
+              search={
+                role === "admin" && it.kind === "message"
+                  ? { client: it.clientId }
+                  : role === "admin" && it.kind === "agreement"
+                  ? { tab: "agreements" as any }
+                  : undefined
+              }
               className="block"
             >
               <div className="text-xs font-semibold">{it.title}</div>

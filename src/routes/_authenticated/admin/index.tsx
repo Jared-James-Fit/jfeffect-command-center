@@ -122,10 +122,10 @@ function AdminDashboard() {
     queryKey: ["dashboard-agreements"],
     queryFn: async () => {
       const { data } = await supabase.from("agreements")
-        .select("id, template_name, agreement_type, status, sent_at, client_id, signer_mismatch, verification_status, clients(id, full_name)")
-        .or("signer_mismatch.eq.true,status.in.(Sent,Opened,Waiting on Client,Expired,Needs Resend,Needs Manual Verification,Error)")
-        .order("created_at", { ascending: false })
-        .limit(8);
+        .select("id, template_name, agreement_type, status, sent_at, updated_at, client_id, signer_mismatch, verification_status, webhook_last_event, webhook_last_event_at, clients(id, full_name)")
+        .or("signer_mismatch.eq.true,status.in.(Sent,Opened,Waiting on Client,Expired,Needs Resend,Needs Manual Verification,Error,Manual Action Needed)")
+        .order("updated_at", { ascending: false })
+        .limit(20);
       return (data ?? []) as any[];
     },
   });
@@ -530,17 +530,36 @@ function AdminDashboard() {
                 All agreements are signed or up-to-date.
               </div>
             ) : (
-              <ul className="divide-y divide-border">
-                {agreementsNeedingAttention.map((a: any) => (
-                  <li key={a.id} className="py-2 flex items-center justify-between gap-2">
-                    <Link to="/admin/clients/$id" params={{ id: a.client_id }} className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold truncate">{a.clients?.full_name ?? "—"}</p>
-                      <p className="text-xs text-muted-foreground truncate">{a.agreement_type ?? a.template_name}</p>
-                    </Link>
-                    <Badge variant="outline" className="text-[10px] shrink-0">{a.status}</Badge>
-                  </li>
-                ))}
-              </ul>
+              <>
+                {(() => {
+                  const cats = categorizeAgreements(agreementsNeedingAttention);
+                  return (
+                    <>
+                      <div className="mb-3 flex flex-wrap gap-1.5">
+                        {cats.counts.map((c) => (
+                          <Badge key={c.key} variant="outline" className={`text-[10px] ${c.tone}`}>
+                            {c.label}: {c.count}
+                          </Badge>
+                        ))}
+                      </div>
+                      <ul className="divide-y divide-border">
+                        {agreementsNeedingAttention.slice(0, 8).map((a: any) => {
+                          const cat = blockerFor(a);
+                          return (
+                            <li key={a.id} className="py-2 flex items-center justify-between gap-2">
+                              <Link to="/admin/clients/$id" params={{ id: a.client_id }} search={{ tab: "agreements" as any }} className="min-w-0 flex-1">
+                                <p className="text-sm font-semibold truncate">{a.clients?.full_name ?? "—"}</p>
+                                <p className="text-xs text-muted-foreground truncate">{a.agreement_type ?? a.template_name}</p>
+                              </Link>
+                              <Badge variant="outline" className={`text-[10px] shrink-0 ${cat.tone}`}>{cat.label}</Badge>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </>
+                  );
+                })()}
+              </>
             )}
           </Card>
 
@@ -581,4 +600,40 @@ function MiniStat({ label, value, tone }: { label: string; value: number; tone?:
       <div className="text-lg font-black">{value}</div>
     </div>
   );
+}
+
+type AgreementBlocker = { key: string; label: string; tone: string };
+
+function blockerFor(a: any): AgreementBlocker {
+  if (a.signer_mismatch) return { key: "mismatch", label: "Signer mismatch", tone: "border-destructive/40 bg-destructive/10 text-destructive" };
+  if (a.status === "Error" || a.webhook_last_event === "error" || a.webhook_last_event === "failed") {
+    return { key: "error", label: "SignNow error", tone: "border-destructive/40 bg-destructive/10 text-destructive" };
+  }
+  if (a.status === "Manual Action Needed" || a.status === "Needs Resend") {
+    return { key: "manual", label: "Manual action", tone: "border-warning/40 bg-warning/10 text-warning" };
+  }
+  if (a.status === "Needs Manual Verification") {
+    return { key: "verify", label: "Needs verification", tone: "border-warning/40 bg-warning/10 text-warning" };
+  }
+  if (a.status === "Expired") return { key: "expired", label: "Expired", tone: "border-destructive/40 bg-destructive/10 text-destructive" };
+  if (a.status === "Signed" && a.verification_status === "Not Verified") {
+    return { key: "unverified", label: "Signed · unverified", tone: "border-warning/40 bg-warning/10 text-warning" };
+  }
+  if (["Sent", "Opened", "Waiting on Client"].includes(a.status)) {
+    return { key: "pending", label: "Sent · awaiting signature", tone: "border-blue-500/40 bg-blue-500/10 text-blue-600 dark:text-blue-300" };
+  }
+  return { key: "other", label: a.status ?? "Attention", tone: "border-border text-muted-foreground" };
+}
+
+function categorizeAgreements(rows: any[]) {
+  const order = ["mismatch", "error", "expired", "manual", "verify", "unverified", "pending", "other"];
+  const map = new Map<string, { key: string; label: string; tone: string; count: number }>();
+  for (const r of rows) {
+    const c = blockerFor(r);
+    const prev = map.get(c.key);
+    if (prev) prev.count += 1;
+    else map.set(c.key, { ...c, count: 1 });
+  }
+  const counts = order.flatMap((k) => (map.has(k) ? [map.get(k)!] : []));
+  return { counts };
 }
