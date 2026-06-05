@@ -228,9 +228,6 @@ export function LiftVideoDialog({ open, onOpenChange, clientId, userId, clientNa
 
   const handleClientBatchSend = async () => {
     if (clips.length === 0) return toast.error("Add at least one video.");
-    if (noteMode === "batch" && !batchNote.trim()) {
-      return toast.error("Add a note for Coach Jared, or switch to per-clip notes.");
-    }
 
     setSaving(true);
     try {
