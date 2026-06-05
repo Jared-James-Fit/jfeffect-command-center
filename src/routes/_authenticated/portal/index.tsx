@@ -356,6 +356,24 @@ function CoachingRow({ label, value }: { label: string; value: any }) {
   );
 }
 
+function PhaseItem({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <div className="text-[10px] uppercase tracking-widest text-muted-foreground">{label}</div>
+      <div className="font-semibold">{value}</div>
+    </div>
+  );
+}
+
+function _CoachingRowOld({ label, value }: { label: string; value: any }) {
+  return (
+    <div className="text-sm flex justify-between gap-3">
+      <span className="text-muted-foreground">{label}</span>
+      <span className="text-right">{value ?? "—"}</span>
+    </div>
+  );
+}
+
 function BillingCard({ purchase, cancelled, needsAction }: { purchase: any; cancelled: boolean; needsAction: boolean }) {
   if (!purchase) {
     return (
