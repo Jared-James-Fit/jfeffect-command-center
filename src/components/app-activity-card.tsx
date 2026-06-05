@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Circle, Clock, MapPin, LogIn } from "lucide-react";
+import { Circle, Clock, MapPin, LogIn, Smartphone, CheckCircle2 } from "lucide-react";
 import { formatDistanceToNow, parseISO, format } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 
 type Props = {
   clientId: string;
@@ -11,6 +13,7 @@ type Props = {
   lastActiveAt: string | null | undefined;
   lastActiveRoute: string | null | undefined;
   complianceStatus?: string | null;
+  homeScreenStatus?: string | null;
 };
 
 type ActivityRow = {
@@ -22,8 +25,10 @@ type ActivityRow = {
 
 /** Live presence + last action card shown on the admin/coach client profile.
  *  Falls back gracefully when the client has never signed in. */
-export function AppActivityCard({ clientId, lastSignedInAt, lastActiveAt, lastActiveRoute, complianceStatus }: Props) {
+export function AppActivityCard({ clientId, lastSignedInAt, lastActiveAt, lastActiveRoute, complianceStatus, homeScreenStatus }: Props) {
   const [recent, setRecent] = useState<ActivityRow | null>(null);
+  const [hsStatus, setHsStatus] = useState<string>(homeScreenStatus ?? "not_started");
+  useEffect(() => { setHsStatus(homeScreenStatus ?? "not_started"); }, [homeScreenStatus]);
 
   useEffect(() => {
     let cancel = false;
@@ -81,6 +86,33 @@ export function AppActivityCard({ clientId, lastSignedInAt, lastActiveAt, lastAc
           <Badge variant="outline" className={complianceTone(complianceStatus)}>{complianceStatus}</Badge>
         </div>
       )}
+
+      <div className="flex items-center justify-between gap-2 pt-1">
+        <div className="inline-flex items-center gap-1.5 text-[10px] uppercase tracking-widest text-muted-foreground">
+          <Smartphone className="h-3 w-3" /> Home Screen
+        </div>
+        {hsStatus === "complete" ? (
+          <Badge variant="outline" className="border-emerald-500/40 bg-emerald-500/10 text-emerald-500">
+            <CheckCircle2 className="mr-1 h-3 w-3" /> Installed
+          </Badge>
+        ) : (
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 text-xs"
+            onClick={async () => {
+              const { error } = await (supabase.from("clients") as any)
+                .update({ home_screen_setup_status: "complete", home_screen_setup_completed_at: new Date().toISOString() })
+                .eq("id", clientId);
+              if (error) { toast.error(error.message); return; }
+              setHsStatus("complete");
+              toast.success("Marked installed.");
+            }}
+          >
+            Mark Installed
+          </Button>
+        )}
+      </div>
     </Card>
   );
 }
