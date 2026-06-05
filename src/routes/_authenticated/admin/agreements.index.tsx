@@ -223,7 +223,6 @@ function AgreementsAdminPage() {
         onOpenChange={(o) => !o && setActioning(null)}
         onDone={() => {
           qc.invalidateQueries({ queryKey: ["agreement-templates"] });
-          qc.invalidateQueries({ queryKey: ["agreements-needing-attention"] });
           setActioning(null);
         }}
       />
