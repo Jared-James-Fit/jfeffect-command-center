@@ -124,7 +124,10 @@ function ClientsPage() {
   const { data: cardTargets = [] } = useQuery({
     queryKey: ["cardio-targets", "all-status"],
     queryFn: async () => {
-      const { data } = await supabase.from("cardio_targets").select("id, client_id, start_date, end_date, status, ending_soon_days").neq("status", "Archived");
+      const { data } = await supabase
+        .from("cardio_targets")
+        .select("id, client_id, start_date, end_date, status, ending_soon_days, day_type, cardio_type, frequency_per_week, intensity, enabled")
+        .neq("status", "Archived");
       return data ?? [];
     },
   });
@@ -168,8 +171,13 @@ function ClientsPage() {
   }, [nutTargets]);
 
   const cardByClient = useMemo(() => {
-    const m = new Map<string, any>();
-    for (const t of cardTargets) if (!m.has(t.client_id)) m.set(t.client_id, t);
+    const m = new Map<string, any[]>();
+    for (const t of cardTargets) {
+      if (t.enabled === false) continue;
+      const list = m.get(t.client_id) ?? [];
+      list.push(t);
+      m.set(t.client_id, list);
+    }
     return m;
   }, [cardTargets]);
 
