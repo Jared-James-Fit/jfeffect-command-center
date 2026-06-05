@@ -155,6 +155,14 @@ export const createAgreement = createServerFn({ method: "POST" })
       offer_name: z.string().max(200).optional().nullable(),
       send_now: z.boolean().optional(),
       admin_notes: z.string().max(2000).optional().nullable(),
+      signing_method: z.enum([
+        "Remote Invite",
+        "In-Person / iPad",
+        "Kiosk Mode",
+        "Manual Upload",
+        "Manual Link",
+      ]).optional(),
+      status_override: z.string().max(60).optional(),
     }).parse(i),
   )
   .handler(async ({ data, context }) => {
@@ -183,6 +191,12 @@ export const createAgreement = createServerFn({ method: "POST" })
       .filter(Boolean).join(", ") || null;
 
     const now = new Date().toISOString();
+    const inPerson = data.signing_method === "In-Person / iPad" || data.signing_method === "Kiosk Mode";
+    const initialStatus = data.status_override
+      ? data.status_override
+      : data.send_now
+        ? (data.signing_method === "Remote Invite" ? "Waiting on Client" : "Sent")
+        : "Not Sent";
     const { data: ag, error } = await supabase.from("agreements").insert({
       client_id: data.client_id,
       template_id: data.template_id ?? null,
@@ -197,18 +211,23 @@ export const createAgreement = createServerFn({ method: "POST" })
       client_phone: client.phone,
       client_address: address,
       correct_client_name: client.full_name,
-      status: data.send_now ? "Sent" : "Not Sent",
+      status: initialStatus,
       sent_at: data.send_now ? now : null,
       admin_notes: data.admin_notes ?? null,
+      signing_method: data.signing_method ?? null,
+      signed_in_person: inPerson,
       created_by: userId,
     } as any).select("*").single();
     if (error) throw new Error(error.message);
 
     await supabase.from("agreement_audit_log").insert({
       agreement_id: ag.id,
-      event: data.send_now ? "sent" : "created",
+      event: data.send_now
+        ? (data.signing_method === "Remote Invite" ? "invited" : "in_person_started")
+        : "created",
       actor_role: "admin",
       actor_user_id: userId,
+      details: { signing_method: data.signing_method ?? null } as any,
     } as any);
 
     return ag;
