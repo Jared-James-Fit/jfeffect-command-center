@@ -324,6 +324,7 @@ Then upload it here before filling out your check-in form.`}
           open={uploadOpen}
           onOpenChange={setUploadOpen}
           clientId={client.id}
+          clientName={(client as any).full_name}
           role="client"
           defaultType={uploadType}
           restrictTypes={[uploadType]}
