@@ -136,7 +136,10 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
       targetId = data.id;
     }
     if (days.length) {
-      const rows = days.map((d, i) => ({ ...d, id: undefined, target_id: targetId, sort_order: i }));
+      const rows = days.map((d, i) => {
+        const { id: _omit, ...rest } = d;
+        return { ...rest, target_id: targetId, sort_order: i };
+      });
       const { error } = await supabase.from("nutrition_target_days").insert(rows);
       if (error) { setSaving(false); return toast.error(error.message); }
     }
