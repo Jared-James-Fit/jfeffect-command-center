@@ -15,7 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { DoubleConfirmDeleteDialog } from "@/components/double-confirm-delete-dialog";
 import { AssignOfferDialog } from "@/components/assign-offer-dialog";
 import { toast } from "sonner";
-import { Copy, ExternalLink, Loader2, Plus, Trash2, ImagePlus, Pencil, Archive, ArchiveRestore, FileSignature, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { Copy, ExternalLink, Loader2, Plus, Trash2, ImagePlus, Pencil, Archive, ArchiveRestore, FileSignature, AlertTriangle, CheckCircle2, Search, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import {
   listCoachingProducts,
