@@ -23,6 +23,8 @@ import { NutritionTargetsPanel } from "@/components/nutrition-targets-panel";
 import { CardioTargetsPanel } from "@/components/cardio-targets-panel";
 import { LiftVideosPanel } from "@/components/lift-videos-panel";
 import { ProgressMetricsPanel } from "@/components/progress-metrics-panel";
+import { BasicInfoForm } from "@/components/basic-info-form";
+import { calcAge, formatHeight } from "@/lib/basic-info";
 import { Switch } from "@/components/ui/switch";
 import { COMMON_TIMEZONES } from "@/lib/pt-sessions";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -75,7 +77,7 @@ export const Route = createFileRoute("/_authenticated/admin/clients/$id")({
 const STATUSES = ["Active", "New Client", "Needs Attention", "Check-In Overdue", "Payment Overdue", "Injured / Modified Plan", "Paused", "Cancelling", "Archived", "High Priority"];
 const PAY_STATUSES = ["Not Sent", "Sent", "Paid", "Failed", "Overdue", "Cancelled", "Refunded"];
 const COUNTRIES = ["Canada", "United States", "United Kingdom", "Australia", "New Zealand", "Other"];
-const ACCOUNT_FIELDS = ["first_name", "last_name", "email", "phone", "address", "city", "province", "postal_code", "country", "timezone"] as const;
+const ACCOUNT_FIELDS = ["first_name", "last_name", "preferred_name", "email", "phone", "date_of_birth", "height_cm", "preferred_height_unit", "address", "city", "province", "postal_code", "country", "timezone", "emergency_contact_name", "emergency_contact_phone"] as const;
 
 function ClientDetail() {
   const { id } = Route.useParams();
@@ -206,8 +208,14 @@ function ClientDetail() {
       first_name: form.first_name ?? null,
       last_name: form.last_name ?? null,
       full_name: [form.first_name, form.last_name].filter(Boolean).join(" ").trim() || form.full_name,
+      preferred_name: form.preferred_name ?? null,
       email: form.email ?? null,
       phone: form.phone ?? null,
+      date_of_birth: form.date_of_birth || null,
+      height_cm: form.height_cm ?? null,
+      preferred_height_unit: form.preferred_height_unit ?? "imperial",
+      emergency_contact_name: form.emergency_contact_name ?? null,
+      emergency_contact_phone: form.emergency_contact_phone ?? null,
       address: form.address ?? null,
       city: form.city ?? null,
       province: form.province ?? null,
