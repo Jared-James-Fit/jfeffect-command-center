@@ -1,57 +1,131 @@
-## Progress Metrics — Scope & Plan
+# Client Activity, Compliance & Notifications
 
-Focus the first build on **manual bodyweight logging** (the stated priority). Other metrics are supported but optional. Device sync ships as a UI-only "Coming soon" stub so it can be wired later without rework.
+A big feature surface. To keep it shippable and avoid a half-broken dashboard, I'll build it in 4 phases. You can stop me after any phase if you want to ship and iterate.
 
-### 1. Database (one migration)
+---
 
-New table `public.progress_metrics`:
-- `client_id` (uuid, required), `entry_date` (date), `bodyweight` (numeric), `bodyweight_unit` (text: lb/kg), `steps`, `sleep_hours`, `resting_heart_rate`, `calories_burned`, `active_minutes`, `notes`, `source` (text: manual / apple_health / fitbit…), `created_by` (uuid)
-- Index on (client_id, entry_date desc)
-- RLS: admin manage, assigned coach manage, client manage own (insert/select/update/delete where their `clients.user_id = auth.uid()`)
-- GRANTs to authenticated + service_role
+## Phase 1 — Activity tracking foundation (ship first)
 
-Add `preferred_weight_unit` (text, default 'lb') to `clients` for per-client default.
+The whole system rests on reliably knowing *when* a client did something. Build this first.
 
-### 2. Client portal
+### Database
 
-- **Dashboard card** "Log Bodyweight" — single number input, unit toggle (lb/kg, prefilled from client preference), date defaulting to today, Save button → toast "Bodyweight logged." Shows latest weight + 7-day avg + weekly change as a compact summary.
-- **New route** `/portal/progress-metrics` ("Progress Metrics" page):
-  - Summary tiles: latest bodyweight, 7-day avg, weekly change, last logged date
-  - Simple line chart of bodyweight over time with 7d/30d/90d/All filters (use Recharts — already in deps via shadcn chart)
-  - Optional "Log other metrics" expandable form (steps, sleep, RHR, calories, active minutes, notes)
-  - Recent entries list with inline edit/delete
-  - "Connect Health Device" panel: list of apps (Apple Health, Google Fit, Fitbit, Garmin, Oura, Whoop) all showing "Coming soon" with status pill "Not Connected"
-- Add nav link in the portal sidebar.
+New columns on `public.clients`:
+- `last_signed_in_at timestamptz`
+- `last_active_at timestamptz`
+- `last_active_route text` (e.g. "/portal/program")
+- `compliance_status text default 'On Track'` — On Track | Watch | Needs Follow-Up | Non-Compliant | Paused
+- `compliance_status_updated_at timestamptz`
+- `compliance_tracking_enabled boolean default true`
 
-### 3. Admin client profile
+New table `public.client_compliance_settings` (1:1 with clients) — per-client rules:
+- check_in_required, check_in_due_day
+- bodyweight_expected, bodyweight_frequency_per_week
+- lift_videos_expected, lift_video_frequency_per_week
+- progress_photos_expected
+- inactivity_threshold_days (default 7)
+- followup_threshold_days (default 14)
+- notes
 
-- New **Progress Metrics** card on `admin/clients.$id.tsx`:
-  - Latest bodyweight, 7-day avg, weekly change, step/sleep averages if data exists
-  - Recent entries list with edit (dialog) + delete (double-confirm)
-  - "Add Entry" button (admin can log on client's behalf)
-  - Unit preference toggle (writes to `clients.preferred_weight_unit`)
-  - CSV export button (downloads all entries)
+(Re-uses the existing `client_activity_log` table for the timeline — already exists.)
 
-### 4. Files
+### Client → app heartbeat
+- `useActivityHeartbeat()` hook mounted in the authenticated portal layout.
+- On mount + route change + every 3 min while tab visible → calls a `pingActivity` server fn that updates `last_active_at` and `last_active_route` (throttled server-side to once / 60s).
+- On successful sign-in / session restore → updates `last_signed_in_at`.
 
-- `supabase/migrations/<ts>_progress_metrics.sql` — table + GRANTs + RLS + client unit column
-- `src/lib/progress-metrics.ts` — types, unit conversion, avg/change helpers
-- `src/components/log-bodyweight-card.tsx` — dashboard quick-entry
-- `src/components/progress-metrics-panel.tsx` — shared summary + chart + history (used by both portal page and admin profile)
-- `src/components/progress-metric-dialog.tsx` — add/edit full entry
-- `src/components/connect-health-device-card.tsx` — stub UI
-- `src/routes/_authenticated/portal/progress-metrics.tsx` — new portal route
-- Edits: `src/routes/_authenticated/portal/index.tsx` (add quick-entry card), `src/routes/_authenticated/portal/route.tsx` (nav link), `src/routes/_authenticated/admin/clients.$id.tsx` (panel)
+### Activity log writes
+Hook the existing tables I already touch from server code so an `client_activity_log` row is inserted when:
+- bodyweight logged, goal set/reached, lift video uploaded (incl. urgent), message sent, check-in submitted, progress metric logged, agreement signed, payment completed.
 
-### 5. Deferred (UI placeholders only, no work this round)
+---
 
-- Actual device OAuth/sync wiring
-- Admin dashboard widget for "clients missing bodyweight" / sync errors
-- Reminder/notification scheduling
+## Phase 2 — Client profile + clients list surfaces
 
-Both can be added later against the same table without migration changes.
+### Client profile (admin + coach view)
+New **App Activity** card on `clients.$id`:
+- Status pill (Online now / Active today / Inactive Xd / Never signed in)
+- Last signed in, Last active, Last viewed page
+- Most recent action (pulled from `client_activity_log`)
+- Compliance pill + "Follow-up needed: Yes/No"
 
-### Notes
-- All queries use `usePortalUserId()` so Client POV mode works automatically.
-- Unit conversion handled in display only; values stored as entered with their unit so history stays faithful.
-- Chart uses existing `recharts` (already a shadcn dep).
+New **Compliance Settings** card (collapsible) with the per-client toggles above.
+
+New **Activity Timeline** card — last 20 entries from `client_activity_log`, simple list.
+
+### Clients list
+Add one new column: **Activity** showing a single compact badge — Online / Active today / Inactive 7d / Inactive 14d+ / Never signed in. Compliance shown only when not "On Track" to keep the table clean.
+
+---
+
+## Phase 3 — Compliance engine + Needs Follow-Up
+
+### Compliance evaluator
+Pure TS function `evaluateCompliance(client, settings, lastActions) → status + reasons[]`. Runs:
+1. Server-side cron-ish: a scheduled server fn (called on admin dashboard load + nightly via `pg_cron` calling `/api/public/recompute-compliance` with a shared secret) recomputes every active client.
+2. Inline: whenever a tracked event fires, recompute that one client.
+
+Logic per request:
+- Inactive 7d → Watch · Inactive 14d → Needs Follow-Up · Inactive 30d → Non-Compliant
+- Check-in overdue past due_day → Needs Follow-Up
+- Bodyweight/lift video frequency missed → Watch then Needs Follow-Up
+- Unsigned agreement blocking service → Needs Follow-Up
+- Paused/archived client → Paused (skip evaluation)
+
+### Needs Follow-Up view
+- New admin route `/admin/follow-up` + dashboard widget version.
+- Lists clients with status ≠ On Track, sorted by severity then last_active.
+- Each row: name, last active, missed item(s), status, **Message Client** button (opens existing message thread pre-filled with a template, admin edits before sending — no auto-send).
+- Coach version filters to assigned clients automatically.
+
+---
+
+## Phase 4 — Notifications & milestones
+
+### Notifications table
+New `public.notifications`:
+- recipient_user_id, recipient_role (admin|coach)
+- client_id (nullable), priority (normal|important|urgent)
+- type (e.g. `lift_video_uploaded`, `bodyweight_goal_reached`, `urgent_lift_video`, `compliance_changed`)
+- title, body, link_to
+- read_at, created_at
+
+`notification_preferences` table — per-user toggles for each event type. Sensible defaults on.
+
+### Wiring
+Notifications written from the same server fns that already perform the action:
+- lift video insert → `lift_video_uploaded` (+ `urgent_lift_video` if `is_urgent`)
+- message insert from client → `client_message`
+- check-in submit, bodyweight log, goal set/changed/**reached**, progress metric → respective types
+- agreement signed, payment success/failure
+- compliance status transitions → `compliance_changed`
+- Milestone detection (new bodyweight low/high during phase, goal reached) — added to the bodyweight save server fn.
+- PR detection (rep PR, est-1RM PR) — added when admin/client logs a lift in progress metrics. **Note:** PR/rep/volume PRs require structured set-level logging which we don't currently capture beyond freeform `load_text`. I'll support bodyweight + manually-tagged "PR" entries first; full automatic strength PR detection needs a separate dedicated logging surface — flagging as a follow-up.
+
+Routing: admin gets everything they've opted into; assigned coach gets a copy for their clients only.
+
+### Surfaces
+- Extend existing `NotificationBell` to read from `notifications` table (currently it has different content — I'll merge).
+- Badges on Lift Video Review, Check-Ins, Messages, Agreements, Payments — based on unread counts per type.
+- Mark-as-read on view; "mark all read" action.
+
+### Settings
+`/admin/settings` → notification preferences toggles (already a page, will add a section).
+
+---
+
+## Out of scope / follow-ups
+
+- True real-time presence ("typing now" / websocket online indicator) — heartbeat gives "online now" within ~3 min which matches your "2–5 min" spec; skipping presence websockets.
+- Automatic strength PR detection (set-level rep/load/1RM history) — needs a dedicated lifting log; flagged above.
+- Push notifications to phone — current scope is in-app only.
+- Email digests of compliance — can layer on later using the existing email sender.
+
+---
+
+## What I'd like to confirm before coding
+
+1. **Ship order** — OK to ship phase by phase (each phase is independently useful), or do you want everything in one drop?
+2. **Coach scope** — coaches see assigned clients only by default. OK?
+3. **PR detection** — confirm the limitation above is acceptable for v1 (bodyweight milestones + manually flagged PRs only).
+4. **Heartbeat cost** — every 3 min while a client has the app open writes one row to `clients`. Across your client count this is negligible, but it does mean `clients.updated_at` will tick frequently. OK, or do you want activity stored on a separate `client_presence` table to keep `clients.updated_at` stable?

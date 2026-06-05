@@ -565,6 +565,63 @@ export type Database = {
         }
         Relationships: []
       }
+      client_compliance_settings: {
+        Row: {
+          bodyweight_expected: boolean
+          bodyweight_frequency_per_week: number | null
+          check_in_due_day: string | null
+          check_in_required: boolean
+          client_id: string
+          created_at: string
+          followup_threshold_days: number
+          id: string
+          inactivity_threshold_days: number
+          lift_video_frequency_per_week: number | null
+          lift_videos_expected: boolean
+          message_response_expected_days: number | null
+          noncompliant_threshold_days: number
+          notes: string | null
+          progress_photos_expected: boolean
+          updated_at: string
+        }
+        Insert: {
+          bodyweight_expected?: boolean
+          bodyweight_frequency_per_week?: number | null
+          check_in_due_day?: string | null
+          check_in_required?: boolean
+          client_id: string
+          created_at?: string
+          followup_threshold_days?: number
+          id?: string
+          inactivity_threshold_days?: number
+          lift_video_frequency_per_week?: number | null
+          lift_videos_expected?: boolean
+          message_response_expected_days?: number | null
+          noncompliant_threshold_days?: number
+          notes?: string | null
+          progress_photos_expected?: boolean
+          updated_at?: string
+        }
+        Update: {
+          bodyweight_expected?: boolean
+          bodyweight_frequency_per_week?: number | null
+          check_in_due_day?: string | null
+          check_in_required?: boolean
+          client_id?: string
+          created_at?: string
+          followup_threshold_days?: number
+          id?: string
+          inactivity_threshold_days?: number
+          lift_video_frequency_per_week?: number | null
+          lift_videos_expected?: boolean
+          message_response_expected_days?: number | null
+          noncompliant_threshold_days?: number
+          notes?: string | null
+          progress_photos_expected?: boolean
+          updated_at?: string
+        }
+        Relationships: []
+      }
       client_drive_folders: {
         Row: {
           client_id: string
@@ -696,6 +753,10 @@ export type Database = {
           coach_notes: string | null
           coaching_package: string | null
           coaching_type: string | null
+          compliance_status: string
+          compliance_status_reasons: Json
+          compliance_status_updated_at: string | null
+          compliance_tracking_enabled: boolean
           country: string | null
           created_at: string
           date_of_birth: string | null
@@ -721,8 +782,11 @@ export type Database = {
           invite_last_resent_at: string | null
           invite_sent_at: string | null
           is_powerlifter: boolean
+          last_active_at: string | null
+          last_active_route: string | null
           last_name: string | null
           last_program_update: string | null
+          last_signed_in_at: string | null
           lifestyle_notes: string | null
           linkedin: string | null
           needs_admin_help: boolean
@@ -809,6 +873,10 @@ export type Database = {
           coach_notes?: string | null
           coaching_package?: string | null
           coaching_type?: string | null
+          compliance_status?: string
+          compliance_status_reasons?: Json
+          compliance_status_updated_at?: string | null
+          compliance_tracking_enabled?: boolean
           country?: string | null
           created_at?: string
           date_of_birth?: string | null
@@ -834,8 +902,11 @@ export type Database = {
           invite_last_resent_at?: string | null
           invite_sent_at?: string | null
           is_powerlifter?: boolean
+          last_active_at?: string | null
+          last_active_route?: string | null
           last_name?: string | null
           last_program_update?: string | null
+          last_signed_in_at?: string | null
           lifestyle_notes?: string | null
           linkedin?: string | null
           needs_admin_help?: boolean
@@ -922,6 +993,10 @@ export type Database = {
           coach_notes?: string | null
           coaching_package?: string | null
           coaching_type?: string | null
+          compliance_status?: string
+          compliance_status_reasons?: Json
+          compliance_status_updated_at?: string | null
+          compliance_tracking_enabled?: boolean
           country?: string | null
           created_at?: string
           date_of_birth?: string | null
@@ -947,8 +1022,11 @@ export type Database = {
           invite_last_resent_at?: string | null
           invite_sent_at?: string | null
           is_powerlifter?: boolean
+          last_active_at?: string | null
+          last_active_route?: string | null
           last_name?: string | null
           last_program_update?: string | null
+          last_signed_in_at?: string | null
           lifestyle_notes?: string | null
           linkedin?: string | null
           needs_admin_help?: boolean
@@ -2979,6 +3057,8 @@ export type Database = {
         Returns: boolean
       }
       is_assigned_coach: { Args: { _client_id: string }; Returns: boolean }
+      mark_client_signed_in: { Args: never; Returns: undefined }
+      ping_client_activity: { Args: { _route?: string }; Returns: undefined }
       purge_old_client_media: { Args: never; Returns: undefined }
     }
     Enums: {
