@@ -751,7 +751,7 @@ export function MessageThread({
         className={cn(
           "space-y-2 border-t border-border",
           fullBleed
-            ? "bg-background/95 px-3 pb-[max(env(safe-area-inset-bottom),0.5rem)] pt-2 backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:px-6 sm:pt-3"
+            ? "bg-background/95 px-3 pt-2 backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:px-6 sm:pt-3 pb-[calc(var(--bottom-nav-clearance,0px)+max(env(safe-area-inset-bottom),0.5rem))]"
             : "bg-card p-2 sm:p-3",
         )}
       >
