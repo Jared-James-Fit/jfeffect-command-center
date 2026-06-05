@@ -100,8 +100,16 @@ export function AgreementsPanel({ clientId, clientName }: { clientId: string; cl
         templates={templates}
         onSubmit={async (payload) => {
           const ag = await createFn({ data: { client_id: clientId, ...payload } as any });
+          const apiErr = (ag as any)?._api_error as string | null | undefined;
+          const apiSent = (ag as any)?._api_document_id as string | null | undefined;
           if (payload.signing_method === "Remote Invite") {
-            toast.success("Invite logged. Open or copy the signing link to send it to the client.");
+            if (apiErr) {
+              toast.error(`SignNow invite failed — saved as Manual Action Needed. ${apiErr}`);
+            } else if (apiSent) {
+              toast.success("SignNow invite sent. Client will receive an email from SignNow.");
+            } else {
+              toast.success("Invite logged. Open or copy the signing link to send it to the client.");
+            }
           } else if (payload.signing_method === "In-Person / iPad" || payload.signing_method === "Kiosk Mode") {
             if (payload.signnow_signing_link) {
               window.open(payload.signnow_signing_link, "_blank", "noopener,noreferrer");

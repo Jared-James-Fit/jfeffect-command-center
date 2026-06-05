@@ -15,7 +15,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Plus, Edit2, Archive, ExternalLink, ShieldCheck, AlertTriangle, FileText, Loader2, UserPlus, Smartphone, Copy, Search, Power, Trash2, Info, Settings } from "lucide-react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
-import { createTemplate, updateTemplate, archiveTemplate, setTemplateActive, createAgreement } from "@/lib/agreements.functions";
+import { createTemplate, updateTemplate, archiveTemplate, setTemplateActive, createAgreement, syncSignNowTemplates } from "@/lib/agreements.functions";
 import { AGREEMENT_TYPES, type AgreementTemplate, type Agreement, VERIFICATION_BADGE, type SigningMethod } from "@/lib/agreements";
 import { AgreementStatusBadge } from "@/components/agreement-status-badge";
 import { useNavigate } from "@tanstack/react-router";
@@ -32,6 +32,8 @@ function AgreementsAdminPage() {
   const updateFn = useServerFn(updateTemplate);
   const archiveFn = useServerFn(archiveTemplate);
   const setActiveFn = useServerFn(setTemplateActive);
+  const syncFn = useServerFn(syncSignNowTemplates);
+  const [syncing, setSyncing] = useState(false);
 
   const { data: templates = [] } = useQuery({
     queryKey: ["agreement-templates"],
@@ -130,7 +132,30 @@ function AgreementsAdminPage() {
               <ShieldCheck className="h-4 w-4 text-primary" />
               <h2 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">Agreement Templates</h2>
             </div>
-            <Button size="sm" onClick={() => setEditing({})}><Plus className="h-3.5 w-3.5 mr-1" /> Add template</Button>
+            <div className="flex gap-2 flex-wrap">
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={!apiConnected || syncing}
+                onClick={async () => {
+                  setSyncing(true);
+                  try {
+                    const res = await syncFn();
+                    toast.success(`Synced ${res.total} template${res.total === 1 ? "" : "s"} from SignNow (${res.created} new, ${res.updated} updated)`);
+                    qc.invalidateQueries({ queryKey: ["agreement-templates"] });
+                  } catch (e: any) {
+                    toast.error(e?.message ?? "Sync failed");
+                  } finally {
+                    setSyncing(false);
+                  }
+                }}
+                title={apiConnected ? "Pull templates from SignNow" : "Connect SignNow API to enable sync"}
+              >
+                {syncing ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Search className="h-3.5 w-3.5 mr-1" />}
+                Sync from SignNow
+              </Button>
+              <Button size="sm" onClick={() => setEditing({})}><Plus className="h-3.5 w-3.5 mr-1" /> Add template</Button>
+            </div>
           </div>
 
           {templates.length === 0 ? (
