@@ -14,6 +14,8 @@ import {
 import { toast } from "sonner";
 import { format, parseISO } from "date-fns";
 import { useAuth } from "@/lib/auth";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { BodyweightGoalCard } from "@/components/bodyweight-goal-card";
 import {
   acknowledgementForLog, averageOfLast, computeGoalProgress, convertWeight,
   filterByRange, formatWeight, normalizedBodyweightSeries, weeklyChange,
@@ -41,6 +43,7 @@ export function LogBodyweightCard({ clientId, defaultUnit = "lb" }: Props) {
   const [saving, setSaving] = useState(false);
   const [justSaved, setJustSaved] = useState(false);
   const [range, setRange] = useState<RangeValue>("30");
+  const [goalOpen, setGoalOpen] = useState(false);
 
   const { data: rows = [] } = useQuery({
     queryKey: ["progress-metrics", clientId],
@@ -167,12 +170,10 @@ export function LogBodyweightCard({ clientId, defaultUnit = "lb" }: Props) {
             ))}
           </div>
         </div>
-        {chartSeries.length < 2 ? (
-          <div className="rounded-md border border-dashed border-border/70 p-4 text-center text-xs text-muted-foreground">
-            Add a few more weigh-ins to see your trend.
-          </div>
-        ) : (
-          <div className="h-[110px] w-full">
+        <div className="relative h-[110px] w-full">
+          {chartSeries.length === 0 ? (
+            <div className="absolute inset-0 rounded-md border border-dashed border-border/60 bg-secondary/20" />
+          ) : (
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={chartSeries} margin={{ top: 4, right: 6, left: 0, bottom: 0 }}>
                 <defs>
@@ -207,8 +208,15 @@ export function LogBodyweightCard({ clientId, defaultUnit = "lb" }: Props) {
                 />
               </AreaChart>
             </ResponsiveContainer>
-          </div>
-        )}
+          )}
+          {chartSeries.length < 2 && (
+            <div className="pointer-events-none absolute inset-0 grid place-items-center px-4 text-center text-[11px] text-muted-foreground">
+              {chartSeries.length === 0
+                ? "Log your first bodyweight to start your trend."
+                : "Add a few more weigh-ins to see your trend."}
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-3 gap-2 border-t border-border pt-3 text-center">
@@ -221,25 +229,59 @@ export function LogBodyweightCard({ clientId, defaultUnit = "lb" }: Props) {
         />
       </div>
 
-      {goal && (
-        <div className="flex items-center justify-between gap-2 rounded-md border border-border bg-secondary/30 px-3 py-2 text-xs">
-          <div className="flex items-center gap-2">
-            <Target className="h-3.5 w-3.5 text-primary" />
-            <span className="text-muted-foreground">Goal</span>
-            <span className="font-bold">
-              {goal.type === "maintain" && goal.value_max != null
-                ? `${goal.value}–${goal.value_max} ${goal.unit}`
-                : `${goal.value} ${goal.unit}`}
-            </span>
+      {/* Goal section — always visible, set or edit inline */}
+      <div className="rounded-md border border-border bg-secondary/30 px-3 py-2.5 text-xs">
+        {goal ? (
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <Target className="h-3.5 w-3.5 shrink-0 text-primary" />
+              <div className="min-w-0">
+                <div className="truncate">
+                  <span className="text-muted-foreground">Goal </span>
+                  <span className="font-bold">
+                    {goal.type === "maintain" && goal.value_max != null
+                      ? `${goal.value}–${goal.value_max} ${goal.unit}`
+                      : `${goal.value} ${goal.unit}`}
+                  </span>
+                </div>
+                <div className={`truncate text-[11px] ${
+                  progress.state === "ahead" || progress.state === "in_range" || progress.state === "at_goal"
+                    ? "text-primary" : "text-muted-foreground"
+                }`}>
+                  {progress.status || "—"}
+                </div>
+              </div>
+            </div>
+            <Button variant="outline" size="sm" className="h-7 px-2 text-[11px]" onClick={() => setGoalOpen(true)}>
+              Edit Goal
+            </Button>
           </div>
-          <span className={`font-bold ${
-            progress.state === "ahead" || progress.state === "in_range" || progress.state === "at_goal"
-              ? "text-primary" : "text-muted-foreground"
-          }`}>
-            {progress.status || "—"}
-          </span>
-        </div>
-      )}
+        ) : (
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <Target className="h-3.5 w-3.5 shrink-0 text-primary" />
+              <span className="truncate text-muted-foreground">No bodyweight goal set yet.</span>
+            </div>
+            <Button size="sm" className="h-7 bg-gradient-primary px-2 text-[11px] font-bold uppercase btn-press" onClick={() => setGoalOpen(true)}>
+              Set Goal
+            </Button>
+          </div>
+        )}
+      </div>
+
+      <Dialog open={goalOpen} onOpenChange={setGoalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{goal ? "Edit bodyweight goal" : "Set bodyweight goal"}</DialogTitle>
+          </DialogHeader>
+          <BodyweightGoalCard
+            clientId={clientId}
+            goal={goal}
+            series={series}
+            displayUnit={unit}
+          />
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }
