@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
-import { Trash2, Upload, AlertTriangle } from "lucide-react";
+import { Trash2, Upload, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { CLIENT_MEDIA_TYPES, MEDIA_TYPES, type MediaType, uploadToDrive } from "@/lib/media";
 import { initMediaUpload, finalizeMediaUpload, createSubmission } from "@/lib/drive.functions";
