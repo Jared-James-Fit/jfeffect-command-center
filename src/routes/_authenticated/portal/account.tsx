@@ -15,7 +15,6 @@ import { ProfilePictureCapture } from "@/components/profile-picture-capture";
 import { SocialHandlesEditor } from "@/components/social-handles-editor";
 import { SOCIAL_FIELDS } from "@/lib/social-handles";
 import { BasicInfoForm } from "@/components/basic-info-form";
-import { calcAge, formatHeight } from "@/lib/basic-info";
 
 export const Route = createFileRoute("/_authenticated/portal/account")({
   component: AccountPage,
