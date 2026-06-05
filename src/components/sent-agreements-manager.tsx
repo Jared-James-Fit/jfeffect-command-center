@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   AlertTriangle, BadgeCheck, BellRing, CheckCircle2, Copy, Download, ExternalLink, FileText,
-  Flag, Inbox, Loader2, Search, Send, ShieldCheck, StickyNote, Upload, User, RefreshCcw,
+  Flag, Inbox, Loader2, RotateCcw, Search, Send, ShieldCheck, StickyNote, Upload, User, RefreshCcw,
 } from "lucide-react";
 import { toast } from "sonner";
 import { AgreementStatusBadge } from "@/components/agreement-status-badge";
@@ -22,7 +22,7 @@ import {
 } from "@/lib/agreements";
 import {
   approveSignedAgreement, markAgreementSigned, verifyAgreement, setAgreementVerification, sendAgreementReminder,
-  updateAgreement, refreshAgreementStatus, getSignedAgreementUrl,
+  updateAgreement, refreshAgreementStatus, getSignedAgreementUrl, reopenAgreement,
 } from "@/lib/agreements.functions";
 
 type Row = Agreement & { clients?: { id: string; full_name: string | null; email: string | null } | null };
@@ -52,6 +52,7 @@ export function SentAgreementsManager() {
   const updateFn = useServerFn(updateAgreement);
   const refreshFn = useServerFn(refreshAgreementStatus);
   const getSignedUrlFn = useServerFn(getSignedAgreementUrl);
+  const reopenFn = useServerFn(reopenAgreement);
 
   const { data: agreements = [] } = useQuery({
     queryKey: ["all-agreements-admin"],
@@ -147,6 +148,20 @@ export function SentAgreementsManager() {
     invalidate();
   };
 
+  const handleReopen = async (a: Row) => {
+    const ok = window.confirm(
+      "Reopen this agreement? This will mark the agreement as incomplete and show it on the client dashboard as needing signature.",
+    );
+    if (!ok) return;
+    try {
+      await reopenFn({ data: { id: a.id } });
+      toast.success("Agreement reopened · client will see it again");
+      invalidate();
+    } catch (e: any) {
+      toast.error(e?.message ?? "Couldn't reopen agreement");
+    }
+  };
+
   return (
     <>
       {attention.length > 0 && (
@@ -172,6 +187,7 @@ export function SentAgreementsManager() {
                 onRefresh={() => handleRefresh(a)}
                 onDownload={() => handleDownload(a)}
                 onAddNote={() => setNoteOpen(a)}
+                onReopen={() => handleReopen(a)}
               />
             ))}
           </ul>
@@ -228,6 +244,7 @@ export function SentAgreementsManager() {
                 onRefresh={() => handleRefresh(a)}
                 onDownload={() => handleDownload(a)}
                 onAddNote={() => setNoteOpen(a)}
+                onReopen={() => handleReopen(a)}
               />
             ))}
           </ul>
@@ -257,13 +274,14 @@ export function SentAgreementsManager() {
 }
 
 function AgreementRow({
-  a, compact, onConfirm, onUpload, onVerify, onToggleVerification, onRemind, onResend, onRefresh, onDownload, onAddNote,
+  a, compact, onConfirm, onUpload, onVerify, onToggleVerification, onRemind, onResend, onRefresh, onDownload, onAddNote, onReopen,
 }: {
   a: Row; compact?: boolean;
   onConfirm: () => void; onUpload: () => void; onVerify: () => void;
   onToggleVerification: (next: boolean) => void;
   onRemind: () => void;
   onResend: () => void; onRefresh: () => void; onDownload: () => void; onAddNote: () => void;
+  onReopen: () => void;
 }) {
   const isTerminal = ["Verified", "Completed", "Cancelled"].includes(a.status as string);
   const hasSignedCopy = !!a.signed_copy_url || !!a.signed_copy_storage_path;
@@ -357,6 +375,11 @@ function AgreementRow({
         ) : (
           <Button size="sm" variant="ghost" onClick={() => onToggleVerification(true)}>
             <ShieldCheck className="h-3 w-3 mr-1" />Mark verified
+          </Button>
+        )}
+        {isSigned && (
+          <Button size="sm" variant="ghost" className="text-amber-600 dark:text-amber-400" onClick={onReopen}>
+            <RotateCcw className="h-3 w-3 mr-1" />Reopen / Mark Unsigned
           </Button>
         )}
         {!["Signed", "Completed", "Verified", "Cancelled"].includes(a.status as string) && (

@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, ExternalLink, Copy, ShieldCheck, AlertTriangle, FileText, Send, BellRing, Upload, Trash2, Loader2, UserPlus, RefreshCcw, Download, CheckCircle2, Flag, StickyNote, BadgeCheck } from "lucide-react";
+import { Plus, ExternalLink, Copy, ShieldCheck, AlertTriangle, FileText, Send, BellRing, Upload, Trash2, Loader2, UserPlus, RefreshCcw, Download, CheckCircle2, Flag, StickyNote, BadgeCheck, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import { AgreementStatusBadge } from "@/components/agreement-status-badge";
@@ -17,7 +17,7 @@ import { fileLabel, AGREEMENT_TYPES, VERIFICATION_BADGE, type Agreement, type Ag
 import {
   createAgreement, updateAgreement, markAgreementSigned, verifyAgreement,
   sendAgreementReminder, cancelAgreement, refreshAgreementStatus, getSignedAgreementUrl,
-  approveSignedAgreement,
+  approveSignedAgreement, setAgreementVerification, reopenAgreement,
 } from "@/lib/agreements.functions";
 
 export function AgreementsPanel({ clientId, clientName }: { clientId: string; clientName?: string }) {
@@ -36,6 +36,8 @@ export function AgreementsPanel({ clientId, clientName }: { clientId: string; cl
   const cancelFn = useServerFn(cancelAgreement);
   const refreshFn = useServerFn(refreshAgreementStatus);
   const getSignedUrlFn = useServerFn(getSignedAgreementUrl);
+  const setVerificationFn = useServerFn(setAgreementVerification);
+  const reopenFn = useServerFn(reopenAgreement);
 
   const { data: agreements = [] } = useQuery({
     queryKey: ["client-agreements", clientId],
@@ -102,6 +104,18 @@ export function AgreementsPanel({ clientId, clientName }: { clientId: string; cl
               onMarkSigned={() => setOpenUpload(a)}
               onVerify={() => setOpenVerify(a)}
               onApprove={() => setOpenApprove(a)}
+              onRemoveVerification={async () => {
+                if (!confirm("Remove verification? This agreement will be marked as needing attention again and may reappear on the client dashboard.")) return;
+                const r: any = await setVerificationFn({ data: { id: a.id, verified: false } });
+                toast.success(`Verification removed · ${r?.newStatus ?? "Needs attention"}`);
+                invalidate();
+              }}
+              onReopen={async () => {
+                if (!confirm("Reopen this agreement? This will mark the agreement as incomplete and show it on the client dashboard as needing signature.")) return;
+                await reopenFn({ data: { id: a.id } });
+                toast.success("Agreement reopened · client will see it again");
+                invalidate();
+              }}
               onRemind={async () => { await reminderFn({ data: { id: a.id } }); toast.success("Reminder logged"); invalidate(); }}
               onCancel={async () => {
                 if (!confirm("Cancel this agreement?")) return;
@@ -229,13 +243,15 @@ export function AgreementsPanel({ clientId, clientName }: { clientId: string; cl
 }
 
 function AgreementRow({
-  ag, onUpdate, onMarkSigned, onVerify, onApprove, onRemind, onCancel, onRefresh, onDownloadSigned, onMarkManuallySent, onNeedsFollowUp,
+  ag, onUpdate, onMarkSigned, onVerify, onApprove, onRemoveVerification, onReopen, onRemind, onCancel, onRefresh, onDownloadSigned, onMarkManuallySent, onNeedsFollowUp,
 }: {
   ag: Agreement;
   onUpdate: (patch: Partial<Agreement>) => Promise<void> | void;
   onMarkSigned: () => void;
   onVerify: () => void;
   onApprove: () => void;
+  onRemoveVerification: () => void;
+  onReopen: () => void;
   onRemind: () => void;
   onCancel: () => void;
   onRefresh: () => void;
@@ -310,6 +326,16 @@ function AgreementRow({
         )}
         {ag.status !== "Verified" && (ag.status === "Signed" || ag.signer_mismatch || ag.verification_status !== "Manually Verified") && (
           <Button size="sm" variant="outline" onClick={onVerify}><ShieldCheck className="h-3 w-3 mr-1" />Mark verified</Button>
+        )}
+        {(ag.status === "Verified" || ag.verification_status === "Manually Verified") && (
+          <Button size="sm" variant="ghost" className="text-amber-600 dark:text-amber-400" onClick={onRemoveVerification}>
+            <ShieldCheck className="h-3 w-3 mr-1" />Remove verification
+          </Button>
+        )}
+        {["Signed", "Completed", "Verified"].includes(ag.status as string) && (
+          <Button size="sm" variant="ghost" className="text-amber-600 dark:text-amber-400" onClick={onReopen}>
+            <RotateCcw className="h-3 w-3 mr-1" />Reopen / Mark Unsigned
+          </Button>
         )}
         {!["Verified", "Cancelled"].includes(ag.status as string) && (
           <Button size="sm" onClick={onApprove}>

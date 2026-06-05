@@ -786,6 +786,73 @@ export const sendAgreementReminder = createServerFn({ method: "POST" })
     return { ok: true, apiSent, apiError };
   });
 
+/**
+ * Reopen an agreement / mark it unsigned.
+ *
+ * Fully reverses Signed / Completed / Verified state so the agreement is
+ * treated as incomplete again:
+ *   - status            -> "Waiting on Client"
+ *   - verification_status -> "Not Verified"
+ *   - signed_at, completed_at, verified_at, verified_by, verification_note -> null
+ *   - signer_mismatch   -> false
+ *
+ * The signed copy (signed_copy_url / signed_copy_storage_path) is preserved
+ * so admin can re-verify later without re-uploading.
+ *
+ * The linked client row is updated to agreement_signed=false and
+ * agreement_status="Waiting on Client" so the client dashboard reminder
+ * reappears immediately.
+ */
+export const reopenAgreement = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i: unknown) =>
+    z.object({
+      id: z.string().uuid(),
+      note: z.string().max(2000).optional().nullable(),
+    }).parse(i),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    await assertAdminOrCoach(supabase, userId);
+    const { data: existing } = await supabase
+      .from("agreements")
+      .select("client_id, status, verification_status")
+      .eq("id", data.id).single();
+    const patch: Record<string, any> = {
+      status: "Waiting on Client",
+      verification_status: "Not Verified",
+      signed_at: null,
+      completed_at: null,
+      verified_at: null,
+      verified_by: null,
+      verification_note: data.note ?? null,
+      signer_mismatch: false,
+      client_marked_complete_at: null,
+      client_marked_complete_by: null,
+    };
+    const { error } = await supabase.from("agreements").update(patch as any).eq("id", data.id);
+    if (error) throw new Error(error.message);
+    if (existing?.client_id) {
+      await supabase.from("clients").update({
+        agreement_signed: false,
+        agreement_signed_date: null,
+        agreement_status: "Waiting on Client",
+      } as any).eq("id", existing.client_id);
+    }
+    await supabase.from("agreement_audit_log").insert({
+      agreement_id: data.id,
+      event: "reopened",
+      actor_role: "admin",
+      actor_user_id: userId,
+      details: {
+        note: data.note ?? null,
+        previous_status: existing?.status ?? null,
+        previous_verification_status: existing?.verification_status ?? null,
+      } as any,
+    } as any);
+    return { ok: true };
+  });
+
 export const cancelAgreement = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((i: unknown) => z.object({ id: z.string().uuid() }).parse(i))
