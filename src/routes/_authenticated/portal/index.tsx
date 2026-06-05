@@ -15,6 +15,8 @@ import { toast } from "sonner";
 import { PowerlifterBadge } from "@/components/powerlifter-badge";
 import { ExternalLink } from "lucide-react";
 import { SocialIcons } from "@/components/social-icons";
+import { LogBodyweightCard } from "@/components/log-bodyweight-card";
+import type { WeightUnit } from "@/lib/progress-metrics";
 
 export const Route = createFileRoute("/_authenticated/portal/")({ component: PortalHome });
 
@@ -325,6 +327,9 @@ function PortalHome() {
 
         {client && (
           <div className="grid gap-4 md:grid-cols-2">
+            {/* Bodyweight quick entry */}
+            <LogBodyweightCard clientId={client.id} defaultUnit={(client.preferred_weight_unit as WeightUnit) ?? "lb"} />
+
             {/* Your Coaching */}
             <Card className="border-border bg-card p-6 space-y-2">
               <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Your Coaching</h3>

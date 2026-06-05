@@ -4,6 +4,7 @@ import {
   Settings, Briefcase, Apple, ClipboardCheck, UserCog, MessageCircle, Video,
   UserCheck, FileSignature, Film,
   ClipboardList, FileEdit,
+  Scale,
 } from "lucide-react";
 import type { NavItem } from "@/components/app-shell";
 
@@ -48,6 +49,7 @@ export const clientNav: NavItem[] = [
   { to: "/portal/lift-videos", label: "Lift Videos", icon: Video },
   { to: "/portal/check-in", label: "Weekly Check-In", icon: ClipboardCheck },
   { to: "/portal/nutrition-targets", label: "Nutrition Targets", icon: Apple },
+  { to: "/portal/progress-metrics", label: "Progress Metrics", icon: Scale },
   { to: "/portal/exercises", label: "Exercises", icon: Dumbbell },
   { to: "/portal/purchases", label: "My Purchases", icon: Package },
   { to: "/portal/agreements", label: "Agreements", icon: FileSignature },

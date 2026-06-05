@@ -23,6 +23,7 @@ import { Route as ApiPublicStripeWebhookRouteImport } from './routes/api/public/
 import { Route as ApiPublicSignnowWebhookRouteImport } from './routes/api/public/signnow-webhook'
 import { Route as AuthenticatedPortalResourcesRouteImport } from './routes/_authenticated/portal/resources'
 import { Route as AuthenticatedPortalPurchasesRouteImport } from './routes/_authenticated/portal/purchases'
+import { Route as AuthenticatedPortalProgressMetricsRouteImport } from './routes/_authenticated/portal/progress-metrics'
 import { Route as AuthenticatedPortalProgramRouteImport } from './routes/_authenticated/portal/program'
 import { Route as AuthenticatedPortalNutritionTargetsRouteImport } from './routes/_authenticated/portal/nutrition-targets'
 import { Route as AuthenticatedPortalMessagesRouteImport } from './routes/_authenticated/portal/messages'
@@ -137,6 +138,12 @@ const AuthenticatedPortalPurchasesRoute =
   AuthenticatedPortalPurchasesRouteImport.update({
     id: '/purchases',
     path: '/purchases',
+    getParentRoute: () => AuthenticatedPortalRouteRoute,
+  } as any)
+const AuthenticatedPortalProgressMetricsRoute =
+  AuthenticatedPortalProgressMetricsRouteImport.update({
+    id: '/progress-metrics',
+    path: '/progress-metrics',
     getParentRoute: () => AuthenticatedPortalRouteRoute,
   } as any)
 const AuthenticatedPortalProgramRoute =
@@ -430,6 +437,7 @@ export interface FileRoutesByFullPath {
   '/portal/messages': typeof AuthenticatedPortalMessagesRoute
   '/portal/nutrition-targets': typeof AuthenticatedPortalNutritionTargetsRoute
   '/portal/program': typeof AuthenticatedPortalProgramRoute
+  '/portal/progress-metrics': typeof AuthenticatedPortalProgressMetricsRoute
   '/portal/purchases': typeof AuthenticatedPortalPurchasesRouteWithChildren
   '/portal/resources': typeof AuthenticatedPortalResourcesRoute
   '/api/public/signnow-webhook': typeof ApiPublicSignnowWebhookRoute
@@ -485,6 +493,7 @@ export interface FileRoutesByTo {
   '/portal/messages': typeof AuthenticatedPortalMessagesRoute
   '/portal/nutrition-targets': typeof AuthenticatedPortalNutritionTargetsRoute
   '/portal/program': typeof AuthenticatedPortalProgramRoute
+  '/portal/progress-metrics': typeof AuthenticatedPortalProgressMetricsRoute
   '/portal/purchases': typeof AuthenticatedPortalPurchasesRouteWithChildren
   '/portal/resources': typeof AuthenticatedPortalResourcesRoute
   '/api/public/signnow-webhook': typeof ApiPublicSignnowWebhookRoute
@@ -544,6 +553,7 @@ export interface FileRoutesById {
   '/_authenticated/portal/messages': typeof AuthenticatedPortalMessagesRoute
   '/_authenticated/portal/nutrition-targets': typeof AuthenticatedPortalNutritionTargetsRoute
   '/_authenticated/portal/program': typeof AuthenticatedPortalProgramRoute
+  '/_authenticated/portal/progress-metrics': typeof AuthenticatedPortalProgressMetricsRoute
   '/_authenticated/portal/purchases': typeof AuthenticatedPortalPurchasesRouteWithChildren
   '/_authenticated/portal/resources': typeof AuthenticatedPortalResourcesRoute
   '/api/public/signnow-webhook': typeof ApiPublicSignnowWebhookRoute
@@ -603,6 +613,7 @@ export interface FileRouteTypes {
     | '/portal/messages'
     | '/portal/nutrition-targets'
     | '/portal/program'
+    | '/portal/progress-metrics'
     | '/portal/purchases'
     | '/portal/resources'
     | '/api/public/signnow-webhook'
@@ -658,6 +669,7 @@ export interface FileRouteTypes {
     | '/portal/messages'
     | '/portal/nutrition-targets'
     | '/portal/program'
+    | '/portal/progress-metrics'
     | '/portal/purchases'
     | '/portal/resources'
     | '/api/public/signnow-webhook'
@@ -716,6 +728,7 @@ export interface FileRouteTypes {
     | '/_authenticated/portal/messages'
     | '/_authenticated/portal/nutrition-targets'
     | '/_authenticated/portal/program'
+    | '/_authenticated/portal/progress-metrics'
     | '/_authenticated/portal/purchases'
     | '/_authenticated/portal/resources'
     | '/api/public/signnow-webhook'
@@ -842,6 +855,13 @@ declare module '@tanstack/react-router' {
       path: '/purchases'
       fullPath: '/portal/purchases'
       preLoaderRoute: typeof AuthenticatedPortalPurchasesRouteImport
+      parentRoute: typeof AuthenticatedPortalRouteRoute
+    }
+    '/_authenticated/portal/progress-metrics': {
+      id: '/_authenticated/portal/progress-metrics'
+      path: '/progress-metrics'
+      fullPath: '/portal/progress-metrics'
+      preLoaderRoute: typeof AuthenticatedPortalProgressMetricsRouteImport
       parentRoute: typeof AuthenticatedPortalRouteRoute
     }
     '/_authenticated/portal/program': {
@@ -1258,6 +1278,7 @@ interface AuthenticatedPortalRouteRouteChildren {
   AuthenticatedPortalMessagesRoute: typeof AuthenticatedPortalMessagesRoute
   AuthenticatedPortalNutritionTargetsRoute: typeof AuthenticatedPortalNutritionTargetsRoute
   AuthenticatedPortalProgramRoute: typeof AuthenticatedPortalProgramRoute
+  AuthenticatedPortalProgressMetricsRoute: typeof AuthenticatedPortalProgressMetricsRoute
   AuthenticatedPortalPurchasesRoute: typeof AuthenticatedPortalPurchasesRouteWithChildren
   AuthenticatedPortalResourcesRoute: typeof AuthenticatedPortalResourcesRoute
   AuthenticatedPortalIndexRoute: typeof AuthenticatedPortalIndexRoute
@@ -1277,6 +1298,8 @@ const AuthenticatedPortalRouteRouteChildren: AuthenticatedPortalRouteRouteChildr
     AuthenticatedPortalNutritionTargetsRoute:
       AuthenticatedPortalNutritionTargetsRoute,
     AuthenticatedPortalProgramRoute: AuthenticatedPortalProgramRoute,
+    AuthenticatedPortalProgressMetricsRoute:
+      AuthenticatedPortalProgressMetricsRoute,
     AuthenticatedPortalPurchasesRoute:
       AuthenticatedPortalPurchasesRouteWithChildren,
     AuthenticatedPortalResourcesRoute: AuthenticatedPortalResourcesRoute,
