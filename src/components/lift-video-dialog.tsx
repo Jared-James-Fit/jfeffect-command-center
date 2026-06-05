@@ -306,172 +306,183 @@ export function LiftVideoDialog({ open, onOpenChange, clientId, userId, clientNa
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Upload Lift Video</DialogTitle>
+            <DialogTitle>{sent ? "Submitted" : "Upload Lift Video"}</DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-4">
-            {/* Add video buttons */}
-            <div className="space-y-2">
-              <Label className="text-xs uppercase tracking-widest text-muted-foreground">Add Video</Label>
-              <input
-                ref={multiUploadRef}
-                type="file"
-                accept="video/mp4,video/quicktime,video/x-m4v,video/*"
-                multiple
-                className="hidden"
-                onChange={(e) => { addFiles(e.target.files); if (multiUploadRef.current) multiUploadRef.current.value = ""; }}
-              />
-              <input
-                ref={multiRecordRef}
-                type="file"
-                accept="video/*"
-                capture="environment"
-                className="hidden"
-                onChange={(e) => { addFiles(e.target.files); if (multiRecordRef.current) multiRecordRef.current.value = ""; }}
-              />
-              <div className="grid grid-cols-3 gap-2">
-                <Button type="button" variant="outline" className="h-auto flex-col gap-1 py-3" onClick={() => multiUploadRef.current?.click()}>
-                  <Upload className="h-4 w-4" />
-                  <span className="text-[11px] font-semibold leading-tight">Upload from phone</span>
-                </Button>
-                <Button type="button" variant="outline" className="h-auto flex-col gap-1 py-3" onClick={() => multiRecordRef.current?.click()}>
-                  <VideoIcon className="h-4 w-4" />
-                  <span className="text-[11px] font-semibold leading-tight">Record now</span>
-                </Button>
-                <Button type="button" variant="outline" className="h-auto flex-col gap-1 py-3" onClick={() => { const el = document.getElementById("clip-paste-link") as HTMLInputElement | null; el?.focus(); }}>
-                  <LinkIcon className="h-4 w-4" />
-                  <span className="text-[11px] font-semibold leading-tight">Paste link</span>
-                </Button>
-              </div>
-              <div className="flex gap-2">
-                <Input
-                  id="clip-paste-link"
-                  placeholder="Paste link(s) — Drive, YouTube, etc. Separate with space or comma"
-                  value={pasteLink}
-                  onChange={(e) => setPasteLink(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addLinks(pasteLink); } }}
-                />
-                <Button type="button" variant="outline" size="sm" onClick={() => addLinks(pasteLink)} disabled={!pasteLink.trim()}>
-                  <Plus className="h-4 w-4" />
-                </Button>
-              </div>
+          {sent ? (
+            <div className="py-8 text-center space-y-4">
+              <CheckCircle2 className="mx-auto h-12 w-12 text-green-500" />
+              <div className="text-lg font-semibold">Sent to Coach Jared</div>
+              <div className="text-sm text-muted-foreground">Your lift video{saving || clips.length > 1 ? "s" : ""} has been submitted for review.</div>
+              <Button onClick={() => { onOpenChange(false); }}>Done</Button>
             </div>
-
-            {/* Selected clips */}
-            {clips.length > 0 && (
-              <div className="space-y-2">
-                <Label className="text-xs uppercase tracking-widest text-muted-foreground">
-                  Selected clips ({clips.length})
-                </Label>
+          ) : (
+            <>
+              <div className="space-y-4">
+                {/* Add video buttons */}
                 <div className="space-y-2">
-                  {clips.map((clip, idx) => (
-                    <div key={clip.id} className="rounded-md border border-border bg-card p-2 space-y-2 overflow-hidden">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <div className="flex h-14 w-16 shrink-0 items-center justify-center overflow-hidden rounded bg-muted">
-                          {clip.kind === "file" && clip.previewUrl ? (
-                            <video src={clip.previewUrl} className="h-full w-full object-cover" muted playsInline preload="metadata" />
-                          ) : (
-                            <LinkIcon className="h-5 w-5 text-muted-foreground" />
+                  <Label className="text-xs uppercase tracking-widest text-muted-foreground">Add Video</Label>
+                  <input
+                    ref={multiUploadRef}
+                    type="file"
+                    accept="video/mp4,video/quicktime,video/x-m4v,video/*"
+                    multiple
+                    className="hidden"
+                    onChange={(e) => { addFiles(e.target.files); if (multiUploadRef.current) multiUploadRef.current.value = ""; }}
+                  />
+                  <input
+                    ref={multiRecordRef}
+                    type="file"
+                    accept="video/*"
+                    capture="environment"
+                    className="hidden"
+                    onChange={(e) => { addFiles(e.target.files); if (multiRecordRef.current) multiRecordRef.current.value = ""; }}
+                  />
+                  <div className="grid grid-cols-3 gap-2">
+                    <Button type="button" variant="outline" className="h-auto flex-col gap-1 py-3" onClick={() => multiUploadRef.current?.click()}>
+                      <Upload className="h-4 w-4" />
+                      <span className="text-[11px] font-semibold leading-tight">Upload from phone</span>
+                    </Button>
+                    <Button type="button" variant="outline" className="h-auto flex-col gap-1 py-3" onClick={() => multiRecordRef.current?.click()}>
+                      <VideoIcon className="h-4 w-4" />
+                      <span className="text-[11px] font-semibold leading-tight">Record now</span>
+                    </Button>
+                    <Button type="button" variant="outline" className="h-auto flex-col gap-1 py-3" onClick={() => { const el = document.getElementById("clip-paste-link") as HTMLInputElement | null; el?.focus(); }}>
+                      <LinkIcon className="h-4 w-4" />
+                      <span className="text-[11px] font-semibold leading-tight">Paste link</span>
+                    </Button>
+                  </div>
+                  <div className="flex gap-2">
+                    <Input
+                      id="clip-paste-link"
+                      placeholder="Paste link(s) — Drive, YouTube, etc. Separate with space or comma"
+                      value={pasteLink}
+                      onChange={(e) => setPasteLink(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addLinks(pasteLink); } }}
+                    />
+                    <Button type="button" variant="outline" size="sm" onClick={() => addLinks(pasteLink)} disabled={!pasteLink.trim()}>
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Selected clips */}
+                {clips.length > 0 && (
+                  <div className="space-y-2">
+                    <Label className="text-xs uppercase tracking-widest text-muted-foreground">
+                      Selected clips ({clips.length})
+                    </Label>
+                    <div className="space-y-2">
+                      {clips.map((clip, idx) => (
+                        <div key={clip.id} className="rounded-md border border-border bg-card p-2 space-y-2 overflow-hidden">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <div className="flex h-14 w-16 shrink-0 items-center justify-center overflow-hidden rounded bg-muted">
+                              {clip.kind === "file" && clip.previewUrl ? (
+                                <video src={clip.previewUrl} className="h-full w-full object-cover" muted playsInline preload="metadata" />
+                              ) : (
+                                <LinkIcon className="h-5 w-5 text-muted-foreground" />
+                              )}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="text-sm font-semibold">Clip {idx + 1}</div>
+                              <div className="truncate text-xs text-muted-foreground break-all">
+                                {clip.kind === "file"
+                                  ? `${clip.file?.name} · ${((clip.file?.size ?? 0) / 1024 / 1024).toFixed(1)} MB`
+                                  : clip.url}
+                              </div>
+                            </div>
+                            <div className="flex shrink-0 flex-col gap-1">
+                              <Button type="button" size="icon" variant="ghost" className="h-7 w-7 shrink-0" onClick={() => moveClip(clip.id, -1)} disabled={idx === 0}>
+                                <ArrowUp className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button type="button" size="icon" variant="ghost" className="h-7 w-7 shrink-0" onClick={() => moveClip(clip.id, 1)} disabled={idx === clips.length - 1}>
+                                <ArrowDown className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+                            <Button type="button" size="icon" variant="ghost" className="h-7 w-7 shrink-0 text-destructive" onClick={() => removeClip(clip.id)}>
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                          {noteMode === "perClip" && (
+                            <Textarea
+                              rows={2}
+                              className="text-sm"
+                              placeholder="Add note for this clip. Example: Squat top set, 405 x 3 @ RPE 8. Felt slow out of the hole."
+                              value={clip.note}
+                              onChange={(e) => updateClipNote(clip.id, e.target.value)}
+                            />
                           )}
                         </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="text-sm font-semibold">Clip {idx + 1}</div>
-                          <div className="truncate text-xs text-muted-foreground break-all">
-                            {clip.kind === "file"
-                              ? `${clip.file?.name} · ${((clip.file?.size ?? 0) / 1024 / 1024).toFixed(1)} MB`
-                              : clip.url}
-                          </div>
-                        </div>
-                        <div className="flex shrink-0 flex-col gap-1">
-                          <Button type="button" size="icon" variant="ghost" className="h-7 w-7 shrink-0" onClick={() => moveClip(clip.id, -1)} disabled={idx === 0}>
-                            <ArrowUp className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button type="button" size="icon" variant="ghost" className="h-7 w-7 shrink-0" onClick={() => moveClip(clip.id, 1)} disabled={idx === clips.length - 1}>
-                            <ArrowDown className="h-3.5 w-3.5" />
-                          </Button>
-                        </div>
-                        <Button type="button" size="icon" variant="ghost" className="h-7 w-7 shrink-0 text-destructive" onClick={() => removeClip(clip.id)}>
-                          <X className="h-4 w-4" />
-                        </Button>
-                      </div>
-                      {noteMode === "perClip" && (
-                        <Textarea
-                          rows={2}
-                          className="text-sm"
-                          placeholder="Add note for this clip. Example: Squat top set, 405 x 3 @ RPE 8. Felt slow out of the hole."
-                          value={clip.note}
-                          onChange={(e) => updateClipNote(clip.id, e.target.value)}
-                        />
-                      )}
+                      ))}
                     </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Notes mode toggle */}
-            <div className="space-y-2">
-              <Label className="text-xs uppercase tracking-widest text-muted-foreground">Notes</Label>
-              <div className="grid grid-cols-2 gap-2">
-                <Button
-                  type="button"
-                  variant={noteMode === "batch" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setNoteMode("batch")}
-                >
-                  One message for all
-                </Button>
-                <Button
-                  type="button"
-                  variant={noteMode === "perClip" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setNoteMode("perClip")}
-                >
-                  Note per clip
-                </Button>
-              </div>
-              {noteMode === "batch" && (
-                <Textarea
-                  rows={5}
-                  className="min-h-[120px] text-base"
-                  placeholder={`Tell Coach Jared what these videos are.\n\nExample: Week 3 Day 2. First video is squat top set 405 x 3 @ RPE 8, second video is backoff set, third video is bench. Squat felt slow out of the hole.`}
-                  value={batchNote}
-                  onChange={(e) => setBatchNote(e.target.value)}
-                />
-              )}
-            </div>
-
-            {/* Pain / urgent toggle */}
-            <div className="space-y-2 rounded-md border border-border bg-secondary/30 p-3">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <div className="flex items-center gap-2 text-sm font-semibold">
-                    <AlertTriangle className="h-4 w-4 text-warning" />
-                    Pain, discomfort, or urgent?
                   </div>
-                  <div className="text-xs text-muted-foreground">Flag this for coach attention.</div>
-                </div>
-                <Switch checked={!!form.is_urgent} onCheckedChange={(v) => set("is_urgent", v)} />
-              </div>
-              {form.is_urgent && (
-                <Textarea
-                  rows={3}
-                  className="text-sm"
-                  placeholder="Example: left hip pinched during this set, or urgent technique concern before next session."
-                  value={urgentText}
-                  onChange={(e) => setUrgentText(e.target.value)}
-                />
-              )}
-            </div>
-          </div>
+                )}
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>Cancel</Button>
-            <Button onClick={handleSave} disabled={saving || clips.length === 0} className="bg-gradient-primary font-bold uppercase">
-              {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-              {clips.length > 1 ? `Send ${clips.length} clips` : "Send Video"}
-            </Button>
-          </DialogFooter>
+                {/* Notes mode toggle */}
+                <div className="space-y-2">
+                  <Label className="text-xs uppercase tracking-widest text-muted-foreground">Notes</Label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button
+                      type="button"
+                      variant={noteMode === "batch" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setNoteMode("batch")}
+                    >
+                      One message for all
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={noteMode === "perClip" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setNoteMode("perClip")}
+                    >
+                      Note per clip
+                    </Button>
+                  </div>
+                  {noteMode === "batch" && (
+                    <Textarea
+                      rows={5}
+                      className="min-h-[120px] text-base"
+                      placeholder={`Tell Coach Jared what these videos are.\n\nExample: Week 3 Day 2. First video is squat top set 405 x 3 @ RPE 8, second video is backoff set, third video is bench. Squat felt slow out of the hole.`}
+                      value={batchNote}
+                      onChange={(e) => setBatchNote(e.target.value)}
+                    />
+                  )}
+                </div>
+
+                {/* Pain / urgent toggle */}
+                <div className="space-y-2 rounded-md border border-border bg-secondary/30 p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <div className="flex items-center gap-2 text-sm font-semibold">
+                        <AlertTriangle className="h-4 w-4 text-warning" />
+                        Pain, discomfort, or urgent?
+                      </div>
+                      <div className="text-xs text-muted-foreground">Flag this for coach attention.</div>
+                    </div>
+                    <Switch checked={!!form.is_urgent} onCheckedChange={(v) => set("is_urgent", v)} />
+                  </div>
+                  {form.is_urgent && (
+                    <Textarea
+                      rows={3}
+                      className="text-sm"
+                      placeholder="Example: left hip pinched during this set, or urgent technique concern before next session."
+                      value={urgentText}
+                      onChange={(e) => setUrgentText(e.target.value)}
+                    />
+                  )}
+                </div>
+              </div>
+
+              <DialogFooter>
+                <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>Cancel</Button>
+                <Button onClick={handleSave} disabled={saving || clips.length === 0} className="bg-gradient-primary font-bold uppercase">
+                  {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+                  {clips.length > 1 ? `Send ${clips.length} clips` : "Send Video"}
+                </Button>
+              </DialogFooter>
+            </>
+          )}
         </DialogContent>
       </Dialog>
     );
