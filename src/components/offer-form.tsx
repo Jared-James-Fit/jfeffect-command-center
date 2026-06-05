@@ -195,6 +195,16 @@ export function OfferForm({ initial, onSubmit, submitting, submitLabel = "Save o
           <Switch checked={!!form.requires_agreement} onCheckedChange={(v) => set("requires_agreement", v)} />
           <Label>Requires signed Coaching Agreement</Label>
         </div>
+        <div className="flex items-center gap-3 mb-3">
+          <Switch
+            checked={!!form.agreement_before_service}
+            onCheckedChange={(v) => set("agreement_before_service", v)}
+            disabled={!form.requires_agreement}
+          />
+          <Label className={!form.requires_agreement ? "text-muted-foreground" : ""}>
+            Must be signed before service start (blocks start if missing)
+          </Label>
+        </div>
         <DefaultAgreementTemplatePicker
           value={form.default_agreement_template_id ?? null}
           onChange={(v) => set("default_agreement_template_id", v)}
