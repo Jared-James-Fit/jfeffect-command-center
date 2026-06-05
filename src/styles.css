@@ -189,3 +189,15 @@
     transition-duration: 0.001ms !important;
   }
 }
+
+/* Hide mobile bottom nav when the on-screen keyboard is open */
+html[data-keyboard-open="true"] [data-mobile-bottom-nav] {
+  display: none !important;
+}
+
+/* Prevent iOS auto-zoom on focus: ensure inputs are at least 16px */
+@media (max-width: 768px) {
+  input, textarea, select {
+    font-size: 16px;
+  }
+}
