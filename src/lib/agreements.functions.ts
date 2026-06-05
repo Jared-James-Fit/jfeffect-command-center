@@ -603,6 +603,67 @@ export const verifyAgreement = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+/**
+ * One-click admin approval: optionally records signed copy / signed date /
+ * verification note, then marks the agreement Verified (Manually Verified).
+ * Mirrors markAgreementSigned + verifyAgreement combined.
+ */
+export const approveSignedAgreement = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i: unknown) =>
+    z.object({
+      id: z.string().uuid(),
+      signed_at: z.string().datetime().optional().nullable(),
+      signed_copy_url: z.string().url().max(500).optional().nullable(),
+      signed_copy_storage_path: z.string().max(500).optional().nullable(),
+      verification_note: z.string().max(2000).optional().nullable(),
+    }).parse(i),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    await assertAdminOrCoach(supabase, userId);
+    const { data: existing } = await supabase
+      .from("agreements")
+      .select("client_id, signed_at, completed_at, signed_copy_url, signed_copy_storage_path")
+      .eq("id", data.id).single();
+    const nowIso = new Date().toISOString();
+    const signedAt = data.signed_at ?? existing?.signed_at ?? nowIso;
+    const patch: Record<string, any> = {
+      status: "Verified",
+      verification_status: "Manually Verified",
+      verified_by: userId,
+      verified_at: nowIso,
+      verification_note: data.verification_note ?? null,
+      signed_at: signedAt,
+      completed_at: existing?.completed_at ?? signedAt,
+      signer_mismatch: false,
+    };
+    if (data.signed_copy_url) patch.signed_copy_url = data.signed_copy_url;
+    if (data.signed_copy_storage_path) patch.signed_copy_storage_path = data.signed_copy_storage_path;
+    const { error } = await supabase.from("agreements").update(patch as any).eq("id", data.id);
+    if (error) throw new Error(error.message);
+    if (existing?.client_id) {
+      await supabase.from("clients").update({
+        agreement_signed: true,
+        agreement_signed_date: signedAt.slice(0, 10),
+        agreement_status: "Verified",
+      } as any).eq("id", existing.client_id);
+    }
+    await supabase.from("agreement_audit_log").insert({
+      agreement_id: data.id,
+      event: "admin_approved_signed",
+      actor_role: "admin",
+      actor_user_id: userId,
+      details: {
+        note: data.verification_note ?? null,
+        signed_copy_url: data.signed_copy_url ?? null,
+        signed_copy_storage_path: data.signed_copy_storage_path ?? null,
+        signed_at: signedAt,
+      } as any,
+    } as any);
+    return { ok: true };
+  });
+
 export const sendAgreementReminder = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((i: unknown) => z.object({ id: z.string().uuid() }).parse(i))

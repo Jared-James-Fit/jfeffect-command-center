@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, ExternalLink, Copy, ShieldCheck, AlertTriangle, FileText, Send, BellRing, Upload, Trash2, Loader2, UserPlus, RefreshCcw, Download, CheckCircle2, Flag, StickyNote } from "lucide-react";
+import { Plus, ExternalLink, Copy, ShieldCheck, AlertTriangle, FileText, Send, BellRing, Upload, Trash2, Loader2, UserPlus, RefreshCcw, Download, CheckCircle2, Flag, StickyNote, BadgeCheck } from "lucide-react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import { AgreementStatusBadge } from "@/components/agreement-status-badge";
@@ -17,6 +17,7 @@ import { fileLabel, AGREEMENT_TYPES, VERIFICATION_BADGE, type Agreement, type Ag
 import {
   createAgreement, updateAgreement, markAgreementSigned, verifyAgreement,
   sendAgreementReminder, cancelAgreement, refreshAgreementStatus, getSignedAgreementUrl,
+  approveSignedAgreement,
 } from "@/lib/agreements.functions";
 
 export function AgreementsPanel({ clientId, clientName }: { clientId: string; clientName?: string }) {
@@ -24,11 +25,13 @@ export function AgreementsPanel({ clientId, clientName }: { clientId: string; cl
   const [sendMode, setSendMode] = useState<null | "invite">(null);
   const [openUpload, setOpenUpload] = useState<Agreement | null>(null);
   const [openVerify, setOpenVerify] = useState<Agreement | null>(null);
+  const [openApprove, setOpenApprove] = useState<Agreement | null>(null);
 
   const createFn = useServerFn(createAgreement);
   const updateFn = useServerFn(updateAgreement);
   const markSignedFn = useServerFn(markAgreementSigned);
   const verifyFn = useServerFn(verifyAgreement);
+  const approveFn = useServerFn(approveSignedAgreement);
   const reminderFn = useServerFn(sendAgreementReminder);
   const cancelFn = useServerFn(cancelAgreement);
   const refreshFn = useServerFn(refreshAgreementStatus);
@@ -98,6 +101,7 @@ export function AgreementsPanel({ clientId, clientName }: { clientId: string; cl
               onUpdate={async (patch) => { await updateFn({ data: { id: a.id, ...patch } as any }); invalidate(); }}
               onMarkSigned={() => setOpenUpload(a)}
               onVerify={() => setOpenVerify(a)}
+              onApprove={() => setOpenApprove(a)}
               onRemind={async () => { await reminderFn({ data: { id: a.id } }); toast.success("Reminder logged"); invalidate(); }}
               onCancel={async () => {
                 if (!confirm("Cancel this agreement?")) return;
@@ -206,17 +210,32 @@ export function AgreementsPanel({ clientId, clientName }: { clientId: string; cl
           invalidate(); setOpenVerify(null);
         }}
       />
+
+      {/* Approve signed (one-click admin/coach approval) */}
+      <ApproveSignedDialog
+        open={!!openApprove}
+        onOpenChange={(o) => !o && setOpenApprove(null)}
+        clientId={clientId}
+        agreement={openApprove}
+        onSubmit={async (payload) => {
+          if (!openApprove) return;
+          await approveFn({ data: { id: openApprove.id, ...payload } as any });
+          toast.success("Agreement approved — client will see it as complete.");
+          invalidate(); setOpenApprove(null);
+        }}
+      />
     </Card>
   );
 }
 
 function AgreementRow({
-  ag, onUpdate, onMarkSigned, onVerify, onRemind, onCancel, onRefresh, onDownloadSigned, onMarkManuallySent, onNeedsFollowUp,
+  ag, onUpdate, onMarkSigned, onVerify, onApprove, onRemind, onCancel, onRefresh, onDownloadSigned, onMarkManuallySent, onNeedsFollowUp,
 }: {
   ag: Agreement;
   onUpdate: (patch: Partial<Agreement>) => Promise<void> | void;
   onMarkSigned: () => void;
   onVerify: () => void;
+  onApprove: () => void;
   onRemind: () => void;
   onCancel: () => void;
   onRefresh: () => void;
@@ -291,6 +310,11 @@ function AgreementRow({
         )}
         {ag.status !== "Verified" && (ag.status === "Signed" || ag.signer_mismatch || ag.verification_status !== "Manually Verified") && (
           <Button size="sm" variant="outline" onClick={onVerify}><ShieldCheck className="h-3 w-3 mr-1" />Mark verified</Button>
+        )}
+        {!["Verified", "Cancelled"].includes(ag.status as string) && (
+          <Button size="sm" onClick={onApprove}>
+            <BadgeCheck className="h-3 w-3 mr-1" />Approve Signed Agreement
+          </Button>
         )}
         {!["Signed", "Completed", "Verified", "Cancelled"].includes(ag.status as string) && (
           <>
@@ -427,6 +451,100 @@ function SendAgreementDialog({
           <Button onClick={go} disabled={busy}>
             {busy && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
             Create invite
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ApproveSignedDialog({
+  open, onOpenChange, clientId, agreement, onSubmit,
+}: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  clientId: string;
+  agreement: Agreement | null;
+  onSubmit: (payload: {
+    signed_at?: string | null;
+    signed_copy_url?: string | null;
+    signed_copy_storage_path?: string | null;
+    verification_note?: string | null;
+  }) => Promise<void>;
+}) {
+  const initialDate = () => {
+    const src = agreement?.signed_at ?? agreement?.completed_at ?? new Date().toISOString();
+    const d = new Date(src);
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  };
+  const [signedDate, setSignedDate] = useState(initialDate());
+  const [signedLink, setSignedLink] = useState(agreement?.signed_copy_url ?? "");
+  const [note, setNote] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function go() {
+    setBusy(true);
+    try {
+      let signedUrl: string | null = signedLink.trim() || null;
+      let signedPath: string | null = null;
+      if (file) {
+        const cleanName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+        const path = `signed/${clientId}/${Date.now()}_${cleanName}`;
+        const up = await supabase.storage.from("agreements").upload(path, file, {
+          contentType: file.type || "application/pdf", upsert: false,
+        });
+        if (up.error) throw up.error;
+        signedPath = path;
+        const { data: signed } = await supabase.storage.from("agreements")
+          .createSignedUrl(path, 60 * 60 * 24 * 365);
+        signedUrl = signed?.signedUrl ?? signedUrl;
+      }
+      await onSubmit({
+        signed_at: signedDate ? new Date(signedDate).toISOString() : null,
+        signed_copy_url: signedUrl,
+        signed_copy_storage_path: signedPath,
+        verification_note: note.trim() || null,
+      });
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to approve");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Approve signed agreement</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3 text-sm">
+          <p className="text-muted-foreground text-xs">
+            Confirm this signed agreement was received. The client will see it as <strong>Completed</strong> and it will be removed from outstanding alerts. All fields below are optional.
+          </p>
+          <div>
+            <Label className="text-xs">Signed date / time</Label>
+            <Input type="datetime-local" value={signedDate} onChange={(e) => setSignedDate(e.target.value)} />
+          </div>
+          <div>
+            <Label className="text-xs">Signed copy link</Label>
+            <Input value={signedLink} onChange={(e) => setSignedLink(e.target.value)} placeholder="https://..." />
+          </div>
+          <div>
+            <Label className="text-xs">Upload signed copy</Label>
+            <Input type="file" accept="application/pdf,image/*" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+          </div>
+          <div>
+            <Label className="text-xs">Admin verification note</Label>
+            <Textarea rows={3} value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. Received signed PDF via email on Jun 5." />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button onClick={go} disabled={busy}>
+            {busy && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}Approve / Mark Received
           </Button>
         </DialogFooter>
       </DialogContent>
