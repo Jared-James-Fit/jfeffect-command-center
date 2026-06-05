@@ -131,6 +131,8 @@ export type Database = {
           client_email: string | null
           client_full_name: string | null
           client_id: string
+          client_marked_complete_at: string | null
+          client_marked_complete_by: string | null
           client_phone: string | null
           completed_at: string | null
           correct_client_name: string | null
@@ -177,6 +179,8 @@ export type Database = {
           client_email?: string | null
           client_full_name?: string | null
           client_id: string
+          client_marked_complete_at?: string | null
+          client_marked_complete_by?: string | null
           client_phone?: string | null
           completed_at?: string | null
           correct_client_name?: string | null
@@ -223,6 +227,8 @@ export type Database = {
           client_email?: string | null
           client_full_name?: string | null
           client_id?: string
+          client_marked_complete_at?: string | null
+          client_marked_complete_by?: string | null
           client_phone?: string | null
           completed_at?: string | null
           correct_client_name?: string | null
