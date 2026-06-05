@@ -17,12 +17,13 @@ import {
 import { format, parseISO, formatDistanceToNow } from "date-fns";
 import {
   Eye, ThumbsUp, CheckCircle2, MessageSquare, AlertTriangle, ExternalLink, Trash2, Edit3, Loader2,
-  AlertCircle, Archive, Zap,
+  AlertCircle, Archive, Zap, MoreVertical, Maximize2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { LiftVideoPlayer } from "@/components/lift-video-player";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+  DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 
 type Props = {
@@ -92,6 +93,9 @@ export function LiftVideoCard({ video, role, userId, onChanged, onEdit }: Props)
   const dayLabel = video.training_day === "Custom" ? video.custom_training_day : video.training_day;
   const tagLabel = video.tag === "Custom" ? video.custom_tag : video.tag;
   const displayStatus = role === "client" ? clientFacingStatus(video) : video.status;
+  const isReviewed = !!video.reviewed_at;
+  const clientCanDelete = role === "client" && video.uploaded_by === userId && !isReviewed;
+  const clientCanEdit = role === "client" && video.uploaded_by === userId && !isReviewed;
 
   return (
     <Card className="border-border bg-card p-5 space-y-4">
@@ -113,16 +117,35 @@ export function LiftVideoCard({ video, role, userId, onChanged, onEdit }: Props)
             {video.program_day && <> · {video.program_day}</>}
           </div>
         </div>
-        <div className="flex items-center gap-1">
-          {onEdit && (
-            <Button size="sm" variant="ghost" onClick={() => onEdit(video)}><Edit3 className="h-3.5 w-3.5" /></Button>
-          )}
-          {(role === "admin" || video.uploaded_by === userId) && (
-            <Button size="sm" variant="ghost" onClick={() => {
-              if (confirm("Delete this video?")) act(() => deleteLiftVideo(video.id), "Deleted");
-            }}><Trash2 className="h-3.5 w-3.5" /></Button>
-          )}
-        </div>
+        {(role === "admin" || clientCanEdit || clientCanDelete) && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="icon" variant="ghost" className="h-8 w-8">
+                <MoreVertical className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {onEdit && (role === "admin" || clientCanEdit) && (
+                <DropdownMenuItem onClick={() => onEdit(video)}>
+                  <Edit3 className="mr-2 h-4 w-4" /> Edit
+                </DropdownMenuItem>
+              )}
+              {(role === "admin" || clientCanDelete) && (
+                <>
+                  {onEdit && (role === "admin" || clientCanEdit) && <DropdownMenuSeparator />}
+                  <DropdownMenuItem
+                    className="text-destructive focus:text-destructive"
+                    onClick={() => {
+                      if (confirm("Delete this video?")) act(() => deleteLiftVideo(video.id), "Deleted");
+                    }}
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" /> Delete
+                  </DropdownMenuItem>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
       </div>
 
       {(video.set_number || video.reps || video.load_text || video.rpe) && (
@@ -136,9 +159,25 @@ export function LiftVideoCard({ video, role, userId, onChanged, onEdit }: Props)
 
       <div className="overflow-hidden rounded-md border border-border bg-black/40">
         {embedUrl ? (
-          <iframe src={embedUrl} className="aspect-video w-full" allow="autoplay; encrypted-media" allowFullScreen />
+          <div className="space-y-2">
+            <iframe
+              src={embedUrl}
+              className="h-[60vh] max-h-[640px] w-full bg-black"
+              allow="autoplay; encrypted-media; fullscreen"
+              allowFullScreen
+            />
+            {video.video_url && (
+              <div className="flex justify-end px-2 pb-2">
+                <Button size="sm" variant="ghost" asChild>
+                  <a href={video.video_url} target="_blank" rel="noreferrer">
+                    <Maximize2 className="mr-1 h-3 w-3" /> Open in {isDrive(video.video_url) ? "Drive" : "new tab"}
+                  </a>
+                </Button>
+              </div>
+            )}
+          </div>
         ) : signedUrl ? (
-          <LiftVideoPlayer src={signedUrl} />
+          <LiftVideoPlayer src={signedUrl} fallbackUrl={video.video_url ?? null} />
         ) : video.video_url ? (
           <a href={video.video_url} target="_blank" rel="noreferrer" className="flex items-center justify-center gap-2 p-6 text-sm text-primary">
             Open video link <ExternalLink className="h-3 w-3" />
@@ -198,26 +237,35 @@ export function LiftVideoCard({ video, role, userId, onChanged, onEdit }: Props)
         </div>
       )}
 
-      {/* Comments */}
+      {/* Coach Feedback */}
       <div className="space-y-2">
-        <div className="flex items-center gap-2 text-xs uppercase tracking-widest text-muted-foreground">
-          <MessageSquare className="h-3 w-3" /> Comments
+        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+          <MessageSquare className="h-3 w-3" /> Coach Feedback
         </div>
         <div className="space-y-2">
-          {comments.length === 0 && <p className="text-xs text-muted-foreground">No comments yet.</p>}
+          {comments.length === 0 && (
+            <p className="text-xs text-muted-foreground">
+              {role === "admin" ? "No comments yet." : "No coach feedback yet."}
+            </p>
+          )}
           {comments.map((c) => (
             <div key={c.id} className={`rounded-md border p-3 text-sm ${c.is_internal_note ? "border-warning/40 bg-warning/10" : c.author_role === "admin" ? "border-primary/30 bg-primary/5" : "border-border bg-secondary/30"}`}>
-              <div className="mb-1 flex items-center gap-2 text-[10px] uppercase tracking-widest text-muted-foreground">
-                <span>{c.author_role === "admin" ? "Coach Jared" : "Client"}</span>
+              <div className="mb-1 flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                <span className="text-foreground">{c.author_role === "admin" ? "Coach Jared" : "You"}</span>
                 {c.is_internal_note && <Badge variant="outline" className="border-warning/40 bg-warning/10 text-warning">Internal</Badge>}
                 <span>· {format(parseISO(c.created_at), "MMM d, h:mm a")}</span>
               </div>
-              <div className="whitespace-pre-wrap">{c.body}</div>
+              <div className="whitespace-pre-wrap text-foreground">{c.body}</div>
             </div>
           ))}
         </div>
-        <Textarea rows={2} placeholder={role === "admin" ? "Reply to client…" : "Reply to coach…"} value={commentBody} onChange={(e) => setCommentBody(e.target.value)} />
-        <div className="flex items-center justify-between">
+        <Textarea
+          rows={2}
+          placeholder={role === "admin" ? "Reply to client…" : "Reply to Coach Jared…"}
+          value={commentBody}
+          onChange={(e) => setCommentBody(e.target.value)}
+        />
+        <div className="flex items-center justify-between gap-2">
           {role === "admin" ? (
             <div className="flex items-center gap-3">
               <label className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -241,7 +289,7 @@ export function LiftVideoCard({ video, role, userId, onChanged, onEdit }: Props)
           ) : <div />}
           <Button size="sm" onClick={post} disabled={posting || !commentBody.trim()}>
             {posting ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : null}
-            Post
+            {role === "admin" ? "Send Feedback" : "Send Reply"}
           </Button>
         </div>
       </div>
