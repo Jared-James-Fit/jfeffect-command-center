@@ -205,7 +205,7 @@ function AudioAttachment({
 
   return (
     <div className={cn(
-      "w-[260px] rounded-2xl p-2",
+      "w-full max-w-[260px] rounded-2xl p-2",
       mine ? "bg-primary-foreground/10" : "bg-background/60",
     )}>
       <div className="flex items-center gap-2">
