@@ -1,0 +1,263 @@
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { PageHeader } from "@/components/app-shell";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Download, ExternalLink, RefreshCw, FileText, Loader2, Search, User } from "lucide-react";
+import { toast } from "sonner";
+import { useServerFn } from "@tanstack/react-start";
+import { getSignedAgreementUrl, refreshAllPendingAgreements } from "@/lib/agreements.functions";
+import { AgreementStatusBadge } from "@/components/agreement-status-badge";
+import { VERIFICATION_BADGE } from "@/lib/agreements";
+
+export const Route = createFileRoute("/_authenticated/admin/agreements/signed")({
+  component: SignedAgreementsPage,
+});
+
+type Row = {
+  id: string;
+  client_id: string;
+  template_name: string | null;
+  agreement_type: string | null;
+  status: string;
+  verification_status: string;
+  signer_mismatch: boolean;
+  signed_at: string | null;
+  completed_at: string | null;
+  signed_copy_storage_path: string | null;
+  signed_copy_url: string | null;
+  signnow_completed_link: string | null;
+  signnow_document_id: string | null;
+  client_full_name: string | null;
+  clients: { id: string; full_name: string } | null;
+};
+
+function SignedAgreementsPage() {
+  const [search, setSearch] = useState("");
+  const [from, setFrom] = useState<string>("");
+  const [to, setTo] = useState<string>("");
+  const [refreshing, setRefreshing] = useState(false);
+  const [downloading, setDownloading] = useState<string | null>(null);
+  const getUrlFn = useServerFn(getSignedAgreementUrl);
+  const refreshAllFn = useServerFn(refreshAllPendingAgreements);
+
+  const { data: rows = [], refetch, isLoading } = useQuery({
+    queryKey: ["admin-signed-agreements"],
+    queryFn: async (): Promise<Row[]> => {
+      const { data, error } = await supabase
+        .from("agreements")
+        .select("id, client_id, template_name, agreement_type, status, verification_status, signer_mismatch, signed_at, completed_at, signed_copy_storage_path, signed_copy_url, signnow_completed_link, signnow_document_id, client_full_name, clients(id, full_name)")
+        .or("status.in.(Signed,Completed,Verified),signed_copy_storage_path.not.is.null")
+        .order("signed_at", { ascending: false, nullsFirst: false })
+        .limit(1000);
+      if (error) throw new Error(error.message);
+      return (data ?? []) as unknown as Row[];
+    },
+  });
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const fromTs = from ? new Date(from).getTime() : null;
+    const toTs = to ? new Date(to).getTime() + 24 * 60 * 60 * 1000 - 1 : null;
+    return rows.filter((r) => {
+      const name = (r.clients?.full_name ?? r.client_full_name ?? "").toLowerCase();
+      const tpl = (r.template_name ?? "").toLowerCase();
+      if (q && !name.includes(q) && !tpl.includes(q)) return false;
+      const signedDate = r.signed_at ?? r.completed_at;
+      if (fromTs || toTs) {
+        if (!signedDate) return false;
+        const t = new Date(signedDate).getTime();
+        if (fromTs && t < fromTs) return false;
+        if (toTs && t > toTs) return false;
+      }
+      return true;
+    });
+  }, [rows, search, from, to]);
+
+  const grouped = useMemo(() => {
+    const map = new Map<string, { clientId: string; clientName: string; items: Row[] }>();
+    for (const r of filtered) {
+      const cid = r.client_id;
+      const name = r.clients?.full_name ?? r.client_full_name ?? "Unknown client";
+      const entry = map.get(cid) ?? { clientId: cid, clientName: name, items: [] };
+      entry.items.push(r);
+      map.set(cid, entry);
+    }
+    const arr = Array.from(map.values());
+    arr.sort((a, b) => a.clientName.localeCompare(b.clientName));
+    for (const g of arr) {
+      g.items.sort((a, b) => {
+        const ta = a.signed_at ?? a.completed_at ?? "";
+        const tb = b.signed_at ?? b.completed_at ?? "";
+        return tb.localeCompare(ta);
+      });
+    }
+    return arr;
+  }, [filtered]);
+
+  async function handleDownload(id: string) {
+    setDownloading(id);
+    try {
+      const res = await getUrlFn({ data: { id } });
+      if (!res?.url) {
+        toast.error("No signed copy available yet for this agreement.");
+        return;
+      }
+      window.open(res.url, "_blank", "noopener,noreferrer");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Could not generate download link");
+    } finally {
+      setDownloading(null);
+    }
+  }
+
+  async function handleRefreshAll() {
+    setRefreshing(true);
+    try {
+      const res = await refreshAllFn();
+      if (!res.ok) {
+        toast.error(res.reason ?? "Refresh failed");
+      } else {
+        toast.success(
+          `Scanned ${res.scanned} pending agreement${res.scanned === 1 ? "" : "s"} · ${res.signedNow} newly signed · ${res.errors} error${res.errors === 1 ? "" : "s"}`,
+        );
+        refetch();
+      }
+    } catch (e: any) {
+      toast.error(e?.message ?? "Refresh failed");
+    } finally {
+      setRefreshing(false);
+    }
+  }
+
+  return (
+    <>
+      <PageHeader
+        title="Signed Documents"
+        subtitle="Every signed SignNow document, organized by client and signed date."
+      />
+      <div className="p-6 md:p-8 space-y-6">
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="flex-1 min-w-[220px]">
+            <label className="text-xs uppercase tracking-widest text-muted-foreground">Search</label>
+            <div className="relative">
+              <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Client name or template…"
+                className="pl-8"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="text-xs uppercase tracking-widest text-muted-foreground">Signed from</label>
+            <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+          </div>
+          <div>
+            <label className="text-xs uppercase tracking-widest text-muted-foreground">Signed to</label>
+            <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+          </div>
+          <Button variant="outline" onClick={handleRefreshAll} disabled={refreshing}>
+            {refreshing ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-1" />}
+            Refresh from SignNow
+          </Button>
+          <Link to="/admin/agreements" className="text-sm text-primary hover:underline">
+            ← Back to Agreements
+          </Link>
+        </div>
+
+        <Card className="p-5">
+          {isLoading ? (
+            <div className="py-12 text-center text-sm text-muted-foreground">
+              <Loader2 className="h-5 w-5 inline animate-spin mr-2" /> Loading signed documents…
+            </div>
+          ) : grouped.length === 0 ? (
+            <div className="py-12 text-center text-sm text-muted-foreground">
+              <FileText className="h-6 w-6 mx-auto mb-2 opacity-50" />
+              No signed documents match your filters yet.
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {grouped.map((g) => (
+                <div key={g.clientId}>
+                  <div className="flex items-center justify-between border-b border-border pb-2 mb-2">
+                    <Link
+                      to="/admin/clients/$id"
+                      params={{ id: g.clientId }}
+                      className="flex items-center gap-2 font-semibold hover:underline"
+                    >
+                      <User className="h-4 w-4 text-muted-foreground" />
+                      {g.clientName}
+                    </Link>
+                    <span className="text-xs text-muted-foreground">
+                      {g.items.length} document{g.items.length === 1 ? "" : "s"}
+                    </span>
+                  </div>
+                  <ul className="divide-y divide-border">
+                    {g.items.map((a) => {
+                      const signedDate = a.signed_at ?? a.completed_at;
+                      const hasFile = !!a.signed_copy_storage_path || !!a.signed_copy_url;
+                      return (
+                        <li key={a.id} className="flex flex-wrap items-center gap-3 py-2.5 text-sm">
+                          <FileText className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                          <div className="min-w-0 flex-1">
+                            <div className="font-medium truncate">
+                              {a.template_name ?? a.agreement_type ?? "Agreement"}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              {signedDate
+                                ? `Signed ${new Date(signedDate).toLocaleString()}`
+                                : "Signed date unknown"}
+                            </div>
+                          </div>
+                          <AgreementStatusBadge status={a.status} />
+                          <Badge
+                            variant="secondary"
+                            className={`border-0 ${VERIFICATION_BADGE[a.verification_status] ?? ""}`}
+                          >
+                            {a.verification_status}
+                          </Badge>
+                          <div className="flex items-center gap-1.5">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={!hasFile || downloading === a.id}
+                              onClick={() => handleDownload(a.id)}
+                              title={hasFile ? "View / download signed PDF" : "Signed copy not yet pulled"}
+                            >
+                              {downloading === a.id ? (
+                                <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+                              ) : (
+                                <Download className="h-3.5 w-3.5 mr-1" />
+                              )}
+                              View
+                            </Button>
+                            {a.signnow_completed_link && (
+                              <a
+                                href={a.signnow_completed_link}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-xs text-primary hover:underline inline-flex items-center gap-1"
+                              >
+                                <ExternalLink className="h-3 w-3" /> SignNow
+                              </a>
+                            )}
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+      </div>
+    </>
+  );
+}
