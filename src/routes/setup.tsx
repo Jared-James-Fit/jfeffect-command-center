@@ -9,6 +9,8 @@ import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import { acceptCoachInvite } from "@/lib/coaches.functions";
+import { SocialHandlesEditor } from "@/components/social-handles-editor";
+import { SOCIAL_FIELDS } from "@/lib/social-handles";
 
 export const Route = createFileRoute("/setup")({
   head: () => ({ meta: [{ title: "Set up your account — JF Effect" }] }),
@@ -17,13 +19,14 @@ export const Route = createFileRoute("/setup")({
 
 function SetupPage() {
   const navigate = useNavigate();
-  const [phase, setPhase] = useState<"loading" | "ready" | "expired" | "done">("loading");
+  const [phase, setPhase] = useState<"loading" | "ready" | "social" | "expired" | "done">("loading");
   const [email, setEmail] = useState<string>("");
   const [fullName, setFullName] = useState<string>("");
   const [isCoachInvite, setIsCoachInvite] = useState(false);
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [busy, setBusy] = useState(false);
+  const [socials, setSocials] = useState<Record<string, string | null>>({});
   const acceptCoachFn = useServerFn(acceptCoachInvite);
 
   useEffect(() => {
@@ -65,9 +68,41 @@ function SetupPage() {
       try { await acceptCoachFn({ data: undefined as any }); } catch { /* non-fatal */ }
     }
     setBusy(false);
+    toast.success("Password saved.");
+    if (isCoachInvite) {
+      setPhase("done");
+      setTimeout(() => navigate({ to: "/admin", replace: true }), 500);
+      return;
+    }
+    setPhase("social");
+  };
+
+  const finishToPortal = () => {
     setPhase("done");
-    toast.success("Account ready. Welcome to JF Effect.");
-    setTimeout(() => navigate({ to: isCoachInvite ? "/admin" : "/portal", replace: true }), 600);
+    toast.success("Welcome to JF Effect.");
+    setTimeout(() => navigate({ to: "/portal", replace: true }), 500);
+  };
+
+  const saveSocialsAndContinue = async () => {
+    setBusy(true);
+    const { data: sessionData } = await supabase.auth.getSession();
+    const uid = sessionData.session?.user?.id;
+    if (!uid) { setBusy(false); finishToPortal(); return; }
+    const patch: Record<string, string | null> = {};
+    let hasAny = false;
+    for (const f of SOCIAL_FIELDS) {
+      const v = (socials[f] ?? "").toString().trim();
+      if (v) { patch[f] = v; hasAny = true; } else { patch[f] = null; }
+    }
+    if (hasAny) {
+      const { error } = await supabase.from("clients").update(patch).eq("user_id", uid);
+      if (error) {
+        setBusy(false);
+        return toast.error(error.message);
+      }
+    }
+    setBusy(false);
+    finishToPortal();
   };
 
   return (
@@ -116,6 +151,38 @@ function SetupPage() {
             </Button>
           </form>
         </>
+      )}
+
+      {phase === "social" && (
+        <div className="space-y-5">
+          <div className="text-center">
+            <h2 className="text-xl font-black tracking-tight">Social Media (optional)</h2>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Add just your username/handle for any platform you use. Skip any you don't.
+            </p>
+          </div>
+          <SocialHandlesEditor
+            disabled={busy}
+            values={socials}
+            onChange={(k, v) => setSocials((s) => ({ ...s, [k]: v }))}
+          />
+          <div className="flex flex-col gap-2">
+            <Button
+              type="button"
+              onClick={saveSocialsAndContinue}
+              disabled={busy}
+              className="w-full bg-gradient-primary py-6 text-sm font-bold uppercase tracking-[0.15em] shadow-glow"
+            >
+              {busy ? "Saving…" : "Save & continue"}
+            </Button>
+            <Button type="button" variant="ghost" onClick={finishToPortal} disabled={busy} className="w-full">
+              Skip for now
+            </Button>
+          </div>
+          <p className="text-center text-[10px] uppercase tracking-widest text-muted-foreground/60">
+            You can update these anytime in Account Settings.
+          </p>
+        </div>
       )}
 
       {phase === "done" && <p className="text-center text-sm text-muted-foreground">Taking you to your dashboard…</p>}
