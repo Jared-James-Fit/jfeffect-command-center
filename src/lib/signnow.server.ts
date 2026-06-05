@@ -199,3 +199,76 @@ export async function whoami(): Promise<{ email: string | null }> {
   const json = JSON.parse(text);
   return { email: json?.primary_email ?? json?.email ?? null };
 }
+
+export interface SignNowDocumentStatus {
+  id: string;
+  documentName: string | null;
+  status: "pending" | "signed" | "completed" | "cancelled" | "expired" | "unknown";
+  signerName: string | null;
+  signerEmail: string | null;
+  signedAt: string | null; // ISO
+  raw: any;
+}
+
+function pickSignerName(json: any): string | null {
+  const fields = Array.isArray(json?.fields) ? json.fields : [];
+  for (const f of fields) {
+    const v = f?.json_attributes?.prefilled_text ?? f?.value;
+    if (typeof v === "string" && v.trim()) return v.trim();
+  }
+  const sigs = Array.isArray(json?.signatures) ? json.signatures : [];
+  for (const s of sigs) {
+    if (typeof s?.signature_name === "string" && s.signature_name.trim()) return s.signature_name.trim();
+    if (typeof s?.user_name === "string" && s.user_name.trim()) return s.user_name.trim();
+  }
+  return null;
+}
+
+/** Fetch document metadata and infer high-level status. */
+export async function getSignNowDocument(documentId: string): Promise<SignNowDocumentStatus> {
+  const res = await signnowFetch(`/document/${encodeURIComponent(documentId)}`);
+  const text = await res.text();
+  if (!res.ok) throw new SignNowApiError(res.status, text);
+  const json = JSON.parse(text);
+  const signatures = Array.isArray(json?.signatures) ? json.signatures : [];
+  const requests = Array.isArray(json?.requests) ? json.requests : [];
+  const cancelled = !!json?.cancelled_invite || requests.some((r: any) => r?.canceled === "1" || r?.status === "cancelled");
+  const allSigned = signatures.length > 0 && signatures.every((s: any) => !!s?.created || !!s?.user_id);
+  const anySigned = signatures.length > 0;
+  let status: SignNowDocumentStatus["status"] = "pending";
+  if (cancelled) status = "cancelled";
+  else if (allSigned) status = "completed";
+  else if (anySigned) status = "signed";
+  // signed_at — pick max signature.created (epoch seconds)
+  let signedAt: string | null = null;
+  if (anySigned) {
+    const epochs = signatures.map((s: any) => Number(s?.created ?? 0)).filter((n: number) => Number.isFinite(n) && n > 0);
+    if (epochs.length) signedAt = new Date(Math.max(...epochs) * 1000).toISOString();
+  }
+  const recipient = Array.isArray(json?.field_invites) && json.field_invites[0];
+  return {
+    id: json?.id ?? documentId,
+    documentName: json?.document_name ?? null,
+    status,
+    signerName: pickSignerName(json),
+    signerEmail: recipient?.email ?? null,
+    signedAt,
+    raw: json,
+  };
+}
+
+/** Download the (latest) collapsed/flattened signed PDF as bytes. */
+export async function downloadSignedDocument(documentId: string): Promise<{ bytes: Uint8Array; contentType: string }> {
+  // collapsed=1 returns a flattened single PDF including signatures.
+  const token = await getSignNowAccessToken();
+  const res = await fetch(`${SIGNNOW_BASE}/document/${encodeURIComponent(documentId)}/download?type=collapsed`, {
+    headers: { Authorization: `Bearer ${token}`, Accept: "application/pdf" },
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new SignNowApiError(res.status, text);
+  }
+  const buf = new Uint8Array(await res.arrayBuffer());
+  const contentType = res.headers.get("content-type") || "application/pdf";
+  return { bytes: buf, contentType };
+}
