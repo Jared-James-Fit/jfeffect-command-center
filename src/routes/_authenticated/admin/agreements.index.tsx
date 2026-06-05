@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
@@ -353,7 +353,6 @@ function TemplateActionDialog({
   const [linkOverride, setLinkOverride] = useState("");
   const [offerName, setOfferName] = useState("");
   const [notes, setNotes] = useState("");
-  const [busy, setBusy] = useState(false);
 
   const { data: clients = [] } = useQuery({
     queryKey: ["clients-picker", search],
@@ -371,42 +370,53 @@ function TemplateActionDialog({
   const isApiTemplate = !!tpl?.signnow_template_id;
   const link = linkOverride.trim() || tpl?.signnow_url || null;
 
-  async function go() {
-    if (!tpl || !clientId) return toast.error("Pick a client first");
-    setBusy(true);
-    try {
-      // Manual mode: the app cannot send the invite itself.
-      // Mark it accordingly so the dashboard doesn't claim the client was emailed.
+  const mutation = useMutation({
+    mutationFn: async (vars: { tpl: AgreementTemplate; clientId: string }) => {
       const statusOverride = !apiConnected ? "Manual Action Needed" : undefined;
-      const ag: any = await createAgreementFn({
+      // Only pass a signing link if it's a non-empty valid-looking URL.
+      // The server validator rejects empty strings (z.string().url()).
+      const trimmed = (linkOverride.trim() || vars.tpl.signnow_url || "").trim();
+      const linkToSend = trimmed.length > 0 ? trimmed : null;
+      return (await createAgreementFn({
         data: {
-          client_id: clientId,
-          template_id: tpl.id,
-          agreement_type: tpl.agreement_type ?? null,
-          signnow_signing_link: link,
+          client_id: vars.clientId,
+          template_id: vars.tpl.id,
+          agreement_type: vars.tpl.agreement_type ?? null,
+          signnow_signing_link: linkToSend,
           offer_name: offerName.trim() || null,
           admin_notes: notes.trim() || null,
           send_now: true,
           signing_method: apiConnected ? "Remote Invite" : "Manual Link",
           status_override: statusOverride,
         } as any,
-      });
+      })) as any;
+    },
+    onSuccess: (ag: any) => {
       toast.success(
         apiConnected
           ? "Invite sent to client via SignNow"
           : "Record created. Send the signing link to the client manually — the app did not email them.",
       );
+      setSearch(""); setClientId(""); setLinkOverride(""); setOfferName(""); setNotes("");
       onDone();
-      // Navigate to client profile so admin can mark signed afterward
       if (ag?.client_id) {
         navigate({ to: "/admin/clients/$id", params: { id: ag.client_id } });
       }
-      setSearch(""); setClientId(""); setLinkOverride(""); setOfferName(""); setNotes("");
-    } catch (e: any) {
-      toast.error(e?.message ?? "Failed");
-    } finally {
-      setBusy(false);
-    }
+    },
+    onError: (e: any) => {
+      // Surface exact SignNow / server error verbatim. Keep dialog open.
+      const msg = e?.message ?? (typeof e === "string" ? e : "Failed to create invite");
+      // eslint-disable-next-line no-console
+      console.error("[createAgreement] failed", e);
+      toast.error(msg, { duration: 12000 });
+    },
+  });
+  const busy = mutation.isPending;
+
+  function go() {
+    if (!tpl) { toast.error("No template selected"); return; }
+    if (!clientId) { toast.error("Pick a client first"); return; }
+    mutation.mutate({ tpl, clientId });
   }
 
   return (
@@ -480,10 +490,10 @@ function TemplateActionDialog({
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={go} disabled={busy || !clientId}>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={busy}>Cancel</Button>
+          <Button type="button" onClick={go} disabled={busy || !clientId}>
             {busy && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
-            Create invite
+            {busy ? "Sending…" : "Create invite"}
           </Button>
         </DialogFooter>
       </DialogContent>
