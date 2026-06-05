@@ -64,11 +64,13 @@ function PortalHome() {
   const showChecklist = completed < checklist.length;
 
   const actions = [
-    { to: "/portal/messages", label: "Message Coach Jared", icon: MessageCircle },
-    { to: "/portal/program", label: "My Program", icon: FileText },
-    { to: "/portal/lift-videos", label: "Upload Lift Video", icon: Video },
-    { to: "/portal/check-in", label: "Submit Check-In", icon: ClipboardCheck },
-    { to: "/portal/exercises", label: "Exercises", icon: Dumbbell },
+    { to: "/portal/messages", label: "Message Coach", icon: MessageCircle },
+    { to: "/portal/program", label: "Workout Program", icon: FileText },
+    { to: "/portal/lift-videos", label: "Send Lift Videos", icon: Video },
+    { to: "/portal/check-in", label: "Weekly Check-In", icon: ClipboardCheck },
+    { to: "/portal/exercises", label: "Exercise Library", icon: Dumbbell },
+    { to: "/portal/nutrition-targets", label: "Nutrition Targets", icon: Target },
+    { to: "/portal/media", label: "Media + Feedback", icon: Image },
   ];
 
   return (
