@@ -93,13 +93,15 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "twitter:site", content: "@Lovable" },
       { name: "twitter:title", content: "JF Effect" },
       { name: "twitter:description", content: "A modern web app for fitness coaches to manage clients, leads, and business operations." },
-      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/97b92026-bcb7-47e6-b437-76274e9cd66c/id-preview-7cb8a0f5--5f1f340c-5afa-4262-90c8-1f9406568c6c.lovable.app-1780514679340.png" },
-      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/97b92026-bcb7-47e6-b437-76274e9cd66c/id-preview-7cb8a0f5--5f1f340c-5afa-4262-90c8-1f9406568c6c.lovable.app-1780514679340.png" },
+      { property: "og:image", content: "https://jfeffect.com/logo.png" },
+      { name: "twitter:image", content: "https://jfeffect.com/logo.png" },
     ],
     links: [
       { rel: "manifest", href: "/manifest.json" },
       { rel: "apple-touch-icon", sizes: "180x180", href: "/apple-touch-icon.png" },
       { rel: "icon", type: "image/png", sizes: "192x192", href: "/icon-192.png" },
+      { rel: "icon", type: "image/png", sizes: "32x32", href: "/favicon-32.png" },
+      { rel: "shortcut icon", href: "/favicon.ico" },
       {
         rel: "stylesheet",
         href: appCss,
