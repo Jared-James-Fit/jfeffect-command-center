@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, ExternalLink, Copy, ShieldCheck, AlertTriangle, FileText, Send, BellRing, Upload, Trash2, Loader2, UserPlus, RefreshCcw, Download, CheckCircle2, Flag, StickyNote } from "lucide-react";
+import { Plus, ExternalLink, Copy, ShieldCheck, AlertTriangle, FileText, Send, BellRing, Upload, Trash2, Loader2, UserPlus, RefreshCcw, Download, CheckCircle2, Flag, StickyNote, BadgeCheck } from "lucide-react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import { AgreementStatusBadge } from "@/components/agreement-status-badge";
@@ -17,6 +17,7 @@ import { fileLabel, AGREEMENT_TYPES, VERIFICATION_BADGE, type Agreement, type Ag
 import {
   createAgreement, updateAgreement, markAgreementSigned, verifyAgreement,
   sendAgreementReminder, cancelAgreement, refreshAgreementStatus, getSignedAgreementUrl,
+  approveSignedAgreement,
 } from "@/lib/agreements.functions";
 
 export function AgreementsPanel({ clientId, clientName }: { clientId: string; clientName?: string }) {
@@ -24,11 +25,13 @@ export function AgreementsPanel({ clientId, clientName }: { clientId: string; cl
   const [sendMode, setSendMode] = useState<null | "invite">(null);
   const [openUpload, setOpenUpload] = useState<Agreement | null>(null);
   const [openVerify, setOpenVerify] = useState<Agreement | null>(null);
+  const [openApprove, setOpenApprove] = useState<Agreement | null>(null);
 
   const createFn = useServerFn(createAgreement);
   const updateFn = useServerFn(updateAgreement);
   const markSignedFn = useServerFn(markAgreementSigned);
   const verifyFn = useServerFn(verifyAgreement);
+  const approveFn = useServerFn(approveSignedAgreement);
   const reminderFn = useServerFn(sendAgreementReminder);
   const cancelFn = useServerFn(cancelAgreement);
   const refreshFn = useServerFn(refreshAgreementStatus);
@@ -98,6 +101,7 @@ export function AgreementsPanel({ clientId, clientName }: { clientId: string; cl
               onUpdate={async (patch) => { await updateFn({ data: { id: a.id, ...patch } as any }); invalidate(); }}
               onMarkSigned={() => setOpenUpload(a)}
               onVerify={() => setOpenVerify(a)}
+              onApprove={() => setOpenApprove(a)}
               onRemind={async () => { await reminderFn({ data: { id: a.id } }); toast.success("Reminder logged"); invalidate(); }}
               onCancel={async () => {
                 if (!confirm("Cancel this agreement?")) return;
@@ -206,17 +210,32 @@ export function AgreementsPanel({ clientId, clientName }: { clientId: string; cl
           invalidate(); setOpenVerify(null);
         }}
       />
+
+      {/* Approve signed (one-click admin/coach approval) */}
+      <ApproveSignedDialog
+        open={!!openApprove}
+        onOpenChange={(o) => !o && setOpenApprove(null)}
+        clientId={clientId}
+        agreement={openApprove}
+        onSubmit={async (payload) => {
+          if (!openApprove) return;
+          await approveFn({ data: { id: openApprove.id, ...payload } as any });
+          toast.success("Agreement approved — client will see it as complete.");
+          invalidate(); setOpenApprove(null);
+        }}
+      />
     </Card>
   );
 }
 
 function AgreementRow({
-  ag, onUpdate, onMarkSigned, onVerify, onRemind, onCancel, onRefresh, onDownloadSigned, onMarkManuallySent, onNeedsFollowUp,
+  ag, onUpdate, onMarkSigned, onVerify, onApprove, onRemind, onCancel, onRefresh, onDownloadSigned, onMarkManuallySent, onNeedsFollowUp,
 }: {
   ag: Agreement;
   onUpdate: (patch: Partial<Agreement>) => Promise<void> | void;
   onMarkSigned: () => void;
   onVerify: () => void;
+  onApprove: () => void;
   onRemind: () => void;
   onCancel: () => void;
   onRefresh: () => void;
