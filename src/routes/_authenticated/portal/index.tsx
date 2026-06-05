@@ -276,7 +276,7 @@ function PortalHome() {
                   <Button
                     size="sm"
                     variant="outline"
-                    onClick={() => window.open(client.openpowerlifting_url, "_blank", "noopener,noreferrer")}
+                    onClick={() => window.open(client.openpowerlifting_url ?? "", "_blank", "noopener,noreferrer")}
                   >
                     <ExternalLink className="mr-1.5 h-3.5 w-3.5" /> Open my OpenPowerlifting profile
                   </Button>
