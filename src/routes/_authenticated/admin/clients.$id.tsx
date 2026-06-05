@@ -419,6 +419,38 @@ function ClientDetail() {
         />
         <PowerlifterSection form={form} set={set} />
         <Card className="border-border bg-card p-6 space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Basic Information</h3>
+            <Link to="/admin/clients/$id" params={{ id }} search={{ tab: "info" }}>
+              <Button variant="ghost" size="sm" className="h-7 text-xs">Edit</Button>
+            </Link>
+          </div>
+          <dl className="grid grid-cols-2 gap-y-1.5 text-xs">
+            {form.preferred_name && (<><dt className="text-muted-foreground">Preferred name</dt><dd className="font-medium">{form.preferred_name}</dd></>)}
+            <dt className="text-muted-foreground">Date of birth</dt>
+            <dd className="font-medium">{form.date_of_birth ? new Date(form.date_of_birth + "T00:00:00").toLocaleDateString() : "—"}</dd>
+            <dt className="text-muted-foreground">Age</dt>
+            <dd className="font-medium">{calcAge(form.date_of_birth) ?? "—"}</dd>
+            <dt className="text-muted-foreground">Height</dt>
+            <dd className="font-medium">{formatHeight(form.height_cm, (form.preferred_height_unit as any) ?? "imperial")}</dd>
+            <dt className="text-muted-foreground">Time zone</dt>
+            <dd className="font-medium">{form.timezone ?? "—"}</dd>
+            <dt className="text-muted-foreground">Mailing address</dt>
+            <dd className="font-medium truncate">
+              {[form.address, form.city, form.province, form.postal_code, form.country].filter(Boolean).join(", ") || "—"}
+            </dd>
+            {(form.emergency_contact_name || form.emergency_contact_phone) && (
+              <>
+                <dt className="text-muted-foreground">Emergency contact</dt>
+                <dd className="font-medium">
+                  {form.emergency_contact_name ?? "—"}
+                  {form.emergency_contact_phone ? ` · ${form.emergency_contact_phone}` : ""}
+                </dd>
+              </>
+            )}
+          </dl>
+        </Card>
+        <Card className="border-border bg-card p-6 space-y-3">
           <div className="flex items-center justify-between gap-3">
             <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Social Media</h3>
             <SocialIcons client={form} size="xs" />
