@@ -147,12 +147,12 @@ function PortalHome() {
         subtitle="Your private coaching dashboard."
       />
       <div className="space-y-6 p-6 md:p-8">
-        {updates.length > 0 && (
-          <section aria-label="Important Updates">
-            <div className="mb-2 flex items-center justify-between px-1">
-              <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Important Updates</h3>
-              <span className="text-[10px] text-muted-foreground">{updates.length}</span>
-            </div>
+        <section aria-label="Important Updates">
+          <div className="mb-2 flex items-center justify-between px-1">
+            <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Important Updates</h3>
+            <span className="text-[10px] text-muted-foreground">{updates.length}</span>
+          </div>
+          {updates.length > 0 ? (
             <div className="-mx-6 md:-mx-8 px-6 md:px-8 overflow-x-auto snap-x snap-mandatory scrollbar-none">
               <div className="flex gap-3 pb-2">
                 {updates.map((u) => (
@@ -190,8 +190,19 @@ function PortalHome() {
                 ))}
               </div>
             </div>
-          </section>
-        )}
+          ) : (
+            <Card className="border-border/60 bg-card/60 p-5">
+              <div className="flex items-start gap-3">
+                <CheckCircle2 className="h-5 w-5 mt-0.5 text-muted-foreground" />
+                <div>
+                  <div className="text-sm font-semibold text-foreground">No updates right now</div>
+                  <p className="text-xs text-muted-foreground mt-0.5">You're all caught up.</p>
+                  <p className="text-[11px] text-muted-foreground/70 mt-1.5">New check-ins, agreements, coach feedback, and reminders will show here.</p>
+                </div>
+              </div>
+            </Card>
+          )}
+        </section>
         {!client && (
           <Card className="border-primary/30 bg-primary/5 p-6">
             <p className="text-sm">Your coach hasn't set up your client profile yet. Once they do, you'll see your program, check-in form and resources here.</p>
