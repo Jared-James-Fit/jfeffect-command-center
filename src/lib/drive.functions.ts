@@ -278,12 +278,23 @@ export const createSubmission = createServerFn({ method: "POST" })
       .then(({ data: roles }: any) => roles?.some((r: any) => r.role === "admin"));
     const { data: client, error: clientError } = await (supabaseAdmin as any)
       .from("clients")
-      .select("id,user_id")
+      .select("id,user_id,assigned_coach_id")
       .eq("id", data.clientId)
       .maybeSingle();
+    const isAssignedCoach = client?.assigned_coach_id
+      ? await (supabaseAdmin as any)
+        .from("coaches")
+        .select("id")
+        .eq("id", client.assigned_coach_id)
+        .eq("user_id", context.userId)
+        .eq("archived", false)
+        .eq("status", "Active")
+        .maybeSingle()
+        .then(({ data: coach }: any) => !!coach)
+      : false;
 
     if (clientError) throw clientError;
-    if (!isAdmin && (!client || client.user_id !== context.userId)) {
+    if (!isAdmin && !isAssignedCoach && (!client || client.user_id !== context.userId)) {
       throw new Error("You can only create submissions for your own client profile.");
     }
 
