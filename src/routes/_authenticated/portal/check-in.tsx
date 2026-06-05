@@ -128,6 +128,10 @@ function CheckIn() {
       await finalizeFn({ data: {
         clientId: client.id, submissionId: sub.id, mediaType: "Check-In Videos",
         driveFileId: uploaded.id, clipNote: null, clipOrder: 0, urgent: false,
+        driveFolderId: init.driveFolderId ?? null,
+        fileName: init.driveFileName ?? displayName,
+        mimeType: file.type || "video/mp4",
+        sizeBytes: file.size,
         painNote: null, uploadedByRole: "client",
       }});
       toast.success("Check-in video uploaded.");

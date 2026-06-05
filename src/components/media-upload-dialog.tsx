@@ -82,6 +82,10 @@ export function MediaUploadDialog({
         });
         await finalizeFn({ data: {
           clientId, submissionId: sub.id, mediaType, driveFileId: uploaded.id,
+          driveFolderId: init.driveFolderId ?? null,
+          fileName: init.driveFileName ?? displayName,
+          mimeType: f.type || "application/octet-stream",
+          sizeBytes: f.size,
           clipNote: mode === "per-clip" ? (perClipNotes[i] || null) : null,
           clipOrder: i, urgent, painNote: urgent ? painNote : null, uploadedByRole: role,
         }});
