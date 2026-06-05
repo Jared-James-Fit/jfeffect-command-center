@@ -507,7 +507,14 @@ export type Database = {
           archived: boolean
           assigned_coach_id: string | null
           calendar_link: string | null
+          checkin_allow_photos: boolean
+          checkin_allow_video: boolean
+          checkin_due_day: string | null
           checkin_form_link: string | null
+          checkin_instructions: string | null
+          checkin_link_updated_at: string | null
+          checkin_notes_admin: string | null
+          checkin_notes_client: string | null
           city: string | null
           coach_notes: string | null
           coaching_package: string | null
@@ -579,7 +586,14 @@ export type Database = {
           archived?: boolean
           assigned_coach_id?: string | null
           calendar_link?: string | null
+          checkin_allow_photos?: boolean
+          checkin_allow_video?: boolean
+          checkin_due_day?: string | null
           checkin_form_link?: string | null
+          checkin_instructions?: string | null
+          checkin_link_updated_at?: string | null
+          checkin_notes_admin?: string | null
+          checkin_notes_client?: string | null
           city?: string | null
           coach_notes?: string | null
           coaching_package?: string | null
@@ -651,7 +665,14 @@ export type Database = {
           archived?: boolean
           assigned_coach_id?: string | null
           calendar_link?: string | null
+          checkin_allow_photos?: boolean
+          checkin_allow_video?: boolean
+          checkin_due_day?: string | null
           checkin_form_link?: string | null
+          checkin_instructions?: string | null
+          checkin_link_updated_at?: string | null
+          checkin_notes_admin?: string | null
+          checkin_notes_client?: string | null
           city?: string | null
           coach_notes?: string | null
           coaching_package?: string | null
