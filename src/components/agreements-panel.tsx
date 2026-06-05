@@ -327,6 +327,16 @@ function AgreementRow({
         {ag.status !== "Verified" && (ag.status === "Signed" || ag.signer_mismatch || ag.verification_status !== "Manually Verified") && (
           <Button size="sm" variant="outline" onClick={onVerify}><ShieldCheck className="h-3 w-3 mr-1" />Mark verified</Button>
         )}
+        {(ag.status === "Verified" || ag.verification_status === "Manually Verified") && (
+          <Button size="sm" variant="ghost" className="text-amber-600 dark:text-amber-400" onClick={onRemoveVerification}>
+            <ShieldCheck className="h-3 w-3 mr-1" />Remove verification
+          </Button>
+        )}
+        {["Signed", "Completed", "Verified"].includes(ag.status as string) && (
+          <Button size="sm" variant="ghost" className="text-amber-600 dark:text-amber-400" onClick={onReopen}>
+            <RotateCcw className="h-3 w-3 mr-1" />Reopen / Mark Unsigned
+          </Button>
+        )}
         {!["Verified", "Cancelled"].includes(ag.status as string) && (
           <Button size="sm" onClick={onApprove}>
             <BadgeCheck className="h-3 w-3 mr-1" />Approve Signed Agreement
