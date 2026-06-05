@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
+import { usePortalUserId } from "@/lib/client-impersonation";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -10,11 +10,11 @@ import { ChevronRight } from "lucide-react";
 export const Route = createFileRoute("/_authenticated/portal/purchases")({ component: MyPurchases });
 
 function MyPurchases() {
-  const { user } = useAuth();
+  const portalUserId = usePortalUserId();
   const { data: client } = useQuery({
-    queryKey: ["my-client", user?.id],
-    enabled: !!user,
-    queryFn: async () => (await supabase.from("clients").select("id").eq("user_id", user!.id).maybeSingle()).data,
+    queryKey: ["my-client", portalUserId],
+    enabled: !!portalUserId,
+    queryFn: async () => (await supabase.from("clients").select("id").eq("user_id", portalUserId!).maybeSingle()).data,
   });
   const { data: records = [] } = useQuery({
     queryKey: ["my-purchases", client?.id],
