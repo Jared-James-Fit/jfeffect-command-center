@@ -591,6 +591,7 @@ export type Database = {
           default_session_location: string | null
           drive_folder_link: string | null
           email: string | null
+          facebook: string | null
           first_name: string | null
           full_name: string
           goals: string | null
@@ -609,11 +610,14 @@ export type Database = {
           last_name: string | null
           last_program_update: string | null
           lifestyle_notes: string | null
+          linkedin: string | null
           needs_admin_help: boolean
           next_program_update: string | null
           nutrition_notes: string | null
           onboarded_by_coach_id: string | null
           openpowerlifting_url: string | null
+          other_social_handle: string | null
+          other_social_label: string | null
           package_tracking_enabled: boolean
           password_reset_sent_at: string | null
           payment_status: string | null
@@ -643,11 +647,15 @@ export type Database = {
           status: string
           stripe_link: string | null
           tags: string[]
+          tiktok: string | null
           timezone: string
           timezone_confirmed_at: string | null
           training_notes: string | null
+          twitter_x: string | null
           updated_at: string
           user_id: string | null
+          website: string | null
+          youtube: string | null
         }
         Insert: {
           account_created_at?: string | null
@@ -680,6 +688,7 @@ export type Database = {
           default_session_location?: string | null
           drive_folder_link?: string | null
           email?: string | null
+          facebook?: string | null
           first_name?: string | null
           full_name: string
           goals?: string | null
@@ -698,11 +707,14 @@ export type Database = {
           last_name?: string | null
           last_program_update?: string | null
           lifestyle_notes?: string | null
+          linkedin?: string | null
           needs_admin_help?: boolean
           next_program_update?: string | null
           nutrition_notes?: string | null
           onboarded_by_coach_id?: string | null
           openpowerlifting_url?: string | null
+          other_social_handle?: string | null
+          other_social_label?: string | null
           package_tracking_enabled?: boolean
           password_reset_sent_at?: string | null
           payment_status?: string | null
@@ -732,11 +744,15 @@ export type Database = {
           status?: string
           stripe_link?: string | null
           tags?: string[]
+          tiktok?: string | null
           timezone?: string
           timezone_confirmed_at?: string | null
           training_notes?: string | null
+          twitter_x?: string | null
           updated_at?: string
           user_id?: string | null
+          website?: string | null
+          youtube?: string | null
         }
         Update: {
           account_created_at?: string | null
@@ -769,6 +785,7 @@ export type Database = {
           default_session_location?: string | null
           drive_folder_link?: string | null
           email?: string | null
+          facebook?: string | null
           first_name?: string | null
           full_name?: string
           goals?: string | null
@@ -787,11 +804,14 @@ export type Database = {
           last_name?: string | null
           last_program_update?: string | null
           lifestyle_notes?: string | null
+          linkedin?: string | null
           needs_admin_help?: boolean
           next_program_update?: string | null
           nutrition_notes?: string | null
           onboarded_by_coach_id?: string | null
           openpowerlifting_url?: string | null
+          other_social_handle?: string | null
+          other_social_label?: string | null
           package_tracking_enabled?: boolean
           password_reset_sent_at?: string | null
           payment_status?: string | null
@@ -821,11 +841,15 @@ export type Database = {
           status?: string
           stripe_link?: string | null
           tags?: string[]
+          tiktok?: string | null
           timezone?: string
           timezone_confirmed_at?: string | null
           training_notes?: string | null
+          twitter_x?: string | null
           updated_at?: string
           user_id?: string | null
+          website?: string | null
+          youtube?: string | null
         }
         Relationships: [
           {
