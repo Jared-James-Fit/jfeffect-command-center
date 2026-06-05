@@ -448,6 +448,15 @@ function ClientDetail() {
           <CardioTargetsPanel clientId={id} />
         </TabsContent>
 
+        <TabsContent value="metrics" className="grid gap-6 md:grid-cols-3">
+          <ProgressMetricsPanel
+            clientId={id}
+            defaultUnit={(form?.preferred_weight_unit as "lb" | "kg") ?? "lb"}
+            canEdit
+            showExport
+          />
+        </TabsContent>
+
         <TabsContent value="messages" className="grid gap-6">
           <ClientMessagesTab clientId={id} />
         </TabsContent>
