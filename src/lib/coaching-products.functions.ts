@@ -72,9 +72,21 @@ const createSchema = z.object({
   name: z.string().trim().min(1).max(200),
   description: z.string().trim().max(2000).optional().nullable(),
   details: z.string().trim().max(10000).optional().nullable(),
-  priceCents: z.number().int().min(50).max(100_000_00),
-  currency: z.string().trim().min(3).max(3).default("usd"),
+  priceCents: z.number().int().min(0).max(100_000_00),
+  currency: z.string().trim().min(3).max(3).default("cad"),
   imagePath: z.string().trim().max(500).optional().nullable(),
+  productType: z.string().trim().max(80).optional().nullable(),
+  paymentStructure: z.string().trim().max(80).optional().nullable(),
+  termLength: z.number().int().min(0).max(10000).optional().nullable(),
+  termUnit: z.string().trim().max(40).optional().nullable(),
+  includedFeatures: z.array(z.string().trim().min(1).max(200)).max(40).optional().default([]),
+  agreementRequired: z.boolean().optional().default(false),
+  agreementTemplateId: z.string().uuid().optional().nullable(),
+  agreementBeforeService: z.boolean().optional().default(false),
+  status: z.enum(["Active", "Draft", "Archived"]).optional().default("Active"),
+  notes: z.string().trim().max(4000).optional().nullable(),
+  pastedPaymentLinkUrl: z.string().url().max(2000).optional().nullable(),
+  generateStripeLink: z.boolean().optional().default(false),
 });
 
 export const createCoachingProduct = createServerFn({ method: "POST" })
@@ -84,33 +96,39 @@ export const createCoachingProduct = createServerFn({ method: "POST" })
     const { supabase, userId } = context as any;
     await assertAdmin(supabase, userId);
 
-    // 1) Stripe product
-    const product = await stripeFetch("/products", {
-      method: "POST",
-      body: formEncode({
-        name: data.name,
-        ...(data.description ? { description: data.description } : {}),
-      }),
-    });
+    let stripe_product_id: string | null = null;
+    let stripe_price_id: string | null = null;
+    let stripe_payment_link_id: string | null = null;
+    let payment_link_url: string | null = data.pastedPaymentLinkUrl ?? null;
 
-    // 2) Stripe price
-    const price = await stripeFetch("/prices", {
-      method: "POST",
-      body: formEncode({
-        product: product.id,
-        unit_amount: data.priceCents,
-        currency: data.currency.toLowerCase(),
-      }),
-    });
-
-    // 3) Stripe payment link
-    const link = await stripeFetch("/payment_links", {
-      method: "POST",
-      body: formEncode({
-        "line_items[0][price]": price.id,
-        "line_items[0][quantity]": 1,
-      }),
-    });
+    if (data.generateStripeLink && data.priceCents >= 50) {
+      const product = await stripeFetch("/products", {
+        method: "POST",
+        body: formEncode({
+          name: data.name,
+          ...(data.description ? { description: data.description } : {}),
+        }),
+      });
+      const price = await stripeFetch("/prices", {
+        method: "POST",
+        body: formEncode({
+          product: product.id,
+          unit_amount: data.priceCents,
+          currency: data.currency.toLowerCase(),
+        }),
+      });
+      const link = await stripeFetch("/payment_links", {
+        method: "POST",
+        body: formEncode({
+          "line_items[0][price]": price.id,
+          "line_items[0][quantity]": 1,
+        }),
+      });
+      stripe_product_id = product.id;
+      stripe_price_id = price.id;
+      stripe_payment_link_id = link.id;
+      payment_link_url = link.url;
+    }
 
     const { data: row, error } = await supabase
       .from("coaching_products")
@@ -121,16 +139,85 @@ export const createCoachingProduct = createServerFn({ method: "POST" })
         price_cents: data.priceCents,
         currency: data.currency.toLowerCase(),
         image_url: data.imagePath ?? null,
-        stripe_product_id: product.id,
-        stripe_price_id: price.id,
-        stripe_payment_link_id: link.id,
-        payment_link_url: link.url,
+        stripe_product_id,
+        stripe_price_id,
+        stripe_payment_link_id,
+        payment_link_url,
+        product_type: data.productType ?? null,
+        payment_structure: data.paymentStructure ?? null,
+        term_length: data.termLength ?? null,
+        term_unit: data.termUnit ?? null,
+        included_features: data.includedFeatures ?? [],
+        agreement_required: !!data.agreementRequired,
+        agreement_template_id: data.agreementTemplateId ?? null,
+        agreement_before_service: !!data.agreementBeforeService,
+        status: data.status ?? "Active",
+        active: (data.status ?? "Active") === "Active",
+        notes: data.notes ?? null,
+        mode: data.generateStripeLink ? "auto" : "manual",
         created_by: userId,
       })
       .select("*")
       .single();
     if (error) throw new Error(error.message);
     return { product: row };
+  });
+
+const updateSchema = createSchema.partial().extend({ id: z.string().uuid() });
+
+export const updateCoachingProduct = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) => updateSchema.parse(input))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context as any;
+    await assertAdmin(supabase, userId);
+    const patch: any = { updated_at: new Date().toISOString() };
+    if (data.name !== undefined) patch.name = data.name;
+    if (data.description !== undefined) patch.description = data.description ?? null;
+    if (data.details !== undefined) patch.details = data.details ?? null;
+    if (data.priceCents !== undefined) patch.price_cents = data.priceCents;
+    if (data.currency !== undefined) patch.currency = data.currency.toLowerCase();
+    if (data.imagePath !== undefined) patch.image_url = data.imagePath ?? null;
+    if (data.productType !== undefined) patch.product_type = data.productType ?? null;
+    if (data.paymentStructure !== undefined) patch.payment_structure = data.paymentStructure ?? null;
+    if (data.termLength !== undefined) patch.term_length = data.termLength ?? null;
+    if (data.termUnit !== undefined) patch.term_unit = data.termUnit ?? null;
+    if (data.includedFeatures !== undefined) patch.included_features = data.includedFeatures ?? [];
+    if (data.agreementRequired !== undefined) patch.agreement_required = !!data.agreementRequired;
+    if (data.agreementTemplateId !== undefined) patch.agreement_template_id = data.agreementTemplateId ?? null;
+    if (data.agreementBeforeService !== undefined) patch.agreement_before_service = !!data.agreementBeforeService;
+    if (data.status !== undefined) {
+      patch.status = data.status;
+      patch.active = data.status === "Active";
+      patch.archived = data.status === "Archived";
+    }
+    if (data.notes !== undefined) patch.notes = data.notes ?? null;
+    if (data.pastedPaymentLinkUrl !== undefined) patch.payment_link_url = data.pastedPaymentLinkUrl ?? null;
+    const { error } = await supabase.from("coaching_products").update(patch).eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+export const duplicateCoachingProduct = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) => z.object({ id: z.string().uuid() }).parse(input))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context as any;
+    await assertAdmin(supabase, userId);
+    const { data: src, error: e1 } = await supabase.from("coaching_products").select("*").eq("id", data.id).single();
+    if (e1 || !src) throw new Error(e1?.message ?? "Not found");
+    const { id, created_at, updated_at, ...rest } = src as any;
+    rest.name = `${src.name} (copy)`;
+    rest.status = "Draft";
+    rest.active = false;
+    rest.created_by = userId;
+    // Don't reuse Stripe IDs
+    rest.stripe_product_id = null;
+    rest.stripe_price_id = null;
+    rest.stripe_payment_link_id = null;
+    const { error } = await supabase.from("coaching_products").insert(rest);
+    if (error) throw new Error(error.message);
+    return { ok: true };
   });
 
 export const deleteCoachingProduct = createServerFn({ method: "POST" })
