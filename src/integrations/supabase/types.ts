@@ -674,6 +674,10 @@ export type Database = {
           archived: boolean
           assigned_check_in_link_id: string | null
           assigned_coach_id: string | null
+          basic_info_completed_at: string | null
+          basic_info_update_reason: string | null
+          basic_info_update_requested: boolean
+          basic_info_update_requested_at: string | null
           calendar_link: string | null
           checkin_allow_photos: boolean
           checkin_allow_video: boolean
@@ -689,13 +693,17 @@ export type Database = {
           coaching_type: string | null
           country: string | null
           created_at: string
+          date_of_birth: string | null
           default_session_location: string | null
           drive_folder_link: string | null
           email: string | null
+          emergency_contact_name: string | null
+          emergency_contact_phone: string | null
           facebook: string | null
           first_name: string | null
           full_name: string
           goals: string | null
+          height_cm: number | null
           id: string
           info_last_updated_at: string | null
           info_last_updated_by: string | null
@@ -726,7 +734,9 @@ export type Database = {
           postal_code: string | null
           powerlifter_badge_label: string
           powerlifting_visible_to_client: boolean
+          preferred_height_unit: string
           preferred_high_days: string[]
+          preferred_name: string | null
           preferred_rest_days: string[]
           preferred_training_days: string[]
           preferred_weight_unit: string
@@ -772,6 +782,10 @@ export type Database = {
           archived?: boolean
           assigned_check_in_link_id?: string | null
           assigned_coach_id?: string | null
+          basic_info_completed_at?: string | null
+          basic_info_update_reason?: string | null
+          basic_info_update_requested?: boolean
+          basic_info_update_requested_at?: string | null
           calendar_link?: string | null
           checkin_allow_photos?: boolean
           checkin_allow_video?: boolean
@@ -787,13 +801,17 @@ export type Database = {
           coaching_type?: string | null
           country?: string | null
           created_at?: string
+          date_of_birth?: string | null
           default_session_location?: string | null
           drive_folder_link?: string | null
           email?: string | null
+          emergency_contact_name?: string | null
+          emergency_contact_phone?: string | null
           facebook?: string | null
           first_name?: string | null
           full_name: string
           goals?: string | null
+          height_cm?: number | null
           id?: string
           info_last_updated_at?: string | null
           info_last_updated_by?: string | null
@@ -824,7 +842,9 @@ export type Database = {
           postal_code?: string | null
           powerlifter_badge_label?: string
           powerlifting_visible_to_client?: boolean
+          preferred_height_unit?: string
           preferred_high_days?: string[]
+          preferred_name?: string | null
           preferred_rest_days?: string[]
           preferred_training_days?: string[]
           preferred_weight_unit?: string
@@ -870,6 +890,10 @@ export type Database = {
           archived?: boolean
           assigned_check_in_link_id?: string | null
           assigned_coach_id?: string | null
+          basic_info_completed_at?: string | null
+          basic_info_update_reason?: string | null
+          basic_info_update_requested?: boolean
+          basic_info_update_requested_at?: string | null
           calendar_link?: string | null
           checkin_allow_photos?: boolean
           checkin_allow_video?: boolean
@@ -885,13 +909,17 @@ export type Database = {
           coaching_type?: string | null
           country?: string | null
           created_at?: string
+          date_of_birth?: string | null
           default_session_location?: string | null
           drive_folder_link?: string | null
           email?: string | null
+          emergency_contact_name?: string | null
+          emergency_contact_phone?: string | null
           facebook?: string | null
           first_name?: string | null
           full_name?: string
           goals?: string | null
+          height_cm?: number | null
           id?: string
           info_last_updated_at?: string | null
           info_last_updated_by?: string | null
@@ -922,7 +950,9 @@ export type Database = {
           postal_code?: string | null
           powerlifter_badge_label?: string
           powerlifting_visible_to_client?: boolean
+          preferred_height_unit?: string
           preferred_high_days?: string[]
+          preferred_name?: string | null
           preferred_rest_days?: string[]
           preferred_training_days?: string[]
           preferred_weight_unit?: string
