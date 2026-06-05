@@ -30,6 +30,7 @@ export const AGREEMENT_STATUSES = [
   "Needs Manual Verification",
   "Verified",
   "Error",
+  "Manual Action Needed",
 ] as const;
 export type AgreementStatus = (typeof AGREEMENT_STATUSES)[number];
 
@@ -73,6 +74,7 @@ export const STATUS_BADGE: Record<string, string> = {
   Error: "bg-red-500/15 text-red-700 dark:text-red-300",
   "Needs Resend": "bg-amber-500/15 text-amber-700 dark:text-amber-300",
   "Needs Manual Verification": "bg-amber-500/15 text-amber-700 dark:text-amber-300",
+  "Manual Action Needed": "bg-amber-500/15 text-amber-700 dark:text-amber-300",
 };
 
 export const VERIFICATION_BADGE: Record<string, string> = {

@@ -12,7 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Plus, Edit2, Archive, ExternalLink, ShieldCheck, AlertTriangle, FileText, Loader2, UserPlus, Smartphone, Copy, Search, Power, Trash2 } from "lucide-react";
+import { Plus, Edit2, Archive, ExternalLink, ShieldCheck, AlertTriangle, FileText, Loader2, UserPlus, Smartphone, Copy, Search, Power, Trash2, Info, Settings } from "lucide-react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import { createTemplate, updateTemplate, archiveTemplate, setTemplateActive, createAgreement } from "@/lib/agreements.functions";
@@ -38,6 +38,12 @@ function AgreementsAdminPage() {
     queryFn: async () => (await supabase.from("agreement_templates")
       .select("*").eq("archived", false).order("created_at", { ascending: false })).data ?? [],
   });
+
+  const { data: signnow } = useQuery({
+    queryKey: ["signnow-settings"],
+    queryFn: async () => (await supabase.from("signnow_settings").select("*").limit(1).maybeSingle()).data,
+  });
+  const apiConnected = signnow?.status === "Connected";
 
   const { data: needAttention = [] } = useQuery({
     queryKey: ["agreements-needing-attention"],
@@ -66,6 +72,23 @@ function AgreementsAdminPage() {
     <>
       <PageHeader title="Agreements" subtitle="Connected to SignNow. Tracks, organizes, and verifies signed copies." />
       <div className="p-6 md:p-8 space-y-6">
+        {!apiConnected && (
+          <Card className="border-amber-500/40 bg-amber-500/5 p-4 flex items-start gap-3">
+            <Info className="h-4 w-4 text-amber-500 mt-0.5 flex-shrink-0" />
+            <div className="space-y-1 text-sm flex-1">
+              <p className="font-semibold">Manual SignNow Link Mode</p>
+              <p className="text-muted-foreground">
+                SignNow API is not connected. Template syncing and automatic signing invites will not work.
+                You can still paste SignNow signing links into templates, launch in-person signing on this device,
+                and track signed copies manually. The app will not send emails on your behalf in this mode.
+              </p>
+              <Link to="/admin/settings" className="text-primary text-xs hover:underline inline-flex items-center gap-1 pt-1">
+                <Settings className="h-3 w-3" /> Connect SignNow in Settings
+              </Link>
+            </div>
+          </Card>
+        )}
+
         <Card className="border-border bg-card p-5 space-y-3">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2">
@@ -114,7 +137,11 @@ function AgreementsAdminPage() {
             <p className="text-sm text-muted-foreground py-4 text-center">No templates yet. Add your SignNow templates here so you can send them from each client profile.</p>
           ) : (
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {templates.map((t) => (
+              {templates.map((t) => {
+                const hasLink = !!t.signnow_url;
+                const hasId = !!t.signnow_template_id;
+                const ready = hasLink;
+                return (
                 <Card key={t.id} className="p-4 space-y-2 bg-secondary/30 border-border">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
@@ -125,6 +152,22 @@ function AgreementsAdminPage() {
                       {t.is_active ? "Active" : "Inactive"}
                     </Badge>
                   </div>
+                  <div className="flex flex-wrap gap-1">
+                    <Badge variant="outline" className="border-muted text-[10px]">Manual</Badge>
+                    {ready ? (
+                      <Badge variant="outline" className="border-emerald-500/40 text-emerald-500 text-[10px]">Ready</Badge>
+                    ) : (
+                      <Badge variant="outline" className="border-amber-500/40 text-amber-500 text-[10px]">Missing URL</Badge>
+                    )}
+                    {!hasId && (
+                      <Badge variant="outline" className="border-amber-500/40 text-amber-500 text-[10px]">Missing ID</Badge>
+                    )}
+                  </div>
+                  {!ready && (
+                    <p className="text-[11px] text-amber-600 dark:text-amber-400">
+                      This template is missing SignNow connection details. Add a SignNow template URL/ID before signing.
+                    </p>
+                  )}
                   {t.signnow_template_id && <p className="text-[11px] text-muted-foreground">SignNow ID: {t.signnow_template_id}</p>}
                   {t.notes && <p className="text-xs text-muted-foreground line-clamp-2">{t.notes}</p>}
                   <div className="grid grid-cols-3 gap-2 text-[10px] text-muted-foreground py-1">
@@ -134,10 +177,10 @@ function AgreementsAdminPage() {
                   </div>
                   {t.version && <p className="text-[11px] text-muted-foreground">Version: {t.version} · Updated {new Date(t.updated_at).toLocaleDateString()}</p>}
                   <div className="flex flex-wrap gap-1.5 pt-1">
-                    <Button size="sm" className="flex-1 min-w-[120px]" onClick={() => setActioning({ template: t, mode: "invite" })}>
+                    <Button size="sm" className="flex-1 min-w-[120px]" disabled={!ready} onClick={() => setActioning({ template: t, mode: "invite" })}>
                       <UserPlus className="h-3 w-3 mr-1" /> Invite to Sign
                     </Button>
-                    <Button size="sm" variant="secondary" className="flex-1 min-w-[120px]" onClick={() => setActioning({ template: t, mode: "in-person" })}>
+                    <Button size="sm" variant="secondary" className="flex-1 min-w-[120px]" disabled={!ready} onClick={() => setActioning({ template: t, mode: "in-person" })}>
                       <Smartphone className="h-3 w-3 mr-1" /> Sign Template
                     </Button>
                     {t.signnow_url && (
@@ -166,7 +209,8 @@ function AgreementsAdminPage() {
                     }}><Trash2 className="h-3 w-3 mr-1" /> Delete</Button>
                   </div>
                 </Card>
-              ))}
+                );
+              })}
             </div>
           )}
         </Card>
@@ -183,6 +227,7 @@ function AgreementsAdminPage() {
       <TemplateActionDialog
         open={actioning !== null}
         action={actioning}
+        apiConnected={apiConnected}
         onOpenChange={(o) => !o && setActioning(null)}
         onDone={() => {
           qc.invalidateQueries({ queryKey: ["agreement-templates"] });
@@ -263,10 +308,11 @@ function TemplateDialog({
 }
 
 function TemplateActionDialog({
-  open, action, onOpenChange, onDone,
+  open, action, apiConnected, onOpenChange, onDone,
 }: {
   open: boolean;
   action: { template: AgreementTemplate; mode: "invite" | "in-person" } | null;
+  apiConnected: boolean;
   onOpenChange: (o: boolean) => void;
   onDone: () => void;
 }) {
@@ -302,6 +348,9 @@ function TemplateActionDialog({
     if (inPerson && !link) return toast.error("This template has no SignNow signing link saved");
     setBusy(true);
     try {
+      // Manual mode: remote "invite" doesn't actually send anything.
+      // Mark it accordingly so the dashboard doesn't claim the client was emailed.
+      const statusOverride = !apiConnected && !inPerson ? "Manual Action Needed" : undefined;
       const ag: any = await createAgreementFn({
         data: {
           client_id: clientId,
@@ -312,12 +361,19 @@ function TemplateActionDialog({
           admin_notes: notes.trim() || null,
           send_now: true,
           signing_method: signingMethod,
+          status_override: statusOverride,
         } as any,
       });
       if (inPerson && link) {
         window.open(link, "_blank", "noopener,noreferrer");
       }
-      toast.success(inPerson ? "Launched signing — finish on this device" : "Invite created for client");
+      toast.success(
+        inPerson
+          ? "Launched signing — finish on this device"
+          : apiConnected
+            ? "Invite sent to client via SignNow"
+            : "Record created. Send the signing link to the client manually — the app did not email them.",
+      );
       onDone();
       // Navigate to client profile so admin can mark signed afterward
       if (ag?.client_id) {
@@ -345,6 +401,12 @@ function TemplateActionDialog({
           )}
         </DialogHeader>
         <div className="space-y-3 text-sm">
+          {!apiConnected && !inPerson && (
+            <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2.5 text-[11px] text-amber-700 dark:text-amber-300">
+              <strong>Manual mode:</strong> SignNow API isn't connected, so the app cannot email this invite for you.
+              We'll save the record and the signing link — you must send it to the client yourself (email, text, copy/paste).
+            </div>
+          )}
           <div>
             <Label className="text-xs">Select client</Label>
             <div className="relative">
