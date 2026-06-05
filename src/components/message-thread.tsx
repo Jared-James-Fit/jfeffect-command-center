@@ -493,11 +493,15 @@ export function MessageThread({
   role,
   conversationState,
   hideControls = false,
+  fullBleed = false,
 }: {
   clientId: string;
   role: SenderRole;
   conversationState?: ConversationState | null;
   hideControls?: boolean;
+  /** When true, render as full-height chat (no card border) and let the
+   *  parent control overall height. Composer sits flush at the bottom. */
+  fullBleed?: boolean;
 }) {
   const { user } = useAuth();
   const qc = useQueryClient();
