@@ -22,13 +22,27 @@ function CheckIn() {
   });
 
   const { data: assignedLink } = useQuery({
-    queryKey: ["my-assigned-checkin-link", (client as any)?.assigned_check_in_link_id],
-    enabled: !!(client as any)?.assigned_check_in_link_id,
+    queryKey: ["my-assigned-checkin-link", (client as any)?.assigned_check_in_link_id ?? "default"],
+    enabled: !!client,
     queryFn: async () => {
+      const assignedId = (client as any)?.assigned_check_in_link_id;
+      if (assignedId) {
+        const { data } = await supabase
+          .from("check_in_links" as any)
+          .select("*")
+          .eq("id", assignedId)
+          .maybeSingle();
+        if (data) return data as any;
+      }
+      // Fallback: first active, non-archived, client-visible check-in link
       const { data } = await supabase
         .from("check_in_links" as any)
         .select("*")
-        .eq("id", (client as any).assigned_check_in_link_id)
+        .eq("active", true)
+        .eq("archived", false)
+        .eq("visible_to_client", true)
+        .order("created_at", { ascending: true })
+        .limit(1)
         .maybeSingle();
       return data as any;
     },
