@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
@@ -41,6 +41,30 @@ type Row = {
   clients: { id: string; full_name: string; email: string | null } | null;
 };
 
+type ImportSummary = {
+  ok: boolean;
+  reason?: string | null;
+  scanned: number;
+  imported: number;
+  skipped: number;
+  unmatched: number;
+  errors: number;
+  completedAt: string;
+};
+
+function emptyImportSummary(ok: boolean, reason?: string | null): ImportSummary {
+  return {
+    ok,
+    reason: reason ?? null,
+    scanned: 0,
+    imported: 0,
+    skipped: 0,
+    unmatched: 0,
+    errors: 0,
+    completedAt: new Date().toISOString(),
+  };
+}
+
 function sourceOf(r: Row): "Storage" | "External" | "SignNow link" | "None" {
   if (r.signed_copy_storage_path) return "Storage";
   if (r.signed_copy_url) return "External";
@@ -60,13 +84,48 @@ function SignedAgreementsPage() {
   const [verif, setVerif] = useState<string>("all");
   const [src, setSrc] = useState<string>("all");
   const [refreshing, setRefreshing] = useState(false);
-  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<ImportSummary | null>(null);
   const [downloading, setDownloading] = useState<string | null>(null);
   const [rowRefreshing, setRowRefreshing] = useState<string | null>(null);
   const getUrlFn = useServerFn(getSignedAgreementUrl);
   const refreshAllFn = useServerFn(refreshAllPendingAgreements);
   const refreshOneFn = useServerFn(refreshAgreementStatus);
   const importFn = useServerFn(importSignNowSignedDocuments);
+
+  const importMutation = useMutation({
+    mutationFn: async (): Promise<ImportSummary> => {
+      const res: any = await importFn({ data: { maxPages: 1 } });
+      return {
+        ok: res?.ok === true,
+        reason: res?.reason ?? null,
+        scanned: Number(res?.scanned ?? 0),
+        imported: Number(res?.imported ?? 0),
+        skipped: Number(res?.skipped ?? 0),
+        unmatched: Number(res?.unmatched ?? 0),
+        errors: Number(res?.errors ?? 0),
+        completedAt: new Date().toISOString(),
+      };
+    },
+    onMutate: () => {
+      setImportResult(null);
+    },
+    onSuccess: (res) => {
+      setImportResult(res);
+      if (!res.ok) {
+        toast.error(res.reason ?? "Import failed");
+        return;
+      }
+      toast.success(
+        `Scanned ${res.scanned} · Imported ${res.imported} · Skipped ${res.skipped} · Unmatched ${res.unmatched} · Errors ${res.errors}`,
+      );
+      refetch();
+    },
+    onError: (e: any) => {
+      const message = e?.message ?? "Import failed";
+      setImportResult(emptyImportSummary(false, message));
+      toast.error(message);
+    },
+  });
 
   const { data: rows = [], refetch, isLoading } = useQuery({
     queryKey: ["admin-signed-agreements"],
