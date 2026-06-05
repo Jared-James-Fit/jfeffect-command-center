@@ -100,7 +100,7 @@ function CheckInsPage() {
         open={!!deleteTarget}
         onOpenChange={(v) => { if (!v) setDeleteTarget(null); }}
         title="Delete check-in link?"
-        description={`This will permanently remove "${deleteTarget?.title}". Clients assigned to it will lose this link.`}
+        message={`This will permanently remove "${deleteTarget?.title}". Clients assigned to it will lose this link.`}
         onConfirm={async () => {
           if (!deleteTarget) return;
           await deleteCheckInLink(deleteTarget.id);
