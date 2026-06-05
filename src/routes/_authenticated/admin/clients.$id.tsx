@@ -37,6 +37,8 @@ import { listCheckInLinks } from "@/lib/check-ins";
 import { PowerlifterBadge, POWERLIFTER_BADGE_LABELS } from "@/components/powerlifter-badge";
 import { SocialHandlesEditor } from "@/components/social-handles-editor";
 import { SocialIcons } from "@/components/social-icons";
+import { ClientQuickLinksCard } from "@/components/client-quick-links-card";
+import { FolderOpen } from "lucide-react";
 
 function AssignedCoachSelect({ value, onChange }: { value: string | null; onChange: (v: string | null) => void }) {
   const { data: coaches = [] } = useQuery({
@@ -307,6 +309,11 @@ function ClientDetail() {
         actions={
           <>
             <Link to="/admin/clients"><Button variant="ghost" size="sm"><ArrowLeft className="mr-2 h-4 w-4" />Back</Button></Link>
+            {form.drive_folder_link && (
+              <a href={form.drive_folder_link} target="_blank" rel="noreferrer">
+                <Button variant="outline" size="sm"><FolderOpen className="mr-2 h-4 w-4" />Open Drive</Button>
+              </a>
+            )}
             <Button variant="outline" size="sm" onClick={() => setPriceCardOpen(true)}><Tag className="mr-2 h-4 w-4" />Assign Offer / View Price Card</Button>
             <Button variant="outline" size="sm" onClick={sendSetup}><Mail className="mr-2 h-4 w-4" />Send setup link</Button>
             <Button variant="outline" size="sm" onClick={archive}><Archive className="mr-2 h-4 w-4" />{form.archived ? "Restore" : "Archive"}</Button>
