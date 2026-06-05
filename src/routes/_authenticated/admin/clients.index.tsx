@@ -20,6 +20,19 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Checkbox } from "@/components/ui/checkbox";
 import { derivePhase, displayTitle, toneClasses, type TrainingPhase } from "@/lib/training-phases";
 import { deriveTarget } from "@/lib/nutrition-cardio";
+
+function summarizeCardio(list: any[]): string {
+  if (!list || list.length === 0) return "";
+  const dayTypes = Array.from(new Set(list.map((t) => t.day_type).filter((d) => d && d !== "General")));
+  if (dayTypes.length > 0) {
+    return dayTypes.map((d) => (d === "Custom" ? "Custom" : `${d}`)).join(" + ") + " Cardio";
+  }
+  const t = list[0];
+  const parts: string[] = [];
+  if (t.frequency_per_week) parts.push(`${t.frequency_per_week}x/wk`);
+  if (t.intensity) parts.push(t.intensity);
+  return parts.join(" · ");
+}
 import { format, parseISO } from "date-fns";
 import type { ConversationState, Message } from "@/lib/messages";
 function AddCell({ id, tab, label }: { id: string; tab: "training" | "nutrition" | "cardio"; label: string }) {
