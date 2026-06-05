@@ -322,28 +322,9 @@ function SignedAgreementsPage() {
             {refreshing ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-1" />}
             Refresh pending
           </Button>
-          <Button type="button" variant="outline" onClick={handleImportHistorical} disabled={importMutation.isPending}>
-            {importMutation.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <DownloadCloud className="h-4 w-4 mr-1" />}
-            Import from SignNow
-          </Button>
-          <AlertDialog open={importConfirmOpen} onOpenChange={setImportConfirmOpen}>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Import signed documents from SignNow?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  This scans the first page (up to ~100 most recent SignNow documents) for signed
-                  documents not yet in this app and imports the ones that match an existing client by
-                  email or name. You can re-run this safely; already-imported documents are skipped.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel type="button">Cancel</AlertDialogCancel>
-                <AlertDialogAction type="button" onClick={confirmImportHistorical}>
-                  Start import
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+          <div className="text-xs text-muted-foreground bg-secondary/40 rounded-md px-3 py-2">
+            Historical SignNow import is temporarily disabled; future signed agreements will appear here after webhook or refresh.
+          </div>
           <Link to="/admin/agreements" className="text-sm text-primary hover:underline">
             ← Back to Agreements
           </Link>
