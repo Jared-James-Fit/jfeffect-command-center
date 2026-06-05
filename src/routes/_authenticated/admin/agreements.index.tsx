@@ -333,7 +333,7 @@ function TemplateActionDialog({
   open, action, apiConnected, onOpenChange, onDone,
 }: {
   open: boolean;
-  action: { template: AgreementTemplate; mode: "invite" | "in-person" } | null;
+  action: { template: AgreementTemplate } | null;
   apiConnected: boolean;
   onOpenChange: (o: boolean) => void;
   onDone: () => void;
@@ -345,7 +345,6 @@ function TemplateActionDialog({
   const [linkOverride, setLinkOverride] = useState("");
   const [offerName, setOfferName] = useState("");
   const [notes, setNotes] = useState("");
-  const [kiosk, setKiosk] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const { data: clients = [] } = useQuery({
@@ -361,18 +360,15 @@ function TemplateActionDialog({
 
   const selectedClient = clients.find((c) => c.id === clientId);
   const tpl = action?.template;
-  const inPerson = action?.mode === "in-person";
-  const signingMethod: SigningMethod = inPerson ? (kiosk ? "Kiosk Mode" : "In-Person / iPad") : "Remote Invite";
   const link = linkOverride.trim() || tpl?.signnow_url || null;
 
   async function go() {
     if (!tpl || !clientId) return toast.error("Pick a client first");
-    if (inPerson && !link) return toast.error("This template has no SignNow signing link saved");
     setBusy(true);
     try {
-      // Manual mode: remote "invite" doesn't actually send anything.
+      // Manual mode: the app cannot send the invite itself.
       // Mark it accordingly so the dashboard doesn't claim the client was emailed.
-      const statusOverride = !apiConnected && !inPerson ? "Manual Action Needed" : undefined;
+      const statusOverride = !apiConnected ? "Manual Action Needed" : undefined;
       const ag: any = await createAgreementFn({
         data: {
           client_id: clientId,
@@ -382,26 +378,21 @@ function TemplateActionDialog({
           offer_name: offerName.trim() || null,
           admin_notes: notes.trim() || null,
           send_now: true,
-          signing_method: signingMethod,
+          signing_method: apiConnected ? "Remote Invite" : "Manual Link",
           status_override: statusOverride,
         } as any,
       });
-      if (inPerson && link) {
-        window.open(link, "_blank", "noopener,noreferrer");
-      }
       toast.success(
-        inPerson
-          ? "Launched signing — finish on this device"
-          : apiConnected
-            ? "Invite sent to client via SignNow"
-            : "Record created. Send the signing link to the client manually — the app did not email them.",
+        apiConnected
+          ? "Invite sent to client via SignNow"
+          : "Record created. Send the signing link to the client manually — the app did not email them.",
       );
       onDone();
       // Navigate to client profile so admin can mark signed afterward
       if (ag?.client_id) {
         navigate({ to: "/admin/clients/$id", params: { id: ag.client_id } });
       }
-      setSearch(""); setClientId(""); setLinkOverride(""); setOfferName(""); setNotes(""); setKiosk(false);
+      setSearch(""); setClientId(""); setLinkOverride(""); setOfferName(""); setNotes("");
     } catch (e: any) {
       toast.error(e?.message ?? "Failed");
     } finally {
@@ -414,7 +405,7 @@ function TemplateActionDialog({
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
-            {inPerson ? "Sign Template — In-Person / iPad" : "Invite to Sign — Remote"}
+            {apiConnected ? "Invite to Sign — SignNow API" : "Invite to Sign — Manual Link"}
           </DialogTitle>
           {tpl && (
             <p className="text-xs text-muted-foreground pt-1">
@@ -423,7 +414,7 @@ function TemplateActionDialog({
           )}
         </DialogHeader>
         <div className="space-y-3 text-sm">
-          {!apiConnected && !inPerson && (
+          {!apiConnected && (
             <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2.5 text-[11px] text-amber-700 dark:text-amber-300">
               <strong>Manual mode:</strong> SignNow API isn't connected, so the app cannot email this invite for you.
               We'll save the record and the signing link — you must send it to the client yourself (email, text, copy/paste).
@@ -475,22 +466,12 @@ function TemplateActionDialog({
             <Label className="text-xs">Admin notes (optional)</Label>
             <Textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} />
           </div>
-
-          {inPerson && (
-            <div className="flex items-center justify-between rounded-md border border-border bg-secondary/30 p-2">
-              <div>
-                <Label className="text-xs">Treat as Kiosk Mode</Label>
-                <p className="text-[11px] text-muted-foreground">SignNow may show your name as the signer — record will still attach to the selected client.</p>
-              </div>
-              <Switch checked={kiosk} onCheckedChange={setKiosk} />
-            </div>
-          )}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
           <Button onClick={go} disabled={busy || !clientId}>
             {busy && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
-            {inPerson ? "Launch signing" : "Create invite"}
+            Create invite
           </Button>
         </DialogFooter>
       </DialogContent>
