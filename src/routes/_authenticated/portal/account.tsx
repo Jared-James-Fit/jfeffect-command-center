@@ -13,13 +13,15 @@ import { Eye, EyeOff, Save, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
 import { ProfilePictureCapture } from "@/components/profile-picture-capture";
 import { COMMON_TIMEZONES } from "@/lib/pt-sessions";
+import { SocialHandlesEditor } from "@/components/social-handles-editor";
+import { SOCIAL_FIELDS } from "@/lib/social-handles";
 
 export const Route = createFileRoute("/_authenticated/portal/account")({
   component: AccountPage,
 });
 
 const COUNTRIES = ["Canada", "United States", "United Kingdom", "Australia", "New Zealand", "Other"];
-const PROFILE_FIELDS = ["first_name", "last_name", "phone", "address", "city", "province", "postal_code", "country", "timezone"] as const;
+const PROFILE_FIELDS = ["first_name", "last_name", "phone", "address", "city", "province", "postal_code", "country", "timezone", ...SOCIAL_FIELDS] as const;
 
 function AccountPage() {
   const { user } = useAuth();
@@ -66,6 +68,15 @@ function AccountPage() {
       postal_code: form.postal_code || null,
       country: form.country || null,
       timezone: form.timezone || "America/Winnipeg",
+      instagram: form.instagram || null,
+      tiktok: form.tiktok || null,
+      youtube: form.youtube || null,
+      facebook: form.facebook || null,
+      twitter_x: form.twitter_x || null,
+      linkedin: form.linkedin || null,
+      website: form.website || null,
+      other_social_label: form.other_social_label || null,
+      other_social_handle: form.other_social_handle || null,
       info_last_updated_at: new Date().toISOString(),
       info_last_updated_by: "client",
       info_last_updated_fields: updatedFields,
@@ -182,6 +193,16 @@ function AccountPage() {
             Use a clear, real-time headshot. Replacement only — you can't leave this blank.
             Last updated: {form.profile_picture_updated_at ? new Date(form.profile_picture_updated_at).toLocaleString() : "—"}
           </p>
+        </Card>
+
+        <Card className="border-border bg-card p-6 md:col-span-3 space-y-4">
+          <div>
+            <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Social Media (optional)</h3>
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Add just your username/handle — no full URLs needed. Leave any field blank to skip.
+            </p>
+          </div>
+          <SocialHandlesEditor values={form} onChange={(k, v) => set(k, v)} />
         </Card>
 
         <Card className="border-border bg-card p-6 md:col-span-3 space-y-4">

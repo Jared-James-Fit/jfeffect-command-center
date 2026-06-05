@@ -35,6 +35,8 @@ import { AgreementsPanel } from "@/components/agreements-panel";
 import { TrainingScheduleCard } from "@/components/training-schedule-card";
 import { listCheckInLinks } from "@/lib/check-ins";
 import { PowerlifterBadge, POWERLIFTER_BADGE_LABELS } from "@/components/powerlifter-badge";
+import { SocialHandlesEditor } from "@/components/social-handles-editor";
+import { SocialIcons } from "@/components/social-icons";
 
 function AssignedCoachSelect({ value, onChange }: { value: string | null; onChange: (v: string | null) => void }) {
   const { data: coaches = [] } = useQuery({
@@ -298,6 +300,7 @@ function ClientDetail() {
             {form.is_powerlifter && (
               <PowerlifterBadge label={form.powerlifter_badge_label} size="sm" />
             )}
+            <SocialIcons client={form} size="sm" />
           </>
         }
         subtitle={form.coaching_type ?? "Coaching client"}
@@ -372,6 +375,14 @@ function ClientDetail() {
         <div className="space-y-6">
         <TrainingScheduleCard client={form} />
         <PowerlifterSection form={form} set={set} />
+        <Card className="border-border bg-card p-6 space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Social Media</h3>
+            <SocialIcons client={form} size="xs" />
+          </div>
+          <p className="text-[11px] text-muted-foreground">Usernames/handles only — the app auto-links where possible.</p>
+          <SocialHandlesEditor values={form} onChange={(k, v) => set(k, v)} />
+        </Card>
         <Card className="border-border bg-card p-6 space-y-3">
           <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Quick Jump</h3>
           <p className="text-xs text-muted-foreground">Open a management area for this client.</p>
