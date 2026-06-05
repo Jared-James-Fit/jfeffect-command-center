@@ -16,7 +16,7 @@ import { initMediaUpload, finalizeMediaUpload, createSubmission } from "@/lib/dr
 import { uploadLiftClipToDrive } from "@/lib/lift-video-drive-upload";
 import { friendlyDriveError } from "@/lib/drive-errors";
 import { toast } from "sonner";
-import { Upload, Link as LinkIcon, Loader2, Video as VideoIcon, Send, X, AlertTriangle, ArrowUp, ArrowDown, Plus, CheckCircle2 } from "lucide-react";
+import { Upload, Link as LinkIcon, Loader2, Video as VideoIcon, Send, X, AlertTriangle, CheckCircle2 } from "lucide-react";
 
 type Props = {
   open: boolean;
