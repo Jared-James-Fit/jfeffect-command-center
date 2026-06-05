@@ -128,13 +128,18 @@ function PortalHome() {
         status: "Awaiting verification",
       });
     } else {
+      const hasLink = !!a.signnow_signing_link;
       updates.push({
         key: `agreement-${a.id}`,
         icon: Mail,
         tone: "warning",
-        title: "Agreement Sent",
-        message: "Check your email to complete it.",
-        primary: { label: "I completed it", onClick: () => markAgreementComplete(a.id) },
+        title: "Agreement needs signature",
+        message: hasLink
+          ? "Check your Gmail for a SignNow document from Coach Jared / JF Effect."
+          : "Please check your Gmail for the SignNow agreement or message Coach Jared if you cannot find it.",
+        primary: hasLink
+          ? { label: "Open Agreement", onClick: () => window.open(a.signnow_signing_link, "_blank", "noopener,noreferrer") }
+          : { label: "I completed it", onClick: () => markAgreementComplete(a.id) },
         secondary: { label: "Open Agreements", to: "/portal/agreements" },
       });
     }
