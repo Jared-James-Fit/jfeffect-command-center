@@ -620,7 +620,12 @@ export type Database = {
           preferred_high_days: string[]
           preferred_rest_days: string[]
           preferred_training_days: string[]
+          profile_picture_needs_update: boolean
+          profile_picture_needs_update_at: string | null
+          profile_picture_needs_update_reason: string | null
+          profile_picture_source: string | null
           profile_picture_updated_at: string | null
+          profile_picture_updated_by: string | null
           profile_picture_url: string | null
           program_phase: string | null
           program_sheet_link: string | null
@@ -700,7 +705,12 @@ export type Database = {
           preferred_high_days?: string[]
           preferred_rest_days?: string[]
           preferred_training_days?: string[]
+          profile_picture_needs_update?: boolean
+          profile_picture_needs_update_at?: string | null
+          profile_picture_needs_update_reason?: string | null
+          profile_picture_source?: string | null
           profile_picture_updated_at?: string | null
+          profile_picture_updated_by?: string | null
           profile_picture_url?: string | null
           program_phase?: string | null
           program_sheet_link?: string | null
@@ -780,7 +790,12 @@ export type Database = {
           preferred_high_days?: string[]
           preferred_rest_days?: string[]
           preferred_training_days?: string[]
+          profile_picture_needs_update?: boolean
+          profile_picture_needs_update_at?: string | null
+          profile_picture_needs_update_reason?: string | null
+          profile_picture_source?: string | null
           profile_picture_updated_at?: string | null
+          profile_picture_updated_by?: string | null
           profile_picture_url?: string | null
           program_phase?: string | null
           program_sheet_link?: string | null
@@ -2157,6 +2172,8 @@ export type Database = {
           email: string | null
           full_name: string | null
           id: string
+          profile_picture_source: string | null
+          profile_picture_updated_at: string | null
           updated_at: string
         }
         Insert: {
@@ -2165,6 +2182,8 @@ export type Database = {
           email?: string | null
           full_name?: string | null
           id: string
+          profile_picture_source?: string | null
+          profile_picture_updated_at?: string | null
           updated_at?: string
         }
         Update: {
@@ -2173,6 +2192,8 @@ export type Database = {
           email?: string | null
           full_name?: string | null
           id?: string
+          profile_picture_source?: string | null
+          profile_picture_updated_at?: string | null
           updated_at?: string
         }
         Relationships: []
