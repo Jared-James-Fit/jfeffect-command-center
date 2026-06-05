@@ -605,6 +605,7 @@ export type Database = {
           invite_expires_at: string | null
           invite_last_resent_at: string | null
           invite_sent_at: string | null
+          is_powerlifter: boolean
           last_name: string | null
           last_program_update: string | null
           lifestyle_notes: string | null
@@ -612,11 +613,14 @@ export type Database = {
           next_program_update: string | null
           nutrition_notes: string | null
           onboarded_by_coach_id: string | null
+          openpowerlifting_url: string | null
           package_tracking_enabled: boolean
           password_reset_sent_at: string | null
           payment_status: string | null
           phone: string | null
           postal_code: string | null
+          powerlifter_badge_label: string
+          powerlifting_visible_to_client: boolean
           preferred_high_days: string[]
           preferred_rest_days: string[]
           preferred_training_days: string[]
@@ -690,6 +694,7 @@ export type Database = {
           invite_expires_at?: string | null
           invite_last_resent_at?: string | null
           invite_sent_at?: string | null
+          is_powerlifter?: boolean
           last_name?: string | null
           last_program_update?: string | null
           lifestyle_notes?: string | null
@@ -697,11 +702,14 @@ export type Database = {
           next_program_update?: string | null
           nutrition_notes?: string | null
           onboarded_by_coach_id?: string | null
+          openpowerlifting_url?: string | null
           package_tracking_enabled?: boolean
           password_reset_sent_at?: string | null
           payment_status?: string | null
           phone?: string | null
           postal_code?: string | null
+          powerlifter_badge_label?: string
+          powerlifting_visible_to_client?: boolean
           preferred_high_days?: string[]
           preferred_rest_days?: string[]
           preferred_training_days?: string[]
@@ -775,6 +783,7 @@ export type Database = {
           invite_expires_at?: string | null
           invite_last_resent_at?: string | null
           invite_sent_at?: string | null
+          is_powerlifter?: boolean
           last_name?: string | null
           last_program_update?: string | null
           lifestyle_notes?: string | null
@@ -782,11 +791,14 @@ export type Database = {
           next_program_update?: string | null
           nutrition_notes?: string | null
           onboarded_by_coach_id?: string | null
+          openpowerlifting_url?: string | null
           package_tracking_enabled?: boolean
           password_reset_sent_at?: string | null
           payment_status?: string | null
           phone?: string | null
           postal_code?: string | null
+          powerlifter_badge_label?: string
+          powerlifting_visible_to_client?: boolean
           preferred_high_days?: string[]
           preferred_rest_days?: string[]
           preferred_training_days?: string[]
