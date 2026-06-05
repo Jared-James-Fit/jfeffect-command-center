@@ -6,6 +6,10 @@ import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ClipboardCheck, CheckCircle2, ShieldAlert, MessageCircle, Video, Mail, CheckCheck, CreditCard, AlertTriangle, Receipt, Dumbbell, Apple } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
+import { derivePhase, displayTitle, toneClasses as phaseToneClasses, type TrainingPhase } from "@/lib/training-phases";
+import { format, parseISO } from "date-fns";
 import { toast } from "sonner";
 import { PowerlifterBadge } from "@/components/powerlifter-badge";
 import { ExternalLink } from "lucide-react";
@@ -51,6 +55,21 @@ function PortalHome() {
       return (data ?? []) as any[];
     },
   });
+
+  const { data: phases = [] } = useQuery({
+    queryKey: ["my-phases", client?.id],
+    enabled: !!client?.id,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("training_phases").select("*").eq("client_id", client!.id)
+        .order("start_date", { ascending: false });
+      return (data ?? []) as TrainingPhase[];
+    },
+  });
+  const activePhase = phases.find((p) => {
+    const s = derivePhase(p).state;
+    return s === "active" || s === "ending-soon" || s === "due-today";
+  }) ?? phases.find((p) => derivePhase(p).state === "upcoming") ?? null;
 
   const qc = useQueryClient();
 
@@ -228,6 +247,38 @@ function PortalHome() {
             </Card>
           )}
         </section>
+
+        {activePhase && (() => {
+          const d = derivePhase(activePhase);
+          return (
+            <Card className="border-border bg-card p-6">
+              <h2 className="mb-4 flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-muted-foreground">
+                <Dumbbell className="h-4 w-4" /> Current Training Phase
+              </h2>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-lg font-bold">{displayTitle(activePhase)}</span>
+                <Badge variant="outline" className={phaseToneClasses(d.tone)}>{d.label}</Badge>
+                <Badge variant="outline" className="text-[10px]">{activePhase.phase_type}</Badge>
+              </div>
+              <div className="mt-1 text-xs text-muted-foreground">
+                {format(parseISO(activePhase.start_date), "MMM d, yyyy")} → {format(parseISO(activePhase.end_date), "MMM d, yyyy")}
+              </div>
+              <div className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-4">
+                <PhaseItem label="Week" value={`${d.currentWeek} / ${d.totalWeeks}`} />
+                <PhaseItem label="Days remaining" value={d.daysRemaining < 0 ? `${Math.abs(d.daysRemaining)}d over` : `${d.daysRemaining}d`} />
+                <PhaseItem label="Weeks left" value={String(d.weeksRemaining)} />
+                <PhaseItem label="Progress" value={`${d.percentComplete}%`} />
+              </div>
+              <Progress value={d.percentComplete} className="mt-3 h-2" />
+              {activePhase.training_goal && (
+                <p className="mt-4 text-sm"><span className="text-muted-foreground">Goal: </span>{activePhase.training_goal}</p>
+              )}
+              {activePhase.notes && (
+                <div className="mt-3 rounded-md border border-border bg-secondary/30 p-3 text-sm whitespace-pre-wrap">{activePhase.notes}</div>
+              )}
+            </Card>
+          );
+        })()}
 
         {!client && (
           <Card className="border-primary/30 bg-primary/5 p-6">
