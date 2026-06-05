@@ -64,6 +64,34 @@ export const CARDIO_INTENSITIES = [
   "Custom",
 ] as const;
 
+// Calories-per-minute ranges by intensity (coaching-friendly estimates)
+const INTENSITY_CPM: Record<string, [number, number]> = {
+  "Low Intensity": [4, 6],
+  "Easy": [4, 6],
+  "Zone 2": [6, 8],
+  "Moderate Intensity": [6, 8],
+  "High Intensity": [8, 10],
+  "Hard": [8, 10],
+  "HIIT": [10, 12],
+  "Very Hard": [10, 12],
+  "Steps Only": [3, 5],
+};
+
+export function estimateCalorieRange(
+  durationMinutes: number | null | undefined,
+  intensity: string | null | undefined,
+): { min: number; max: number } | null {
+  if (!durationMinutes || durationMinutes <= 0) return null;
+  const cpm = INTENSITY_CPM[intensity ?? ""] ?? [5, 7];
+  return { min: Math.round(durationMinutes * cpm[0]), max: Math.round(durationMinutes * cpm[1]) };
+}
+
+export function formatCalorieTarget(min?: number | null, max?: number | null): string | null {
+  if (min == null && max == null) return null;
+  if (min != null && max != null && min !== max) return `~${min}–${max} cal`;
+  return `~${min ?? max} cal`;
+}
+
 export const TARGET_STATUSES = [
   "Active",
   "Ending Soon",
