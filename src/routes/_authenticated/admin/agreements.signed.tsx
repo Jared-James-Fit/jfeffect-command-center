@@ -314,6 +314,29 @@ function SignedAgreementsPage() {
           </Link>
         </div>
 
+        {importResult && (
+          <Card className="border-border bg-secondary/30 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <div className="text-sm font-semibold">
+                  SignNow import {importResult.ok ? "completed" : "failed"}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  {new Date(importResult.completedAt).toLocaleString()}
+                  {importResult.reason ? ` · ${importResult.reason}` : ""}
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-5">
+                <Badge variant="secondary">Scanned {importResult.scanned}</Badge>
+                <Badge variant="secondary">Imported {importResult.imported}</Badge>
+                <Badge variant="secondary">Skipped {importResult.skipped}</Badge>
+                <Badge variant="secondary">Unmatched {importResult.unmatched}</Badge>
+                <Badge variant={importResult.errors ? "destructive" : "secondary"}>Errors {importResult.errors}</Badge>
+              </div>
+            </div>
+          </Card>
+        )}
+
         <Card className="p-5">
           {isLoading ? (
             <div className="py-12 text-center text-sm text-muted-foreground">
