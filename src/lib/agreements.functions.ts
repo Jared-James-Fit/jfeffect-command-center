@@ -105,6 +105,10 @@ export const updateSignNowSettings = createServerFn({ method: "POST" })
       auto_reminders_enabled: z.boolean().optional(),
       signnow_dashboard_url: z.string().url().max(500).nullable().optional(),
       notes: z.string().max(2000).nullable().optional(),
+      api_client_id: z.string().max(200).nullable().optional(),
+      api_basic_auth_token: z.string().max(500).nullable().optional(),
+      redirect_uri: z.string().url().max(500).nullable().optional(),
+      app_mode_note: z.string().max(500).nullable().optional(),
     }).parse(i),
   )
   .handler(async ({ data, context }) => {
@@ -122,9 +126,14 @@ export const testSignNowConnection = createServerFn({ method: "POST" })
     const token = process.env.SIGNNOW_API_TOKEN;
     const now = new Date().toISOString();
     if (!token) {
-      const result = "No SIGNNOW_API_TOKEN configured — running in Manual Mode.";
+      const result = "No SIGNNOW_API_TOKEN / OAuth credentials configured — running in Manual Mode Only.";
       await supabase.from("signnow_settings").update({
-        status: "Manual Mode", last_test_at: now, last_test_result: result,
+        status: "Manual Mode Only",
+        last_test_at: now,
+        last_test_result: result,
+        access_token_status: "Missing",
+        refresh_token_status: "Missing",
+        last_error: null,
       } as any).eq("singleton", true);
       return { mode: "manual", ok: true, message: result };
     }
@@ -144,12 +153,17 @@ export const testSignNowConnection = createServerFn({ method: "POST" })
         account_email: email,
         last_test_at: now,
         last_test_result: result,
+        access_token_status: ok ? "Valid" : "Invalid",
+        last_error: ok ? null : result,
       } as any).eq("singleton", true);
       return { mode: "api", ok, message: result };
     } catch (e: any) {
       const result = `SignNow connection failed: ${e?.message ?? "unknown error"}`;
       await supabase.from("signnow_settings").update({
-        status: "Error", last_test_at: now, last_test_result: result,
+        status: "Error",
+        last_test_at: now,
+        last_test_result: result,
+        last_error: result,
       } as any).eq("singleton", true);
       return { mode: "api", ok: false, message: result };
     }
