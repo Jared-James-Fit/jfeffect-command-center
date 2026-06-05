@@ -604,6 +604,9 @@ export const verifyAgreement = createServerFn({ method: "POST" })
   });
 
 export const sendAgreementReminder = createServerFn({ method: "POST" })
+  // placeholder anchor
+  /* anchor */
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   .middleware([requireSupabaseAuth])
   .inputValidator((i: unknown) => z.object({ id: z.string().uuid() }).parse(i))
   .handler(async ({ data, context }) => {
