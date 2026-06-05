@@ -22,6 +22,41 @@ async function assertAdminOrCoach(supabase: any, userId: string) {
   return roles;
 }
 
+/**
+ * Resolve the caller's effective role for a given client_id.
+ * - "admin"  → unrestricted
+ * - "coach"  → only if assigned to that client (is_assigned_coach)
+ * - "owner"  → the signed-in user IS the client (clients.user_id = auth.uid())
+ * Throws "Forbidden" otherwise.
+ *
+ * This is intentionally redundant with RLS: it gives server-fn code an
+ * explicit, auditable permission gate that does not silently degrade if RLS
+ * is ever changed.
+ */
+async function assertClientAccess(
+  supabase: any,
+  userId: string,
+  clientId: string,
+): Promise<"admin" | "coach" | "owner"> {
+  const { data: rolesRows } = await supabase
+    .from("user_roles").select("role").eq("user_id", userId);
+  const roles = (rolesRows ?? []).map((r: any) => r.role);
+  if (roles.includes("admin")) return "admin";
+
+  // Client owner?
+  const { data: ownerRow } = await supabase
+    .from("clients").select("id").eq("id", clientId).eq("user_id", userId).maybeSingle();
+  if (ownerRow) return "owner";
+
+  // Assigned coach? Check via the security-definer RPC used by RLS.
+  if (roles.includes("coach")) {
+    const { data: isCoach } = await supabase.rpc("is_assigned_coach", { _client_id: clientId });
+    if (isCoach === true) return "coach";
+  }
+
+  throw new Error("Forbidden");
+}
+
 function nameNormalize(s: string | null | undefined): string {
   return (s ?? "").trim().toLowerCase().replace(/\s+/g, " ");
 }
@@ -585,21 +620,110 @@ export const getSignedAgreementUrl = createServerFn({ method: "POST" })
   .inputValidator((i: unknown) => z.object({ id: z.string().uuid() }).parse(i))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
+    // RLS-scoped read: returns null for rows the caller can't see.
     const { data: ag, error } = await supabase
       .from("agreements")
       .select("id, client_id, signed_copy_storage_path, signed_copy_url, signnow_completed_link")
       .eq("id", data.id)
-      .single();
-    if (error || !ag) throw new Error(error?.message ?? "Agreement not found");
-    // RLS already restricts visibility (admin / coach / owner). Just confirm we got the row.
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!ag) throw new Error("Agreement not found");
+
+    // Belt-and-suspenders: explicitly re-validate the caller can access this
+    // agreement's client. Defends against future RLS regressions and produces
+    // a clear server-side audit if someone tries to fish for IDs.
+    const accessRole = await assertClientAccess(supabase, userId, ag.client_id);
+
     if (!ag.signed_copy_storage_path) {
-      return { url: ag.signed_copy_url ?? ag.signnow_completed_link ?? null, source: ag.signed_copy_url ? "external" : ag.signnow_completed_link ? "signnow" : null };
+      return {
+        url: ag.signed_copy_url ?? ag.signnow_completed_link ?? null,
+        source: ag.signed_copy_url ? "external" : ag.signnow_completed_link ? "signnow" : null,
+        accessRole,
+      };
     }
+
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: signed, error: sErr } = await supabaseAdmin.storage
       .from("agreements")
       .createSignedUrl(ag.signed_copy_storage_path, 60 * 10);
     if (sErr) throw new Error(sErr.message);
-    void userId;
-    return { url: signed?.signedUrl ?? null, source: "storage" as const };
+    return { url: signed?.signedUrl ?? null, source: "storage" as const, accessRole };
+  });
+
+/**
+ * Return short-lived signed URLs for every signed PDF attached to a purchase
+ * record. Requires the caller to have access to the purchase's client
+ * (admin, assigned coach, or the client themselves).
+ *
+ * This is what UIs that show "download signed copy" on a purchase should call
+ * — it never trusts a client-supplied agreement id and never accepts a raw
+ * storage path.
+ */
+export const getSignedAgreementUrlsForPurchase = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i: unknown) =>
+    z.object({ purchase_record_id: z.string().uuid() }).parse(i),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+
+    // Step 1: RLS-scoped purchase lookup — returns null if caller can't see it.
+    const { data: purchase, error: pErr } = await supabase
+      .from("purchase_records")
+      .select("id, client_id")
+      .eq("id", data.purchase_record_id)
+      .maybeSingle();
+    if (pErr) throw new Error(pErr.message);
+    if (!purchase) throw new Error("Purchase not found");
+
+    // Step 2: Explicit re-validation against the purchase's client.
+    const accessRole = await assertClientAccess(supabase, userId, purchase.client_id);
+
+    // Step 3: Pull agreements linked to that purchase (RLS-scoped again).
+    const { data: ags, error: aErr } = await supabase
+      .from("agreements")
+      .select("id, client_id, status, template_name, signed_at, signed_copy_storage_path, signed_copy_url, signnow_completed_link")
+      .eq("purchase_record_id", purchase.id);
+    if (aErr) throw new Error(aErr.message);
+
+    // Step 4: Defence-in-depth — drop any row whose client_id drifted away
+    // from the purchase. This should be impossible under current RLS but
+    // guarantees we never mint a signed URL for an agreement that no longer
+    // belongs to the validated client.
+    const safe = (ags ?? []).filter((a) => a.client_id === purchase.client_id);
+
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const out: Array<{
+      id: string;
+      template_name: string | null;
+      status: string | null;
+      signed_at: string | null;
+      url: string | null;
+      source: "storage" | "external" | "signnow" | null;
+    }> = [];
+    for (const a of safe) {
+      let url: string | null = null;
+      let source: "storage" | "external" | "signnow" | null = null;
+      if (a.signed_copy_storage_path) {
+        const { data: signed, error: sErr } = await supabaseAdmin.storage
+          .from("agreements")
+          .createSignedUrl(a.signed_copy_storage_path, 60 * 10);
+        if (sErr) throw new Error(sErr.message);
+        url = signed?.signedUrl ?? null;
+        source = "storage";
+      } else if (a.signed_copy_url) {
+        url = a.signed_copy_url; source = "external";
+      } else if (a.signnow_completed_link) {
+        url = a.signnow_completed_link; source = "signnow";
+      }
+      out.push({
+        id: a.id,
+        template_name: a.template_name,
+        status: a.status,
+        signed_at: a.signed_at,
+        url,
+        source,
+      });
+    }
+    return { accessRole, agreements: out };
   });
