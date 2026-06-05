@@ -180,11 +180,12 @@ function SignedAgreementsPage() {
     }
   }
 
-  async function handleImportHistorical() {
+  async function handleImportHistorical(e: React.MouseEvent<HTMLButtonElement>) {
+    e.preventDefault();
     if (!confirm("Scan SignNow for signed documents not yet in this app and import them? This may take a minute.")) return;
     setImporting(true);
     try {
-      const res: any = await importFn({ data: {} });
+      const res: any = await importFn({ data: { maxPages: 2 } });
       if (!res?.ok) {
         toast.error(res?.reason ?? "Import failed");
       } else {
