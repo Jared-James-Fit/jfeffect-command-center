@@ -559,6 +559,62 @@ export type Database = {
         }
         Relationships: []
       }
+      client_quick_links: {
+        Row: {
+          archived: boolean
+          client_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          link_type: string
+          notes: string | null
+          sort_order: number
+          status: string
+          title: string
+          updated_at: string
+          url: string
+          visibility: string
+        }
+        Insert: {
+          archived?: boolean
+          client_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          link_type?: string
+          notes?: string | null
+          sort_order?: number
+          status?: string
+          title: string
+          updated_at?: string
+          url: string
+          visibility?: string
+        }
+        Update: {
+          archived?: boolean
+          client_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          link_type?: string
+          notes?: string | null
+          sort_order?: number
+          status?: string
+          title?: string
+          updated_at?: string
+          url?: string
+          visibility?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_quick_links_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       clients: {
         Row: {
           account_created_at: string | null

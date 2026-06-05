@@ -37,6 +37,8 @@ import { listCheckInLinks } from "@/lib/check-ins";
 import { PowerlifterBadge, POWERLIFTER_BADGE_LABELS } from "@/components/powerlifter-badge";
 import { SocialHandlesEditor } from "@/components/social-handles-editor";
 import { SocialIcons } from "@/components/social-icons";
+import { ClientQuickLinksCard } from "@/components/client-quick-links-card";
+import { FolderOpen } from "lucide-react";
 
 function AssignedCoachSelect({ value, onChange }: { value: string | null; onChange: (v: string | null) => void }) {
   const { data: coaches = [] } = useQuery({
@@ -307,6 +309,11 @@ function ClientDetail() {
         actions={
           <>
             <Link to="/admin/clients"><Button variant="ghost" size="sm"><ArrowLeft className="mr-2 h-4 w-4" />Back</Button></Link>
+            {form.drive_folder_link && (
+              <a href={form.drive_folder_link} target="_blank" rel="noreferrer">
+                <Button variant="outline" size="sm"><FolderOpen className="mr-2 h-4 w-4" />Open Drive</Button>
+              </a>
+            )}
             <Button variant="outline" size="sm" onClick={() => setPriceCardOpen(true)}><Tag className="mr-2 h-4 w-4" />Assign Offer / View Price Card</Button>
             <Button variant="outline" size="sm" onClick={sendSetup}><Mail className="mr-2 h-4 w-4" />Send setup link</Button>
             <Button variant="outline" size="sm" onClick={archive}><Archive className="mr-2 h-4 w-4" />{form.archived ? "Restore" : "Archive"}</Button>
@@ -374,6 +381,11 @@ function ClientDetail() {
 
         <div className="space-y-6">
         <TrainingScheduleCard client={form} />
+        <ClientQuickLinksCard
+          clientId={id}
+          driveFolderLink={form.drive_folder_link}
+          onChangeDriveFolderLink={(v) => set("drive_folder_link", v)}
+        />
         <PowerlifterSection form={form} set={set} />
         <Card className="border-border bg-card p-6 space-y-3">
           <div className="flex items-center justify-between gap-3">
@@ -422,6 +434,13 @@ function ClientDetail() {
         </TabsContent>
 
         <TabsContent value="documents" className="grid gap-6 md:grid-cols-3">
+          <div className="md:col-span-3">
+            <ClientQuickLinksCard
+              clientId={id}
+              driveFolderLink={form.drive_folder_link}
+              onChangeDriveFolderLink={(v) => set("drive_folder_link", v)}
+            />
+          </div>
           <Card className="border-border bg-card p-6 md:col-span-3 space-y-4">
             <div className="flex items-center justify-between gap-3 flex-wrap">
               <div>
