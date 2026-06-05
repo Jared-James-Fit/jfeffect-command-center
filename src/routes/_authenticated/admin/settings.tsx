@@ -342,7 +342,7 @@ function SignNowIntegrationCard() {
     finally { setBusy(false); }
   }
 
-  const status = cur.status ?? "Manual Mode";
+  const status = cur.status ?? "Manual Mode Only";
   const tone = status === "Connected" ? "border-emerald-500/40 text-emerald-500"
     : status === "Error" ? "border-destructive/40 text-destructive"
     : status === "Manual Mode Only" ? "border-amber-500/40 text-amber-500"
@@ -381,7 +381,7 @@ function SignNowIntegrationCard() {
         </div>
         <div className="space-y-1">
           <Label>Integration status</Label>
-          <Select value={cur.status ?? "Manual Mode"} onValueChange={(v) => setK("status", v)}>
+          <Select value={cur.status ?? "Manual Mode Only"} onValueChange={(v) => setK("status", v)}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
               {["Not Connected","Connected","Error","Manual Mode Only"].map((v) => <SelectItem key={v} value={v}>{v}</SelectItem>)}
