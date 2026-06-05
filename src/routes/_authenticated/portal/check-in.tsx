@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useAuth } from "@/lib/auth";
+import { usePortalUserId } from "@/lib/client-impersonation";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
@@ -10,13 +10,13 @@ import { ClipboardCheck, ExternalLink, MessageCircle } from "lucide-react";
 export const Route = createFileRoute("/_authenticated/portal/check-in")({ component: CheckIn });
 
 function CheckIn() {
-  const { user } = useAuth();
+  const portalUserId = usePortalUserId();
 
   const { data: client } = useQuery({
-    queryKey: ["my-client", user?.id],
-    enabled: !!user,
+    queryKey: ["my-client", portalUserId],
+    enabled: !!portalUserId,
     queryFn: async () => {
-      const { data } = await supabase.from("clients").select("*").eq("user_id", user!.id).maybeSingle();
+      const { data } = await supabase.from("clients").select("*").eq("user_id", portalUserId!).maybeSingle();
       return data;
     },
   });

@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
+import { usePortalUserId } from "@/lib/client-impersonation";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -19,12 +20,13 @@ export const Route = createFileRoute("/_authenticated/portal/")({ component: Por
 
 function PortalHome() {
   const { user } = useAuth();
+  const portalUserId = usePortalUserId();
 
   const { data: client } = useQuery({
-    queryKey: ["my-client", user?.id],
-    enabled: !!user,
+    queryKey: ["my-client", portalUserId],
+    enabled: !!portalUserId,
     queryFn: async () => {
-      const { data } = await supabase.from("clients").select("*").eq("user_id", user!.id).maybeSingle();
+      const { data } = await supabase.from("clients").select("*").eq("user_id", portalUserId!).maybeSingle();
       return data;
     },
   });

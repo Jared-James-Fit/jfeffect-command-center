@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/lib/auth";
+import { usePortalUserId } from "@/lib/client-impersonation";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -23,7 +23,7 @@ export const Route = createFileRoute("/_authenticated/portal/lift-videos")({
 });
 
 function ClientLiftVideos() {
-  const { user } = useAuth();
+  const portalUserId = usePortalUserId();
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<LiftVideo | null>(null);
@@ -32,10 +32,10 @@ function ClientLiftVideos() {
   const [deleting, setDeleting] = useState(false);
 
   const { data: client } = useQuery({
-    queryKey: ["my-client-id", user?.id],
-    enabled: !!user,
+    queryKey: ["my-client-id", portalUserId],
+    enabled: !!portalUserId,
     queryFn: async () => {
-      const { data } = await supabase.from("clients").select("id, full_name").eq("user_id", user!.id).maybeSingle();
+      const { data } = await supabase.from("clients").select("id, full_name").eq("user_id", portalUserId!).maybeSingle();
       return data;
     },
   });
@@ -307,7 +307,7 @@ function ClientLiftVideos() {
                   <LiftVideoCard
                     video={clip}
                     role="client"
-                    userId={user?.id ?? null}
+                    userId={portalUserId ?? null}
                     onChanged={refresh}
                     onEdit={(vid) => { setEditing(vid); setOpen(true); setDetailKey(null); }}
                   />
@@ -324,7 +324,7 @@ function ClientLiftVideos() {
           onOpenChange={setOpen}
           clientId={client.id}
           clientName={(client as any).full_name}
-          userId={user?.id ?? null}
+          userId={portalUserId ?? null}
           initial={editing}
           onSaved={refresh}
           role="client"

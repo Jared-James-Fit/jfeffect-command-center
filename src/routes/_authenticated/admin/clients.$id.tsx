@@ -38,7 +38,9 @@ import { PowerlifterBadge, POWERLIFTER_BADGE_LABELS } from "@/components/powerli
 import { SocialHandlesEditor } from "@/components/social-handles-editor";
 import { SocialIcons } from "@/components/social-icons";
 import { ClientQuickLinksCard } from "@/components/client-quick-links-card";
-import { FolderOpen } from "lucide-react";
+import { FolderOpen, Eye } from "lucide-react";
+import { useClientImpersonation } from "@/lib/client-impersonation";
+import { useAuth } from "@/lib/auth";
 
 function AssignedCoachSelect({ value, onChange }: { value: string | null; onChange: (v: string | null) => void }) {
   const { data: coaches = [] } = useQuery({
@@ -79,6 +81,9 @@ function ClientDetail() {
   const { tab } = Route.useSearch();
   const qc = useQueryClient();
   const navigate = useNavigate();
+  const { role } = useAuth();
+  const impersonation = useClientImpersonation();
+  const canPov = role === "admin" || role === "coach";
   const [form, setForm] = useState<any>(null);
   const [deleteStep, setDeleteStep] = useState<0 | 1 | 2>(0);
   const [priceCardOpen, setPriceCardOpen] = useState(false);
@@ -313,6 +318,22 @@ function ClientDetail() {
               <a href={form.drive_folder_link} target="_blank" rel="noreferrer">
                 <Button variant="outline" size="sm"><FolderOpen className="mr-2 h-4 w-4" />Open Drive</Button>
               </a>
+            )}
+            {canPov && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  if (!form.user_id) {
+                    toast.error("Client has no account yet — send a setup link first.");
+                    return;
+                  }
+                  impersonation.start({ id, user_id: form.user_id, full_name: form.full_name });
+                  navigate({ to: "/portal" });
+                }}
+              >
+                <Eye className="mr-2 h-4 w-4" />View Client POV
+              </Button>
             )}
             <Button variant="outline" size="sm" onClick={() => setPriceCardOpen(true)}><Tag className="mr-2 h-4 w-4" />Assign Offer / View Price Card</Button>
             <Button variant="outline" size="sm" onClick={sendSetup}><Mail className="mr-2 h-4 w-4" />Send setup link</Button>

@@ -5,6 +5,7 @@ import { ProfilePictureCapture } from "@/components/profile-picture-capture";
 import { Card } from "@/components/ui/card";
 import { AlertTriangle } from "lucide-react";
 import type { ReactNode } from "react";
+import { useClientImpersonation } from "@/lib/client-impersonation";
 
 /**
  * Blocks the client portal until a real-time profile picture has been captured.
@@ -13,6 +14,10 @@ import type { ReactNode } from "react";
 export function ClientProfilePictureGate({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const qc = useQueryClient();
+  const { isImpersonating } = useClientImpersonation();
+
+  // Admin in client-POV mode bypasses the gate — they're inspecting, not setting up.
+  if (isImpersonating) return <>{children}</>;
 
   const { data: client, isLoading } = useQuery({
     queryKey: ["my-client-picture-gate", user?.id],

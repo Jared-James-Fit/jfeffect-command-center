@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { usePortalUserId } from "@/lib/client-impersonation";
 import { useAuth } from "@/lib/auth";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
@@ -24,6 +25,7 @@ const COUNTRIES = ["Canada", "United States", "United Kingdom", "Australia", "Ne
 const PROFILE_FIELDS = ["first_name", "last_name", "phone", "address", "city", "province", "postal_code", "country", "timezone", ...SOCIAL_FIELDS] as const;
 
 function AccountPage() {
+  const portalUserId = usePortalUserId();
   const { user } = useAuth();
   const qc = useQueryClient();
   const [form, setForm] = useState<any>(null);
@@ -31,10 +33,10 @@ function AccountPage() {
   const [pwdBusy, setPwdBusy] = useState(false);
 
   const { data: client } = useQuery({
-    queryKey: ["my-client-account", user?.id],
-    enabled: !!user,
+    queryKey: ["my-client-account", portalUserId],
+    enabled: !!portalUserId,
     queryFn: async () => {
-      const { data, error } = await supabase.from("clients").select("*").eq("user_id", user!.id).maybeSingle();
+      const { data, error } = await supabase.from("clients").select("*").eq("user_id", portalUserId!).maybeSingle();
       if (error) throw error;
       return data;
     },

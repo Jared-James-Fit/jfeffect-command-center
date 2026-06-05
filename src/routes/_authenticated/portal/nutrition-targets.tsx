@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useAuth } from "@/lib/auth";
+import { usePortalUserId } from "@/lib/client-impersonation";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
@@ -11,12 +11,12 @@ import { useEffect, useState } from "react";
 export const Route = createFileRoute("/_authenticated/portal/nutrition-targets")({ component: NutritionTargets });
 
 function NutritionTargets() {
-  const { user } = useAuth();
+  const portalUserId = usePortalUserId();
 
   const { data: client } = useQuery({
-    queryKey: ["my-client", user?.id],
-    enabled: !!user,
-    queryFn: async () => (await supabase.from("clients").select("id, full_name").eq("user_id", user!.id).maybeSingle()).data,
+    queryKey: ["my-client", portalUserId],
+    enabled: !!portalUserId,
+    queryFn: async () => (await supabase.from("clients").select("id, full_name").eq("user_id", portalUserId!).maybeSingle()).data,
   });
 
   const { data: targets = [] } = useQuery({

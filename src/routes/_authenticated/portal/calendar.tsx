@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useAuth } from "@/lib/auth";
+import { usePortalUserId } from "@/lib/client-impersonation";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
@@ -12,11 +12,11 @@ import { statusTone, fmtTimeRange } from "@/lib/pt-sessions";
 export const Route = createFileRoute("/_authenticated/portal/calendar")({ component: CalendarPage });
 
 function CalendarPage() {
-  const { user } = useAuth();
+  const portalUserId = usePortalUserId();
   const { data: client } = useQuery({
-    queryKey: ["my-client", user?.id],
-    enabled: !!user,
-    queryFn: async () => (await supabase.from("clients").select("*").eq("user_id", user!.id).maybeSingle()).data,
+    queryKey: ["my-client", portalUserId],
+    enabled: !!portalUserId,
+    queryFn: async () => (await supabase.from("clients").select("*").eq("user_id", portalUserId!).maybeSingle()).data,
   });
 
   const { data: sessions = [] } = useQuery({
