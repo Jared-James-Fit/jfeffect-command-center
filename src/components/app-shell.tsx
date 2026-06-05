@@ -13,14 +13,43 @@ export interface NavItem {
   group?: string;
 }
 
+function groupNavItems(items: NavItem[]) {
+  const hasGroups = items.some((i) => i.group);
+  if (!hasGroups) return [{ label: undefined as string | undefined, items }];
+  const map = new Map<string, NavItem[]>();
+  for (const item of items) {
+    const key = item.group || "Other";
+    const list = map.get(key) || [];
+    list.push(item);
+    map.set(key, list);
+  }
+  const order = [
+    "Command Center",
+    "Coaching",
+    "Scheduling",
+    "Sales & Payments",
+    "Agreements & Documents",
+    "Business Tools",
+    "Settings",
+  ];
+  const result: { label: string | undefined; items: NavItem[] }[] = [];
+  for (const key of order) {
+    if (map.has(key)) {
+      result.push({ label: key, items: map.get(key)! });
+      map.delete(key);
+    }
+  }
+  for (const [key, list] of map) {
+    result.push({ label: key, items: list });
+  }
+  return result;
+}
+
 export function AppShell({ items, title, children }: { items: NavItem[]; title: string; children: ReactNode }) {
   const { signOut, user } = useAuth();
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (r) => r.location.pathname });
 
-  // Pick the single best-matching nav item: longest `to` that equals or is a
-  // path-prefix of the current pathname. Prevents parents like `/admin` from
-  // staying active on `/admin/training-phases`.
   const activeTo = items.reduce<string | null>((best, item) => {
     const matches =
       pathname === item.to || pathname.startsWith(item.to + "/");
@@ -34,6 +63,8 @@ export function AppShell({ items, title, children }: { items: NavItem[]; title: 
     navigate({ to: "/auth", replace: true });
   };
 
+  const grouped = groupNavItems(items);
+
   return (
     <div className="flex min-h-screen w-full bg-background text-foreground">
       <aside className="hidden w-64 shrink-0 flex-col border-r border-sidebar-border bg-sidebar md:flex">
@@ -45,28 +76,39 @@ export function AppShell({ items, title, children }: { items: NavItem[]; title: 
           </div>
         </div>
         <nav className="flex-1 overflow-y-auto p-3">
-          <ul className="space-y-0.5">
-            {items.map((item) => {
-              const active = item.to === activeTo;
-              const Icon = item.icon;
-              return (
-                <li key={item.to}>
-                  <Link
-                    to={item.to}
-                    className={cn(
-                      "flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
-                      active
-                        ? "bg-gradient-primary text-primary-foreground font-semibold shadow-glow"
-                        : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                    )}
-                  >
-                    <Icon className="h-4 w-4" />
-                    <span>{item.label}</span>
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
+          <div className="space-y-4">
+            {grouped.map((group) => (
+              <div key={group.label ?? "default"}>
+                {group.label && (
+                  <div className="px-3 pb-1.5 pt-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    {group.label}
+                  </div>
+                )}
+                <ul className="space-y-0.5">
+                  {group.items.map((item) => {
+                    const active = item.to === activeTo;
+                    const Icon = item.icon;
+                    return (
+                      <li key={item.to}>
+                        <Link
+                          to={item.to}
+                          className={cn(
+                            "flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
+                            active
+                              ? "bg-gradient-primary text-primary-foreground font-semibold shadow-glow"
+                              : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                          )}
+                        >
+                          <Icon className="h-4 w-4 shrink-0" />
+                          <span>{item.label}</span>
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            ))}
+          </div>
         </nav>
         <div className="border-t border-sidebar-border p-3">
           <div className="mb-2 px-2 text-xs text-muted-foreground truncate">{user?.email}</div>
