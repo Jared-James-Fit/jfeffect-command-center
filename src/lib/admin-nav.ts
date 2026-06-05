@@ -1,5 +1,5 @@
 import {
-  LayoutDashboard, Users, CreditCard,
+  LayoutDashboard, Users, CreditCard, DollarSign,
   Package, FileText, Dumbbell, FolderOpen, Calendar, Layers,
   Settings, Briefcase, Apple, ClipboardCheck, UserCog, MessageCircle, Video,
   UserCheck, FileSignature, Film,
@@ -19,6 +19,7 @@ export const adminNav: NavItem[] = [
   { to: "/admin/calendar", label: "Calendar", icon: Calendar, group: "Scheduling" },
   { to: "/admin/offers", label: "Offers & Products", icon: Package, group: "Sales & Payments" },
   { to: "/admin/payment-links", label: "Stripe Payment Links", icon: CreditCard, group: "Sales & Payments" },
+  { to: "/admin/payments", label: "Payments", icon: DollarSign, group: "Sales & Payments" },
   { to: "/admin/purchases", label: "Purchase Records", icon: ClipboardCheck, group: "Sales & Payments" },
   { to: "/admin/agreements", label: "Agreements", icon: FileSignature, group: "Agreements & Documents" },
   { to: "/admin/forms", label: "Forms", icon: FileEdit, group: "Agreements & Documents" },

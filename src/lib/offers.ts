@@ -74,6 +74,32 @@ export const PAYMENT_RECORD_STATUSES = [
   "Refunded",
 ] as const;
 
+export const PAYMENT_STATUS_DETAILED = [
+  "Draft",
+  "Pending Payment",
+  "Paid",
+  "Partially Paid",
+  "Active Subscription",
+  "Payment Plan Active",
+  "Overdue",
+  "Failed",
+  "Cancelled",
+  "Refunded",
+  "Expired",
+  "Manual Payment Needed",
+  "Error",
+] as const;
+
+export const SERVICE_STATUSES = [
+  "Not Started",
+  "Active",
+  "Ending Soon",
+  "Expired",
+  "Paused",
+  "Cancelled",
+  "Completed",
+] as const;
+
 export const PURCHASE_RECORD_STATUSES = ["Active", "Cancelled", "Completed", "Refunded"] as const;
 
 export const OFFER_TEMPLATES: Array<Partial<OfferLike> & { name: string }> = [
