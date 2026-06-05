@@ -302,7 +302,7 @@ export const createAgreement = createServerFn({ method: "POST" })
       .filter(Boolean).join(", ") || null;
 
     const now = new Date().toISOString();
-    const inPerson = data.signing_method === "In-Person / iPad" || data.signing_method === "Kiosk Mode";
+    
 
     // Real SignNow Invite (API mode) — only attempted for Remote Invite,
     // only when settings show Connected, credentials are present, the template has a
