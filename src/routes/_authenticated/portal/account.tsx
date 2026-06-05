@@ -196,6 +196,16 @@ function AccountPage() {
         </Card>
 
         <Card className="border-border bg-card p-6 md:col-span-3 space-y-4">
+          <div>
+            <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Social Media (optional)</h3>
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Add just your username/handle — no full URLs needed. Leave any field blank to skip.
+            </p>
+          </div>
+          <SocialHandlesEditor values={form} onChange={(k, v) => set(k, v)} />
+        </Card>
+
+        <Card className="border-border bg-card p-6 md:col-span-3 space-y-4">
           <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Change Password</h3>
           <form onSubmit={changePassword} className="grid gap-3 md:grid-cols-3">
             <div>
