@@ -228,6 +228,26 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
           <div><Label>Private admin notes</Label><Textarea rows={3} value={form.admin_notes ?? ""} onChange={(e) => set("admin_notes", e.target.value)} /></div>
         </div>
 
+        <div className="rounded-md border border-border bg-secondary/20 p-4 space-y-2">
+          <div className="flex items-center justify-between">
+            <Label className="text-xs uppercase tracking-widest text-muted-foreground">Nutrition Plan PDF (visible to client)</Label>
+            {form.pdf_url && (
+              <Button size="sm" variant="ghost" className="text-destructive" onClick={removePdf}><X className="mr-1 h-3 w-3" /> Remove</Button>
+            )}
+          </div>
+          {form.pdf_url ? (
+            <div className="flex items-center gap-2 rounded-md border border-border bg-card px-3 py-2 text-sm">
+              <FileText className="h-4 w-4 text-primary" />
+              <span className="font-semibold truncate">{form.pdf_name || "nutrition-plan.pdf"}</span>
+            </div>
+          ) : (
+            <label className="flex cursor-pointer items-center justify-center gap-2 rounded-md border border-dashed border-border bg-card px-3 py-6 text-sm text-muted-foreground hover:bg-secondary/30">
+              <Upload className="h-4 w-4" /> Click to upload PDF
+              <input type="file" accept="application/pdf" className="hidden" onChange={(e) => e.target.files?.[0] && uploadPdf(e.target.files[0])} />
+            </label>
+          )}
+        </div>
+
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
           <Button onClick={save} disabled={saving} className="bg-gradient-primary font-bold uppercase">{saving ? "Saving…" : "Save"}</Button>
