@@ -82,6 +82,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { title: "JF Effect" },
       { name: "description", content: "A modern web app for fitness coaches to manage clients, leads, and business operations." },
       { name: "author", content: "Lovable" },
+      { name: "theme-color", content: "#0F172A" },
+      { name: "apple-mobile-web-app-capable", content: "yes" },
+      { name: "apple-mobile-web-app-title", content: "JF Effect" },
+      { name: "apple-mobile-web-app-status-bar-style", content: "black-translucent" },
       { property: "og:title", content: "JF Effect" },
       { property: "og:description", content: "A modern web app for fitness coaches to manage clients, leads, and business operations." },
       { property: "og:type", content: "website" },
@@ -93,6 +97,9 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/97b92026-bcb7-47e6-b437-76274e9cd66c/id-preview-7cb8a0f5--5f1f340c-5afa-4262-90c8-1f9406568c6c.lovable.app-1780514679340.png" },
     ],
     links: [
+      { rel: "manifest", href: "/manifest.json" },
+      { rel: "apple-touch-icon", sizes: "180x180", href: "/apple-touch-icon.png" },
+      { rel: "icon", type: "image/png", sizes: "192x192", href: "/icon-192.png" },
       {
         rel: "stylesheet",
         href: appCss,
