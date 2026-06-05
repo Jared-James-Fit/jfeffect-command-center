@@ -371,6 +371,7 @@ function ClientDetail() {
 
         <div className="space-y-6">
         <TrainingScheduleCard client={form} />
+        <PowerlifterSection form={form} set={set} />
         <Card className="border-border bg-card p-6 space-y-3">
           <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Quick Jump</h3>
           <p className="text-xs text-muted-foreground">Open a management area for this client.</p>
