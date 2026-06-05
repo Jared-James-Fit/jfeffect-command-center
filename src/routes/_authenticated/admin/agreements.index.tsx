@@ -12,10 +12,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Plus, Edit2, Archive, ExternalLink, ShieldCheck, AlertTriangle, FileText, Loader2, UserPlus, Smartphone, Copy, Search } from "lucide-react";
+import { Plus, Edit2, Archive, ExternalLink, ShieldCheck, AlertTriangle, FileText, Loader2, UserPlus, Smartphone, Copy, Search, Power, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
-import { createTemplate, updateTemplate, archiveTemplate, createAgreement } from "@/lib/agreements.functions";
+import { createTemplate, updateTemplate, archiveTemplate, setTemplateActive, createAgreement } from "@/lib/agreements.functions";
 import { AGREEMENT_TYPES, type AgreementTemplate, type Agreement, VERIFICATION_BADGE, type SigningMethod } from "@/lib/agreements";
 import { AgreementStatusBadge } from "@/components/agreement-status-badge";
 import { useNavigate } from "@tanstack/react-router";
@@ -31,6 +31,7 @@ function AgreementsAdminPage() {
   const createFn = useServerFn(createTemplate);
   const updateFn = useServerFn(updateTemplate);
   const archiveFn = useServerFn(archiveTemplate);
+  const setActiveFn = useServerFn(setTemplateActive);
 
   const { data: templates = [] } = useQuery({
     queryKey: ["agreement-templates"],
@@ -131,6 +132,8 @@ function AgreementsAdminPage() {
                     <div>Signed: <span className="text-foreground font-medium">{(t as any).times_completed ?? 0}</span></div>
                     <div>Last: <span className="text-foreground font-medium">{(t as any).last_used_at ? new Date((t as any).last_used_at).toLocaleDateString() : "—"}</span></div>
                   </div>
+                  {t.signnow_template_id && <p className="text-[11px] text-muted-foreground">SignNow ID: {t.signnow_template_id}</p>}
+                  {t.version && <p className="text-[11px] text-muted-foreground">Version: {t.version} · Updated {new Date(t.updated_at).toLocaleDateString()}</p>}
                   <div className="flex flex-wrap gap-1.5 pt-1">
                     <Button size="sm" className="flex-1 min-w-[120px]" onClick={() => setActioning({ template: t, mode: "invite" })}>
                       <UserPlus className="h-3 w-3 mr-1" /> Invite to Sign
@@ -152,10 +155,16 @@ function AgreementsAdminPage() {
                       <Edit2 className="h-3 w-3 mr-1" /> Edit
                     </Button>
                     <Button size="sm" variant="ghost" onClick={async () => {
-                      if (!confirm(`${t.is_active ? "Deactivate" : "Archive"} this template?`)) return;
+                      await setActiveFn({ data: { id: t.id, is_active: !t.is_active } });
+                      qc.invalidateQueries({ queryKey: ["agreement-templates"] });
+                      toast.success(t.is_active ? "Template deactivated" : "Template activated");
+                    }}><Power className="h-3 w-3 mr-1" /> {t.is_active ? "Deactivate" : "Activate"}</Button>
+                    <Button size="sm" variant="ghost" onClick={async () => {
+                      if (!confirm(`Delete "${t.name}"? It will be hidden from the templates list. Existing signed agreements stay intact.`)) return;
                       await archiveFn({ data: { id: t.id } });
                       qc.invalidateQueries({ queryKey: ["agreement-templates"] });
-                    }}><Archive className="h-3 w-3 mr-1" /> Deactivate</Button>
+                      toast.success("Template deleted");
+                    }}><Trash2 className="h-3 w-3 mr-1" /> Delete</Button>
                   </div>
                 </Card>
               ))}
