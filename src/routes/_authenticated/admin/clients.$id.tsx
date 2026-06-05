@@ -381,6 +381,11 @@ function ClientDetail() {
 
         <div className="space-y-6">
         <TrainingScheduleCard client={form} />
+        <ClientQuickLinksCard
+          clientId={id}
+          driveFolderLink={form.drive_folder_link}
+          onChangeDriveFolderLink={(v) => set("drive_folder_link", v)}
+        />
         <PowerlifterSection form={form} set={set} />
         <Card className="border-border bg-card p-6 space-y-3">
           <div className="flex items-center justify-between gap-3">
@@ -429,6 +434,13 @@ function ClientDetail() {
         </TabsContent>
 
         <TabsContent value="documents" className="grid gap-6 md:grid-cols-3">
+          <div className="md:col-span-3">
+            <ClientQuickLinksCard
+              clientId={id}
+              driveFolderLink={form.drive_folder_link}
+              onChangeDriveFolderLink={(v) => set("drive_folder_link", v)}
+            />
+          </div>
           <Card className="border-border bg-card p-6 md:col-span-3 space-y-4">
             <div className="flex items-center justify-between gap-3 flex-wrap">
               <div>
