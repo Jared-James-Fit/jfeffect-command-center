@@ -165,7 +165,10 @@ function AgreementsAdminPage() {
               {templates.map((t) => {
                 const hasLink = !!t.signnow_url;
                 const hasId = !!t.signnow_template_id;
-                const ready = hasLink;
+                const isApiTemplate = hasId;
+                // API templates only need a SignNow ID + connected API to invite.
+                // Manual templates need a signing URL.
+                const ready = isApiTemplate ? apiConnected : hasLink;
                 return (
                 <Card key={t.id} className="p-4 space-y-2 bg-secondary/30 border-border">
                   <div className="flex items-start justify-between gap-2">
@@ -178,19 +181,24 @@ function AgreementsAdminPage() {
                     </Badge>
                   </div>
                   <div className="flex flex-wrap gap-1">
-                    <Badge variant="outline" className="border-muted text-[10px]">Manual</Badge>
+                    {isApiTemplate ? (
+                      <Badge variant="outline" className="border-primary/40 text-primary text-[10px]">SignNow API</Badge>
+                    ) : (
+                      <Badge variant="outline" className="border-muted text-[10px]">Manual</Badge>
+                    )}
                     {ready ? (
                       <Badge variant="outline" className="border-emerald-500/40 text-emerald-500 text-[10px]">Ready</Badge>
+                    ) : isApiTemplate ? (
+                      <Badge variant="outline" className="border-amber-500/40 text-amber-500 text-[10px]">API Not Connected</Badge>
                     ) : (
-                      <Badge variant="outline" className="border-amber-500/40 text-amber-500 text-[10px]">Missing URL</Badge>
-                    )}
-                    {!hasId && (
                       <Badge variant="outline" className="border-amber-500/40 text-amber-500 text-[10px]">Missing ID</Badge>
                     )}
                   </div>
                   {!ready && (
                     <p className="text-[11px] text-amber-600 dark:text-amber-400">
-                      This template is missing SignNow connection details. Add a SignNow template URL/ID before signing.
+                      {isApiTemplate
+                        ? "SignNow API is not connected. Connect it in Settings to send invites with this template."
+                        : "This template has no SignNow template ID or signing URL. Add one (or sync from SignNow) before sending."}
                     </p>
                   )}
                   {t.signnow_template_id && <p className="text-[11px] text-muted-foreground">SignNow ID: {t.signnow_template_id}</p>}
@@ -360,6 +368,7 @@ function TemplateActionDialog({
 
   const selectedClient = clients.find((c) => c.id === clientId);
   const tpl = action?.template;
+  const isApiTemplate = !!tpl?.signnow_template_id;
   const link = linkOverride.trim() || tpl?.signnow_url || null;
 
   async function go() {
@@ -452,8 +461,11 @@ function TemplateActionDialog({
           <div>
             <Label className="text-xs">Signing link override (optional)</Label>
             <Input value={linkOverride} onChange={(e) => setLinkOverride(e.target.value)} placeholder={tpl?.signnow_url ?? "https://app.signnow.com/..."} />
-            {!tpl?.signnow_url && !linkOverride && (
+            {!isApiTemplate && !tpl?.signnow_url && !linkOverride && (
               <p className="text-[11px] text-amber-500 mt-1">This template has no SignNow URL saved. Paste one or edit the template.</p>
+            )}
+            {isApiTemplate && (
+              <p className="text-[11px] text-muted-foreground mt-1">Optional. The SignNow API will generate and email the signing link using template ID <code>{tpl?.signnow_template_id}</code>.</p>
             )}
           </div>
 
