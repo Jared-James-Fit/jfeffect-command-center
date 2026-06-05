@@ -11,7 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Plus, Video, ChevronRight, MoreVertical, Pencil, Link2, MessageSquare, Trash2 } from "lucide-react";
+import { Plus, Video, ChevronRight, MoreVertical, Pencil, Link2, MessageSquare, Trash2, Settings2 } from "lucide-react";
 import { formatDistanceToNow, parseISO } from "date-fns";
 import { toast } from "sonner";
 import { listLiftVideos, markClientViewed, statusTone, deleteLiftVideos, type LiftVideo } from "@/lib/lift-videos";
@@ -30,6 +30,7 @@ function ClientLiftVideos() {
   const [detailKey, setDetailKey] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [deleting, setDeleting] = useState(false);
+  const [manageMode, setManageMode] = useState(false);
 
   const { data: client } = useQuery({
     queryKey: ["my-client-id", portalUserId],
@@ -137,18 +138,20 @@ function ClientLiftVideos() {
 
   return (
     <>
-      <PageHeader title="Lift Videos" subtitle="Upload your lifts for coach review." />
+      <PageHeader title="Lift Videos" subtitle="Send lifts for coach review." />
       <div className="space-y-4 p-6 pb-32 md:p-8 md:pb-32">
-        <Card className="border-border bg-card p-5 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <Video className="h-6 w-6 text-primary" />
-            <div>
-              <div className="font-bold">Submit a lift video</div>
-              <div className="text-xs text-muted-foreground">Attach a video link or upload a file from your phone.</div>
+        <Card className="border-border bg-card p-4 flex items-center justify-between gap-3 rounded-2xl">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
+              <Video className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+              <div className="font-semibold text-sm">Send a Lift Video</div>
+              <div className="text-xs text-muted-foreground truncate">Upload or record a video for Coach Jared.</div>
             </div>
           </div>
-          <Button className="bg-gradient-primary font-bold uppercase" onClick={() => { setEditing(null); setOpen(true); }} disabled={!client?.id}>
-            <Plus className="mr-1 h-4 w-4" /> Upload Lift Video
+          <Button size="sm" className="bg-gradient-primary font-semibold shrink-0" onClick={() => { setEditing(null); setOpen(true); }} disabled={!client?.id}>
+            <Plus className="mr-1 h-4 w-4" /> Upload
           </Button>
         </Card>
 
@@ -165,38 +168,54 @@ function ClientLiftVideos() {
         )}
 
         {groups.length > 0 && (
-          <Card className="border-border bg-card p-3 flex items-center gap-3">
-            <Checkbox
-              checked={allSelected ? true : someSelected ? "indeterminate" : false}
-              onCheckedChange={toggleAll}
-              aria-label="Select all"
-            />
-            <div className="text-sm">Select all</div>
-            <div className="ml-auto flex items-center gap-2">
-              <div className="text-xs text-muted-foreground">{selected.size} selected</div>
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button size="sm" variant="destructive" disabled={selected.size === 0 || deleting}>
-                    <Trash2 className="mr-1 h-4 w-4" /> Delete
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Delete {selected.size} submission{selected.size === 1 ? "" : "s"}?</AlertDialogTitle>
-                    <AlertDialogDescription>This removes them from your app. Videos in Google Drive are not affected.</AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction onClick={doDelete}>Delete</AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
+          <div className="flex items-center justify-between px-1">
+            <div className="text-xs text-muted-foreground">
+              {groups.length} submission{groups.length === 1 ? "" : "s"}
             </div>
-          </Card>
-        )}
-
-        {groups.length > 0 && (
-          <div className="text-xs text-muted-foreground px-1">Lift videos auto-clear from your app after 14 days. Coach Jared keeps the originals.</div>
+            {!manageMode ? (
+              <button
+                type="button"
+                className="text-xs font-medium text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
+                onClick={() => setManageMode(true)}
+              >
+                <Settings2 className="h-3 w-3" /> Manage
+              </button>
+            ) : (
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  className="text-xs text-muted-foreground hover:text-foreground"
+                  onClick={toggleAll}
+                >
+                  {allSelected ? "Deselect all" : "Select all"}
+                </button>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button size="sm" variant="destructive" className="h-7" disabled={selected.size === 0 || deleting}>
+                      <Trash2 className="mr-1 h-3.5 w-3.5" /> Delete{selected.size > 0 ? ` (${selected.size})` : ""}
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Delete {selected.size} submission{selected.size === 1 ? "" : "s"}?</AlertDialogTitle>
+                      <AlertDialogDescription>This removes them from your app. Videos in Google Drive are not affected.</AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction onClick={doDelete}>Delete</AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+                <button
+                  type="button"
+                  className="text-xs text-muted-foreground hover:text-foreground"
+                  onClick={() => { setManageMode(false); setSelected(new Set()); }}
+                >
+                  Done
+                </button>
+              </div>
+            )}
+          </div>
         )}
 
         <div className="space-y-2">
@@ -204,24 +223,25 @@ function ClientLiftVideos() {
             const v = g.head;
             const count = g.clips.length;
             const fb = feedbackLabel(g.clips);
-            const noteSnippet = (v.batch_note ?? v.client_notes ?? "").trim();
             const reviewed = fb !== "Awaiting Review" && fb !== "Watched";
             const canEdit = count === 1 && !v.reviewed_at;
             return (
               <Card
                 key={g.key}
-                className="cursor-pointer border-border bg-card p-3 transition hover:border-primary/50"
+                className="cursor-pointer border-border bg-card p-3 rounded-2xl transition hover:border-primary/50 active:scale-[0.99]"
                 onClick={() => setDetailKey(g.key)}
               >
                 <div className="flex items-center gap-3">
-                  <div onClick={(e) => e.stopPropagation()} className="shrink-0">
-                    <Checkbox
-                      checked={selected.has(g.key)}
-                      onCheckedChange={() => toggleOne(g.key)}
-                      aria-label="Select submission"
-                    />
-                  </div>
-                  <div className="relative h-14 w-20 shrink-0 overflow-hidden rounded-md bg-secondary">
+                  {manageMode && (
+                    <div onClick={(e) => e.stopPropagation()} className="shrink-0">
+                      <Checkbox
+                        checked={selected.has(g.key)}
+                        onCheckedChange={() => toggleOne(g.key)}
+                        aria-label="Select submission"
+                      />
+                    </div>
+                  )}
+                  <div className="relative h-14 w-20 shrink-0 overflow-hidden rounded-xl bg-secondary">
                     {v.thumbnail_url ? (
                       <img src={v.thumbnail_url} alt="" className="h-full w-full object-cover" />
                     ) : (
@@ -235,25 +255,24 @@ function ClientLiftVideos() {
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <div className="truncate font-semibold">{v.exercise || "Lift video"}</div>
-                      {v.is_urgent && <Badge variant="outline" className="border-rose-500/40 bg-rose-500/10 text-rose-300">Urgent</Badge>}
+                      <div className="truncate text-sm font-semibold">
+                        {v.exercise || (count > 1 ? `Lift videos · ${count}` : "Lift video")}
+                      </div>
+                      {v.is_urgent && <Badge variant="outline" className="border-rose-500/40 bg-rose-500/10 text-rose-400 text-[10px] px-1.5 py-0">Urgent</Badge>}
                     </div>
                     <div className="truncate text-xs text-muted-foreground">
-                      Uploaded {formatDistanceToNow(parseISO(v.created_at), { addSuffix: true })}
-                      {count > 1 ? ` · ${count} clips` : ""}
+                      {formatDistanceToNow(parseISO(v.created_at), { addSuffix: true })}
                     </div>
-                    {noteSnippet && (
-                      <div className="mt-1 line-clamp-1 text-xs text-muted-foreground/90">{noteSnippet}</div>
-                    )}
-                    <div className="mt-1.5 flex items-center gap-2">
-                      <Badge variant="outline" className={statusTone(reviewed ? "Reviewed" : "Awaiting Review")}>
+                    <div className="mt-1.5">
+                      <Badge variant="outline" className={`${statusTone(reviewed ? "Reviewed" : "Awaiting Review")} text-[10px] px-1.5 py-0`}>
                         {fb}
                       </Badge>
                     </div>
                   </div>
-                  <div className="flex items-center gap-1">
-                    <Button size="sm" variant="ghost" className="h-8" onClick={(e) => { e.stopPropagation(); setDetailKey(g.key); }}>
-                      {reviewed ? (<><MessageSquare className="mr-1 h-3.5 w-3.5" /> View Feedback</>) : (<>View <ChevronRight className="ml-0.5 h-3.5 w-3.5" /></>)}
+                  <div className="flex items-center gap-1 shrink-0">
+                    <Button size="sm" variant="ghost" className="h-8 px-2 text-xs" onClick={(e) => { e.stopPropagation(); setDetailKey(g.key); }}>
+                      {reviewed ? "Feedback" : "View"}
+                      <ChevronRight className="ml-0.5 h-3.5 w-3.5" />
                     </Button>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
@@ -275,6 +294,11 @@ function ClientLiftVideos() {
                             }}
                           >
                             <Link2 className="mr-2 h-4 w-4" /> Copy link
+                          </DropdownMenuItem>
+                        )}
+                        {!manageMode && (
+                          <DropdownMenuItem onClick={() => { setManageMode(true); setSelected(new Set([g.key])); }} className="text-destructive focus:text-destructive">
+                            <Trash2 className="mr-2 h-4 w-4" /> Delete
                           </DropdownMenuItem>
                         )}
                       </DropdownMenuContent>
