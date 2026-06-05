@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
-import { Plus, ExternalLink, Copy, ShieldCheck, AlertTriangle, FileText, Send, BellRing, Upload, Trash2, Loader2, UserPlus, Smartphone, RefreshCcw, Download, CheckCircle2, Flag, StickyNote } from "lucide-react";
+import { Plus, ExternalLink, Copy, ShieldCheck, AlertTriangle, FileText, Send, BellRing, Upload, Trash2, Loader2, UserPlus, RefreshCcw, Download, CheckCircle2, Flag, StickyNote } from "lucide-react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import { AgreementStatusBadge } from "@/components/agreement-status-badge";
@@ -22,7 +22,7 @@ import {
 
 export function AgreementsPanel({ clientId, clientName }: { clientId: string; clientName?: string }) {
   const qc = useQueryClient();
-  const [sendMode, setSendMode] = useState<null | "invite" | "in-person">(null);
+  const [sendMode, setSendMode] = useState<null | "invite">(null);
   const [openUpload, setOpenUpload] = useState<Agreement | null>(null);
   const [openVerify, setOpenVerify] = useState<Agreement | null>(null);
 
@@ -65,7 +65,6 @@ export function AgreementsPanel({ clientId, clientName }: { clientId: string; cl
         </div>
         <div className="flex gap-2 flex-wrap">
           <Button size="sm" onClick={() => setSendMode("invite")}><UserPlus className="h-3.5 w-3.5 mr-1" /> Invite to Sign</Button>
-          <Button size="sm" variant="secondary" onClick={() => setSendMode("in-person")}><Smartphone className="h-3.5 w-3.5 mr-1" /> Sign Template</Button>
           <Button size="sm" variant="outline" onClick={() => setOpenUpload({} as any)}>
             <Upload className="h-3.5 w-3.5 mr-1" /> Upload signed copy
           </Button>
