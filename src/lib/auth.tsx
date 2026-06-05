@@ -3,6 +3,7 @@ import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { useRouter } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
+import { markClientSignedIn } from "@/lib/activity";
 
 export type AppRole = "admin" | "coach" | "client";
 
@@ -31,10 +32,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, sess) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((event, sess) => {
       setSession(sess);
       setUser(sess?.user ?? null);
       if (!sess) setRole(null);
+      // Fire-and-forget — RPC self-scopes to auth.uid() and ignores non-client users.
+      if (sess && (event === "SIGNED_IN" || event === "TOKEN_REFRESHED" || event === "INITIAL_SESSION")) {
+        void markClientSignedIn();
+      }
       router.invalidate();
       queryClient.invalidateQueries();
     });
@@ -42,6 +47,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(data.session);
       setUser(data.session?.user ?? null);
       setLoading(false);
+      if (data.session) void markClientSignedIn();
     });
     return () => sub.subscription.unsubscribe();
   }, [router, queryClient]);
