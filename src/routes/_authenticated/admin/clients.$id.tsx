@@ -417,6 +417,7 @@ function ClientDetail() {
           lastActiveAt={form.last_active_at}
           lastActiveRoute={form.last_active_route}
           complianceStatus={form.compliance_status}
+          homeScreenStatus={form.home_screen_setup_status}
         />
         <TrainingScheduleCard client={form} />
         <ClientQuickLinksCard
