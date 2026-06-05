@@ -44,6 +44,23 @@ export function AgreementsPanel({ clientId, clientName }: { clientId: string; cl
     },
   });
 
+  // Sort: signed/verified rows first (newest signed_at first), then in-flight
+  // (by sent_at desc), then terminal/legacy rows last. Keeps real signed
+  // documents prominent above old unsigned/test rows.
+  const SIGNED_STATUSES = new Set(["Signed", "Completed", "Verified"]);
+  const TERMINAL_STATUSES = new Set(["Cancelled", "Declined", "Expired", "Error"]);
+  const sortedAgreements = [...agreements].sort((a, b) => {
+    const bucket = (x: Agreement) =>
+      SIGNED_STATUSES.has(x.status as string) ? 0
+      : TERMINAL_STATUSES.has(x.status as string) ? 2
+      : 1;
+    const ba = bucket(a), bb = bucket(b);
+    if (ba !== bb) return ba - bb;
+    const ta = (a.signed_at ?? a.completed_at ?? a.sent_at ?? a.updated_at ?? a.created_at ?? "") as string;
+    const tb = (b.signed_at ?? b.completed_at ?? b.sent_at ?? b.updated_at ?? b.created_at ?? "") as string;
+    return tb.localeCompare(ta);
+  });
+
   const { data: templates = [] } = useQuery({
     queryKey: ["agreement-templates-active"],
     queryFn: async () => {
@@ -70,11 +87,11 @@ export function AgreementsPanel({ clientId, clientName }: { clientId: string; cl
         </div>
       </div>
 
-      {agreements.length === 0 ? (
+      {sortedAgreements.length === 0 ? (
         <p className="text-sm text-muted-foreground py-6 text-center">No agreements yet. Send one through SignNow or upload an existing signed copy.</p>
       ) : (
         <ul className="space-y-2">
-          {agreements.map((a) => (
+          {sortedAgreements.map((a) => (
             <AgreementRow
               key={a.id}
               ag={a}
