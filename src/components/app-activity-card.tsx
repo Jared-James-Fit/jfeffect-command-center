@@ -144,7 +144,7 @@ function prettyRoute(path: string): string {
     "/portal/exercises": "Exercises",
     "/portal/resources": "Resources",
   };
-  return map[path] ?? path.replace(/^\/portal\/?/, "").replace(/-/g, " ") || "Home";
+  return map[path] ?? (path.replace(/^\/portal\/?/, "").replace(/-/g, " ") || "Home");
 }
 
 function prettyAction(action: string): string {
