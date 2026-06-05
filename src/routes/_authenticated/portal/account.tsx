@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { usePortalUserId } from "@/lib/client-impersonation";
+import { useAuth } from "@/lib/auth";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -25,6 +26,7 @@ const PROFILE_FIELDS = ["first_name", "last_name", "phone", "address", "city", "
 
 function AccountPage() {
   const portalUserId = usePortalUserId();
+  const { user } = useAuth();
   const qc = useQueryClient();
   const [form, setForm] = useState<any>(null);
   const [pwd, setPwd] = useState({ current: "", next: "", confirm: "", showCurrent: false, showNext: false });
