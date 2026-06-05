@@ -47,13 +47,22 @@ function PurchaseDetail() {
   const save = async () => {
     const { id: _i, created_at, updated_at, clients, ...patch } = form;
     if (patch.payment_status === "Paid" && !patch.paid_at) patch.paid_at = new Date().toISOString();
-    if (patch.agreement_block_override && !(patch.agreement_block_override_reason ?? "").trim()) {
-      return toast.error("Override requires a written reason for the audit log.");
+    const wasOverride = !!data?.agreement_block_override;
+    const willOverride = !!patch.agreement_block_override;
+    if (willOverride !== wasOverride) {
+      const reason = (patch.agreement_block_override_reason ?? "").trim();
+      if (willOverride && reason.length < 5) {
+        return toast.error("Override requires a written reason (at least 5 characters) for the audit log.");
+      }
     }
     const { error } = await supabase.from("purchase_records").update(patch).eq("id", id);
     if (error) {
       const msg = /Agreement required/i.test(error.message)
-        ? "Blocked: this purchase needs a verified signed agreement before service can start. Verify the agreement or apply an override."
+        ? "Blocked: this purchase needs a signed, verified agreement (no mismatch, not expired/cancelled, no manual action pending) before service can start. Verify the agreement or apply an override with a reason."
+        : /written reason/i.test(error.message)
+        ? "Override requires a written reason (at least 5 characters)."
+        : /admin or assigned coach|insufficient_privilege/i.test(error.message)
+        ? "Only an admin or assigned coach can change the agreement override."
         : error.message;
       return toast.error(msg);
     }
