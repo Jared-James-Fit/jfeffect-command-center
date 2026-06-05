@@ -22,6 +22,7 @@ import { PtSessionsPanel } from "@/components/pt-sessions-panel";
 import { NutritionTargetsPanel } from "@/components/nutrition-targets-panel";
 import { CardioTargetsPanel } from "@/components/cardio-targets-panel";
 import { LiftVideosPanel } from "@/components/lift-videos-panel";
+import { ProgressMetricsPanel } from "@/components/progress-metrics-panel";
 import { Switch } from "@/components/ui/switch";
 import { COMMON_TIMEZONES } from "@/lib/pt-sessions";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -63,7 +64,7 @@ function AssignedCoachSelect({ value, onChange }: { value: string | null; onChan
   );
 }
 
-const TAB_VALUES = ["summary", "training", "nutrition", "cardio", "messages", "lift-videos", "documents", "sessions", "purchases", "agreements", "notes", "info", "account"] as const;
+const TAB_VALUES = ["summary", "training", "nutrition", "cardio", "metrics", "messages", "lift-videos", "documents", "sessions", "purchases", "agreements", "notes", "info", "account"] as const;
 type TabValue = typeof TAB_VALUES[number];
 
 export const Route = createFileRoute("/_authenticated/admin/clients/$id")({
