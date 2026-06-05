@@ -151,6 +151,12 @@ export async function deleteLiftVideo(id: string) {
   if (error) throw error;
 }
 
+export async function deleteLiftVideos(ids: string[]) {
+  if (!ids.length) return;
+  const { error } = await db.from("lift_videos").delete().in("id", ids);
+  if (error) throw error;
+}
+
 export async function listComments(videoId: string, opts: { includeInternal?: boolean } = {}) {
   let q = db.from("lift_video_comments").select("*").eq("video_id", videoId).order("created_at", { ascending: true });
   if (!opts.includeInternal) q = q.eq("is_internal_note", false);
