@@ -12,6 +12,7 @@ import { Trash2, Upload, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { CLIENT_MEDIA_TYPES, MEDIA_TYPES, type MediaType, uploadToDrive } from "@/lib/media";
 import { initMediaUpload, finalizeMediaUpload, createSubmission } from "@/lib/drive.functions";
+import { friendlyDriveError } from "@/lib/drive-errors";
 
 type Mode = "batch" | "per-clip";
 
@@ -86,7 +87,7 @@ export function MediaUploadDialog({
       onUploaded?.();
     } catch (err: any) {
       console.error(err);
-      toast.error(err?.message || "Upload failed");
+      toast.error(friendlyDriveError(err, role));
     } finally {
       setUploading(false);
     }
