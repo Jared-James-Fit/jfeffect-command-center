@@ -261,6 +261,7 @@ function AdminDashboard() {
         ))}
       />
       <div className="space-y-6 p-6 md:p-8">
+        <DriveSetupBanner />
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard label="Active Clients" value={active} icon={Users} tone="primary" />
           <StatCard label="New This Period" value={newClients} icon={UserPlus} />
