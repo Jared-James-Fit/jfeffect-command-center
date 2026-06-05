@@ -18,7 +18,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { createTemplate, updateTemplate, archiveTemplate, createAgreement } from "@/lib/agreements.functions";
 import { AGREEMENT_TYPES, type AgreementTemplate, type Agreement, VERIFICATION_BADGE, type SigningMethod } from "@/lib/agreements";
 import { AgreementStatusBadge } from "@/components/agreement-status-badge";
-import { Link as RouterLink, useNavigate } from "@tanstack/react-router";
+import { useNavigate } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/_authenticated/admin/agreements/")({
   component: AgreementsAdminPage,
