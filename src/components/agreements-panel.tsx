@@ -10,11 +10,11 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
-import { Plus, ExternalLink, Copy, ShieldCheck, AlertTriangle, FileText, Send, BellRing, Upload, Trash2, Loader2 } from "lucide-react";
+import { Plus, ExternalLink, Copy, ShieldCheck, AlertTriangle, FileText, Send, BellRing, Upload, Trash2, Loader2, UserPlus, Smartphone } from "lucide-react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import { AgreementStatusBadge } from "@/components/agreement-status-badge";
-import { fileLabel, AGREEMENT_TYPES, VERIFICATION_BADGE, type Agreement, type AgreementTemplate } from "@/lib/agreements";
+import { fileLabel, AGREEMENT_TYPES, VERIFICATION_BADGE, type Agreement, type AgreementTemplate, type SigningMethod } from "@/lib/agreements";
 import {
   createAgreement, updateAgreement, markAgreementSigned, verifyAgreement,
   sendAgreementReminder, cancelAgreement,
@@ -22,7 +22,7 @@ import {
 
 export function AgreementsPanel({ clientId, clientName }: { clientId: string; clientName?: string }) {
   const qc = useQueryClient();
-  const [openSend, setOpenSend] = useState(false);
+  const [sendMode, setSendMode] = useState<null | "invite" | "in-person">(null);
   const [openUpload, setOpenUpload] = useState<Agreement | null>(null);
   const [openVerify, setOpenVerify] = useState<Agreement | null>(null);
 
@@ -61,8 +61,9 @@ export function AgreementsPanel({ clientId, clientName }: { clientId: string; cl
           <ShieldCheck className="h-4 w-4 text-primary" />
           <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Agreements (SignNow)</h3>
         </div>
-        <div className="flex gap-2">
-          <Button size="sm" onClick={() => setOpenSend(true)}><Plus className="h-3.5 w-3.5 mr-1" /> Send agreement</Button>
+        <div className="flex gap-2 flex-wrap">
+          <Button size="sm" onClick={() => setSendMode("invite")}><UserPlus className="h-3.5 w-3.5 mr-1" /> Invite to Sign</Button>
+          <Button size="sm" variant="secondary" onClick={() => setSendMode("in-person")}><Smartphone className="h-3.5 w-3.5 mr-1" /> Sign Template</Button>
           <Button size="sm" variant="outline" onClick={() => setOpenUpload({} as any)}>
             <Upload className="h-3.5 w-3.5 mr-1" /> Upload signed copy
           </Button>
@@ -92,13 +93,25 @@ export function AgreementsPanel({ clientId, clientName }: { clientId: string; cl
 
       {/* Send dialog */}
       <SendAgreementDialog
-        open={openSend}
-        onOpenChange={setOpenSend}
+        open={sendMode !== null}
+        mode={sendMode ?? "invite"}
+        onOpenChange={(o) => !o && setSendMode(null)}
+        clientName={clientName}
         templates={templates}
         onSubmit={async (payload) => {
-          await createFn({ data: { client_id: clientId, ...payload } as any });
-          toast.success(payload.send_now ? "Agreement sent" : "Agreement created");
-          invalidate(); setOpenSend(false);
+          const ag = await createFn({ data: { client_id: clientId, ...payload } as any });
+          if (payload.signing_method === "Remote Invite") {
+            toast.success("Invite logged. Open or copy the signing link to send it to the client.");
+          } else if (payload.signing_method === "In-Person / iPad" || payload.signing_method === "Kiosk Mode") {
+            if (payload.signnow_signing_link) {
+              window.open(payload.signnow_signing_link, "_blank", "noopener,noreferrer");
+            }
+            toast.success("Launched signing session. Mark signed when finished.");
+            setOpenUpload(ag as any);
+          } else {
+            toast.success("Agreement created");
+          }
+          invalidate(); setSendMode(null);
         }}
       />
 
