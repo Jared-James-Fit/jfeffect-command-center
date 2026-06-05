@@ -9,20 +9,18 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Eye, EyeOff, Save, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
 import { ProfilePictureCapture } from "@/components/profile-picture-capture";
-import { COMMON_TIMEZONES } from "@/lib/pt-sessions";
 import { SocialHandlesEditor } from "@/components/social-handles-editor";
 import { SOCIAL_FIELDS } from "@/lib/social-handles";
+import { BasicInfoForm } from "@/components/basic-info-form";
 
 export const Route = createFileRoute("/_authenticated/portal/account")({
   component: AccountPage,
 });
 
-const COUNTRIES = ["Canada", "United States", "United Kingdom", "Australia", "New Zealand", "Other"];
-const PROFILE_FIELDS = ["first_name", "last_name", "phone", "address", "city", "province", "postal_code", "country", "timezone", ...SOCIAL_FIELDS] as const;
+const PROFILE_FIELDS = ["first_name", "last_name", "preferred_name", "phone", "address", "city", "province", "postal_code", "country", "timezone", "date_of_birth", "height_cm", "preferred_height_unit", "emergency_contact_name", "emergency_contact_phone", ...SOCIAL_FIELDS] as const;
 
 function AccountPage() {
   const portalUserId = usePortalUserId();
@@ -63,7 +61,13 @@ function AccountPage() {
       first_name: form.first_name?.trim() || null,
       last_name: form.last_name?.trim() || null,
       full_name: [form.first_name, form.last_name].filter(Boolean).join(" ").trim() || form.full_name,
+      preferred_name: form.preferred_name?.trim() || null,
       phone: form.phone || null,
+      date_of_birth: form.date_of_birth || null,
+      height_cm: form.height_cm ?? null,
+      preferred_height_unit: form.preferred_height_unit ?? "imperial",
+      emergency_contact_name: form.emergency_contact_name || null,
+      emergency_contact_phone: form.emergency_contact_phone || null,
       address: form.address || null,
       city: form.city || null,
       province: form.province || null,
@@ -151,35 +155,12 @@ function AccountPage() {
         )}
 
         <Card className="border-border bg-card p-6 md:col-span-2 space-y-4">
-          <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Contact Information</h3>
-          <div className="grid gap-3 md:grid-cols-2">
-            <div><Label>First name</Label><Input value={form.first_name ?? ""} onChange={(e) => set("first_name", e.target.value)} /></div>
-            <div><Label>Last name</Label><Input value={form.last_name ?? ""} onChange={(e) => set("last_name", e.target.value)} /></div>
-            <div className="md:col-span-2">
-              <Label>Email</Label>
-              <Input value={form.email ?? user.email ?? ""} disabled className="bg-secondary/40" />
-              <p className="mt-1 text-[11px] text-muted-foreground">To update your email, contact Coach Jared.</p>
-            </div>
-            <div><Label>Phone</Label><Input value={form.phone ?? ""} onChange={(e) => set("phone", e.target.value)} /></div>
-            <div>
-              <Label>Time zone</Label>
-              <Select value={form.timezone ?? "America/Winnipeg"} onValueChange={(v) => set("timezone", v)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>{COMMON_TIMEZONES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
-            <div className="md:col-span-2"><Label>Mailing address</Label><Input value={form.address ?? ""} onChange={(e) => set("address", e.target.value)} /></div>
-            <div><Label>City</Label><Input value={form.city ?? ""} onChange={(e) => set("city", e.target.value)} /></div>
-            <div><Label>Province / State</Label><Input value={form.province ?? ""} onChange={(e) => set("province", e.target.value)} /></div>
-            <div><Label>Postal / ZIP code</Label><Input value={form.postal_code ?? ""} onChange={(e) => set("postal_code", e.target.value)} /></div>
-            <div>
-              <Label>Country</Label>
-              <Select value={form.country ?? ""} onValueChange={(v) => set("country", v)}>
-                <SelectTrigger><SelectValue placeholder="Select…" /></SelectTrigger>
-                <SelectContent>{COUNTRIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
-          </div>
+          <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Basic Information</h3>
+          <BasicInfoForm
+            values={form}
+            onChange={(p) => setForm({ ...form, ...p })}
+            emailReadOnly={form.email ?? user.email ?? ""}
+          />
           <p className="text-[11px] text-muted-foreground">Last updated: {form.info_last_updated_at ? new Date(form.info_last_updated_at).toLocaleString() : "—"} {form.info_last_updated_by ? `by ${form.info_last_updated_by}` : ""}</p>
         </Card>
 

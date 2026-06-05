@@ -23,6 +23,8 @@ import { NutritionTargetsPanel } from "@/components/nutrition-targets-panel";
 import { CardioTargetsPanel } from "@/components/cardio-targets-panel";
 import { LiftVideosPanel } from "@/components/lift-videos-panel";
 import { ProgressMetricsPanel } from "@/components/progress-metrics-panel";
+import { BasicInfoForm } from "@/components/basic-info-form";
+import { calcAge, formatHeight } from "@/lib/basic-info";
 import { Switch } from "@/components/ui/switch";
 import { COMMON_TIMEZONES } from "@/lib/pt-sessions";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -74,8 +76,7 @@ export const Route = createFileRoute("/_authenticated/admin/clients/$id")({
 
 const STATUSES = ["Active", "New Client", "Needs Attention", "Check-In Overdue", "Payment Overdue", "Injured / Modified Plan", "Paused", "Cancelling", "Archived", "High Priority"];
 const PAY_STATUSES = ["Not Sent", "Sent", "Paid", "Failed", "Overdue", "Cancelled", "Refunded"];
-const COUNTRIES = ["Canada", "United States", "United Kingdom", "Australia", "New Zealand", "Other"];
-const ACCOUNT_FIELDS = ["first_name", "last_name", "email", "phone", "address", "city", "province", "postal_code", "country", "timezone"] as const;
+const ACCOUNT_FIELDS = ["first_name", "last_name", "preferred_name", "email", "phone", "date_of_birth", "height_cm", "preferred_height_unit", "address", "city", "province", "postal_code", "country", "timezone", "emergency_contact_name", "emergency_contact_phone"] as const;
 
 function ClientDetail() {
   const { id } = Route.useParams();
@@ -206,8 +207,14 @@ function ClientDetail() {
       first_name: form.first_name ?? null,
       last_name: form.last_name ?? null,
       full_name: [form.first_name, form.last_name].filter(Boolean).join(" ").trim() || form.full_name,
+      preferred_name: form.preferred_name ?? null,
       email: form.email ?? null,
       phone: form.phone ?? null,
+      date_of_birth: form.date_of_birth || null,
+      height_cm: form.height_cm ?? null,
+      preferred_height_unit: form.preferred_height_unit ?? "imperial",
+      emergency_contact_name: form.emergency_contact_name ?? null,
+      emergency_contact_phone: form.emergency_contact_phone ?? null,
       address: form.address ?? null,
       city: form.city ?? null,
       province: form.province ?? null,
@@ -410,6 +417,38 @@ function ClientDetail() {
           onChangeDriveFolderLink={(v) => set("drive_folder_link", v)}
         />
         <PowerlifterSection form={form} set={set} />
+        <Card className="border-border bg-card p-6 space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Basic Information</h3>
+            <Link to="/admin/clients/$id" params={{ id }} search={{ tab: "info" }}>
+              <Button variant="ghost" size="sm" className="h-7 text-xs">Edit</Button>
+            </Link>
+          </div>
+          <dl className="grid grid-cols-2 gap-y-1.5 text-xs">
+            {form.preferred_name && (<><dt className="text-muted-foreground">Preferred name</dt><dd className="font-medium">{form.preferred_name}</dd></>)}
+            <dt className="text-muted-foreground">Date of birth</dt>
+            <dd className="font-medium">{form.date_of_birth ? new Date(form.date_of_birth + "T00:00:00").toLocaleDateString() : "—"}</dd>
+            <dt className="text-muted-foreground">Age</dt>
+            <dd className="font-medium">{calcAge(form.date_of_birth) ?? "—"}</dd>
+            <dt className="text-muted-foreground">Height</dt>
+            <dd className="font-medium">{formatHeight(form.height_cm, (form.preferred_height_unit as any) ?? "imperial")}</dd>
+            <dt className="text-muted-foreground">Time zone</dt>
+            <dd className="font-medium">{form.timezone ?? "—"}</dd>
+            <dt className="text-muted-foreground">Mailing address</dt>
+            <dd className="font-medium truncate">
+              {[form.address, form.city, form.province, form.postal_code, form.country].filter(Boolean).join(", ") || "—"}
+            </dd>
+            {(form.emergency_contact_name || form.emergency_contact_phone) && (
+              <>
+                <dt className="text-muted-foreground">Emergency contact</dt>
+                <dd className="font-medium">
+                  {form.emergency_contact_name ?? "—"}
+                  {form.emergency_contact_phone ? ` · ${form.emergency_contact_phone}` : ""}
+                </dd>
+              </>
+            )}
+          </dl>
+        </Card>
         <Card className="border-border bg-card p-6 space-y-3">
           <div className="flex items-center justify-between gap-3">
             <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Social Media</h3>
@@ -620,40 +659,24 @@ function ClientDetail() {
         <TabsContent value="info" className="grid gap-6 md:grid-cols-3">
           <Card className="border-border bg-card p-6 md:col-span-2 space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Account Information</h3>
+              <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Basic Information</h3>
               <div className="flex gap-2">
                 {form.info_update_requested ? (
                   <Button size="sm" variant="outline" onClick={clearUpdateRequest}>Clear update request</Button>
                 ) : (
-                  <Button size="sm" variant="outline" onClick={requestUpdate}><BellRing className="mr-2 h-4 w-4" />Request Account Info Update</Button>
+                  <Button size="sm" variant="outline" onClick={requestUpdate}><BellRing className="mr-2 h-4 w-4" />Request Profile Info Update</Button>
                 )}
                 <Button size="sm" className="bg-gradient-primary uppercase font-bold" onClick={saveAccountInfo}><Save className="mr-2 h-4 w-4" />Save</Button>
               </div>
             </div>
-            <div className="grid gap-3 md:grid-cols-2">
-              <div><Label>First name</Label><Input value={form.first_name ?? ""} onChange={(e) => set("first_name", e.target.value)} /></div>
-              <div><Label>Last name</Label><Input value={form.last_name ?? ""} onChange={(e) => set("last_name", e.target.value)} /></div>
-              <div><Label>Email</Label><Input value={form.email ?? ""} onChange={(e) => set("email", e.target.value)} /></div>
-              <div><Label>Phone</Label><Input value={form.phone ?? ""} onChange={(e) => set("phone", e.target.value)} /></div>
-              <div className="md:col-span-2"><Label>Mailing address</Label><Input value={form.address ?? ""} onChange={(e) => set("address", e.target.value)} /></div>
-              <div><Label>City</Label><Input value={form.city ?? ""} onChange={(e) => set("city", e.target.value)} /></div>
-              <div><Label>Province / State</Label><Input value={form.province ?? ""} onChange={(e) => set("province", e.target.value)} /></div>
-              <div><Label>Postal / ZIP code</Label><Input value={form.postal_code ?? ""} onChange={(e) => set("postal_code", e.target.value)} /></div>
-              <div>
-                <Label>Country</Label>
-                <Select value={form.country ?? ""} onValueChange={(v) => set("country", v)}>
-                  <SelectTrigger><SelectValue placeholder="Select…" /></SelectTrigger>
-                  <SelectContent>{COUNTRIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>Time zone</Label>
-                <Select value={form.timezone ?? "America/Winnipeg"} onValueChange={(v) => set("timezone", v)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>{COMMON_TIMEZONES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
-                </Select>
-              </div>
+            <div className="md:col-span-2">
+              <Label>Email</Label>
+              <Input value={form.email ?? ""} onChange={(e) => set("email", e.target.value)} />
             </div>
+            <BasicInfoForm
+              values={form}
+              onChange={(p) => setForm({ ...form, ...p })}
+            />
             <div className="grid gap-2 rounded-md border border-border bg-secondary/30 p-3 text-xs md:grid-cols-2">
               <div><span className="text-muted-foreground">Last account info update:</span> {fmtDate(form.info_last_updated_at)}</div>
               <div><span className="text-muted-foreground">Updated by:</span> {form.info_last_updated_by ?? "—"}</div>
@@ -661,6 +684,7 @@ function ClientDetail() {
               <div><span className="text-muted-foreground">Profile picture updated:</span> {fmtDate(form.profile_picture_updated_at)}</div>
               <div><span className="text-muted-foreground">Time zone confirmed:</span> {fmtDate(form.timezone_confirmed_at)}</div>
               <div><span className="text-muted-foreground">Update requested:</span> {form.info_update_requested ? `Yes (${fmtDate(form.info_update_requested_at)})` : "No"}</div>
+              <div><span className="text-muted-foreground">Basic info completed:</span> {fmtDate(form.basic_info_completed_at)}</div>
             </div>
           </Card>
 

@@ -18,6 +18,7 @@ import type { ConversationState, Message } from "@/lib/messages";
 import { listLiftVideos, statusTone as liftStatusTone } from "@/lib/lift-videos";
 import { formatDistanceToNow, parseISO } from "date-fns";
 import { HardDrive } from "lucide-react";
+import { UpcomingBirthdaysWidget } from "@/components/upcoming-birthdays-widget";
 
 export const Route = createFileRoute("/_authenticated/admin/")({
   component: AdminDashboard,
@@ -308,6 +309,8 @@ function AdminDashboard() {
           <StatCard label="Needs Attention" value={needsAttention} icon={AlertTriangle} tone="warn" />
           <StatCard label="Payment Overdue" value={overdue} icon={DollarSign} tone="warn" />
         </div>
+
+        <UpcomingBirthdaysWidget />
 
         <Card className="border-border bg-card p-6">
           <div className="mb-4 flex items-center justify-between">

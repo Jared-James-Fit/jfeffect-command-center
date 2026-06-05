@@ -3,6 +3,7 @@ import { AppShell } from "@/components/app-shell";
 import { clientNav } from "@/lib/admin-nav";
 import { ClientProfilePictureGate } from "@/components/client-profile-picture-gate";
 import { ClientPovBanner } from "@/components/client-pov-banner";
+import { ClientBasicInfoGate } from "@/components/client-basic-info-gate";
 
 export const Route = createFileRoute("/_authenticated/portal")({
   component: () => (
@@ -10,7 +11,9 @@ export const Route = createFileRoute("/_authenticated/portal")({
       <ClientPovBanner />
       <AppShell items={clientNav} title="Client Portal">
         <ClientProfilePictureGate>
-          <Outlet />
+          <ClientBasicInfoGate>
+            <Outlet />
+          </ClientBasicInfoGate>
         </ClientProfilePictureGate>
       </AppShell>
     </>
