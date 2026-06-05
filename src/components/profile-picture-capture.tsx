@@ -152,62 +152,119 @@ export function ProfilePictureCapture({
   };
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
+      {/* Title & instructions */}
       {isClient && !currentUrl && !preview && !streaming && (
-        <div className="rounded-md border border-border bg-secondary/30 p-3 text-xs leading-relaxed text-muted-foreground">
-          <div className="mb-1 text-sm font-semibold text-foreground">Add Your Profile Picture</div>
-          Take a clear headshot so Coach Jared can easily identify your profile.
-          Use good lighting. Face the camera. Make sure your face is visible.
-          This should be quick — it only takes a few seconds.
+        <div className="text-center">
+          <h3 className="text-lg font-semibold text-foreground">Add Your Profile Picture</h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Use good lighting. Face the camera. Make sure your face is visible.
+          </p>
         </div>
       )}
-      <div className="flex items-start gap-4">
-        {!hidePreviewThumbnail && (
-          <div className="h-24 w-24 overflow-hidden rounded-full border border-border bg-secondary/40">
-            {preview ? (
-              <img src={preview} alt="Preview" className="h-full w-full object-cover" />
-            ) : signedUrl ? (
+
+      {/* Small status avatar (only when NOT actively capturing) */}
+      {!hidePreviewThumbnail && !streaming && !preview && (
+        <div className="flex justify-center">
+          <div className="h-20 w-20 overflow-hidden rounded-full border border-border bg-secondary/40">
+            {signedUrl ? (
               <img src={signedUrl} alt="Current" className="h-full w-full object-cover" />
             ) : (
               <div className="grid h-full w-full place-items-center text-xs text-muted-foreground">No photo</div>
             )}
           </div>
-        )}
-        <div className="flex flex-wrap gap-2">
-          {!streaming && !preview && (
-            <Button type="button" size="sm" onClick={startCamera} disabled={opening}>
-              {opening ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Camera className="mr-2 h-4 w-4" />}
-              {opening ? "Opening camera…" : isClient ? (currentUrl ? "Take New Profile Picture" : "Take Profile Picture") : "Take photo"}
-            </Button>
-          )}
-          <input
-            ref={cameraInputRef}
-            type="file"
-            accept="image/*"
-            capture="user"
-            className="hidden"
-            onChange={onFileChosen}
-          />
-          {effectiveAllowFileUpload && !streaming && !preview && (
-            <>
-              <Button type="button" size="sm" variant="outline" onClick={() => fileInputRef.current?.click()}><Upload className="mr-2 h-4 w-4" />Upload file</Button>
-              <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={onFileChosen} />
-            </>
-          )}
-          {streaming && (
-            <>
-              <Button type="button" size="sm" onClick={capture}>Take Photo</Button>
-              <Button type="button" size="sm" variant="outline" onClick={stopCamera}><X className="mr-2 h-4 w-4" />Cancel</Button>
-            </>
-          )}
-          {preview && (
-            <>
-              <Button type="button" size="sm" onClick={upload} disabled={busy}>{busy ? "Uploading…" : isClient ? "Save Profile Picture" : "Save photo"}</Button>
-              <Button type="button" size="sm" variant="outline" onClick={retake}><RefreshCw className="mr-2 h-4 w-4" />Retake</Button>
-            </>
-          )}
         </div>
+      )}
+
+      {/* Live camera preview — large & centered */}
+      {streaming && (
+        <div className="mx-auto w-full max-w-sm overflow-hidden rounded-xl border-2 border-border bg-black">
+          <video
+            ref={videoRef}
+            playsInline
+            muted
+            autoPlay
+            className="aspect-square w-full object-cover"
+          />
+        </div>
+      )}
+
+      {/* Captured photo preview */}
+      {preview && (
+        <div className="mx-auto w-full max-w-sm overflow-hidden rounded-xl border-2 border-border bg-black">
+          <img src={preview} alt="Captured" className="aspect-square w-full object-cover" />
+        </div>
+      )}
+
+      {/* Action buttons — centered below preview */}
+      <div className="flex flex-col items-center gap-3 pb-2">
+        {!streaming && !preview && (
+          <Button
+            type="button"
+            size="lg"
+            className="w-full max-w-sm"
+            onClick={startCamera}
+            disabled={opening}
+          >
+            {opening ? (
+              <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+            ) : (
+              <Camera className="mr-2 h-5 w-5" />
+            )}
+            {opening ? "Opening camera…" : isClient ? (currentUrl ? "Take New Profile Picture" : "Take Profile Picture") : "Take photo"}
+          </Button>
+        )}
+
+        <input
+          ref={cameraInputRef}
+          type="file"
+          accept="image/*"
+          capture="user"
+          className="hidden"
+          onChange={onFileChosen}
+        />
+
+        {effectiveAllowFileUpload && !streaming && !preview && (
+          <>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full max-w-sm"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <Upload className="mr-2 h-4 w-4" />
+              Upload file
+            </Button>
+            <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={onFileChosen} />
+          </>
+        )}
+
+        {streaming && (
+          <div className="flex w-full max-w-sm flex-col gap-2">
+            <Button type="button" size="lg" onClick={capture}>
+              <Camera className="mr-2 h-5 w-5" />
+              Take Photo
+            </Button>
+            <Button type="button" variant="outline" onClick={stopCamera}>
+              <X className="mr-2 h-4 w-4" />
+              Cancel
+            </Button>
+          </div>
+        )}
+
+        {preview && (
+          <div className="flex w-full max-w-sm flex-col gap-2">
+            <Button type="button" size="lg" onClick={upload} disabled={busy}>
+              {busy ? "Uploading…" : isClient ? "Save Profile Picture" : "Save photo"}
+            </Button>
+            <Button type="button" variant="outline" onClick={retake}>
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Retake
+            </Button>
+          </div>
+        )}
       </div>
+
       {cameraError && (
         <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
@@ -219,11 +276,7 @@ export function ProfilePictureCapture({
           </div>
         </div>
       )}
-      {streaming && (
-        <div className="overflow-hidden rounded-md border border-border bg-black">
-          <video ref={videoRef} playsInline muted autoPlay className="aspect-square w-full max-w-xs object-cover" />
-        </div>
-      )}
+
       <canvas ref={canvasRef} className="hidden" />
     </div>
   );
