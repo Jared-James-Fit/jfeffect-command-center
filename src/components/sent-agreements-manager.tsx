@@ -27,7 +27,7 @@ import { BulkActionBar } from "@/components/bulk-action-bar";
 import { DoubleConfirmDeleteDialog } from "@/components/double-confirm-delete-dialog";
 import { useBulkSelection } from "@/hooks/use-bulk-selection";
 import {
-  agreementNeedsAttention, AGREEMENT_STATUSES, VERIFICATION_BADGE, type Agreement,
+  agreementNeedsAttention, VERIFICATION_BADGE, type Agreement,
 } from "@/lib/agreements";
 import {
   approveSignedAgreement, markAgreementSigned, verifyAgreement, setAgreementVerification, sendAgreementReminder,
