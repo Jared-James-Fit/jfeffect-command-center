@@ -185,9 +185,23 @@ export async function addComment(input: {
   };
   const { data, error } = await db.from("lift_video_comments").insert(row).select().single();
   if (error) throw error;
-  // Bump status if admin commented publicly
+  // When admin/coach posts a public comment, automatically mark as Reviewed
+  // (unless it's an internal note). This keeps the admin from having to click
+  // "Mark Reviewed" after every reply.
   if (input.authorRole === "admin" && !input.isInternalNote) {
-    await updateLiftVideo(input.videoId, { status: "Commented" } as any);
+    // Don't downgrade an existing "Needs Follow-Up" status.
+    const { data: current } = await db
+      .from("lift_videos")
+      .select("status, reviewed_at")
+      .eq("id", input.videoId)
+      .maybeSingle();
+    const keepStatus = current?.status === "Needs Follow-Up" || current?.status === "Archived";
+    const patch: any = {
+      reviewed_at: current?.reviewed_at ?? new Date().toISOString(),
+      reviewed_by: input.authorId,
+    };
+    if (!keepStatus) patch.status = "Reviewed";
+    await updateLiftVideo(input.videoId, patch);
   }
   return data as LiftVideoComment;
 }
