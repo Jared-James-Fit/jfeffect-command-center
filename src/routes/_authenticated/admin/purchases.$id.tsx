@@ -190,6 +190,34 @@ function PurchaseDetail() {
             {form.agreement_link && <a className="text-xs text-primary underline" href={form.agreement_link} target="_blank" rel="noreferrer">View agreement</a>}
             <div className="text-sm flex items-center gap-2 mt-2">Terms accepted: <Badge variant="outline" className={form.terms_accepted ? "border-primary/40 text-primary" : "text-muted-foreground"}>{form.terms_accepted ? "Yes" : "No"}</Badge></div>
             {form.terms_accepted_at && <div className="text-xs text-muted-foreground">on {new Date(form.terms_accepted_at).toLocaleString()}</div>}
+            {offer?.requires_agreement && offer?.agreement_before_service && (
+              <div className="mt-3 rounded-md border border-dashed border-border bg-secondary/10 p-3 space-y-2">
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="agreement-override"
+                    checked={!!form.agreement_block_override}
+                    onCheckedChange={(v) => set("agreement_block_override", !!v)}
+                  />
+                  <Label htmlFor="agreement-override" className="text-xs font-semibold uppercase tracking-widest">
+                    Override agreement block
+                  </Label>
+                </div>
+                <Textarea
+                  rows={2}
+                  placeholder="Reason for bypassing the agreement requirement (required for audit)"
+                  value={form.agreement_block_override_reason ?? ""}
+                  onChange={(e) => set("agreement_block_override_reason", e.target.value)}
+                />
+                {form.agreement_block_override_at && (
+                  <div className="text-[10px] text-muted-foreground">
+                    Override applied {new Date(form.agreement_block_override_at).toLocaleString()}
+                  </div>
+                )}
+                <div className="text-[11px] text-muted-foreground">
+                  Without override, the database will refuse to mark this purchase Active or set a current/past service start date until a verified agreement is linked.
+                </div>
+              </div>
+            )}
           </Card>
           <Card className="border-border bg-card p-5 space-y-2">
             <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Admin notes</h3>
