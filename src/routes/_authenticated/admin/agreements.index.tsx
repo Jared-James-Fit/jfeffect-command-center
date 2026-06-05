@@ -12,12 +12,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Plus, Edit2, Archive, ExternalLink, ShieldCheck, AlertTriangle, FileText, Loader2 } from "lucide-react";
+import { Plus, Edit2, Archive, ExternalLink, ShieldCheck, AlertTriangle, FileText, Loader2, UserPlus, Smartphone, Copy, Search } from "lucide-react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
-import { createTemplate, updateTemplate, archiveTemplate } from "@/lib/agreements.functions";
-import { AGREEMENT_TYPES, type AgreementTemplate, type Agreement, VERIFICATION_BADGE } from "@/lib/agreements";
+import { createTemplate, updateTemplate, archiveTemplate, createAgreement } from "@/lib/agreements.functions";
+import { AGREEMENT_TYPES, type AgreementTemplate, type Agreement, VERIFICATION_BADGE, type SigningMethod } from "@/lib/agreements";
 import { AgreementStatusBadge } from "@/components/agreement-status-badge";
+import { useNavigate } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/_authenticated/admin/agreements/")({
   component: AgreementsAdminPage,
@@ -26,6 +27,7 @@ export const Route = createFileRoute("/_authenticated/admin/agreements/")({
 function AgreementsAdminPage() {
   const qc = useQueryClient();
   const [editing, setEditing] = useState<Partial<AgreementTemplate> | null>(null);
+  const [actioning, setActioning] = useState<{ template: AgreementTemplate; mode: "invite" | "in-person" } | null>(null);
   const createFn = useServerFn(createTemplate);
   const updateFn = useServerFn(updateTemplate);
   const archiveFn = useServerFn(archiveTemplate);
@@ -124,20 +126,36 @@ function AgreementsAdminPage() {
                   </div>
                   {t.signnow_template_id && <p className="text-[11px] text-muted-foreground">SignNow ID: {t.signnow_template_id}</p>}
                   {t.notes && <p className="text-xs text-muted-foreground line-clamp-2">{t.notes}</p>}
-                  <div className="flex gap-2 pt-1">
-                    <Button size="sm" variant="outline" className="flex-1" onClick={() => setEditing(t)}>
-                      <Edit2 className="h-3 w-3 mr-1" /> Edit
+                  <div className="grid grid-cols-3 gap-2 text-[10px] text-muted-foreground py-1">
+                    <div>Sent: <span className="text-foreground font-medium">{(t as any).times_sent ?? 0}</span></div>
+                    <div>Signed: <span className="text-foreground font-medium">{(t as any).times_completed ?? 0}</span></div>
+                    <div>Last: <span className="text-foreground font-medium">{(t as any).last_used_at ? new Date((t as any).last_used_at).toLocaleDateString() : "—"}</span></div>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    <Button size="sm" className="flex-1 min-w-[120px]" onClick={() => setActioning({ template: t, mode: "invite" })}>
+                      <UserPlus className="h-3 w-3 mr-1" /> Invite to Sign
+                    </Button>
+                    <Button size="sm" variant="secondary" className="flex-1 min-w-[120px]" onClick={() => setActioning({ template: t, mode: "in-person" })}>
+                      <Smartphone className="h-3 w-3 mr-1" /> Sign Template
                     </Button>
                     {t.signnow_url && (
-                      <Button size="sm" variant="ghost" asChild>
-                        <a href={t.signnow_url} target="_blank" rel="noreferrer"><ExternalLink className="h-3 w-3" /></a>
+                      <Button size="sm" variant="ghost" onClick={() => { navigator.clipboard.writeText(t.signnow_url!); toast.success("Signing link copied"); }}>
+                        <Copy className="h-3 w-3 mr-1" /> Copy link
                       </Button>
                     )}
+                    {t.signnow_url && (
+                      <Button size="sm" variant="ghost" asChild>
+                        <a href={t.signnow_url} target="_blank" rel="noreferrer"><ExternalLink className="h-3 w-3 mr-1" /> SignNow</a>
+                      </Button>
+                    )}
+                    <Button size="sm" variant="ghost" onClick={() => setEditing(t)}>
+                      <Edit2 className="h-3 w-3 mr-1" /> Edit
+                    </Button>
                     <Button size="sm" variant="ghost" onClick={async () => {
-                      if (!confirm("Archive this template?")) return;
+                      if (!confirm(`${t.is_active ? "Deactivate" : "Archive"} this template?`)) return;
                       await archiveFn({ data: { id: t.id } });
                       qc.invalidateQueries({ queryKey: ["agreement-templates"] });
-                    }}><Archive className="h-3 w-3" /></Button>
+                    }}><Archive className="h-3 w-3 mr-1" /> Deactivate</Button>
                   </div>
                 </Card>
               ))}
@@ -152,6 +170,17 @@ function AgreementsAdminPage() {
         onOpenChange={(o) => !o && setEditing(null)}
         initial={editing ?? {}}
         onSubmit={save}
+      />
+
+      <TemplateActionDialog
+        open={actioning !== null}
+        action={actioning}
+        onOpenChange={(o) => !o && setActioning(null)}
+        onDone={() => {
+          qc.invalidateQueries({ queryKey: ["agreement-templates"] });
+          qc.invalidateQueries({ queryKey: ["agreements-needing-attention"] });
+          setActioning(null);
+        }}
       />
     </>
   );
@@ -218,6 +247,158 @@ function TemplateDialog({
             try { await onSubmit(form); } finally { setBusy(false); }
           }} disabled={busy}>
             {busy && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}Save
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function TemplateActionDialog({
+  open, action, onOpenChange, onDone,
+}: {
+  open: boolean;
+  action: { template: AgreementTemplate; mode: "invite" | "in-person" } | null;
+  onOpenChange: (o: boolean) => void;
+  onDone: () => void;
+}) {
+  const navigate = useNavigate();
+  const createAgreementFn = useServerFn(createAgreement);
+  const [search, setSearch] = useState("");
+  const [clientId, setClientId] = useState<string>("");
+  const [linkOverride, setLinkOverride] = useState("");
+  const [offerName, setOfferName] = useState("");
+  const [notes, setNotes] = useState("");
+  const [kiosk, setKiosk] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  const { data: clients = [] } = useQuery({
+    queryKey: ["clients-picker", search],
+    enabled: open,
+    queryFn: async () => {
+      let q = supabase.from("clients").select("id, full_name, email").eq("archived", false).order("full_name").limit(50);
+      if (search.trim()) q = q.ilike("full_name", `%${search.trim()}%`);
+      const { data } = await q;
+      return data ?? [];
+    },
+  });
+
+  const selectedClient = clients.find((c) => c.id === clientId);
+  const tpl = action?.template;
+  const inPerson = action?.mode === "in-person";
+  const signingMethod: SigningMethod = inPerson ? (kiosk ? "Kiosk Mode" : "In-Person / iPad") : "Remote Invite";
+  const link = linkOverride.trim() || tpl?.signnow_url || null;
+
+  async function go() {
+    if (!tpl || !clientId) return toast.error("Pick a client first");
+    if (inPerson && !link) return toast.error("This template has no SignNow signing link saved");
+    setBusy(true);
+    try {
+      const ag: any = await createAgreementFn({
+        data: {
+          client_id: clientId,
+          template_id: tpl.id,
+          agreement_type: tpl.agreement_type ?? null,
+          signnow_signing_link: link,
+          offer_name: offerName.trim() || null,
+          admin_notes: notes.trim() || null,
+          send_now: true,
+          signing_method: signingMethod,
+        } as any,
+      });
+      if (inPerson && link) {
+        window.open(link, "_blank", "noopener,noreferrer");
+      }
+      toast.success(inPerson ? "Launched signing — finish on this device" : "Invite created for client");
+      onDone();
+      // Navigate to client profile so admin can mark signed afterward
+      if (ag?.client_id) {
+        navigate({ to: "/admin/clients/$id", params: { id: ag.client_id } });
+      }
+      setSearch(""); setClientId(""); setLinkOverride(""); setOfferName(""); setNotes(""); setKiosk(false);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>
+            {inPerson ? "Sign Template — In-Person / iPad" : "Invite to Sign — Remote"}
+          </DialogTitle>
+          {tpl && (
+            <p className="text-xs text-muted-foreground pt-1">
+              {tpl.name}{tpl.agreement_type ? ` · ${tpl.agreement_type}` : ""}
+            </p>
+          )}
+        </DialogHeader>
+        <div className="space-y-3 text-sm">
+          <div>
+            <Label className="text-xs">Select client</Label>
+            <div className="relative">
+              <Search className="h-3.5 w-3.5 absolute left-2 top-2.5 text-muted-foreground" />
+              <Input className="pl-7" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search clients by name…" />
+            </div>
+            <div className="mt-2 max-h-48 overflow-y-auto rounded-md border border-border bg-secondary/20">
+              {clients.length === 0 ? (
+                <p className="text-xs text-muted-foreground p-3 text-center">No clients found.</p>
+              ) : clients.map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => setClientId(c.id)}
+                  className={`w-full text-left px-3 py-2 text-xs hover:bg-accent transition border-b border-border/50 last:border-0 ${clientId === c.id ? "bg-accent" : ""}`}
+                >
+                  <div className="font-medium">{c.full_name}</div>
+                  {c.email && <div className="text-muted-foreground">{c.email}</div>}
+                </button>
+              ))}
+            </div>
+            {selectedClient && (
+              <p className="text-[11px] text-muted-foreground mt-1">
+                Selected: <strong className="text-foreground">{selectedClient.full_name}</strong>
+                {selectedClient.email ? ` (${selectedClient.email})` : ""}
+              </p>
+            )}
+          </div>
+
+          <div>
+            <Label className="text-xs">Signing link override (optional)</Label>
+            <Input value={linkOverride} onChange={(e) => setLinkOverride(e.target.value)} placeholder={tpl?.signnow_url ?? "https://app.signnow.com/..."} />
+            {!tpl?.signnow_url && !linkOverride && (
+              <p className="text-[11px] text-amber-500 mt-1">This template has no SignNow URL saved. Paste one or edit the template.</p>
+            )}
+          </div>
+
+          <div>
+            <Label className="text-xs">Connect to offer / purchase (optional)</Label>
+            <Input value={offerName} onChange={(e) => setOfferName(e.target.value)} placeholder="e.g. 6 Month Online Coaching" />
+          </div>
+
+          <div>
+            <Label className="text-xs">Admin notes (optional)</Label>
+            <Textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} />
+          </div>
+
+          {inPerson && (
+            <div className="flex items-center justify-between rounded-md border border-border bg-secondary/30 p-2">
+              <div>
+                <Label className="text-xs">Treat as Kiosk Mode</Label>
+                <p className="text-[11px] text-muted-foreground">SignNow may show your name as the signer — record will still attach to the selected client.</p>
+              </div>
+              <Switch checked={kiosk} onCheckedChange={setKiosk} />
+            </div>
+          )}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button onClick={go} disabled={busy || !clientId}>
+            {busy && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
+            {inPerson ? "Launch signing" : "Create invite"}
           </Button>
         </DialogFooter>
       </DialogContent>

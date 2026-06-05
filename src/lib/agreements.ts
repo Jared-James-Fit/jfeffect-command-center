@@ -42,6 +42,15 @@ export const VERIFICATION_STATUSES = [
 ] as const;
 export type VerificationStatus = (typeof VERIFICATION_STATUSES)[number];
 
+export const SIGNING_METHODS = [
+  "Remote Invite",
+  "In-Person / iPad",
+  "Kiosk Mode",
+  "Manual Upload",
+  "Manual Link",
+] as const;
+export type SigningMethod = (typeof SIGNING_METHODS)[number];
+
 export const SIGNNOW_INTEGRATION_STATUSES = [
   "Not Connected",
   "Connected",
