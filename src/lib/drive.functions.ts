@@ -66,6 +66,7 @@ export const testDriveConnection = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     await requireAdmin(context.supabase, context.userId);
+    const { driveGetFile } = await getDriveHelpers();
     const s = await loadSettings(context.supabase);
     if (!s?.root_folder_id) {
       return { ok: false, status: "Root Folder Missing", message: "No root folder configured." };
@@ -93,6 +94,7 @@ export const setupDriveRoot = createServerFn({ method: "POST" })
   .inputValidator((d: { folderName?: string; existingFolderId?: string }) => d)
   .handler(async ({ data, context }) => {
     await requireAdmin(context.supabase, context.userId);
+    const { driveCreateFolder, driveGetFile } = await getDriveHelpers();
     let folderId = data.existingFolderId?.trim() || "";
     let folderName = data.folderName?.trim() || DEFAULT_ROOT_FOLDER_NAME;
     let folderUrl = "";
@@ -142,7 +144,8 @@ async function ensureClientFolder(supabase: any, clientId: string) {
   }
   // Use admin client for folder bookkeeping so client uploads aren't blocked
   // by RLS on client_drive_folders / clients.
-  const db = supabaseAdmin as any;
+  const db = await getAdminClient();
+  const { driveCreateFolder } = await getDriveHelpers();
   const { data: existing } = await db.from("client_drive_folders").select("*").eq("client_id", clientId).maybeSingle();
   if (existing?.folder_id && existing.subfolders && Object.keys(existing.subfolders).length >= MEDIA_TYPE_SUBFOLDERS.length) {
     return existing;
