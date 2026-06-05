@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerDescription, DrawerFooter } from "@/components/ui/drawer";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -16,7 +17,7 @@ import { initMediaUpload, finalizeMediaUpload, createSubmission } from "@/lib/dr
 import { uploadLiftClipToDrive } from "@/lib/lift-video-drive-upload";
 import { friendlyDriveError } from "@/lib/drive-errors";
 import { toast } from "sonner";
-import { Upload, Link as LinkIcon, Loader2, Video as VideoIcon, Send, X, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { Upload, Link as LinkIcon, Loader2, Video as VideoIcon, Send, X, AlertTriangle, CheckCircle2, ChevronDown } from "lucide-react";
 
 type Props = {
   open: boolean;
@@ -319,25 +320,32 @@ export function LiftVideoDialog({ open, onOpenChange, clientId, userId, clientNa
   // ---------- Client (multi-clip DM-style) view ----------
   if (role === "client" && !initial) {
     return (
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-md max-h-[92vh] overflow-y-auto p-5 sm:p-6">
-          <DialogHeader className="space-y-1">
-            <DialogTitle className="text-xl">{sent ? "Sent" : "Send Lift Videos"}</DialogTitle>
-            {!sent && (
-              <p className="text-sm text-muted-foreground">Upload your training videos for Coach Jared to review.</p>
-            )}
-          </DialogHeader>
+      <Drawer open={open} onOpenChange={onOpenChange}>
+        <DrawerContent
+          className="max-h-[92vh] focus:outline-none"
+          style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+        >
+          <div className="mx-auto w-full max-w-md">
+            <DrawerHeader className="text-center pb-2">
+              <DrawerTitle className="text-lg">{sent ? "Sent" : "Send Lift Video"}</DrawerTitle>
+              {!sent && (
+                <DrawerDescription className="text-sm">
+                  Upload a lift for Coach Jared to review.
+                </DrawerDescription>
+              )}
+            </DrawerHeader>
 
-          {sent ? (
-            <div className="py-8 text-center space-y-4">
-              <CheckCircle2 className="mx-auto h-12 w-12 text-green-500" />
-              <div className="text-lg font-semibold">Sent to Coach Jared</div>
-              <div className="text-sm text-muted-foreground">Your videos have been submitted for review.</div>
-              <Button onClick={() => { onOpenChange(false); }}>Done</Button>
-            </div>
-          ) : (
-            <>
-              <div className="space-y-5">
+            {sent ? (
+              <div className="px-5 py-8 text-center space-y-3">
+                <CheckCircle2 className="mx-auto h-12 w-12 text-emerald-500" />
+                <div className="text-base font-semibold">Sent to Coach Jared</div>
+                <div className="text-sm text-muted-foreground">
+                  You'll see feedback here once it's reviewed.
+                </div>
+                <Button className="mt-2 w-full" onClick={() => onOpenChange(false)}>Done</Button>
+              </div>
+            ) : (
+              <div className="space-y-5 px-5 pb-4 overflow-y-auto">
                 {/* 1. Add Video */}
                 <div className="space-y-2.5">
                   <input
@@ -357,24 +365,26 @@ export function LiftVideoDialog({ open, onOpenChange, clientId, userId, clientNa
                     onChange={(e) => { addFiles(e.target.files); if (multiRecordRef.current) multiRecordRef.current.value = ""; }}
                   />
                   <div className="grid grid-cols-2 gap-2">
-                    <Button type="button" variant="outline" className="h-auto flex-col gap-1.5 py-4" onClick={() => multiUploadRef.current?.click()}>
+                    <Button type="button" variant="outline" className="h-auto flex-col gap-1.5 py-5 rounded-xl" onClick={() => multiUploadRef.current?.click()}>
                       <Upload className="h-5 w-5" />
-                      <span className="text-xs font-semibold">Upload from phone</span>
+                      <span className="text-sm font-semibold">Upload from phone</span>
                     </Button>
-                    <Button type="button" variant="outline" className="h-auto flex-col gap-1.5 py-4" onClick={() => multiRecordRef.current?.click()}>
+                    <Button type="button" variant="outline" className="h-auto flex-col gap-1.5 py-5 rounded-xl" onClick={() => multiRecordRef.current?.click()}>
                       <VideoIcon className="h-5 w-5" />
-                      <span className="text-xs font-semibold">Record now</span>
+                      <span className="text-sm font-semibold">Record now</span>
                     </Button>
                   </div>
 
                   {!showLinkInput ? (
-                    <button
-                      type="button"
-                      className="text-xs text-muted-foreground underline-offset-4 hover:underline"
-                      onClick={() => setShowLinkInput(true)}
-                    >
-                      Use a video link instead
-                    </button>
+                    <div className="text-center">
+                      <button
+                        type="button"
+                        className="text-xs text-muted-foreground underline-offset-4 hover:underline"
+                        onClick={() => setShowLinkInput(true)}
+                      >
+                        Use a video link instead
+                      </button>
+                    </div>
                   ) : (
                     <div className="flex gap-2 pt-1">
                       <Input
@@ -391,17 +401,17 @@ export function LiftVideoDialog({ open, onOpenChange, clientId, userId, clientNa
                   )}
                 </div>
 
-                {/* Selected clips — compact list */}
+                {/* Selected clips — compact attachment list */}
                 {clips.length > 0 && (
                   <div className="space-y-1.5">
                     <div className="text-xs font-medium text-muted-foreground">
-                      {clips.length} video{clips.length === 1 ? "" : "s"} selected
+                      {clips.length} video{clips.length === 1 ? "" : "s"} attached
                     </div>
                     <div className="space-y-1.5">
                       {clips.map((clip, idx) => (
-                        <div key={clip.id} className="rounded-md border border-border bg-card/50 p-2">
+                        <div key={clip.id} className="rounded-xl border border-border bg-card/50 p-2">
                           <div className="flex items-center gap-2.5 min-w-0">
-                            <div className="flex h-10 w-14 shrink-0 items-center justify-center overflow-hidden rounded bg-muted">
+                            <div className="flex h-10 w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-muted">
                               {clip.kind === "file" && clip.previewUrl ? (
                                 <video src={clip.previewUrl} className="h-full w-full object-cover" muted playsInline preload="metadata" />
                               ) : (
@@ -410,7 +420,7 @@ export function LiftVideoDialog({ open, onOpenChange, clientId, userId, clientNa
                             </div>
                             <div className="min-w-0 flex-1">
                               <div className="truncate text-sm font-medium">
-                                {clip.kind === "file" ? clip.file?.name : clip.url}
+                                {clip.kind === "file" ? (clip.file?.name || `Video ${idx + 1}`) : (clip.url || "Link")}
                               </div>
                               <div className="text-xs text-muted-foreground">
                                 {clip.kind === "file"
@@ -418,51 +428,46 @@ export function LiftVideoDialog({ open, onOpenChange, clientId, userId, clientNa
                                   : "Link"}
                               </div>
                             </div>
-                            <Button type="button" size="icon" variant="ghost" className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive" onClick={() => removeClip(clip.id)}>
+                            <Button type="button" size="icon" variant="ghost" className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive" onClick={() => removeClip(clip.id)}>
                               <X className="h-4 w-4" />
                             </Button>
                           </div>
-                          {noteMode === "perClip" && (
-                            <Textarea
-                              rows={2}
-                              className="mt-2 text-sm"
-                              placeholder={`Note for clip ${idx + 1}`}
-                              value={clip.note}
-                              onChange={(e) => updateClipNote(clip.id, e.target.value)}
-                            />
-                          )}
                         </div>
                       ))}
                     </div>
                   </div>
                 )}
 
-                {/* 2. Notes */}
+                {/* 2. Note — message-style */}
                 <div className="space-y-2">
-                  <Label className="text-sm font-semibold">Notes for Coach Jared</Label>
-                  {noteMode === "batch" && (
-                    <Textarea
-                      rows={4}
-                      className="min-h-[100px] text-base"
-                      placeholder="Example: Week 3 Day 2 — squat top set 405 x 3 @ RPE 8. Felt slow out of the hole."
-                      value={batchNote}
-                      onChange={(e) => setBatchNote(e.target.value)}
-                    />
-                  )}
-                  {clips.length > 1 && (
-                    <button
-                      type="button"
-                      className="text-xs text-muted-foreground underline-offset-4 hover:underline"
-                      onClick={() => setNoteMode(noteMode === "batch" ? "perClip" : "batch")}
-                    >
-                      {noteMode === "batch" ? "Add notes per clip instead" : "Use one note for all clips"}
-                    </button>
-                  )}
+                  <Textarea
+                    rows={3}
+                    className="min-h-[88px] rounded-xl text-base resize-none"
+                    placeholder="Squat top set — 135 x 5 @ RPE 8."
+                    value={batchNote}
+                    onChange={(e) => setBatchNote(e.target.value)}
+                  />
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] text-muted-foreground">Note optional · tell Coach Jared what to review.</span>
+                  </div>
+                  <details className="group">
+                    <summary className="flex cursor-pointer list-none items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground">
+                      <ChevronDown className="h-3 w-3 transition-transform group-open:rotate-180" />
+                      What to include
+                    </summary>
+                    <ul className="mt-1.5 ml-4 list-disc space-y-0.5 text-[11px] text-muted-foreground">
+                      <li>Lift</li>
+                      <li>Training day</li>
+                      <li>Set or load if you know it</li>
+                      <li>RPE / RIR if you know it</li>
+                      <li>Anything that felt off</li>
+                    </ul>
+                  </details>
                 </div>
 
-                {/* 3. Urgent toggle — compact row */}
+                {/* 3. Urgent toggle — compact */}
                 <div className="space-y-2">
-                  <div className="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2.5">
+                  <div className="flex items-center justify-between gap-3 rounded-xl border border-border px-3 py-2.5">
                     <div className="min-w-0">
                       <div className="text-sm font-medium">Needs coach attention?</div>
                       <div className="text-xs text-muted-foreground">Pain, discomfort, or urgent.</div>
@@ -472,7 +477,7 @@ export function LiftVideoDialog({ open, onOpenChange, clientId, userId, clientNa
                   {form.is_urgent && (
                     <Textarea
                       rows={2}
-                      className="text-sm"
+                      className="rounded-xl text-sm"
                       placeholder="What's going on? (e.g. left hip pinched during this set)"
                       value={urgentText}
                       onChange={(e) => setUrgentText(e.target.value)}
@@ -480,18 +485,29 @@ export function LiftVideoDialog({ open, onOpenChange, clientId, userId, clientNa
                   )}
                 </div>
               </div>
+            )}
 
-              <DialogFooter className="gap-2 pt-2 sm:gap-2">
-                <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={saving}>Cancel</Button>
-                <Button onClick={handleSave} disabled={saving || clips.length === 0} className="bg-gradient-primary font-bold uppercase">
-                  {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-                  Send Videos
+            {!sent && (
+              <DrawerFooter className="pt-2">
+                <Button
+                  onClick={handleSave}
+                  disabled={saving || clips.length === 0}
+                  className="h-12 w-full rounded-full bg-gradient-primary text-base font-bold"
+                >
+                  {saving ? (
+                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Sending…</>
+                  ) : (
+                    <><Send className="mr-2 h-4 w-4" /> Send {clips.length > 1 ? "Videos" : "Video"}</>
+                  )}
                 </Button>
-              </DialogFooter>
-            </>
-          )}
-        </DialogContent>
-      </Dialog>
+                <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={saving} className="h-10">
+                  Cancel
+                </Button>
+              </DrawerFooter>
+            )}
+          </div>
+        </DrawerContent>
+      </Drawer>
     );
   }
 
