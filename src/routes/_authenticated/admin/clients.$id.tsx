@@ -41,6 +41,7 @@ import { PowerlifterBadge, POWERLIFTER_BADGE_LABELS } from "@/components/powerli
 import { SocialHandlesEditor } from "@/components/social-handles-editor";
 import { SocialIcons } from "@/components/social-icons";
 import { ClientQuickLinksCard } from "@/components/client-quick-links-card";
+import { AppActivityCard } from "@/components/app-activity-card";
 import { FolderOpen, Eye } from "lucide-react";
 import { useClientImpersonation } from "@/lib/client-impersonation";
 import { useAuth } from "@/lib/auth";
@@ -410,6 +411,13 @@ function ClientDetail() {
         </Card>
 
         <div className="space-y-6">
+        <AppActivityCard
+          clientId={id}
+          lastSignedInAt={form.last_signed_in_at}
+          lastActiveAt={form.last_active_at}
+          lastActiveRoute={form.last_active_route}
+          complianceStatus={form.compliance_status}
+        />
         <TrainingScheduleCard client={form} />
         <ClientQuickLinksCard
           clientId={id}
