@@ -12,7 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Plus, Edit2, Archive, ExternalLink, ShieldCheck, AlertTriangle, FileText, Loader2, UserPlus, Copy, Search, Power, Trash2, Info, Settings, FolderArchive } from "lucide-react";
+import { Plus, Edit2, Archive, ExternalLink, ShieldCheck, Loader2, UserPlus, Copy, Search, Power, Trash2, Info, Settings, FolderArchive } from "lucide-react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import { createTemplate, updateTemplate, archiveTemplate, setTemplateActive, createAgreement, syncSignNowTemplates } from "@/lib/agreements.functions";
