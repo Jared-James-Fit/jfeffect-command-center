@@ -16,7 +16,7 @@ import { Plus, Edit2, Archive, ExternalLink, ShieldCheck, Loader2, UserPlus, Cop
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import { createTemplate, updateTemplate, archiveTemplate, setTemplateActive, createAgreement, syncSignNowTemplates } from "@/lib/agreements.functions";
-import { AGREEMENT_TYPES, type AgreementTemplate, type Agreement } from "@/lib/agreements";
+import { AGREEMENT_TYPES, type AgreementTemplate } from "@/lib/agreements";
 import { AgreementStatusBadge } from "@/components/agreement-status-badge";
 import { useNavigate } from "@tanstack/react-router";
 
