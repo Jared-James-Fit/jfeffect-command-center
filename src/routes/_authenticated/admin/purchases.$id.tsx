@@ -58,7 +58,11 @@ function PurchaseDetail() {
     const { error } = await supabase.from("purchase_records").update(patch).eq("id", id);
     if (error) {
       const msg = /Agreement required/i.test(error.message)
-        ? "Blocked: this purchase needs a verified signed agreement before service can start. Verify the agreement or apply an override."
+        ? "Blocked: this purchase needs a signed, verified agreement (no mismatch, not expired/cancelled, no manual action pending) before service can start. Verify the agreement or apply an override with a reason."
+        : /written reason/i.test(error.message)
+        ? "Override requires a written reason (at least 5 characters)."
+        : /admin or assigned coach|insufficient_privilege/i.test(error.message)
+        ? "Only an admin or assigned coach can change the agreement override."
         : error.message;
       return toast.error(msg);
     }
