@@ -34,6 +34,8 @@ import { PriceCardPickerDialog } from "@/components/price-card-picker-dialog";
 import { AgreementsPanel } from "@/components/agreements-panel";
 import { TrainingScheduleCard } from "@/components/training-schedule-card";
 import { listCheckInLinks } from "@/lib/check-ins";
+import { PowerlifterBadge, POWERLIFTER_BADGE_LABELS } from "@/components/powerlifter-badge";
+import { ExternalLink as ExternalLinkIcon, Eye, EyeOff } from "lucide-react";
 
 function AssignedCoachSelect({ value, onChange }: { value: string | null; onChange: (v: string | null) => void }) {
   const { data: coaches = [] } = useQuery({
@@ -291,7 +293,14 @@ function ClientDetail() {
   return (
     <>
       <PageHeader
-        title={form.full_name}
+        title={
+          <>
+            <span>{form.full_name}</span>
+            {form.is_powerlifter && (
+              <PowerlifterBadge label={form.powerlifter_badge_label} size="sm" />
+            )}
+          </>
+        }
         subtitle={form.coaching_type ?? "Coaching client"}
         actions={
           <>
