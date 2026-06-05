@@ -205,7 +205,7 @@ function AudioAttachment({
 
   return (
     <div className={cn(
-      "w-[260px] rounded-2xl p-2",
+      "w-full max-w-[260px] rounded-2xl p-2",
       mine ? "bg-primary-foreground/10" : "bg-background/60",
     )}>
       <div className="flex items-center gap-2">
@@ -493,11 +493,15 @@ export function MessageThread({
   role,
   conversationState,
   hideControls = false,
+  fullBleed = false,
 }: {
   clientId: string;
   role: SenderRole;
   conversationState?: ConversationState | null;
   hideControls?: boolean;
+  /** When true, render as full-height chat (no card border) and let the
+   *  parent control overall height. Composer sits flush at the bottom. */
+  fullBleed?: boolean;
 }) {
   const { user } = useAuth();
   const qc = useQueryClient();
@@ -663,7 +667,12 @@ export function MessageThread({
     : "text-muted-foreground";
 
   return (
-    <div className="flex h-[min(80vh,640px)] flex-col rounded-md border border-border bg-card">
+    <div className={cn(
+      "flex flex-col",
+      fullBleed
+        ? "h-full min-h-0 flex-1 bg-background"
+        : "h-[min(80vh,640px)] rounded-md border border-border bg-card",
+    )}>
       {role === "admin" && !hideControls && (
         <div className="flex flex-wrap items-center gap-2 border-b border-border px-3 py-2 text-xs">
           <span className="text-muted-foreground">Status:</span>
@@ -692,7 +701,13 @@ export function MessageThread({
         </div>
       )}
 
-      <div ref={scrollerRef} className="flex-1 space-y-3 overflow-y-auto p-3 sm:p-4">
+      <div
+        ref={scrollerRef}
+        className={cn(
+          "flex-1 min-h-0 space-y-3 overflow-y-auto",
+          fullBleed ? "px-3 py-4 sm:px-6" : "p-3 sm:p-4",
+        )}
+      >
         {visibleMessages.length === 0 ? (
           <div className="grid h-full place-items-center text-sm text-muted-foreground">
             {role === "client" ? "Send your coach a message to start the conversation." : "No messages yet."}
@@ -732,7 +747,14 @@ export function MessageThread({
         })}
       </div>
 
-      <div className="border-t border-border bg-card p-2 sm:p-3 space-y-2">
+      <div
+        className={cn(
+          "space-y-2 border-t border-border",
+          fullBleed
+            ? "bg-background/95 px-3 pb-[max(env(safe-area-inset-bottom),0.5rem)] pt-2 backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:px-6 sm:pt-3"
+            : "bg-card p-2 sm:p-3",
+        )}
+      >
         {role === "admin" && (
           <div className="flex flex-wrap gap-1 px-1">
             {QUICK_REPLIES.map((q) => (
