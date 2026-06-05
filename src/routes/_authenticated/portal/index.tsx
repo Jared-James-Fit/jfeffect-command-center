@@ -55,7 +55,7 @@ function PortalHome() {
   const markAgreementComplete = async (id: string) => {
     const { error } = await supabase
       .from("agreements")
-      .update({ client_marked_complete_at: new Date().toISOString(), client_marked_complete_by: user?.id ?? null })
+      .update({ client_marked_complete_at: new Date().toISOString(), client_marked_complete_by: user?.id ?? null } as any)
       .eq("id", id);
     if (error) { toast.error(error.message); return; }
     toast.success("Thanks — Coach Jared will verify it.");
