@@ -419,6 +419,10 @@ function ClientDetail() {
         <TabsContent value="purchases" className="grid gap-6 md:grid-cols-3">
           <AgreementStatusPanel client={form} />
           <PurchaseRecordsPanel clientId={id} />
+        </TabsContent>
+
+        <TabsContent value="agreements" className="grid gap-6 md:grid-cols-3">
+          <AgreementStatusPanel client={form} />
           <AgreementsPanel clientId={id} clientName={form?.full_name} />
         </TabsContent>
 
