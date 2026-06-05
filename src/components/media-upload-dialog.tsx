@@ -91,9 +91,7 @@ export function MediaUploadDialog({
           clipOrder: i, urgent, painNote: urgent ? painNote : null, uploadedByRole: role,
         }});
       }
-      toast.success("Sent to coach");
-      reset();
-      onOpenChange(false);
+      setSent(true);
       onUploaded?.();
     } catch (err: any) {
       console.error(err);
