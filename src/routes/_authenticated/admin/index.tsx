@@ -17,6 +17,7 @@ import { statusTone, fmtTimeRange } from "@/lib/pt-sessions";
 import type { ConversationState, Message } from "@/lib/messages";
 import { listLiftVideos, statusTone as liftStatusTone } from "@/lib/lift-videos";
 import { formatDistanceToNow, parseISO } from "date-fns";
+import { HardDrive } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/admin/")({
   component: AdminDashboard,
@@ -36,6 +37,40 @@ function StatCard({ label, value, icon: Icon, tone = "default" }: { label: strin
         }`}>
           <Icon className="h-5 w-5" />
         </div>
+      </div>
+    </Card>
+  );
+}
+
+function DriveSetupBanner() {
+  const { data } = useQuery({
+    queryKey: ["media-drive-settings-banner"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("media_drive_settings" as any)
+        .select("root_folder_id,status")
+        .limit(1)
+        .maybeSingle();
+      return data as { root_folder_id?: string | null; status?: string | null } | null;
+    },
+  });
+  const ready = !!data?.root_folder_id;
+  if (ready) return null;
+  return (
+    <Card className="border-warning/40 bg-warning/5 p-4">
+      <div className="flex items-start gap-3">
+        <div className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-warning/15 text-warning">
+          <HardDrive className="h-4 w-4" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="font-bold">Google Drive uploads are not ready</div>
+          <p className="text-sm text-muted-foreground">
+            Set up your root folder before clients upload check-in videos, lift videos, or progress photos.
+          </p>
+        </div>
+        <Link to="/admin/settings">
+          <Button size="sm" variant="outline" className="font-semibold">Open Google Drive Settings</Button>
+        </Link>
       </div>
     </Card>
   );
