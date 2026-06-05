@@ -359,13 +359,14 @@ export const createAgreement = createServerFn({ method: "POST" })
         try {
           const docName = `${template_name} — ${client.full_name}`;
           const documentId = await copyTemplateToDocument(signnow_template_id, docName);
+          // NOTE: Do NOT pass subject/message — SignNow rejects personalized
+          // invite subject/message (error 65582) unless the account is on a
+          // higher plan. Use SignNow's default invite email instead.
           const invite = await apiCreateSignNowInvite({
             documentId,
             signerEmail: client.email,
             signerName: client.full_name,
             fromEmail: settings.account_email,
-            subject: `Please sign: ${template_name}`,
-            message: `Hi ${client.full_name ?? ""}, please review and sign your ${template_name}.`,
             expirationDays: 30,
           });
           apiDocumentId = documentId;
