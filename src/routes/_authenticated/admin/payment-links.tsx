@@ -313,7 +313,7 @@ function PaymentLinksPage() {
           <Card className="border-border bg-card p-8 text-center text-muted-foreground"><Loader2 className="inline h-4 w-4 animate-spin mr-2" />Loading…</Card>
         ) : visible.length === 0 ? (
           <Card className="border-border bg-card p-10 text-center text-sm text-muted-foreground">
-            {showArchived ? "No archived products." : "No products yet. Create your first product."}
+            {hasFilters ? "No products match your filters. Try clearing some filters." : "No products yet. Create your first product."}
           </Card>
         ) : (
           <div className="grid gap-4 md:grid-cols-2">
