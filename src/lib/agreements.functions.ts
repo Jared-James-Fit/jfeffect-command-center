@@ -79,6 +79,20 @@ export const archiveTemplate = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+export const setTemplateActive = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i: unknown) =>
+    z.object({ id: z.string().uuid(), is_active: z.boolean() }).parse(i),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    await assertAdminOrCoach(supabase, userId);
+    const { error } = await supabase.from("agreement_templates")
+      .update({ is_active: data.is_active } as any).eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
 // ---- SignNow settings ----
 
 export const updateSignNowSettings = createServerFn({ method: "POST" })
