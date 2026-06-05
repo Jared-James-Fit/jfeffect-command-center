@@ -9,6 +9,7 @@ import { ClipboardCheck, CheckCircle2, ShieldAlert, MessageCircle, Video, Mail, 
 import { toast } from "sonner";
 import { PowerlifterBadge } from "@/components/powerlifter-badge";
 import { ExternalLink } from "lucide-react";
+import { SocialIcons } from "@/components/social-icons";
 
 export const Route = createFileRoute("/_authenticated/portal/")({ component: PortalHome });
 
@@ -162,6 +163,7 @@ function PortalHome() {
             {client?.is_powerlifter && client?.powerlifting_visible_to_client && (
               <PowerlifterBadge label={client.powerlifter_badge_label} size="sm" />
             )}
+            <SocialIcons client={client} size="sm" />
           </>
         }
         subtitle="Your private coaching dashboard."
