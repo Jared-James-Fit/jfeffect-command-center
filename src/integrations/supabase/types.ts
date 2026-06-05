@@ -915,6 +915,7 @@ export type Database = {
       coaching_products: {
         Row: {
           active: boolean
+          archived: boolean
           created_at: string
           created_by: string | null
           currency: string
@@ -922,8 +923,12 @@ export type Database = {
           details: string | null
           id: string
           image_url: string | null
+          mode: string
           name: string
+          notes: string | null
+          offer_id: string | null
           payment_link_url: string | null
+          payment_structure: string | null
           price_cents: number
           stripe_payment_link_id: string | null
           stripe_price_id: string | null
@@ -932,6 +937,7 @@ export type Database = {
         }
         Insert: {
           active?: boolean
+          archived?: boolean
           created_at?: string
           created_by?: string | null
           currency?: string
@@ -939,8 +945,12 @@ export type Database = {
           details?: string | null
           id?: string
           image_url?: string | null
+          mode?: string
           name: string
+          notes?: string | null
+          offer_id?: string | null
           payment_link_url?: string | null
+          payment_structure?: string | null
           price_cents: number
           stripe_payment_link_id?: string | null
           stripe_price_id?: string | null
@@ -949,6 +959,7 @@ export type Database = {
         }
         Update: {
           active?: boolean
+          archived?: boolean
           created_at?: string
           created_by?: string | null
           currency?: string
@@ -956,15 +967,27 @@ export type Database = {
           details?: string | null
           id?: string
           image_url?: string | null
+          mode?: string
           name?: string
+          notes?: string | null
+          offer_id?: string | null
           payment_link_url?: string | null
+          payment_structure?: string | null
           price_cents?: number
           stripe_payment_link_id?: string | null
           stripe_price_id?: string | null
           stripe_product_id?: string | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "coaching_products_offer_id_fkey"
+            columns: ["offer_id"]
+            isOneToOne: false
+            referencedRelation: "offers"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       communication_log: {
         Row: {
@@ -2301,6 +2324,7 @@ export type Database = {
           assigned_by: string | null
           cancellation_policy: string | null
           client_id: string
+          confirmation_email_sent_at: string | null
           created_at: string
           currency: string | null
           deposit_amount: number | null
@@ -2313,6 +2337,8 @@ export type Database = {
           installment_amount: number | null
           is_fixed_term_commitment: boolean | null
           is_recurring: boolean | null
+          last_payment_update_at: string | null
+          last_payment_update_source: string | null
           location: string | null
           number_of_payments: number | null
           offer_id: string | null
@@ -2328,6 +2354,7 @@ export type Database = {
           purchase_disclaimer: string | null
           purchased_at: string
           refund_policy: string | null
+          service_status: string
           session_length_minutes: number | null
           sessions_booked: number | null
           sessions_cancelled: number | null
@@ -2338,9 +2365,13 @@ export type Database = {
           short_description: string | null
           status: string
           stripe_checkout_session_id: string | null
+          stripe_customer_id: string | null
+          stripe_payment_intent_id: string | null
           stripe_payment_link: string | null
           stripe_price_id: string | null
           stripe_product_id: string | null
+          stripe_receipt_url: string | null
+          stripe_subscription_id: string | null
           term_duration_text: string | null
           term_end_date: string | null
           term_start_date: string | null
@@ -2367,6 +2398,7 @@ export type Database = {
           assigned_by?: string | null
           cancellation_policy?: string | null
           client_id: string
+          confirmation_email_sent_at?: string | null
           created_at?: string
           currency?: string | null
           deposit_amount?: number | null
@@ -2379,6 +2411,8 @@ export type Database = {
           installment_amount?: number | null
           is_fixed_term_commitment?: boolean | null
           is_recurring?: boolean | null
+          last_payment_update_at?: string | null
+          last_payment_update_source?: string | null
           location?: string | null
           number_of_payments?: number | null
           offer_id?: string | null
@@ -2394,6 +2428,7 @@ export type Database = {
           purchase_disclaimer?: string | null
           purchased_at?: string
           refund_policy?: string | null
+          service_status?: string
           session_length_minutes?: number | null
           sessions_booked?: number | null
           sessions_cancelled?: number | null
@@ -2404,9 +2439,13 @@ export type Database = {
           short_description?: string | null
           status?: string
           stripe_checkout_session_id?: string | null
+          stripe_customer_id?: string | null
+          stripe_payment_intent_id?: string | null
           stripe_payment_link?: string | null
           stripe_price_id?: string | null
           stripe_product_id?: string | null
+          stripe_receipt_url?: string | null
+          stripe_subscription_id?: string | null
           term_duration_text?: string | null
           term_end_date?: string | null
           term_start_date?: string | null
@@ -2433,6 +2472,7 @@ export type Database = {
           assigned_by?: string | null
           cancellation_policy?: string | null
           client_id?: string
+          confirmation_email_sent_at?: string | null
           created_at?: string
           currency?: string | null
           deposit_amount?: number | null
@@ -2445,6 +2485,8 @@ export type Database = {
           installment_amount?: number | null
           is_fixed_term_commitment?: boolean | null
           is_recurring?: boolean | null
+          last_payment_update_at?: string | null
+          last_payment_update_source?: string | null
           location?: string | null
           number_of_payments?: number | null
           offer_id?: string | null
@@ -2460,6 +2502,7 @@ export type Database = {
           purchase_disclaimer?: string | null
           purchased_at?: string
           refund_policy?: string | null
+          service_status?: string
           session_length_minutes?: number | null
           sessions_booked?: number | null
           sessions_cancelled?: number | null
@@ -2470,9 +2513,13 @@ export type Database = {
           short_description?: string | null
           status?: string
           stripe_checkout_session_id?: string | null
+          stripe_customer_id?: string | null
+          stripe_payment_intent_id?: string | null
           stripe_payment_link?: string | null
           stripe_price_id?: string | null
           stripe_product_id?: string | null
+          stripe_receipt_url?: string | null
+          stripe_subscription_id?: string | null
           term_duration_text?: string | null
           term_end_date?: string | null
           term_start_date?: string | null
