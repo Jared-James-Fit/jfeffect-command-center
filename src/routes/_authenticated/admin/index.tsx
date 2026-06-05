@@ -601,3 +601,39 @@ function MiniStat({ label, value, tone }: { label: string; value: number; tone?:
     </div>
   );
 }
+
+type AgreementBlocker = { key: string; label: string; tone: string };
+
+function blockerFor(a: any): AgreementBlocker {
+  if (a.signer_mismatch) return { key: "mismatch", label: "Signer mismatch", tone: "border-destructive/40 bg-destructive/10 text-destructive" };
+  if (a.status === "Error" || a.webhook_last_event === "error" || a.webhook_last_event === "failed") {
+    return { key: "error", label: "SignNow error", tone: "border-destructive/40 bg-destructive/10 text-destructive" };
+  }
+  if (a.status === "Manual Action Needed" || a.status === "Needs Resend") {
+    return { key: "manual", label: "Manual action", tone: "border-warning/40 bg-warning/10 text-warning" };
+  }
+  if (a.status === "Needs Manual Verification") {
+    return { key: "verify", label: "Needs verification", tone: "border-warning/40 bg-warning/10 text-warning" };
+  }
+  if (a.status === "Expired") return { key: "expired", label: "Expired", tone: "border-destructive/40 bg-destructive/10 text-destructive" };
+  if (a.status === "Signed" && a.verification_status === "Not Verified") {
+    return { key: "unverified", label: "Signed · unverified", tone: "border-warning/40 bg-warning/10 text-warning" };
+  }
+  if (["Sent", "Opened", "Waiting on Client"].includes(a.status)) {
+    return { key: "pending", label: "Sent · awaiting signature", tone: "border-blue-500/40 bg-blue-500/10 text-blue-600 dark:text-blue-300" };
+  }
+  return { key: "other", label: a.status ?? "Attention", tone: "border-border text-muted-foreground" };
+}
+
+function categorizeAgreements(rows: any[]) {
+  const order = ["mismatch", "error", "expired", "manual", "verify", "unverified", "pending", "other"];
+  const map = new Map<string, { key: string; label: string; tone: string; count: number }>();
+  for (const r of rows) {
+    const c = blockerFor(r);
+    const prev = map.get(c.key);
+    if (prev) prev.count += 1;
+    else map.set(c.key, { ...c, count: 1 });
+  }
+  const counts = order.flatMap((k) => (map.has(k) ? [map.get(k)!] : []));
+  return { counts };
+}
