@@ -376,6 +376,14 @@ function ClientDetail() {
         <TrainingScheduleCard client={form} />
         <PowerlifterSection form={form} set={set} />
         <Card className="border-border bg-card p-6 space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Social Media</h3>
+            <SocialIcons client={form} size="xs" />
+          </div>
+          <p className="text-[11px] text-muted-foreground">Usernames/handles only — the app auto-links where possible.</p>
+          <SocialHandlesEditor values={form} onChange={(k, v) => set(k, v)} />
+        </Card>
+        <Card className="border-border bg-card p-6 space-y-3">
           <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Quick Jump</h3>
           <p className="text-xs text-muted-foreground">Open a management area for this client.</p>
           <div className="grid gap-2">
