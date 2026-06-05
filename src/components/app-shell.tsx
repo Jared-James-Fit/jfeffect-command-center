@@ -88,10 +88,15 @@ export function AppShell({ items, title, children }: { items: NavItem[]; title: 
           </Button>
         </header>
 
-        <main className="flex-1 overflow-x-hidden">{children}</main>
+        <main className="flex-1 overflow-x-hidden pb-[calc(88px+env(safe-area-inset-bottom))] md:pb-0">
+          {children}
+        </main>
 
-        {/* Mobile bottom nav */}
-        <nav className="sticky bottom-0 z-10 grid grid-cols-5 gap-px border-t border-border bg-card md:hidden">
+        {/* Mobile bottom nav — fixed, app-like tab bar */}
+        <nav
+          className="fixed inset-x-0 bottom-0 z-50 grid grid-cols-5 border-t border-border bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80 shadow-[0_-4px_20px_-8px_rgba(0,0,0,0.5)] md:hidden"
+          style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+        >
           {items.slice(0, 5).map((item) => {
             const active = pathname === item.to;
             const Icon = item.icon;
@@ -100,12 +105,15 @@ export function AppShell({ items, title, children }: { items: NavItem[]; title: 
                 key={item.to}
                 to={item.to}
                 className={cn(
-                  "flex flex-col items-center justify-center gap-1 px-2 py-2 text-[10px] font-semibold",
-                  active ? "text-primary" : "text-muted-foreground"
+                  "flex min-h-[64px] flex-col items-center justify-center gap-1 px-2 pt-2.5 pb-2 text-[11px] font-semibold transition-colors",
+                  active
+                    ? "text-primary"
+                    : "text-muted-foreground hover:text-foreground"
                 )}
               >
-                <Icon className="h-4 w-4" />
-                <span className="truncate">{item.label}</span>
+                <Icon className={cn("h-6 w-6", active && "drop-shadow-[0_0_6px_hsl(var(--primary)/0.6)]")} />
+                <span className="truncate text-[11px] leading-tight">{item.label}</span>
+                {active && <span className="mt-0.5 h-1 w-6 rounded-full bg-primary" />}
               </Link>
             );
           })}
