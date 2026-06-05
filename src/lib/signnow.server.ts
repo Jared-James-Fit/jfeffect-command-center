@@ -137,6 +137,12 @@ export interface SignNowInviteOptions {
   message?: string;
   expirationDays?: number;
   /**
+   * Role name to assign the signer to. Must exist on the SignNow document
+   * (templates define their own role names; "Recipient 1" is NOT a default).
+   * If omitted, callers should pre-resolve via listDocumentRoles().
+   */
+  roleName?: string;
+  /**
    * SignNow rejects personalized invite subject/message (error 65582) on
    * standard plans. Default off — only set true when the account plan is
    * known to support personalized invites.
@@ -155,13 +161,14 @@ export interface SignNowInviteResult {
  */
 export async function createSignNowInvite(opts: SignNowInviteOptions): Promise<SignNowInviteResult> {
   const personalize = opts.allowPersonalizedEmail === true;
+  const role = opts.roleName && opts.roleName.trim() ? opts.roleName.trim() : "Signer 1";
   const body = {
     document_id: opts.documentId,
     to: [
       {
         email: opts.signerEmail,
-        role_name: "Recipient 1",
-        role: "Recipient 1",
+        role_name: role,
+        role: role,
         order: 1,
         ...(opts.expirationDays ? { expiration_days: opts.expirationDays } : {}),
         ...(personalize && opts.subject ? { subject: opts.subject } : {}),
@@ -184,6 +191,51 @@ export async function createSignNowInvite(opts: SignNowInviteOptions): Promise<S
     inviteId: json?.id ?? json?.invite_id ?? null,
     signingLink: json?.url ?? json?.signing_link ?? null,
   };
+}
+
+export interface SignNowRole {
+  name: string;
+  uniqueId?: string | null;
+  signingOrder?: number | null;
+}
+
+/**
+ * List the signer roles defined on a SignNow document (or document copied from
+ * a template). SignNow templates each define their own role names (e.g.
+ * "Client", "Parent/Guardian"); there is no universal default. Use this to
+ * resolve the actual role names before sending an invite — otherwise SignNow
+ * rejects with error 65536: "Role does not exist on document".
+ *
+ * Strategy: GET /document/{id} and prefer the top-level `roles` array. Fall
+ * back to unique role names found on the document's fields.
+ */
+export async function listDocumentRoles(documentId: string): Promise<SignNowRole[]> {
+  const res = await signnowFetch(`/document/${encodeURIComponent(documentId)}`);
+  const text = await res.text();
+  if (!res.ok) throw new SignNowApiError(res.status, text);
+  const json = JSON.parse(text);
+  const roles: SignNowRole[] = [];
+  const seen = new Set<string>();
+  const push = (name: any, uniqueId?: any, order?: any) => {
+    if (typeof name !== "string") return;
+    const n = name.trim();
+    if (!n || seen.has(n)) return;
+    seen.add(n);
+    roles.push({
+      name: n,
+      uniqueId: typeof uniqueId === "string" ? uniqueId : null,
+      signingOrder: typeof order === "number" ? order : Number.isFinite(Number(order)) ? Number(order) : null,
+    });
+  };
+  if (Array.isArray(json?.roles)) {
+    for (const r of json.roles) push(r?.name, r?.unique_id ?? r?.id, r?.signing_order);
+  }
+  if (Array.isArray(json?.fields)) {
+    for (const f of json.fields) push(f?.role, f?.role_id, f?.signing_order ?? f?.signer_index);
+  }
+  // Stable sort by signing order if present
+  roles.sort((a, b) => (a.signingOrder ?? 999) - (b.signingOrder ?? 999));
+  return roles;
 }
 
 /** Fire a SignNow reminder for an outstanding invite. */
