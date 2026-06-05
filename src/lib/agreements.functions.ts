@@ -366,6 +366,12 @@ export const createAgreement = createServerFn({ method: "POST" })
       } as any,
     } as any);
 
+    // Mirror high-level status to clients.agreement_status so dashboards/lists
+    // stay accurate without requiring the agreements row to be re-read.
+    await supabase.from("clients").update({
+      agreement_status: initialStatus,
+    } as any).eq("id", data.client_id);
+
     return { ...ag, _api_error: apiError, _api_attempted: apiAttempted, _api_document_id: apiDocumentId };
   });
 
