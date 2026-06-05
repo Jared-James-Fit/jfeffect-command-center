@@ -73,10 +73,13 @@ export type Database = {
           description: string | null
           id: string
           is_active: boolean
+          last_used_at: string | null
           name: string
           notes: string | null
           signnow_template_id: string | null
           signnow_url: string | null
+          times_completed: number
+          times_sent: number
           updated_at: string
           version: string
         }
@@ -88,10 +91,13 @@ export type Database = {
           description?: string | null
           id?: string
           is_active?: boolean
+          last_used_at?: string | null
           name: string
           notes?: string | null
           signnow_template_id?: string | null
           signnow_url?: string | null
+          times_completed?: number
+          times_sent?: number
           updated_at?: string
           version?: string
         }
@@ -103,10 +109,13 @@ export type Database = {
           description?: string | null
           id?: string
           is_active?: boolean
+          last_used_at?: string | null
           name?: string
           notes?: string | null
           signnow_template_id?: string | null
           signnow_url?: string | null
+          times_completed?: number
+          times_sent?: number
           updated_at?: string
           version?: string
         }
@@ -139,8 +148,10 @@ export type Database = {
           signed_at: string | null
           signed_copy_storage_path: string | null
           signed_copy_url: string | null
+          signed_in_person: boolean
           signer_mismatch: boolean
           signer_name_in_signnow: string | null
+          signing_method: string | null
           signnow_completed_link: string | null
           signnow_document_id: string | null
           signnow_signing_link: string | null
@@ -180,8 +191,10 @@ export type Database = {
           signed_at?: string | null
           signed_copy_storage_path?: string | null
           signed_copy_url?: string | null
+          signed_in_person?: boolean
           signer_mismatch?: boolean
           signer_name_in_signnow?: string | null
+          signing_method?: string | null
           signnow_completed_link?: string | null
           signnow_document_id?: string | null
           signnow_signing_link?: string | null
@@ -221,8 +234,10 @@ export type Database = {
           signed_at?: string | null
           signed_copy_storage_path?: string | null
           signed_copy_url?: string | null
+          signed_in_person?: boolean
           signer_mismatch?: boolean
           signer_name_in_signnow?: string | null
+          signing_method?: string | null
           signnow_completed_link?: string | null
           signnow_document_id?: string | null
           signnow_signing_link?: string | null
