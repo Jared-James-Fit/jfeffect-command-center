@@ -7,6 +7,7 @@ import {
   listSignNowTemplates,
   copyTemplateToDocument,
   createSignNowInvite as apiCreateSignNowInvite,
+  listDocumentRoles,
   remindSignNowInvite,
   SignNowNotConfiguredError,
   SignNowApiError,
@@ -359,6 +360,25 @@ export const createAgreement = createServerFn({ method: "POST" })
         try {
           const docName = `${template_name} — ${client.full_name}`;
           const documentId = await copyTemplateToDocument(signnow_template_id, docName);
+          // SignNow templates each define their own signer role names.
+          // Using a hardcoded default (e.g. "Recipient 1") causes error 65536
+          // "Role does not exist on document". Resolve actual roles from the
+          // copied document, map single-signer templates to the only role,
+          // and block multi-signer templates with a clear error listing the
+          // required roles (no fake sent state).
+          const roles = await listDocumentRoles(documentId);
+          if (roles.length === 0) {
+            throw new Error(
+              `SignNow template has no signer roles defined. Open the template in SignNow and assign at least one signer role before inviting.`,
+            );
+          }
+          if (roles.length > 1) {
+            const names = roles.map((r) => r.name).join(", ");
+            throw new Error(
+              `SignNow template requires multiple signer roles (${names}). Multi-signer invites are not supported yet — please use SignNow directly for this template.`,
+            );
+          }
+          const roleName = roles[0].name;
           // NOTE: Do NOT pass subject/message — SignNow rejects personalized
           // invite subject/message (error 65582) unless the account is on a
           // higher plan. Use SignNow's default invite email instead.
@@ -368,6 +388,7 @@ export const createAgreement = createServerFn({ method: "POST" })
             signerName: client.full_name,
             fromEmail: settings.account_email,
             expirationDays: 30,
+            roleName,
           });
           apiDocumentId = documentId;
           apiSigningLink = invite.signingLink ?? apiSigningLink;
