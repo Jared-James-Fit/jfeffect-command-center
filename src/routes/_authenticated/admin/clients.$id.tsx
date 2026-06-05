@@ -646,6 +646,30 @@ function ClientMessagesTab({ clientId }: { clientId: string }) {
   return <MessageThread clientId={clientId} role="admin" conversationState={state ?? null} />;
 }
 
+function AssignCheckInLibrary({ value, onChange }: { value: string | null; onChange: (v: string | null) => void }) {
+  const { data: links = [] } = useQuery({
+    queryKey: ["check-in-links-active"],
+    queryFn: () => listCheckInLinks({ includeArchived: false }),
+  });
+  return (
+    <div className="grid gap-2 md:grid-cols-[1fr_auto] items-end">
+      <div>
+        <Label>Assigned check-in link (from library)</Label>
+        <Select value={value ?? "none"} onValueChange={(v) => onChange(v === "none" ? null : v)}>
+          <SelectTrigger><SelectValue placeholder="— None —" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="none">— None (use custom link below) —</SelectItem>
+            {links.filter((l) => l.active).map((l) => (
+              <SelectItem key={l.id} value={l.id}>{l.title} {l.due_day ? `· ${l.due_day}` : ""}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <Link to="/admin/check-ins"><Button variant="outline" size="sm">Manage library</Button></Link>
+    </div>
+  );
+}
+
 function fmtDate(v?: string | null) {
   if (!v) return "—";
   return new Date(v).toLocaleString();
