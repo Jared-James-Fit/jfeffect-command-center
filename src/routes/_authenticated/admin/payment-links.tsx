@@ -15,7 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { DoubleConfirmDeleteDialog } from "@/components/double-confirm-delete-dialog";
 import { AssignOfferDialog } from "@/components/assign-offer-dialog";
 import { toast } from "sonner";
-import { Copy, ExternalLink, Loader2, Plus, Trash2, ImagePlus, Pencil, Archive, ArchiveRestore, FileSignature, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { Copy, ExternalLink, Loader2, Plus, Trash2, ImagePlus, Pencil, Archive, ArchiveRestore, FileSignature, AlertTriangle, CheckCircle2, Search, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import {
   listCoachingProducts,
@@ -216,16 +216,38 @@ function PaymentLinksPage() {
 
   const items = (data?.items ?? []) as Product[];
 
-  const activeItems = useMemo(() => items.filter((p) => (p.status ?? (p.active ? "Active" : "Draft")) !== "Archived"), [items]);
-  const archivedItems = useMemo(() => items.filter((p) => (p.status ?? "") === "Archived"), [items]);
-  const [showArchived, setShowArchived] = useState(false);
-  const visible = showArchived ? archivedItems : activeItems;
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "Active" | "Draft" | "Archived">("all");
+  const [typeFilter, setTypeFilter] = useState<string>("all");
+  const [structureFilter, setStructureFilter] = useState<string>("all");
+  const [linkFilter, setLinkFilter] = useState<"all" | "linked" | "missing">("all");
+
+  const filteredItems = useMemo(() => {
+    return items.filter((p) => {
+      const s = (p.status ?? (p.active ? "Active" : "Draft"));
+      const q = searchQuery.trim().toLowerCase();
+      const matchesSearch = !q ||
+        p.name.toLowerCase().includes(q) ||
+        (p.description ?? "").toLowerCase().includes(q) ||
+        (p.product_type ?? "").toLowerCase().includes(q) ||
+        (p.payment_structure ?? "").toLowerCase().includes(q);
+      const matchesStatus = statusFilter === "all" || s === statusFilter;
+      const matchesType = typeFilter === "all" || (p.product_type ?? "") === typeFilter;
+      const matchesStructure = structureFilter === "all" || (p.payment_structure ?? "") === structureFilter;
+      const matchesLink = linkFilter === "all" || (linkFilter === "linked" ? !!p.payment_link_url : !p.payment_link_url);
+      return matchesSearch && matchesStatus && matchesType && matchesStructure && matchesLink;
+    });
+  }, [items, searchQuery, statusFilter, typeFilter, structureFilter, linkFilter]);
+
+  const visible = filteredItems;
 
   async function copyLink(url: string | null) {
     if (!url) return;
     await navigator.clipboard.writeText(url);
     toast.success("Payment link copied");
   }
+
+  const hasFilters = searchQuery || statusFilter !== "all" || typeFilter !== "all" || structureFilter !== "all" || linkFilter !== "all";
 
   return (
     <>
@@ -239,19 +261,59 @@ function PaymentLinksPage() {
         }
       />
       <div className="p-6 md:p-8 space-y-6">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xs uppercase tracking-widest text-muted-foreground">
-            {showArchived ? "Archived products" : "Your products"}
-          </h2>
-          <Button size="sm" variant="outline" onClick={() => setShowArchived((v) => !v)}>
-            {showArchived ? "Show active" : "Show archived"}
-          </Button>
+        <div className="flex flex-col gap-4">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search products by name, description, type…"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9"
+            />
+            {searchQuery && (
+              <button onClick={() => setSearchQuery("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant={statusFilter === "all" ? "default" : "outline"} className="cursor-pointer" onClick={() => setStatusFilter("all")}>All statuses</Badge>
+            <Badge variant={statusFilter === "Active" ? "default" : "outline"} className="cursor-pointer" onClick={() => setStatusFilter("Active")}>Active</Badge>
+            <Badge variant={statusFilter === "Draft" ? "default" : "outline"} className="cursor-pointer" onClick={() => setStatusFilter("Draft")}>Draft</Badge>
+            <Badge variant={statusFilter === "Archived" ? "default" : "outline"} className="cursor-pointer" onClick={() => setStatusFilter("Archived")}>Archived</Badge>
+            <div className="w-px h-5 bg-border mx-1" />
+            <Badge variant={linkFilter === "all" ? "default" : "outline"} className="cursor-pointer" onClick={() => setLinkFilter("all")}>All links</Badge>
+            <Badge variant={linkFilter === "linked" ? "default" : "outline"} className="cursor-pointer" onClick={() => setLinkFilter("linked")}>Has Stripe Link</Badge>
+            <Badge variant={linkFilter === "missing" ? "default" : "outline"} className="cursor-pointer" onClick={() => setLinkFilter("missing")}>Missing Link</Badge>
+            {hasFilters && (
+              <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => { setSearchQuery(""); setStatusFilter("all"); setTypeFilter("all"); setStructureFilter("all"); setLinkFilter("all"); }}>
+                <X className="h-3 w-3 mr-1" /> Clear filters
+              </Button>
+            )}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Select value={typeFilter} onValueChange={setTypeFilter}>
+              <SelectTrigger className="w-auto min-w-[160px] h-8 text-xs"><SelectValue placeholder="Product type" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All types</SelectItem>
+                {PRODUCT_TYPES.map((t) => (<SelectItem key={t} value={t}>{t}</SelectItem>))}
+              </SelectContent>
+            </Select>
+            <Select value={structureFilter} onValueChange={setStructureFilter}>
+              <SelectTrigger className="w-auto min-w-[180px] h-8 text-xs"><SelectValue placeholder="Payment structure" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All structures</SelectItem>
+                {PAYMENT_STRUCTURES.map((s) => (<SelectItem key={s} value={s}>{s}</SelectItem>))}
+              </SelectContent>
+            </Select>
+            <span className="text-xs text-muted-foreground ml-auto">{visible.length} product{visible.length !== 1 ? "s" : ""}</span>
+          </div>
         </div>
         {isLoading ? (
           <Card className="border-border bg-card p-8 text-center text-muted-foreground"><Loader2 className="inline h-4 w-4 animate-spin mr-2" />Loading…</Card>
         ) : visible.length === 0 ? (
           <Card className="border-border bg-card p-10 text-center text-sm text-muted-foreground">
-            {showArchived ? "No archived products." : "No products yet. Create your first product."}
+            {hasFilters ? "No products match your filters. Try clearing some filters." : "No products yet. Create your first product."}
           </Card>
         ) : (
           <div className="grid gap-4 md:grid-cols-2">
