@@ -16,6 +16,7 @@ import { PAYMENT_RECORD_STATUSES, PURCHASE_RECORD_STATUSES } from "@/lib/offers"
 import { PurchaseAgreementBadge, computePurchaseAgreementStatus } from "@/components/purchase-agreement-status";
 import { useServerFn } from "@tanstack/react-start";
 import { getSignedAgreementUrl } from "@/lib/agreements.functions";
+import { Checkbox } from "@/components/ui/checkbox";
 
 export const Route = createFileRoute("/_authenticated/admin/purchases/$id")({ component: PurchaseDetail });
 
@@ -47,7 +48,12 @@ function PurchaseDetail() {
     const { id: _i, created_at, updated_at, clients, ...patch } = form;
     if (patch.payment_status === "Paid" && !patch.paid_at) patch.paid_at = new Date().toISOString();
     const { error } = await supabase.from("purchase_records").update(patch).eq("id", id);
-    if (error) return toast.error(error.message);
+    if (error) {
+      const msg = /Agreement required/i.test(error.message)
+        ? "Blocked: this purchase needs a verified signed agreement before service can start. Verify the agreement or apply an override."
+        : error.message;
+      return toast.error(msg);
+    }
     toast.success("Saved");
     qc.invalidateQueries({ queryKey: ["purchase-record", id] });
     qc.invalidateQueries({ queryKey: ["purchase-records"] });
