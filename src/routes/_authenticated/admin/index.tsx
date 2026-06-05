@@ -165,6 +165,17 @@ function AdminDashboard() {
     queryKey: ["lift-videos-admin"],
     queryFn: () => listLiftVideos(),
   });
+
+  const { data: paymentsAttention = [] } = useQuery({
+    queryKey: ["payments-needing-attention"],
+    queryFn: async () => (await supabase
+      .from("purchase_records")
+      .select("id, offer_name, payment_status, full_payable_amount, currency, purchased_at, client_id, stripe_payment_link, clients(id, full_name)")
+      .in("payment_status", ["Pending", "Pending Payment", "Overdue", "Failed", "Manual Payment Needed", "Partially Paid"])
+      .order("purchased_at", { ascending: false })
+      .limit(8)).data ?? [],
+  });
+
   const liftNeedReview = liftVideos
     .filter((v) => !v.reviewed_at && v.status !== "Archived")
     .sort((a, b) => (Number(b.is_urgent) - Number(a.is_urgent)) || (new Date(a.created_at).getTime() - new Date(b.created_at).getTime()))
@@ -284,6 +295,38 @@ function AdminDashboard() {
                   </li>
                 );
               })}
+            </ul>
+          )}
+        </Card>
+
+        <Card className="border-border bg-card p-6">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-muted-foreground">
+              <DollarSign className="h-4 w-4" /> Payments Needing Attention
+            </h2>
+            <Link to="/admin/payments" className="text-xs font-semibold text-primary hover:underline">Open payments →</Link>
+          </div>
+          {paymentsAttention.length === 0 ? (
+            <div className="rounded-md border border-dashed border-border p-6 text-center text-sm text-muted-foreground">All payments look settled.</div>
+          ) : (
+            <ul className="divide-y divide-border">
+              {paymentsAttention.map((p: any) => (
+                <li key={p.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <Badge variant="outline" className={
+                      p.payment_status === "Overdue" || p.payment_status === "Failed" || p.payment_status === "Manual Payment Needed"
+                        ? "border-destructive/40 bg-destructive/10 text-destructive"
+                        : "border-warning/40 bg-warning/10 text-warning"
+                    }>{p.payment_status}</Badge>
+                    <Link to="/admin/clients/$id" params={{ id: p.clients?.id ?? p.client_id }} className="text-sm font-semibold hover:underline">{p.clients?.full_name ?? "Client"}</Link>
+                    <span className="truncate text-xs text-muted-foreground max-w-md">{p.offer_name}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-xs">{p.currency ?? "USD"} {Number(p.full_payable_amount ?? 0).toLocaleString()}</span>
+                    <Link to="/admin/purchases/$id" params={{ id: p.id }} className="text-xs font-semibold text-primary hover:underline">Open →</Link>
+                  </div>
+                </li>
+              ))}
             </ul>
           )}
         </Card>
