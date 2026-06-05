@@ -148,6 +148,36 @@ function MyProgram() {
           </div>
         </Card>
 
+        {visibleCardio.length > 0 && (
+          <Card className="border-border bg-card p-6">
+            <h2 className="mb-4 flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-muted-foreground">
+              <Heart className="h-4 w-4" /> Cardio Targets
+            </h2>
+            <div className="grid gap-3 md:grid-cols-2">
+              {visibleCardio.map((c: any) => (
+                <div key={c.id} className="rounded-md border border-border bg-secondary/30 p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline" className={dayTypeTone(c.day_type)}>{dayTypeLabel(c)}</Badge>
+                      <span className="text-sm font-bold">{c.cardio_type === "Custom" ? c.custom_type : c.cardio_type}</span>
+                    </div>
+                    <Badge variant="outline" className="text-[10px]">{c.start_date} → {c.end_date ?? "ongoing"}</Badge>
+                  </div>
+                  <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+                    {c.frequency_per_week && <Item label="Frequency" value={`${c.frequency_per_week}x / week`} />}
+                    {c.duration_minutes && <Item label="Duration" value={`${c.duration_minutes} min`} />}
+                    {c.intensity && <Item label="Intensity" value={c.intensity} />}
+                    {c.heart_rate_zone && <Item label="HR Zone" value={c.heart_rate_zone} />}
+                    {c.step_target && <Item label="Steps" value={c.step_target.toLocaleString()} />}
+                    {c.machine_preference && <Item label="Machine" value={c.machine_preference} />}
+                  </div>
+                  {c.client_notes && <p className="mt-3 text-xs text-muted-foreground">{c.client_notes}</p>}
+                </div>
+              ))}
+            </div>
+          </Card>
+        )}
+
         <Card className="border-border bg-card p-6 md:p-8">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="flex items-start gap-3">
@@ -208,42 +238,6 @@ function MyProgram() {
           )}
         </Card>
 
-        <Card className="border-border bg-card p-6">
-          <h2 className="mb-4 flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-muted-foreground">
-            <Dumbbell className="h-4 w-4" /> Current Training Phase
-          </h2>
-          {activePhase ? (() => {
-            const d = derivePhase(activePhase);
-            return (
-              <div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-lg font-bold">{displayTitle(activePhase)}</span>
-                  <Badge variant="outline" className={toneClasses(d.tone)}>{d.label}</Badge>
-                  <Badge variant="outline" className="text-[10px]">{activePhase.phase_type}</Badge>
-                </div>
-                <div className="mt-1 text-xs text-muted-foreground">
-                  {format(parseISO(activePhase.start_date), "MMM d, yyyy")} → {format(parseISO(activePhase.end_date), "MMM d, yyyy")}
-                </div>
-                <div className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-4">
-                  <Item label="Week" value={`${d.currentWeek} / ${d.totalWeeks}`} />
-                  <Item label="Days remaining" value={d.daysRemaining < 0 ? `${Math.abs(d.daysRemaining)}d over` : `${d.daysRemaining}d`} />
-                  <Item label="Weeks left" value={String(d.weeksRemaining)} />
-                  <Item label="Progress" value={`${d.percentComplete}%`} />
-                </div>
-                <Progress value={d.percentComplete} className="mt-3 h-2" />
-                {activePhase.training_goal && (
-                  <p className="mt-4 text-sm"><span className="text-muted-foreground">Goal: </span>{activePhase.training_goal}</p>
-                )}
-                {activePhase.notes && (
-                  <div className="mt-3 rounded-md border border-border bg-secondary/30 p-3 text-sm whitespace-pre-wrap">{activePhase.notes}</div>
-                )}
-              </div>
-            );
-          })() : (
-            <p className="text-sm text-muted-foreground">No active training phase yet. Your coach will assign one soon.</p>
-          )}
-        </Card>
-
         {upcomingDates.length > 0 && (
           <Card className="border-border bg-card p-6">
             <h2 className="mb-4 flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-muted-foreground">
@@ -278,35 +272,6 @@ function MyProgram() {
           </Card>
         )}
 
-        {visibleCardio.length > 0 && (
-          <Card className="border-border bg-card p-6">
-            <h2 className="mb-4 flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-muted-foreground">
-              <Heart className="h-4 w-4" /> Cardio Targets
-            </h2>
-            <div className="grid gap-3 md:grid-cols-2">
-              {visibleCardio.map((c: any) => (
-                <div key={c.id} className="rounded-md border border-border bg-secondary/30 p-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Badge variant="outline" className={dayTypeTone(c.day_type)}>{dayTypeLabel(c)}</Badge>
-                      <span className="text-sm font-bold">{c.cardio_type === "Custom" ? c.custom_type : c.cardio_type}</span>
-                    </div>
-                    <Badge variant="outline" className="text-[10px]">{c.start_date} → {c.end_date ?? "ongoing"}</Badge>
-                  </div>
-                  <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
-                    {c.frequency_per_week && <Item label="Frequency" value={`${c.frequency_per_week}x / week`} />}
-                    {c.duration_minutes && <Item label="Duration" value={`${c.duration_minutes} min`} />}
-                    {c.intensity && <Item label="Intensity" value={c.intensity} />}
-                    {c.heart_rate_zone && <Item label="HR Zone" value={c.heart_rate_zone} />}
-                    {c.step_target && <Item label="Steps" value={c.step_target.toLocaleString()} />}
-                    {c.machine_preference && <Item label="Machine" value={c.machine_preference} />}
-                  </div>
-                  {c.client_notes && <p className="mt-3 text-xs text-muted-foreground">{c.client_notes}</p>}
-                </div>
-              ))}
-            </div>
-          </Card>
-        )}
       </div>
     </>
   );
