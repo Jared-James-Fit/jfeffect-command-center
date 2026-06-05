@@ -248,19 +248,27 @@ export function LiftVideoDialog({ open, onOpenChange, clientId, userId, clientNa
           // Upload the actual video to the client's Google Drive folder and
           // mirror it into media_items so it appears in the Media Review Inbox.
           const perClipNote = noteMode === "perClip" ? clip.note.trim() : (sharedNote || null);
-          const res = await uploadLiftClipToDrive({
-            clientId, clientName, file: clip.file,
-            index: i + 1, total,
-            batchNote: sharedNote || null,
-            perClipNote,
-            urgent: isUrgent,
-            painNote: isUrgent ? urgentNote || null : null,
-            submissionId: driveSubmissionId,
-            initFn, finalizeFn, createSubFn,
-          });
-          driveSubmissionId = res.submissionId;
-          videoUrl = res.url;
-          storagePath = null;
+          try {
+            const res = await uploadLiftClipToDrive({
+              clientId, clientName, file: clip.file,
+              index: i + 1, total,
+              batchNote: sharedNote || null,
+              perClipNote,
+              urgent: isUrgent,
+              painNote: isUrgent ? urgentNote || null : null,
+              submissionId: driveSubmissionId,
+              initFn, finalizeFn, createSubFn,
+            });
+            driveSubmissionId = res.submissionId;
+            videoUrl = res.url;
+            storagePath = null;
+          } catch (driveError) {
+            console.warn("Drive upload failed; falling back to lift video storage", driveError);
+            if (!userId) throw driveError;
+            const fallback = await uploadVideoFile(clip.file, userId);
+            videoUrl = fallback.url;
+            storagePath = fallback.path;
+          }
           source = "upload";
         } else if (clip.kind === "link" && clip.url) {
           videoUrl = clip.url;
@@ -272,7 +280,7 @@ export function LiftVideoDialog({ open, onOpenChange, clientId, userId, clientNa
           .filter(Boolean)
           .join("\n");
 
-        await createClientLiftVideoFn({ data: {
+        const liftVideoPayload = {
           client_id: clientId,
           exercise: "",
           tag: isUrgent ? "Pain / Discomfort" : "Normal Review",
@@ -287,7 +295,15 @@ export function LiftVideoDialog({ open, onOpenChange, clientId, userId, clientNa
           batch_note: sharedNote || null,
           batch_size: total,
           batch_index: i + 1,
-        } });
+        };
+
+        try {
+          await createClientLiftVideoFn({ data: liftVideoPayload });
+        } catch (saveError) {
+          console.warn("Server lift video save failed; falling back to client insert", saveError);
+          if (!userId) throw saveError;
+          await createLiftVideo({ ...liftVideoPayload, uploaded_by: userId } as any);
+        }
       }
 
       setSent(true);

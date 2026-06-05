@@ -1,15 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { supabaseAdmin } from "@/integrations/supabase/client.server";
-import {
-  driveCreateFolder,
-  driveGetFile,
-  driveInitResumableUpload,
-  driveShareAnyoneReader,
-  driveEmbedUrl,
-  driveViewUrl,
-} from "./drive.server";
 
 const MEDIA_TYPE_SUBFOLDERS = [
   "Lift Videos",
@@ -25,11 +16,21 @@ const MEDIA_TYPE_SUBFOLDERS = [
 
 const DEFAULT_ROOT_FOLDER_NAME = "JF Effect Client Files";
 
+async function getAdminClient() {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  return supabaseAdmin as any;
+}
+
+async function getDriveHelpers() {
+  return import("./drive.server");
+}
+
 async function loadSettings(_supabase: any) {
   // Always read Drive settings with the admin client. RLS on
   // media_drive_settings only allows admins, but clients also need to know if
   // uploads are available (so the gate doesn't lie to them and uploads don't
   // throw "not set up" when it actually is).
+  const supabaseAdmin = await getAdminClient();
   const { data } = await (supabaseAdmin as any).from("media_drive_settings").select("*").limit(1).maybeSingle();
   return data as any;
 }
@@ -65,6 +66,7 @@ export const testDriveConnection = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     await requireAdmin(context.supabase, context.userId);
+    const { driveGetFile } = await getDriveHelpers();
     const s = await loadSettings(context.supabase);
     if (!s?.root_folder_id) {
       return { ok: false, status: "Root Folder Missing", message: "No root folder configured." };
@@ -92,6 +94,7 @@ export const setupDriveRoot = createServerFn({ method: "POST" })
   .inputValidator((d: { folderName?: string; existingFolderId?: string }) => d)
   .handler(async ({ data, context }) => {
     await requireAdmin(context.supabase, context.userId);
+    const { driveCreateFolder, driveGetFile } = await getDriveHelpers();
     let folderId = data.existingFolderId?.trim() || "";
     let folderName = data.folderName?.trim() || DEFAULT_ROOT_FOLDER_NAME;
     let folderUrl = "";
@@ -141,7 +144,8 @@ async function ensureClientFolder(supabase: any, clientId: string) {
   }
   // Use admin client for folder bookkeeping so client uploads aren't blocked
   // by RLS on client_drive_folders / clients.
-  const db = supabaseAdmin as any;
+  const db = await getAdminClient();
+  const { driveCreateFolder } = await getDriveHelpers();
   const { data: existing } = await db.from("client_drive_folders").select("*").eq("client_id", clientId).maybeSingle();
   if (existing?.folder_id && existing.subfolders && Object.keys(existing.subfolders).length >= MEDIA_TYPE_SUBFOLDERS.length) {
     return existing;
@@ -198,6 +202,7 @@ export const initMediaUpload = createServerFn({ method: "POST" })
     }).parse(d),
   )
   .handler(async ({ data, context }) => {
+    const { driveInitResumableUpload } = await getDriveHelpers();
     // Hard-block uploads if Drive isn't Ready so clients never hit a broken pipeline.
     const s = await loadSettings(context.supabase);
     if (!s?.root_folder_id || s?.status !== "Ready") {
@@ -228,6 +233,8 @@ export const finalizeMediaUpload = createServerFn({ method: "POST" })
     driveFolderId?: string | null; fileName?: string | null; mimeType?: string | null; sizeBytes?: number | null;
   }) => d)
   .handler(async ({ data, context }) => {
+    const supabaseAdmin = await getAdminClient();
+    const { driveGetFile, driveShareAnyoneReader, driveEmbedUrl, driveViewUrl } = await getDriveHelpers();
     let meta: any = null;
     try {
       meta = await driveGetFile(data.driveFileId);
@@ -271,6 +278,7 @@ export const createSubmission = createServerFn({ method: "POST" })
     urgent?: boolean; painNote?: string | null; clipCount: number; role: "admin" | "client";
   }) => d)
   .handler(async ({ data, context }) => {
+    const supabaseAdmin = await getAdminClient();
     const isAdmin = await context.supabase
       .from("user_roles" as any)
       .select("role")
