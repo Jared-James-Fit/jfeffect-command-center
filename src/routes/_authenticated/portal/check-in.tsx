@@ -14,7 +14,7 @@ function CheckIn() {
 
   const { data: client } = useQuery({
     queryKey: ["my-client", portalUserId],
-    enabled: !!user,
+    enabled: !!portalUserId,
     queryFn: async () => {
       const { data } = await supabase.from("clients").select("*").eq("user_id", portalUserId!).maybeSingle();
       return data;

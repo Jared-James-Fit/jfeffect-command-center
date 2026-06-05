@@ -15,7 +15,7 @@ function NutritionTargets() {
 
   const { data: client } = useQuery({
     queryKey: ["my-client", portalUserId],
-    enabled: !!user,
+    enabled: !!portalUserId,
     queryFn: async () => (await supabase.from("clients").select("id, full_name").eq("user_id", portalUserId!).maybeSingle()).data,
   });
 

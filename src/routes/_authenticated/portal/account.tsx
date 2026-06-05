@@ -32,7 +32,7 @@ function AccountPage() {
 
   const { data: client } = useQuery({
     queryKey: ["my-client-account", portalUserId],
-    enabled: !!user,
+    enabled: !!portalUserId,
     queryFn: async () => {
       const { data, error } = await supabase.from("clients").select("*").eq("user_id", portalUserId!).maybeSingle();
       if (error) throw error;

@@ -33,7 +33,7 @@ function ClientLiftVideos() {
 
   const { data: client } = useQuery({
     queryKey: ["my-client-id", portalUserId],
-    enabled: !!user,
+    enabled: !!portalUserId,
     queryFn: async () => {
       const { data } = await supabase.from("clients").select("id, full_name").eq("user_id", portalUserId!).maybeSingle();
       return data;

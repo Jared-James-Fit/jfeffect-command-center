@@ -15,7 +15,7 @@ function CalendarPage() {
   const portalUserId = usePortalUserId();
   const { data: client } = useQuery({
     queryKey: ["my-client", portalUserId],
-    enabled: !!user,
+    enabled: !!portalUserId,
     queryFn: async () => (await supabase.from("clients").select("*").eq("user_id", portalUserId!).maybeSingle()).data,
   });
 
