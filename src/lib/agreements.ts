@@ -55,9 +55,8 @@ export type SigningMethod = (typeof SIGNING_METHODS)[number];
 export const SIGNNOW_INTEGRATION_STATUSES = [
   "Not Connected",
   "Connected",
-  "Needs Setup",
   "Error",
-  "Manual Mode",
+  "Manual Mode Only",
 ] as const;
 
 export const STATUS_BADGE: Record<string, string> = {

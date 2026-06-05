@@ -321,6 +321,10 @@ function SignNowIntegrationCard() {
         auto_reminders_enabled: !!cur.auto_reminders_enabled,
         signnow_dashboard_url: cur.signnow_dashboard_url || null,
         notes: cur.notes || null,
+        api_client_id: cur.api_client_id || null,
+        api_basic_auth_token: cur.api_basic_auth_token || null,
+        redirect_uri: cur.redirect_uri || null,
+        app_mode_note: cur.app_mode_note || null,
       }});
       toast.success("SignNow settings saved");
       qc.invalidateQueries({ queryKey: ["signnow-settings"] });
@@ -341,7 +345,7 @@ function SignNowIntegrationCard() {
   const status = cur.status ?? "Manual Mode";
   const tone = status === "Connected" ? "border-emerald-500/40 text-emerald-500"
     : status === "Error" ? "border-destructive/40 text-destructive"
-    : status === "Needs Setup" ? "border-amber-500/40 text-amber-500"
+    : status === "Manual Mode Only" ? "border-amber-500/40 text-amber-500"
     : "border-border text-muted-foreground";
 
   return (
@@ -354,7 +358,7 @@ function SignNowIntegrationCard() {
         <Badge variant="outline" className={tone}>{status}</Badge>
       </div>
       <p className="text-xs text-muted-foreground">
-        SignNow handles signing. The app tracks, organizes, labels, and verifies signed agreements per client. In <strong>Manual Mode</strong>, paste signing links and upload signed copies directly. To enable automatic API mode, add the <code>SIGNNOW_API_TOKEN</code> secret and run "Test connection".
+        SignNow handles signing. The app tracks, organizes, labels, and verifies signed agreements per client. In <strong>Manual Mode Only</strong>, paste signing links and upload signed copies directly. To enable automatic API mode, fill in OAuth fields below, add the <code>SIGNNOW_CLIENT_SECRET</code>, <code>SIGNNOW_USERNAME</code>, and <code>SIGNNOW_PASSWORD</code> secrets, then run "Test connection".
       </p>
 
       <div className="grid gap-3 md:grid-cols-2">
@@ -380,10 +384,60 @@ function SignNowIntegrationCard() {
           <Select value={cur.status ?? "Manual Mode"} onValueChange={(v) => setK("status", v)}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
-              {["Not Connected","Connected","Needs Setup","Error","Manual Mode"].map((v) => <SelectItem key={v} value={v}>{v}</SelectItem>)}
+              {["Not Connected","Connected","Error","Manual Mode Only"].map((v) => <SelectItem key={v} value={v}>{v}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>
+
+        <div className="md:col-span-2 pt-2 border-t border-border/50">
+          <h4 className="text-xs uppercase tracking-widest text-muted-foreground mb-2">OAuth / API credentials</h4>
+          <p className="text-[11px] text-muted-foreground mb-3">
+            Non-secret values live here. Secrets (<code>SIGNNOW_CLIENT_SECRET</code>, <code>SIGNNOW_USERNAME</code>, <code>SIGNNOW_PASSWORD</code>, or a static <code>SIGNNOW_API_TOKEN</code>) must be added via the Lovable Cloud Secrets manager — never paste them into a database field.
+          </p>
+        </div>
+        <div className="space-y-1">
+          <Label>API client ID</Label>
+          <Input value={cur.api_client_id ?? ""} onChange={(e) => setK("api_client_id", e.target.value)} placeholder="signnow application client id" />
+        </div>
+        <div className="space-y-1">
+          <Label>Basic Authorization token (optional)</Label>
+          <Input value={cur.api_basic_auth_token ?? ""} onChange={(e) => setK("api_basic_auth_token", e.target.value)} placeholder="base64(client_id:client_secret)" />
+          <p className="text-[10px] text-muted-foreground">Only paste here if you cannot store the client secret as a secret. Prefer the Secrets manager.</p>
+        </div>
+        <div className="space-y-1 md:col-span-2">
+          <Label>OAuth redirect URI</Label>
+          <Input value={cur.redirect_uri ?? ""} onChange={(e) => setK("redirect_uri", e.target.value)} placeholder="https://jfeffect.com/api/public/signnow/callback" />
+        </div>
+
+        <div className="md:col-span-2 grid gap-2 sm:grid-cols-2 rounded-md border border-border bg-secondary/30 p-3">
+          <div className="flex items-center justify-between gap-2">
+            <Label className="text-xs">Access token status</Label>
+            <Badge variant="outline" className={cur.access_token_status === "Valid" ? "border-emerald-500/40 text-emerald-500" : "border-amber-500/40 text-amber-500"}>
+              {cur.access_token_status ?? "Missing"}
+            </Badge>
+          </div>
+          <div className="flex items-center justify-between gap-2">
+            <Label className="text-xs">Refresh token status</Label>
+            <Badge variant="outline" className={cur.refresh_token_status === "Valid" ? "border-emerald-500/40 text-emerald-500" : "border-amber-500/40 text-amber-500"}>
+              {cur.refresh_token_status ?? "Missing"}
+            </Badge>
+          </div>
+          <div className="text-[11px] text-muted-foreground">
+            Last tested at: {cur.last_test_at ? new Date(cur.last_test_at).toLocaleString() : "Never"}
+          </div>
+          <div className="text-[11px] text-muted-foreground">
+            Last synced at: {cur.last_synced_at ? new Date(cur.last_synced_at).toLocaleString() : "Never"}
+          </div>
+          {cur.last_error && (
+            <div className="sm:col-span-2 text-[11px] text-destructive">Last error: {cur.last_error}</div>
+          )}
+        </div>
+
+        <div className="md:col-span-2 space-y-1">
+          <Label>App mode note</Label>
+          <Input value={cur.app_mode_note ?? ""} onChange={(e) => setK("app_mode_note", e.target.value)} placeholder="e.g. Running manually until SignNow OAuth approved" />
+        </div>
+
         <div className="md:col-span-2 flex items-center justify-between rounded-md border border-border bg-secondary/30 px-3 py-2">
           <div>
             <Label className="text-xs">Auto reminders (1d / 3d / 7d)</Label>
