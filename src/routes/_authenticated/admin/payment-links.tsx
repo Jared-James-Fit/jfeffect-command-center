@@ -326,7 +326,7 @@ function PaymentLinksPage() {
         title={`Delete "${pendingDelete?.name}"?`}
         message="This removes the product and deactivates its Stripe link. Past Stripe payments are untouched. Existing client purchase records are preserved."
         confirmLabel="Delete Product"
-        onConfirm={() => pendingDelete && deleteMutation.mutate(pendingDelete.id)}
+        onConfirm={() => { if (pendingDelete) deleteMutation.mutate(pendingDelete.id); }}
       />
     </>
   );
