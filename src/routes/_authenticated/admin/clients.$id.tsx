@@ -233,11 +233,50 @@ function ClientDetail() {
   const adminUpdatePicture = async (path: string) => {
     const { error } = await supabase
       .from("clients")
-      .update({ profile_picture_url: path, profile_picture_updated_at: new Date().toISOString() })
+      .update({
+        profile_picture_url: path,
+        profile_picture_updated_at: new Date().toISOString(),
+        profile_picture_updated_by: "admin",
+        profile_picture_source: "admin_override",
+        profile_picture_needs_update: false,
+        profile_picture_needs_update_at: null,
+        profile_picture_needs_update_reason: null,
+      })
       .eq("id", id);
     if (error) return toast.error(error.message);
     qc.invalidateQueries({ queryKey: ["client", id] });
-    setForm({ ...form, profile_picture_url: path });
+    setForm({
+      ...form,
+      profile_picture_url: path,
+      profile_picture_needs_update: false,
+      profile_picture_needs_update_at: null,
+      profile_picture_needs_update_reason: null,
+    });
+  };
+
+  const requestPictureUpdate = async () => {
+    const reason = window.prompt(
+      "Reason for requesting a new profile picture (optional, shown to the client):",
+      "Please take a new clear headshot.",
+    );
+    if (reason === null) return;
+    const { error } = await supabase
+      .from("clients")
+      .update({
+        profile_picture_needs_update: true,
+        profile_picture_needs_update_at: new Date().toISOString(),
+        profile_picture_needs_update_reason: reason || "Please take a new clear headshot.",
+      })
+      .eq("id", id);
+    if (error) return toast.error(error.message);
+    toast.success("Client will be asked to update their profile picture on next login.");
+    qc.invalidateQueries({ queryKey: ["client", id] });
+    setForm({
+      ...form,
+      profile_picture_needs_update: true,
+      profile_picture_needs_update_at: new Date().toISOString(),
+      profile_picture_needs_update_reason: reason || "Please take a new clear headshot.",
+    });
   };
 
   const links = [
