@@ -265,6 +265,26 @@ function PortalHome() {
 
             {/* Billing & Subscription */}
             <BillingCard purchase={primaryPurchase} cancelled={billingCancelled} needsAction={billingNeedsAction} />
+
+            {client.powerlifting_visible_to_client && (client.is_powerlifter || client.openpowerlifting_url) && (
+              <Card className="border-border bg-card p-6 space-y-3 md:col-span-2">
+                <div className="flex items-center justify-between gap-3">
+                  <h3 className="text-xs uppercase tracking-widest text-muted-foreground">OpenPowerlifting</h3>
+                  {client.is_powerlifter && <PowerlifterBadge label={client.powerlifter_badge_label} size="xs" />}
+                </div>
+                {client.openpowerlifting_url ? (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => window.open(client.openpowerlifting_url, "_blank", "noopener,noreferrer")}
+                  >
+                    <ExternalLink className="mr-1.5 h-3.5 w-3.5" /> Open my OpenPowerlifting profile
+                  </Button>
+                ) : (
+                  <p className="text-xs text-muted-foreground">No OpenPowerlifting link yet. Message Coach Jared to add one.</p>
+                )}
+              </Card>
+            )}
           </div>
         )}
       </div>
