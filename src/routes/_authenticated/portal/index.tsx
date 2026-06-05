@@ -6,7 +6,7 @@ import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { FileText, ClipboardCheck, Dumbbell, CreditCard, Calendar, ExternalLink, CheckCircle2, Circle, ShieldAlert, MessageCircle, Video, FileSignature } from "lucide-react";
+import { FileText, ClipboardCheck, Dumbbell, Calendar, ExternalLink, CheckCircle2, Circle, ShieldAlert, MessageCircle, Video, FileSignature, Target, Image } from "lucide-react";
 import { useEffect, useState } from "react";
 
 export const Route = createFileRoute("/_authenticated/portal/")({ component: PortalHome });
