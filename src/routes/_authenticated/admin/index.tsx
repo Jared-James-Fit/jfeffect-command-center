@@ -262,7 +262,7 @@ function AdminDashboard() {
 
   const quickActions = [
     { label: "Add Client", to: "/admin/clients", icon: Plus },
-    { label: "Open Price Card", to: "/admin/offers", icon: Zap },
+    { label: "Payment Links", to: "/admin/payment-links", icon: Zap },
     { label: "Book PT Session", to: "/admin/calendar", icon: Calendar },
     { label: "Update Phase", to: "/admin/training-phases", icon: Timer },
     { label: "Nutrition Targets", to: "/admin/nutrition-targets", icon: Apple },
@@ -270,7 +270,7 @@ function AdminDashboard() {
     { label: "Review Check-Ins", to: "/admin/check-ins", icon: ClipboardCheck },
     { label: "Programs", to: "/admin/programs", icon: FileText },
     { label: "Add Exercise", to: "/admin/exercises", icon: Dumbbell },
-    { label: "Create Offer", to: "/admin/offers", icon: Package },
+    { label: "Create Product", to: "/admin/payment-links", icon: Package },
   ];
 
   const shortcuts = [

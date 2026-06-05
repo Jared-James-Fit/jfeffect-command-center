@@ -951,6 +951,9 @@ export type Database = {
       coaching_products: {
         Row: {
           active: boolean
+          agreement_before_service: boolean
+          agreement_required: boolean
+          agreement_template_id: string | null
           archived: boolean
           created_at: string
           created_by: string | null
@@ -959,6 +962,7 @@ export type Database = {
           details: string | null
           id: string
           image_url: string | null
+          included_features: string[]
           mode: string
           name: string
           notes: string | null
@@ -966,13 +970,20 @@ export type Database = {
           payment_link_url: string | null
           payment_structure: string | null
           price_cents: number
+          product_type: string | null
+          status: string
           stripe_payment_link_id: string | null
           stripe_price_id: string | null
           stripe_product_id: string | null
+          term_length: number | null
+          term_unit: string | null
           updated_at: string
         }
         Insert: {
           active?: boolean
+          agreement_before_service?: boolean
+          agreement_required?: boolean
+          agreement_template_id?: string | null
           archived?: boolean
           created_at?: string
           created_by?: string | null
@@ -981,6 +992,7 @@ export type Database = {
           details?: string | null
           id?: string
           image_url?: string | null
+          included_features?: string[]
           mode?: string
           name: string
           notes?: string | null
@@ -988,13 +1000,20 @@ export type Database = {
           payment_link_url?: string | null
           payment_structure?: string | null
           price_cents: number
+          product_type?: string | null
+          status?: string
           stripe_payment_link_id?: string | null
           stripe_price_id?: string | null
           stripe_product_id?: string | null
+          term_length?: number | null
+          term_unit?: string | null
           updated_at?: string
         }
         Update: {
           active?: boolean
+          agreement_before_service?: boolean
+          agreement_required?: boolean
+          agreement_template_id?: string | null
           archived?: boolean
           created_at?: string
           created_by?: string | null
@@ -1003,6 +1022,7 @@ export type Database = {
           details?: string | null
           id?: string
           image_url?: string | null
+          included_features?: string[]
           mode?: string
           name?: string
           notes?: string | null
@@ -1010,9 +1030,13 @@ export type Database = {
           payment_link_url?: string | null
           payment_structure?: string | null
           price_cents?: number
+          product_type?: string | null
+          status?: string
           stripe_payment_link_id?: string | null
           stripe_price_id?: string | null
           stripe_product_id?: string | null
+          term_length?: number | null
+          term_unit?: string | null
           updated_at?: string
         }
         Relationships: [
