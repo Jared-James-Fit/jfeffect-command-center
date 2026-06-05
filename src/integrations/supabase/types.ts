@@ -2770,6 +2770,7 @@ export type Database = {
         Returns: boolean
       }
       is_assigned_coach: { Args: { _client_id: string }; Returns: boolean }
+      purge_old_client_media: { Args: never; Returns: undefined }
     }
     Enums: {
       app_role: "admin" | "client" | "coach"

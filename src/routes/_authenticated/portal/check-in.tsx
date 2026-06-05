@@ -8,11 +8,13 @@ import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { ClipboardCheck, ExternalLink, Camera, Video as VideoIcon, CalendarDays, MessageCircle, Upload, CheckCircle2 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { ClipboardCheck, ExternalLink, Camera, Video as VideoIcon, CalendarDays, MessageCircle, Upload, CheckCircle2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { MediaUploadDialog } from "@/components/media-upload-dialog";
 import { MediaItemCard } from "@/components/media-item-card";
-import { listMediaItems, type MediaType, uploadToDrive } from "@/lib/media";
+import { listMediaItems, deleteMediaItems, type MediaType, uploadToDrive } from "@/lib/media";
 import { initMediaUpload, finalizeMediaUpload, createSubmission } from "@/lib/drive.functions";
 import { friendlyDriveError, isDriveSetupError } from "@/lib/drive-errors";
 import { buildDriveDisplayName } from "@/lib/media-naming";
@@ -27,6 +29,9 @@ function CheckIn() {
   const [videoUploading, setVideoUploading] = useState(false);
   const [videoProgress, setVideoProgress] = useState(0);
   const [uploadsUnavailable, setUploadsUnavailable] = useState(false);
+  const [selectedVideos, setSelectedVideos] = useState<Set<string>>(new Set());
+  const [selectedPhotos, setSelectedPhotos] = useState<Set<string>>(new Set());
+  const [deleting, setDeleting] = useState(false);
   const videoInputRef = useRef<HTMLInputElement>(null);
   const initFn = useServerFn(initMediaUpload);
   const finalizeFn = useServerFn(finalizeMediaUpload);
@@ -91,6 +96,34 @@ function CheckIn() {
     const created = new Date(v.created_at).getTime();
     return Date.now() - created < 7 * 24 * 60 * 60 * 1000;
   });
+
+  function makeBulk(items: any[], selected: Set<string>, setSelected: (s: Set<string>) => void, label: string, invalidateKey: any[]) {
+    const ids = items.map((i: any) => i.id);
+    const allSelected = ids.length > 0 && ids.every((id) => selected.has(id));
+    const someSelected = selected.size > 0 && !allSelected;
+    const toggleOne = (id: string) => {
+      const next = new Set(selected);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      setSelected(next);
+    };
+    const toggleAll = () => setSelected(allSelected ? new Set() : new Set(ids));
+    const doDelete = async () => {
+      const toDelete = Array.from(selected);
+      if (!toDelete.length) return;
+      setDeleting(true);
+      try {
+        await deleteMediaItems(toDelete);
+        toast.success(`Deleted ${toDelete.length} ${label}${toDelete.length === 1 ? "" : "s"}`);
+        setSelected(new Set());
+        qc.invalidateQueries({ queryKey: invalidateKey });
+      } catch (e: any) {
+        toast.error(e?.message ?? "Delete failed");
+      } finally {
+        setDeleting(false);
+      }
+    };
+    return { allSelected, someSelected, toggleOne, toggleAll, doDelete };
+  }
 
   function openUpload(type: MediaType) {
     setUploadType(type);
@@ -247,9 +280,46 @@ Then upload it here before filling out your check-in form.`}
 
               {checkInVideos.length > 0 && (
                 <div className="mt-4 space-y-2">
-                  {(checkInVideos as any[]).slice(0, 3).map((it: any) => (
-                    <MediaItemCard key={it.id} item={it} role="client" userId={user?.id ?? null} onChanged={() => qc.invalidateQueries({ queryKey: ["my-checkin-videos", client?.id] })} />
-                  ))}
+                  {(() => {
+                    const bulk = makeBulk(checkInVideos as any[], selectedVideos, setSelectedVideos, "video", ["my-checkin-videos", client?.id]);
+                    return (
+                      <>
+                        <div className="flex items-center gap-3 rounded-md border border-border bg-secondary/30 p-2">
+                          <Checkbox checked={bulk.allSelected ? true : bulk.someSelected ? "indeterminate" : false} onCheckedChange={bulk.toggleAll} aria-label="Select all" />
+                          <div className="text-xs">Select all</div>
+                          <div className="ml-auto flex items-center gap-2">
+                            <div className="text-xs text-muted-foreground">{selectedVideos.size} selected</div>
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button size="sm" variant="destructive" disabled={selectedVideos.size === 0 || deleting}>
+                                  <Trash2 className="mr-1 h-4 w-4" /> Delete
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Delete {selectedVideos.size} video{selectedVideos.size === 1 ? "" : "s"}?</AlertDialogTitle>
+                                  <AlertDialogDescription>This removes them from your app. Files in Google Drive are not affected.</AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction onClick={bulk.doDelete}>Delete</AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          </div>
+                        </div>
+                        <div className="text-[11px] text-muted-foreground px-1">Check-in videos auto-clear from your app after 14 days.</div>
+                        {(checkInVideos as any[]).map((it: any) => (
+                          <div key={it.id} className="flex items-start gap-2">
+                            <div className="pt-3"><Checkbox checked={selectedVideos.has(it.id)} onCheckedChange={() => bulk.toggleOne(it.id)} aria-label="Select" /></div>
+                            <div className="flex-1 min-w-0">
+                              <MediaItemCard item={it} role="client" userId={user?.id ?? null} onChanged={() => qc.invalidateQueries({ queryKey: ["my-checkin-videos", client?.id] })} />
+                            </div>
+                          </div>
+                        ))}
+                      </>
+                    );
+                  })()}
                 </div>
               )}
             </div>
@@ -269,9 +339,46 @@ Then upload it here before filling out your check-in form.`}
             </div>
             {progressPhotos.length > 0 && (
               <div className="mt-4 space-y-2">
-                {(progressPhotos as any[]).slice(0, 3).map((it: any) => (
-                  <MediaItemCard key={it.id} item={it} role="client" userId={user?.id ?? null} onChanged={() => qc.invalidateQueries({ queryKey: ["my-progress-photos", client?.id] })} />
-                ))}
+                {(() => {
+                  const bulk = makeBulk(progressPhotos as any[], selectedPhotos, setSelectedPhotos, "photo", ["my-progress-photos", client?.id]);
+                  return (
+                    <>
+                      <div className="flex items-center gap-3 rounded-md border border-border bg-secondary/30 p-2">
+                        <Checkbox checked={bulk.allSelected ? true : bulk.someSelected ? "indeterminate" : false} onCheckedChange={bulk.toggleAll} aria-label="Select all" />
+                        <div className="text-xs">Select all</div>
+                        <div className="ml-auto flex items-center gap-2">
+                          <div className="text-xs text-muted-foreground">{selectedPhotos.size} selected</div>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button size="sm" variant="destructive" disabled={selectedPhotos.size === 0 || deleting}>
+                                <Trash2 className="mr-1 h-4 w-4" /> Delete
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Delete {selectedPhotos.size} photo{selectedPhotos.size === 1 ? "" : "s"}?</AlertDialogTitle>
+                                <AlertDialogDescription>This removes them from your app. Files in Google Drive are not affected.</AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction onClick={bulk.doDelete}>Delete</AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </div>
+                      </div>
+                      <div className="text-[11px] text-muted-foreground px-1">Progress photos auto-clear from your app after 14 days.</div>
+                      {(progressPhotos as any[]).map((it: any) => (
+                        <div key={it.id} className="flex items-start gap-2">
+                          <div className="pt-3"><Checkbox checked={selectedPhotos.has(it.id)} onCheckedChange={() => bulk.toggleOne(it.id)} aria-label="Select" /></div>
+                          <div className="flex-1 min-w-0">
+                            <MediaItemCard item={it} role="client" userId={user?.id ?? null} onChanged={() => qc.invalidateQueries({ queryKey: ["my-progress-photos", client?.id] })} />
+                          </div>
+                        </div>
+                      ))}
+                    </>
+                  );
+                })()}
               </div>
             )}
           </Card>
