@@ -375,7 +375,7 @@ function ClientDetail() {
             </div>
             <AssignCheckInLibrary
               value={form.assigned_check_in_link_id ?? null}
-              onChange={(v) => set("assigned_check_in_link_id", v)}
+              onChange={(v: string | null) => set("assigned_check_in_link_id", v)}
             />
             <div className="grid gap-3 md:grid-cols-2">
               <div className="md:col-span-2">
