@@ -271,9 +271,6 @@ export const createAgreement = createServerFn({ method: "POST" })
       admin_notes: z.string().max(2000).optional().nullable(),
       signing_method: z.enum([
         "Remote Invite",
-        "In-Person / iPad",
-        "Kiosk Mode",
-        "Manual Upload",
         "Manual Link",
       ]).optional(),
       status_override: z.string().max(60).optional(),
@@ -305,7 +302,7 @@ export const createAgreement = createServerFn({ method: "POST" })
       .filter(Boolean).join(", ") || null;
 
     const now = new Date().toISOString();
-    const inPerson = data.signing_method === "In-Person / iPad" || data.signing_method === "Kiosk Mode";
+    
 
     // Real SignNow Invite (API mode) — only attempted for Remote Invite,
     // only when settings show Connected, credentials are present, the template has a
@@ -377,7 +374,7 @@ export const createAgreement = createServerFn({ method: "POST" })
         ? `${data.admin_notes ? data.admin_notes + "\n\n" : ""}[SignNow API error] ${apiError}`
         : data.admin_notes ?? null,
       signing_method: data.signing_method ?? null,
-      signed_in_person: inPerson,
+      signed_in_person: false,
       created_by: userId,
     } as any).select("*").single();
     if (error) throw new Error(error.message);
