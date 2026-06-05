@@ -770,6 +770,9 @@ export type Database = {
           full_name: string
           goals: string | null
           height_cm: number | null
+          home_screen_setup_completed_at: string | null
+          home_screen_setup_remind_after: string | null
+          home_screen_setup_status: string
           id: string
           info_last_updated_at: string | null
           info_last_updated_by: string | null
@@ -890,6 +893,9 @@ export type Database = {
           full_name: string
           goals?: string | null
           height_cm?: number | null
+          home_screen_setup_completed_at?: string | null
+          home_screen_setup_remind_after?: string | null
+          home_screen_setup_status?: string
           id?: string
           info_last_updated_at?: string | null
           info_last_updated_by?: string | null
@@ -1010,6 +1016,9 @@ export type Database = {
           full_name?: string
           goals?: string | null
           height_cm?: number | null
+          home_screen_setup_completed_at?: string | null
+          home_screen_setup_remind_after?: string | null
+          home_screen_setup_status?: string
           id?: string
           info_last_updated_at?: string | null
           info_last_updated_by?: string | null
