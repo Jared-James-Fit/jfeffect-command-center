@@ -133,13 +133,13 @@ export function AppShell({ items, title, children }: { items: NavItem[]; title: 
           </Button>
         </header>
 
-        <main className="flex-1 overflow-x-hidden pb-[calc(120px+env(safe-area-inset-bottom))] md:pb-0">
+        <main className="flex-1 overflow-x-hidden pb-[calc(110px+env(safe-area-inset-bottom))] md:pb-0">
           {children}
         </main>
 
         {/* Mobile bottom nav — fixed, app-like tab bar */}
         <nav
-          className="fixed left-3 right-3 z-50 grid grid-cols-5 rounded-2xl border border-border bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80 shadow-[0_8px_24px_-6px_rgba(0,0,0,0.55)] md:hidden"
+          className="fixed left-3 right-3 z-50 grid grid-cols-5 overflow-hidden rounded-2xl border border-border bg-card/95 px-1 py-1 backdrop-blur supports-[backdrop-filter]:bg-card/80 shadow-[0_8px_24px_-6px_rgba(0,0,0,0.55)] md:hidden"
           style={{ bottom: "calc(env(safe-area-inset-bottom) + 10px)" }}
         >
           {bottomItems.map((item) => {
@@ -152,16 +152,16 @@ export function AppShell({ items, title, children }: { items: NavItem[]; title: 
                 to={item.to}
                 onClick={() => markNavSeen(user?.id, item.to)}
                 className={cn(
-                  "relative flex min-h-[82px] flex-col items-center justify-center gap-1.5 px-2 pt-3 pb-3 text-[12px] font-semibold transition-colors",
+                  "relative flex min-h-[68px] flex-col items-center justify-center gap-1 px-1 pt-2 pb-2 text-[10px] font-medium transition-colors",
                   active
                     ? "text-primary"
                     : "text-muted-foreground hover:text-foreground"
                 )}
               >
                 <div className="relative">
-                  <Icon className={cn("h-7 w-7", active && "drop-shadow-[0_0_6px_hsl(var(--primary)/0.6)]")} />
+                  <Icon className={cn("h-6 w-6", active && "drop-shadow-[0_0_6px_hsl(var(--primary)/0.6)]")} />
                   {badge?.count != null && badge.count > 0 && (
-                    <span className="absolute -right-2 -top-1.5 grid h-[18px] min-w-[18px] place-items-center rounded-full bg-destructive px-1 text-[10px] font-bold leading-none text-destructive-foreground ring-2 ring-card">
+                    <span className="absolute -right-2 -top-1.5 grid h-[16px] min-w-[16px] place-items-center rounded-full bg-destructive px-1 text-[9px] font-bold leading-none text-destructive-foreground ring-2 ring-card">
                       {badge.count > 9 ? "9+" : badge.count}
                     </span>
                   )}
@@ -169,8 +169,8 @@ export function AppShell({ items, title, children }: { items: NavItem[]; title: 
                     <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-destructive ring-2 ring-card" />
                   )}
                 </div>
-                <span className="truncate text-[12px] leading-tight">{item.label}</span>
-                {active && <span className="mt-0.5 h-1 w-6 rounded-full bg-primary" />}
+                <span className="w-full px-0.5 text-center text-[10px] leading-tight tracking-tight">{item.label}</span>
+                {active && <span className="mt-0.5 h-0.5 w-5 rounded-full bg-primary" />}
               </Link>
             );
           })}
