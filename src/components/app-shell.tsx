@@ -72,7 +72,7 @@ export function AppShell({ items, title, children }: { items: NavItem[]; title: 
     <div className="flex min-h-screen w-full bg-background text-foreground">
       <aside className="hidden w-64 shrink-0 flex-col border-r border-sidebar-border bg-sidebar md:flex">
         <div className="flex items-center gap-3 px-5 py-5 border-b border-sidebar-border">
-          <div className="grid h-9 w-9 place-items-center rounded-md bg-gradient-primary text-xs font-black text-primary-foreground shadow-glow">JF</div>
+          <img src="/logo.png" alt="JF Effect" className="h-9 w-9 rounded-md shadow-glow object-cover" />
           <div className="leading-tight">
             <div className="text-sm font-black tracking-tight">JF EFFECT</div>
             <div className="text-[10px] uppercase tracking-widest text-muted-foreground">{title}</div>
@@ -125,7 +125,7 @@ export function AppShell({ items, title, children }: { items: NavItem[]; title: 
       <div className="flex w-full flex-col">
         <header className="flex items-center justify-between border-b border-border px-4 py-3 md:hidden">
           <div className="flex items-center gap-2">
-            <div className="grid h-8 w-8 place-items-center rounded-md bg-gradient-primary text-xs font-black text-primary-foreground">JF</div>
+            <img src="/logo.png" alt="JF Effect" className="h-8 w-8 rounded-md object-cover" />
             <span className="text-sm font-black tracking-tight">{title}</span>
           </div>
           <Button variant="ghost" size="sm" onClick={handleSignOut}>
