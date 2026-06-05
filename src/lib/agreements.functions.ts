@@ -12,6 +12,7 @@ import {
   SignNowNotConfiguredError,
   SignNowApiError,
 } from "@/lib/signnow.server";
+import { listAllSignNowDocuments } from "@/lib/signnow.server";
 
 async function assertAdminOrCoach(supabase: any, userId: string) {
   const { data } = await supabase
@@ -712,6 +713,183 @@ export const refreshAllPendingAgreements = createServerFn({ method: "POST" })
       }
     }
     return { ok: true, scanned: rows?.length ?? 0, refreshed, signedNow, errors };
+  });
+
+/**
+ * Admin-only historical import. Scans the SignNow account for signed/completed
+ * documents that are not yet linked to an agreement row in this app, then
+ * creates an agreement row for each (matched to a client by signer email when
+ * possible) and downloads the signed PDF into storage.
+ *
+ * Safe to re-run: documents already linked by signnow_document_id are skipped.
+ * Bounded by maxPages × perPage (default 5 × 100 = 500 docs/scan) to avoid
+ * burning the SignNow rate limit on huge accounts.
+ */
+export const importSignNowSignedDocuments = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i: unknown) =>
+    z.object({
+      maxPages: z.number().int().min(1).max(20).optional(),
+      perPage: z.number().int().min(10).max(100).optional(),
+      /** When no client matches the signer email, skip instead of erroring. */
+      skipUnmatched: z.boolean().optional(),
+    }).parse(i ?? {}),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    // Admin-only — historical import touches client records and creates rows.
+    const { data: roleRows } = await supabase
+      .from("user_roles").select("role").eq("user_id", userId);
+    const roles = (roleRows ?? []).map((r: any) => r.role);
+    if (!roles.includes("admin")) throw new Error("Forbidden: admin only.");
+
+    if (!hasSignNowCredentials()) {
+      return {
+        ok: false,
+        reason: "SignNow API not configured.",
+        scanned: 0, imported: 0, skipped: 0, unmatched: 0, errors: 0,
+        details: [] as Array<{ documentId: string; outcome: string; reason?: string }>,
+      };
+    }
+
+    const skipUnmatched = data.skipUnmatched ?? true;
+    const { getSignNowDocument } = await import("@/lib/signnow.server");
+    const { pullSignedDocumentForAgreement } = await import("@/lib/agreements-pull.server");
+
+    const summaries = await listAllSignNowDocuments({
+      maxPages: data.maxPages ?? 5,
+      perPage: data.perPage ?? 100,
+    });
+
+    // Existing links (skip set).
+    const ids = summaries.map((s) => s.id);
+    const existingIds = new Set<string>();
+    if (ids.length) {
+      const { data: existing } = await supabase
+        .from("agreements")
+        .select("signnow_document_id")
+        .in("signnow_document_id", ids);
+      for (const r of existing ?? []) {
+        if (r.signnow_document_id) existingIds.add(r.signnow_document_id);
+      }
+    }
+
+    const details: Array<{ documentId: string; outcome: string; reason?: string; agreementId?: string }> = [];
+    let imported = 0, skipped = 0, unmatched = 0, errors = 0;
+
+    for (const s of summaries) {
+      if (existingIds.has(s.id)) {
+        skipped += 1;
+        details.push({ documentId: s.id, outcome: "skipped", reason: "already linked" });
+        continue;
+      }
+      try {
+        const doc = await getSignNowDocument(s.id);
+        if (doc.status !== "signed" && doc.status !== "completed") {
+          skipped += 1;
+          details.push({ documentId: s.id, outcome: "skipped", reason: `status=${doc.status}` });
+          continue;
+        }
+
+        // Match client by signer email (case-insensitive), then by signer name.
+        let clientId: string | null = null;
+        let clientName: string | null = null;
+        if (doc.signerEmail) {
+          const { data: c } = await supabase
+            .from("clients")
+            .select("id, full_name")
+            .ilike("email", doc.signerEmail)
+            .maybeSingle();
+          if (c) { clientId = c.id; clientName = c.full_name; }
+        }
+        if (!clientId && doc.signerName) {
+          const { data: c } = await supabase
+            .from("clients")
+            .select("id, full_name")
+            .ilike("full_name", doc.signerName)
+            .maybeSingle();
+          if (c) { clientId = c.id; clientName = c.full_name; }
+        }
+
+        if (!clientId) {
+          unmatched += 1;
+          details.push({
+            documentId: s.id,
+            outcome: "unmatched",
+            reason: `no client matches signer ${doc.signerEmail ?? doc.signerName ?? "unknown"}`,
+          });
+          if (skipUnmatched) continue;
+          // Future: create a parking row. For now strictly skip when unmatched.
+          continue;
+        }
+
+        const signedAt = doc.signedAt ?? new Date().toISOString();
+        const { data: ag, error: insErr } = await supabase
+          .from("agreements")
+          .insert({
+            client_id: clientId,
+            template_name: doc.documentName ?? "Imported SignNow document",
+            status: "Signed",
+            signnow_document_id: s.id,
+            signer_name_in_signnow: doc.signerName,
+            client_full_name: clientName,
+            client_email: doc.signerEmail,
+            correct_client_name: clientName,
+            signed_at: signedAt,
+            completed_at: signedAt,
+            verification_status: doc.signerName ? "Auto-Matched" : "Not Verified",
+            signer_mismatch: false,
+            signing_method: "Remote Invite",
+            signed_in_person: false,
+            admin_notes: "[Historical import] Created by SignNow signed-document sweep.",
+            created_by: userId,
+          } as any)
+          .select("id")
+          .single();
+        if (insErr || !ag) {
+          errors += 1;
+          details.push({ documentId: s.id, outcome: "error", reason: insErr?.message ?? "insert failed" });
+          continue;
+        }
+
+        // Download the signed PDF + finalize verification status.
+        try {
+          await pullSignedDocumentForAgreement(ag.id, { event: "historical_import" });
+        } catch (e: any) {
+          // Row was created; PDF pull can be retried via the Refresh button.
+          details.push({
+            documentId: s.id, outcome: "imported_no_pdf", agreementId: ag.id,
+            reason: e?.message ?? "pdf download failed",
+          });
+          imported += 1;
+          continue;
+        }
+
+        await supabase.from("agreement_audit_log").insert({
+          agreement_id: ag.id,
+          event: "imported_from_signnow",
+          actor_role: "admin",
+          actor_user_id: userId,
+          details: { signnow_document_id: s.id } as any,
+        } as any);
+
+        imported += 1;
+        details.push({ documentId: s.id, outcome: "imported", agreementId: ag.id });
+      } catch (e: any) {
+        errors += 1;
+        details.push({ documentId: s.id, outcome: "error", reason: e?.message ?? "unknown" });
+      }
+    }
+
+    return {
+      ok: true,
+      scanned: summaries.length,
+      imported,
+      skipped,
+      unmatched,
+      errors,
+      details,
+    };
   });
 
 /** Return a short-lived signed download URL for the stored signed PDF.

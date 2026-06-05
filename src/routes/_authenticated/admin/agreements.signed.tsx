@@ -8,10 +8,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Download, ExternalLink, RefreshCw, FileText, Loader2, Search, User, Mail } from "lucide-react";
+import { Download, ExternalLink, RefreshCw, FileText, Loader2, Search, User, Mail, DownloadCloud } from "lucide-react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
-import { getSignedAgreementUrl, refreshAllPendingAgreements, refreshAgreementStatus } from "@/lib/agreements.functions";
+import { getSignedAgreementUrl, refreshAllPendingAgreements, refreshAgreementStatus, importSignNowSignedDocuments } from "@/lib/agreements.functions";
 import { AgreementStatusBadge } from "@/components/agreement-status-badge";
 import { VERIFICATION_BADGE } from "@/lib/agreements";
 
@@ -60,11 +60,13 @@ function SignedAgreementsPage() {
   const [verif, setVerif] = useState<string>("all");
   const [src, setSrc] = useState<string>("all");
   const [refreshing, setRefreshing] = useState(false);
+  const [importing, setImporting] = useState(false);
   const [downloading, setDownloading] = useState<string | null>(null);
   const [rowRefreshing, setRowRefreshing] = useState<string | null>(null);
   const getUrlFn = useServerFn(getSignedAgreementUrl);
   const refreshAllFn = useServerFn(refreshAllPendingAgreements);
   const refreshOneFn = useServerFn(refreshAgreementStatus);
+  const importFn = useServerFn(importSignNowSignedDocuments);
 
   const { data: rows = [], refetch, isLoading } = useQuery({
     queryKey: ["admin-signed-agreements"],
@@ -178,6 +180,26 @@ function SignedAgreementsPage() {
     }
   }
 
+  async function handleImportHistorical() {
+    if (!confirm("Scan SignNow for signed documents not yet in this app and import them? This may take a minute.")) return;
+    setImporting(true);
+    try {
+      const res: any = await importFn({ data: {} });
+      if (!res?.ok) {
+        toast.error(res?.reason ?? "Import failed");
+      } else {
+        toast.success(
+          `Scanned ${res.scanned} · Imported ${res.imported} · Skipped ${res.skipped} · Unmatched ${res.unmatched} · Errors ${res.errors}`,
+        );
+        refetch();
+      }
+    } catch (e: any) {
+      toast.error(e?.message ?? "Import failed");
+    } finally {
+      setImporting(false);
+    }
+  }
+
   return (
     <>
       <PageHeader
@@ -235,6 +257,10 @@ function SignedAgreementsPage() {
           <Button variant="outline" onClick={handleRefreshAll} disabled={refreshing}>
             {refreshing ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-1" />}
             Refresh pending
+          </Button>
+          <Button variant="outline" onClick={handleImportHistorical} disabled={importing}>
+            {importing ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <DownloadCloud className="h-4 w-4 mr-1" />}
+            Import from SignNow
           </Button>
           <Link to="/admin/agreements" className="text-sm text-primary hover:underline">
             ← Back to Agreements
