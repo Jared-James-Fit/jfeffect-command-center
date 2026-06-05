@@ -268,7 +268,8 @@ function ClientsPage() {
                     const next = ph?.next;
                     const dCur = current ? derivePhase(current) : null;
                     const nut = nutByClient.get(c.id);
-                    const card = cardByClient.get(c.id);
+                    const cardList = cardByClient.get(c.id) ?? [];
+                    const card = cardList[0];
                     const dNut = nut ? deriveTarget(nut) : null;
                     const dCard = card ? deriveTarget(card) : null;
                     return (
@@ -311,9 +312,12 @@ function ClientsPage() {
                         ) : <AddCell id={c.id} tab="nutrition" label="Add Nutrition Targets" />}
                       </td>
                       <td className="px-4 py-3">
-                        {dCard ? (
+                        {dCard && card ? (
                           <Link to="/admin/clients/$id" params={{ id: c.id }} search={{ tab: "cardio" }}>
-                            <Badge variant="outline" className={`${dCard.tone} cursor-pointer hover:opacity-80`}>{dCard.label}</Badge>
+                            <div className="space-y-1">
+                              <Badge variant="outline" className={`${dCard.tone} cursor-pointer hover:opacity-80`}>{dCard.label}</Badge>
+                              <div className="text-[10px] text-muted-foreground">{summarizeCardio(cardList)}</div>
+                            </div>
                           </Link>
                         ) : <AddCell id={c.id} tab="cardio" label="Add Cardio Targets" />}
                       </td>
