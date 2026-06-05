@@ -1,13 +1,13 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { FileText, ClipboardCheck, Dumbbell, Calendar, ExternalLink, CheckCircle2, Circle, ShieldAlert, MessageCircle, Video, FileSignature, Target, Image } from "lucide-react";
+import { FileText, ClipboardCheck, Dumbbell, Calendar, ExternalLink, CheckCircle2, Circle, ShieldAlert, MessageCircle, Video, Mail, Target, Image, CheckCheck } from "lucide-react";
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/portal/")({ component: PortalHome });
 
@@ -43,13 +43,24 @@ function PortalHome() {
     queryFn: async () => {
       const { data } = await supabase
         .from("agreements")
-        .select("id, template_name, status, signnow_signing_link, sent_at")
+        .select("id, template_name, status, signnow_signing_link, sent_at, client_marked_complete_at")
         .eq("client_id", client!.id)
         .in("status", ["Sent", "Opened", "Waiting on Client", "Needs Resend", "Manual Action Needed"])
         .order("created_at", { ascending: false });
       return data ?? [];
     },
   });
+  const qc = useQueryClient();
+
+  const markAgreementComplete = async (id: string) => {
+    const { error } = await supabase
+      .from("agreements")
+      .update({ client_marked_complete_at: new Date().toISOString(), client_marked_complete_by: user?.id ?? null })
+      .eq("id", id);
+    if (error) { toast.error(error.message); return; }
+    toast.success("Thanks — Coach Jared will verify it.");
+    qc.invalidateQueries({ queryKey: ["portal-outstanding-agreements", client?.id] });
+  };
 
   const firstName = (client?.full_name ?? user?.email?.split("@")[0] ?? "").split(" ")[0];
 
@@ -73,6 +84,62 @@ function PortalHome() {
     { to: "/portal/media", label: "Media + Feedback", icon: Image },
   ];
 
+  type UpdateCard = {
+    key: string;
+    icon: any;
+    tone: "warning" | "primary" | "success";
+    title: string;
+    message: string;
+    primary?: { label: string; onClick?: () => void; to?: string };
+    secondary?: { label: string; to: string };
+    status?: string;
+  };
+  const toneClasses: Record<UpdateCard["tone"], string> = {
+    warning: "border-warning/40 bg-warning/5",
+    primary: "border-primary/30 bg-primary/5",
+    success: "border-emerald-500/30 bg-emerald-500/5",
+  };
+  const iconToneClasses: Record<UpdateCard["tone"], string> = {
+    warning: "text-warning",
+    primary: "text-primary",
+    success: "text-emerald-500",
+  };
+
+  const updates: UpdateCard[] = [];
+  if (client?.info_update_requested) {
+    updates.push({
+      key: "info-update",
+      icon: ShieldAlert,
+      tone: "warning",
+      title: "Update Account Info",
+      message: "Confirm your contact details are current.",
+      primary: { label: "Update", to: "/portal/account" },
+    });
+  }
+  for (const a of outstandingAgreements as any[]) {
+    if (a.client_marked_complete_at) {
+      updates.push({
+        key: `agreement-${a.id}`,
+        icon: CheckCheck,
+        tone: "success",
+        title: "Agreement marked complete",
+        message: "Coach Jared will verify it.",
+        secondary: { label: "View", to: "/portal/agreements" },
+        status: "Awaiting verification",
+      });
+    } else {
+      updates.push({
+        key: `agreement-${a.id}`,
+        icon: Mail,
+        tone: "warning",
+        title: "Agreement Sent",
+        message: "Check your email to complete it.",
+        primary: { label: "I completed it", onClick: () => markAgreementComplete(a.id) },
+        secondary: { label: "Open Agreements", to: "/portal/agreements" },
+      });
+    }
+  }
+
   return (
     <>
       <PageHeader
@@ -80,41 +147,50 @@ function PortalHome() {
         subtitle="Your private coaching dashboard."
       />
       <div className="space-y-6 p-6 md:p-8">
-        {client?.info_update_requested && (
-          <Card className="border-warning/40 bg-warning/10 p-5">
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex items-start gap-3">
-                <ShieldAlert className="h-5 w-5 text-warning" />
-                <div>
-                  <div className="font-bold">Please review and update your account information.</div>
-                  <div className="text-xs text-muted-foreground">Your coach asked you to confirm your contact details are current.</div>
-                </div>
-              </div>
-              <Link to="/portal/account"><Button size="sm" className="bg-gradient-primary uppercase font-bold">Update Account Information</Button></Link>
+        {updates.length > 0 && (
+          <section aria-label="Important Updates">
+            <div className="mb-2 flex items-center justify-between px-1">
+              <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Important Updates</h3>
+              <span className="text-[10px] text-muted-foreground">{updates.length}</span>
             </div>
-          </Card>
-        )}
-        {outstandingAgreements.length > 0 && (
-          <Card className="border-warning/40 bg-warning/10 p-5">
-            <div className="flex items-start gap-3">
-              <FileSignature className="h-5 w-5 text-warning mt-0.5" />
-              <div className="flex-1">
-                <div className="font-bold">You have {outstandingAgreements.length === 1 ? "an agreement" : `${outstandingAgreements.length} agreements`} waiting for signature.</div>
-                <p className="text-xs text-muted-foreground">Sign now so your coach can finalize your program and purchases.</p>
-                <div className="mt-3 space-y-2">
-                  {outstandingAgreements.map((a: any) => (
-                    <div key={a.id} className="flex flex-wrap items-center gap-2 rounded-md border border-warning/30 bg-background/40 px-3 py-2">
-                      <span className="text-sm font-semibold">{a.template_name}</span>
-                      <Badge variant="outline" className="border-warning/40 bg-warning/10 text-warning">{a.status}</Badge>
-                      {a.signnow_signing_link
-                        ? <a href={a.signnow_signing_link} target="_blank" rel="noreferrer" className="ml-auto"><Button size="sm" className="bg-gradient-primary uppercase font-bold">Sign now</Button></a>
-                        : <Link to="/portal/agreements" className="ml-auto"><Button size="sm" variant="outline">View agreements</Button></Link>}
+            <div className="-mx-6 md:-mx-8 px-6 md:px-8 overflow-x-auto snap-x snap-mandatory scrollbar-none">
+              <div className="flex gap-3 pb-2">
+                {updates.map((u) => (
+                  <Card
+                    key={u.key}
+                    className={`w-[260px] shrink-0 snap-start p-4 ${toneClasses[u.tone]}`}
+                  >
+                    <div className="flex items-start gap-2">
+                      <u.icon className={`h-5 w-5 mt-0.5 ${iconToneClasses[u.tone]}`} />
+                      <div className="min-w-0 flex-1">
+                        <div className="text-sm font-bold truncate">{u.title}</div>
+                        <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{u.message}</p>
+                      </div>
                     </div>
-                  ))}
-                </div>
+                    <div className="mt-3 flex items-center gap-2">
+                      {u.primary && (
+                        u.primary.to ? (
+                          <Link to={u.primary.to} className="flex-1">
+                            <Button size="sm" className="w-full bg-gradient-primary uppercase font-bold text-xs">{u.primary.label}</Button>
+                          </Link>
+                        ) : (
+                          <Button size="sm" onClick={u.primary.onClick} className="flex-1 bg-gradient-primary uppercase font-bold text-xs">{u.primary.label}</Button>
+                        )
+                      )}
+                      {u.secondary && (
+                        <Link to={u.secondary.to} className={u.primary ? "" : "flex-1"}>
+                          <Button size="sm" variant="outline" className={`text-xs ${u.primary ? "" : "w-full"}`}>{u.secondary.label}</Button>
+                        </Link>
+                      )}
+                    </div>
+                    {u.status && (
+                      <div className="mt-2 text-[10px] uppercase tracking-wider text-muted-foreground">{u.status}</div>
+                    )}
+                  </Card>
+                ))}
               </div>
             </div>
-          </Card>
+          </section>
         )}
         {!client && (
           <Card className="border-primary/30 bg-primary/5 p-6">
