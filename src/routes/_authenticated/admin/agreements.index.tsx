@@ -19,6 +19,7 @@ import { createTemplate, updateTemplate, archiveTemplate, setTemplateActive, cre
 import { AGREEMENT_TYPES, type AgreementTemplate } from "@/lib/agreements";
 import { AgreementStatusBadge } from "@/components/agreement-status-badge";
 import { useNavigate } from "@tanstack/react-router";
+import { SentAgreementsManager } from "@/components/sent-agreements-manager";
 
 export const Route = createFileRoute("/_authenticated/admin/agreements/")({
   component: AgreementsAdminPage,
@@ -87,6 +88,8 @@ function AgreementsAdminPage() {
             </div>
           </Card>
         )}
+
+        <SentAgreementsManager />
 
         <Card className="border-border bg-card p-5 space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">
