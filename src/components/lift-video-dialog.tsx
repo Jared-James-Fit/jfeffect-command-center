@@ -73,6 +73,7 @@ export function LiftVideoDialog({ open, onOpenChange, clientId, userId, clientNa
   const [batchNote, setBatchNote] = useState("");
   const [pasteLink, setPasteLink] = useState("");
   const [urgentText, setUrgentText] = useState("");
+  const [showLinkInput, setShowLinkInput] = useState(false);
   const multiUploadRef = useRef<HTMLInputElement | null>(null);
   const multiRecordRef = useRef<HTMLInputElement | null>(null);
 
@@ -104,6 +105,7 @@ export function LiftVideoDialog({ open, onOpenChange, clientId, userId, clientNa
       setNoteMode("batch");
       setPasteLink("");
       setUrgentText("");
+      setShowLinkInput(false);
       setSent(false);
     }
   }, [initial, open]);
