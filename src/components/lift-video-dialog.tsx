@@ -290,13 +290,8 @@ export function LiftVideoDialog({ open, onOpenChange, clientId, userId, clientNa
         } as any);
       }
 
-      toast.success(
-        clips.length === 1
-          ? "Video sent to Coach Jared."
-          : `${clips.length} clips sent to Coach Jared.`
-      );
+      setSent(true);
       onSaved?.();
-      onOpenChange(false);
     } catch (e: any) {
       console.error(e);
       toast.error(friendlyDriveError(e, role === "client" ? "client" : "admin"));
