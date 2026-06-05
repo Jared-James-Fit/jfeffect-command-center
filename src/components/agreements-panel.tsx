@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
-import { Plus, ExternalLink, Copy, ShieldCheck, AlertTriangle, FileText, Send, BellRing, Upload, Trash2, Loader2, UserPlus, Smartphone, RefreshCcw, Download } from "lucide-react";
+import { Plus, ExternalLink, Copy, ShieldCheck, AlertTriangle, FileText, Send, BellRing, Upload, Trash2, Loader2, UserPlus, Smartphone, RefreshCcw, Download, CheckCircle2, Flag, StickyNote } from "lucide-react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import { AgreementStatusBadge } from "@/components/agreement-status-badge";
@@ -87,6 +87,16 @@ export function AgreementsPanel({ clientId, clientName }: { clientId: string; cl
               onCancel={async () => {
                 if (!confirm("Cancel this agreement?")) return;
                 await cancelFn({ data: { id: a.id } }); toast.success("Cancelled"); invalidate();
+              }}
+              onMarkManuallySent={async () => {
+                await updateFn({ data: { id: a.id, status: "Sent", sent_at: new Date().toISOString() } as any });
+                toast.success("Marked as manually sent");
+                invalidate();
+              }}
+              onNeedsFollowUp={async () => {
+                await updateFn({ data: { id: a.id, status: "Needs Manual Verification" } as any });
+                toast.success("Flagged for follow-up");
+                invalidate();
               }}
               onRefresh={async () => {
                 const r: any = await refreshFn({ data: { id: a.id } });
