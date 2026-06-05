@@ -19,6 +19,7 @@ import { Route as AuthenticatedPortalRouteRouteImport } from './routes/_authenti
 import { Route as AuthenticatedAdminRouteRouteImport } from './routes/_authenticated/admin/route'
 import { Route as AuthenticatedPortalIndexRouteImport } from './routes/_authenticated/portal/index'
 import { Route as AuthenticatedAdminIndexRouteImport } from './routes/_authenticated/admin/index'
+import { Route as ApiPublicSignnowWebhookRouteImport } from './routes/api/public/signnow-webhook'
 import { Route as AuthenticatedPortalResourcesRouteImport } from './routes/_authenticated/portal/resources'
 import { Route as AuthenticatedPortalPurchasesRouteImport } from './routes/_authenticated/portal/purchases'
 import { Route as AuthenticatedPortalProgramRouteImport } from './routes/_authenticated/portal/program'
@@ -112,6 +113,11 @@ const AuthenticatedAdminIndexRoute = AuthenticatedAdminIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => AuthenticatedAdminRouteRoute,
+} as any)
+const ApiPublicSignnowWebhookRoute = ApiPublicSignnowWebhookRouteImport.update({
+  id: '/api/public/signnow-webhook',
+  path: '/api/public/signnow-webhook',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedPortalResourcesRoute =
   AuthenticatedPortalResourcesRouteImport.update({
@@ -406,6 +412,7 @@ export interface FileRoutesByFullPath {
   '/portal/program': typeof AuthenticatedPortalProgramRoute
   '/portal/purchases': typeof AuthenticatedPortalPurchasesRouteWithChildren
   '/portal/resources': typeof AuthenticatedPortalResourcesRoute
+  '/api/public/signnow-webhook': typeof ApiPublicSignnowWebhookRoute
   '/admin/': typeof AuthenticatedAdminIndexRoute
   '/portal/': typeof AuthenticatedPortalIndexRoute
   '/admin/clients/$id': typeof AuthenticatedAdminClientsIdRoute
@@ -457,6 +464,7 @@ export interface FileRoutesByTo {
   '/portal/program': typeof AuthenticatedPortalProgramRoute
   '/portal/purchases': typeof AuthenticatedPortalPurchasesRouteWithChildren
   '/portal/resources': typeof AuthenticatedPortalResourcesRoute
+  '/api/public/signnow-webhook': typeof ApiPublicSignnowWebhookRoute
   '/admin': typeof AuthenticatedAdminIndexRoute
   '/portal': typeof AuthenticatedPortalIndexRoute
   '/admin/clients/$id': typeof AuthenticatedAdminClientsIdRoute
@@ -512,6 +520,7 @@ export interface FileRoutesById {
   '/_authenticated/portal/program': typeof AuthenticatedPortalProgramRoute
   '/_authenticated/portal/purchases': typeof AuthenticatedPortalPurchasesRouteWithChildren
   '/_authenticated/portal/resources': typeof AuthenticatedPortalResourcesRoute
+  '/api/public/signnow-webhook': typeof ApiPublicSignnowWebhookRoute
   '/_authenticated/admin/': typeof AuthenticatedAdminIndexRoute
   '/_authenticated/portal/': typeof AuthenticatedPortalIndexRoute
   '/_authenticated/admin/clients/$id': typeof AuthenticatedAdminClientsIdRoute
@@ -567,6 +576,7 @@ export interface FileRouteTypes {
     | '/portal/program'
     | '/portal/purchases'
     | '/portal/resources'
+    | '/api/public/signnow-webhook'
     | '/admin/'
     | '/portal/'
     | '/admin/clients/$id'
@@ -618,6 +628,7 @@ export interface FileRouteTypes {
     | '/portal/program'
     | '/portal/purchases'
     | '/portal/resources'
+    | '/api/public/signnow-webhook'
     | '/admin'
     | '/portal'
     | '/admin/clients/$id'
@@ -672,6 +683,7 @@ export interface FileRouteTypes {
     | '/_authenticated/portal/program'
     | '/_authenticated/portal/purchases'
     | '/_authenticated/portal/resources'
+    | '/api/public/signnow-webhook'
     | '/_authenticated/admin/'
     | '/_authenticated/portal/'
     | '/_authenticated/admin/clients/$id'
@@ -691,6 +703,7 @@ export interface RootRouteChildren {
   ResetPasswordRoute: typeof ResetPasswordRoute
   SetupRoute: typeof SetupRoute
   SitemapRoute: typeof SitemapRoute
+  ApiPublicSignnowWebhookRoute: typeof ApiPublicSignnowWebhookRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -764,6 +777,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/admin/'
       preLoaderRoute: typeof AuthenticatedAdminIndexRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
+    '/api/public/signnow-webhook': {
+      id: '/api/public/signnow-webhook'
+      path: '/api/public/signnow-webhook'
+      fullPath: '/api/public/signnow-webhook'
+      preLoaderRoute: typeof ApiPublicSignnowWebhookRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/_authenticated/portal/resources': {
       id: '/_authenticated/portal/resources'
@@ -1226,6 +1246,7 @@ const rootRouteChildren: RootRouteChildren = {
   ResetPasswordRoute: ResetPasswordRoute,
   SetupRoute: SetupRoute,
   SitemapRoute: SitemapRoute,
+  ApiPublicSignnowWebhookRoute: ApiPublicSignnowWebhookRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
