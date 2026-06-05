@@ -332,9 +332,44 @@ export type Database = {
         }
         Relationships: []
       }
+      cardio_program_templates: {
+        Row: {
+          archived: boolean
+          created_at: string
+          created_by: string | null
+          id: string
+          name: string
+          notes: string | null
+          rows: Json
+          updated_at: string
+        }
+        Insert: {
+          archived?: boolean
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name: string
+          notes?: string | null
+          rows?: Json
+          updated_at?: string
+        }
+        Update: {
+          archived?: boolean
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name?: string
+          notes?: string | null
+          rows?: Json
+          updated_at?: string
+        }
+        Relationships: []
+      }
       cardio_targets: {
         Row: {
           admin_notes: string | null
+          calorie_target_max: number | null
+          calorie_target_min: number | null
           cardio_type: string
           client_id: string
           client_notes: string | null
@@ -354,6 +389,8 @@ export type Database = {
           last_updated_at: string
           machine_preference: string | null
           phase_id: string | null
+          program_name: string | null
+          show_calories_to_client: boolean
           start_date: string
           status: string
           step_target: number | null
@@ -362,6 +399,8 @@ export type Database = {
         }
         Insert: {
           admin_notes?: string | null
+          calorie_target_max?: number | null
+          calorie_target_min?: number | null
           cardio_type?: string
           client_id: string
           client_notes?: string | null
@@ -381,6 +420,8 @@ export type Database = {
           last_updated_at?: string
           machine_preference?: string | null
           phase_id?: string | null
+          program_name?: string | null
+          show_calories_to_client?: boolean
           start_date: string
           status?: string
           step_target?: number | null
@@ -389,6 +430,8 @@ export type Database = {
         }
         Update: {
           admin_notes?: string | null
+          calorie_target_max?: number | null
+          calorie_target_min?: number | null
           cardio_type?: string
           client_id?: string
           client_notes?: string | null
@@ -408,6 +451,8 @@ export type Database = {
           last_updated_at?: string
           machine_preference?: string | null
           phase_id?: string | null
+          program_name?: string | null
+          show_calories_to_client?: boolean
           start_date?: string
           status?: string
           step_target?: number | null
