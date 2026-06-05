@@ -58,7 +58,7 @@ export function MediaUploadDialog({
 
   function reset() {
     setFiles([]); setPerClipNotes([]); setBatchNote(""); setUrgent(false); setPainNote("");
-    setProgress([]); setUploading(false); setMode("batch");
+    setProgress([]); setUploading(false); setMode("batch"); setSent(false);
   }
 
   async function submit() {
