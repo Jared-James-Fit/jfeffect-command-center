@@ -47,16 +47,6 @@ function AgreementsAdminPage() {
   });
   const apiConnected = signnow?.status === "Connected";
 
-  const { data: needAttention = [] } = useQuery({
-    queryKey: ["agreements-needing-attention"],
-    queryFn: async () => {
-      const { data } = await supabase.from("agreements")
-        .select("*, clients(id, full_name)")
-        .or("signer_mismatch.eq.true,status.in.(Sent,Opened,Waiting on Client,Expired,Needs Resend,Needs Manual Verification,Error)")
-        .order("created_at", { ascending: false }).limit(50);
-      return (data ?? []) as (Agreement & { clients: { id: string; full_name: string } | null })[];
-    },
-  });
 
   async function save(payload: Partial<AgreementTemplate>) {
     if (editing?.id) {
