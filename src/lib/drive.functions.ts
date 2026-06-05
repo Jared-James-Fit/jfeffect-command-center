@@ -1,15 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { supabaseAdmin } from "@/integrations/supabase/client.server";
-import {
-  driveCreateFolder,
-  driveGetFile,
-  driveInitResumableUpload,
-  driveShareAnyoneReader,
-  driveEmbedUrl,
-  driveViewUrl,
-} from "./drive.server";
 
 const MEDIA_TYPE_SUBFOLDERS = [
   "Lift Videos",
@@ -30,6 +21,7 @@ async function loadSettings(_supabase: any) {
   // media_drive_settings only allows admins, but clients also need to know if
   // uploads are available (so the gate doesn't lie to them and uploads don't
   // throw "not set up" when it actually is).
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { data } = await (supabaseAdmin as any).from("media_drive_settings").select("*").limit(1).maybeSingle();
   return data as any;
 }
