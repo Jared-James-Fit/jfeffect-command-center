@@ -14,6 +14,7 @@ import { MediaUploadDialog } from "@/components/media-upload-dialog";
 import { MediaItemCard } from "@/components/media-item-card";
 import { listMediaItems, type MediaType, uploadToDrive } from "@/lib/media";
 import { initMediaUpload, finalizeMediaUpload, createSubmission } from "@/lib/drive.functions";
+import { friendlyDriveError, isDriveSetupError } from "@/lib/drive-errors";
 
 export const Route = createFileRoute("/_authenticated/portal/check-in")({ component: CheckIn });
 
@@ -38,6 +39,7 @@ function CheckIn() {
   const [uploadType, setUploadType] = useState<MediaType>("Check-In Videos");
   const [videoUploading, setVideoUploading] = useState(false);
   const [videoProgress, setVideoProgress] = useState(0);
+  const [uploadsUnavailable, setUploadsUnavailable] = useState(false);
   const videoInputRef = useRef<HTMLInputElement>(null);
   const initFn = useServerFn(initMediaUpload);
   const finalizeFn = useServerFn(finalizeMediaUpload);
@@ -143,7 +145,9 @@ function CheckIn() {
       qc.invalidateQueries({ queryKey: ["my-checkin-videos", client.id] });
     } catch (err: any) {
       console.error(err);
-      toast.error(err?.message || "Upload failed. Try again or message Coach Jared.");
+      const setup = isDriveSetupError(err);
+      if (setup) setUploadsUnavailable(true);
+      toast.error(friendlyDriveError(err, "client"));
     } finally {
       setVideoUploading(false);
       if (videoInputRef.current) videoInputRef.current.value = "";
@@ -206,6 +210,19 @@ Then upload it here before filling out your check-in form.`}
               {recentVideo && !videoUploading && (
                 <div className="mt-3 flex items-center gap-2 rounded-md border border-emerald-500/30 bg-emerald-500/5 p-3 text-sm text-emerald-300">
                   <CheckCircle2 className="h-4 w-4" /> Check-in video uploaded.
+                </div>
+              )}
+
+              {uploadsUnavailable && (
+                <div className="mt-3 rounded-md border border-warning/30 bg-warning/5 p-3 text-sm">
+                  Video uploads are being set up. Message Coach Jared if you need help.
+                  <div className="mt-3">
+                    <a href="/portal/messages">
+                      <Button variant="outline" size="sm">
+                        <MessageCircle className="mr-2 h-4 w-4" />Message Coach
+                      </Button>
+                    </a>
+                  </div>
                 </div>
               )}
 
