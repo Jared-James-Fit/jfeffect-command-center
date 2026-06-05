@@ -604,6 +604,98 @@ export const verifyAgreement = createServerFn({ method: "POST" })
   });
 
 /**
+ * Toggle manual verification on or off.
+ *
+ * When `verified=true`, behaves like verifyAgreement (status -> Verified,
+ * verification_status -> Manually Verified).
+ *
+ * When `verified=false`, removes verification and reopens the agreement:
+ *   - If a signed copy exists (URL or storage path), status -> Needs Manual Verification
+ *   - Otherwise status -> Waiting on Client (so it shows back up on the client dashboard)
+ * In both off-cases verification_status -> Not Verified and the client row
+ * is updated to agreement_signed=false so client-side reminders reappear.
+ */
+export const setAgreementVerification = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i: unknown) =>
+    z.object({
+      id: z.string().uuid(),
+      verified: z.boolean(),
+      note: z.string().max(2000).optional().nullable(),
+    }).parse(i),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    await assertAdminOrCoach(supabase, userId);
+    const { data: existing } = await supabase
+      .from("agreements")
+      .select("client_id, signed_copy_url, signed_copy_storage_path, signed_at, completed_at")
+      .eq("id", data.id).single();
+    const nowIso = new Date().toISOString();
+
+    if (data.verified) {
+      const signedAt = existing?.signed_at ?? nowIso;
+      const patch: Record<string, any> = {
+        status: "Verified",
+        verification_status: "Manually Verified",
+        verified_by: userId,
+        verified_at: nowIso,
+        verification_note: data.note ?? null,
+        signed_at: signedAt,
+        completed_at: existing?.completed_at ?? signedAt,
+        signer_mismatch: false,
+      };
+      const { error } = await supabase.from("agreements").update(patch as any).eq("id", data.id);
+      if (error) throw new Error(error.message);
+      if (existing?.client_id) {
+        await supabase.from("clients").update({
+          agreement_signed: true,
+          agreement_signed_date: signedAt.slice(0, 10),
+          agreement_status: "Verified",
+        } as any).eq("id", existing.client_id);
+      }
+      await supabase.from("agreement_audit_log").insert({
+        agreement_id: data.id,
+        event: "verification_enabled",
+        actor_role: "admin",
+        actor_user_id: userId,
+        details: { note: data.note ?? null } as any,
+      } as any);
+      return { ok: true, verified: true };
+    }
+
+    const hasSignedCopy = !!existing?.signed_copy_url || !!existing?.signed_copy_storage_path;
+    const newStatus = hasSignedCopy ? "Needs Manual Verification" : "Waiting on Client";
+    const patch: Record<string, any> = {
+      status: newStatus,
+      verification_status: "Not Verified",
+      verified_by: null,
+      verified_at: null,
+      verification_note: data.note ?? null,
+    };
+    const { error } = await supabase.from("agreements").update(patch as any).eq("id", data.id);
+    if (error) throw new Error(error.message);
+    if (existing?.client_id) {
+      await supabase.from("clients").update({
+        agreement_signed: false,
+        agreement_status: newStatus,
+      } as any).eq("id", existing.client_id);
+    }
+    await supabase.from("agreement_audit_log").insert({
+      agreement_id: data.id,
+      event: "verification_removed",
+      actor_role: "admin",
+      actor_user_id: userId,
+      details: {
+        note: data.note ?? null,
+        new_status: newStatus,
+        had_signed_copy: hasSignedCopy,
+      } as any,
+    } as any);
+    return { ok: true, verified: false, newStatus };
+  });
+
+/**
  * One-click admin approval: optionally records signed copy / signed date /
  * verification note, then marks the agreement Verified (Manually Verified).
  * Mirrors markAgreementSigned + verifyAgreement combined.
