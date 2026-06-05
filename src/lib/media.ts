@@ -103,6 +103,12 @@ export async function setMediaStatus(itemId: string, status: MediaStatus, userId
   if (error) throw error;
 }
 
+export async function deleteMediaItems(ids: string[]) {
+  if (!ids.length) return;
+  const { error } = await supabase.from("media_items" as any).delete().in("id", ids);
+  if (error) throw error;
+}
+
 export async function markAdminViewed(itemId: string) {
   await supabase.from("media_items" as any).update({ admin_last_viewed_at: new Date().toISOString() }).eq("id", itemId);
 }

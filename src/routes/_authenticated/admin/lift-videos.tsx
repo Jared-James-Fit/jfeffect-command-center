@@ -9,10 +9,13 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { listLiftVideos, markAdminViewed, statusTone, LIFT_VIDEO_STATUSES, type LiftVideoStatus } from "@/lib/lift-videos";
+import { Checkbox } from "@/components/ui/checkbox";
+import { listLiftVideos, markAdminViewed, deleteLiftVideos, statusTone, LIFT_VIDEO_STATUSES, type LiftVideoStatus } from "@/lib/lift-videos";
 import { LiftVideoCard } from "@/components/lift-video-card";
 import { format, parseISO, formatDistanceToNow } from "date-fns";
-import { AlertTriangle, ExternalLink, Video } from "lucide-react";
+import { AlertTriangle, ExternalLink, Video, Trash2 } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/admin/lift-videos")({
   component: AdminLiftVideos,
@@ -24,6 +27,8 @@ function AdminLiftVideos() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | LiftVideoStatus>("all");
   const [openId, setOpenId] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [deleting, setDeleting] = useState(false);
 
   const { data: videos = [] } = useQuery({
     queryKey: ["lift-videos-admin"],
@@ -65,6 +70,35 @@ function AdminLiftVideos() {
   const openVideo = openId ? videos.find((v) => v.id === openId) : null;
   const refresh = () => qc.invalidateQueries({ queryKey: ["lift-videos-admin"] });
 
+  const allSelected = filtered.length > 0 && filtered.every((v) => selected.has(v.id));
+  const someSelected = selected.size > 0 && !allSelected;
+  const toggleOne = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+  const toggleAll = () => {
+    if (allSelected) setSelected(new Set());
+    else setSelected(new Set(filtered.map((v) => v.id)));
+  };
+  const doDelete = async () => {
+    const ids = Array.from(selected);
+    setDeleting(true);
+    try {
+      await deleteLiftVideos(ids);
+      toast.success(`Deleted ${ids.length} video${ids.length === 1 ? "" : "s"}`);
+      if (openId && selected.has(openId)) setOpenId(null);
+      setSelected(new Set());
+      refresh();
+    } catch (e: any) {
+      toast.error(e?.message ?? "Delete failed");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   // Mark as viewed (clears admin bell) when an admin opens a video
   useEffect(() => {
     if (!openId) return;
@@ -87,6 +121,33 @@ function AdminLiftVideos() {
           <div className="ml-auto text-xs text-muted-foreground">{filtered.length} of {videos.length}</div>
         </Card>
 
+        <Card className="border-border bg-card p-3 flex flex-wrap items-center gap-3">
+          <label className="flex items-center gap-2 text-sm">
+            <Checkbox checked={allSelected ? true : someSelected ? "indeterminate" : false} onCheckedChange={toggleAll} />
+            Select all ({filtered.length})
+          </label>
+          <div className="text-xs text-muted-foreground">{selected.size} selected</div>
+          <div className="ml-auto">
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button size="sm" variant="destructive" disabled={selected.size === 0 || deleting}>
+                  <Trash2 className="mr-2 h-4 w-4" /> Delete selected
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete {selected.size} video{selected.size === 1 ? "" : "s"}?</AlertDialogTitle>
+                  <AlertDialogDescription>This removes the metadata records from the review list. Files in Google Drive are not affected.</AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={doDelete}>Delete</AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
+        </Card>
+
         <div className="grid gap-4 lg:grid-cols-2">
           <div className="space-y-2">
             {filtered.length === 0 && (
@@ -101,6 +162,9 @@ function AdminLiftVideos() {
                   onClick={() => setOpenId(v.id)}
                 >
                   <div className="flex items-start gap-3">
+                    <div onClick={(e) => e.stopPropagation()} className="pt-1">
+                      <Checkbox checked={selected.has(v.id)} onCheckedChange={() => toggleOne(v.id)} />
+                    </div>
                     {c?.profile_picture_url ? (
                       <img src={c.profile_picture_url} alt="" className="h-10 w-10 rounded-full object-cover" />
                     ) : (
