@@ -331,3 +331,59 @@ export async function downloadSignedDocument(documentId: string): Promise<{ byte
   const contentType = res.headers.get("content-type") || "application/pdf";
   return { bytes: buf, contentType };
 }
+
+export interface SignNowDocumentSummary {
+  id: string;
+  name: string | null;
+  updated: number | null;
+  isTemplate: boolean;
+  /** Hint flag from list endpoint — true iff every recipient invite signed. */
+  allSigned: boolean;
+  /** Hint flag from list endpoint — true if invite was cancelled. */
+  cancelled: boolean;
+}
+
+/**
+ * Paginated list of all (non-template) documents owned by the SignNow account.
+ * Used for historical import sweeps. The list endpoint returns coarse status
+ * hints; callers should fetch /document/{id} for definitive signed metadata.
+ *
+ * `maxPages` and `perPage` bound the scan so a runaway account doesn't burn
+ * the SignNow rate limit.
+ */
+export async function listAllSignNowDocuments(
+  opts: { maxPages?: number; perPage?: number } = {},
+): Promise<SignNowDocumentSummary[]> {
+  const perPage = Math.max(1, Math.min(100, opts.perPage ?? 100));
+  const maxPages = Math.max(1, Math.min(20, opts.maxPages ?? 5));
+  const out: SignNowDocumentSummary[] = [];
+  for (let page = 1; page <= maxPages; page += 1) {
+    const res = await signnowFetch(
+      `/user/documentsv2?per_page=${perPage}&page=${page}`,
+    );
+    const text = await res.text();
+    if (!res.ok) throw new SignNowApiError(res.status, text);
+    const json = JSON.parse(text);
+    const docs = Array.isArray(json?.data) ? json.data : Array.isArray(json) ? json : [];
+    if (docs.length === 0) break;
+    for (const d of docs) {
+      const id = d?.id ?? d?.document_id;
+      if (!id) continue;
+      const isTemplate = d?.template === true || d?.is_template === 1 || d?.template === 1;
+      if (isTemplate) continue;
+      const invites = Array.isArray(d?.field_invites) ? d.field_invites : [];
+      const cancelled = !!d?.cancelled_invite || invites.some((i: any) => i?.canceled === "1" || i?.status === "cancelled");
+      const allSigned = invites.length > 0 && invites.every((i: any) => i?.status === "fulfilled" || !!i?.signed_at);
+      out.push({
+        id,
+        name: d?.document_name ?? d?.name ?? null,
+        updated: typeof d?.updated === "number" ? d.updated : null,
+        isTemplate: false,
+        allSigned,
+        cancelled,
+      });
+    }
+    if (docs.length < perPage) break;
+  }
+  return out;
+}
