@@ -115,6 +115,9 @@ function MyProgram() {
             <Link to="/portal/lift-videos">
               <Button variant="outline" size="sm"><Video className="mr-1 h-4 w-4" /> Upload Lift Video</Button>
             </Link>
+            <Link to="/portal/exercises">
+              <Button variant="outline" size="sm"><Dumbbell className="mr-1 h-4 w-4" /> Exercise Library</Button>
+            </Link>
           </div>
         </Card>
 
