@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { FileText, ClipboardCheck, Dumbbell, CreditCard, Calendar, ExternalLink, CheckCircle2, Circle, ShieldAlert, MessageCircle, Video, FileSignature } from "lucide-react";
 import { useEffect, useState } from "react";
 
