@@ -365,14 +365,6 @@ function PhaseItem({ label, value }: { label: string; value: string }) {
   );
 }
 
-function _CoachingRowOld({ label, value }: { label: string; value: any }) {
-  return (
-    <div className="text-sm flex justify-between gap-3">
-      <span className="text-muted-foreground">{label}</span>
-      <span className="text-right">{value ?? "—"}</span>
-    </div>
-  );
-}
 
 function BillingCard({ purchase, cancelled, needsAction }: { purchase: any; cancelled: boolean; needsAction: boolean }) {
   if (!purchase) {
