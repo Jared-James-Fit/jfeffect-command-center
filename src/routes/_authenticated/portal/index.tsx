@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ClipboardCheck, CheckCircle2, ShieldAlert, MessageCircle, Video, Mail, CheckCheck, CreditCard, AlertTriangle, Receipt } from "lucide-react";
+import { ClipboardCheck, CheckCircle2, ShieldAlert, MessageCircle, Video, Mail, CheckCheck, CreditCard, AlertTriangle, Receipt, Dumbbell } from "lucide-react";
 import { toast } from "sonner";
 import { PowerlifterBadge } from "@/components/powerlifter-badge";
 import { ExternalLink } from "lucide-react";
@@ -69,6 +69,7 @@ function PortalHome() {
   const quickActions = [
     { to: "/portal/check-in", label: "Submit Check-In", icon: ClipboardCheck },
     { to: "/portal/lift-videos", label: "Send Lift Video", icon: Video },
+    { to: "/portal/exercises", label: "Exercise Library", icon: Dumbbell },
     { to: "/portal/messages", label: "Message Coach", icon: MessageCircle },
   ];
 
@@ -236,7 +237,7 @@ function PortalHome() {
         {/* Quick Actions — compact row */}
         <section aria-label="Quick Actions">
           <h3 className="mb-2 px-1 text-xs uppercase tracking-widest text-muted-foreground">Quick Actions</h3>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             {quickActions.map((a) => (
               <Link key={a.to} to={a.to}>
                 <Card className="flex h-full flex-col items-center justify-center gap-1.5 border-border bg-card p-3 text-center transition hover:border-primary">
