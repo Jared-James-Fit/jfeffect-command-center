@@ -259,7 +259,7 @@ function SignedAgreementsPage() {
             {refreshing ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-1" />}
             Refresh pending
           </Button>
-          <Button variant="outline" onClick={handleImportHistorical} disabled={importing}>
+          <Button type="button" variant="outline" onClick={handleImportHistorical} disabled={importing}>
             {importing ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <DownloadCloud className="h-4 w-4 mr-1" />}
             Import from SignNow
           </Button>
