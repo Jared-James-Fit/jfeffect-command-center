@@ -344,6 +344,15 @@ export const createAgreement = createServerFn({ method: "POST" })
       }
     }
 
+    // Transactional rule: for SignNow API Remote Invite, the agreement row
+    // is only created after a real SignNow invite succeeds. If we attempted
+    // the API call and it failed, abort BEFORE inserting the agreement row
+    // or incrementing any counters. The exact SignNow error is surfaced to
+    // the caller so the dialog/toast can display it verbatim.
+    if (apiAttempted && apiError) {
+      throw new Error(apiError);
+    }
+
     const initialStatus = data.status_override
       ? data.status_override
       : apiError
