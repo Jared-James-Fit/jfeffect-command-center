@@ -272,6 +272,7 @@ function ClientsPage() {
                     <th className="px-4 py-3">Payment</th>
                     <th className="px-4 py-3">Messages</th>
                     <th className="px-4 py-3">Status</th>
+                    <th className="px-4 py-3">Activity</th>
                     <th className="px-4 py-3 w-12"></th>
                   </tr>
                 </thead>
