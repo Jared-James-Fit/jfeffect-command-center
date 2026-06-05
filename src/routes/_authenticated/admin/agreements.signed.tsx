@@ -7,10 +7,11 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Download, ExternalLink, RefreshCw, FileText, Loader2, Search, User } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Download, ExternalLink, RefreshCw, FileText, Loader2, Search, User, Mail } from "lucide-react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
-import { getSignedAgreementUrl, refreshAllPendingAgreements } from "@/lib/agreements.functions";
+import { getSignedAgreementUrl, refreshAllPendingAgreements, refreshAgreementStatus } from "@/lib/agreements.functions";
 import { AgreementStatusBadge } from "@/components/agreement-status-badge";
 import { VERIFICATION_BADGE } from "@/lib/agreements";
 
@@ -28,31 +29,52 @@ type Row = {
   signer_mismatch: boolean;
   signed_at: string | null;
   completed_at: string | null;
+  updated_at: string | null;
+  signing_method: string | null;
+  signed_in_person: boolean | null;
   signed_copy_storage_path: string | null;
   signed_copy_url: string | null;
   signnow_completed_link: string | null;
   signnow_document_id: string | null;
   client_full_name: string | null;
-  clients: { id: string; full_name: string } | null;
+  client_email: string | null;
+  clients: { id: string; full_name: string; email: string | null } | null;
 };
+
+function sourceOf(r: Row): "Storage" | "External" | "SignNow link" | "None" {
+  if (r.signed_copy_storage_path) return "Storage";
+  if (r.signed_copy_url) return "External";
+  if (r.signnow_completed_link) return "SignNow link";
+  return "None";
+}
+
+function methodOf(r: Row): string {
+  if (r.signed_in_person) return "In person";
+  return r.signing_method ?? (r.signnow_document_id ? "Remote Invite" : "—");
+}
 
 function SignedAgreementsPage() {
   const [search, setSearch] = useState("");
   const [from, setFrom] = useState<string>("");
   const [to, setTo] = useState<string>("");
+  const [verif, setVerif] = useState<string>("all");
+  const [src, setSrc] = useState<string>("all");
   const [refreshing, setRefreshing] = useState(false);
   const [downloading, setDownloading] = useState<string | null>(null);
+  const [rowRefreshing, setRowRefreshing] = useState<string | null>(null);
   const getUrlFn = useServerFn(getSignedAgreementUrl);
   const refreshAllFn = useServerFn(refreshAllPendingAgreements);
+  const refreshOneFn = useServerFn(refreshAgreementStatus);
 
   const { data: rows = [], refetch, isLoading } = useQuery({
     queryKey: ["admin-signed-agreements"],
     queryFn: async (): Promise<Row[]> => {
       const { data, error } = await supabase
         .from("agreements")
-        .select("id, client_id, template_name, agreement_type, status, verification_status, signer_mismatch, signed_at, completed_at, signed_copy_storage_path, signed_copy_url, signnow_completed_link, signnow_document_id, client_full_name, clients(id, full_name)")
-        .or("status.in.(Signed,Completed,Verified),signed_copy_storage_path.not.is.null")
+        .select("id, client_id, template_name, agreement_type, status, verification_status, signer_mismatch, signed_at, completed_at, updated_at, signing_method, signed_in_person, signed_copy_storage_path, signed_copy_url, signnow_completed_link, signnow_document_id, client_full_name, client_email, clients(id, full_name, email)")
+        .or("status.in.(Signed,Completed,Verified),signed_copy_storage_path.not.is.null,signed_at.not.is.null")
         .order("signed_at", { ascending: false, nullsFirst: false })
+        .order("updated_at", { ascending: false })
         .limit(1000);
       if (error) throw new Error(error.message);
       return (data ?? []) as unknown as Row[];
@@ -65,8 +87,11 @@ function SignedAgreementsPage() {
     const toTs = to ? new Date(to).getTime() + 24 * 60 * 60 * 1000 - 1 : null;
     return rows.filter((r) => {
       const name = (r.clients?.full_name ?? r.client_full_name ?? "").toLowerCase();
+      const email = (r.clients?.email ?? r.client_email ?? "").toLowerCase();
       const tpl = (r.template_name ?? "").toLowerCase();
-      if (q && !name.includes(q) && !tpl.includes(q)) return false;
+      if (q && !name.includes(q) && !tpl.includes(q) && !email.includes(q)) return false;
+      if (verif !== "all" && r.verification_status !== verif) return false;
+      if (src !== "all" && sourceOf(r) !== src) return false;
       const signedDate = r.signed_at ?? r.completed_at;
       if (fromTs || toTs) {
         if (!signedDate) return false;
@@ -76,7 +101,7 @@ function SignedAgreementsPage() {
       }
       return true;
     });
-  }, [rows, search, from, to]);
+  }, [rows, search, from, to, verif, src]);
 
   const grouped = useMemo(() => {
     const map = new Map<string, { clientId: string; clientName: string; items: Row[] }>();
@@ -115,6 +140,25 @@ function SignedAgreementsPage() {
     }
   }
 
+  async function handleRefreshRow(id: string) {
+    setRowRefreshing(id);
+    try {
+      const res: any = await refreshOneFn({ data: { id } });
+      if (res?.ok === false && res?.reason) {
+        toast.error(res.reason);
+      } else if (res?.storagePath) {
+        toast.success("Signed copy pulled from SignNow.");
+      } else {
+        toast.success("Refreshed from SignNow.");
+      }
+      refetch();
+    } catch (e: any) {
+      toast.error(e?.message ?? "Refresh failed");
+    } finally {
+      setRowRefreshing(null);
+    }
+  }
+
   async function handleRefreshAll() {
     setRefreshing(true);
     try {
@@ -143,16 +187,42 @@ function SignedAgreementsPage() {
       <div className="p-6 md:p-8 space-y-6">
         <div className="flex flex-wrap items-end gap-3">
           <div className="flex-1 min-w-[220px]">
-            <label className="text-xs uppercase tracking-widest text-muted-foreground">Search</label>
+            <label className="text-xs uppercase tracking-widest text-muted-foreground">Search client, email, or template</label>
             <div className="relative">
               <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Client name or template…"
+                placeholder="e.g. Jared, @gmail.com, Liability waiver…"
                 className="pl-8"
               />
             </div>
+          </div>
+          <div className="min-w-[160px]">
+            <label className="text-xs uppercase tracking-widest text-muted-foreground">Verification</label>
+            <Select value={verif} onValueChange={setVerif}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All</SelectItem>
+                <SelectItem value="Manually Verified">Manually Verified</SelectItem>
+                <SelectItem value="Auto-Matched">Auto-Matched</SelectItem>
+                <SelectItem value="Not Verified">Not Verified</SelectItem>
+                <SelectItem value="Signer Name Mismatch">Signer Name Mismatch</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="min-w-[140px]">
+            <label className="text-xs uppercase tracking-widest text-muted-foreground">Source</label>
+            <Select value={src} onValueChange={setSrc}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All</SelectItem>
+                <SelectItem value="Storage">Storage (PDF)</SelectItem>
+                <SelectItem value="External">External URL</SelectItem>
+                <SelectItem value="SignNow link">SignNow link</SelectItem>
+                <SelectItem value="None">No file yet</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           <div>
             <label className="text-xs uppercase tracking-widest text-muted-foreground">Signed from</label>
@@ -164,7 +234,7 @@ function SignedAgreementsPage() {
           </div>
           <Button variant="outline" onClick={handleRefreshAll} disabled={refreshing}>
             {refreshing ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-1" />}
-            Refresh from SignNow
+            Refresh pending
           </Button>
           <Link to="/admin/agreements" className="text-sm text-primary hover:underline">
             ← Back to Agreements
@@ -202,17 +272,27 @@ function SignedAgreementsPage() {
                     {g.items.map((a) => {
                       const signedDate = a.signed_at ?? a.completed_at;
                       const hasFile = !!a.signed_copy_storage_path || !!a.signed_copy_url;
+                      const email = a.clients?.email ?? a.client_email ?? null;
                       return (
-                        <li key={a.id} className="flex flex-wrap items-center gap-3 py-2.5 text-sm">
+                        <li key={a.id} className="flex flex-wrap items-center gap-3 py-3 text-sm">
                           <FileText className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                           <div className="min-w-0 flex-1">
                             <div className="font-medium truncate">
                               {a.template_name ?? a.agreement_type ?? "Agreement"}
                             </div>
-                            <div className="text-xs text-muted-foreground">
-                              {signedDate
-                                ? `Signed ${new Date(signedDate).toLocaleString()}`
-                                : "Signed date unknown"}
+                            <div className="text-xs text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-0.5">
+                              <span className="font-medium text-foreground/80">
+                                {signedDate
+                                  ? `Signed ${new Date(signedDate).toLocaleString()}`
+                                  : "Signed date unknown"}
+                              </span>
+                              {email && (
+                                <span className="inline-flex items-center gap-1">
+                                  <Mail className="h-3 w-3" /> {email}
+                                </span>
+                              )}
+                              <span>· {methodOf(a)}</span>
+                              <span>· {sourceOf(a)}</span>
                             </div>
                           </div>
                           <AgreementStatusBadge status={a.status} />
@@ -237,6 +317,21 @@ function SignedAgreementsPage() {
                               )}
                               View
                             </Button>
+                            {a.signnow_document_id && (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                disabled={rowRefreshing === a.id}
+                                onClick={() => handleRefreshRow(a.id)}
+                                title="Refresh status and pull signed copy from SignNow"
+                              >
+                                {rowRefreshing === a.id ? (
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                ) : (
+                                  <RefreshCw className="h-3.5 w-3.5" />
+                                )}
+                              </Button>
+                            )}
                             {a.signnow_completed_link && (
                               <a
                                 href={a.signnow_completed_link}
@@ -247,6 +342,13 @@ function SignedAgreementsPage() {
                                 <ExternalLink className="h-3 w-3" /> SignNow
                               </a>
                             )}
+                            <Link
+                              to="/admin/clients/$id"
+                              params={{ id: a.client_id }}
+                              className="text-xs text-primary hover:underline inline-flex items-center gap-1"
+                            >
+                              <User className="h-3 w-3" /> Client
+                            </Link>
                           </div>
                         </li>
                       );
