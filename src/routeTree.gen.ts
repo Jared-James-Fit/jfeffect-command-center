@@ -62,6 +62,7 @@ import { Route as AuthenticatedPortalPurchasesIdRouteImport } from './routes/_au
 import { Route as AuthenticatedAdminPurchasesIdRouteImport } from './routes/_authenticated/admin/purchases.$id'
 import { Route as AuthenticatedAdminCoachesIdRouteImport } from './routes/_authenticated/admin/coaches.$id'
 import { Route as AuthenticatedAdminClientsIdRouteImport } from './routes/_authenticated/admin/clients.$id'
+import { Route as AuthenticatedAdminAgreementsSignedRouteImport } from './routes/_authenticated/admin/agreements.signed'
 
 const SitemapRoute = SitemapRouteImport.update({
   id: '/sitemap',
@@ -369,6 +370,12 @@ const AuthenticatedAdminClientsIdRoute =
     path: '/clients/$id',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
+const AuthenticatedAdminAgreementsSignedRoute =
+  AuthenticatedAdminAgreementsSignedRouteImport.update({
+    id: '/agreements/signed',
+    path: '/agreements/signed',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -415,6 +422,7 @@ export interface FileRoutesByFullPath {
   '/api/public/signnow-webhook': typeof ApiPublicSignnowWebhookRoute
   '/admin/': typeof AuthenticatedAdminIndexRoute
   '/portal/': typeof AuthenticatedPortalIndexRoute
+  '/admin/agreements/signed': typeof AuthenticatedAdminAgreementsSignedRoute
   '/admin/clients/$id': typeof AuthenticatedAdminClientsIdRoute
   '/admin/coaches/$id': typeof AuthenticatedAdminCoachesIdRoute
   '/admin/purchases/$id': typeof AuthenticatedAdminPurchasesIdRoute
@@ -467,6 +475,7 @@ export interface FileRoutesByTo {
   '/api/public/signnow-webhook': typeof ApiPublicSignnowWebhookRoute
   '/admin': typeof AuthenticatedAdminIndexRoute
   '/portal': typeof AuthenticatedPortalIndexRoute
+  '/admin/agreements/signed': typeof AuthenticatedAdminAgreementsSignedRoute
   '/admin/clients/$id': typeof AuthenticatedAdminClientsIdRoute
   '/admin/coaches/$id': typeof AuthenticatedAdminCoachesIdRoute
   '/admin/purchases/$id': typeof AuthenticatedAdminPurchasesIdRoute
@@ -523,6 +532,7 @@ export interface FileRoutesById {
   '/api/public/signnow-webhook': typeof ApiPublicSignnowWebhookRoute
   '/_authenticated/admin/': typeof AuthenticatedAdminIndexRoute
   '/_authenticated/portal/': typeof AuthenticatedPortalIndexRoute
+  '/_authenticated/admin/agreements/signed': typeof AuthenticatedAdminAgreementsSignedRoute
   '/_authenticated/admin/clients/$id': typeof AuthenticatedAdminClientsIdRoute
   '/_authenticated/admin/coaches/$id': typeof AuthenticatedAdminCoachesIdRoute
   '/_authenticated/admin/purchases/$id': typeof AuthenticatedAdminPurchasesIdRoute
@@ -579,6 +589,7 @@ export interface FileRouteTypes {
     | '/api/public/signnow-webhook'
     | '/admin/'
     | '/portal/'
+    | '/admin/agreements/signed'
     | '/admin/clients/$id'
     | '/admin/coaches/$id'
     | '/admin/purchases/$id'
@@ -631,6 +642,7 @@ export interface FileRouteTypes {
     | '/api/public/signnow-webhook'
     | '/admin'
     | '/portal'
+    | '/admin/agreements/signed'
     | '/admin/clients/$id'
     | '/admin/coaches/$id'
     | '/admin/purchases/$id'
@@ -686,6 +698,7 @@ export interface FileRouteTypes {
     | '/api/public/signnow-webhook'
     | '/_authenticated/admin/'
     | '/_authenticated/portal/'
+    | '/_authenticated/admin/agreements/signed'
     | '/_authenticated/admin/clients/$id'
     | '/_authenticated/admin/coaches/$id'
     | '/_authenticated/admin/purchases/$id'
@@ -1079,6 +1092,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminClientsIdRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
+    '/_authenticated/admin/agreements/signed': {
+      id: '/_authenticated/admin/agreements/signed'
+      path: '/agreements/signed'
+      fullPath: '/admin/agreements/signed'
+      preLoaderRoute: typeof AuthenticatedAdminAgreementsSignedRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
   }
 }
 
@@ -1119,6 +1139,7 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminTestimonialsRoute: typeof AuthenticatedAdminTestimonialsRoute
   AuthenticatedAdminTrainingPhasesRoute: typeof AuthenticatedAdminTrainingPhasesRoute
   AuthenticatedAdminIndexRoute: typeof AuthenticatedAdminIndexRoute
+  AuthenticatedAdminAgreementsSignedRoute: typeof AuthenticatedAdminAgreementsSignedRoute
   AuthenticatedAdminClientsIdRoute: typeof AuthenticatedAdminClientsIdRoute
   AuthenticatedAdminCoachesIdRoute: typeof AuthenticatedAdminCoachesIdRoute
   AuthenticatedAdminAgreementsIndexRoute: typeof AuthenticatedAdminAgreementsIndexRoute
@@ -1154,6 +1175,8 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
     AuthenticatedAdminTrainingPhasesRoute:
       AuthenticatedAdminTrainingPhasesRoute,
     AuthenticatedAdminIndexRoute: AuthenticatedAdminIndexRoute,
+    AuthenticatedAdminAgreementsSignedRoute:
+      AuthenticatedAdminAgreementsSignedRoute,
     AuthenticatedAdminClientsIdRoute: AuthenticatedAdminClientsIdRoute,
     AuthenticatedAdminCoachesIdRoute: AuthenticatedAdminCoachesIdRoute,
     AuthenticatedAdminAgreementsIndexRoute:
