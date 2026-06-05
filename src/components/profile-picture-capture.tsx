@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Camera, RefreshCw, Upload, X, AlertTriangle } from "lucide-react";
+import { Camera, RefreshCw, Upload, X, AlertTriangle, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -32,7 +32,10 @@ export function ProfilePictureCapture({
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const [streaming, setStreaming] = useState(false);
+  const [opening, setOpening] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [signedUrl, setSignedUrl] = useState<string | null>(null);
@@ -51,25 +54,55 @@ export function ProfilePictureCapture({
     return () => { cancelled = true; };
   }, [currentUrl]);
 
+  useEffect(() => {
+    if (streaming && videoRef.current && streamRef.current) {
+      videoRef.current.srcObject = streamRef.current;
+      videoRef.current.play().catch(() => {});
+    }
+  }, [streaming]);
+
+  useEffect(() => () => {
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+  }, []);
+
+  const triggerFallback = () => cameraInputRef.current?.click();
+
   const startCamera = async () => {
     setCameraError(null);
+    if (!navigator.mediaDevices?.getUserMedia || !window.isSecureContext) {
+      triggerFallback();
+      return;
+    }
+    setOpening(true);
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: 640, height: 640 }, audio: false });
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-      }
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "user" },
+        audio: false,
+      });
+      streamRef.current = stream;
       setStreaming(true);
     } catch (e: any) {
-      const msg = "Camera access is needed to take your profile picture. Please allow camera access and try again.";
-      setCameraError(msg);
-      toast.error(msg);
+      const name = e?.name ?? "";
+      if (name === "NotAllowedError" || name === "SecurityError") {
+        setCameraError("Camera access is blocked. Please allow camera access in your browser settings and try again.");
+      } else if (name === "NotFoundError" || name === "OverconstrainedError") {
+        triggerFallback();
+      } else if (name === "NotReadableError") {
+        setCameraError("Camera is in use by another app. Close it and try again.");
+        triggerFallback();
+      } else {
+        setCameraError("Camera could not open. Try again or contact Coach Jared.");
+        triggerFallback();
+      }
+    } finally {
+      setOpening(false);
     }
   };
 
   const stopCamera = () => {
-    const stream = videoRef.current?.srcObject as MediaStream | null;
-    stream?.getTracks().forEach((t) => t.stop());
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
     if (videoRef.current) videoRef.current.srcObject = null;
     setStreaming(false);
   };
@@ -96,6 +129,7 @@ export function ProfilePictureCapture({
     const reader = new FileReader();
     reader.onload = () => setPreview(reader.result as string);
     reader.readAsDataURL(file);
+    e.target.value = "";
   };
 
   const upload = async () => {
@@ -141,11 +175,19 @@ export function ProfilePictureCapture({
         )}
         <div className="flex flex-wrap gap-2">
           {!streaming && !preview && (
-            <Button type="button" size="sm" onClick={startCamera}>
-              <Camera className="mr-2 h-4 w-4" />
-              {isClient ? (currentUrl ? "Take New Profile Picture" : "Take Profile Picture") : "Take photo"}
+            <Button type="button" size="sm" onClick={startCamera} disabled={opening}>
+              {opening ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Camera className="mr-2 h-4 w-4" />}
+              {opening ? "Opening camera…" : isClient ? (currentUrl ? "Take New Profile Picture" : "Take Profile Picture") : "Take photo"}
             </Button>
           )}
+          <input
+            ref={cameraInputRef}
+            type="file"
+            accept="image/*"
+            capture="user"
+            className="hidden"
+            onChange={onFileChosen}
+          />
           {effectiveAllowFileUpload && !streaming && !preview && (
             <>
               <Button type="button" size="sm" variant="outline" onClick={() => fileInputRef.current?.click()}><Upload className="mr-2 h-4 w-4" />Upload file</Button>
@@ -154,13 +196,13 @@ export function ProfilePictureCapture({
           )}
           {streaming && (
             <>
-              <Button type="button" size="sm" onClick={capture}>Capture</Button>
+              <Button type="button" size="sm" onClick={capture}>Take Photo</Button>
               <Button type="button" size="sm" variant="outline" onClick={stopCamera}><X className="mr-2 h-4 w-4" />Cancel</Button>
             </>
           )}
           {preview && (
             <>
-              <Button type="button" size="sm" onClick={upload} disabled={busy}>{busy ? "Uploading…" : "Save photo"}</Button>
+              <Button type="button" size="sm" onClick={upload} disabled={busy}>{busy ? "Uploading…" : isClient ? "Save Profile Picture" : "Save photo"}</Button>
               <Button type="button" size="sm" variant="outline" onClick={retake}><RefreshCw className="mr-2 h-4 w-4" />Retake</Button>
             </>
           )}
@@ -169,12 +211,17 @@ export function ProfilePictureCapture({
       {cameraError && (
         <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-          <span>{cameraError}</span>
+          <div className="space-y-2">
+            <div>{cameraError}</div>
+            <Button type="button" size="sm" variant="outline" onClick={triggerFallback}>
+              Use device camera instead
+            </Button>
+          </div>
         </div>
       )}
       {streaming && (
         <div className="overflow-hidden rounded-md border border-border bg-black">
-          <video ref={videoRef} playsInline muted className="aspect-square w-full max-w-xs object-cover" />
+          <video ref={videoRef} playsInline muted autoPlay className="aspect-square w-full max-w-xs object-cover" />
         </div>
       )}
       <canvas ref={canvasRef} className="hidden" />
