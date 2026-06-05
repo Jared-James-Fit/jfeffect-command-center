@@ -13,6 +13,7 @@ import { ArrowLeft, ExternalLink, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useState, useEffect } from "react";
 import { PAYMENT_RECORD_STATUSES, PURCHASE_RECORD_STATUSES } from "@/lib/offers";
+import { PurchaseAgreementBadge, computePurchaseAgreementStatus } from "@/components/purchase-agreement-status";
 
 export const Route = createFileRoute("/_authenticated/admin/purchases/$id")({ component: PurchaseDetail });
 
@@ -25,6 +26,19 @@ function PurchaseDetail() {
     queryFn: async () => (await supabase.from("purchase_records").select("*, clients(id, full_name, email)").eq("id", id).single()).data,
   });
   useEffect(() => { if (data) setForm(data); }, [data]);
+  const { data: offer } = useQuery({
+    queryKey: ["purchase-offer", form?.offer_id],
+    enabled: !!form?.offer_id,
+    queryFn: async () => (await supabase.from("offers").select("id, requires_agreement, agreement_before_service, default_agreement_template_id").eq("id", form.offer_id).maybeSingle()).data,
+  });
+  const { data: linkedAgreements = [] } = useQuery({
+    queryKey: ["purchase-linked-agreements", id],
+    queryFn: async () => (await supabase
+      .from("agreements")
+      .select("id, status, verification_status, template_name, signed_at, verified_at, signnow_signing_link, signed_copy_url")
+      .eq("purchase_record_id", id)
+      .order("created_at", { ascending: false })).data ?? [],
+  });
   if (!form) return <div className="p-10 text-muted-foreground">Loading…</div>;
 
   const save = async () => {
@@ -128,7 +142,38 @@ function PurchaseDetail() {
           )}
           <Card className="border-border bg-card p-5 space-y-2">
             <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Agreement & acceptance</h3>
-            <div className="text-sm flex items-center gap-2">Agreement: <Badge variant="outline" className={form.agreement_signed_at_purchase ? "border-primary/40 text-primary" : "border-destructive/40 text-destructive"}>{form.agreement_signed_at_purchase ? "Signed" : "Not signed"}</Badge></div>
+            <div className="text-sm flex items-center gap-2 flex-wrap">
+              Status:
+              <PurchaseAgreementBadge status={computePurchaseAgreementStatus({
+                requiresAgreement: !!offer?.requires_agreement,
+                agreementBeforeService: !!offer?.agreement_before_service,
+                termStartDate: form.term_start_date,
+                agreements: linkedAgreements as any,
+              })} />
+            </div>
+            <div className="text-xs text-muted-foreground">
+              {offer?.requires_agreement ? `Offer requires a signed agreement${offer.agreement_before_service ? " before service start." : "."}` : "This offer doesn't require a signed agreement."}
+            </div>
+            {linkedAgreements.length === 0 && offer?.requires_agreement && (
+              <Link to="/admin/clients/$id" params={{ id: form.clients?.id ?? form.client_id }} search={{ tab: "agreements" }} className="text-xs text-primary underline">Create or link an agreement for this purchase</Link>
+            )}
+            {linkedAgreements.length > 0 && (
+              <ul className="space-y-1 pt-1">
+                {linkedAgreements.map((a: any) => (
+                  <li key={a.id} className="rounded-md border border-border bg-secondary/20 p-2 text-xs flex items-center justify-between gap-2 flex-wrap">
+                    <div className="min-w-0">
+                      <div className="font-semibold truncate">{a.template_name}</div>
+                      <div className="text-muted-foreground">Status: {a.status}{a.signed_at ? ` · signed ${new Date(a.signed_at).toLocaleDateString()}` : ""}{a.verified_at ? ` · verified ${new Date(a.verified_at).toLocaleDateString()}` : ""}</div>
+                    </div>
+                    <div className="flex gap-1">
+                      {a.signnow_signing_link && <a className="text-primary underline" href={a.signnow_signing_link} target="_blank" rel="noreferrer">Signing link</a>}
+                      {a.signed_copy_url && <a className="text-primary underline" href={a.signed_copy_url} target="_blank" rel="noreferrer">Signed copy</a>}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <div className="text-sm flex items-center gap-2 mt-3">Stripe-recorded: <Badge variant="outline" className={form.agreement_signed_at_purchase ? "border-primary/40 text-primary" : "border-muted-foreground/40 text-muted-foreground"}>{form.agreement_signed_at_purchase ? "Signed at purchase" : "Not recorded"}</Badge></div>
             {form.agreement_version && <div className="text-xs text-muted-foreground">Version {form.agreement_version}</div>}
             {form.agreement_link && <a className="text-xs text-primary underline" href={form.agreement_link} target="_blank" rel="noreferrer">View agreement</a>}
             <div className="text-sm flex items-center gap-2 mt-2">Terms accepted: <Badge variant="outline" className={form.terms_accepted ? "border-primary/40 text-primary" : "text-muted-foreground"}>{form.terms_accepted ? "Yes" : "No"}</Badge></div>
