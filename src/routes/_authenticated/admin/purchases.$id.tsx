@@ -47,6 +47,9 @@ function PurchaseDetail() {
   const save = async () => {
     const { id: _i, created_at, updated_at, clients, ...patch } = form;
     if (patch.payment_status === "Paid" && !patch.paid_at) patch.paid_at = new Date().toISOString();
+    if (patch.agreement_block_override && !(patch.agreement_block_override_reason ?? "").trim()) {
+      return toast.error("Override requires a written reason for the audit log.");
+    }
     const { error } = await supabase.from("purchase_records").update(patch).eq("id", id);
     if (error) {
       const msg = /Agreement required/i.test(error.message)
