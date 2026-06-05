@@ -12,11 +12,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Plus, Edit2, Archive, ExternalLink, ShieldCheck, AlertTriangle, FileText, Loader2, UserPlus, Smartphone, Copy, Search, Power, Trash2, Info, Settings } from "lucide-react";
+import { Plus, Edit2, Archive, ExternalLink, ShieldCheck, AlertTriangle, FileText, Loader2, UserPlus, Copy, Search, Power, Trash2, Info, Settings } from "lucide-react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import { createTemplate, updateTemplate, archiveTemplate, setTemplateActive, createAgreement, syncSignNowTemplates } from "@/lib/agreements.functions";
-import { AGREEMENT_TYPES, type AgreementTemplate, type Agreement, VERIFICATION_BADGE, type SigningMethod } from "@/lib/agreements";
+import { AGREEMENT_TYPES, type AgreementTemplate, type Agreement, VERIFICATION_BADGE } from "@/lib/agreements";
 import { AgreementStatusBadge } from "@/components/agreement-status-badge";
 import { useNavigate } from "@tanstack/react-router";
 
@@ -27,7 +27,7 @@ export const Route = createFileRoute("/_authenticated/admin/agreements/")({
 function AgreementsAdminPage() {
   const qc = useQueryClient();
   const [editing, setEditing] = useState<Partial<AgreementTemplate> | null>(null);
-  const [actioning, setActioning] = useState<{ template: AgreementTemplate; mode: "invite" | "in-person" } | null>(null);
+  const [actioning, setActioning] = useState<{ template: AgreementTemplate } | null>(null);
   const createFn = useServerFn(createTemplate);
   const updateFn = useServerFn(updateTemplate);
   const archiveFn = useServerFn(archiveTemplate);
@@ -81,8 +81,8 @@ function AgreementsAdminPage() {
               <p className="font-semibold">Manual SignNow Link Mode</p>
               <p className="text-muted-foreground">
                 SignNow API is not connected. Template syncing and automatic signing invites will not work.
-                You can still paste SignNow signing links into templates, launch in-person signing on this device,
-                and track signed copies manually. The app will not send emails on your behalf in this mode.
+                You can still paste SignNow signing links into templates and track signed copies manually.
+                The app will not send emails on your behalf in this mode — copy the link and send it to the client yourself.
               </p>
               <Link to="/admin/settings" className="text-primary text-xs hover:underline inline-flex items-center gap-1 pt-1">
                 <Settings className="h-3 w-3" /> Connect SignNow in Settings
@@ -202,11 +202,8 @@ function AgreementsAdminPage() {
                   </div>
                   {t.version && <p className="text-[11px] text-muted-foreground">Version: {t.version} · Updated {new Date(t.updated_at).toLocaleDateString()}</p>}
                   <div className="flex flex-wrap gap-1.5 pt-1">
-                    <Button size="sm" className="flex-1 min-w-[120px]" disabled={!ready} onClick={() => setActioning({ template: t, mode: "invite" })}>
+                    <Button size="sm" className="flex-1 min-w-[120px]" disabled={!ready} onClick={() => setActioning({ template: t })}>
                       <UserPlus className="h-3 w-3 mr-1" /> Invite to Sign
-                    </Button>
-                    <Button size="sm" variant="secondary" className="flex-1 min-w-[120px]" disabled={!ready} onClick={() => setActioning({ template: t, mode: "in-person" })}>
-                      <Smartphone className="h-3 w-3 mr-1" /> Sign Template
                     </Button>
                     {t.signnow_url && (
                       <Button size="sm" variant="ghost" onClick={() => { navigator.clipboard.writeText(t.signnow_url!); toast.success("Signing link copied"); }}>
