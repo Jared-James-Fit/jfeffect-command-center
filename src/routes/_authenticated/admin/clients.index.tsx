@@ -20,6 +20,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Checkbox } from "@/components/ui/checkbox";
 import { derivePhase, displayTitle, toneClasses, type TrainingPhase } from "@/lib/training-phases";
 import { deriveTarget } from "@/lib/nutrition-cardio";
+import { PowerlifterBadge } from "@/components/powerlifter-badge";
 
 function summarizeCardio(list: any[]): string {
   if (!list || list.length === 0) return "";
