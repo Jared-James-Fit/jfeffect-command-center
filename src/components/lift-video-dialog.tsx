@@ -296,7 +296,8 @@ export function LiftVideoDialog({ open, onOpenChange, clientId, userId, clientNa
       onSaved?.();
       onOpenChange(false);
     } catch (e: any) {
-      toast.error(e.message ?? "Failed to send");
+      console.error(e);
+      toast.error(friendlyDriveError(e, role === "client" ? "client" : "admin"));
     } finally {
       setSaving(false);
     }
