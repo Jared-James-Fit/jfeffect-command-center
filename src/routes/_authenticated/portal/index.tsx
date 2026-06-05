@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { FileText, ClipboardCheck, Dumbbell, Calendar, ExternalLink, CheckCircle2, Circle, ShieldAlert, MessageCircle, Video, Mail, Target, Image, CheckCheck } from "lucide-react";
+import { FileText, ClipboardCheck, Dumbbell, Calendar, ExternalLink, CheckCircle2, Circle, ShieldAlert, MessageCircle, Video, Mail, Target, CheckCheck } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -81,7 +81,6 @@ function PortalHome() {
     { to: "/portal/check-in", label: "Weekly Check-In", icon: ClipboardCheck },
     { to: "/portal/exercises", label: "Exercise Library", icon: Dumbbell },
     { to: "/portal/nutrition-targets", label: "Nutrition Targets", icon: Target },
-    { to: "/portal/media", label: "Media + Feedback", icon: Image },
   ];
 
   type UpdateCard = {

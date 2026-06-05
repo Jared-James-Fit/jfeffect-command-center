@@ -362,6 +362,58 @@ function ClientDetail() {
         </TabsContent>
 
         <TabsContent value="documents" className="grid gap-6 md:grid-cols-3">
+          <Card className="border-border bg-card p-6 md:col-span-3 space-y-4">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div>
+                <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Weekly Check-In</h3>
+                <p className="text-xs text-muted-foreground mt-1">External check-in link the client opens from their portal.</p>
+              </div>
+              <Badge variant="outline" className={form.checkin_form_link ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300" : "border-warning/40 bg-warning/10 text-warning"}>
+                Weekly check-in link: {form.checkin_form_link ? "Added" : "Missing"}
+              </Badge>
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="md:col-span-2">
+                <Label>Weekly Check-In Link</Label>
+                <Input
+                  value={form.checkin_form_link ?? ""}
+                  onChange={(e) => { set("checkin_form_link", e.target.value); set("checkin_link_updated_at", new Date().toISOString()); }}
+                  placeholder="https://forms.google.com/…"
+                />
+                {form.checkin_link_updated_at && (
+                  <div className="mt-1 text-[11px] text-muted-foreground">Last updated: {new Date(form.checkin_link_updated_at).toLocaleString()}</div>
+                )}
+              </div>
+              <div>
+                <Label>Check-in due day</Label>
+                <Input value={form.checkin_due_day ?? ""} onChange={(e) => set("checkin_due_day", e.target.value)} placeholder="e.g. Every Sunday" />
+              </div>
+              <div className="flex items-end gap-6">
+                <label className="flex items-center gap-2 text-sm">
+                  <Switch checked={form.checkin_allow_video !== false} onCheckedChange={(v) => set("checkin_allow_video", v)} />
+                  Allow check-in video
+                </label>
+                <label className="flex items-center gap-2 text-sm">
+                  <Switch checked={form.checkin_allow_photos !== false} onCheckedChange={(v) => set("checkin_allow_photos", v)} />
+                  Allow progress photos
+                </label>
+              </div>
+              <div className="md:col-span-2">
+                <Label>Check-in instructions (visible to client)</Label>
+                <Textarea rows={3} value={form.checkin_instructions ?? ""} onChange={(e) => set("checkin_instructions", e.target.value)} placeholder="What you want the client to know before submitting." />
+              </div>
+              <div className="md:col-span-2">
+                <Label>Check-in notes for client</Label>
+                <Textarea rows={2} value={form.checkin_notes_client ?? ""} onChange={(e) => set("checkin_notes_client", e.target.value)} placeholder="Short note shown on their check-in page." />
+              </div>
+              <div className="md:col-span-2">
+                <Label>Private admin notes</Label>
+                <Textarea rows={2} value={form.checkin_notes_admin ?? ""} onChange={(e) => set("checkin_notes_admin", e.target.value)} placeholder="Internal only — never shown to the client." />
+              </div>
+            </div>
+            <p className="text-[11px] text-muted-foreground">Use the Save button at the top of the page to apply changes.</p>
+          </Card>
+
           <Card className="border-border bg-card p-6 md:col-span-3 space-y-3">
             <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Linked Resources & Uploads</h3>
             <p className="text-xs text-muted-foreground">Attach Google Sheets, Drive folders, PDFs, and external links. Save to apply.</p>
