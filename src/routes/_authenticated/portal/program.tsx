@@ -11,7 +11,6 @@ import { ExternalLink, FileText, Heart, Dumbbell, Target, Video, Calendar } from
 import { derivePhase, displayTitle, toneClasses, type TrainingPhase } from "@/lib/training-phases";
 import { deriveImportantDate, dateTypeLabel, importantToneClasses, type ImportantDate } from "@/lib/important-dates";
 import { dayTypeLabel, dayTypeTone, formatDays } from "@/lib/training-schedule";
-import { Badge as _BadgeAlias } from "@/components/ui/badge";
 import { format, parseISO } from "date-fns";
 
 export const Route = createFileRoute("/_authenticated/portal/program")({ component: MyProgram });
@@ -199,7 +198,7 @@ function MyProgram() {
                 <div key={c.id} className="rounded-md border border-border bg-secondary/30 p-4">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <_BadgeAlias variant="outline" className={dayTypeTone(c.day_type)}>{dayTypeLabel(c)}</_BadgeAlias>
+                      <Badge variant="outline" className={dayTypeTone(c.day_type)}>{dayTypeLabel(c)}</Badge>
                       <span className="text-sm font-bold">{c.cardio_type === "Custom" ? c.custom_type : c.cardio_type}</span>
                     </div>
                     <Badge variant="outline" className="text-[10px]">{c.start_date} → {c.end_date ?? "ongoing"}</Badge>
