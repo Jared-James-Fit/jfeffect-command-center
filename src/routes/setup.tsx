@@ -95,7 +95,7 @@ function SetupPage() {
       if (v) { patch[f] = v; hasAny = true; } else { patch[f] = null; }
     }
     if (hasAny) {
-      const { error } = await supabase.from("clients").update(patch).eq("user_id", uid);
+      const { error } = await supabase.from("clients").update(patch as any).eq("user_id", uid);
       if (error) {
         setBusy(false);
         return toast.error(error.message);
