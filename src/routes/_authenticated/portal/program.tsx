@@ -70,6 +70,17 @@ function MyProgram() {
   });
   const currentNutrition = (nutritionTargets as any[])[0];
 
+  const { data: nutritionPdfUrl } = useQuery({
+    queryKey: ["my-nutrition-pdf-url", currentNutrition?.pdf_url],
+    enabled: !!currentNutrition?.pdf_url,
+    queryFn: async () => {
+      const { data } = await supabase.storage
+        .from("nutrition-plans")
+        .createSignedUrl(currentNutrition!.pdf_url, 60 * 60);
+      return data?.signedUrl ?? null;
+    },
+  });
+
   const hasSchedule =
     (client?.preferred_training_days?.length ?? 0) +
       (client?.preferred_rest_days?.length ?? 0) +
@@ -143,36 +154,41 @@ function MyProgram() {
               <Apple className="h-8 w-8 text-primary" />
               <div>
                 <h2 className="text-xl font-black">Nutrition Targets</h2>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {currentNutrition
-                    ? `${currentNutrition.phase === "Custom" ? currentNutrition.custom_phase : currentNutrition.phase} · ${currentNutrition.goal === "Custom" ? currentNutrition.custom_goal : currentNutrition.goal}`
-                    : "Your coach hasn't assigned nutrition targets yet."}
-                </p>
+                {currentNutrition ? (
+                  (() => {
+                    const day = (currentNutrition.nutrition_target_days ?? []).sort((a: any, b: any) => a.sort_order - b.sort_order)[0];
+                    const phase = currentNutrition.phase === "Custom" ? currentNutrition.custom_phase : currentNutrition.phase;
+                    const goal = currentNutrition.goal === "Custom" ? currentNutrition.custom_goal : currentNutrition.goal;
+                    return (
+                      <div className="mt-1 space-y-1 text-sm">
+                        <p className="text-muted-foreground">{phase} · {goal}</p>
+                        {day && (
+                          <p className="font-semibold">
+                            {day.calories ?? "—"} kcal · P {day.protein ?? "—"} / C {day.carbs ?? "—"} / F {day.fats ?? "—"}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })()
+                ) : (
+                  <p className="mt-1 text-sm text-muted-foreground">Your coach hasn't assigned nutrition targets yet.</p>
+                )}
               </div>
             </div>
-            <Link to="/portal/nutrition-targets">
-              <Button size="lg" className="bg-gradient-primary font-bold uppercase">
-                View Full Plan <ExternalLink className="ml-2 h-4 w-4" />
-              </Button>
-            </Link>
+            {currentNutrition?.pdf_url && nutritionPdfUrl ? (
+              <a href={nutritionPdfUrl} target="_blank" rel="noreferrer">
+                <Button size="lg" className="bg-gradient-primary font-bold uppercase">
+                  View Full Plan <ExternalLink className="ml-2 h-4 w-4" />
+                </Button>
+              </a>
+            ) : (
+              <Link to="/portal/nutrition-targets">
+                <Button size="lg" className="bg-gradient-primary font-bold uppercase">
+                  View Full Plan <ExternalLink className="ml-2 h-4 w-4" />
+                </Button>
+              </Link>
+            )}
           </div>
-
-          {currentNutrition && (
-            <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              {(() => {
-                const day = (currentNutrition.nutrition_target_days ?? []).sort((a: any, b: any) => a.sort_order - b.sort_order)[0];
-                if (!day) return <p className="text-sm text-muted-foreground">Targets set — open the full plan to see details.</p>;
-                return (
-                  <>
-                    <MiniStat label="Calories" value={day.calories} unit="kcal" />
-                    <MiniStat label="Protein" value={day.protein} unit="g" />
-                    <MiniStat label="Carbs" value={day.carbs} unit="g" />
-                    <MiniStat label="Fats" value={day.fats} unit="g" />
-                  </>
-                );
-              })()}
-            </div>
-          )}
 
           {currentNutrition?.pdf_url && (
             <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-md border border-primary/30 bg-primary/5 p-4">
@@ -183,9 +199,11 @@ function MyProgram() {
                   <div className="font-bold">{currentNutrition.pdf_name || "Nutrition Plan.pdf"}</div>
                 </div>
               </div>
-              <Link to="/portal/nutrition-targets">
-                <Button size="sm" variant="outline">Open PDF</Button>
-              </Link>
+              {nutritionPdfUrl && (
+                <a href={nutritionPdfUrl} target="_blank" rel="noreferrer">
+                  <Button size="sm" variant="outline">Open PDF</Button>
+                </a>
+              )}
             </div>
           )}
         </Card>
