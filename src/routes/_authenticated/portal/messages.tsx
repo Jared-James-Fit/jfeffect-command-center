@@ -23,9 +23,19 @@ function ClientMessages() {
   });
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div
+      className="fixed inset-x-0 top-0 z-30 flex flex-col bg-background md:static md:inset-auto md:z-auto md:h-full md:flex-1"
+      style={{
+        // On mobile, use the dynamic viewport so the chat tracks the
+        // visible area (URL bar collapse + on-screen keyboard).
+        height: "100dvh",
+      }}
+    >
       {/* Slim chat header — coach identity, not a giant page hero */}
-      <header className="flex items-center gap-3 border-b border-border bg-card/80 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-card/60 md:px-6">
+      <header
+        className="flex items-center gap-3 border-b border-border bg-card/80 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-card/60 md:px-6"
+        style={{ paddingTop: "max(env(safe-area-inset-top), 0.75rem)" }}
+      >
         <img
           src="/logo.png"
           alt="Coach Jared"

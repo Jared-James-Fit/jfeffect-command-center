@@ -6,6 +6,7 @@ import { LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { NotificationBell } from "@/components/notification-bell";
 import { useClientNavBadges, markNavSeen } from "@/hooks/use-client-nav-badges";
+import { useKeyboardOpen } from "@/hooks/use-keyboard-open";
 
 export interface NavItem {
   to: string;
@@ -47,6 +48,7 @@ function groupNavItems(items: NavItem[]) {
 }
 
 export function AppShell({ items, title, children }: { items: NavItem[]; title: string; children: ReactNode }) {
+  useKeyboardOpen();
   const { signOut, user } = useAuth();
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (r) => r.location.pathname });
@@ -139,6 +141,7 @@ export function AppShell({ items, title, children }: { items: NavItem[]; title: 
 
         {/* Mobile bottom nav — fixed, app-like tab bar */}
         <nav
+          data-mobile-bottom-nav
           className="fixed left-3 right-3 z-50 grid grid-cols-5 overflow-hidden rounded-2xl border border-border bg-card/95 px-1 py-1 backdrop-blur supports-[backdrop-filter]:bg-card/80 shadow-[0_8px_24px_-6px_rgba(0,0,0,0.55)] md:hidden"
           style={{ bottom: "calc(env(safe-area-inset-bottom) + 10px)" }}
         >
