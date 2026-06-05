@@ -180,11 +180,11 @@ export function AppShell({ items, title, children }: { items: NavItem[]; title: 
   );
 }
 
-export function PageHeader({ title, subtitle, actions }: { title: string; subtitle?: string; actions?: ReactNode }) {
+export function PageHeader({ title, subtitle, actions }: { title: ReactNode; subtitle?: ReactNode; actions?: ReactNode }) {
   return (
     <div className="flex flex-wrap items-end justify-between gap-4 border-b border-border bg-gradient-to-b from-card to-background px-6 py-6 md:px-8">
       <div>
-        <h1 className="text-2xl font-black tracking-tight md:text-3xl">{title}</h1>
+        <h1 className="flex flex-wrap items-center gap-3 text-2xl font-black tracking-tight md:text-3xl">{title}</h1>
         {subtitle ? <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p> : null}
       </div>
       <div className="flex flex-wrap items-center gap-2">

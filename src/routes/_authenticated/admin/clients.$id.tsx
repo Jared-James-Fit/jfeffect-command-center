@@ -34,6 +34,7 @@ import { PriceCardPickerDialog } from "@/components/price-card-picker-dialog";
 import { AgreementsPanel } from "@/components/agreements-panel";
 import { TrainingScheduleCard } from "@/components/training-schedule-card";
 import { listCheckInLinks } from "@/lib/check-ins";
+import { PowerlifterBadge, POWERLIFTER_BADGE_LABELS } from "@/components/powerlifter-badge";
 
 function AssignedCoachSelect({ value, onChange }: { value: string | null; onChange: (v: string | null) => void }) {
   const { data: coaches = [] } = useQuery({
@@ -291,7 +292,14 @@ function ClientDetail() {
   return (
     <>
       <PageHeader
-        title={form.full_name}
+        title={
+          <>
+            <span>{form.full_name}</span>
+            {form.is_powerlifter && (
+              <PowerlifterBadge label={form.powerlifter_badge_label} size="sm" />
+            )}
+          </>
+        }
         subtitle={form.coaching_type ?? "Coaching client"}
         actions={
           <>
@@ -363,6 +371,7 @@ function ClientDetail() {
 
         <div className="space-y-6">
         <TrainingScheduleCard client={form} />
+        <PowerlifterSection form={form} set={set} />
         <Card className="border-border bg-card p-6 space-y-3">
           <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Quick Jump</h3>
           <p className="text-xs text-muted-foreground">Open a management area for this client.</p>
@@ -743,4 +752,78 @@ function AccountStatusBadge({ status, needsHelp }: { status?: string; needsHelp?
     s === "Invite Expired" || s === "Needs Admin Help" ? "border-warning/40 text-warning bg-warning/10" :
     "border-border text-muted-foreground bg-secondary/40";
   return <Badge variant="outline" className={tone}>{s}</Badge>;
+}
+
+function PowerlifterSection({ form, set }: { form: any; set: (k: string, v: any) => void }) {
+  const url = (form.openpowerlifting_url ?? "").trim();
+  const isOn = !!form.is_powerlifter;
+  const show = isOn || !!url;
+  const openLink = () => {
+    if (url) window.open(url, "_blank", "noopener,noreferrer");
+  };
+  const removeLink = () => set("openpowerlifting_url", null);
+  return (
+    <Card className="border-border bg-card p-6 space-y-3">
+      <div className="flex items-center justify-between gap-3">
+        <h3 className="text-xs uppercase tracking-widest text-muted-foreground">OpenPowerlifting</h3>
+        {isOn && <PowerlifterBadge label={form.powerlifter_badge_label} size="xs" />}
+      </div>
+
+      <label className="flex items-center justify-between gap-3 text-sm">
+        <span className="font-medium">Powerlifter</span>
+        <Switch checked={isOn} onCheckedChange={(v) => set("is_powerlifter", v)} />
+      </label>
+
+      {isOn && (
+        <div>
+          <Label className="text-[11px]">Badge style</Label>
+          <Select
+            value={form.powerlifter_badge_label ?? "Powerlifter"}
+            onValueChange={(v) => set("powerlifter_badge_label", v)}
+          >
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {POWERLIFTER_BADGE_LABELS.map((l) => (
+                <SelectItem key={l} value={l}>{l}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
+      {show ? (
+        <div className="space-y-2">
+          <Label className="text-[11px]">OpenPowerlifting Link (optional)</Label>
+          <Input
+            value={form.openpowerlifting_url ?? ""}
+            onChange={(e) => set("openpowerlifting_url", e.target.value || null)}
+            placeholder="https://www.openpowerlifting.org/u/…"
+          />
+          <div className="flex flex-wrap gap-2 pt-1">
+            <Button type="button" size="sm" variant="outline" disabled={!url} onClick={openLink}>
+              <ExternalLink className="mr-1.5 h-3.5 w-3.5" /> Open Link
+            </Button>
+            {url && (
+              <Button type="button" size="sm" variant="outline" className="text-destructive hover:text-destructive" onClick={removeLink}>
+                <Trash2 className="mr-1.5 h-3.5 w-3.5" /> Remove
+              </Button>
+            )}
+          </div>
+        </div>
+      ) : (
+        <p className="text-xs text-muted-foreground">No OpenPowerlifting link added.</p>
+      )}
+
+      {(isOn || url) && (
+        <label className="flex items-center justify-between gap-3 text-sm pt-2 border-t border-border/60">
+          <span>Visible to client</span>
+          <Switch
+            checked={!!form.powerlifting_visible_to_client}
+            onCheckedChange={(v) => set("powerlifting_visible_to_client", v)}
+          />
+        </label>
+      )}
+      <p className="text-[11px] text-muted-foreground">Use Save at the top to apply changes.</p>
+    </Card>
+  );
 }

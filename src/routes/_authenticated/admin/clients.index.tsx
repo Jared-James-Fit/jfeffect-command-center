@@ -20,6 +20,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Checkbox } from "@/components/ui/checkbox";
 import { derivePhase, displayTitle, toneClasses, type TrainingPhase } from "@/lib/training-phases";
 import { deriveTarget } from "@/lib/nutrition-cardio";
+import { PowerlifterBadge } from "@/components/powerlifter-badge";
 
 function summarizeCardio(list: any[]): string {
   if (!list || list.length === 0) return "";
@@ -290,6 +291,9 @@ function ClientsPage() {
                       <td className="px-4 py-3">
                         <Link to="/admin/clients/$id" params={{ id: c.id }} className="font-semibold hover:text-primary">{c.full_name}</Link>
                         <div className="text-xs text-muted-foreground">{c.email}</div>
+                       {c.is_powerlifter && (
+                         <div className="mt-1"><PowerlifterBadge label={c.powerlifter_badge_label} size="xs" /></div>
+                       )}
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">{c.coaching_type ?? "—"}</td>
                       <td className="px-4 py-3">
