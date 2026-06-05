@@ -32,7 +32,10 @@ function ClientMessages() {
       }}
     >
       {/* Slim chat header — coach identity, not a giant page hero */}
-      <header className="flex items-center gap-3 border-b border-border bg-card/80 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-card/60 md:px-6">
+      <header
+        className="flex items-center gap-3 border-b border-border bg-card/80 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-card/60 md:px-6"
+        style={{ paddingTop: "max(env(safe-area-inset-top), 0.75rem)" }}
+      >
         <img
           src="/logo.png"
           alt="Coach Jared"
