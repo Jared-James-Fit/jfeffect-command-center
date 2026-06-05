@@ -11,6 +11,8 @@ import { Badge } from "@/components/ui/badge";
 import { AlertTriangle, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { snapshotOfferForPurchase } from "@/lib/offers";
+import { useServerFn } from "@tanstack/react-start";
+import { createAgreement } from "@/lib/agreements.functions";
 
 export function AssignOfferDialog({ offer, onClose, fixedClientId }: { offer: any | null; onClose: () => void; fixedClientId?: string }) {
   const qc = useQueryClient();
@@ -18,6 +20,20 @@ export function AssignOfferDialog({ offer, onClose, fixedClientId }: { offer: an
   const [adminNotes, setAdminNotes] = useState("");
   const [recordPaid, setRecordPaid] = useState(false);
   const [busy, setBusy] = useState(false);
+  const offerDefaultTemplateId: string | null = offer?.default_agreement_template_id ?? null;
+  const [agreementTemplateId, setAgreementTemplateId] = useState<string | null>(offerDefaultTemplateId);
+  const [createAgreementOnAssign, setCreateAgreementOnAssign] = useState<boolean>(!!offerDefaultTemplateId);
+  const createAgreementFn = useServerFn(createAgreement);
+
+  const { data: templates = [] } = useQuery({
+    queryKey: ["agreement-templates-active-for-assign"],
+    queryFn: async () => (await supabase
+      .from("agreement_templates")
+      .select("id, name, is_active, archived")
+      .eq("archived", false).eq("is_active", true)
+      .order("name")).data ?? [],
+    enabled: !!offer,
+  });
 
   const { data: clients = [] } = useQuery({
     queryKey: ["clients-assign-list"],
@@ -47,10 +63,30 @@ export function AssignOfferDialog({ offer, onClose, fixedClientId }: { offer: an
       paid_at: recordPaid ? new Date().toISOString() : null,
       amount_paid: recordPaid ? snap.full_payable_amount ?? 0 : 0,
     };
-    const { error } = await supabase.from("purchase_records").insert(payload as any);
+    const { data: purchase, error } = await supabase
+      .from("purchase_records").insert(payload as any).select("id").single();
     setBusy(false);
     if (error) return toast.error(error.message);
     toast.success("Purchase record created");
+
+    if (createAgreementOnAssign && agreementTemplateId && purchase?.id) {
+      try {
+        await createAgreementFn({
+          data: {
+            client_id: clientId,
+            template_id: agreementTemplateId,
+            purchase_record_id: purchase.id,
+            offer_name: offer.name,
+            send_now: false,
+          },
+        });
+        toast.success("Draft agreement linked to purchase");
+      } catch (e: any) {
+        toast.error(`Couldn't create draft agreement: ${e?.message ?? "unknown error"}`);
+      }
+      qc.invalidateQueries({ queryKey: ["client-agreements", clientId] });
+    }
+
     qc.invalidateQueries({ queryKey: ["purchase-records"] });
     qc.invalidateQueries({ queryKey: ["client-purchases", clientId] });
     onClose();
@@ -102,6 +138,27 @@ export function AssignOfferDialog({ offer, onClose, fixedClientId }: { offer: an
             <div className="flex items-center gap-3">
               <Switch checked={recordPaid} onCheckedChange={setRecordPaid} />
               <Label>Mark as already paid in full</Label>
+            </div>
+
+            <div className="rounded-md border border-border bg-secondary/20 p-3 space-y-2">
+              <div className="flex items-center gap-3">
+                <Switch checked={createAgreementOnAssign} onCheckedChange={setCreateAgreementOnAssign} />
+                <Label>Auto-create draft agreement for this purchase</Label>
+              </div>
+              {createAgreementOnAssign && (
+                <div>
+                  <Label className="text-xs">Agreement template{offerDefaultTemplateId ? " (offer default pre-selected)" : ""}</Label>
+                  <Select value={agreementTemplateId ?? ""} onValueChange={(v) => setAgreementTemplateId(v || null)}>
+                    <SelectTrigger><SelectValue placeholder="Pick a template" /></SelectTrigger>
+                    <SelectContent>
+                      {templates.map((t: any) => (
+                        <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="mt-1 text-xs text-muted-foreground">The draft is linked to this purchase. You'll still send it manually from the client's Agreements panel.</p>
+                </div>
+              )}
             </div>
           </div>
         )}

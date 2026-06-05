@@ -1,4 +1,6 @@
 import { useState, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -193,6 +195,10 @@ export function OfferForm({ initial, onSubmit, submitting, submitLabel = "Save o
           <Switch checked={!!form.requires_agreement} onCheckedChange={(v) => set("requires_agreement", v)} />
           <Label>Requires signed Coaching Agreement</Label>
         </div>
+        <DefaultAgreementTemplatePicker
+          value={form.default_agreement_template_id ?? null}
+          onChange={(v) => set("default_agreement_template_id", v)}
+        />
         <Label>Purchase disclaimer (shown to client)</Label>
         <Textarea rows={5} value={form.purchase_disclaimer ?? DEFAULT_PURCHASE_DISCLAIMER} onChange={(e) => set("purchase_disclaimer", e.target.value)} />
       </Section>
@@ -210,5 +216,39 @@ function Section({ title, children }: { title: string; children: React.ReactNode
       <h3 className="text-xs uppercase tracking-widest text-muted-foreground mb-3">{title}</h3>
       {children}
     </Card>
+  );
+}
+
+function DefaultAgreementTemplatePicker({
+  value,
+  onChange,
+}: { value: string | null; onChange: (v: string | null) => void }) {
+  const { data: templates = [] } = useQuery({
+    queryKey: ["agreement-templates-for-offer"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("agreement_templates")
+        .select("id, name, agreement_type, is_active, archived")
+        .eq("archived", false)
+        .order("name");
+      return data ?? [];
+    },
+  });
+  return (
+    <div className="mb-3">
+      <Label>Default agreement template (optional)</Label>
+      <Select value={value ?? "__none__"} onValueChange={(v) => onChange(v === "__none__" ? null : v)}>
+        <SelectTrigger><SelectValue placeholder="No default — admin picks per purchase" /></SelectTrigger>
+        <SelectContent>
+          <SelectItem value="__none__">No default</SelectItem>
+          {templates.map((t: any) => (
+            <SelectItem key={t.id} value={t.id}>
+              {t.name}{t.is_active ? "" : " (inactive)"}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <p className="mt-1 text-xs text-muted-foreground">When set, a draft agreement is auto-created on each new purchase of this offer.</p>
+    </div>
   );
 }

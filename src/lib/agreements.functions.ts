@@ -366,6 +366,12 @@ export const createAgreement = createServerFn({ method: "POST" })
       } as any,
     } as any);
 
+    // Mirror high-level status to clients.agreement_status so dashboards/lists
+    // stay accurate without requiring the agreements row to be re-read.
+    await supabase.from("clients").update({
+      agreement_status: initialStatus,
+    } as any).eq("id", data.client_id);
+
     return { ...ag, _api_error: apiError, _api_attempted: apiAttempted, _api_document_id: apiDocumentId };
   });
 
@@ -535,13 +541,65 @@ export const cancelAgreement = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
     await assertAdminOrCoach(supabase, userId);
+    const { data: ag } = await supabase.from("agreements").select("client_id").eq("id", data.id).single();
     const { error } = await supabase.from("agreements")
       .update({ status: "Cancelled", cancelled_at: new Date().toISOString() } as any)
       .eq("id", data.id);
     if (error) throw new Error(error.message);
+    if (ag?.client_id) {
+      await supabase.from("clients")
+        .update({ agreement_status: "Cancelled" } as any).eq("id", ag.client_id);
+    }
     await supabase.from("agreement_audit_log").insert({
       agreement_id: data.id, event: "cancelled",
       actor_role: "admin", actor_user_id: userId,
     } as any);
     return { ok: true };
+  });
+
+/** Manually refresh an agreement's status from SignNow and pull the signed
+ *  PDF into storage if available. Safe to call repeatedly. */
+export const refreshAgreementStatus = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i: unknown) => z.object({ id: z.string().uuid() }).parse(i))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    await assertAdminOrCoach(supabase, userId);
+    if (!hasSignNowCredentials()) {
+      return { ok: false, reason: "SignNow API not configured." };
+    }
+    const { pullSignedDocumentForAgreement } = await import("@/lib/agreements-pull.server");
+    const result = await pullSignedDocumentForAgreement(data.id, { event: "manual_refresh" });
+    await supabase.from("agreement_audit_log").insert({
+      agreement_id: data.id, event: "status_refreshed",
+      actor_role: "admin", actor_user_id: userId,
+      details: result as any,
+    } as any);
+    return result;
+  });
+
+/** Return a short-lived signed download URL for the stored signed PDF.
+ *  Visible to admins/coaches and to the owning client. */
+export const getSignedAgreementUrl = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i: unknown) => z.object({ id: z.string().uuid() }).parse(i))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const { data: ag, error } = await supabase
+      .from("agreements")
+      .select("id, client_id, signed_copy_storage_path, signed_copy_url, signnow_completed_link")
+      .eq("id", data.id)
+      .single();
+    if (error || !ag) throw new Error(error?.message ?? "Agreement not found");
+    // RLS already restricts visibility (admin / coach / owner). Just confirm we got the row.
+    if (!ag.signed_copy_storage_path) {
+      return { url: ag.signed_copy_url ?? ag.signnow_completed_link ?? null, source: ag.signed_copy_url ? "external" : ag.signnow_completed_link ? "signnow" : null };
+    }
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: signed, error: sErr } = await supabaseAdmin.storage
+      .from("agreements")
+      .createSignedUrl(ag.signed_copy_storage_path, 60 * 10);
+    if (sErr) throw new Error(sErr.message);
+    void userId;
+    return { url: signed?.signedUrl ?? null, source: "storage" as const };
   });

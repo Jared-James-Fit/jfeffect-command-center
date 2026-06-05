@@ -10,14 +10,14 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
-import { Plus, ExternalLink, Copy, ShieldCheck, AlertTriangle, FileText, Send, BellRing, Upload, Trash2, Loader2, UserPlus, Smartphone } from "lucide-react";
+import { Plus, ExternalLink, Copy, ShieldCheck, AlertTriangle, FileText, Send, BellRing, Upload, Trash2, Loader2, UserPlus, Smartphone, RefreshCcw, Download } from "lucide-react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import { AgreementStatusBadge } from "@/components/agreement-status-badge";
 import { fileLabel, AGREEMENT_TYPES, VERIFICATION_BADGE, type Agreement, type AgreementTemplate, type SigningMethod } from "@/lib/agreements";
 import {
   createAgreement, updateAgreement, markAgreementSigned, verifyAgreement,
-  sendAgreementReminder, cancelAgreement,
+  sendAgreementReminder, cancelAgreement, refreshAgreementStatus, getSignedAgreementUrl,
 } from "@/lib/agreements.functions";
 
 export function AgreementsPanel({ clientId, clientName }: { clientId: string; clientName?: string }) {
@@ -32,6 +32,8 @@ export function AgreementsPanel({ clientId, clientName }: { clientId: string; cl
   const verifyFn = useServerFn(verifyAgreement);
   const reminderFn = useServerFn(sendAgreementReminder);
   const cancelFn = useServerFn(cancelAgreement);
+  const refreshFn = useServerFn(refreshAgreementStatus);
+  const getSignedUrlFn = useServerFn(getSignedAgreementUrl);
 
   const { data: agreements = [] } = useQuery({
     queryKey: ["client-agreements", clientId],
@@ -85,6 +87,27 @@ export function AgreementsPanel({ clientId, clientName }: { clientId: string; cl
               onCancel={async () => {
                 if (!confirm("Cancel this agreement?")) return;
                 await cancelFn({ data: { id: a.id } }); toast.success("Cancelled"); invalidate();
+              }}
+              onRefresh={async () => {
+                const r: any = await refreshFn({ data: { id: a.id } });
+                if (r?.ok) {
+                  toast.success(`Refreshed: ${r.status}`);
+                } else {
+                  toast.error(r?.reason ?? "Refresh failed");
+                }
+                invalidate();
+              }}
+              onDownloadSigned={async () => {
+                try {
+                  const r: any = await getSignedUrlFn({ data: { id: a.id } });
+                  if (r?.url) {
+                    window.open(r.url, "_blank", "noopener,noreferrer");
+                  } else {
+                    toast.error("No signed copy available yet.");
+                  }
+                } catch (e: any) {
+                  toast.error(e?.message ?? "Couldn't fetch signed copy");
+                }
               }}
             />
           ))}
@@ -170,7 +193,7 @@ export function AgreementsPanel({ clientId, clientName }: { clientId: string; cl
 }
 
 function AgreementRow({
-  ag, onUpdate, onMarkSigned, onVerify, onRemind, onCancel,
+  ag, onUpdate, onMarkSigned, onVerify, onRemind, onCancel, onRefresh, onDownloadSigned,
 }: {
   ag: Agreement;
   onUpdate: (patch: Partial<Agreement>) => Promise<void> | void;
@@ -178,6 +201,8 @@ function AgreementRow({
   onVerify: () => void;
   onRemind: () => void;
   onCancel: () => void;
+  onRefresh: () => void;
+  onDownloadSigned: () => void;
 }) {
   const label = useMemo(() => fileLabel({
     clientName: ag.client_full_name ?? ag.correct_client_name ?? "Client",
@@ -228,6 +253,12 @@ function AgreementRow({
           <Button size="sm" variant="outline" asChild>
             <a href={ag.signed_copy_url} target="_blank" rel="noreferrer"><ExternalLink className="h-3 w-3 mr-1" />View signed copy</a>
           </Button>
+        )}
+        {ag.signed_copy_storage_path && (
+          <Button size="sm" variant="outline" onClick={onDownloadSigned}><Download className="h-3 w-3 mr-1" />Download signed PDF</Button>
+        )}
+        {ag.signnow_document_id && (
+          <Button size="sm" variant="ghost" onClick={onRefresh}><RefreshCcw className="h-3 w-3 mr-1" />Refresh status</Button>
         )}
         {ag.signnow_completed_link && (
           <Button size="sm" variant="outline" asChild>

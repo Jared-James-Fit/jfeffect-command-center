@@ -5,7 +5,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { FileText, ClipboardCheck, Dumbbell, CreditCard, Calendar, ExternalLink, CheckCircle2, Circle, ShieldAlert, MessageCircle, Video } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { FileText, ClipboardCheck, Dumbbell, CreditCard, Calendar, ExternalLink, CheckCircle2, Circle, ShieldAlert, MessageCircle, Video, FileSignature } from "lucide-react";
 import { useEffect, useState } from "react";
 
 export const Route = createFileRoute("/_authenticated/portal/")({ component: PortalHome });
@@ -33,6 +34,20 @@ function PortalHome() {
     queryFn: async () => {
       const { data } = await supabase.from("clients").select("*").eq("user_id", user!.id).maybeSingle();
       return data;
+    },
+  });
+
+  const { data: outstandingAgreements = [] } = useQuery({
+    queryKey: ["portal-outstanding-agreements", client?.id],
+    enabled: !!client?.id,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("agreements")
+        .select("id, template_name, status, signnow_signing_link, sent_at")
+        .eq("client_id", client!.id)
+        .in("status", ["Sent", "Opened", "Waiting on Client", "Needs Resend", "Manual Action Needed"])
+        .order("created_at", { ascending: false });
+      return data ?? [];
     },
   });
 
@@ -74,6 +89,28 @@ function PortalHome() {
                 </div>
               </div>
               <Link to="/portal/account"><Button size="sm" className="bg-gradient-primary uppercase font-bold">Update Account Information</Button></Link>
+            </div>
+          </Card>
+        )}
+        {outstandingAgreements.length > 0 && (
+          <Card className="border-warning/40 bg-warning/10 p-5">
+            <div className="flex items-start gap-3">
+              <FileSignature className="h-5 w-5 text-warning mt-0.5" />
+              <div className="flex-1">
+                <div className="font-bold">You have {outstandingAgreements.length === 1 ? "an agreement" : `${outstandingAgreements.length} agreements`} waiting for signature.</div>
+                <p className="text-xs text-muted-foreground">Sign now so your coach can finalize your program and purchases.</p>
+                <div className="mt-3 space-y-2">
+                  {outstandingAgreements.map((a: any) => (
+                    <div key={a.id} className="flex flex-wrap items-center gap-2 rounded-md border border-warning/30 bg-background/40 px-3 py-2">
+                      <span className="text-sm font-semibold">{a.template_name}</span>
+                      <Badge variant="outline" className="border-warning/40 bg-warning/10 text-warning">{a.status}</Badge>
+                      {a.signnow_signing_link
+                        ? <a href={a.signnow_signing_link} target="_blank" rel="noreferrer" className="ml-auto"><Button size="sm" className="bg-gradient-primary uppercase font-bold">Sign now</Button></a>
+                        : <Link to="/portal/agreements" className="ml-auto"><Button size="sm" variant="outline">View agreements</Button></Link>}
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           </Card>
         )}
