@@ -9,11 +9,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowLeft, ExternalLink, Trash2 } from "lucide-react";
+import { ArrowLeft, ExternalLink, Trash2, Download } from "lucide-react";
 import { toast } from "sonner";
 import { useState, useEffect } from "react";
 import { PAYMENT_RECORD_STATUSES, PURCHASE_RECORD_STATUSES } from "@/lib/offers";
 import { PurchaseAgreementBadge, computePurchaseAgreementStatus } from "@/components/purchase-agreement-status";
+import { useServerFn } from "@tanstack/react-start";
+import { getSignedAgreementUrl } from "@/lib/agreements.functions";
 
 export const Route = createFileRoute("/_authenticated/admin/purchases/$id")({ component: PurchaseDetail });
 
@@ -35,7 +37,7 @@ function PurchaseDetail() {
     queryKey: ["purchase-linked-agreements", id],
     queryFn: async () => (await supabase
       .from("agreements")
-      .select("id, status, verification_status, template_name, signed_at, verified_at, signnow_signing_link, signed_copy_url")
+      .select("id, status, verification_status, template_name, signed_at, verified_at, signnow_signing_link, signnow_completed_link, signed_copy_url, signed_copy_storage_path")
       .eq("purchase_record_id", id)
       .order("created_at", { ascending: false })).data ?? [],
   });
@@ -168,6 +170,10 @@ function PurchaseDetail() {
                     <div className="flex gap-1">
                       {a.signnow_signing_link && <a className="text-primary underline" href={a.signnow_signing_link} target="_blank" rel="noreferrer">Signing link</a>}
                       {a.signed_copy_url && <a className="text-primary underline" href={a.signed_copy_url} target="_blank" rel="noreferrer">Signed copy</a>}
+                      {a.signed_copy_storage_path && <DownloadSignedButton agreementId={a.id} />}
+                      {!a.signed_copy_url && !a.signed_copy_storage_path && a.signnow_completed_link && (
+                        <a className="text-primary underline" href={a.signnow_completed_link} target="_blank" rel="noreferrer">Open in SignNow</a>
+                      )}
                     </div>
                   </li>
                 ))}
@@ -195,5 +201,26 @@ function Field({ label, v }: { label: string; v: any }) {
       <div className="text-xs uppercase tracking-widest text-muted-foreground">{label}</div>
       <div>{v || "—"}</div>
     </div>
+  );
+}
+
+function DownloadSignedButton({ agreementId }: { agreementId: string }) {
+  const getUrl = useServerFn(getSignedAgreementUrl);
+  return (
+    <button
+      type="button"
+      className="text-primary underline inline-flex items-center gap-1"
+      onClick={async () => {
+        try {
+          const r: any = await getUrl({ data: { id: agreementId } });
+          if (r?.url) window.open(r.url, "_blank", "noopener,noreferrer");
+          else toast.error("No signed copy available yet.");
+        } catch (e: any) {
+          toast.error(e?.message ?? "Couldn't fetch signed copy");
+        }
+      }}
+    >
+      <Download className="h-3 w-3" /> Download PDF
+    </button>
   );
 }
