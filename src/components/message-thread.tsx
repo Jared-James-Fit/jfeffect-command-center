@@ -874,7 +874,7 @@ export function MessageThread({
               onChange={(e) => setBody(e.target.value)}
               placeholder={role === "client" ? "Message Coach Jared…" : "Reply to client…"}
               rows={1}
-              className="min-h-10 max-h-40 flex-1 resize-none rounded-2xl border-input bg-background px-3 py-2 text-sm"
+              className="min-h-10 max-h-40 flex-1 resize-none rounded-2xl border-input bg-background px-3 py-2 text-base sm:text-sm"
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
                   e.preventDefault(); onSend();
