@@ -678,6 +678,11 @@ export type Database = {
           basic_info_update_reason: string | null
           basic_info_update_requested: boolean
           basic_info_update_requested_at: string | null
+          bodyweight_goal_set_at: string | null
+          bodyweight_goal_type: string | null
+          bodyweight_goal_unit: string | null
+          bodyweight_goal_value: number | null
+          bodyweight_goal_value_max: number | null
           calendar_link: string | null
           checkin_allow_photos: boolean
           checkin_allow_video: boolean
@@ -786,6 +791,11 @@ export type Database = {
           basic_info_update_reason?: string | null
           basic_info_update_requested?: boolean
           basic_info_update_requested_at?: string | null
+          bodyweight_goal_set_at?: string | null
+          bodyweight_goal_type?: string | null
+          bodyweight_goal_unit?: string | null
+          bodyweight_goal_value?: number | null
+          bodyweight_goal_value_max?: number | null
           calendar_link?: string | null
           checkin_allow_photos?: boolean
           checkin_allow_video?: boolean
@@ -894,6 +904,11 @@ export type Database = {
           basic_info_update_reason?: string | null
           basic_info_update_requested?: boolean
           basic_info_update_requested_at?: string | null
+          bodyweight_goal_set_at?: string | null
+          bodyweight_goal_type?: string | null
+          bodyweight_goal_unit?: string | null
+          bodyweight_goal_value?: number | null
+          bodyweight_goal_value_max?: number | null
           calendar_link?: string | null
           checkin_allow_photos?: boolean
           checkin_allow_video?: boolean

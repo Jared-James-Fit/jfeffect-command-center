@@ -104,3 +104,127 @@ export function toCsv(rows: ProgressMetric[]): string {
   }
   return lines.join("\n");
 }
+// ============================================================
+// Bodyweight goal helpers
+// ============================================================
+
+export type GoalType = "lose" | "gain" | "maintain" | "performance_cut" | "custom";
+
+export const GOAL_TYPE_LABELS: Record<GoalType, string> = {
+  lose: "Lose weight",
+  gain: "Gain weight",
+  maintain: "Maintain weight",
+  performance_cut: "Performance cut",
+  custom: "Custom",
+};
+
+export interface BodyweightGoal {
+  type: GoalType;
+  value: number;          // target (or range floor for maintain)
+  value_max?: number | null; // range ceiling for maintain
+  unit: WeightUnit;
+}
+
+export interface GoalProgress {
+  /** absolute distance from current to goal target (or range bounds) in current unit */
+  distance: number | null;
+  /** "ahead" = moving correctly, "behind" = away, "in_range" for maintain, "at_goal" if hit */
+  state: "ahead" | "behind" | "in_range" | "out_of_range" | "at_goal" | "unknown";
+  /** 0–1 progress (lose/gain/cut only) from start (first entry) to goal */
+  ratio: number | null;
+  /** Friendly short status copy */
+  status: string;
+}
+
+export function computeGoalProgress(
+  goal: BodyweightGoal | null,
+  series: Array<{ value: number }>,
+  displayUnit: WeightUnit,
+): GoalProgress {
+  if (!goal || series.length === 0) {
+    return { distance: null, state: "unknown", ratio: null, status: "" };
+  }
+  const current = series[series.length - 1].value;
+  const start = series[0].value;
+  const target = convertWeight(goal.value, goal.unit, displayUnit);
+  const targetMax = goal.value_max != null
+    ? convertWeight(goal.value_max, goal.unit, displayUnit)
+    : null;
+
+  if (goal.type === "maintain") {
+    const low = targetMax != null ? Math.min(target, targetMax) : target;
+    const high = targetMax != null ? Math.max(target, targetMax) : target;
+    if (current >= low && current <= high) {
+      return { distance: 0, state: "in_range", ratio: null, status: "In range" };
+    }
+    const dist = current < low ? low - current : current - high;
+    return {
+      distance: Number(dist.toFixed(1)),
+      state: "out_of_range",
+      ratio: null,
+      status: "Outside range",
+    };
+  }
+
+  // lose / performance_cut: target < start, want current to decrease
+  // gain: target > start, want current to increase
+  // custom: infer direction from start vs target
+  const wantsDown = goal.type === "lose" || goal.type === "performance_cut"
+    || (goal.type === "custom" && target < start);
+  const distance = Number(Math.abs(current - target).toFixed(1));
+
+  if (distance < 0.05) {
+    return { distance: 0, state: "at_goal", ratio: 1, status: "Goal reached" };
+  }
+
+  const totalSpan = Math.abs(start - target);
+  const traveled = wantsDown ? start - current : current - start;
+  const ratio = totalSpan > 0
+    ? Math.max(0, Math.min(1, traveled / totalSpan))
+    : null;
+
+  const movingRight = wantsDown ? current <= start : current >= start;
+  return {
+    distance,
+    state: movingRight ? "ahead" : "behind",
+    ratio,
+    status: `${distance.toFixed(1)} ${displayUnit} away`,
+  };
+}
+
+/**
+ * Pick a tasteful acknowledgment line for a new log, given the prior latest entry
+ * and any goal context. Returned copy is neutral and never shaming.
+ */
+export function acknowledgementForLog(opts: {
+  prior: number | null;
+  next: number;
+  goal: BodyweightGoal | null;
+  displayUnit: WeightUnit;
+}): string {
+  const { prior, next, goal, displayUnit } = opts;
+  if (!goal) {
+    if (prior == null) return "Bodyweight logged. Keep the data coming.";
+    return "Progress updated. Coach Jared can see it.";
+  }
+  const target = convertWeight(goal.value, goal.unit, displayUnit);
+  const targetMax = goal.value_max != null
+    ? convertWeight(goal.value_max, goal.unit, displayUnit)
+    : null;
+
+  if (goal.type === "maintain") {
+    const low = targetMax != null ? Math.min(target, targetMax) : target;
+    const high = targetMax != null ? Math.max(target, targetMax) : target;
+    if (next >= low && next <= high) return "Still in range.";
+    return "Logged. The trend matters more than one day.";
+  }
+
+  if (prior == null) return "Logged. Let's build the trend.";
+  const wantsDown = goal.type === "lose" || goal.type === "performance_cut"
+    || (goal.type === "custom" && target < prior);
+  const movedRight = wantsDown ? next < prior : next > prior;
+  if (Math.abs(next - target) < 0.05) return "Goal hit. Nice work.";
+  return movedRight
+    ? "Closer to your goal."
+    : "Logged. One data point does not define the trend.";
+}
