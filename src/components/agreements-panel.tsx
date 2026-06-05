@@ -243,13 +243,15 @@ export function AgreementsPanel({ clientId, clientName }: { clientId: string; cl
 }
 
 function AgreementRow({
-  ag, onUpdate, onMarkSigned, onVerify, onApprove, onRemind, onCancel, onRefresh, onDownloadSigned, onMarkManuallySent, onNeedsFollowUp,
+  ag, onUpdate, onMarkSigned, onVerify, onApprove, onRemoveVerification, onReopen, onRemind, onCancel, onRefresh, onDownloadSigned, onMarkManuallySent, onNeedsFollowUp,
 }: {
   ag: Agreement;
   onUpdate: (patch: Partial<Agreement>) => Promise<void> | void;
   onMarkSigned: () => void;
   onVerify: () => void;
   onApprove: () => void;
+  onRemoveVerification: () => void;
+  onReopen: () => void;
   onRemind: () => void;
   onCancel: () => void;
   onRefresh: () => void;
