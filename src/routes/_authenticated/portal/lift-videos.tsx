@@ -7,12 +7,14 @@ import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Plus, Video, ChevronRight, MoreVertical, Pencil, Link2, MessageSquare } from "lucide-react";
+import { Plus, Video, ChevronRight, MoreVertical, Pencil, Link2, MessageSquare, Trash2 } from "lucide-react";
 import { formatDistanceToNow, parseISO } from "date-fns";
 import { toast } from "sonner";
-import { listLiftVideos, markClientViewed, statusTone, type LiftVideo } from "@/lib/lift-videos";
+import { listLiftVideos, markClientViewed, statusTone, deleteLiftVideos, type LiftVideo } from "@/lib/lift-videos";
 import { LiftVideoDialog } from "@/components/lift-video-dialog";
 import { LiftVideoCard } from "@/components/lift-video-card";
 
@@ -26,6 +28,8 @@ function ClientLiftVideos() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<LiftVideo | null>(null);
   const [detailKey, setDetailKey] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [deleting, setDeleting] = useState(false);
 
   const { data: client } = useQuery({
     queryKey: ["my-client-id", user?.id],
@@ -95,6 +99,36 @@ function ClientLiftVideos() {
 
   const openGroup = detailKey ? groups.find((g) => g.key === detailKey) : null;
 
+  const allSelected = groups.length > 0 && groups.every((g) => selected.has(g.key));
+  const someSelected = selected.size > 0 && !allSelected;
+  const toggleOne = (key: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
+  const toggleAll = () => {
+    if (allSelected) setSelected(new Set());
+    else setSelected(new Set(groups.map((g) => g.key)));
+  };
+  const doDelete = async () => {
+    const ids: string[] = [];
+    for (const g of groups) if (selected.has(g.key)) ids.push(...g.clips.map((c) => c.id));
+    if (!ids.length) return;
+    setDeleting(true);
+    try {
+      await deleteLiftVideos(ids);
+      toast.success(`Deleted ${selected.size} submission${selected.size === 1 ? "" : "s"}`);
+      setSelected(new Set());
+      refresh();
+    } catch (e: any) {
+      toast.error(e?.message ?? "Delete failed");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   function feedbackLabel(clips: LiftVideo[]) {
     if (clips.some((c) => c.status === "Needs Follow-Up")) return "Needs Follow-Up";
     if (clips.some((c) => c.status === "Reviewed")) return "Reviewed by Jared";
@@ -132,6 +166,41 @@ function ClientLiftVideos() {
           </Card>
         )}
 
+        {groups.length > 0 && (
+          <Card className="border-border bg-card p-3 flex items-center gap-3">
+            <Checkbox
+              checked={allSelected ? true : someSelected ? "indeterminate" : false}
+              onCheckedChange={toggleAll}
+              aria-label="Select all"
+            />
+            <div className="text-sm">Select all</div>
+            <div className="ml-auto flex items-center gap-2">
+              <div className="text-xs text-muted-foreground">{selected.size} selected</div>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button size="sm" variant="destructive" disabled={selected.size === 0 || deleting}>
+                    <Trash2 className="mr-1 h-4 w-4" /> Delete
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Delete {selected.size} submission{selected.size === 1 ? "" : "s"}?</AlertDialogTitle>
+                    <AlertDialogDescription>This removes them from your app. Videos in Google Drive are not affected.</AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={doDelete}>Delete</AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
+          </Card>
+        )}
+
+        {groups.length > 0 && (
+          <div className="text-xs text-muted-foreground px-1">Lift videos auto-clear from your app after 14 days. Coach Jared keeps the originals.</div>
+        )}
+
         <div className="space-y-2">
           {groups.map((g) => {
             const v = g.head;
@@ -147,6 +216,13 @@ function ClientLiftVideos() {
                 onClick={() => setDetailKey(g.key)}
               >
                 <div className="flex items-center gap-3">
+                  <div onClick={(e) => e.stopPropagation()} className="shrink-0">
+                    <Checkbox
+                      checked={selected.has(g.key)}
+                      onCheckedChange={() => toggleOne(g.key)}
+                      aria-label="Select submission"
+                    />
+                  </div>
                   <div className="relative h-14 w-20 shrink-0 overflow-hidden rounded-md bg-secondary">
                     {v.thumbnail_url ? (
                       <img src={v.thumbnail_url} alt="" className="h-full w-full object-cover" />
