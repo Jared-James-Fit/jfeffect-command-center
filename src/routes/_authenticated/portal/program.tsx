@@ -302,3 +302,12 @@ function Item({ label, value }: { label: string; value: string }) {
     </div>
   );
 }
+
+function MiniStat({ label, value, unit }: { label: string; value: any; unit: string }) {
+  return (
+    <div className="rounded-md border border-border bg-secondary/30 p-3">
+      <div className="text-[10px] uppercase tracking-widest text-muted-foreground">{label}</div>
+      <div className="mt-1 text-xl font-black">{value ?? "—"}<span className="ml-1 text-xs font-normal text-muted-foreground">{unit}</span></div>
+    </div>
+  );
+}
