@@ -82,10 +82,20 @@ function AccountPage() {
   const updatePicture = async (path: string) => {
     const { error } = await supabase
       .from("clients")
-      .update({ profile_picture_url: path, profile_picture_updated_at: new Date().toISOString() })
+      .update({
+        profile_picture_url: path,
+        profile_picture_updated_at: new Date().toISOString(),
+        profile_picture_updated_by: "client",
+        profile_picture_source: "camera",
+        profile_picture_needs_update: false,
+        profile_picture_needs_update_at: null,
+        profile_picture_needs_update_reason: null,
+      })
       .eq("id", form.id);
     if (error) return toast.error(error.message);
     qc.invalidateQueries({ queryKey: ["my-client-account"] });
+    qc.invalidateQueries({ queryKey: ["my-client-picture-gate"] });
+    qc.invalidateQueries({ queryKey: ["my-client"] });
     setForm({ ...form, profile_picture_url: path });
   };
 
@@ -163,11 +173,15 @@ function AccountPage() {
         <Card className="border-border bg-card p-6 space-y-3">
           <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Profile Picture</h3>
           <ProfilePictureCapture
+            mode="client"
             userId={user.id}
             currentUrl={form.profile_picture_url}
             onUploaded={updatePicture}
           />
-          <p className="text-[11px] text-muted-foreground">Use a clear, real-time headshot. Last updated: {form.profile_picture_updated_at ? new Date(form.profile_picture_updated_at).toLocaleString() : "—"}</p>
+          <p className="text-[11px] text-muted-foreground">
+            Use a clear, real-time headshot. Replacement only — you can't leave this blank.
+            Last updated: {form.profile_picture_updated_at ? new Date(form.profile_picture_updated_at).toLocaleString() : "—"}
+          </p>
         </Card>
 
         <Card className="border-border bg-card p-6 md:col-span-3 space-y-4">
