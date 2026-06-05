@@ -3,6 +3,7 @@ import {
   Package, FileText, Dumbbell, FolderOpen, Calendar, Layers,
   Settings, Briefcase, Apple, ClipboardCheck, UserCog, MessageCircle, Video,
   UserCheck, FileSignature, Film,
+  Link2,
 } from "lucide-react";
 import type { NavItem } from "@/components/app-shell";
 
@@ -15,6 +16,7 @@ export const adminNav: NavItem[] = [
   { to: "/admin/media-review", label: "Media Review", icon: Film },
   { to: "/admin/calendar", label: "Calendar", icon: Calendar },
   { to: "/admin/payments", label: "Payments", icon: CreditCard },
+  { to: "/admin/payment-links", label: "Payment Links", icon: Link2 },
   { to: "/admin/offers", label: "Offers / Products", icon: Package },
   { to: "/admin/purchases", label: "Purchase Records", icon: ClipboardCheck },
   { to: "/admin/agreements", label: "Agreements", icon: FileSignature },

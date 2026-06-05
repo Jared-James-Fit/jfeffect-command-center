@@ -757,6 +757,60 @@ export type Database = {
         }
         Relationships: []
       }
+      coaching_products: {
+        Row: {
+          active: boolean
+          created_at: string
+          created_by: string | null
+          currency: string
+          description: string | null
+          details: string | null
+          id: string
+          image_url: string | null
+          name: string
+          payment_link_url: string | null
+          price_cents: number
+          stripe_payment_link_id: string | null
+          stripe_price_id: string | null
+          stripe_product_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          description?: string | null
+          details?: string | null
+          id?: string
+          image_url?: string | null
+          name: string
+          payment_link_url?: string | null
+          price_cents: number
+          stripe_payment_link_id?: string | null
+          stripe_price_id?: string | null
+          stripe_product_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          description?: string | null
+          details?: string | null
+          id?: string
+          image_url?: string | null
+          name?: string
+          payment_link_url?: string | null
+          price_cents?: number
+          stripe_payment_link_id?: string | null
+          stripe_price_id?: string | null
+          stripe_product_id?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       communication_log: {
         Row: {
           client_id: string
