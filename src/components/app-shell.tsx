@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { NotificationBell } from "@/components/notification-bell";
+import { useClientNavBadges, markNavSeen } from "@/hooks/use-client-nav-badges";
 
 export interface NavItem {
   to: string;
@@ -49,6 +50,7 @@ export function AppShell({ items, title, children }: { items: NavItem[]; title: 
   const { signOut, user } = useAuth();
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (r) => r.location.pathname });
+  const navBadges = useClientNavBadges();
 
   const activeTo = items.reduce<string | null>((best, item) => {
     const matches =
@@ -64,6 +66,7 @@ export function AppShell({ items, title, children }: { items: NavItem[]; title: 
   };
 
   const grouped = groupNavItems(items);
+  const bottomItems = items.slice(0, 5);
 
   return (
     <div className="flex min-h-screen w-full bg-background text-foreground">
@@ -130,31 +133,43 @@ export function AppShell({ items, title, children }: { items: NavItem[]; title: 
           </Button>
         </header>
 
-        <main className="flex-1 overflow-x-hidden pb-[calc(88px+env(safe-area-inset-bottom))] md:pb-0">
+        <main className="flex-1 overflow-x-hidden pb-[calc(120px+env(safe-area-inset-bottom))] md:pb-0">
           {children}
         </main>
 
         {/* Mobile bottom nav — fixed, app-like tab bar */}
         <nav
-          className="fixed inset-x-0 bottom-0 z-50 grid grid-cols-5 border-t border-border bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80 shadow-[0_-4px_20px_-8px_rgba(0,0,0,0.5)] md:hidden"
-          style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+          className="fixed left-3 right-3 z-50 grid grid-cols-5 rounded-2xl border border-border bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80 shadow-[0_8px_24px_-6px_rgba(0,0,0,0.55)] md:hidden"
+          style={{ bottom: "calc(env(safe-area-inset-bottom) + 10px)" }}
         >
-          {items.slice(0, 5).map((item) => {
+          {bottomItems.map((item) => {
             const active = pathname === item.to;
             const Icon = item.icon;
+            const badge = navBadges[item.to];
             return (
               <Link
                 key={item.to}
                 to={item.to}
+                onClick={() => markNavSeen(user?.id, item.to)}
                 className={cn(
-                  "flex min-h-[64px] flex-col items-center justify-center gap-1 px-2 pt-2.5 pb-2 text-[11px] font-semibold transition-colors",
+                  "relative flex min-h-[82px] flex-col items-center justify-center gap-1.5 px-2 pt-3 pb-3 text-[12px] font-semibold transition-colors",
                   active
                     ? "text-primary"
                     : "text-muted-foreground hover:text-foreground"
                 )}
               >
-                <Icon className={cn("h-6 w-6", active && "drop-shadow-[0_0_6px_hsl(var(--primary)/0.6)]")} />
-                <span className="truncate text-[11px] leading-tight">{item.label}</span>
+                <div className="relative">
+                  <Icon className={cn("h-7 w-7", active && "drop-shadow-[0_0_6px_hsl(var(--primary)/0.6)]")} />
+                  {badge?.count != null && badge.count > 0 && (
+                    <span className="absolute -right-2 -top-1.5 grid h-[18px] min-w-[18px] place-items-center rounded-full bg-destructive px-1 text-[10px] font-bold leading-none text-destructive-foreground ring-2 ring-card">
+                      {badge.count > 9 ? "9+" : badge.count}
+                    </span>
+                  )}
+                  {badge?.dot && badge.count == null && (
+                    <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-destructive ring-2 ring-card" />
+                  )}
+                </div>
+                <span className="truncate text-[12px] leading-tight">{item.label}</span>
                 {active && <span className="mt-0.5 h-1 w-6 rounded-full bg-primary" />}
               </Link>
             );
