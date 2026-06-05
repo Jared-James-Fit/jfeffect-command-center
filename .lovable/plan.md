@@ -1,56 +1,57 @@
+## Progress Metrics — Scope & Plan
 
-# Payments, Offers, Stripe Links & Purchase Records — Full Overhaul
+Focus the first build on **manual bodyweight logging** (the stated priority). Other metrics are supported but optional. Device sync ships as a UI-only "Coming soon" stub so it can be wired later without rework.
 
-Big build. Doing it in one pass per your call, with Stripe set up now (Lovable's built-in Stripe Payments — no API key needed; covers automatic checkout, webhooks, payment confirmation).
+### 1. Database (one migration)
 
-## 1. Enable Stripe (built-in)
-- Run `enable_stripe_payments` so Stripe is connected with managed webhooks. This handles `checkout.session.completed`, `payment_intent.succeeded/failed`, `customer.subscription.*`, `invoice.payment_*`, `charge.refunded` automatically and routes them to a webhook route I'll add.
-- Manual mode still works for offers/links not created through Stripe (you paste a link, mark paid manually).
+New table `public.progress_metrics`:
+- `client_id` (uuid, required), `entry_date` (date), `bodyweight` (numeric), `bodyweight_unit` (text: lb/kg), `steps`, `sleep_hours`, `resting_heart_rate`, `calories_burned`, `active_minutes`, `notes`, `source` (text: manual / apple_health / fitbit…), `created_by` (uuid)
+- Index on (client_id, entry_date desc)
+- RLS: admin manage, assigned coach manage, client manage own (insert/select/update/delete where their `clients.user_id = auth.uid()`)
+- GRANTs to authenticated + service_role
 
-## 2. Database (one migration)
-Extend existing tables, do not rewrite:
+Add `preferred_weight_unit` (text, default 'lb') to `clients` for per-client default.
 
-**offers** — add: `offer_type` enum-style text (full list), `image_url`, `short_description`, `full_description`, `currency`, `price`, `full_payable_amount`, `amount_due_today`, `deposit_amount`, `payment_structure`, `payment_frequency`, `number_of_payments`, `payment_amount`, `billing_day`, `payment_start_date`, `final_payment_date`, `minimum_commitment_length`, `term_duration`, `term_duration_unit`, `is_recurring`, `access_length`, `session_count`, `session_length_minutes`, `location`, `cancellation_policy`, `rescheduling_policy`, `no_show_policy`, `late_policy`, `transferability_policy`, `gym_access_note`, `included_features text[]`, `excluded_features text[]`, `requires_agreement`, `required_agreement_template_id`, `agreement_before_service`, `stripe_product_id`, `stripe_price_id`, `stripe_payment_link_id`, `stripe_payment_link_url`, `admin_notes`, `client_notes`, `status`, `archived`, `version`, `last_edited_at` (most exist; only add the missing ones).
+### 2. Client portal
 
-**stripe_payment_links** (new) — `id, offer_id?, title, url, stripe_product_id, stripe_price_id, stripe_payment_link_id, currency, price_cents, full_payable_amount, payment_structure, mode (auto|manual), active, archived, notes, created_*`.
+- **Dashboard card** "Log Bodyweight" — single number input, unit toggle (lb/kg, prefilled from client preference), date defaulting to today, Save button → toast "Bodyweight logged." Shows latest weight + 7-day avg + weekly change as a compact summary.
+- **New route** `/portal/progress-metrics` ("Progress Metrics" page):
+  - Summary tiles: latest bodyweight, 7-day avg, weekly change, last logged date
+  - Simple line chart of bodyweight over time with 7d/30d/90d/All filters (use Recharts — already in deps via shadcn chart)
+  - Optional "Log other metrics" expandable form (steps, sleep, RHR, calories, active minutes, notes)
+  - Recent entries list with inline edit/delete
+  - "Connect Health Device" panel: list of apps (Apple Health, Google Fit, Fitbit, Garmin, Oura, Whoop) all showing "Coming soon" with status pill "Not Connected"
+- Add nav link in the portal sidebar.
 
-**purchase_records** — add any missing: `service_status`, `amount_paid`, `remaining_balance`, `stripe_checkout_session_id`, `stripe_payment_intent_id`, `stripe_subscription_id`, `stripe_customer_id`, `stripe_receipt_url`, `sessions_used`, `sessions_remaining`, `package_expiry_date`, `confirmation_email_sent_at`, snapshot fields (`included_features`, `excluded_features`, `cancellation_policy`, `refund_policy`, `term_duration_text`, `location`, `purchase_disclaimer`) — preserve existing.
+### 3. Admin client profile
 
-**RLS**: admin full, coach read-only on assigned client purchases (no $$ widgets), client read own.
+- New **Progress Metrics** card on `admin/clients.$id.tsx`:
+  - Latest bodyweight, 7-day avg, weekly change, step/sleep averages if data exists
+  - Recent entries list with edit (dialog) + delete (double-confirm)
+  - "Add Entry" button (admin can log on client's behalf)
+  - Unit preference toggle (writes to `clients.preferred_weight_unit`)
+  - CSV export button (downloads all entries)
 
-## 3. Stripe webhook route
-`/api/public/stripe-webhook` — verifies signature, updates `purchase_records` payment_status, stores Stripe IDs, sets service_status, decrements `sessions_remaining` only on admin action (not on payment), sends confirmation email if email infra configured (gracefully skip if not).
+### 4. Files
 
-## 4. Server functions (`createServerFn`)
-- `createStripeProductAndLink(offerId)` — admin only, uses STRIPE_SECRET_KEY (already in secrets) to create Product, Price, Payment Link; writes IDs back to offer.
-- `assignOfferToClient({offerId, clientId, sendEmail})` — snapshots offer → creates `purchase_records` row (Pending Payment), returns payment link.
-- `markPurchasePaidManually(id)` / `markOverdue(id)` / `updateServiceDates(...)`.
-- `sendPaymentLinkEmail(purchaseId)` — uses existing email sender if configured, else returns "manual send" notice.
+- `supabase/migrations/<ts>_progress_metrics.sql` — table + GRANTs + RLS + client unit column
+- `src/lib/progress-metrics.ts` — types, unit conversion, avg/change helpers
+- `src/components/log-bodyweight-card.tsx` — dashboard quick-entry
+- `src/components/progress-metrics-panel.tsx` — shared summary + chart + history (used by both portal page and admin profile)
+- `src/components/progress-metric-dialog.tsx` — add/edit full entry
+- `src/components/connect-health-device-card.tsx` — stub UI
+- `src/routes/_authenticated/portal/progress-metrics.tsx` — new portal route
+- Edits: `src/routes/_authenticated/portal/index.tsx` (add quick-entry card), `src/routes/_authenticated/portal/route.tsx` (nav link), `src/routes/_authenticated/admin/clients.$id.tsx` (panel)
 
-## 5. Admin UI
-**Sales & Payments sidebar group** (already exists): Offers & Products, Stripe Payment Links, Payments, Purchase Records.
+### 5. Deferred (UI placeholders only, no work this round)
 
-- **Offers & Products** (`/admin/offers`): keep existing list; expand the offer form to cover all new fields, grouped tabs (Basics, Pricing & Schedule, Term & Sessions, Includes/Excludes, Agreement, Stripe, Notes). "Create Stripe link" button if STRIPE_SECRET_KEY present.
-- **Stripe Payment Links** (`/admin/payment-links`): list, create (auto or manual), copy, archive, open, connect to offer.
-- **Payments** (new `/admin/payments`): table of all purchase_records joined to clients with filters (status, date, offer type, agreement). Quick actions: mark paid, view, send link, copy link. CSV export.
-- **Purchase Records** (`/admin/purchases`): keep existing list, expand filters + bulk archive/export.
-- **Client profile → Purchases panel**: replace existing `PurchaseRecordsPanel` with richer cards showing payment status + service status + agreement state + quick actions (Assign Offer, Send Link, Copy, Open Stripe, Mark Paid, Edit Service Term, Archive). Add a "Sessions" mini-tracker for session-package purchases.
-- **Admin dashboard widgets**: Payments Needing Attention, Recent Purchases, Active Services, Session Packages Low.
+- Actual device OAuth/sync wiring
+- Admin dashboard widget for "clients missing bodyweight" / sync errors
+- Reminder/notification scheduling
 
-## 6. Client portal
-- New `/portal/purchases` (already exists) — keep but enhance with status chips, agreement banner, session counter.
-- Existing `/portal/purchases/$id` — keep, surface "Complete Payment" button using snapshot payment link.
+Both can be added later against the same table without migration changes.
 
-## 7. Notifications
-Use existing notification bell. Insert into existing notification table on: payment_received, payment_failed, overdue, purchase_created, agreement_missing, service_ending, session_low.
-
-## 8. Bulk + safety
-- Reuse `useBulkSelection` + `DoubleConfirmDeleteDialog` (require typing DELETE for purchase records).
-- Coaches see service type only; payment $$ hidden by RLS.
-
-## 9. Out of scope (will note in UI)
-- Per-line subscription invoice reconciliation beyond webhook events.
-- Refund initiation from inside app (refunds visible, but processed in Stripe).
-- Marketing emails.
-
-Acknowledge: this is ~15–25 files of change. After approval I'll execute the migration + Stripe enable first, then code.
+### Notes
+- All queries use `usePortalUserId()` so Client POV mode works automatically.
+- Unit conversion handled in display only; values stored as entered with their unit so history stays faithful.
+- Chart uses existing `recharts` (already a shadcn dep).

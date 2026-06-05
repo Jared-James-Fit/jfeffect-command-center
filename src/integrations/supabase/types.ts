@@ -729,6 +729,7 @@ export type Database = {
           preferred_high_days: string[]
           preferred_rest_days: string[]
           preferred_training_days: string[]
+          preferred_weight_unit: string
           profile_picture_needs_update: boolean
           profile_picture_needs_update_at: string | null
           profile_picture_needs_update_reason: string | null
@@ -826,6 +827,7 @@ export type Database = {
           preferred_high_days?: string[]
           preferred_rest_days?: string[]
           preferred_training_days?: string[]
+          preferred_weight_unit?: string
           profile_picture_needs_update?: boolean
           profile_picture_needs_update_at?: string | null
           profile_picture_needs_update_reason?: string | null
@@ -923,6 +925,7 @@ export type Database = {
           preferred_high_days?: string[]
           preferred_rest_days?: string[]
           preferred_training_days?: string[]
+          preferred_weight_unit?: string
           profile_picture_needs_update?: boolean
           profile_picture_needs_update_at?: string | null
           profile_picture_needs_update_reason?: string | null
@@ -2384,6 +2387,60 @@ export type Database = {
           id?: string
           profile_picture_source?: string | null
           profile_picture_updated_at?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      progress_metrics: {
+        Row: {
+          active_minutes: number | null
+          bodyweight: number | null
+          bodyweight_unit: string
+          calories_burned: number | null
+          client_id: string
+          created_at: string
+          created_by: string | null
+          entry_date: string
+          id: string
+          notes: string | null
+          resting_heart_rate: number | null
+          sleep_hours: number | null
+          source: string
+          steps: number | null
+          updated_at: string
+        }
+        Insert: {
+          active_minutes?: number | null
+          bodyweight?: number | null
+          bodyweight_unit?: string
+          calories_burned?: number | null
+          client_id: string
+          created_at?: string
+          created_by?: string | null
+          entry_date?: string
+          id?: string
+          notes?: string | null
+          resting_heart_rate?: number | null
+          sleep_hours?: number | null
+          source?: string
+          steps?: number | null
+          updated_at?: string
+        }
+        Update: {
+          active_minutes?: number | null
+          bodyweight?: number | null
+          bodyweight_unit?: string
+          calories_burned?: number | null
+          client_id?: string
+          created_at?: string
+          created_by?: string | null
+          entry_date?: string
+          id?: string
+          notes?: string | null
+          resting_heart_rate?: number | null
+          sleep_hours?: number | null
+          source?: string
+          steps?: number | null
           updated_at?: string
         }
         Relationships: []
