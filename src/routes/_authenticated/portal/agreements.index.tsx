@@ -37,8 +37,30 @@ function PortalAgreementsPage() {
   });
 
   const completedStatuses = ["Signed", "Completed", "Verified"];
-  const needsAction = data.filter((a) => !completedStatuses.includes(a.status as string) && !["Cancelled", "Declined"].includes(a.status as string));
-  const completed = data.filter((a) => completedStatuses.includes(a.status as string));
+  const NEEDS_PRIORITY: Record<string, number> = {
+    "Needs Manual Verification": 0,
+    "Needs Resend": 1,
+    "Manual Action Needed": 2,
+    "Waiting on Client": 3,
+    "Opened": 4,
+    "Sent": 5,
+    "Not Sent": 6,
+  };
+  const needsAction = data
+    .filter((a) => !completedStatuses.includes(a.status as string) && !["Cancelled", "Declined", "Expired"].includes(a.status as string))
+    .sort((a, b) => {
+      const pa = NEEDS_PRIORITY[a.status as string] ?? 99;
+      const pb = NEEDS_PRIORITY[b.status as string] ?? 99;
+      if (pa !== pb) return pa - pb;
+      return (b.sent_at ?? b.created_at ?? "").localeCompare(a.sent_at ?? a.created_at ?? "");
+    });
+  const completed = data
+    .filter((a) => completedStatuses.includes(a.status as string))
+    .sort((a, b) => {
+      const ta = a.signed_at ?? a.completed_at ?? a.updated_at ?? "";
+      const tb = b.signed_at ?? b.completed_at ?? b.updated_at ?? "";
+      return tb.localeCompare(ta);
+    });
 
   return (
     <>
