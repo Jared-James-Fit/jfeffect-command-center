@@ -10,6 +10,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { CARDIO_TYPES, CARDIO_INTENSITIES, TARGET_STATUSES } from "@/lib/nutrition-cardio";
+import { CARDIO_DAY_TYPES } from "@/lib/training-schedule";
 
 type Props = {
   open: boolean;
@@ -17,9 +18,10 @@ type Props = {
   clientId?: string;
   clients?: Array<{ id: string; full_name: string }>;
   initial?: any;
+  defaultDayType?: string;
 };
 
-export function CardioTargetDialog({ open, onOpenChange, clientId, clients = [], initial }: Props) {
+export function CardioTargetDialog({ open, onOpenChange, clientId, clients = [], initial, defaultDayType }: Props) {
   const qc = useQueryClient();
   const [form, setForm] = useState<any>(null);
   const [saving, setSaving] = useState(false);
@@ -32,6 +34,9 @@ export function CardioTargetDialog({ open, onOpenChange, clientId, clients = [],
       goal: "",
       cardio_type: "Incline Walking",
       custom_type: "",
+      day_type: defaultDayType ?? "General",
+      custom_day_type: "",
+      enabled: true,
       frequency_per_week: 3,
       duration_minutes: 30,
       intensity: "Zone 2",
@@ -46,7 +51,7 @@ export function CardioTargetDialog({ open, onOpenChange, clientId, clients = [],
       admin_notes: "",
       visible_to_client: true,
     });
-  }, [open, initial, clientId]);
+  }, [open, initial, clientId, defaultDayType]);
 
   if (!form) return null;
   const set = (k: string, v: any) => setForm({ ...form, [k]: v });
@@ -59,6 +64,9 @@ export function CardioTargetDialog({ open, onOpenChange, clientId, clients = [],
       goal: form.goal || null,
       cardio_type: form.cardio_type,
       custom_type: form.cardio_type === "Custom" ? form.custom_type : null,
+      day_type: form.day_type ?? "General",
+      custom_day_type: form.day_type === "Custom" ? (form.custom_day_type || null) : null,
+      enabled: form.enabled !== false,
       frequency_per_week: form.frequency_per_week ? Number(form.frequency_per_week) : null,
       duration_minutes: form.duration_minutes ? Number(form.duration_minutes) : null,
       intensity: form.intensity || null,
@@ -97,6 +105,21 @@ export function CardioTargetDialog({ open, onOpenChange, clientId, clients = [],
                 <SelectTrigger><SelectValue placeholder="Select client" /></SelectTrigger>
                 <SelectContent>{clients.map((c) => <SelectItem key={c.id} value={c.id}>{c.full_name}</SelectItem>)}</SelectContent>
               </Select>
+            </div>
+          )}
+          <div><Label>Day type</Label>
+            <Select value={form.day_type ?? "General"} onValueChange={(v) => set("day_type", v)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>{CARDIO_DAY_TYPES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+            </Select>
+          </div>
+          <div className="flex items-center justify-between rounded-md border border-border bg-secondary/30 px-3 py-2">
+            <Label className="text-xs">Enabled</Label>
+            <Switch checked={form.enabled !== false} onCheckedChange={(v) => set("enabled", v)} />
+          </div>
+          {form.day_type === "Custom" && (
+            <div className="md:col-span-2"><Label>Custom day type</Label>
+              <Input value={form.custom_day_type ?? ""} onChange={(e) => set("custom_day_type", e.target.value)} placeholder="e.g. Refeed Day" />
             </div>
           )}
           <div><Label>Cardio type</Label>
