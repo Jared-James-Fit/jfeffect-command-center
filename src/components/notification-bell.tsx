@@ -232,6 +232,14 @@ export function NotificationBell() {
                   : undefined
               }
               className="block"
+              onClick={() => {
+                if (it.kind === "message") {
+                  markRead(it.clientId, role === "admin" ? "admin" : "client").catch(() => {});
+                } else if (it.kind === "lift_video" && it.videoId) {
+                  (role === "admin" ? markAdminViewed(it.videoId) : markClientViewed(it.videoId)).catch(() => {});
+                }
+                qc.invalidateQueries({ queryKey: ["unread-counts"] });
+              }}
             >
               <div className="text-xs font-semibold">{it.title}</div>
               <div className="line-clamp-1 text-[11px] text-muted-foreground">{it.body || "(attachment)"}</div>
