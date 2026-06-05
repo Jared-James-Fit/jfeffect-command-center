@@ -65,6 +65,7 @@ export function OfferDetailDialog({ offer, onClose, onAssign, onEdit }: {
           <Row label="No-show policy" value={offer.no_show_policy} />
           <Row label="Transferability" value={offer.transferability_policy} />
           <Row label="Agreement required" value={offer.requires_agreement ? "Yes" : "No"} />
+          <Row label="Before service start" value={offer.agreement_before_service ? "Required (blocks start)" : "Not required"} />
           <Row label="Purchase disclaimer" value={offer.purchase_disclaimer} />
           <Row
             label="Stripe payment link"

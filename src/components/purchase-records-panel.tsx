@@ -8,6 +8,7 @@ import { Link } from "@tanstack/react-router";
 import { ShoppingBag, Plus } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AssignOfferDialog } from "@/components/assign-offer-dialog";
+import { PurchaseAgreementInlineBadge } from "@/components/purchase-agreement-status";
 
 export function PurchaseRecordsPanel({ clientId }: { clientId: string }) {
   const [picker, setPicker] = useState(false);
@@ -15,7 +16,26 @@ export function PurchaseRecordsPanel({ clientId }: { clientId: string }) {
 
   const { data: records = [] } = useQuery({
     queryKey: ["client-purchases", clientId],
-    queryFn: async () => (await supabase.from("purchase_records").select("*").eq("client_id", clientId).order("purchased_at", { ascending: false })).data ?? [],
+    queryFn: async () => (await supabase
+      .from("purchase_records")
+      .select("*")
+      .eq("client_id", clientId)
+      .order("purchased_at", { ascending: false })).data ?? [],
+  });
+
+  const offerIds = Array.from(new Set(records.map((r: any) => r.offer_id).filter(Boolean)));
+  const { data: offerFlags = {} } = useQuery({
+    queryKey: ["offer-agreement-flags", offerIds.sort().join(",")],
+    enabled: offerIds.length > 0,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("offers")
+        .select("id, requires_agreement, agreement_before_service")
+        .in("id", offerIds as string[]);
+      const map: Record<string, { requires_agreement: boolean; agreement_before_service: boolean }> = {};
+      for (const o of (data ?? []) as any[]) map[o.id] = o;
+      return map;
+    },
   });
 
   const { data: offers = [] } = useQuery({
@@ -46,6 +66,13 @@ export function PurchaseRecordsPanel({ clientId }: { clientId: string }) {
                     <span className="text-sm font-mono">{r.currency} {Number(r.full_payable_amount ?? 0).toLocaleString()}</span>
                     <Badge variant="outline">{r.payment_status}</Badge>
                     <Badge variant="outline" className={r.terms_accepted ? "border-primary/40 text-primary" : ""}>{r.terms_accepted ? "Accepted" : "Pending"}</Badge>
+                    <PurchaseAgreementInlineBadge
+                      purchaseId={r.id}
+                      clientId={clientId}
+                      requiresAgreement={!!offerFlags[r.offer_id]?.requires_agreement}
+                      agreementBeforeService={!!offerFlags[r.offer_id]?.agreement_before_service}
+                      termStartDate={r.term_start_date}
+                    />
                   </div>
                 </div>
               </Link>

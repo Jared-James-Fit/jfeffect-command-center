@@ -249,6 +249,7 @@ export interface OfferLike {
   archived?: boolean;
   version?: number;
   default_agreement_template_id?: string | null;
+  agreement_before_service?: boolean;
 }
 
 export const DEFAULT_PURCHASE_DISCLAIMER = `By completing this purchase, you confirm that you understand the offer details, payment terms, service term, inclusions, exclusions, and any listed cancellation/refund policies.\n\nYou also understand this purchase is covered by the JF Effect / Jared James Fit Coaching Agreement + Liability Waiver you have signed or will be required to sign before services begin.`;
