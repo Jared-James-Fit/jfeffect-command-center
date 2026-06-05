@@ -14,7 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { sendTestEmail } from "@/lib/email-sender.functions";
-import { setupDriveRoot } from "@/lib/drive.functions";
+import { setupDriveRoot, testDriveConnection } from "@/lib/drive.functions";
 import { updateSignNowSettings, testSignNowConnection } from "@/lib/agreements.functions";
 import { Mail, Send, FolderOpen, ExternalLink, ShieldCheck } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
@@ -219,6 +219,7 @@ function SettingsPage() {
 function DriveIntegrationCard() {
   const qc = useQueryClient();
   const setupFn = useServerFn(setupDriveRoot);
+  const testFn = useServerFn(testDriveConnection);
   const { data: drive } = useQuery({
     queryKey: ["media-drive-settings"],
     queryFn: async () => {
@@ -226,18 +227,32 @@ function DriveIntegrationCard() {
       return data;
     },
   });
-  const [folderName, setFolderName] = useState("JF Effect Coaching Media");
+  const [folderName, setFolderName] = useState("JF Effect Client Files");
   const [existingId, setExistingId] = useState("");
   const [busy, setBusy] = useState(false);
+  const [testing, setTesting] = useState(false);
 
   async function run() {
     setBusy(true);
     try {
       await setupFn({ data: { folderName, existingFolderId: existingId || undefined } });
-      toast.success("Drive folder connected");
+      toast.success("Drive folder is Ready");
       qc.invalidateQueries({ queryKey: ["media-drive-settings"] });
     } catch (e: any) { toast.error(e?.message || "Drive setup failed"); }
     finally { setBusy(false); }
+  }
+
+  async function test() {
+    setTesting(true);
+    try {
+      const res = await testFn({ data: {} as any });
+      if (res.ok) toast.success(res.message);
+      else toast.error(res.message);
+      qc.invalidateQueries({ queryKey: ["media-drive-settings"] });
+      qc.invalidateQueries({ queryKey: ["media-drive-settings-banner"] });
+    } catch (e: any) {
+      toast.error(e?.message || "Drive test failed");
+    } finally { setTesting(false); }
   }
 
   async function toggleShare(v: boolean) {
@@ -285,12 +300,22 @@ function DriveIntegrationCard() {
         </div>
       )}
       <div className="flex flex-wrap items-center gap-3">
-        <Button onClick={run} disabled={busy}>{(drive as any)?.root_folder_id ? "Re-test connection" : "Create root folder"}</Button>
+        {!(drive as any)?.root_folder_id && (
+          <Button onClick={run} disabled={busy}>Create root folder</Button>
+        )}
+        {(drive as any)?.root_folder_id && (
+          <Button onClick={test} disabled={testing} variant="outline">{testing ? "Testing…" : "Test connection"}</Button>
+        )}
         <label className="flex items-center gap-2 text-xs">
           <Switch checked={!!(drive as any)?.share_uploads_with_link} onCheckedChange={toggleShare} />
           Share uploaded files with link (lets clients view their own videos)
         </label>
       </div>
+      {(drive as any)?.last_test_at && (
+        <p className="text-xs text-muted-foreground">
+          Last test: {new Date((drive as any).last_test_at).toLocaleString()} — {(drive as any).last_test_result}
+        </p>
+      )}
     </Card>
   );
 }

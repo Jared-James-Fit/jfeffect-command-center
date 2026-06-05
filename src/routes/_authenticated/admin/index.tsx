@@ -54,8 +54,11 @@ function DriveSetupBanner() {
       return data as { root_folder_id?: string | null; status?: string | null } | null;
     },
   });
-  const ready = !!data?.root_folder_id;
+  const ready = !!data?.root_folder_id && data?.status === "Ready";
   if (ready) return null;
+  const headline = !data?.root_folder_id
+    ? "Google Drive uploads are not ready"
+    : `Google Drive status: ${data?.status ?? "Unknown"}`;
   return (
     <Card className="border-warning/40 bg-warning/5 p-4">
       <div className="flex items-start gap-3">
@@ -63,9 +66,11 @@ function DriveSetupBanner() {
           <HardDrive className="h-4 w-4" />
         </div>
         <div className="flex-1 min-w-0">
-          <div className="font-bold">Google Drive uploads are not ready</div>
+          <div className="font-bold">{headline}</div>
           <p className="text-sm text-muted-foreground">
-            Set up your root folder before clients upload check-in videos, lift videos, or progress photos.
+            {data?.root_folder_id
+              ? "Re-test the connection in Settings → Google Drive so clients can upload videos and photos."
+              : "Set up your root folder before clients upload check-in videos, lift videos, or progress photos."}
           </p>
         </div>
         <Link to="/admin/settings">

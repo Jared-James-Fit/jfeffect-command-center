@@ -15,22 +15,9 @@ import { MediaItemCard } from "@/components/media-item-card";
 import { listMediaItems, type MediaType, uploadToDrive } from "@/lib/media";
 import { initMediaUpload, finalizeMediaUpload, createSubmission } from "@/lib/drive.functions";
 import { friendlyDriveError, isDriveSetupError } from "@/lib/drive-errors";
+import { buildDriveDisplayName } from "@/lib/media-naming";
 
 export const Route = createFileRoute("/_authenticated/portal/check-in")({ component: CheckIn });
-
-function safeName(name: string) {
-  return name.replace(/[\/\\?%*:|"<>]/g, "-").trim() || "Client";
-}
-function fmtDateTime(d: Date) {
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  const hh = d.getHours();
-  const min = String(d.getMinutes()).padStart(2, "0");
-  const ampm = hh >= 12 ? "PM" : "AM";
-  const h12 = ((hh + 11) % 12) + 1;
-  return { date: `${yyyy}-${mm}-${dd}`, time: `${h12}:${min} ${ampm}` };
-}
 
 function CheckIn() {
   const { user } = useAuth();
@@ -116,16 +103,17 @@ function CheckIn() {
     setVideoProgress(0);
     try {
       const now = new Date();
-      const { date, time } = fmtDateTime(now);
-      const clientName = safeName(client.full_name || "Client");
-      const ext = file.name.includes(".") ? file.name.slice(file.name.lastIndexOf(".")) : "";
-      const index = ((checkInVideos as any[]).filter((v) => {
+      const todayCount = (checkInVideos as any[]).filter((v) => {
         const d = new Date(v.created_at);
         return d.toDateString() === now.toDateString();
-      }).length) + 1;
-      const suffix = index > 1 ? ` ${index}` : "";
-      const newName = `${clientName} — Weekly Check-In Video${suffix} — ${date} — ${time}${ext}`;
-      const renamed = new File([file], newName, { type: file.type });
+      }).length + 1;
+      const displayName = buildDriveDisplayName({
+        clientName: client.full_name,
+        type: "Check-In Videos",
+        index: todayCount,
+        total: todayCount,
+        at: now,
+      });
 
       const sub = await createSubFn({ data: {
         clientId: client.id, submissionType: "Check-In Videos", batchNote: null,
@@ -133,9 +121,10 @@ function CheckIn() {
       }});
       const init = await initFn({ data: {
         clientId: client.id, mediaType: "Check-In Videos",
-        fileName: renamed.name, mimeType: renamed.type || "video/mp4", sizeBytes: renamed.size,
+        fileName: file.name, mimeType: file.type || "video/mp4", sizeBytes: file.size,
+        displayName,
       }});
-      const uploaded = await uploadToDrive(init.uploadUrl, renamed, setVideoProgress);
+      const uploaded = await uploadToDrive(init.uploadUrl, file, setVideoProgress);
       await finalizeFn({ data: {
         clientId: client.id, submissionId: sub.id, mediaType: "Check-In Videos",
         driveFileId: uploaded.id, clipNote: null, clipOrder: 0, urgent: false,
@@ -321,6 +310,7 @@ Then upload it here before filling out your check-in form.`}
           open={uploadOpen}
           onOpenChange={setUploadOpen}
           clientId={client.id}
+          clientName={(client as any).full_name}
           role="client"
           defaultType={uploadType}
           restrictTypes={[uploadType]}

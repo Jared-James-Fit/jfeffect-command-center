@@ -25,7 +25,7 @@ function ClientLiftVideos() {
     queryKey: ["my-client-id", user?.id],
     enabled: !!user,
     queryFn: async () => {
-      const { data } = await supabase.from("clients").select("id").eq("user_id", user!.id).maybeSingle();
+      const { data } = await supabase.from("clients").select("id, full_name").eq("user_id", user!.id).maybeSingle();
       return data;
     },
   });
@@ -116,6 +116,7 @@ function ClientLiftVideos() {
           open={open}
           onOpenChange={setOpen}
           clientId={client.id}
+          clientName={(client as any).full_name}
           userId={user?.id ?? null}
           initial={editing}
           onSaved={refresh}

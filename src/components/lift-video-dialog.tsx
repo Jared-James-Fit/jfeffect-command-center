@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,6 +11,9 @@ import {
   TRAINING_DAY_OPTIONS, LIFT_VIDEO_TAGS, createLiftVideo, updateLiftVideo, uploadVideoFile,
   type LiftVideo,
 } from "@/lib/lift-videos";
+import { initMediaUpload, finalizeMediaUpload, createSubmission } from "@/lib/drive.functions";
+import { uploadLiftClipToDrive } from "@/lib/lift-video-drive-upload";
+import { friendlyDriveError } from "@/lib/drive-errors";
 import { toast } from "sonner";
 import { Upload, Link as LinkIcon, Loader2, Video as VideoIcon, Send, X, AlertTriangle, ArrowUp, ArrowDown, Plus } from "lucide-react";
 
@@ -18,13 +22,17 @@ type Props = {
   onOpenChange: (v: boolean) => void;
   clientId: string;
   userId: string | null;
+  clientName?: string | null;
   initial?: LiftVideo | null;
   onSaved?: () => void;
   /** "client" = simplified flow (video + notes); "admin" = full form. Defaults to "admin". */
   role?: "client" | "admin";
 };
 
-export function LiftVideoDialog({ open, onOpenChange, clientId, userId, initial, onSaved, role = "admin" }: Props) {
+export function LiftVideoDialog({ open, onOpenChange, clientId, userId, clientName, initial, onSaved, role = "admin" }: Props) {
+  const initFn = useServerFn(initMediaUpload);
+  const finalizeFn = useServerFn(finalizeMediaUpload);
+  const createSubFn = useServerFn(createSubmission);
   const [tab, setTab] = useState<"link" | "upload">("upload");
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
   const recordInputRef = useRef<HTMLInputElement | null>(null);
@@ -225,6 +233,7 @@ export function LiftVideoDialog({ open, onOpenChange, clientId, userId, initial,
       const sharedNote = noteMode === "batch" ? batchNote.trim() : "";
       const isUrgent = !!form.is_urgent;
       const urgentNote = isUrgent ? urgentText.trim() : "";
+      let driveSubmissionId: string | null = null;
 
       for (let i = 0; i < clips.length; i++) {
         const clip = clips[i];
@@ -232,10 +241,23 @@ export function LiftVideoDialog({ open, onOpenChange, clientId, userId, initial,
         let storagePath: string | null = null;
         let source: "link" | "upload" = "link";
 
-        if (clip.kind === "file" && clip.file && userId) {
-          const res = await uploadVideoFile(clip.file, userId);
-          storagePath = res.path;
+        if (clip.kind === "file" && clip.file) {
+          // Upload the actual video to the client's Google Drive folder and
+          // mirror it into media_items so it appears in the Media Review Inbox.
+          const perClipNote = noteMode === "perClip" ? clip.note.trim() : (sharedNote || null);
+          const res = await uploadLiftClipToDrive({
+            clientId, clientName, file: clip.file,
+            index: i + 1, total,
+            batchNote: sharedNote || null,
+            perClipNote,
+            urgent: isUrgent,
+            painNote: isUrgent ? urgentNote || null : null,
+            submissionId: driveSubmissionId,
+            initFn, finalizeFn, createSubFn,
+          });
+          driveSubmissionId = res.submissionId;
           videoUrl = res.url;
+          storagePath = null;
           source = "upload";
         } else if (clip.kind === "link" && clip.url) {
           videoUrl = clip.url;
@@ -274,7 +296,8 @@ export function LiftVideoDialog({ open, onOpenChange, clientId, userId, initial,
       onSaved?.();
       onOpenChange(false);
     } catch (e: any) {
-      toast.error(e.message ?? "Failed to send");
+      console.error(e);
+      toast.error(friendlyDriveError(e, role === "client" ? "client" : "admin"));
     } finally {
       setSaving(false);
     }
