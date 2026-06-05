@@ -368,6 +368,7 @@ function TemplateActionDialog({
 
   const selectedClient = clients.find((c) => c.id === clientId);
   const tpl = action?.template;
+  const isApiTemplate = !!tpl?.signnow_template_id;
   const link = linkOverride.trim() || tpl?.signnow_url || null;
 
   async function go() {
@@ -460,8 +461,11 @@ function TemplateActionDialog({
           <div>
             <Label className="text-xs">Signing link override (optional)</Label>
             <Input value={linkOverride} onChange={(e) => setLinkOverride(e.target.value)} placeholder={tpl?.signnow_url ?? "https://app.signnow.com/..."} />
-            {!tpl?.signnow_url && !linkOverride && (
+            {!isApiTemplate && !tpl?.signnow_url && !linkOverride && (
               <p className="text-[11px] text-amber-500 mt-1">This template has no SignNow URL saved. Paste one or edit the template.</p>
+            )}
+            {isApiTemplate && (
+              <p className="text-[11px] text-muted-foreground mt-1">Optional. The SignNow API will generate and email the signing link using template ID <code>{tpl?.signnow_template_id}</code>.</p>
             )}
           </div>
 
