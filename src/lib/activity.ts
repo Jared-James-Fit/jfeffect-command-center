@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
  *  Server-side throttled to once per 60s. Route is updated when it changes. Safe to call often. */
 export async function pingClientActivity(route?: string | null): Promise<void> {
   try {
-    await supabase.rpc("ping_client_activity", { _route: route ?? null });
+    await supabase.rpc("ping_client_activity", { _route: route ?? undefined });
   } catch {
     // Best-effort; never throw to caller.
   }
