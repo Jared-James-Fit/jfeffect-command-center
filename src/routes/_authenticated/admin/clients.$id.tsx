@@ -35,7 +35,6 @@ import { AgreementsPanel } from "@/components/agreements-panel";
 import { TrainingScheduleCard } from "@/components/training-schedule-card";
 import { listCheckInLinks } from "@/lib/check-ins";
 import { PowerlifterBadge, POWERLIFTER_BADGE_LABELS } from "@/components/powerlifter-badge";
-import { ExternalLink as ExternalLinkIcon, Eye, EyeOff } from "lucide-react";
 
 function AssignedCoachSelect({ value, onChange }: { value: string | null; onChange: (v: string | null) => void }) {
   const { data: coaches = [] } = useQuery({
