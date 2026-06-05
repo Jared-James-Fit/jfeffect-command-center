@@ -2157,14 +2157,23 @@ export type Database = {
       }
       signnow_settings: {
         Row: {
+          access_token_expires_at: string | null
+          access_token_status: string
           account_email: string | null
+          api_basic_auth_token: string | null
+          api_client_id: string | null
+          app_mode_note: string | null
           auto_reminders_enabled: boolean
           created_at: string
           default_template_id: string | null
           id: string
+          last_error: string | null
+          last_synced_at: string | null
           last_test_at: string | null
           last_test_result: string | null
           notes: string | null
+          redirect_uri: string | null
+          refresh_token_status: string
           reminder_intervals_days: number[]
           signnow_dashboard_url: string | null
           singleton: boolean
@@ -2172,14 +2181,23 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          access_token_expires_at?: string | null
+          access_token_status?: string
           account_email?: string | null
+          api_basic_auth_token?: string | null
+          api_client_id?: string | null
+          app_mode_note?: string | null
           auto_reminders_enabled?: boolean
           created_at?: string
           default_template_id?: string | null
           id?: string
+          last_error?: string | null
+          last_synced_at?: string | null
           last_test_at?: string | null
           last_test_result?: string | null
           notes?: string | null
+          redirect_uri?: string | null
+          refresh_token_status?: string
           reminder_intervals_days?: number[]
           signnow_dashboard_url?: string | null
           singleton?: boolean
@@ -2187,14 +2205,23 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          access_token_expires_at?: string | null
+          access_token_status?: string
           account_email?: string | null
+          api_basic_auth_token?: string | null
+          api_client_id?: string | null
+          app_mode_note?: string | null
           auto_reminders_enabled?: boolean
           created_at?: string
           default_template_id?: string | null
           id?: string
+          last_error?: string | null
+          last_synced_at?: string | null
           last_test_at?: string | null
           last_test_result?: string | null
           notes?: string | null
+          redirect_uri?: string | null
+          refresh_token_status?: string
           reminder_intervals_days?: number[]
           signnow_dashboard_url?: string | null
           singleton?: boolean
