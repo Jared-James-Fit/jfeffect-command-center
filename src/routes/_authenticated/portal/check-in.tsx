@@ -19,20 +19,6 @@ import { buildDriveDisplayName } from "@/lib/media-naming";
 
 export const Route = createFileRoute("/_authenticated/portal/check-in")({ component: CheckIn });
 
-function safeName(name: string) {
-  return name.replace(/[\/\\?%*:|"<>]/g, "-").trim() || "Client";
-}
-function fmtDateTime(d: Date) {
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  const hh = d.getHours();
-  const min = String(d.getMinutes()).padStart(2, "0");
-  const ampm = hh >= 12 ? "PM" : "AM";
-  const h12 = ((hh + 11) % 12) + 1;
-  return { date: `${yyyy}-${mm}-${dd}`, time: `${h12}:${min} ${ampm}` };
-}
-
 function CheckIn() {
   const { user } = useAuth();
   const qc = useQueryClient();
