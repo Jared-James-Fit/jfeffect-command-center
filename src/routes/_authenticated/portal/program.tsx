@@ -11,6 +11,7 @@ import { ExternalLink, FileText, Heart, Dumbbell, Target, Video, Calendar, Apple
 import { derivePhase, displayTitle, toneClasses, type TrainingPhase } from "@/lib/training-phases";
 import { deriveImportantDate, dateTypeLabel, importantToneClasses, type ImportantDate } from "@/lib/important-dates";
 import { dayTypeLabel, dayTypeTone, formatDays } from "@/lib/training-schedule";
+import { formatCalorieTarget } from "@/lib/nutrition-cardio";
 import { format, parseISO } from "date-fns";
 
 export const Route = createFileRoute("/_authenticated/portal/program")({ component: MyProgram });
@@ -163,6 +164,7 @@ function MyProgram() {
                     </div>
                     <Badge variant="outline" className="text-[10px]">{c.start_date} → {c.end_date ?? "ongoing"}</Badge>
                   </div>
+                  {c.program_name && <div className="mt-1 text-[10px] uppercase tracking-widest text-primary">{c.program_name}</div>}
                   <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
                     {c.frequency_per_week && <Item label="Frequency" value={`${c.frequency_per_week}x / week`} />}
                     {c.duration_minutes && <Item label="Duration" value={`${c.duration_minutes} min`} />}
@@ -171,6 +173,11 @@ function MyProgram() {
                     {c.step_target && <Item label="Steps" value={c.step_target.toLocaleString()} />}
                     {c.machine_preference && <Item label="Machine" value={c.machine_preference} />}
                   </div>
+                  {c.show_calories_to_client !== false && (c.calorie_target_min || c.calorie_target_max) && (
+                    <div className="mt-2 text-xs text-muted-foreground">
+                      Estimated target: <span className="font-semibold text-foreground">{formatCalorieTarget(c.calorie_target_min, c.calorie_target_max)}</span>
+                    </div>
+                  )}
                   {c.client_notes && <p className="mt-3 text-xs text-muted-foreground">{c.client_notes}</p>}
                 </div>
               ))}
