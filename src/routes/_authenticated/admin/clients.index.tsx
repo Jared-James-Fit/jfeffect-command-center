@@ -512,5 +512,32 @@ function NewClientDialog({ onClose, onCreated }: { onClose: () => void; onCreate
         </DialogFooter>
       </form>
     </DialogContent>
+    </>
+  );
+}
+
+function activityCell(lastActiveAt: string | null | undefined, lastSignedInAt: string | null | undefined) {
+  if (!lastSignedInAt && !lastActiveAt) {
+    return <span className="text-[10px] text-muted-foreground">Never signed in</span>;
+  }
+  if (!lastActiveAt) {
+    return <span className="text-[10px] text-muted-foreground">—</span>;
+  }
+  const min = (Date.now() - new Date(lastActiveAt).getTime()) / 60000;
+  if (min < 5) {
+    return <Badge variant="outline" className="border-emerald-500/40 bg-emerald-500/10 text-emerald-500 text-[10px]">Online</Badge>;
+  }
+  if (min < 60 * 24) {
+    return <Badge variant="outline" className="border-blue-500/40 bg-blue-500/10 text-blue-400 text-[10px]">Active today</Badge>;
+  }
+  const days = Math.floor(min / (60 * 24));
+  if (days < 7) {
+    return <span className="text-[10px] text-muted-foreground">{days}d ago</span>;
+  }
+  if (days < 14) {
+    return <Badge variant="outline" className="border-amber-500/40 bg-amber-500/10 text-amber-400 text-[10px]">Inactive {days}d</Badge>;
+  }
+  return <Badge variant="outline" className="border-rose-500/40 bg-rose-500/10 text-rose-400 text-[10px]">Inactive {days}d</Badge>;
+}
   );
 }
