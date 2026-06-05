@@ -424,6 +424,72 @@ export type Database = {
           },
         ]
       }
+      check_in_links: {
+        Row: {
+          active: boolean
+          archived: boolean
+          archived_at: string | null
+          check_in_type: string
+          created_at: string
+          created_by: string | null
+          custom_type: string | null
+          description: string | null
+          due_day: string | null
+          frequency: string
+          id: string
+          notes_admin: string | null
+          notes_client: string | null
+          require_photos: boolean
+          require_video: boolean
+          title: string
+          updated_at: string
+          url: string
+          visible_to_client: boolean
+        }
+        Insert: {
+          active?: boolean
+          archived?: boolean
+          archived_at?: string | null
+          check_in_type?: string
+          created_at?: string
+          created_by?: string | null
+          custom_type?: string | null
+          description?: string | null
+          due_day?: string | null
+          frequency?: string
+          id?: string
+          notes_admin?: string | null
+          notes_client?: string | null
+          require_photos?: boolean
+          require_video?: boolean
+          title: string
+          updated_at?: string
+          url: string
+          visible_to_client?: boolean
+        }
+        Update: {
+          active?: boolean
+          archived?: boolean
+          archived_at?: string | null
+          check_in_type?: string
+          created_at?: string
+          created_by?: string | null
+          custom_type?: string | null
+          description?: string | null
+          due_day?: string | null
+          frequency?: string
+          id?: string
+          notes_admin?: string | null
+          notes_client?: string | null
+          require_photos?: boolean
+          require_video?: boolean
+          title?: string
+          updated_at?: string
+          url?: string
+          visible_to_client?: boolean
+        }
+        Relationships: []
+      }
       client_activity_log: {
         Row: {
           action: string
@@ -505,6 +571,7 @@ export type Database = {
           agreement_status: string
           agreement_version: string | null
           archived: boolean
+          assigned_check_in_link_id: string | null
           assigned_coach_id: string | null
           calendar_link: string | null
           checkin_allow_photos: boolean
@@ -584,6 +651,7 @@ export type Database = {
           agreement_status?: string
           agreement_version?: string | null
           archived?: boolean
+          assigned_check_in_link_id?: string | null
           assigned_coach_id?: string | null
           calendar_link?: string | null
           checkin_allow_photos?: boolean
@@ -663,6 +731,7 @@ export type Database = {
           agreement_status?: string
           agreement_version?: string | null
           archived?: boolean
+          assigned_check_in_link_id?: string | null
           assigned_coach_id?: string | null
           calendar_link?: string | null
           checkin_allow_photos?: boolean
@@ -731,7 +800,15 @@ export type Database = {
           updated_at?: string
           user_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "clients_assigned_check_in_link_id_fkey"
+            columns: ["assigned_check_in_link_id"]
+            isOneToOne: false
+            referencedRelation: "check_in_links"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       coach_invites: {
         Row: {
@@ -1103,6 +1180,89 @@ export type Database = {
           youtube_fallback_allowed?: boolean
           youtube_replaced?: boolean
           youtube_url?: string | null
+        }
+        Relationships: []
+      }
+      form_client_assignments: {
+        Row: {
+          assigned_by: string | null
+          client_id: string
+          created_at: string
+          form_id: string
+          id: string
+        }
+        Insert: {
+          assigned_by?: string | null
+          client_id: string
+          created_at?: string
+          form_id: string
+          id?: string
+        }
+        Update: {
+          assigned_by?: string | null
+          client_id?: string
+          created_at?: string
+          form_id?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "form_client_assignments_form_id_fkey"
+            columns: ["form_id"]
+            isOneToOne: false
+            referencedRelation: "forms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      forms: {
+        Row: {
+          active: boolean
+          archived: boolean
+          archived_at: string | null
+          created_at: string
+          created_by: string | null
+          custom_type: string | null
+          description: string | null
+          form_type: string
+          id: string
+          notes_admin: string | null
+          title: string
+          updated_at: string
+          url: string
+          visible_to_client: boolean
+        }
+        Insert: {
+          active?: boolean
+          archived?: boolean
+          archived_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          custom_type?: string | null
+          description?: string | null
+          form_type?: string
+          id?: string
+          notes_admin?: string | null
+          title: string
+          updated_at?: string
+          url: string
+          visible_to_client?: boolean
+        }
+        Update: {
+          active?: boolean
+          archived?: boolean
+          archived_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          custom_type?: string | null
+          description?: string | null
+          form_type?: string
+          id?: string
+          notes_admin?: string | null
+          title?: string
+          updated_at?: string
+          url?: string
+          visible_to_client?: boolean
         }
         Relationships: []
       }
