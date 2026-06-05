@@ -327,8 +327,11 @@ export type Database = {
           client_id: string
           client_notes: string | null
           created_at: string
+          custom_day_type: string | null
           custom_type: string | null
+          day_type: string
           duration_minutes: number | null
+          enabled: boolean
           end_date: string | null
           ending_soon_days: number
           frequency_per_week: number | null
@@ -351,8 +354,11 @@ export type Database = {
           client_id: string
           client_notes?: string | null
           created_at?: string
+          custom_day_type?: string | null
           custom_type?: string | null
+          day_type?: string
           duration_minutes?: number | null
+          enabled?: boolean
           end_date?: string | null
           ending_soon_days?: number
           frequency_per_week?: number | null
@@ -375,8 +381,11 @@ export type Database = {
           client_id?: string
           client_notes?: string | null
           created_at?: string
+          custom_day_type?: string | null
           custom_type?: string | null
+          day_type?: string
           duration_minutes?: number | null
+          enabled?: boolean
           end_date?: string | null
           ending_soon_days?: number
           frequency_per_week?: number | null
@@ -522,12 +531,17 @@ export type Database = {
           payment_status: string | null
           phone: string | null
           postal_code: string | null
+          preferred_high_days: string[]
+          preferred_rest_days: string[]
+          preferred_training_days: string[]
           profile_picture_updated_at: string | null
           profile_picture_url: string | null
           program_phase: string | null
           program_sheet_link: string | null
           province: string | null
           renewal_date: string | null
+          schedule_notes: string | null
+          schedule_updated_at: string | null
           sessions_purchased: number
           sessions_used: number
           start_date: string | null
@@ -589,12 +603,17 @@ export type Database = {
           payment_status?: string | null
           phone?: string | null
           postal_code?: string | null
+          preferred_high_days?: string[]
+          preferred_rest_days?: string[]
+          preferred_training_days?: string[]
           profile_picture_updated_at?: string | null
           profile_picture_url?: string | null
           program_phase?: string | null
           program_sheet_link?: string | null
           province?: string | null
           renewal_date?: string | null
+          schedule_notes?: string | null
+          schedule_updated_at?: string | null
           sessions_purchased?: number
           sessions_used?: number
           start_date?: string | null
@@ -656,12 +675,17 @@ export type Database = {
           payment_status?: string | null
           phone?: string | null
           postal_code?: string | null
+          preferred_high_days?: string[]
+          preferred_rest_days?: string[]
+          preferred_training_days?: string[]
           profile_picture_updated_at?: string | null
           profile_picture_url?: string | null
           program_phase?: string | null
           program_sheet_link?: string | null
           province?: string | null
           renewal_date?: string | null
+          schedule_notes?: string | null
+          schedule_updated_at?: string | null
           sessions_purchased?: number
           sessions_used?: number
           start_date?: string | null

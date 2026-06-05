@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Plus, Pencil } from "lucide-react";
 import { CardioTargetDialog } from "@/components/cardio-target-dialog";
 import { CARDIO_TYPES, deriveTarget } from "@/lib/nutrition-cardio";
+import { dayTypeLabel, dayTypeTone } from "@/lib/training-schedule";
 
 export const Route = createFileRoute("/_authenticated/admin/cardio-targets")({ component: CardioDashboard });
 
@@ -89,6 +90,7 @@ function CardioDashboard() {
                 <li key={t.id} className="flex flex-wrap items-center justify-between gap-2 py-3">
                   <div className="flex items-center gap-3 flex-wrap">
                     <Badge variant="outline" className={t.derived.tone}>{t.derived.label}</Badge>
+                    <Badge variant="outline" className={dayTypeTone(t.day_type)}>{dayTypeLabel(t)}</Badge>
                     {t.clients && (
                       <Link to="/admin/clients/$id" params={{ id: t.clients.id }} className="text-sm font-semibold text-primary hover:underline">{t.clients.full_name}</Link>
                     )}

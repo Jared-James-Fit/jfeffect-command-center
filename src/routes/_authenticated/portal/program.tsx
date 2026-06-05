@@ -7,9 +7,10 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { ExternalLink, FileText, Heart, Dumbbell, Target, Video } from "lucide-react";
+import { ExternalLink, FileText, Heart, Dumbbell, Target, Video, Calendar } from "lucide-react";
 import { derivePhase, displayTitle, toneClasses, type TrainingPhase } from "@/lib/training-phases";
 import { deriveImportantDate, dateTypeLabel, importantToneClasses, type ImportantDate } from "@/lib/important-dates";
+import { dayTypeLabel, dayTypeTone, formatDays } from "@/lib/training-schedule";
 import { format, parseISO } from "date-fns";
 
 export const Route = createFileRoute("/_authenticated/portal/program")({ component: MyProgram });
@@ -52,6 +53,12 @@ function MyProgram() {
       return data ?? [];
     },
   });
+  const visibleCardio = (cardio as any[]).filter((c) => c.enabled !== false && c.visible_to_client !== false);
+  const hasSchedule =
+    (client?.preferred_training_days?.length ?? 0) +
+      (client?.preferred_rest_days?.length ?? 0) +
+      (client?.preferred_high_days?.length ?? 0) >
+    0;
 
   const { data: importantDates = [] } = useQuery({
     queryKey: ["my-important-dates", client?.id],
@@ -69,6 +76,22 @@ function MyProgram() {
     <>
       <PageHeader title="My Program" subtitle={activePhase ? displayTitle(activePhase) : (client?.program_phase ?? "Current training phase")} />
       <div className="p-6 md:p-8 space-y-6">
+        {hasSchedule && (
+          <Card className="border-border bg-card p-6">
+            <h2 className="mb-3 flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-muted-foreground">
+              <Calendar className="h-4 w-4" /> Training Schedule
+            </h2>
+            <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
+              <Item label="Training days" value={formatDays(client?.preferred_training_days)} />
+              <Item label="Rest days" value={formatDays(client?.preferred_rest_days)} />
+              <Item label="High days" value={formatDays(client?.preferred_high_days)} />
+            </div>
+            {client?.schedule_notes && (
+              <p className="mt-3 text-xs text-muted-foreground whitespace-pre-wrap">{client.schedule_notes}</p>
+            )}
+          </Card>
+        )}
+
         <Card className="border-border bg-card p-6 md:p-8">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="flex items-start gap-3">
@@ -165,16 +188,19 @@ function MyProgram() {
           </Card>
         )}
 
-        {cardio.length > 0 && (
+        {visibleCardio.length > 0 && (
           <Card className="border-border bg-card p-6">
             <h2 className="mb-4 flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-muted-foreground">
               <Heart className="h-4 w-4" /> Cardio Targets
             </h2>
             <div className="grid gap-3 md:grid-cols-2">
-              {cardio.map((c: any) => (
+              {visibleCardio.map((c: any) => (
                 <div key={c.id} className="rounded-md border border-border bg-secondary/30 p-4">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-bold">{c.cardio_type === "Custom" ? c.custom_type : c.cardio_type}</span>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline" className={dayTypeTone(c.day_type)}>{dayTypeLabel(c)}</Badge>
+                      <span className="text-sm font-bold">{c.cardio_type === "Custom" ? c.custom_type : c.cardio_type}</span>
+                    </div>
                     <Badge variant="outline" className="text-[10px]">{c.start_date} → {c.end_date ?? "ongoing"}</Badge>
                   </div>
                   <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
