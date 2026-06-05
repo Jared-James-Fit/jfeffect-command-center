@@ -253,3 +253,155 @@ function TemplateDialog({
     </Dialog>
   );
 }
+
+function TemplateActionDialog({
+  open, action, onOpenChange, onDone,
+}: {
+  open: boolean;
+  action: { template: AgreementTemplate; mode: "invite" | "in-person" } | null;
+  onOpenChange: (o: boolean) => void;
+  onDone: () => void;
+}) {
+  const navigate = useNavigate();
+  const createAgreementFn = useServerFn(createAgreement);
+  const [search, setSearch] = useState("");
+  const [clientId, setClientId] = useState<string>("");
+  const [linkOverride, setLinkOverride] = useState("");
+  const [offerName, setOfferName] = useState("");
+  const [notes, setNotes] = useState("");
+  const [kiosk, setKiosk] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  const { data: clients = [] } = useQuery({
+    queryKey: ["clients-picker", search],
+    enabled: open,
+    queryFn: async () => {
+      let q = supabase.from("clients").select("id, full_name, email").eq("archived", false).order("full_name").limit(50);
+      if (search.trim()) q = q.ilike("full_name", `%${search.trim()}%`);
+      const { data } = await q;
+      return data ?? [];
+    },
+  });
+
+  const selectedClient = clients.find((c) => c.id === clientId);
+  const tpl = action?.template;
+  const inPerson = action?.mode === "in-person";
+  const signingMethod: SigningMethod = inPerson ? (kiosk ? "Kiosk Mode" : "In-Person / iPad") : "Remote Invite";
+  const link = linkOverride.trim() || tpl?.signnow_url || null;
+
+  async function go() {
+    if (!tpl || !clientId) return toast.error("Pick a client first");
+    if (inPerson && !link) return toast.error("This template has no SignNow signing link saved");
+    setBusy(true);
+    try {
+      const ag: any = await createAgreementFn({
+        data: {
+          client_id: clientId,
+          template_id: tpl.id,
+          agreement_type: tpl.agreement_type ?? null,
+          signnow_signing_link: link,
+          offer_name: offerName.trim() || null,
+          admin_notes: notes.trim() || null,
+          send_now: true,
+          signing_method: signingMethod,
+        } as any,
+      });
+      if (inPerson && link) {
+        window.open(link, "_blank", "noopener,noreferrer");
+      }
+      toast.success(inPerson ? "Launched signing — finish on this device" : "Invite created for client");
+      onDone();
+      // Navigate to client profile so admin can mark signed afterward
+      if (ag?.client_id) {
+        navigate({ to: "/admin/clients/$id", params: { id: ag.client_id } });
+      }
+      setSearch(""); setClientId(""); setLinkOverride(""); setOfferName(""); setNotes(""); setKiosk(false);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>
+            {inPerson ? "Sign Template — In-Person / iPad" : "Invite to Sign — Remote"}
+          </DialogTitle>
+          {tpl && (
+            <p className="text-xs text-muted-foreground pt-1">
+              {tpl.name}{tpl.agreement_type ? ` · ${tpl.agreement_type}` : ""}
+            </p>
+          )}
+        </DialogHeader>
+        <div className="space-y-3 text-sm">
+          <div>
+            <Label className="text-xs">Select client</Label>
+            <div className="relative">
+              <Search className="h-3.5 w-3.5 absolute left-2 top-2.5 text-muted-foreground" />
+              <Input className="pl-7" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search clients by name…" />
+            </div>
+            <div className="mt-2 max-h-48 overflow-y-auto rounded-md border border-border bg-secondary/20">
+              {clients.length === 0 ? (
+                <p className="text-xs text-muted-foreground p-3 text-center">No clients found.</p>
+              ) : clients.map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => setClientId(c.id)}
+                  className={`w-full text-left px-3 py-2 text-xs hover:bg-accent transition border-b border-border/50 last:border-0 ${clientId === c.id ? "bg-accent" : ""}`}
+                >
+                  <div className="font-medium">{c.full_name}</div>
+                  {c.email && <div className="text-muted-foreground">{c.email}</div>}
+                </button>
+              ))}
+            </div>
+            {selectedClient && (
+              <p className="text-[11px] text-muted-foreground mt-1">
+                Selected: <strong className="text-foreground">{selectedClient.full_name}</strong>
+                {selectedClient.email ? ` (${selectedClient.email})` : ""}
+              </p>
+            )}
+          </div>
+
+          <div>
+            <Label className="text-xs">Signing link override (optional)</Label>
+            <Input value={linkOverride} onChange={(e) => setLinkOverride(e.target.value)} placeholder={tpl?.signnow_url ?? "https://app.signnow.com/..."} />
+            {!tpl?.signnow_url && !linkOverride && (
+              <p className="text-[11px] text-amber-500 mt-1">This template has no SignNow URL saved. Paste one or edit the template.</p>
+            )}
+          </div>
+
+          <div>
+            <Label className="text-xs">Connect to offer / purchase (optional)</Label>
+            <Input value={offerName} onChange={(e) => setOfferName(e.target.value)} placeholder="e.g. 6 Month Online Coaching" />
+          </div>
+
+          <div>
+            <Label className="text-xs">Admin notes (optional)</Label>
+            <Textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} />
+          </div>
+
+          {inPerson && (
+            <div className="flex items-center justify-between rounded-md border border-border bg-secondary/30 p-2">
+              <div>
+                <Label className="text-xs">Treat as Kiosk Mode</Label>
+                <p className="text-[11px] text-muted-foreground">SignNow may show your name as the signer — record will still attach to the selected client.</p>
+              </div>
+              <Switch checked={kiosk} onCheckedChange={setKiosk} />
+            </div>
+          )}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button onClick={go} disabled={busy || !clientId}>
+            {busy && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
+            {inPerson ? "Launch signing" : "Create invite"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
