@@ -216,7 +216,7 @@ export const initMediaUpload = createServerFn({ method: "POST" })
     const { uploadUrl } = await driveInitResumableUpload({
       fileName: finalName, mimeType: data.mimeType, sizeBytes: data.sizeBytes, parentId,
     });
-    return { uploadUrl, driveFolderId: parentId };
+    return { uploadUrl, driveFolderId: parentId, driveFileName: finalName, mimeType: data.mimeType, sizeBytes: data.sizeBytes };
   });
 
 export const finalizeMediaUpload = createServerFn({ method: "POST" })
@@ -225,25 +225,33 @@ export const finalizeMediaUpload = createServerFn({ method: "POST" })
     clientId: string; submissionId?: string | null; mediaType: string; driveFileId: string;
     clipNote?: string | null; clipOrder?: number; urgent?: boolean; painNote?: string | null;
     uploadedByRole: "admin" | "client";
+    driveFolderId?: string | null; fileName?: string | null; mimeType?: string | null; sizeBytes?: number | null;
   }) => d)
   .handler(async ({ data, context }) => {
-    const meta = await driveGetFile(data.driveFileId);
+    let meta: any = null;
+    try {
+      meta = await driveGetFile(data.driveFileId);
+    } catch (err) {
+      console.warn(`[drive] uploaded file ${data.driveFileId} could not be read back; saving fallback metadata`, err);
+    }
     const settings = await loadSettings(context.supabase);
     if (settings?.share_uploads_with_link) {
       await driveShareAnyoneReader(data.driveFileId);
     }
-    const { data: row, error } = await (context.supabase.from("media_items" as any) as any).insert({
+    const fileId = meta?.id ?? data.driveFileId;
+    const { data: row, error } = await ((supabaseAdmin as any).from("media_items") as any).insert({
       submission_id: data.submissionId ?? null,
       client_id: data.clientId,
       media_type: data.mediaType,
-      drive_file_id: meta.id,
-      drive_url: meta.webViewLink ?? driveViewUrl(meta.id),
-      drive_embed_url: driveEmbedUrl(meta.id),
-      file_name: meta.name,
-      mime_type: meta.mimeType,
-      size_bytes: meta.size ? Number(meta.size) : null,
-      duration_seconds: meta.videoMediaMetadata?.durationMillis ? Number(meta.videoMediaMetadata.durationMillis) / 1000 : null,
-      thumbnail_url: meta.thumbnailLink ?? null,
+      drive_file_id: fileId,
+      drive_url: meta?.webViewLink ?? driveViewUrl(fileId),
+      drive_embed_url: driveEmbedUrl(fileId),
+      drive_folder_id: data.driveFolderId ?? null,
+      file_name: meta?.name ?? data.fileName ?? `Drive upload ${fileId}`,
+      mime_type: meta?.mimeType ?? data.mimeType ?? null,
+      size_bytes: meta?.size ? Number(meta.size) : (data.sizeBytes ?? null),
+      duration_seconds: meta?.videoMediaMetadata?.durationMillis ? Number(meta.videoMediaMetadata.durationMillis) / 1000 : null,
+      thumbnail_url: meta?.thumbnailLink ?? null,
       clip_note: data.clipNote ?? null,
       clip_order: data.clipOrder ?? 0,
       urgent_flag: !!data.urgent,

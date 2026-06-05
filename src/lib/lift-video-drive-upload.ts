@@ -54,6 +54,10 @@ export async function uploadLiftClipToDrive(args: Args): Promise<LiftDriveUpload
   const row = await args.finalizeFn({ data: {
     clientId: args.clientId, submissionId: subId, mediaType: "Lift Videos",
     driveFileId: uploaded.id,
+    driveFolderId: init.driveFolderId ?? null,
+    fileName: init.driveFileName ?? displayName,
+    mimeType: args.file.type || "video/mp4",
+    sizeBytes: args.file.size,
     clipNote: args.perClipNote ?? null,
     clipOrder: args.index - 1, urgent: !!args.urgent,
     painNote: args.painNote ?? null, uploadedByRole: "client",
