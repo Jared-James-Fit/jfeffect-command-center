@@ -3,7 +3,7 @@ import {
   Package, FileText, Dumbbell, FolderOpen, Calendar, Layers,
   Settings, Briefcase, Apple, ClipboardCheck, UserCog, MessageCircle, Video,
   UserCheck, FileSignature, Film,
-  Link2,
+  Link2, ClipboardList, FileEdit,
 } from "lucide-react";
 import type { NavItem } from "@/components/app-shell";
 
@@ -12,6 +12,7 @@ export const adminNav: NavItem[] = [
   { to: "/admin/clients", label: "Clients", icon: Users, group: "Coaching" },
   { to: "/admin/coaches", label: "Coaches", icon: UserCheck, group: "Coaching" },
   { to: "/admin/messages", label: "Messages", icon: MessageCircle, group: "Coaching" },
+  { to: "/admin/check-ins", label: "Check-Ins", icon: ClipboardList, group: "Coaching" },
   { to: "/admin/lift-videos", label: "Lift Video Review", icon: Video, group: "Coaching" },
   { to: "/admin/media-review", label: "Media Review Inbox", icon: Film, group: "Coaching" },
   { to: "/admin/exercises", label: "Exercise Library", icon: Dumbbell, group: "Coaching" },
@@ -21,6 +22,7 @@ export const adminNav: NavItem[] = [
   { to: "/admin/payments", label: "Payments", icon: CreditCard, group: "Sales & Payments" },
   { to: "/admin/purchases", label: "Purchase Records", icon: ClipboardCheck, group: "Sales & Payments" },
   { to: "/admin/agreements", label: "Agreements", icon: FileSignature, group: "Agreements & Documents" },
+  { to: "/admin/forms", label: "Forms", icon: FileEdit, group: "Agreements & Documents" },
   { to: "/admin/resources", label: "Resources", icon: FolderOpen, group: "Agreements & Documents" },
   { to: "/admin/apps", label: "Integrations & Tools", icon: Layers, group: "Business Tools" },
   { to: "/admin/business-systems", label: "Business Systems", icon: Briefcase, group: "Business Tools" },
@@ -32,6 +34,7 @@ export const coachNav: NavItem[] = [
   { to: "/admin", label: "Dashboard", icon: LayoutDashboard },
   { to: "/admin/clients", label: "My Clients", icon: Users },
   { to: "/admin/messages", label: "Messages", icon: MessageCircle },
+  { to: "/admin/check-ins", label: "Check-Ins", icon: ClipboardList },
   { to: "/admin/lift-videos", label: "Lift Video Review", icon: Video },
   { to: "/admin/media-review", label: "Media Review Inbox", icon: Film },
   { to: "/admin/calendar", label: "Calendar", icon: Calendar },

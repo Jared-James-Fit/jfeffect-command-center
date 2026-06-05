@@ -33,6 +33,7 @@ import { PurchaseRecordsPanel } from "@/components/purchase-records-panel";
 import { PriceCardPickerDialog } from "@/components/price-card-picker-dialog";
 import { AgreementsPanel } from "@/components/agreements-panel";
 import { TrainingScheduleCard } from "@/components/training-schedule-card";
+import { listCheckInLinks } from "@/lib/check-ins";
 
 function AssignedCoachSelect({ value, onChange }: { value: string | null; onChange: (v: string | null) => void }) {
   const { data: coaches = [] } = useQuery({
@@ -366,12 +367,16 @@ function ClientDetail() {
             <div className="flex items-center justify-between gap-3 flex-wrap">
               <div>
                 <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Weekly Check-In</h3>
-                <p className="text-xs text-muted-foreground mt-1">External check-in link the client opens from their portal.</p>
+                <p className="text-xs text-muted-foreground mt-1">Assign a reusable check-in link from your library, or paste a custom one below.</p>
               </div>
               <Badge variant="outline" className={form.checkin_form_link ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300" : "border-warning/40 bg-warning/10 text-warning"}>
                 Weekly check-in link: {form.checkin_form_link ? "Added" : "Missing"}
               </Badge>
             </div>
+            <AssignCheckInLibrary
+              value={form.assigned_check_in_link_id ?? null}
+              onChange={(v: string | null) => set("assigned_check_in_link_id", v)}
+            />
             <div className="grid gap-3 md:grid-cols-2">
               <div className="md:col-span-2">
                 <Label>Weekly Check-In Link</Label>
@@ -639,6 +644,30 @@ function ClientMessagesTab({ clientId }: { clientId: string }) {
     },
   });
   return <MessageThread clientId={clientId} role="admin" conversationState={state ?? null} />;
+}
+
+function AssignCheckInLibrary({ value, onChange }: { value: string | null; onChange: (v: string | null) => void }) {
+  const { data: links = [] } = useQuery({
+    queryKey: ["check-in-links-active"],
+    queryFn: () => listCheckInLinks({ includeArchived: false }),
+  });
+  return (
+    <div className="grid gap-2 md:grid-cols-[1fr_auto] items-end">
+      <div>
+        <Label>Assigned check-in link (from library)</Label>
+        <Select value={value ?? "none"} onValueChange={(v) => onChange(v === "none" ? null : v)}>
+          <SelectTrigger><SelectValue placeholder="— None —" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="none">— None (use custom link below) —</SelectItem>
+            {links.filter((l) => l.active).map((l) => (
+              <SelectItem key={l.id} value={l.id}>{l.title} {l.due_day ? `· ${l.due_day}` : ""}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <Link to="/admin/check-ins"><Button variant="outline" size="sm">Manage library</Button></Link>
+    </div>
+  );
 }
 
 function fmtDate(v?: string | null) {
