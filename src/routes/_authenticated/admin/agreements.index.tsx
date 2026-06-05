@@ -132,7 +132,6 @@ function AgreementsAdminPage() {
                     <div>Signed: <span className="text-foreground font-medium">{(t as any).times_completed ?? 0}</span></div>
                     <div>Last: <span className="text-foreground font-medium">{(t as any).last_used_at ? new Date((t as any).last_used_at).toLocaleDateString() : "—"}</span></div>
                   </div>
-                  {t.signnow_template_id && <p className="text-[11px] text-muted-foreground">SignNow ID: {t.signnow_template_id}</p>}
                   {t.version && <p className="text-[11px] text-muted-foreground">Version: {t.version} · Updated {new Date(t.updated_at).toLocaleDateString()}</p>}
                   <div className="flex flex-wrap gap-1.5 pt-1">
                     <Button size="sm" className="flex-1 min-w-[120px]" onClick={() => setActioning({ template: t, mode: "invite" })}>
