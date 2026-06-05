@@ -233,6 +233,7 @@ export function LiftVideoDialog({ open, onOpenChange, clientId, userId, clientNa
       const sharedNote = noteMode === "batch" ? batchNote.trim() : "";
       const isUrgent = !!form.is_urgent;
       const urgentNote = isUrgent ? urgentText.trim() : "";
+      let driveSubmissionId: string | null = null;
 
       for (let i = 0; i < clips.length; i++) {
         const clip = clips[i];
@@ -240,10 +241,23 @@ export function LiftVideoDialog({ open, onOpenChange, clientId, userId, clientNa
         let storagePath: string | null = null;
         let source: "link" | "upload" = "link";
 
-        if (clip.kind === "file" && clip.file && userId) {
-          const res = await uploadVideoFile(clip.file, userId);
-          storagePath = res.path;
+        if (clip.kind === "file" && clip.file) {
+          // Upload the actual video to the client's Google Drive folder and
+          // mirror it into media_items so it appears in the Media Review Inbox.
+          const perClipNote = noteMode === "perClip" ? clip.note.trim() : (sharedNote || null);
+          const res = await uploadLiftClipToDrive({
+            clientId, clientName, file: clip.file,
+            index: i + 1, total,
+            batchNote: sharedNote || null,
+            perClipNote,
+            urgent: isUrgent,
+            painNote: isUrgent ? urgentNote || null : null,
+            submissionId: driveSubmissionId,
+            initFn, finalizeFn, createSubFn,
+          });
+          driveSubmissionId = res.submissionId;
           videoUrl = res.url;
+          storagePath = null;
           source = "upload";
         } else if (clip.kind === "link" && clip.url) {
           videoUrl = clip.url;
