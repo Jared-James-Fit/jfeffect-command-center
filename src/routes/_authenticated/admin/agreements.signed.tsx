@@ -239,25 +239,12 @@ function SignedAgreementsPage() {
     }
   }
 
-  async function handleImportHistorical(e: React.MouseEvent<HTMLButtonElement>) {
+  function handleImportHistorical(e: React.MouseEvent<HTMLButtonElement>) {
     e.preventDefault();
-    if (!confirm("Scan SignNow for signed documents not yet in this app and import them? This may take a minute.")) return;
-    setImporting(true);
-    try {
-      const res: any = await importFn({ data: { maxPages: 2 } });
-      if (!res?.ok) {
-        toast.error(res?.reason ?? "Import failed");
-      } else {
-        toast.success(
-          `Scanned ${res.scanned} · Imported ${res.imported} · Skipped ${res.skipped} · Unmatched ${res.unmatched} · Errors ${res.errors}`,
-        );
-        refetch();
-      }
-    } catch (e: any) {
-      toast.error(e?.message ?? "Import failed");
-    } finally {
-      setImporting(false);
-    }
+    e.stopPropagation();
+    if (importMutation.isPending) return;
+    if (!confirm("Scan the first page of SignNow for signed documents not yet in this app and import them?")) return;
+    importMutation.mutate();
   }
 
   return (
@@ -318,8 +305,8 @@ function SignedAgreementsPage() {
             {refreshing ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-1" />}
             Refresh pending
           </Button>
-          <Button type="button" variant="outline" onClick={handleImportHistorical} disabled={importing}>
-            {importing ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <DownloadCloud className="h-4 w-4 mr-1" />}
+          <Button type="button" variant="outline" onClick={handleImportHistorical} disabled={importMutation.isPending}>
+            {importMutation.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <DownloadCloud className="h-4 w-4 mr-1" />}
             Import from SignNow
           </Button>
           <Link to="/admin/agreements" className="text-sm text-primary hover:underline">
