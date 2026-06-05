@@ -102,6 +102,7 @@ export function LiftVideoDialog({ open, onOpenChange, clientId, userId, clientNa
       setNoteMode("batch");
       setPasteLink("");
       setUrgentText("");
+      setSent(false);
     }
   }, [initial, open]);
 
