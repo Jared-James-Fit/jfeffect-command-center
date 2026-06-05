@@ -675,6 +675,45 @@ export const refreshAgreementStatus = createServerFn({ method: "POST" })
     return result;
   });
 
+/** Refresh every agreement that has a SignNow document id and is still in a
+ *  non-terminal state. Pulls signed PDFs into storage when SignNow reports
+ *  the document as completed/signed. Admin/coach only; safe to re-run. */
+export const refreshAllPendingAgreements = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { supabase, userId } = context;
+    await assertAdminOrCoach(supabase, userId);
+    if (!hasSignNowCredentials()) {
+      return { ok: false, reason: "SignNow API not configured.", refreshed: 0, signedNow: 0, errors: 0 };
+    }
+    const NON_TERMINAL = [
+      "Not Sent", "Sent", "Opened", "Waiting on Client",
+      "Manual Action Needed", "Needs Manual Verification", "Needs Resend",
+    ];
+    const { data: rows, error } = await supabase
+      .from("agreements")
+      .select("id, status")
+      .not("signnow_document_id", "is", null)
+      .in("status", NON_TERMINAL)
+      .limit(500);
+    if (error) throw new Error(error.message);
+
+    const { pullSignedDocumentForAgreement } = await import("@/lib/agreements-pull.server");
+    let refreshed = 0;
+    let signedNow = 0;
+    let errors = 0;
+    for (const row of rows ?? []) {
+      try {
+        const res = await pullSignedDocumentForAgreement(row.id, { event: "bulk_refresh" });
+        refreshed += 1;
+        if (res.storagePath) signedNow += 1;
+      } catch {
+        errors += 1;
+      }
+    }
+    return { ok: true, scanned: rows?.length ?? 0, refreshed, signedNow, errors };
+  });
+
 /** Return a short-lived signed download URL for the stored signed PDF.
  *  Visible to admins/coaches and to the owning client. */
 export const getSignedAgreementUrl = createServerFn({ method: "POST" })
