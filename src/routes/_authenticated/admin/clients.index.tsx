@@ -290,6 +290,9 @@ function ClientsPage() {
                       <td className="px-4 py-3">
                         <Link to="/admin/clients/$id" params={{ id: c.id }} className="font-semibold hover:text-primary">{c.full_name}</Link>
                         <div className="text-xs text-muted-foreground">{c.email}</div>
+                       {c.is_powerlifter && (
+                         <div className="mt-1"><PowerlifterBadge label={c.powerlifter_badge_label} size="xs" /></div>
+                       )}
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">{c.coaching_type ?? "—"}</td>
                       <td className="px-4 py-3">
