@@ -7,7 +7,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { ExternalLink, FileText, Heart, Dumbbell, Target, Video, Calendar } from "lucide-react";
+import { ExternalLink, FileText, Heart, Dumbbell, Target, Video, Calendar, Apple } from "lucide-react";
 import { derivePhase, displayTitle, toneClasses, type TrainingPhase } from "@/lib/training-phases";
 import { deriveImportantDate, dateTypeLabel, importantToneClasses, type ImportantDate } from "@/lib/important-dates";
 import { dayTypeLabel, dayTypeTone, formatDays } from "@/lib/training-schedule";
@@ -117,6 +117,9 @@ function MyProgram() {
             </Link>
             <Link to="/portal/exercises">
               <Button variant="outline" size="sm"><Dumbbell className="mr-1 h-4 w-4" /> Exercise Library</Button>
+            </Link>
+            <Link to="/portal/nutrition-targets">
+              <Button variant="outline" size="sm"><Apple className="mr-1 h-4 w-4" /> Nutrition Targets</Button>
             </Link>
           </div>
         </Card>
