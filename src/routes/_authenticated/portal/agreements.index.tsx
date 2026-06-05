@@ -5,14 +5,27 @@ import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { AgreementStatusBadge } from "@/components/agreement-status-badge";
-import { FileText, ExternalLink, CheckCircle2 } from "lucide-react";
+import { FileText, ExternalLink, CheckCircle2, Download } from "lucide-react";
 import type { Agreement } from "@/lib/agreements";
+import { useServerFn } from "@tanstack/react-start";
+import { getSignedAgreementUrl } from "@/lib/agreements.functions";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/portal/agreements/")({
   component: PortalAgreementsPage,
 });
 
 function PortalAgreementsPage() {
+  const getUrl = useServerFn(getSignedAgreementUrl);
+  const downloadSigned = async (id: string) => {
+    try {
+      const r: any = await getUrl({ data: { id } });
+      if (r?.url) window.open(r.url, "_blank", "noopener,noreferrer");
+      else toast.error("No signed copy available yet.");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Couldn't fetch signed copy");
+    }
+  };
   const { data = [], isLoading } = useQuery({
     queryKey: ["portal-agreements"],
     queryFn: async () => {
@@ -65,7 +78,11 @@ function PortalAgreementsPage() {
                       <p className="font-semibold truncate">{a.agreement_type ?? a.template_name}</p>
                       <p className="text-xs text-muted-foreground">Signed {a.signed_at ? new Date(a.signed_at).toLocaleDateString() : "—"}</p>
                     </div>
-                    {a.signed_copy_url ? (
+                    {a.signed_copy_storage_path ? (
+                      <Button size="sm" variant="outline" onClick={() => downloadSigned(a.id)}>
+                        Download signed copy <Download className="h-3 w-3 ml-1" />
+                      </Button>
+                    ) : a.signed_copy_url ? (
                       <Button size="sm" variant="outline" asChild>
                         <a href={a.signed_copy_url} target="_blank" rel="noreferrer">View signed copy <ExternalLink className="h-3 w-3 ml-1" /></a>
                       </Button>
