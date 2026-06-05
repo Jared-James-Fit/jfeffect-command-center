@@ -22,6 +22,41 @@ async function assertAdminOrCoach(supabase: any, userId: string) {
   return roles;
 }
 
+/**
+ * Resolve the caller's effective role for a given client_id.
+ * - "admin"  → unrestricted
+ * - "coach"  → only if assigned to that client (is_assigned_coach)
+ * - "owner"  → the signed-in user IS the client (clients.user_id = auth.uid())
+ * Throws "Forbidden" otherwise.
+ *
+ * This is intentionally redundant with RLS: it gives server-fn code an
+ * explicit, auditable permission gate that does not silently degrade if RLS
+ * is ever changed.
+ */
+async function assertClientAccess(
+  supabase: any,
+  userId: string,
+  clientId: string,
+): Promise<"admin" | "coach" | "owner"> {
+  const { data: rolesRows } = await supabase
+    .from("user_roles").select("role").eq("user_id", userId);
+  const roles = (rolesRows ?? []).map((r: any) => r.role);
+  if (roles.includes("admin")) return "admin";
+
+  // Client owner?
+  const { data: ownerRow } = await supabase
+    .from("clients").select("id").eq("id", clientId).eq("user_id", userId).maybeSingle();
+  if (ownerRow) return "owner";
+
+  // Assigned coach? Check via the security-definer RPC used by RLS.
+  if (roles.includes("coach")) {
+    const { data: isCoach } = await supabase.rpc("is_assigned_coach", { _client_id: clientId });
+    if (isCoach === true) return "coach";
+  }
+
+  throw new Error("Forbidden");
+}
+
 function nameNormalize(s: string | null | undefined): string {
   return (s ?? "").trim().toLowerCase().replace(/\s+/g, " ");
 }
