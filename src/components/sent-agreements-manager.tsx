@@ -21,7 +21,7 @@ import {
   agreementNeedsAttention, AGREEMENT_STATUSES, VERIFICATION_BADGE, type Agreement,
 } from "@/lib/agreements";
 import {
-  approveSignedAgreement, markAgreementSigned, verifyAgreement, sendAgreementReminder,
+  approveSignedAgreement, markAgreementSigned, verifyAgreement, setAgreementVerification, sendAgreementReminder,
   updateAgreement, refreshAgreementStatus, getSignedAgreementUrl,
 } from "@/lib/agreements.functions";
 
@@ -47,6 +47,7 @@ export function SentAgreementsManager() {
   const [uploadOpen, setUploadOpen] = useState<Row | null>(null);
 
   const verifyFn = useServerFn(verifyAgreement);
+  const setVerificationFn = useServerFn(setAgreementVerification);
   const reminderFn = useServerFn(sendAgreementReminder);
   const updateFn = useServerFn(updateAgreement);
   const refreshFn = useServerFn(refreshAgreementStatus);
@@ -120,6 +121,20 @@ export function SentAgreementsManager() {
     invalidate();
   };
 
+  const handleToggleVerification = async (a: Row, nextVerified: boolean) => {
+    if (!nextVerified) {
+      if (!confirm("Remove verification? This agreement will be marked as needing attention again and may reappear on the client dashboard.")) return;
+    }
+    try {
+      const r: any = await setVerificationFn({ data: { id: a.id, verified: nextVerified } });
+      if (nextVerified) toast.success("Marked verified");
+      else toast.success(`Verification removed · ${r?.newStatus ?? "Needs attention"}`);
+      invalidate();
+    } catch (e: any) {
+      toast.error(e?.message ?? "Couldn't update verification");
+    }
+  };
+
   const handleRemind = async (a: Row) => {
     await reminderFn({ data: { id: a.id } });
     toast.success("Reminder logged");
@@ -151,6 +166,7 @@ export function SentAgreementsManager() {
                 onConfirm={() => setConfirming(a)}
                 onUpload={() => setUploadOpen(a)}
                 onVerify={() => handleVerify(a)}
+                onToggleVerification={(v) => handleToggleVerification(a, v)}
                 onRemind={() => handleRemind(a)}
                 onResend={() => handleNeedsResend(a)}
                 onRefresh={() => handleRefresh(a)}
@@ -206,6 +222,7 @@ export function SentAgreementsManager() {
                 onConfirm={() => setConfirming(a)}
                 onUpload={() => setUploadOpen(a)}
                 onVerify={() => handleVerify(a)}
+                onToggleVerification={(v) => handleToggleVerification(a, v)}
                 onRemind={() => handleRemind(a)}
                 onResend={() => handleNeedsResend(a)}
                 onRefresh={() => handleRefresh(a)}
@@ -240,15 +257,18 @@ export function SentAgreementsManager() {
 }
 
 function AgreementRow({
-  a, compact, onConfirm, onUpload, onVerify, onRemind, onResend, onRefresh, onDownload, onAddNote,
+  a, compact, onConfirm, onUpload, onVerify, onToggleVerification, onRemind, onResend, onRefresh, onDownload, onAddNote,
 }: {
   a: Row; compact?: boolean;
-  onConfirm: () => void; onUpload: () => void; onVerify: () => void; onRemind: () => void;
+  onConfirm: () => void; onUpload: () => void; onVerify: () => void;
+  onToggleVerification: (next: boolean) => void;
+  onRemind: () => void;
   onResend: () => void; onRefresh: () => void; onDownload: () => void; onAddNote: () => void;
 }) {
   const isTerminal = ["Verified", "Completed", "Cancelled"].includes(a.status as string);
   const hasSignedCopy = !!a.signed_copy_url || !!a.signed_copy_storage_path;
   const isSigned = ["Signed", "Completed", "Verified"].includes(a.status as string);
+  const isVerified = a.status === "Verified" || a.verification_status === "Manually Verified";
   return (
     <li className={`rounded-lg border border-border bg-secondary/30 p-3 space-y-2 ${compact ? "" : ""}`}>
       <div className="flex items-start gap-2 flex-wrap">
@@ -330,8 +350,14 @@ function AgreementRow({
           <Button size="sm" variant="ghost" onClick={onDownload}><Download className="h-3 w-3 mr-1" />Download signed</Button>
         )}
         <Button size="sm" variant="ghost" onClick={onUpload}><Upload className="h-3 w-3 mr-1" />Upload signed copy</Button>
-        {a.status !== "Verified" && (
-          <Button size="sm" variant="ghost" onClick={onVerify}><ShieldCheck className="h-3 w-3 mr-1" />Mark verified</Button>
+        {isVerified ? (
+          <Button size="sm" variant="ghost" className="text-amber-600 dark:text-amber-400" onClick={() => onToggleVerification(false)}>
+            <ShieldCheck className="h-3 w-3 mr-1" />Remove verification
+          </Button>
+        ) : (
+          <Button size="sm" variant="ghost" onClick={() => onToggleVerification(true)}>
+            <ShieldCheck className="h-3 w-3 mr-1" />Mark verified
+          </Button>
         )}
         {!["Signed", "Completed", "Verified", "Cancelled"].includes(a.status as string) && (
           <>
