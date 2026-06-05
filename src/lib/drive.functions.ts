@@ -25,13 +25,13 @@ const MEDIA_TYPE_SUBFOLDERS = [
 
 const DEFAULT_ROOT_FOLDER_NAME = "JF Effect Client Files";
 
-async function loadSettings(supabase: any) {
+async function loadSettings(_supabase: any) {
   // Always read Drive settings with the admin client. RLS on
   // media_drive_settings only allows admins, but clients also need to know if
   // uploads are available (so the gate doesn't lie to them and uploads don't
   // throw "not set up" when it actually is).
-  const { data } = await supabaseAdmin.from("media_drive_settings" as any).select("*").limit(1).maybeSingle();
-  return data;
+  const { data } = await (supabaseAdmin as any).from("media_drive_settings").select("*").limit(1).maybeSingle();
+  return data as any;
 }
 
 async function requireAdmin(supabase: any, userId: string) {
@@ -141,12 +141,12 @@ async function ensureClientFolder(supabase: any, clientId: string) {
   }
   // Use admin client for folder bookkeeping so client uploads aren't blocked
   // by RLS on client_drive_folders / clients.
-  const db = supabaseAdmin;
-  const { data: existing } = await db.from("client_drive_folders" as any).select("*").eq("client_id", clientId).maybeSingle();
+  const db = supabaseAdmin as any;
+  const { data: existing } = await db.from("client_drive_folders").select("*").eq("client_id", clientId).maybeSingle();
   if (existing?.folder_id && existing.subfolders && Object.keys(existing.subfolders).length >= MEDIA_TYPE_SUBFOLDERS.length) {
     return existing;
   }
-  const { data: client } = await db.from("clients" as any).select("id, full_name").eq("id", clientId).single();
+  const { data: client } = await db.from("clients").select("id, full_name").eq("id", clientId).single();
   const folderName = `${client.full_name} (${String(clientId).slice(0, 8)})`;
   let folderId = existing?.folder_id as string | undefined;
   let folderUrl = existing?.folder_url as string | undefined;
@@ -171,9 +171,9 @@ async function ensureClientFolder(supabase: any, clientId: string) {
     last_error: null as string | null,
   };
   if (existing) {
-    await db.from("client_drive_folders" as any).update(payload).eq("id", existing.id);
+    await db.from("client_drive_folders").update(payload).eq("id", existing.id);
   } else {
-    await db.from("client_drive_folders" as any).insert(payload);
+    await db.from("client_drive_folders").insert(payload);
   }
   return payload;
 }
