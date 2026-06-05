@@ -55,6 +55,7 @@ export function LiftVideoDialog({ open, onOpenChange, clientId, userId, clientNa
   });
   const [file, setFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
+  const [sent, setSent] = useState(false);
 
   // ---- Multi-clip client state ----
   type Clip = {
