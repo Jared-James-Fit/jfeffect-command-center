@@ -530,17 +530,36 @@ function AdminDashboard() {
                 All agreements are signed or up-to-date.
               </div>
             ) : (
-              <ul className="divide-y divide-border">
-                {agreementsNeedingAttention.map((a: any) => (
-                  <li key={a.id} className="py-2 flex items-center justify-between gap-2">
-                    <Link to="/admin/clients/$id" params={{ id: a.client_id }} className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold truncate">{a.clients?.full_name ?? "—"}</p>
-                      <p className="text-xs text-muted-foreground truncate">{a.agreement_type ?? a.template_name}</p>
-                    </Link>
-                    <Badge variant="outline" className="text-[10px] shrink-0">{a.status}</Badge>
-                  </li>
-                ))}
-              </ul>
+              <>
+                {(() => {
+                  const cats = categorizeAgreements(agreementsNeedingAttention);
+                  return (
+                    <>
+                      <div className="mb-3 flex flex-wrap gap-1.5">
+                        {cats.counts.map((c) => (
+                          <Badge key={c.key} variant="outline" className={`text-[10px] ${c.tone}`}>
+                            {c.label}: {c.count}
+                          </Badge>
+                        ))}
+                      </div>
+                      <ul className="divide-y divide-border">
+                        {agreementsNeedingAttention.slice(0, 8).map((a: any) => {
+                          const cat = blockerFor(a);
+                          return (
+                            <li key={a.id} className="py-2 flex items-center justify-between gap-2">
+                              <Link to="/admin/clients/$id" params={{ id: a.client_id }} search={{ tab: "agreements" as any }} className="min-w-0 flex-1">
+                                <p className="text-sm font-semibold truncate">{a.clients?.full_name ?? "—"}</p>
+                                <p className="text-xs text-muted-foreground truncate">{a.agreement_type ?? a.template_name}</p>
+                              </Link>
+                              <Badge variant="outline" className={`text-[10px] shrink-0 ${cat.tone}`}>{cat.label}</Badge>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </>
+                  );
+                })()}
+              </>
             )}
           </Card>
 
