@@ -88,41 +88,6 @@ function AgreementsAdminPage() {
           </Card>
         )}
 
-        <Card className="border-border bg-card p-5 space-y-3">
-          <div className="flex items-center justify-between flex-wrap gap-2">
-            <div className="flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4 text-amber-500" />
-              <h2 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">Agreements Needing Attention</h2>
-            </div>
-            <span className="text-xs text-muted-foreground">{needAttention.length}</span>
-          </div>
-          {needAttention.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-4 text-center">All agreements are signed and verified.</p>
-          ) : (
-            <ul className="divide-y divide-border">
-              {needAttention.map((a) => (
-                <li key={a.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5 text-sm">
-                  <div className="min-w-0 flex-1 flex items-center gap-2">
-                    <FileText className="h-4 w-4 text-muted-foreground" />
-                    <div className="min-w-0">
-                      <Link to="/admin/clients/$id" params={{ id: a.client_id }} className="font-semibold hover:underline">
-                        {a.clients?.full_name ?? a.client_full_name ?? "Client"}
-                      </Link>
-                      <span className="text-xs text-muted-foreground"> · {a.agreement_type ?? a.template_name}</span>
-                      {a.signer_mismatch && <Badge variant="outline" className="ml-2 border-amber-500/40 bg-amber-500/10 text-amber-500 text-[10px]">Mismatch</Badge>}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <AgreementStatusBadge status={a.status} />
-                    <Badge variant="secondary" className={`border-0 ${VERIFICATION_BADGE[a.verification_status] ?? ""}`}>{a.verification_status}</Badge>
-                    <Link to="/admin/clients/$id" params={{ id: a.client_id }} className="text-xs text-primary hover:underline">Open</Link>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
-
         <Card className="border-border bg-card p-5 space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2">
