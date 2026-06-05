@@ -16,13 +16,15 @@ import { ProfilePictureCapture } from "@/components/profile-picture-capture";
 import { COMMON_TIMEZONES } from "@/lib/pt-sessions";
 import { SocialHandlesEditor } from "@/components/social-handles-editor";
 import { SOCIAL_FIELDS } from "@/lib/social-handles";
+import { BasicInfoForm } from "@/components/basic-info-form";
+import { calcAge, formatHeight } from "@/lib/basic-info";
 
 export const Route = createFileRoute("/_authenticated/portal/account")({
   component: AccountPage,
 });
 
 const COUNTRIES = ["Canada", "United States", "United Kingdom", "Australia", "New Zealand", "Other"];
-const PROFILE_FIELDS = ["first_name", "last_name", "phone", "address", "city", "province", "postal_code", "country", "timezone", ...SOCIAL_FIELDS] as const;
+const PROFILE_FIELDS = ["first_name", "last_name", "preferred_name", "phone", "address", "city", "province", "postal_code", "country", "timezone", "date_of_birth", "height_cm", "preferred_height_unit", "emergency_contact_name", "emergency_contact_phone", ...SOCIAL_FIELDS] as const;
 
 function AccountPage() {
   const portalUserId = usePortalUserId();
@@ -63,7 +65,13 @@ function AccountPage() {
       first_name: form.first_name?.trim() || null,
       last_name: form.last_name?.trim() || null,
       full_name: [form.first_name, form.last_name].filter(Boolean).join(" ").trim() || form.full_name,
+      preferred_name: form.preferred_name?.trim() || null,
       phone: form.phone || null,
+      date_of_birth: form.date_of_birth || null,
+      height_cm: form.height_cm ?? null,
+      preferred_height_unit: form.preferred_height_unit ?? "imperial",
+      emergency_contact_name: form.emergency_contact_name || null,
+      emergency_contact_phone: form.emergency_contact_phone || null,
       address: form.address || null,
       city: form.city || null,
       province: form.province || null,
