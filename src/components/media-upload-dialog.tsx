@@ -43,6 +43,7 @@ export function MediaUploadDialog({
   const [painNote, setPainNote] = useState("");
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState<number[]>([]);
+  const [sent, setSent] = useState(false);
 
   function addFiles(list: FileList | null) {
     if (!list) return;
