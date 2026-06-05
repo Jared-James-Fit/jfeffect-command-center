@@ -354,6 +354,7 @@ function ClientDetail() {
           <TabsTrigger value="training">Training</TabsTrigger>
           <TabsTrigger value="nutrition">Nutrition Targets</TabsTrigger>
           <TabsTrigger value="cardio">Cardio Targets</TabsTrigger>
+         <TabsTrigger value="metrics">Progress Metrics</TabsTrigger>
           <TabsTrigger value="messages">Messages</TabsTrigger>
           <TabsTrigger value="lift-videos">Lift Videos</TabsTrigger>
           <TabsTrigger value="documents">Documents</TabsTrigger>
