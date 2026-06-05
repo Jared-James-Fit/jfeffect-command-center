@@ -458,6 +458,100 @@ function SendAgreementDialog({
   );
 }
 
+function ApproveSignedDialog({
+  open, onOpenChange, clientId, agreement, onSubmit,
+}: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  clientId: string;
+  agreement: Agreement | null;
+  onSubmit: (payload: {
+    signed_at?: string | null;
+    signed_copy_url?: string | null;
+    signed_copy_storage_path?: string | null;
+    verification_note?: string | null;
+  }) => Promise<void>;
+}) {
+  const initialDate = () => {
+    const src = agreement?.signed_at ?? agreement?.completed_at ?? new Date().toISOString();
+    const d = new Date(src);
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  };
+  const [signedDate, setSignedDate] = useState(initialDate());
+  const [signedLink, setSignedLink] = useState(agreement?.signed_copy_url ?? "");
+  const [note, setNote] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function go() {
+    setBusy(true);
+    try {
+      let signedUrl: string | null = signedLink.trim() || null;
+      let signedPath: string | null = null;
+      if (file) {
+        const cleanName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+        const path = `signed/${clientId}/${Date.now()}_${cleanName}`;
+        const up = await supabase.storage.from("agreements").upload(path, file, {
+          contentType: file.type || "application/pdf", upsert: false,
+        });
+        if (up.error) throw up.error;
+        signedPath = path;
+        const { data: signed } = await supabase.storage.from("agreements")
+          .createSignedUrl(path, 60 * 60 * 24 * 365);
+        signedUrl = signed?.signedUrl ?? signedUrl;
+      }
+      await onSubmit({
+        signed_at: signedDate ? new Date(signedDate).toISOString() : null,
+        signed_copy_url: signedUrl,
+        signed_copy_storage_path: signedPath,
+        verification_note: note.trim() || null,
+      });
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to approve");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Approve signed agreement</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3 text-sm">
+          <p className="text-muted-foreground text-xs">
+            Confirm this signed agreement was received. The client will see it as <strong>Completed</strong> and it will be removed from outstanding alerts. All fields below are optional.
+          </p>
+          <div>
+            <Label className="text-xs">Signed date / time</Label>
+            <Input type="datetime-local" value={signedDate} onChange={(e) => setSignedDate(e.target.value)} />
+          </div>
+          <div>
+            <Label className="text-xs">Signed copy link</Label>
+            <Input value={signedLink} onChange={(e) => setSignedLink(e.target.value)} placeholder="https://..." />
+          </div>
+          <div>
+            <Label className="text-xs">Upload signed copy</Label>
+            <Input type="file" accept="application/pdf,image/*" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+          </div>
+          <div>
+            <Label className="text-xs">Admin verification note</Label>
+            <Textarea rows={3} value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. Received signed PDF via email on Jun 5." />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button onClick={go} disabled={busy}>
+            {busy && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}Approve / Mark Received
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function UploadSignedDialog({
   open, onOpenChange, clientId, clientName, agreement, templates, onSubmit,
 }: {
