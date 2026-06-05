@@ -47,6 +47,7 @@ import { Route as AuthenticatedAdminNutritionTargetsRouteImport } from './routes
 import { Route as AuthenticatedAdminMessagesRouteImport } from './routes/_authenticated/admin/messages'
 import { Route as AuthenticatedAdminMediaReviewRouteImport } from './routes/_authenticated/admin/media-review'
 import { Route as AuthenticatedAdminLiftVideosRouteImport } from './routes/_authenticated/admin/lift-videos'
+import { Route as AuthenticatedAdminFormsRouteImport } from './routes/_authenticated/admin/forms'
 import { Route as AuthenticatedAdminExercisesRouteImport } from './routes/_authenticated/admin/exercises'
 import { Route as AuthenticatedAdminContentIdeasRouteImport } from './routes/_authenticated/admin/content-ideas'
 import { Route as AuthenticatedAdminCheckInsRouteImport } from './routes/_authenticated/admin/check-ins'
@@ -282,6 +283,11 @@ const AuthenticatedAdminLiftVideosRoute =
     path: '/lift-videos',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
+const AuthenticatedAdminFormsRoute = AuthenticatedAdminFormsRouteImport.update({
+  id: '/forms',
+  path: '/forms',
+  getParentRoute: () => AuthenticatedAdminRouteRoute,
+} as any)
 const AuthenticatedAdminExercisesRoute =
   AuthenticatedAdminExercisesRouteImport.update({
     id: '/exercises',
@@ -400,6 +406,7 @@ export interface FileRoutesByFullPath {
   '/admin/check-ins': typeof AuthenticatedAdminCheckInsRoute
   '/admin/content-ideas': typeof AuthenticatedAdminContentIdeasRoute
   '/admin/exercises': typeof AuthenticatedAdminExercisesRoute
+  '/admin/forms': typeof AuthenticatedAdminFormsRoute
   '/admin/lift-videos': typeof AuthenticatedAdminLiftVideosRoute
   '/admin/media-review': typeof AuthenticatedAdminMediaReviewRoute
   '/admin/messages': typeof AuthenticatedAdminMessagesRoute
@@ -454,6 +461,7 @@ export interface FileRoutesByTo {
   '/admin/check-ins': typeof AuthenticatedAdminCheckInsRoute
   '/admin/content-ideas': typeof AuthenticatedAdminContentIdeasRoute
   '/admin/exercises': typeof AuthenticatedAdminExercisesRoute
+  '/admin/forms': typeof AuthenticatedAdminFormsRoute
   '/admin/lift-videos': typeof AuthenticatedAdminLiftVideosRoute
   '/admin/media-review': typeof AuthenticatedAdminMediaReviewRoute
   '/admin/messages': typeof AuthenticatedAdminMessagesRoute
@@ -512,6 +520,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/check-ins': typeof AuthenticatedAdminCheckInsRoute
   '/_authenticated/admin/content-ideas': typeof AuthenticatedAdminContentIdeasRoute
   '/_authenticated/admin/exercises': typeof AuthenticatedAdminExercisesRoute
+  '/_authenticated/admin/forms': typeof AuthenticatedAdminFormsRoute
   '/_authenticated/admin/lift-videos': typeof AuthenticatedAdminLiftVideosRoute
   '/_authenticated/admin/media-review': typeof AuthenticatedAdminMediaReviewRoute
   '/_authenticated/admin/messages': typeof AuthenticatedAdminMessagesRoute
@@ -570,6 +579,7 @@ export interface FileRouteTypes {
     | '/admin/check-ins'
     | '/admin/content-ideas'
     | '/admin/exercises'
+    | '/admin/forms'
     | '/admin/lift-videos'
     | '/admin/media-review'
     | '/admin/messages'
@@ -624,6 +634,7 @@ export interface FileRouteTypes {
     | '/admin/check-ins'
     | '/admin/content-ideas'
     | '/admin/exercises'
+    | '/admin/forms'
     | '/admin/lift-videos'
     | '/admin/media-review'
     | '/admin/messages'
@@ -681,6 +692,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/check-ins'
     | '/_authenticated/admin/content-ideas'
     | '/_authenticated/admin/exercises'
+    | '/_authenticated/admin/forms'
     | '/_authenticated/admin/lift-videos'
     | '/_authenticated/admin/media-review'
     | '/_authenticated/admin/messages'
@@ -1000,6 +1012,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminLiftVideosRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
+    '/_authenticated/admin/forms': {
+      id: '/_authenticated/admin/forms'
+      path: '/forms'
+      fullPath: '/admin/forms'
+      preLoaderRoute: typeof AuthenticatedAdminFormsRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
     '/_authenticated/admin/exercises': {
       id: '/_authenticated/admin/exercises'
       path: '/exercises'
@@ -1145,6 +1164,7 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminCheckInsRoute: typeof AuthenticatedAdminCheckInsRoute
   AuthenticatedAdminContentIdeasRoute: typeof AuthenticatedAdminContentIdeasRoute
   AuthenticatedAdminExercisesRoute: typeof AuthenticatedAdminExercisesRoute
+  AuthenticatedAdminFormsRoute: typeof AuthenticatedAdminFormsRoute
   AuthenticatedAdminLiftVideosRoute: typeof AuthenticatedAdminLiftVideosRoute
   AuthenticatedAdminMediaReviewRoute: typeof AuthenticatedAdminMediaReviewRoute
   AuthenticatedAdminMessagesRoute: typeof AuthenticatedAdminMessagesRoute
@@ -1179,6 +1199,7 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
     AuthenticatedAdminCheckInsRoute: AuthenticatedAdminCheckInsRoute,
     AuthenticatedAdminContentIdeasRoute: AuthenticatedAdminContentIdeasRoute,
     AuthenticatedAdminExercisesRoute: AuthenticatedAdminExercisesRoute,
+    AuthenticatedAdminFormsRoute: AuthenticatedAdminFormsRoute,
     AuthenticatedAdminLiftVideosRoute: AuthenticatedAdminLiftVideosRoute,
     AuthenticatedAdminMediaReviewRoute: AuthenticatedAdminMediaReviewRoute,
     AuthenticatedAdminMessagesRoute: AuthenticatedAdminMessagesRoute,
