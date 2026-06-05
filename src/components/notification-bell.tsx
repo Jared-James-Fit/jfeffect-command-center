@@ -4,6 +4,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bell } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
+import { markRead } from "@/lib/messages";
+import { markClientViewed, markAdminViewed } from "@/lib/lift-videos";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -230,6 +232,14 @@ export function NotificationBell() {
                   : undefined
               }
               className="block"
+              onClick={() => {
+                if (it.kind === "message") {
+                  markRead(it.clientId, role === "admin" ? "admin" : "client").catch(() => {});
+                } else if (it.kind === "lift_video" && it.videoId) {
+                  (role === "admin" ? markAdminViewed(it.videoId) : markClientViewed(it.videoId)).catch(() => {});
+                }
+                qc.invalidateQueries({ queryKey: ["unread-counts"] });
+              }}
             >
               <div className="text-xs font-semibold">{it.title}</div>
               <div className="line-clamp-1 text-[11px] text-muted-foreground">{it.body || "(attachment)"}</div>
