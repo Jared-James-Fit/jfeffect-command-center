@@ -126,7 +126,6 @@ export function AgreementsPanel({ clientId, clientName }: { clientId: string; cl
       {/* Send dialog */}
       <SendAgreementDialog
         open={sendMode !== null}
-        mode={sendMode ?? "invite"}
         onOpenChange={(o) => !o && setSendMode(null)}
         clientName={clientName}
         templates={templates}
@@ -142,12 +141,6 @@ export function AgreementsPanel({ clientId, clientName }: { clientId: string; cl
             } else {
               toast.success("Invite logged. Open or copy the signing link to send it to the client.");
             }
-          } else if (payload.signing_method === "In-Person / iPad" || payload.signing_method === "Kiosk Mode") {
-            if (payload.signnow_signing_link) {
-              window.open(payload.signnow_signing_link, "_blank", "noopener,noreferrer");
-            }
-            toast.success("Launched signing session. Mark signed when finished.");
-            setOpenUpload(ag as any);
           } else {
             toast.success("Agreement created");
           }
