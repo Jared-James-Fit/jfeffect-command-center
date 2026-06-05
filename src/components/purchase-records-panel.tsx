@@ -18,9 +18,24 @@ export function PurchaseRecordsPanel({ clientId }: { clientId: string }) {
     queryKey: ["client-purchases", clientId],
     queryFn: async () => (await supabase
       .from("purchase_records")
-      .select("*, offers:offer_id(requires_agreement, agreement_before_service, default_agreement_template_id)")
+      .select("*")
       .eq("client_id", clientId)
       .order("purchased_at", { ascending: false })).data ?? [],
+  });
+
+  const offerIds = Array.from(new Set(records.map((r: any) => r.offer_id).filter(Boolean)));
+  const { data: offerFlags = {} } = useQuery({
+    queryKey: ["offer-agreement-flags", offerIds.sort().join(",")],
+    enabled: offerIds.length > 0,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("offers")
+        .select("id, requires_agreement, agreement_before_service")
+        .in("id", offerIds as string[]);
+      const map: Record<string, { requires_agreement: boolean; agreement_before_service: boolean }> = {};
+      for (const o of (data ?? []) as any[]) map[o.id] = o;
+      return map;
+    },
   });
 
   const { data: offers = [] } = useQuery({
@@ -54,8 +69,8 @@ export function PurchaseRecordsPanel({ clientId }: { clientId: string }) {
                     <PurchaseAgreementInlineBadge
                       purchaseId={r.id}
                       clientId={clientId}
-                      requiresAgreement={!!r.offers?.requires_agreement}
-                      agreementBeforeService={!!r.offers?.agreement_before_service}
+                      requiresAgreement={!!offerFlags[r.offer_id]?.requires_agreement}
+                      agreementBeforeService={!!offerFlags[r.offer_id]?.agreement_before_service}
                       termStartDate={r.term_start_date}
                     />
                   </div>
