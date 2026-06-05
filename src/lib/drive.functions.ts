@@ -271,7 +271,34 @@ export const createSubmission = createServerFn({ method: "POST" })
     urgent?: boolean; painNote?: string | null; clipCount: number; role: "admin" | "client";
   }) => d)
   .handler(async ({ data, context }) => {
-    const { data: row, error } = await (context.supabase.from("media_submissions" as any) as any).insert({
+    const isAdmin = await context.supabase
+      .from("user_roles" as any)
+      .select("role")
+      .eq("user_id", context.userId)
+      .then(({ data: roles }: any) => roles?.some((r: any) => r.role === "admin"));
+    const { data: client, error: clientError } = await (supabaseAdmin as any)
+      .from("clients")
+      .select("id,user_id,assigned_coach_id")
+      .eq("id", data.clientId)
+      .maybeSingle();
+    const isAssignedCoach = client?.assigned_coach_id
+      ? await (supabaseAdmin as any)
+        .from("coaches")
+        .select("id")
+        .eq("id", client.assigned_coach_id)
+        .eq("user_id", context.userId)
+        .eq("archived", false)
+        .eq("status", "Active")
+        .maybeSingle()
+        .then(({ data: coach }: any) => !!coach)
+      : false;
+
+    if (clientError) throw clientError;
+    if (!isAdmin && !isAssignedCoach && (!client || client.user_id !== context.userId)) {
+      throw new Error("You can only create submissions for your own client profile.");
+    }
+
+    const { data: row, error } = await ((supabaseAdmin as any).from("media_submissions") as any).insert({
       client_id: data.clientId,
       submission_type: data.submissionType,
       title: data.title ?? null,

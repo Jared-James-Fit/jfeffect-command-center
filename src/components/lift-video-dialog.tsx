@@ -11,6 +11,7 @@ import {
   TRAINING_DAY_OPTIONS, LIFT_VIDEO_TAGS, createLiftVideo, updateLiftVideo, uploadVideoFile,
   type LiftVideo,
 } from "@/lib/lift-videos";
+import { createClientLiftVideo } from "@/lib/lift-videos.functions";
 import { initMediaUpload, finalizeMediaUpload, createSubmission } from "@/lib/drive.functions";
 import { uploadLiftClipToDrive } from "@/lib/lift-video-drive-upload";
 import { friendlyDriveError } from "@/lib/drive-errors";
@@ -33,6 +34,7 @@ export function LiftVideoDialog({ open, onOpenChange, clientId, userId, clientNa
   const initFn = useServerFn(initMediaUpload);
   const finalizeFn = useServerFn(finalizeMediaUpload);
   const createSubFn = useServerFn(createSubmission);
+  const createClientLiftVideoFn = useServerFn(createClientLiftVideo);
   const [tab, setTab] = useState<"link" | "upload">("upload");
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
   const recordInputRef = useRef<HTMLInputElement | null>(null);
@@ -271,9 +273,8 @@ export function LiftVideoDialog({ open, onOpenChange, clientId, userId, clientNa
           .filter(Boolean)
           .join("\n");
 
-        await createLiftVideo({
+        await createClientLiftVideoFn({ data: {
           client_id: clientId,
-          uploaded_by: userId,
           exercise: "",
           tag: isUrgent ? "Pain / Discomfort" : "Normal Review",
           is_urgent: isUrgent,
@@ -287,7 +288,7 @@ export function LiftVideoDialog({ open, onOpenChange, clientId, userId, clientNa
           batch_note: sharedNote || null,
           batch_size: total,
           batch_index: i + 1,
-        } as any);
+        } });
       }
 
       setSent(true);
