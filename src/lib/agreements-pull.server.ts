@@ -88,7 +88,7 @@ export async function pullSignedDocumentForAgreement(
     patch.status = "Waiting on Client";
   }
 
-  const { error: updErr } = await supabaseAdmin.from("agreements").update(patch).eq("id", ag.id);
+  const { error: updErr } = await supabaseAdmin.from("agreements").update(patch as any).eq("id", ag.id);
   if (updErr) {
     return { ok: false, status: doc.status, storagePath, signerName: doc.signerName, signedAt: doc.signedAt, mismatch, reason: updErr.message };
   }
@@ -99,9 +99,9 @@ export async function pullSignedDocumentForAgreement(
       agreement_signed: patch.status === "Signed",
       agreement_signed_date: (patch.signed_at as string).slice(0, 10),
       agreement_status: patch.status,
-    }).eq("id", ag.client_id);
+    } as any).eq("id", ag.client_id);
   } else if (patch.status === "Cancelled" || patch.status === "Expired") {
-    await supabaseAdmin.from("clients").update({ agreement_status: patch.status }).eq("id", ag.client_id);
+    await supabaseAdmin.from("clients").update({ agreement_status: patch.status } as any).eq("id", ag.client_id);
   }
 
   await supabaseAdmin.from("agreement_audit_log").insert({
@@ -109,7 +109,7 @@ export async function pullSignedDocumentForAgreement(
     event: opts.event ? `webhook:${opts.event}` : "status_refreshed",
     actor_role: "system",
     details: { signnow_status: doc.status, mismatch, signer: doc.signerName } as any,
-  });
+  } as any);
 
   return { ok: true, status: patch.status ?? doc.status, storagePath, signerName: doc.signerName, signedAt: doc.signedAt, mismatch };
 }
