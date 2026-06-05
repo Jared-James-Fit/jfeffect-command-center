@@ -365,6 +365,7 @@ function ClientsPage() {
                         })()}
                       </td>
                       <td className="px-4 py-3"><Badge variant="outline">{c.status}</Badge></td>
+                      <td className="px-4 py-3">{activityCell(c.last_active_at, c.last_signed_in_at)}</td>
                       <td className="px-4 py-3 text-right">
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
