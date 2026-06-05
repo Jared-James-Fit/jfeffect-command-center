@@ -41,13 +41,13 @@ function PortalHome() {
     queryKey: ["portal-outstanding-agreements", client?.id],
     enabled: !!client?.id,
     queryFn: async () => {
-      const { data } = await supabase
-        .from("agreements")
+      const { data } = await (supabase
+        .from("agreements") as any)
         .select("id, template_name, status, signnow_signing_link, sent_at, client_marked_complete_at")
         .eq("client_id", client!.id)
         .in("status", ["Sent", "Opened", "Waiting on Client", "Needs Resend", "Manual Action Needed"])
         .order("created_at", { ascending: false });
-      return data ?? [];
+      return (data ?? []) as any[];
     },
   });
   const qc = useQueryClient();
