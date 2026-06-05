@@ -13,15 +13,17 @@ import { toast } from "sonner";
 import { CLIENT_MEDIA_TYPES, MEDIA_TYPES, type MediaType, uploadToDrive } from "@/lib/media";
 import { initMediaUpload, finalizeMediaUpload, createSubmission } from "@/lib/drive.functions";
 import { friendlyDriveError } from "@/lib/drive-errors";
+import { buildDriveDisplayName } from "@/lib/media-naming";
 
 type Mode = "batch" | "per-clip";
 
 export function MediaUploadDialog({
-  open, onOpenChange, clientId, role, defaultType, onUploaded, restrictTypes,
+  open, onOpenChange, clientId, clientName, role, defaultType, onUploaded, restrictTypes,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   clientId: string;
+  clientName?: string | null;
   role: "admin" | "client";
   defaultType?: MediaType;
   onUploaded?: () => void;
@@ -69,8 +71,11 @@ export function MediaUploadDialog({
       }});
       for (let i = 0; i < files.length; i++) {
         const f = files[i];
+        const displayName = buildDriveDisplayName({
+          clientName, type: mediaType, index: i + 1, total: files.length,
+        });
         const init = await initFn({ data: {
-          clientId, mediaType, fileName: f.name, mimeType: f.type || "application/octet-stream", sizeBytes: f.size,
+          clientId, mediaType, fileName: f.name, mimeType: f.type || "application/octet-stream", sizeBytes: f.size, displayName,
         }});
         const uploaded = await uploadToDrive(init.uploadUrl, f, (pct) => {
           setProgress((prev) => { const c = [...prev]; c[i] = pct; return c; });
