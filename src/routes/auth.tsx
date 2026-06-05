@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
+import { AuthSplash } from "@/components/auth-splash";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/auth")({
@@ -41,6 +42,12 @@ function AuthPage() {
       navigate({ to: role === "client" ? "/portal" : "/admin", replace: true });
     }
   }, [user, role, loading, navigate]);
+
+  // Avoid flashing the login form while the session is still restoring,
+  // or while an authenticated user is being routed to their dashboard.
+  if (loading || user) {
+    return <AuthSplash />;
+  }
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();

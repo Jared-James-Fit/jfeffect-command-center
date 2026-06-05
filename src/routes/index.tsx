@@ -1,6 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { useAuth } from "@/lib/auth";
+import { AuthSplash } from "@/components/auth-splash";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -27,9 +28,5 @@ function IndexRedirect() {
     }
   }, [user, role, loading, navigate]);
 
-  return (
-    <div className="grid min-h-screen place-items-center bg-background text-muted-foreground">
-      Loading…
-    </div>
-  );
+  return <AuthSplash />;
 }
