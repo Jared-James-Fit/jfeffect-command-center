@@ -32,6 +32,7 @@ import { AgreementStatusPanel } from "@/components/agreement-status-panel";
 import { PurchaseRecordsPanel } from "@/components/purchase-records-panel";
 import { PriceCardPickerDialog } from "@/components/price-card-picker-dialog";
 import { AgreementsPanel } from "@/components/agreements-panel";
+import { TrainingScheduleCard } from "@/components/training-schedule-card";
 
 function AssignedCoachSelect({ value, onChange }: { value: string | null; onChange: (v: string | null) => void }) {
   const { data: coaches = [] } = useQuery({
@@ -320,6 +321,8 @@ function ClientDetail() {
           </div>
         </Card>
 
+        <div className="space-y-6">
+        <TrainingScheduleCard client={form} />
         <Card className="border-border bg-card p-6 space-y-3">
           <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Quick Jump</h3>
           <p className="text-xs text-muted-foreground">Open a management area for this client.</p>
@@ -332,9 +335,11 @@ function ClientDetail() {
             <Link to="/admin/clients/$id" params={{ id }} search={{ tab: "account" }}><Button variant="outline" size="sm" className="w-full justify-start">Account & Access</Button></Link>
           </div>
         </Card>
+        </div>
         </TabsContent>
 
         <TabsContent value="training" className="grid gap-6 md:grid-cols-3">
+          <div className="md:col-span-3"><TrainingScheduleCard client={form} /></div>
           <TrainingPhasesPanel clientId={id} />
           <ImportantDatesPanel clientId={id} />
         </TabsContent>
@@ -344,6 +349,7 @@ function ClientDetail() {
         </TabsContent>
 
         <TabsContent value="cardio" className="grid gap-6 md:grid-cols-3">
+          <div className="md:col-span-3"><TrainingScheduleCard client={form} /></div>
           <CardioTargetsPanel clientId={id} />
         </TabsContent>
 
