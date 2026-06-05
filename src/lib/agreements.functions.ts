@@ -875,6 +875,272 @@ export const cancelAgreement = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+// ---- Archive / Delete / Bulk ----
+
+async function assertAdminOnly(supabase: any, userId: string) {
+  const { data } = await supabase
+    .from("user_roles").select("role").eq("user_id", userId);
+  const roles = (data ?? []).map((r: any) => r.role);
+  if (!roles.includes("admin")) {
+    throw new Error("Forbidden: admin only.");
+  }
+}
+
+/** Archive an agreement (soft-hide). Reversible via unarchiveAgreement. */
+export const archiveAgreement = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i: unknown) =>
+    z.object({
+      id: z.string().uuid(),
+      reason: z.string().max(500).optional().nullable(),
+    }).parse(i),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    await assertAdminOrCoach(supabase, userId);
+    const { error } = await supabase.from("agreements").update({
+      archived: true,
+      archived_at: new Date().toISOString(),
+      archived_by: userId,
+      archive_reason: data.reason ?? null,
+    } as any).eq("id", data.id);
+    if (error) throw new Error(error.message);
+    await supabase.from("agreement_audit_log").insert({
+      agreement_id: data.id, event: "archived",
+      actor_role: "admin", actor_user_id: userId,
+      details: { reason: data.reason ?? null } as any,
+    } as any);
+    return { ok: true };
+  });
+
+export const unarchiveAgreement = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i: unknown) => z.object({ id: z.string().uuid() }).parse(i))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    await assertAdminOrCoach(supabase, userId);
+    const { error } = await supabase.from("agreements").update({
+      archived: false,
+      archived_at: null,
+      archived_by: null,
+      archive_reason: null,
+    } as any).eq("id", data.id);
+    if (error) throw new Error(error.message);
+    await supabase.from("agreement_audit_log").insert({
+      agreement_id: data.id, event: "unarchived",
+      actor_role: "admin", actor_user_id: userId,
+    } as any);
+    return { ok: true };
+  });
+
+/**
+ * Permanently delete an agreement record. Admin-only. Logs to
+ * client_activity_log (since agreement_audit_log requires the agreement to
+ * still exist) BEFORE deleting. Storage cleanup is best-effort.
+ */
+export const deleteAgreement = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i: unknown) =>
+    z.object({
+      id: z.string().uuid(),
+      reason: z.string().max(500).optional().nullable(),
+    }).parse(i),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    await assertAdminOnly(supabase, userId);
+    const { data: ag } = await supabase
+      .from("agreements")
+      .select("id, client_id, client_full_name, template_name, status, signed_copy_storage_path")
+      .eq("id", data.id).maybeSingle();
+    if (!ag) return { ok: true };
+
+    // Audit BEFORE delete — agreement_audit_log FK would prevent post-delete insert.
+    await supabase.from("client_activity_log").insert({
+      client_id: ag.client_id,
+      actor_role: "admin",
+      actor_user_id: userId,
+      action: "agreement_deleted",
+      details: {
+        agreement_id: ag.id,
+        template_name: ag.template_name,
+        client_full_name: ag.client_full_name,
+        previous_status: ag.status,
+        reason: data.reason ?? null,
+        had_signed_copy: !!ag.signed_copy_storage_path,
+      } as any,
+    } as any);
+
+    // Best-effort: remove signed PDF from storage.
+    if (ag.signed_copy_storage_path) {
+      try {
+        const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+        await supabaseAdmin.storage.from("agreements").remove([ag.signed_copy_storage_path]);
+      } catch {
+        // Non-fatal — keep going so the record itself is removed.
+      }
+    }
+
+    // Remove audit log rows first (FK).
+    await supabase.from("agreement_audit_log").delete().eq("agreement_id", data.id);
+    const { error } = await supabase.from("agreements").delete().eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+/**
+ * Bulk-archive a set of agreement ids. Returns counts.
+ */
+export const bulkArchiveAgreements = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i: unknown) =>
+    z.object({
+      ids: z.array(z.string().uuid()).min(1).max(200),
+    }).parse(i),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    await assertAdminOrCoach(supabase, userId);
+    const nowIso = new Date().toISOString();
+    const { error } = await supabase.from("agreements").update({
+      archived: true,
+      archived_at: nowIso,
+      archived_by: userId,
+    } as any).in("id", data.ids);
+    if (error) throw new Error(error.message);
+    // Audit
+    const rows = data.ids.map((id) => ({
+      agreement_id: id,
+      event: "archived",
+      actor_role: "admin",
+      actor_user_id: userId,
+      details: { bulk: true } as any,
+    }));
+    await supabase.from("agreement_audit_log").insert(rows as any);
+    return { ok: true, count: data.ids.length };
+  });
+
+/**
+ * Bulk-update status of a set of agreement ids. Limited to safe statuses.
+ */
+export const bulkUpdateAgreementStatus = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i: unknown) =>
+    z.object({
+      ids: z.array(z.string().uuid()).min(1).max(200),
+      status: z.enum([
+        "Waiting on Client",
+        "Needs Manual Verification",
+        "Needs Resend",
+      ]),
+    }).parse(i),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    await assertAdminOrCoach(supabase, userId);
+    const { error } = await supabase.from("agreements").update({
+      status: data.status,
+    } as any).in("id", data.ids);
+    if (error) throw new Error(error.message);
+    const rows = data.ids.map((id) => ({
+      agreement_id: id,
+      event: "status_bulk_updated",
+      actor_role: "admin",
+      actor_user_id: userId,
+      details: { new_status: data.status, bulk: true } as any,
+    }));
+    await supabase.from("agreement_audit_log").insert(rows as any);
+    return { ok: true, count: data.ids.length };
+  });
+
+/**
+ * Bulk-verify (admin/coach quick approve).
+ */
+export const bulkVerifyAgreements = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i: unknown) =>
+    z.object({ ids: z.array(z.string().uuid()).min(1).max(200) }).parse(i),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    await assertAdminOrCoach(supabase, userId);
+    const nowIso = new Date().toISOString();
+    const { error } = await supabase.from("agreements").update({
+      status: "Verified",
+      verification_status: "Manually Verified",
+      verified_at: nowIso,
+      verified_by: userId,
+    } as any).in("id", data.ids);
+    if (error) throw new Error(error.message);
+    const rows = data.ids.map((id) => ({
+      agreement_id: id,
+      event: "verification_enabled",
+      actor_role: "admin",
+      actor_user_id: userId,
+      details: { bulk: true } as any,
+    }));
+    await supabase.from("agreement_audit_log").insert(rows as any);
+    return { ok: true, count: data.ids.length };
+  });
+
+/**
+ * Bulk delete agreements. Admin-only. Same care as single-row delete:
+ * logs to client_activity_log first, removes audit rows, then deletes.
+ */
+export const bulkDeleteAgreements = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i: unknown) =>
+    z.object({
+      ids: z.array(z.string().uuid()).min(1).max(200),
+      reason: z.string().max(500).optional().nullable(),
+    }).parse(i),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    await assertAdminOnly(supabase, userId);
+    const { data: rows } = await supabase
+      .from("agreements")
+      .select("id, client_id, client_full_name, template_name, status, signed_copy_storage_path")
+      .in("id", data.ids);
+    const list = rows ?? [];
+    if (list.length === 0) return { ok: true, count: 0 };
+
+    // Audit each.
+    const auditRows = list.map((ag) => ({
+      client_id: ag.client_id,
+      actor_role: "admin",
+      actor_user_id: userId,
+      action: "agreement_deleted",
+      details: {
+        agreement_id: ag.id,
+        template_name: ag.template_name,
+        client_full_name: ag.client_full_name,
+        previous_status: ag.status,
+        reason: data.reason ?? null,
+        had_signed_copy: !!ag.signed_copy_storage_path,
+        bulk: true,
+      } as any,
+    }));
+    await supabase.from("client_activity_log").insert(auditRows as any);
+
+    // Best-effort storage cleanup.
+    const paths = list.map((r) => r.signed_copy_storage_path).filter(Boolean) as string[];
+    if (paths.length) {
+      try {
+        const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+        await supabaseAdmin.storage.from("agreements").remove(paths);
+      } catch {
+        // Non-fatal.
+      }
+    }
+
+    const ids = list.map((r) => r.id);
+    await supabase.from("agreement_audit_log").delete().in("agreement_id", ids);
+    const { error } = await supabase.from("agreements").delete().in("id", ids);
+    if (error) throw new Error(error.message);
+    return { ok: true, count: ids.length };
+  });
+
 /** Manually refresh an agreement's status from SignNow and pull the signed
  *  PDF into storage if available. Safe to call repeatedly. */
 export const refreshAgreementStatus = createServerFn({ method: "POST" })
