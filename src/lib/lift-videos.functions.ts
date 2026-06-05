@@ -1,7 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { createOwnedClientLiftVideo } from "./lift-videos.server";
 
 const nullableString = z.string().max(2000).nullable().optional();
 const nullableNumber = z.number().nullable().optional();
@@ -37,5 +36,6 @@ export const createClientLiftVideo = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data) => ClientLiftVideoInput.parse(data))
   .handler(async ({ data, context }) => {
+    const { createOwnedClientLiftVideo } = await import("./lift-videos.server");
     return createOwnedClientLiftVideo(data, context.userId);
   });
