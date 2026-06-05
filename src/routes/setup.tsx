@@ -131,7 +131,7 @@ function Shell({ children }: { children: React.ReactNode }) {
       <div className="flex min-h-screen items-center justify-center px-6 py-16">
         <div className="w-full max-w-sm">
           <div className="mb-8 flex items-center justify-center gap-3">
-            <div className="grid h-11 w-11 place-items-center rounded-full bg-gradient-primary text-sm font-black text-primary-foreground shadow-glow">JF</div>
+            <img src="/logo.png" alt="JF Effect" className="h-11 w-11 rounded-xl shadow-glow" />
             <span className="text-lg font-black tracking-tight">JF EFFECT</span>
           </div>
           <Card className="border-border bg-card/60 p-6 backdrop-blur-sm">{children}</Card>
