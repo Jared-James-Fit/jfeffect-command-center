@@ -17,6 +17,7 @@ import { ExternalLink } from "lucide-react";
 import { SocialIcons } from "@/components/social-icons";
 import { LogBodyweightCard } from "@/components/log-bodyweight-card";
 import type { WeightUnit } from "@/lib/progress-metrics";
+import { HomeScreenSetupCard } from "@/components/home-screen-setup-card";
 
 export const Route = createFileRoute("/_authenticated/portal/")({ component: PortalHome });
 
@@ -194,6 +195,13 @@ function PortalHome() {
         subtitle="Your private coaching dashboard."
       />
       <div className="space-y-6 p-6 md:p-8">
+        {client?.id && (
+          <HomeScreenSetupCard
+            clientId={client.id}
+            status={(client as any).home_screen_setup_status}
+            remindAfter={(client as any).home_screen_setup_remind_after}
+          />
+        )}
         {/* Today / This Week — alerts and action items */}
         <section aria-label="Today / This Week">
           <div className="mb-2 flex items-center justify-between px-1">
