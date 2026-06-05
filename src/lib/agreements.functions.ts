@@ -1,6 +1,16 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import {
+  hasSignNowCredentials,
+  whoami as signnowWhoami,
+  listSignNowTemplates,
+  copyTemplateToDocument,
+  createSignNowInvite as apiCreateSignNowInvite,
+  remindSignNowInvite,
+  SignNowNotConfiguredError,
+  SignNowApiError,
+} from "@/lib/signnow.server";
 
 async function assertAdminOrCoach(supabase: any, userId: string) {
   const { data } = await supabase
@@ -123,10 +133,9 @@ export const testSignNowConnection = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const { supabase } = context;
-    const token = process.env.SIGNNOW_API_TOKEN;
     const now = new Date().toISOString();
-    if (!token) {
-      const result = "No SIGNNOW_API_TOKEN / OAuth credentials configured — running in Manual Mode Only.";
+    if (!hasSignNowCredentials()) {
+      const result = "No SignNow OAuth credentials configured — running in Manual Mode Only.";
       await supabase.from("signnow_settings").update({
         status: "Manual Mode Only",
         last_test_at: now,
@@ -138,38 +147,80 @@ export const testSignNowConnection = createServerFn({ method: "POST" })
       return { mode: "manual", ok: true, message: result };
     }
     try {
-      const res = await fetch("https://api.signnow.com/user", {
-        headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
-      });
-      const ok = res.ok;
-      const body = await res.text();
-      let email: string | null = null;
-      try { email = JSON.parse(body)?.primary_email ?? null; } catch { /* ignore */ }
-      const result = ok
-        ? `Connected as ${email ?? "SignNow user"}.`
-        : `SignNow API error ${res.status}: ${body.slice(0, 200)}`;
+      const { email } = await signnowWhoami();
+      const result = `Connected as ${email ?? "SignNow user"}.`;
       await supabase.from("signnow_settings").update({
-        status: ok ? "Connected" : "Error",
+        status: "Connected",
         account_email: email,
         last_test_at: now,
         last_test_result: result,
-        access_token_status: ok ? "Valid" : "Invalid",
-        last_error: ok ? null : result,
+        access_token_status: "Valid",
+        last_error: null,
       } as any).eq("singleton", true);
-      return { mode: "api", ok, message: result };
+      return { mode: "api", ok: true, message: result };
     } catch (e: any) {
-      const result = `SignNow connection failed: ${e?.message ?? "unknown error"}`;
+      const isConfig = e instanceof SignNowNotConfiguredError;
+      const result = isConfig
+        ? "SignNow API not configured — Manual Mode Only."
+        : `SignNow connection failed: ${e?.message ?? "unknown error"}`;
       await supabase.from("signnow_settings").update({
-        status: "Error",
+        status: isConfig ? "Manual Mode Only" : "Error",
         last_test_at: now,
         last_test_result: result,
-        last_error: result,
+        last_error: isConfig ? null : result,
+        access_token_status: isConfig ? "Missing" : "Invalid",
       } as any).eq("singleton", true);
-      return { mode: "api", ok: false, message: result };
+      return { mode: isConfig ? "manual" : "api", ok: false, message: result };
     }
   });
 
 // ---- Agreements ----
+
+// Pulls templates from SignNow and upserts matches into agreement_templates by signnow_template_id.
+// New templates appear as inactive so admin can review names/types before exposing them.
+export const syncSignNowTemplates = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { supabase, userId } = context;
+    await assertAdminOrCoach(supabase, userId);
+    if (!hasSignNowCredentials()) {
+      throw new Error("SignNow API is not configured. Add the SIGNNOW_* secrets to enable template sync.");
+    }
+    const remote = await listSignNowTemplates();
+    const { data: existing } = await supabase
+      .from("agreement_templates")
+      .select("id, signnow_template_id, name, is_active");
+    const byId = new Map<string, any>();
+    for (const t of existing ?? []) {
+      if (t.signnow_template_id) byId.set(t.signnow_template_id, t);
+    }
+    let created = 0;
+    let updated = 0;
+    for (const r of remote) {
+      const match = byId.get(r.id);
+      if (match) {
+        if (match.name !== r.name) {
+          await supabase.from("agreement_templates")
+            .update({ name: r.name } as any).eq("id", match.id);
+          updated += 1;
+        }
+      } else {
+        await supabase.from("agreement_templates").insert({
+          name: r.name,
+          signnow_template_id: r.id,
+          version: "1",
+          is_active: false,
+          created_by: userId,
+          notes: "Synced from SignNow. Review and activate.",
+        } as any);
+        created += 1;
+      }
+    }
+    await supabase.from("signnow_settings").update({
+      last_synced_at: new Date().toISOString(),
+    } as any).eq("singleton", true);
+    return { ok: true, total: remote.length, created, updated };
+  });
 
 export const createAgreement = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -220,8 +271,53 @@ export const createAgreement = createServerFn({ method: "POST" })
 
     const now = new Date().toISOString();
     const inPerson = data.signing_method === "In-Person / iPad" || data.signing_method === "Kiosk Mode";
+
+    // Real SignNow Invite (API mode) — only attempted for Remote Invite,
+    // only when settings show Connected, credentials are present, the template has a
+    // signnow_template_id, and the client has an email.
+    let apiSigningLink: string | null = data.signnow_signing_link ?? null;
+    let apiDocumentId: string | null = null;
+    let apiError: string | null = null;
+    let apiAttempted = false;
+    if (
+      data.send_now &&
+      data.signing_method === "Remote Invite" &&
+      signnow_template_id &&
+      client.email &&
+      hasSignNowCredentials()
+    ) {
+      const { data: settings } = await supabase
+        .from("signnow_settings").select("status, account_email").eq("singleton", true).maybeSingle();
+      if (settings?.status === "Connected" && settings?.account_email) {
+        apiAttempted = true;
+        try {
+          const docName = `${template_name} — ${client.full_name}`;
+          const documentId = await copyTemplateToDocument(signnow_template_id, docName);
+          const invite = await apiCreateSignNowInvite({
+            documentId,
+            signerEmail: client.email,
+            signerName: client.full_name,
+            fromEmail: settings.account_email,
+            subject: `Please sign: ${template_name}`,
+            message: `Hi ${client.full_name ?? ""}, please review and sign your ${template_name}.`,
+            expirationDays: 30,
+          });
+          apiDocumentId = documentId;
+          apiSigningLink = invite.signingLink ?? apiSigningLink;
+        } catch (e: any) {
+          apiError = e instanceof SignNowApiError
+            ? e.message
+            : `SignNow invite failed: ${e?.message ?? "unknown error"}`;
+        }
+      }
+    }
+
     const initialStatus = data.status_override
       ? data.status_override
+      : apiError
+        ? "Manual Action Needed"
+        : apiAttempted && apiDocumentId
+          ? "Waiting on Client"
       : data.send_now
         ? (data.signing_method === "Remote Invite" ? "Waiting on Client" : "Sent")
         : "Not Sent";
@@ -231,7 +327,8 @@ export const createAgreement = createServerFn({ method: "POST" })
       template_name,
       agreement_type,
       signnow_template_id,
-      signnow_signing_link: data.signnow_signing_link ?? null,
+      signnow_signing_link: apiSigningLink,
+      signnow_document_id: apiDocumentId,
       purchase_record_id: data.purchase_record_id ?? null,
       offer_name: data.offer_name ?? null,
       client_full_name: client.full_name,
@@ -240,8 +337,10 @@ export const createAgreement = createServerFn({ method: "POST" })
       client_address: address,
       correct_client_name: client.full_name,
       status: initialStatus,
-      sent_at: data.send_now ? now : null,
-      admin_notes: data.admin_notes ?? null,
+      sent_at: data.send_now && !apiError ? now : null,
+      admin_notes: apiError
+        ? `${data.admin_notes ? data.admin_notes + "\n\n" : ""}[SignNow API error] ${apiError}`
+        : data.admin_notes ?? null,
       signing_method: data.signing_method ?? null,
       signed_in_person: inPerson,
       created_by: userId,
@@ -250,15 +349,24 @@ export const createAgreement = createServerFn({ method: "POST" })
 
     await supabase.from("agreement_audit_log").insert({
       agreement_id: ag.id,
-      event: data.send_now
-        ? (data.signing_method === "Remote Invite" ? "invited" : "in_person_started")
-        : "created",
+      event: apiError
+        ? "invite_api_failed"
+        : apiAttempted && apiDocumentId
+          ? "invited_via_api"
+          : data.send_now
+            ? (data.signing_method === "Remote Invite" ? "invited_manual" : "in_person_started")
+            : "created",
       actor_role: "admin",
       actor_user_id: userId,
-      details: { signing_method: data.signing_method ?? null } as any,
+      details: {
+        signing_method: data.signing_method ?? null,
+        api_attempted: apiAttempted,
+        api_document_id: apiDocumentId,
+        api_error: apiError,
+      } as any,
     } as any);
 
-    return ag;
+    return { ...ag, _api_error: apiError, _api_attempted: apiAttempted, _api_document_id: apiDocumentId };
   });
 
 export const updateAgreement = createServerFn({ method: "POST" })
@@ -397,13 +505,28 @@ export const sendAgreementReminder = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
     await assertAdminOrCoach(supabase, userId);
+    const { data: ag } = await supabase.from("agreements")
+      .select("signnow_document_id, status").eq("id", data.id).single();
+    let apiSent = false;
+    let apiError: string | null = null;
+    if (ag?.signnow_document_id && hasSignNowCredentials()) {
+      try {
+        await remindSignNowInvite(ag.signnow_document_id);
+        apiSent = true;
+      } catch (e: any) {
+        apiError = e?.message ?? "SignNow reminder failed";
+      }
+    }
     await supabase.from("agreements")
       .update({ last_reminder_at: new Date().toISOString() } as any).eq("id", data.id);
     await supabase.from("agreement_audit_log").insert({
-      agreement_id: data.id, event: "reminder_sent",
-      actor_role: "admin", actor_user_id: userId,
+      agreement_id: data.id,
+      event: apiSent ? "reminder_sent_api" : apiError ? "reminder_api_failed" : "reminder_logged",
+      actor_role: "admin",
+      actor_user_id: userId,
+      details: { api_sent: apiSent, api_error: apiError } as any,
     } as any);
-    return { ok: true };
+    return { ok: true, apiSent, apiError };
   });
 
 export const cancelAgreement = createServerFn({ method: "POST" })
