@@ -12,7 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Plus, Edit2, Archive, ExternalLink, ShieldCheck, AlertTriangle, FileText, Loader2, UserPlus, Copy, Search, Power, Trash2, Info, Settings } from "lucide-react";
+import { Plus, Edit2, Archive, ExternalLink, ShieldCheck, AlertTriangle, FileText, Loader2, UserPlus, Copy, Search, Power, Trash2, Info, Settings, FolderArchive } from "lucide-react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import { createTemplate, updateTemplate, archiveTemplate, setTemplateActive, createAgreement, syncSignNowTemplates } from "@/lib/agreements.functions";
@@ -74,6 +74,13 @@ function AgreementsAdminPage() {
     <>
       <PageHeader title="Agreements" subtitle="Connected to SignNow. Tracks, organizes, and verifies signed copies." />
       <div className="p-6 md:p-8 space-y-6">
+        <div className="flex justify-end">
+          <Link to="/admin/agreements/signed">
+            <Button variant="outline" size="sm">
+              <FolderArchive className="h-4 w-4 mr-1" /> Signed Documents
+            </Button>
+          </Link>
+        </div>
         {!apiConnected && (
           <Card className="border-amber-500/40 bg-amber-500/5 p-4 flex items-start gap-3">
             <Info className="h-4 w-4 text-amber-500 mt-0.5 flex-shrink-0" />
