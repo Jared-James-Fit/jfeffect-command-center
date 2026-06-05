@@ -23,14 +23,7 @@ function ClientMessages() {
   });
 
   return (
-    <div
-      className="flex min-h-0 flex-col"
-      style={{
-        // Use the dynamic viewport so the page tracks the visible area
-        // (iOS URL bar collapse + on-screen keyboard).
-        height: "100dvh",
-      }}
-    >
+    <div className="flex h-full min-h-0 flex-1 flex-col" style={{ minHeight: 0 }}>
       {/* Slim chat header — coach identity, not a giant page hero */}
       <header className="flex items-center gap-3 border-b border-border bg-card/80 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-card/60 md:px-6">
         <img
