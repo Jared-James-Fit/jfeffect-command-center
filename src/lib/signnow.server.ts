@@ -136,6 +136,12 @@ export interface SignNowInviteOptions {
   subject?: string;
   message?: string;
   expirationDays?: number;
+  /**
+   * SignNow rejects personalized invite subject/message (error 65582) on
+   * standard plans. Default off — only set true when the account plan is
+   * known to support personalized invites.
+   */
+  allowPersonalizedEmail?: boolean;
 }
 
 export interface SignNowInviteResult {
@@ -148,6 +154,7 @@ export interface SignNowInviteResult {
  * Returns the invite id and a best-effort signing link.
  */
 export async function createSignNowInvite(opts: SignNowInviteOptions): Promise<SignNowInviteResult> {
+  const personalize = opts.allowPersonalizedEmail === true;
   const body = {
     document_id: opts.documentId,
     to: [
@@ -157,13 +164,13 @@ export async function createSignNowInvite(opts: SignNowInviteOptions): Promise<S
         role: "Recipient 1",
         order: 1,
         ...(opts.expirationDays ? { expiration_days: opts.expirationDays } : {}),
-        ...(opts.subject ? { subject: opts.subject } : {}),
-        ...(opts.message ? { message: opts.message } : {}),
+        ...(personalize && opts.subject ? { subject: opts.subject } : {}),
+        ...(personalize && opts.message ? { message: opts.message } : {}),
       },
     ],
     from: opts.fromEmail,
-    ...(opts.subject ? { subject: opts.subject } : {}),
-    ...(opts.message ? { message: opts.message } : {}),
+    ...(personalize && opts.subject ? { subject: opts.subject } : {}),
+    ...(personalize && opts.message ? { message: opts.message } : {}),
   };
   const res = await signnowFetch(`/document/${encodeURIComponent(opts.documentId)}/invite`, {
     method: "POST",
