@@ -7,6 +7,8 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ClipboardCheck, CheckCircle2, ShieldAlert, MessageCircle, Video, Mail, CheckCheck, CreditCard, AlertTriangle, Receipt } from "lucide-react";
 import { toast } from "sonner";
+import { PowerlifterBadge } from "@/components/powerlifter-badge";
+import { ExternalLink } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/portal/")({ component: PortalHome });
 
@@ -154,7 +156,14 @@ function PortalHome() {
   return (
     <>
       <PageHeader
-        title={`Welcome${firstName ? `, ${firstName}` : ""}`}
+        title={
+          <>
+            <span>{`Welcome${firstName ? `, ${firstName}` : ""}`}</span>
+            {client?.is_powerlifter && client?.powerlifting_visible_to_client && (
+              <PowerlifterBadge label={client.powerlifter_badge_label} size="sm" />
+            )}
+          </>
+        }
         subtitle="Your private coaching dashboard."
       />
       <div className="space-y-6 p-6 md:p-8">
