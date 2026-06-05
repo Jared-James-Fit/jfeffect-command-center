@@ -195,6 +195,14 @@ html[data-keyboard-open="true"] [data-mobile-bottom-nav] {
   display: none !important;
 }
 
+/* Clearance under sticky composers so they sit above the mobile bottom nav,
+   and collapse to 0 when the keyboard is open (nav is hidden). */
+:root { --bottom-nav-clearance: 0px; }
+@media (max-width: 768px) {
+  :root { --bottom-nav-clearance: 92px; }
+}
+html[data-keyboard-open="true"] { --bottom-nav-clearance: 0px; }
+
 /* Prevent iOS auto-zoom on focus: ensure inputs are at least 16px */
 @media (max-width: 768px) {
   input, textarea, select {
