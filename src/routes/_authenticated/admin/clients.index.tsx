@@ -512,7 +512,6 @@ function NewClientDialog({ onClose, onCreated }: { onClose: () => void; onCreate
         </DialogFooter>
       </form>
     </DialogContent>
-    </>
   );
 }
 
@@ -538,6 +537,4 @@ function activityCell(lastActiveAt: string | null | undefined, lastSignedInAt: s
     return <Badge variant="outline" className="border-amber-500/40 bg-amber-500/10 text-amber-400 text-[10px]">Inactive {days}d</Badge>;
   }
   return <Badge variant="outline" className="border-rose-500/40 bg-rose-500/10 text-rose-400 text-[10px]">Inactive {days}d</Badge>;
-}
-  );
 }
