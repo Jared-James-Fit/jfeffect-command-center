@@ -14,7 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { sendTestEmail } from "@/lib/email-sender.functions";
-import { setupDriveRoot } from "@/lib/drive.functions";
+import { setupDriveRoot, testDriveConnection } from "@/lib/drive.functions";
 import { updateSignNowSettings, testSignNowConnection } from "@/lib/agreements.functions";
 import { Mail, Send, FolderOpen, ExternalLink, ShieldCheck } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
