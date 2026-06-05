@@ -202,6 +202,7 @@ export const initMediaUpload = createServerFn({ method: "POST" })
     }).parse(d),
   )
   .handler(async ({ data, context }) => {
+    const { driveInitResumableUpload } = await getDriveHelpers();
     // Hard-block uploads if Drive isn't Ready so clients never hit a broken pipeline.
     const s = await loadSettings(context.supabase);
     if (!s?.root_folder_id || s?.status !== "Ready") {
@@ -232,6 +233,8 @@ export const finalizeMediaUpload = createServerFn({ method: "POST" })
     driveFolderId?: string | null; fileName?: string | null; mimeType?: string | null; sizeBytes?: number | null;
   }) => d)
   .handler(async ({ data, context }) => {
+    const supabaseAdmin = await getAdminClient();
+    const { driveGetFile, driveShareAnyoneReader, driveEmbedUrl, driveViewUrl } = await getDriveHelpers();
     let meta: any = null;
     try {
       meta = await driveGetFile(data.driveFileId);
@@ -275,6 +278,7 @@ export const createSubmission = createServerFn({ method: "POST" })
     urgent?: boolean; painNote?: string | null; clipCount: number; role: "admin" | "client";
   }) => d)
   .handler(async ({ data, context }) => {
+    const supabaseAdmin = await getAdminClient();
     const isAdmin = await context.supabase
       .from("user_roles" as any)
       .select("role")
