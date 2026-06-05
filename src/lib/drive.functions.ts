@@ -17,9 +17,12 @@ const MEDIA_TYPE_SUBFOLDERS = [
   "Training Videos",
   "Form Videos",
   "Technique Videos",
+  "Agreements",
   "Documents",
   "Other Media",
 ] as const;
+
+const DEFAULT_ROOT_FOLDER_NAME = "JF Effect Client Files";
 
 async function loadSettings(supabase: any) {
   const { data } = await supabase.from("media_drive_settings" as any).select("*").limit(1).maybeSingle();
@@ -40,13 +43,52 @@ export const getDriveSettings = createServerFn({ method: "GET" })
     return (await loadSettings(context.supabase)) ?? null;
   });
 
+// Lightweight readiness check usable by any authenticated user (incl. clients)
+// to decide whether to enable upload buttons. Returns only a boolean — no
+// folder IDs or admin-only details leak.
+export const getDriveReady = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const s = await loadSettings(context.supabase);
+    const ready = !!s?.root_folder_id && s?.status === "Ready";
+    return { ready, status: (s?.status as string | undefined) ?? "Not Connected" };
+  });
+
+// Probe the configured root folder to confirm Drive access still works.
+// Updates status to "Ready" or "Error" accordingly.
+export const testDriveConnection = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await requireAdmin(context.supabase, context.userId);
+    const s = await loadSettings(context.supabase);
+    if (!s?.root_folder_id) {
+      return { ok: false, status: "Root Folder Missing", message: "No root folder configured." };
+    }
+    try {
+      const meta = await driveGetFile(s.root_folder_id);
+      await (context.supabase.from("media_drive_settings" as any) as any).update({
+        status: "Ready",
+        last_test_at: new Date().toISOString(),
+        last_test_result: `OK — ${meta.name}`,
+      }).eq("id", s.id);
+      return { ok: true, status: "Ready", message: `Connected to ${meta.name}` };
+    } catch (err: any) {
+      await (context.supabase.from("media_drive_settings" as any) as any).update({
+        status: "Error",
+        last_test_at: new Date().toISOString(),
+        last_test_result: (err?.message ?? "Drive test failed").slice(0, 500),
+      }).eq("id", s.id);
+      return { ok: false, status: "Error", message: err?.message ?? "Drive test failed" };
+    }
+  });
+
 export const setupDriveRoot = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { folderName?: string; existingFolderId?: string }) => d)
   .handler(async ({ data, context }) => {
     await requireAdmin(context.supabase, context.userId);
     let folderId = data.existingFolderId?.trim() || "";
-    let folderName = data.folderName?.trim() || "JF Effect Coaching Media";
+    let folderName = data.folderName?.trim() || DEFAULT_ROOT_FOLDER_NAME;
     let folderUrl = "";
     if (!folderId) {
       const created = await driveCreateFolder(folderName);
@@ -64,14 +106,14 @@ export const setupDriveRoot = createServerFn({ method: "POST" })
         root_folder_id: folderId,
         root_folder_url: folderUrl,
         root_folder_name: folderName,
-        status: "Connected",
+        status: "Ready",
         last_test_at: new Date().toISOString(),
         last_test_result: "OK",
       }).eq("id", existing.id);
     } else {
       await (context.supabase.from("media_drive_settings" as any) as any).insert({
         root_folder_id: folderId, root_folder_url: folderUrl, root_folder_name: folderName,
-        status: "Connected", last_test_at: new Date().toISOString(), last_test_result: "OK",
+        status: "Ready", last_test_at: new Date().toISOString(), last_test_result: "OK",
       });
     }
     return { folderId, folderUrl, folderName };
@@ -137,21 +179,34 @@ export const provisionClientFolder = createServerFn({ method: "POST" })
 
 export const initMediaUpload = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { clientId: string; mediaType: string; fileName: string; mimeType: string; sizeBytes: number }) =>
+  .inputValidator((d: { clientId: string; mediaType: string; fileName: string; mimeType: string; sizeBytes: number; displayName?: string }) =>
     z.object({
       clientId: z.string().uuid(),
       mediaType: z.string().min(1),
       fileName: z.string().min(1).max(500),
       mimeType: z.string().min(1).max(200),
       sizeBytes: z.number().int().min(1).max(5 * 1024 * 1024 * 1024),
+      displayName: z.string().min(1).max(500).optional(),
     }).parse(d),
   )
   .handler(async ({ data, context }) => {
+    // Hard-block uploads if Drive isn't Ready so clients never hit a broken pipeline.
+    const s = await loadSettings(context.supabase);
+    if (!s?.root_folder_id || s?.status !== "Ready") {
+      throw new Error("Google Drive root folder is not set up. Open Settings → Google Drive and create it.");
+    }
     const cf = await ensureClientFolder(context.supabase, data.clientId);
     const parentId = (cf.subfolders as any)?.[data.mediaType] ?? (cf.subfolders as any)?.["Other Media"] ?? cf.folder_id;
     if (!parentId) throw new Error("Could not locate a target Drive folder for this media type.");
+    // Prefer the caller-supplied display name (already formatted with client name
+    // + date + time) so files in Drive match the spec; keep the file extension
+    // from the original upload so previews/thumbnails work.
+    const ext = data.fileName.includes(".") ? data.fileName.slice(data.fileName.lastIndexOf(".")) : "";
+    const finalName = data.displayName
+      ? (data.displayName.endsWith(ext) ? data.displayName : `${data.displayName}${ext}`)
+      : data.fileName;
     const { uploadUrl } = await driveInitResumableUpload({
-      fileName: data.fileName, mimeType: data.mimeType, sizeBytes: data.sizeBytes, parentId,
+      fileName: finalName, mimeType: data.mimeType, sizeBytes: data.sizeBytes, parentId,
     });
     return { uploadUrl, driveFolderId: parentId };
   });
