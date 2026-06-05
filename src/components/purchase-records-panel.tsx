@@ -16,7 +16,11 @@ export function PurchaseRecordsPanel({ clientId }: { clientId: string }) {
 
   const { data: records = [] } = useQuery({
     queryKey: ["client-purchases", clientId],
-    queryFn: async () => (await supabase.from("purchase_records").select("*").eq("client_id", clientId).order("purchased_at", { ascending: false })).data ?? [],
+    queryFn: async () => (await supabase
+      .from("purchase_records")
+      .select("*, offers:offer_id(requires_agreement, agreement_before_service, default_agreement_template_id)")
+      .eq("client_id", clientId)
+      .order("purchased_at", { ascending: false })).data ?? [],
   });
 
   const { data: offers = [] } = useQuery({
@@ -50,8 +54,8 @@ export function PurchaseRecordsPanel({ clientId }: { clientId: string }) {
                     <PurchaseAgreementInlineBadge
                       purchaseId={r.id}
                       clientId={clientId}
-                      requiresAgreement={!!r.requires_agreement}
-                      agreementBeforeService={!!r.agreement_before_service}
+                      requiresAgreement={!!r.offers?.requires_agreement}
+                      agreementBeforeService={!!r.offers?.agreement_before_service}
                       termStartDate={r.term_start_date}
                     />
                   </div>
