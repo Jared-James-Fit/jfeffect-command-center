@@ -611,6 +611,8 @@ export const sendAgreementReminder = createServerFn({ method: "POST" })
     await assertAdminOrCoach(supabase, userId);
     const { data: ag } = await supabase.from("agreements")
       .select("signnow_document_id, status").eq("id", data.id).single();
+    void ag;
+    // unchanged below
     let apiSent = false;
     let apiError: string | null = null;
     if (ag?.signnow_document_id && hasSignNowCredentials()) {
