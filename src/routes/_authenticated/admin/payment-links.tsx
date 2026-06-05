@@ -148,7 +148,7 @@ function PaymentLinksPage() {
     <div className="space-y-6">
       <PageHeader
         title="Payment Links"
-        description="Create coaching products. Each one auto-generates a Stripe payment link."
+        subtitle="Create coaching products. Each one auto-generates a Stripe payment link."
       />
 
       <Card className="p-5">
