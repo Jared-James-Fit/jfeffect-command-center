@@ -46,21 +46,14 @@ function ClientLiftVideos() {
     queryFn: () => listLiftVideos({ clientId: client!.id }),
   });
 
-  // Clear bell notifications: mark videos with new coach activity as viewed.
+  // Mark only the clips inside the opened detail dialog as viewed — opening
+  // the list alone should NOT clear unread feedback badges.
   useEffect(() => {
-    if (!videos.length) return;
-    const stale = videos.filter((v) => {
-      const seen = v.client_last_viewed_at ? new Date(v.client_last_viewed_at).getTime() : 0;
-      const latest = Math.max(
-        v.watched_at ? +new Date(v.watched_at) : 0,
-        v.liked_at ? +new Date(v.liked_at) : 0,
-        v.reviewed_at ? +new Date(v.reviewed_at) : 0,
-      );
-      return latest > seen;
-    });
-    if (!stale.length) return;
-    Promise.all(stale.map((v) => markClientViewed(v.id))).catch(() => {});
-  }, [videos]);
+    if (!detailKey) return;
+    const group = groupsRef.current.find((g) => g.key === detailKey);
+    if (!group) return;
+    Promise.all(group.clips.map((v) => markClientViewed(v.id))).catch(() => {});
+  }, [detailKey]);
 
   useEffect(() => {
     if (!client?.id) return;
@@ -96,6 +89,11 @@ function ClientLiftVideos() {
       })
       .sort((a, b) => (a.latest.created_at < b.latest.created_at ? 1 : -1));
   }, [videos]);
+
+  // Keep a ref to current groups so the "mark viewed on open" effect can read
+  // them without re-running every time the videos list re-fetches.
+  const groupsRef = useRef(groups);
+  useEffect(() => { groupsRef.current = groups; }, [groups]);
 
   const openGroup = detailKey ? groups.find((g) => g.key === detailKey) : null;
 
