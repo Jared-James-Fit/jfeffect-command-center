@@ -10,6 +10,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { NUTRITION_PHASES, NUTRITION_GOALS, NUTRITION_STRUCTURES, dayLabelsForStructure, TARGET_STATUSES } from "@/lib/nutrition-cardio";
+import { FileText, Upload, X } from "lucide-react";
 
 type Day = {
   id?: string;
@@ -62,6 +63,8 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
         client_notes: "",
         admin_notes: "",
         visible_to_client: true,
+        pdf_url: "",
+        pdf_name: "",
       };
       setForm(f);
       setDays(dayLabelsForStructure(f.structure).map((label, i) => ({ day_label: label, sort_order: i })));
@@ -70,6 +73,22 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
 
   if (!form) return null;
   const set = (k: string, v: any) => setForm({ ...form, [k]: v });
+
+  const uploadPdf = async (file: File) => {
+    if (!form.client_id) return toast.error("Pick a client first");
+    if (file.type !== "application/pdf") return toast.error("PDF files only");
+    if (file.size > 25 * 1024 * 1024) return toast.error("Max 25MB");
+    const path = `${form.client_id}/${Date.now()}-${file.name.replace(/[^a-z0-9.\-_]/gi, "_")}`;
+    const { error } = await supabase.storage.from("nutrition-plans").upload(path, file, { upsert: true, contentType: "application/pdf" });
+    if (error) return toast.error(error.message);
+    setForm({ ...form, pdf_url: path, pdf_name: file.name });
+    toast.success("PDF uploaded");
+  };
+
+  const removePdf = async () => {
+    if (form.pdf_url) await supabase.storage.from("nutrition-plans").remove([form.pdf_url]);
+    setForm({ ...form, pdf_url: "", pdf_name: "" });
+  };
 
   const updateStructure = (v: string) => {
     setForm({ ...form, structure: v });
@@ -102,6 +121,8 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
       client_notes: form.client_notes,
       admin_notes: form.admin_notes,
       visible_to_client: form.visible_to_client,
+      pdf_url: form.pdf_url || null,
+      pdf_name: form.pdf_name || null,
       last_updated_at: new Date().toISOString(),
     };
     let targetId = form.id;
