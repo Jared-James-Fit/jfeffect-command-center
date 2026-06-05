@@ -9,8 +9,9 @@ import { Switch } from "@/components/ui/switch";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
-import { CARDIO_TYPES, CARDIO_INTENSITIES, TARGET_STATUSES } from "@/lib/nutrition-cardio";
+import { CARDIO_TYPES, CARDIO_INTENSITIES, TARGET_STATUSES, estimateCalorieRange, formatCalorieTarget } from "@/lib/nutrition-cardio";
 import { CARDIO_DAY_TYPES } from "@/lib/training-schedule";
+import { Calculator, X } from "lucide-react";
 
 type Props = {
   open: boolean;
@@ -50,6 +51,9 @@ export function CardioTargetDialog({ open, onOpenChange, clientId, clients = [],
       client_notes: "",
       admin_notes: "",
       visible_to_client: true,
+      calorie_target_min: null,
+      calorie_target_max: null,
+      show_calories_to_client: true,
     });
   }, [open, initial, clientId, defaultDayType]);
 
@@ -80,6 +84,9 @@ export function CardioTargetDialog({ open, onOpenChange, clientId, clients = [],
       client_notes: form.client_notes,
       admin_notes: form.admin_notes,
       visible_to_client: form.visible_to_client,
+      calorie_target_min: form.calorie_target_min ? Number(form.calorie_target_min) : null,
+      calorie_target_max: form.calorie_target_max ? Number(form.calorie_target_max) : null,
+      show_calories_to_client: form.show_calories_to_client !== false,
       last_updated_at: new Date().toISOString(),
     };
     const { error } = form.id
@@ -143,6 +150,27 @@ export function CardioTargetDialog({ open, onOpenChange, clientId, clients = [],
           <div><Label>Step target</Label><Input type="number" value={form.step_target ?? ""} onChange={(e) => set("step_target", e.target.value)} /></div>
           <div><Label>Start date</Label><Input type="date" value={form.start_date} onChange={(e) => set("start_date", e.target.value)} /></div>
           <div><Label>End date</Label><Input type="date" value={form.end_date ?? ""} onChange={(e) => set("end_date", e.target.value)} /></div>
+          <div><Label>Calories min</Label><Input type="number" value={form.calorie_target_min ?? ""} onChange={(e) => set("calorie_target_min", e.target.value)} /></div>
+          <div><Label>Calories max</Label><Input type="number" value={form.calorie_target_max ?? ""} onChange={(e) => set("calorie_target_max", e.target.value)} /></div>
+          <div className="md:col-span-2 flex flex-wrap items-center justify-between gap-2 rounded-md border border-dashed border-border bg-secondary/20 px-3 py-2">
+            <span className="text-xs text-muted-foreground">
+              {formatCalorieTarget(form.calorie_target_min ? Number(form.calorie_target_min) : null, form.calorie_target_max ? Number(form.calorie_target_max) : null) ?? "Optional calorie target"}
+            </span>
+            <div className="flex gap-1">
+              <Button type="button" size="sm" variant="outline" onClick={() => {
+                const est = estimateCalorieRange(Number(form.duration_minutes), form.intensity);
+                if (!est) return toast.error("Add duration + intensity first");
+                setForm({ ...form, calorie_target_min: est.min, calorie_target_max: est.max, show_calories_to_client: true });
+              }}><Calculator className="mr-1 h-4 w-4" /> Estimate</Button>
+              {(form.calorie_target_min || form.calorie_target_max) && (
+                <Button type="button" size="sm" variant="ghost" onClick={() => setForm({ ...form, calorie_target_min: null, calorie_target_max: null, show_calories_to_client: false })}><X className="h-4 w-4" /></Button>
+              )}
+            </div>
+          </div>
+          <div className="md:col-span-2 flex items-center justify-between rounded-md border border-border bg-secondary/30 px-3 py-2">
+            <Label className="text-xs">Show calorie target to client</Label>
+            <Switch checked={form.show_calories_to_client !== false} onCheckedChange={(v) => set("show_calories_to_client", v)} />
+          </div>
           <div><Label>Status</Label>
             <Select value={form.status} onValueChange={(v) => set("status", v)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
