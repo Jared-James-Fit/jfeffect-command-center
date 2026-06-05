@@ -23,7 +23,6 @@ import { Route as ApiPublicSignnowWebhookRouteImport } from './routes/api/public
 import { Route as AuthenticatedPortalResourcesRouteImport } from './routes/_authenticated/portal/resources'
 import { Route as AuthenticatedPortalPurchasesRouteImport } from './routes/_authenticated/portal/purchases'
 import { Route as AuthenticatedPortalProgramRouteImport } from './routes/_authenticated/portal/program'
-import { Route as AuthenticatedPortalPaymentsRouteImport } from './routes/_authenticated/portal/payments'
 import { Route as AuthenticatedPortalNutritionTargetsRouteImport } from './routes/_authenticated/portal/nutrition-targets'
 import { Route as AuthenticatedPortalMessagesRouteImport } from './routes/_authenticated/portal/messages'
 import { Route as AuthenticatedPortalMediaRouteImport } from './routes/_authenticated/portal/media'
@@ -40,7 +39,6 @@ import { Route as AuthenticatedAdminSettingsRouteImport } from './routes/_authen
 import { Route as AuthenticatedAdminResourcesRouteImport } from './routes/_authenticated/admin/resources'
 import { Route as AuthenticatedAdminPurchasesRouteImport } from './routes/_authenticated/admin/purchases'
 import { Route as AuthenticatedAdminProgramsRouteImport } from './routes/_authenticated/admin/programs'
-import { Route as AuthenticatedAdminPaymentsRouteImport } from './routes/_authenticated/admin/payments'
 import { Route as AuthenticatedAdminPaymentLinksRouteImport } from './routes/_authenticated/admin/payment-links'
 import { Route as AuthenticatedAdminOffersRouteImport } from './routes/_authenticated/admin/offers'
 import { Route as AuthenticatedAdminNutritionTargetsRouteImport } from './routes/_authenticated/admin/nutrition-targets'
@@ -140,12 +138,6 @@ const AuthenticatedPortalProgramRoute =
     path: '/program',
     getParentRoute: () => AuthenticatedPortalRouteRoute,
   } as any)
-const AuthenticatedPortalPaymentsRoute =
-  AuthenticatedPortalPaymentsRouteImport.update({
-    id: '/payments',
-    path: '/payments',
-    getParentRoute: () => AuthenticatedPortalRouteRoute,
-  } as any)
 const AuthenticatedPortalNutritionTargetsRoute =
   AuthenticatedPortalNutritionTargetsRouteImport.update({
     id: '/nutrition-targets',
@@ -239,12 +231,6 @@ const AuthenticatedAdminProgramsRoute =
   AuthenticatedAdminProgramsRouteImport.update({
     id: '/programs',
     path: '/programs',
-    getParentRoute: () => AuthenticatedAdminRouteRoute,
-  } as any)
-const AuthenticatedAdminPaymentsRoute =
-  AuthenticatedAdminPaymentsRouteImport.update({
-    id: '/payments',
-    path: '/payments',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
 const AuthenticatedAdminPaymentLinksRoute =
@@ -413,7 +399,6 @@ export interface FileRoutesByFullPath {
   '/admin/nutrition-targets': typeof AuthenticatedAdminNutritionTargetsRoute
   '/admin/offers': typeof AuthenticatedAdminOffersRoute
   '/admin/payment-links': typeof AuthenticatedAdminPaymentLinksRoute
-  '/admin/payments': typeof AuthenticatedAdminPaymentsRoute
   '/admin/programs': typeof AuthenticatedAdminProgramsRoute
   '/admin/purchases': typeof AuthenticatedAdminPurchasesRouteWithChildren
   '/admin/resources': typeof AuthenticatedAdminResourcesRoute
@@ -430,7 +415,6 @@ export interface FileRoutesByFullPath {
   '/portal/media': typeof AuthenticatedPortalMediaRoute
   '/portal/messages': typeof AuthenticatedPortalMessagesRoute
   '/portal/nutrition-targets': typeof AuthenticatedPortalNutritionTargetsRoute
-  '/portal/payments': typeof AuthenticatedPortalPaymentsRoute
   '/portal/program': typeof AuthenticatedPortalProgramRoute
   '/portal/purchases': typeof AuthenticatedPortalPurchasesRouteWithChildren
   '/portal/resources': typeof AuthenticatedPortalResourcesRoute
@@ -468,7 +452,6 @@ export interface FileRoutesByTo {
   '/admin/nutrition-targets': typeof AuthenticatedAdminNutritionTargetsRoute
   '/admin/offers': typeof AuthenticatedAdminOffersRoute
   '/admin/payment-links': typeof AuthenticatedAdminPaymentLinksRoute
-  '/admin/payments': typeof AuthenticatedAdminPaymentsRoute
   '/admin/programs': typeof AuthenticatedAdminProgramsRoute
   '/admin/purchases': typeof AuthenticatedAdminPurchasesRouteWithChildren
   '/admin/resources': typeof AuthenticatedAdminResourcesRoute
@@ -485,7 +468,6 @@ export interface FileRoutesByTo {
   '/portal/media': typeof AuthenticatedPortalMediaRoute
   '/portal/messages': typeof AuthenticatedPortalMessagesRoute
   '/portal/nutrition-targets': typeof AuthenticatedPortalNutritionTargetsRoute
-  '/portal/payments': typeof AuthenticatedPortalPaymentsRoute
   '/portal/program': typeof AuthenticatedPortalProgramRoute
   '/portal/purchases': typeof AuthenticatedPortalPurchasesRouteWithChildren
   '/portal/resources': typeof AuthenticatedPortalResourcesRoute
@@ -527,7 +509,6 @@ export interface FileRoutesById {
   '/_authenticated/admin/nutrition-targets': typeof AuthenticatedAdminNutritionTargetsRoute
   '/_authenticated/admin/offers': typeof AuthenticatedAdminOffersRoute
   '/_authenticated/admin/payment-links': typeof AuthenticatedAdminPaymentLinksRoute
-  '/_authenticated/admin/payments': typeof AuthenticatedAdminPaymentsRoute
   '/_authenticated/admin/programs': typeof AuthenticatedAdminProgramsRoute
   '/_authenticated/admin/purchases': typeof AuthenticatedAdminPurchasesRouteWithChildren
   '/_authenticated/admin/resources': typeof AuthenticatedAdminResourcesRoute
@@ -544,7 +525,6 @@ export interface FileRoutesById {
   '/_authenticated/portal/media': typeof AuthenticatedPortalMediaRoute
   '/_authenticated/portal/messages': typeof AuthenticatedPortalMessagesRoute
   '/_authenticated/portal/nutrition-targets': typeof AuthenticatedPortalNutritionTargetsRoute
-  '/_authenticated/portal/payments': typeof AuthenticatedPortalPaymentsRoute
   '/_authenticated/portal/program': typeof AuthenticatedPortalProgramRoute
   '/_authenticated/portal/purchases': typeof AuthenticatedPortalPurchasesRouteWithChildren
   '/_authenticated/portal/resources': typeof AuthenticatedPortalResourcesRoute
@@ -586,7 +566,6 @@ export interface FileRouteTypes {
     | '/admin/nutrition-targets'
     | '/admin/offers'
     | '/admin/payment-links'
-    | '/admin/payments'
     | '/admin/programs'
     | '/admin/purchases'
     | '/admin/resources'
@@ -603,7 +582,6 @@ export interface FileRouteTypes {
     | '/portal/media'
     | '/portal/messages'
     | '/portal/nutrition-targets'
-    | '/portal/payments'
     | '/portal/program'
     | '/portal/purchases'
     | '/portal/resources'
@@ -641,7 +619,6 @@ export interface FileRouteTypes {
     | '/admin/nutrition-targets'
     | '/admin/offers'
     | '/admin/payment-links'
-    | '/admin/payments'
     | '/admin/programs'
     | '/admin/purchases'
     | '/admin/resources'
@@ -658,7 +635,6 @@ export interface FileRouteTypes {
     | '/portal/media'
     | '/portal/messages'
     | '/portal/nutrition-targets'
-    | '/portal/payments'
     | '/portal/program'
     | '/portal/purchases'
     | '/portal/resources'
@@ -699,7 +675,6 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/nutrition-targets'
     | '/_authenticated/admin/offers'
     | '/_authenticated/admin/payment-links'
-    | '/_authenticated/admin/payments'
     | '/_authenticated/admin/programs'
     | '/_authenticated/admin/purchases'
     | '/_authenticated/admin/resources'
@@ -716,7 +691,6 @@ export interface FileRouteTypes {
     | '/_authenticated/portal/media'
     | '/_authenticated/portal/messages'
     | '/_authenticated/portal/nutrition-targets'
-    | '/_authenticated/portal/payments'
     | '/_authenticated/portal/program'
     | '/_authenticated/portal/purchases'
     | '/_authenticated/portal/resources'
@@ -844,13 +818,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedPortalProgramRouteImport
       parentRoute: typeof AuthenticatedPortalRouteRoute
     }
-    '/_authenticated/portal/payments': {
-      id: '/_authenticated/portal/payments'
-      path: '/payments'
-      fullPath: '/portal/payments'
-      preLoaderRoute: typeof AuthenticatedPortalPaymentsRouteImport
-      parentRoute: typeof AuthenticatedPortalRouteRoute
-    }
     '/_authenticated/portal/nutrition-targets': {
       id: '/_authenticated/portal/nutrition-targets'
       path: '/nutrition-targets'
@@ -961,13 +928,6 @@ declare module '@tanstack/react-router' {
       path: '/programs'
       fullPath: '/admin/programs'
       preLoaderRoute: typeof AuthenticatedAdminProgramsRouteImport
-      parentRoute: typeof AuthenticatedAdminRouteRoute
-    }
-    '/_authenticated/admin/payments': {
-      id: '/_authenticated/admin/payments'
-      path: '/payments'
-      fullPath: '/admin/payments'
-      preLoaderRoute: typeof AuthenticatedAdminPaymentsRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
     '/_authenticated/admin/payment-links': {
@@ -1171,7 +1131,6 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminNutritionTargetsRoute: typeof AuthenticatedAdminNutritionTargetsRoute
   AuthenticatedAdminOffersRoute: typeof AuthenticatedAdminOffersRoute
   AuthenticatedAdminPaymentLinksRoute: typeof AuthenticatedAdminPaymentLinksRoute
-  AuthenticatedAdminPaymentsRoute: typeof AuthenticatedAdminPaymentsRoute
   AuthenticatedAdminProgramsRoute: typeof AuthenticatedAdminProgramsRoute
   AuthenticatedAdminPurchasesRoute: typeof AuthenticatedAdminPurchasesRouteWithChildren
   AuthenticatedAdminResourcesRoute: typeof AuthenticatedAdminResourcesRoute
@@ -1207,7 +1166,6 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
       AuthenticatedAdminNutritionTargetsRoute,
     AuthenticatedAdminOffersRoute: AuthenticatedAdminOffersRoute,
     AuthenticatedAdminPaymentLinksRoute: AuthenticatedAdminPaymentLinksRoute,
-    AuthenticatedAdminPaymentsRoute: AuthenticatedAdminPaymentsRoute,
     AuthenticatedAdminProgramsRoute: AuthenticatedAdminProgramsRoute,
     AuthenticatedAdminPurchasesRoute:
       AuthenticatedAdminPurchasesRouteWithChildren,
@@ -1257,7 +1215,6 @@ interface AuthenticatedPortalRouteRouteChildren {
   AuthenticatedPortalMediaRoute: typeof AuthenticatedPortalMediaRoute
   AuthenticatedPortalMessagesRoute: typeof AuthenticatedPortalMessagesRoute
   AuthenticatedPortalNutritionTargetsRoute: typeof AuthenticatedPortalNutritionTargetsRoute
-  AuthenticatedPortalPaymentsRoute: typeof AuthenticatedPortalPaymentsRoute
   AuthenticatedPortalProgramRoute: typeof AuthenticatedPortalProgramRoute
   AuthenticatedPortalPurchasesRoute: typeof AuthenticatedPortalPurchasesRouteWithChildren
   AuthenticatedPortalResourcesRoute: typeof AuthenticatedPortalResourcesRoute
@@ -1277,7 +1234,6 @@ const AuthenticatedPortalRouteRouteChildren: AuthenticatedPortalRouteRouteChildr
     AuthenticatedPortalMessagesRoute: AuthenticatedPortalMessagesRoute,
     AuthenticatedPortalNutritionTargetsRoute:
       AuthenticatedPortalNutritionTargetsRoute,
-    AuthenticatedPortalPaymentsRoute: AuthenticatedPortalPaymentsRoute,
     AuthenticatedPortalProgramRoute: AuthenticatedPortalProgramRoute,
     AuthenticatedPortalPurchasesRoute:
       AuthenticatedPortalPurchasesRouteWithChildren,
