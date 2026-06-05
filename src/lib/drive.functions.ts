@@ -16,12 +16,21 @@ const MEDIA_TYPE_SUBFOLDERS = [
 
 const DEFAULT_ROOT_FOLDER_NAME = "JF Effect Client Files";
 
+async function getAdminClient() {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  return supabaseAdmin as any;
+}
+
+async function getDriveHelpers() {
+  return import("./drive.server");
+}
+
 async function loadSettings(_supabase: any) {
   // Always read Drive settings with the admin client. RLS on
   // media_drive_settings only allows admins, but clients also need to know if
   // uploads are available (so the gate doesn't lie to them and uploads don't
   // throw "not set up" when it actually is).
-  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const supabaseAdmin = await getAdminClient();
   const { data } = await (supabaseAdmin as any).from("media_drive_settings").select("*").limit(1).maybeSingle();
   return data as any;
 }
