@@ -345,16 +345,29 @@ function PaymentLinksPage() {
                     </div>
                   </div>
                   <div className="mt-2 flex flex-wrap gap-1.5">
-                    {p.payment_link_url ? (
-                      <Badge variant="outline" className="text-xs"><CheckCircle2 className="h-3 w-3 mr-1 text-primary" />Stripe Link Connected</Badge>
-                    ) : (
-                      <Badge variant="outline" className="text-xs text-destructive border-destructive/40"><AlertTriangle className="h-3 w-3 mr-1" />Missing Stripe Link</Badge>
-                    )}
-                    {(p as any).stripe_price_id ? (
-                      <Badge variant="outline" className="text-xs border-primary/40 text-primary"><CheckCircle2 className="h-3 w-3 mr-1" />Checkout Ready</Badge>
-                    ) : (
-                      <Badge variant="outline" className="text-xs text-muted-foreground">No Price ID</Badge>
-                    )}
+                    {(() => {
+                      const hasPrice = !!(p as any).stripe_price_id;
+                      const hasLink = !!p.payment_link_url;
+                      if (hasPrice) {
+                        return (
+                          <Badge variant="outline" className="text-xs border-primary/40 text-primary">
+                            <CheckCircle2 className="h-3 w-3 mr-1" />Checkout Ready
+                          </Badge>
+                        );
+                      }
+                      if (hasLink) {
+                        return (
+                          <Badge variant="outline" className="text-xs border-amber-500/40 text-amber-600 dark:text-amber-400">
+                            <AlertTriangle className="h-3 w-3 mr-1" />Legacy Payment Link (no Price ID)
+                          </Badge>
+                        );
+                      }
+                      return (
+                        <Badge variant="outline" className="text-xs text-destructive border-destructive/40">
+                          <AlertTriangle className="h-3 w-3 mr-1" />Missing Stripe Price ID
+                        </Badge>
+                      );
+                    })()}
                     {p.agreement_required && <Badge variant="outline" className="text-xs"><FileSignature className="h-3 w-3 mr-1" />Agreement Required</Badge>}
                   </div>
                   {p.description && <p className="text-sm mt-2 line-clamp-2 text-muted-foreground">{p.description}</p>}
