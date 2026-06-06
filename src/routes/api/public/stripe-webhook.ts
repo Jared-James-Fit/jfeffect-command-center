@@ -177,6 +177,12 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
                   stripe_subscription_id: obj.id,
                   stripe_customer_id: obj.customer ?? null,
                   service_status: obj.status === "active" || obj.status === "trialing" ? "Active" : purchase.service_status,
+                  // Stamp term_end_date immediately so the admin dashboard
+                  // shows the next billing date without waiting for the
+                  // first customer.subscription.updated event.
+                  ...(obj.current_period_end
+                    ? { term_end_date: new Date(obj.current_period_end * 1000).toISOString().split("T")[0] }
+                    : {}),
                   last_payment_update_source: "stripe_webhook",
                   last_payment_update_at: now,
                 }).eq("id", purchase.id);
@@ -193,6 +199,16 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
                 stripe_customer_id: obj.customer,
               });
               if (purchase) {
+                // Cancelled is terminal — refuse to flip back to Active
+                // from a stale .updated arriving after .deleted. The matched
+                // row must also be tied to the SAME subscription id; a new
+                // subscription gets a new purchase_records row.
+                if (
+                  isTerminalCancelled(purchase) &&
+                  purchase.stripe_subscription_id === obj.id
+                ) {
+                  break;
+                }
                 // Map Stripe subscription status to app payment_status
                 const statusMap: Record<string, string> = {
                   active: "Active Subscription",
