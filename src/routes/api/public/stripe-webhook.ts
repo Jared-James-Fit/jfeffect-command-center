@@ -47,7 +47,10 @@ async function findPurchase(supabase: any, lookup: Record<string, string | null 
 /**
  * Resolve the purchase record for a Stripe event.
  * Primary: metadata.purchase_record_id (set by createCheckoutSessionForAssignment).
- * Fallback: legacy lookups (session id, payment link, subscription, customer).
+ * Fallback: lookups by Stripe IDs we ourselves stamped onto the row
+ * (checkout session id, subscription id, payment intent id, customer id).
+ * NOTE: legacy "build a URL from obj.payment_link" fallback was removed —
+ * obj.payment_link is a `plink_…` ID, not a URL slug, so that match never worked.
  */
 async function resolvePurchase(
   supabase: any,
@@ -63,6 +66,20 @@ async function resolvePurchase(
     if (data) return data;
   }
   return findPurchase(supabase, fallback);
+}
+
+/**
+ * Cancelled is a terminal state. Once a purchase_record is Cancelled we
+ * refuse to flip it back to Active/Active Subscription from a stale
+ * `customer.subscription.updated` event (Stripe can deliver events out of
+ * order, and the same subscription id may briefly report `active` after
+ * `deleted` has already been processed).
+ *
+ * The only legitimate way to reactivate a Cancelled record is to assign
+ * a NEW purchase / NEW subscription — which gets a new purchase_records row.
+ */
+function isTerminalCancelled(purchase: any): boolean {
+  return purchase?.payment_status === "Cancelled" || purchase?.service_status === "Cancelled";
 }
 
 /**
