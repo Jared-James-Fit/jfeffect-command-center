@@ -16,7 +16,7 @@ import {
   type ConversationState, type Message,
   setConversationStatus, setConversationPriority, PRIORITIES,
 } from "@/lib/messages";
-import { Search, ChevronLeft, MoreHorizontal, ExternalLink, Filter } from "lucide-react";
+import { Search, ChevronLeft, MoreHorizontal, ExternalLink } from "lucide-react";
 import { formatDistanceToNow, parseISO } from "date-fns";
 import { cn } from "@/lib/utils";
 
