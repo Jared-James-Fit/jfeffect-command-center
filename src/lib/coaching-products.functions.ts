@@ -143,7 +143,7 @@ export const createCoachingProduct = createServerFn({ method: "POST" })
         currency: data.currency.toLowerCase(),
         image_url: data.imagePath ?? null,
         stripe_product_id,
-        stripe_price_id,
+        stripe_price_id: data.stripePriceId ?? stripe_price_id,
         stripe_payment_link_id,
         payment_link_url,
         product_type: data.productType ?? null,
@@ -158,7 +158,6 @@ export const createCoachingProduct = createServerFn({ method: "POST" })
         active: (data.status ?? "Active") === "Active",
         notes: data.notes ?? null,
         mode: data.checkoutMode ?? (data.generateStripeLink ? "auto" : "manual"),
-        stripe_price_id: data.stripePriceId ?? stripe_price_id,
         created_by: userId,
       })
       .select("*")

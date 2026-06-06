@@ -98,7 +98,8 @@ export const createCheckoutSession = createServerFn({ method: "POST" })
           body: formEncode({
             email: client.email,
             name: client.full_name ?? undefined,
-            metadata: { client_id: client.id, user_id: userId },
+            "metadata[client_id]": client.id,
+            "metadata[user_id]": userId,
           }),
         });
         stripeCustomerId = newCustomer.id;
