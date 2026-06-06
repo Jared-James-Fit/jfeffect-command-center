@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { usePortalUserId } from "@/lib/client-impersonation";
 import { useAuth } from "@/lib/auth";
@@ -9,8 +10,9 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Eye, EyeOff, Save, ShieldAlert } from "lucide-react";
+import { Eye, EyeOff, Save, ShieldAlert, CreditCard, Settings } from "lucide-react";
 import { toast } from "sonner";
+import { createCustomerPortalSession } from "@/lib/stripe-checkout.functions";
 import { ProfilePictureCapture } from "@/components/profile-picture-capture";
 import { SocialHandlesEditor } from "@/components/social-handles-editor";
 import { SOCIAL_FIELDS } from "@/lib/social-handles";
@@ -219,7 +221,79 @@ function AccountPage() {
             </div>
           </form>
         </Card>
+
+        {/* ── Billing & Subscription ─────────────────────────────────────── */}
+        <BillingSection clientId={client?.id} />
       </div>
     </>
+  );
+
+}
+
+function BillingSection({ clientId }: { clientId?: string }) {
+  const portalFn = useServerFn(createCustomerPortalSession);
+  const [loading, setLoading] = useState(false);
+
+  const { data: primaryPurchase } = useQuery({
+    queryKey: ["billing-section-purchase", clientId],
+    enabled: !!clientId,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("purchase_records")
+        .select("offer_name, payment_status, payment_structure, payment_frequency, term_end_date, stripe_customer_id, is_recurring")
+        .eq("client_id", clientId!)
+        .not("payment_status", "in", "(\"Cancelled\",\"Expired\",\"Refunded\")")
+        .order("purchased_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      return data;
+    },
+  });
+
+  const openPortal = async () => {
+    setLoading(true);
+    try {
+      const { url } = await portalFn({ data: { origin: window.location.origin } });
+      window.open(url, "_blank", "noopener,noreferrer");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Could not open billing portal");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fmtDate = (d: any) => d ? new Date(d).toLocaleDateString() : "—";
+
+  return (
+    <Card className="border-border bg-card p-6 space-y-4">
+      <div className="flex items-center gap-2">
+        <CreditCard className="h-4 w-4 text-primary" />
+        <h2 className="text-xs uppercase tracking-widest text-muted-foreground">Billing &amp; Subscription</h2>
+      </div>
+      {primaryPurchase ? (
+        <>
+          <div className="space-y-1 text-sm">
+            <div className="font-semibold">{primaryPurchase.offer_name}</div>
+            <div className="text-muted-foreground">
+              {primaryPurchase.payment_frequency ?? primaryPurchase.payment_structure ?? ""}
+            </div>
+            <div className="flex items-center gap-2 mt-1">
+              <span className="text-[10px] uppercase tracking-wider rounded-full border border-border px-2 py-0.5">{primaryPurchase.payment_status}</span>
+              {primaryPurchase.is_recurring && primaryPurchase.term_end_date && (
+                <span className="text-xs text-muted-foreground">Next billing: {fmtDate(primaryPurchase.term_end_date)}</span>
+              )}
+            </div>
+          </div>
+          {primaryPurchase.stripe_customer_id && (
+            <Button size="sm" variant="outline" onClick={openPortal} disabled={loading} className="gap-2">
+              <Settings className="h-4 w-4" />{loading ? "Opening..." : "Manage Billing"}
+            </Button>
+          )}
+          <p className="text-xs text-muted-foreground/70">Manage Billing opens the Stripe portal where you can update your payment method, view invoices, and manage your subscription.</p>
+        </>
+      ) : (
+        <p className="text-sm text-muted-foreground">No active billing found. Purchase a coaching plan to see billing details here.</p>
+      )}
+    </Card>
   );
 }

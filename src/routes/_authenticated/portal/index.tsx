@@ -1,12 +1,15 @@
+import React from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
 import { usePortalUserId } from "@/lib/client-impersonation";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ClipboardCheck, CheckCircle2, ShieldAlert, MessageCircle, Video, Mail, CheckCheck, CreditCard, AlertTriangle, Receipt, Dumbbell, Apple } from "lucide-react";
+import { ClipboardCheck, CheckCircle2, ShieldAlert, MessageCircle, Video, Mail, CheckCheck, CreditCard, AlertTriangle, Receipt, Dumbbell, Apple, Settings } from "lucide-react";
+import { createCustomerPortalSession } from "@/lib/stripe-checkout.functions";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { derivePhase, displayTitle, toneClasses as phaseToneClasses, type TrainingPhase } from "@/lib/training-phases";
@@ -382,6 +385,19 @@ function PhaseItem({ label, value }: { label: string; value: string }) {
 
 
 function BillingCard({ purchase, cancelled, needsAction }: { purchase: any; cancelled: boolean; needsAction: boolean }) {
+  const portalFn = useServerFn(createCustomerPortalSession);
+  const [portalLoading, setPortalLoading] = React.useState(false);
+  const openPortal = async () => {
+    setPortalLoading(true);
+    try {
+      const { url } = await portalFn({ data: { origin: window.location.origin } });
+      window.open(url, "_blank", "noopener,noreferrer");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Could not open billing portal");
+    } finally {
+      setPortalLoading(false);
+    }
+  };
   if (!purchase) {
     return (
       <Card className="border-border bg-card p-6 space-y-3">
@@ -436,11 +452,16 @@ function BillingCard({ purchase, cancelled, needsAction }: { purchase: any; canc
         </div>
       )}
 
-      <p className="text-xs text-muted-foreground/80">Need to adjust your billing or package? Message Coach Jared.</p>
+      <p className="text-xs text-muted-foreground/80">Need to adjust your billing or package? Use Manage Billing or message Coach Jared.</p>
       <div className="flex flex-wrap gap-2">
         {needsAction && purchase.stripe_payment_link && (
           <Button size="sm" className="bg-gradient-primary uppercase font-bold text-xs" onClick={() => window.open(purchase.stripe_payment_link, "_blank", "noopener,noreferrer")}>
             Complete Payment
+          </Button>
+        )}
+        {purchase.stripe_customer_id && (
+          <Button size="sm" variant="outline" className="text-xs" onClick={openPortal} disabled={portalLoading}>
+            <Settings className="h-3.5 w-3.5 mr-1" />{portalLoading ? "Opening..." : "Manage Billing"}
           </Button>
         )}
         <Link to="/portal/messages" className="flex-1 min-w-[140px]">

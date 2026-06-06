@@ -126,6 +126,8 @@ type FormState = {
   notes: string;
   imageFile: File | null;
   imagePreview: string | null;
+  stripePriceId: string;
+  checkoutMode: "payment" | "subscription" | "auto";
 };
 
 function emptyForm(): FormState {
@@ -136,6 +138,7 @@ function emptyForm(): FormState {
     includedFeaturesText: "", agreementRequired: false, agreementTemplateId: null,
     agreementBeforeService: false, status: "Active", notes: "",
     imageFile: null, imagePreview: null,
+    stripePriceId: "", checkoutMode: "auto",
   };
 }
 
@@ -159,6 +162,8 @@ function productToForm(p: Product): FormState {
     notes: p.notes ?? "",
     imageFile: null,
     imagePreview: p.image_signed_url ?? null,
+    stripePriceId: (p as any).stripe_price_id ?? "",
+    checkoutMode: ((p as any).mode === "subscription" || (p as any).mode === "payment" ? (p as any).mode : "auto") as "payment" | "subscription" | "auto",
   };
 }
 
@@ -345,6 +350,11 @@ function PaymentLinksPage() {
                     ) : (
                       <Badge variant="outline" className="text-xs text-destructive border-destructive/40"><AlertTriangle className="h-3 w-3 mr-1" />Missing Stripe Link</Badge>
                     )}
+                    {(p as any).stripe_price_id ? (
+                      <Badge variant="outline" className="text-xs border-primary/40 text-primary"><CheckCircle2 className="h-3 w-3 mr-1" />Checkout Ready</Badge>
+                    ) : (
+                      <Badge variant="outline" className="text-xs text-muted-foreground">No Price ID</Badge>
+                    )}
                     {p.agreement_required && <Badge variant="outline" className="text-xs"><FileSignature className="h-3 w-3 mr-1" />Agreement Required</Badge>}
                   </div>
                   {p.description && <p className="text-sm mt-2 line-clamp-2 text-muted-foreground">{p.description}</p>}
@@ -459,6 +469,8 @@ function ProductFormDialog({
         status: form.status,
         notes: form.notes.trim() || null,
         pastedPaymentLinkUrl: form.paymentLinkUrl.trim() || null,
+        stripePriceId: form.stripePriceId.trim() || null,
+        checkoutMode: form.checkoutMode,
       };
 
       if (product) {
@@ -590,6 +602,35 @@ function ProductFormDialog({
             {!linkConnected && (
               <p className="text-xs text-muted-foreground">You can save without a link — paste it later. Stripe collects the money; this app organizes it.</p>
             )}
+          </div>
+
+          {/* ── Stripe Checkout Session fields ─────────────────────────── */}
+          <div className="md:col-span-2 rounded-md border border-border bg-secondary/20 p-3 space-y-3">
+            <div className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Stripe Checkout Session</div>
+            <div className="grid md:grid-cols-2 gap-3">
+              <div>
+                <Label>Stripe Price ID</Label>
+                <Input
+                  value={form.stripePriceId}
+                  onChange={(e) => set("stripePriceId", e.target.value)}
+                  placeholder="price_1ABC..."
+                  className="font-mono text-xs"
+                />
+                <p className="text-xs text-muted-foreground mt-1">From Stripe Dashboard → Products → Prices. Required for in-app checkout.</p>
+              </div>
+              <div>
+                <Label>Checkout Mode</Label>
+                <Select value={form.checkoutMode} onValueChange={(v) => set("checkoutMode", v as any)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="auto">Auto (infer from payment structure)</SelectItem>
+                    <SelectItem value="payment">One-time payment</SelectItem>
+                    <SelectItem value="subscription">Subscription</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground mt-1">Controls whether Stripe Checkout creates a subscription or a one-time charge.</p>
+              </div>
+            </div>
           </div>
 
           <div className="md:col-span-2">

@@ -44,6 +44,19 @@ async function findPurchase(supabase: any, lookup: Record<string, string | null 
   return null;
 }
 
+/**
+ * Sync stripe_customer_id onto the clients row so the Customer Portal
+ * can be opened without scanning purchase_records every time.
+ */
+async function syncClientStripeCustomerId(supabase: any, stripeCustomerId: string | null, clientId: string | null) {
+  if (!stripeCustomerId || !clientId) return;
+  await supabase
+    .from("clients")
+    .update({ stripe_customer_id: stripeCustomerId })
+    .eq("id", clientId)
+    .is("stripe_customer_id", null); // only update if not already set
+}
+
 export const Route = createFileRoute("/api/public/stripe-webhook")({
   server: {
     handlers: {
@@ -66,6 +79,8 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
 
         try {
           switch (event.type) {
+
+            // ── One-time & subscription checkout completion ─────────────────
             case "checkout.session.completed": {
               const purchase = await findPurchase(supabase, {
                 stripe_checkout_session_id: obj.id,
@@ -83,34 +98,91 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
                   last_payment_update_source: "stripe_webhook",
                   last_payment_update_at: now,
                 }).eq("id", purchase.id);
+
+                // Sync stripe_customer_id to clients table for portal access
+                await syncClientStripeCustomerId(supabase, obj.customer ?? null, purchase.client_id ?? null);
               }
               break;
             }
-            case "payment_intent.succeeded": {
-              const purchase = await findPurchase(supabase, { stripe_payment_intent_id: obj.id });
+
+            // ── Subscription created (new subscriber) ───────────────────────
+            case "customer.subscription.created": {
+              const purchase = await findPurchase(supabase, {
+                stripe_subscription_id: obj.id,
+                stripe_customer_id: obj.customer,
+              });
               if (purchase) {
                 await supabase.from("purchase_records").update({
-                  payment_status: "Paid",
-                  paid_at: now,
-                  amount_paid: obj.amount_received ? obj.amount_received / 100 : purchase.amount_paid,
-                  stripe_receipt_url: obj.charges?.data?.[0]?.receipt_url ?? purchase.stripe_receipt_url,
+                  payment_status: obj.status === "active" ? "Active Subscription"
+                    : obj.status === "trialing" ? "Active Subscription"
+                    : "Pending Payment",
+                  stripe_subscription_id: obj.id,
+                  stripe_customer_id: obj.customer ?? null,
+                  service_status: obj.status === "active" || obj.status === "trialing" ? "Active" : purchase.service_status,
+                  last_payment_update_source: "stripe_webhook",
+                  last_payment_update_at: now,
+                }).eq("id", purchase.id);
+
+                await syncClientStripeCustomerId(supabase, obj.customer ?? null, purchase.client_id ?? null);
+              }
+              break;
+            }
+
+            // ── Subscription updated (renewal, cancellation, past_due) ──────
+            case "customer.subscription.updated": {
+              const purchase = await findPurchase(supabase, {
+                stripe_subscription_id: obj.id,
+                stripe_customer_id: obj.customer,
+              });
+              if (purchase) {
+                // Map Stripe subscription status to app payment_status
+                const statusMap: Record<string, string> = {
+                  active: "Active Subscription",
+                  trialing: "Active Subscription",
+                  past_due: "Overdue",
+                  unpaid: "Overdue",
+                  canceled: "Cancelled",
+                  incomplete: "Pending Payment",
+                  incomplete_expired: "Failed",
+                  paused: "Paused",
+                };
+                const newPaymentStatus = statusMap[obj.status] ?? purchase.payment_status;
+                const newServiceStatus =
+                  obj.status === "active" || obj.status === "trialing" ? "Active"
+                  : obj.status === "canceled" ? "Cancelled"
+                  : purchase.service_status;
+
+                await supabase.from("purchase_records").update({
+                  payment_status: newPaymentStatus,
+                  service_status: newServiceStatus,
+                  // Update term_end_date from current_period_end if available
+                  ...(obj.current_period_end
+                    ? { term_end_date: new Date(obj.current_period_end * 1000).toISOString().split("T")[0] }
+                    : {}),
+                  last_payment_update_source: "stripe_webhook",
+                  last_payment_update_at: now,
+                }).eq("id", purchase.id);
+
+                await syncClientStripeCustomerId(supabase, obj.customer ?? null, purchase.client_id ?? null);
+              }
+              break;
+            }
+
+            // ── Subscription deleted (hard cancel) ──────────────────────────
+            case "customer.subscription.deleted": {
+              const purchase = await findPurchase(supabase, { stripe_subscription_id: obj.id });
+              if (purchase) {
+                await supabase.from("purchase_records").update({
+                  payment_status: "Cancelled",
+                  service_status: "Cancelled",
                   last_payment_update_source: "stripe_webhook",
                   last_payment_update_at: now,
                 }).eq("id", purchase.id);
               }
               break;
             }
-            case "payment_intent.payment_failed": {
-              const purchase = await findPurchase(supabase, { stripe_payment_intent_id: obj.id });
-              if (purchase) {
-                await supabase.from("purchase_records").update({
-                  payment_status: "Failed",
-                  last_payment_update_source: "stripe_webhook",
-                  last_payment_update_at: now,
-                }).eq("id", purchase.id);
-              }
-              break;
-            }
+
+            // ── Invoice paid (subscription renewal) ─────────────────────────
             case "invoice.payment_succeeded": {
               const purchase = await findPurchase(supabase, {
                 stripe_subscription_id: obj.subscription,
@@ -127,6 +199,8 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
               }
               break;
             }
+
+            // ── Invoice failed (payment issue) ──────────────────────────────
             case "invoice.payment_failed": {
               const purchase = await findPurchase(supabase, {
                 stripe_subscription_id: obj.subscription,
@@ -141,18 +215,37 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
               }
               break;
             }
-            case "customer.subscription.deleted": {
-              const purchase = await findPurchase(supabase, { stripe_subscription_id: obj.id });
+
+            // ── One-time payment intent succeeded ───────────────────────────
+            case "payment_intent.succeeded": {
+              const purchase = await findPurchase(supabase, { stripe_payment_intent_id: obj.id });
               if (purchase) {
                 await supabase.from("purchase_records").update({
-                  payment_status: "Cancelled",
-                  service_status: "Cancelled",
+                  payment_status: "Paid",
+                  paid_at: now,
+                  amount_paid: obj.amount_received ? obj.amount_received / 100 : purchase.amount_paid,
+                  stripe_receipt_url: obj.charges?.data?.[0]?.receipt_url ?? purchase.stripe_receipt_url,
                   last_payment_update_source: "stripe_webhook",
                   last_payment_update_at: now,
                 }).eq("id", purchase.id);
               }
               break;
             }
+
+            // ── Payment intent failed ────────────────────────────────────────
+            case "payment_intent.payment_failed": {
+              const purchase = await findPurchase(supabase, { stripe_payment_intent_id: obj.id });
+              if (purchase) {
+                await supabase.from("purchase_records").update({
+                  payment_status: "Failed",
+                  last_payment_update_source: "stripe_webhook",
+                  last_payment_update_at: now,
+                }).eq("id", purchase.id);
+              }
+              break;
+            }
+
+            // ── Refund ───────────────────────────────────────────────────────
             case "charge.refunded": {
               const purchase = await findPurchase(supabase, { stripe_payment_intent_id: obj.payment_intent });
               if (purchase) {
@@ -164,6 +257,7 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
               }
               break;
             }
+
             default:
               break;
           }

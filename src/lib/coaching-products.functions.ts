@@ -87,6 +87,9 @@ const createSchema = z.object({
   notes: z.string().trim().max(4000).optional().nullable(),
   pastedPaymentLinkUrl: z.string().url().max(2000).optional().nullable(),
   generateStripeLink: z.boolean().optional().default(false),
+  // Stripe Checkout Session fields
+  stripePriceId: z.string().trim().max(100).optional().nullable(),
+  checkoutMode: z.enum(["payment", "subscription", "auto"]).optional().default("auto"),
 });
 
 export const createCoachingProduct = createServerFn({ method: "POST" })
@@ -154,7 +157,8 @@ export const createCoachingProduct = createServerFn({ method: "POST" })
         status: data.status ?? "Active",
         active: (data.status ?? "Active") === "Active",
         notes: data.notes ?? null,
-        mode: data.generateStripeLink ? "auto" : "manual",
+        mode: data.checkoutMode ?? (data.generateStripeLink ? "auto" : "manual"),
+        stripe_price_id: data.stripePriceId ?? stripe_price_id,
         created_by: userId,
       })
       .select("*")
@@ -193,6 +197,8 @@ export const updateCoachingProduct = createServerFn({ method: "POST" })
     }
     if (data.notes !== undefined) patch.notes = data.notes ?? null;
     if (data.pastedPaymentLinkUrl !== undefined) patch.payment_link_url = data.pastedPaymentLinkUrl ?? null;
+    if (data.stripePriceId !== undefined) patch.stripe_price_id = data.stripePriceId ?? null;
+    if (data.checkoutMode !== undefined) patch.mode = data.checkoutMode;
     const { error } = await supabase.from("coaching_products").update(patch).eq("id", data.id);
     if (error) throw new Error(error.message);
     return { ok: true };
