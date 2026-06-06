@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { snapshotOfferForPurchase } from "@/lib/offers";
 import { useServerFn } from "@tanstack/react-start";
 import { createAgreement } from "@/lib/agreements.functions";
+import { createCheckoutSessionForAssignment } from "@/lib/stripe-checkout.functions";
 
 export function AssignOfferDialog({ offer, onClose, fixedClientId }: { offer: any | null; onClose: () => void; fixedClientId?: string }) {
   const qc = useQueryClient();
@@ -24,6 +25,8 @@ export function AssignOfferDialog({ offer, onClose, fixedClientId }: { offer: an
   const [agreementTemplateId, setAgreementTemplateId] = useState<string | null>(offerDefaultTemplateId);
   const [createAgreementOnAssign, setCreateAgreementOnAssign] = useState<boolean>(!!offerDefaultTemplateId);
   const createAgreementFn = useServerFn(createAgreement);
+  const createCheckoutFn = useServerFn(createCheckoutSessionForAssignment);
+  const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
 
   const { data: templates = [] } = useQuery({
     queryKey: ["agreement-templates-active-for-assign"],
@@ -65,9 +68,28 @@ export function AssignOfferDialog({ offer, onClose, fixedClientId }: { offer: an
     };
     const { data: purchase, error } = await supabase
       .from("purchase_records").insert(payload as any).select("id").single();
-    setBusy(false);
-    if (error) return toast.error(error.message);
+    if (error) { setBusy(false); return toast.error(error.message); }
     toast.success("Purchase record created");
+
+    // Generate a client-specific Stripe Checkout Session (unless admin marked paid).
+    // Falls back silently to the legacy payment_link_url snapshot if no Stripe Price ID.
+    let generatedUrl: string | null = null;
+    if (!recordPaid && purchase?.id && offer?.stripe_price_id) {
+      try {
+        const res = await createCheckoutFn({
+          data: { purchaseRecordId: purchase.id, origin: window.location.origin },
+        });
+        generatedUrl = res.url;
+        setCheckoutUrl(res.url);
+        try { await navigator.clipboard.writeText(res.url); } catch {}
+        toast.success("Checkout link generated & copied to clipboard");
+      } catch (e: any) {
+        toast.error(`Couldn't generate checkout link: ${e?.message ?? "unknown error"}`);
+      }
+    } else if (!recordPaid && !offer?.stripe_price_id && offer?.stripe_payment_link) {
+      toast.message("Using legacy payment link (no Stripe Price ID on this offer).");
+    }
+    setBusy(false);
 
     if (createAgreementOnAssign && agreementTemplateId && purchase?.id) {
       try {
@@ -89,10 +111,12 @@ export function AssignOfferDialog({ offer, onClose, fixedClientId }: { offer: an
 
     qc.invalidateQueries({ queryKey: ["purchase-records"] });
     qc.invalidateQueries({ queryKey: ["client-purchases", clientId] });
-    onClose();
-    setClientId(fixedClientId ?? "");
-    setAdminNotes("");
-    setRecordPaid(false);
+    if (!generatedUrl) {
+      onClose();
+      setClientId(fixedClientId ?? "");
+      setAdminNotes("");
+      setRecordPaid(false);
+    }
   };
 
   return (
@@ -101,6 +125,19 @@ export function AssignOfferDialog({ offer, onClose, fixedClientId }: { offer: an
         <DialogHeader><DialogTitle>Assign offer to client</DialogTitle></DialogHeader>
         {offer && (
           <div className="space-y-4">
+            {checkoutUrl && (
+              <div className="rounded-md border border-primary/40 bg-primary/5 p-3 text-sm space-y-2">
+                <div className="font-semibold flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-primary" /> Stripe checkout link ready
+                </div>
+                <div className="break-all rounded bg-background px-2 py-1 font-mono text-xs">{checkoutUrl}</div>
+                <div className="flex gap-2">
+                  <Button size="sm" variant="outline" onClick={async () => { try { await navigator.clipboard.writeText(checkoutUrl); toast.success("Copied"); } catch {} }}>Copy link</Button>
+                  <Button size="sm" variant="outline" onClick={() => window.open(checkoutUrl, "_blank")}>Open</Button>
+                </div>
+                <p className="text-xs text-muted-foreground">Send this link to the client. The webhook will mark this exact purchase as paid when they complete checkout.</p>
+              </div>
+            )}
             <div className="rounded-md border border-border bg-secondary/30 p-3">
               <div className="font-bold">{offer.name}</div>
               <div className="text-xs text-muted-foreground">{offer.offer_type} · v{offer.version ?? 1} · {offer.currency ?? "USD"} {Number(offer.full_payable_amount ?? offer.price ?? 0).toLocaleString()}</div>
