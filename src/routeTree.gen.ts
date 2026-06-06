@@ -20,6 +20,7 @@ import { Route as AuthenticatedAdminRouteRouteImport } from './routes/_authentic
 import { Route as AuthenticatedPortalIndexRouteImport } from './routes/_authenticated/portal/index'
 import { Route as AuthenticatedAdminIndexRouteImport } from './routes/_authenticated/admin/index'
 import { Route as ApiPublicStripeWebhookRouteImport } from './routes/api/public/stripe-webhook'
+import { Route as ApiPublicStripeModeCheckRouteImport } from './routes/api/public/stripe-mode-check'
 import { Route as ApiPublicSignnowWebhookRouteImport } from './routes/api/public/signnow-webhook'
 import { Route as AuthenticatedPortalResourcesRouteImport } from './routes/_authenticated/portal/resources'
 import { Route as AuthenticatedPortalPurchasesRouteImport } from './routes/_authenticated/portal/purchases'
@@ -123,6 +124,12 @@ const ApiPublicStripeWebhookRoute = ApiPublicStripeWebhookRouteImport.update({
   path: '/api/public/stripe-webhook',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicStripeModeCheckRoute =
+  ApiPublicStripeModeCheckRouteImport.update({
+    id: '/api/public/stripe-mode-check',
+    path: '/api/public/stripe-mode-check',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicSignnowWebhookRoute = ApiPublicSignnowWebhookRouteImport.update({
   id: '/api/public/signnow-webhook',
   path: '/api/public/signnow-webhook',
@@ -441,6 +448,7 @@ export interface FileRoutesByFullPath {
   '/portal/purchases': typeof AuthenticatedPortalPurchasesRouteWithChildren
   '/portal/resources': typeof AuthenticatedPortalResourcesRoute
   '/api/public/signnow-webhook': typeof ApiPublicSignnowWebhookRoute
+  '/api/public/stripe-mode-check': typeof ApiPublicStripeModeCheckRoute
   '/api/public/stripe-webhook': typeof ApiPublicStripeWebhookRoute
   '/admin/': typeof AuthenticatedAdminIndexRoute
   '/portal/': typeof AuthenticatedPortalIndexRoute
@@ -497,6 +505,7 @@ export interface FileRoutesByTo {
   '/portal/purchases': typeof AuthenticatedPortalPurchasesRouteWithChildren
   '/portal/resources': typeof AuthenticatedPortalResourcesRoute
   '/api/public/signnow-webhook': typeof ApiPublicSignnowWebhookRoute
+  '/api/public/stripe-mode-check': typeof ApiPublicStripeModeCheckRoute
   '/api/public/stripe-webhook': typeof ApiPublicStripeWebhookRoute
   '/admin': typeof AuthenticatedAdminIndexRoute
   '/portal': typeof AuthenticatedPortalIndexRoute
@@ -557,6 +566,7 @@ export interface FileRoutesById {
   '/_authenticated/portal/purchases': typeof AuthenticatedPortalPurchasesRouteWithChildren
   '/_authenticated/portal/resources': typeof AuthenticatedPortalResourcesRoute
   '/api/public/signnow-webhook': typeof ApiPublicSignnowWebhookRoute
+  '/api/public/stripe-mode-check': typeof ApiPublicStripeModeCheckRoute
   '/api/public/stripe-webhook': typeof ApiPublicStripeWebhookRoute
   '/_authenticated/admin/': typeof AuthenticatedAdminIndexRoute
   '/_authenticated/portal/': typeof AuthenticatedPortalIndexRoute
@@ -617,6 +627,7 @@ export interface FileRouteTypes {
     | '/portal/purchases'
     | '/portal/resources'
     | '/api/public/signnow-webhook'
+    | '/api/public/stripe-mode-check'
     | '/api/public/stripe-webhook'
     | '/admin/'
     | '/portal/'
@@ -673,6 +684,7 @@ export interface FileRouteTypes {
     | '/portal/purchases'
     | '/portal/resources'
     | '/api/public/signnow-webhook'
+    | '/api/public/stripe-mode-check'
     | '/api/public/stripe-webhook'
     | '/admin'
     | '/portal'
@@ -732,6 +744,7 @@ export interface FileRouteTypes {
     | '/_authenticated/portal/purchases'
     | '/_authenticated/portal/resources'
     | '/api/public/signnow-webhook'
+    | '/api/public/stripe-mode-check'
     | '/api/public/stripe-webhook'
     | '/_authenticated/admin/'
     | '/_authenticated/portal/'
@@ -754,6 +767,7 @@ export interface RootRouteChildren {
   SetupRoute: typeof SetupRoute
   SitemapRoute: typeof SitemapRoute
   ApiPublicSignnowWebhookRoute: typeof ApiPublicSignnowWebhookRoute
+  ApiPublicStripeModeCheckRoute: typeof ApiPublicStripeModeCheckRoute
   ApiPublicStripeWebhookRoute: typeof ApiPublicStripeWebhookRoute
 }
 
@@ -834,6 +848,13 @@ declare module '@tanstack/react-router' {
       path: '/api/public/stripe-webhook'
       fullPath: '/api/public/stripe-webhook'
       preLoaderRoute: typeof ApiPublicStripeWebhookRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/stripe-mode-check': {
+      id: '/api/public/stripe-mode-check'
+      path: '/api/public/stripe-mode-check'
+      fullPath: '/api/public/stripe-mode-check'
+      preLoaderRoute: typeof ApiPublicStripeModeCheckRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/public/signnow-webhook': {
@@ -1334,6 +1355,7 @@ const rootRouteChildren: RootRouteChildren = {
   SetupRoute: SetupRoute,
   SitemapRoute: SitemapRoute,
   ApiPublicSignnowWebhookRoute: ApiPublicSignnowWebhookRoute,
+  ApiPublicStripeModeCheckRoute: ApiPublicStripeModeCheckRoute,
   ApiPublicStripeWebhookRoute: ApiPublicStripeWebhookRoute,
 }
 export const routeTree = rootRouteImport
