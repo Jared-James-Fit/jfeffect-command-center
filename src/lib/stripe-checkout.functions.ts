@@ -204,3 +204,143 @@ export const createCustomerPortalSession = createServerFn({ method: "POST" })
 
     return { url: portalSession.url as string };
   });
+
+// ─── Create Checkout Session for an Admin-Assigned Purchase ──────────────────
+
+const CreateAssignmentCheckoutInput = z.object({
+  purchaseRecordId: z.string().uuid(),
+  origin: z.string().url(),
+});
+
+/**
+ * Generates a client-specific Stripe Checkout Session tied to an existing
+ * purchase_records row. Stamps metadata[purchase_record_id] so the webhook
+ * can match the exact assignment without fuzzy lookups.
+ *
+ * Saves stripe_payment_link + stripe_checkout_session_id back onto the row.
+ */
+export const createCheckoutSessionForAssignment = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => CreateAssignmentCheckoutInput.parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context as any;
+
+    // Admin / coach gate
+    const { data: roleRows } = await supabase
+      .from("user_roles").select("role").eq("user_id", userId);
+    const roles = (roleRows ?? []).map((r: any) => r.role);
+    if (!roles.includes("admin") && !roles.includes("coach")) {
+      throw new Error("Only admins or coaches can generate assignment checkout links.");
+    }
+
+    // Load the purchase record
+    const { data: purchase, error: pErr } = await supabase
+      .from("purchase_records")
+      .select(
+        "id, client_id, offer_id, stripe_price_id, stripe_product_id, payment_structure, full_payable_amount, currency, offer_name",
+      )
+      .eq("id", data.purchaseRecordId)
+      .single();
+    if (pErr || !purchase) throw new Error("Purchase record not found");
+
+    // Resolve price id + checkout mode (snapshot row may not include them)
+    let priceId: string | null = purchase.stripe_price_id ?? null;
+    let productMode: string | null = null;
+    let paymentStructure: string | null = purchase.payment_structure ?? null;
+    if (purchase.offer_id) {
+      const { data: prod } = await supabase
+        .from("coaching_products")
+        .select("stripe_price_id, mode, payment_structure")
+        .eq("id", purchase.offer_id)
+        .maybeSingle();
+      if (prod) {
+        priceId = priceId || prod.stripe_price_id;
+        productMode = prod.mode ?? null;
+        paymentStructure = paymentStructure || prod.payment_structure;
+      }
+    }
+    if (!priceId) {
+      throw new Error(
+        `"${purchase.offer_name}" has no Stripe Price ID. Open Admin → Stripe Payment Links, edit this product, and add a Stripe Price ID before generating a checkout link.`,
+      );
+    }
+
+    // Load client
+    const { data: client, error: cErr } = await supabase
+      .from("clients")
+      .select("id, full_name, email, stripe_customer_id")
+      .eq("id", purchase.client_id)
+      .single();
+    if (cErr || !client) throw new Error("Client not found");
+
+    // Resolve / create Stripe customer
+    let stripeCustomerId: string | null = client.stripe_customer_id ?? null;
+    if (!stripeCustomerId && client.email) {
+      const existing = await stripeFetch(
+        `/customers/search?query=${encodeURIComponent(`email:"${client.email}"`)}`,
+      );
+      if (existing?.data?.[0]?.id) {
+        stripeCustomerId = existing.data[0].id;
+      } else {
+        const newCustomer = await stripeFetch("/customers", {
+          method: "POST",
+          body: formEncode({
+            email: client.email,
+            name: client.full_name ?? undefined,
+            "metadata[client_id]": client.id,
+          }),
+        });
+        stripeCustomerId = newCustomer.id;
+      }
+      if (stripeCustomerId) {
+        await supabase
+          .from("clients")
+          .update({ stripe_customer_id: stripeCustomerId })
+          .eq("id", client.id);
+      }
+    }
+
+    const isSubscription =
+      productMode === "subscription" ||
+      ((productMode === "auto" || !productMode) &&
+        !!paymentStructure &&
+        /monthly|weekly|bi-weekly|quarterly|annual|recurring/i.test(paymentStructure));
+    const checkoutMode = isSubscription ? "subscription" : "payment";
+
+    const sessionParams: Record<string, string> = {
+      "line_items[0][price]": priceId,
+      "line_items[0][quantity]": "1",
+      mode: checkoutMode,
+      success_url: `${data.origin}/portal/purchases?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${data.origin}/portal/purchases`,
+      allow_promotion_codes: "true",
+      "metadata[purchase_record_id]": purchase.id,
+      "metadata[client_id]": client.id,
+      "metadata[offer_id]": purchase.offer_id ?? "",
+      "metadata[assigned_by]": userId,
+    };
+    if (stripeCustomerId) {
+      sessionParams["customer"] = stripeCustomerId;
+    } else if (client.email) {
+      sessionParams["customer_email"] = client.email;
+    }
+
+    const session = await stripeFetch("/checkout/sessions", {
+      method: "POST",
+      body: formEncode(sessionParams),
+    });
+
+    await supabase
+      .from("purchase_records")
+      .update({
+        stripe_payment_link: session.url,
+        stripe_checkout_session_id: session.id,
+        stripe_price_id: priceId,
+        payment_status: "Pending",
+        last_payment_update_source: "admin_assignment",
+        last_payment_update_at: new Date().toISOString(),
+      })
+      .eq("id", purchase.id);
+
+    return { url: session.url as string, sessionId: session.id as string };
+  });

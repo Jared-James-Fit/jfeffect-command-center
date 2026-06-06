@@ -45,6 +45,27 @@ async function findPurchase(supabase: any, lookup: Record<string, string | null 
 }
 
 /**
+ * Resolve the purchase record for a Stripe event.
+ * Primary: metadata.purchase_record_id (set by createCheckoutSessionForAssignment).
+ * Fallback: legacy lookups (session id, payment link, subscription, customer).
+ */
+async function resolvePurchase(
+  supabase: any,
+  obj: any,
+  fallback: Record<string, string | null | undefined>,
+) {
+  const metaId: string | undefined =
+    obj?.metadata?.purchase_record_id ||
+    obj?.subscription_details?.metadata?.purchase_record_id;
+  if (metaId) {
+    const { data } = await supabase
+      .from("purchase_records").select("*").eq("id", metaId).maybeSingle();
+    if (data) return data;
+  }
+  return findPurchase(supabase, fallback);
+}
+
+/**
  * Sync stripe_customer_id onto the clients row so the Customer Portal
  * can be opened without scanning purchase_records every time.
  */
@@ -82,19 +103,22 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
 
             // ── One-time & subscription checkout completion ─────────────────
             case "checkout.session.completed": {
-              const purchase = await findPurchase(supabase, {
+              const purchase = await resolvePurchase(supabase, obj, {
                 stripe_checkout_session_id: obj.id,
                 stripe_payment_link: obj.payment_link ? `https://buy.stripe.com/${obj.payment_link}` : null,
               });
               if (purchase) {
                 await supabase.from("purchase_records").update({
-                  payment_status: obj.payment_status === "paid" ? "Paid" : "Pending Payment",
+                  payment_status: obj.payment_status === "paid"
+                    ? (obj.mode === "subscription" ? "Active Subscription" : "Paid")
+                    : "Pending Payment",
                   paid_at: obj.payment_status === "paid" ? now : purchase.paid_at,
                   amount_paid: obj.amount_total ? obj.amount_total / 100 : purchase.amount_paid,
                   stripe_checkout_session_id: obj.id,
                   stripe_payment_intent_id: obj.payment_intent ?? null,
                   stripe_subscription_id: obj.subscription ?? null,
                   stripe_customer_id: obj.customer ?? null,
+                  service_status: obj.payment_status === "paid" ? "Active" : purchase.service_status,
                   last_payment_update_source: "stripe_webhook",
                   last_payment_update_at: now,
                 }).eq("id", purchase.id);
@@ -107,7 +131,7 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
 
             // ── Subscription created (new subscriber) ───────────────────────
             case "customer.subscription.created": {
-              const purchase = await findPurchase(supabase, {
+              const purchase = await resolvePurchase(supabase, obj, {
                 stripe_subscription_id: obj.id,
                 stripe_customer_id: obj.customer,
               });
@@ -130,7 +154,7 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
 
             // ── Subscription updated (renewal, cancellation, past_due) ──────
             case "customer.subscription.updated": {
-              const purchase = await findPurchase(supabase, {
+              const purchase = await resolvePurchase(supabase, obj, {
                 stripe_subscription_id: obj.id,
                 stripe_customer_id: obj.customer,
               });
@@ -170,7 +194,7 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
 
             // ── Subscription deleted (hard cancel) ──────────────────────────
             case "customer.subscription.deleted": {
-              const purchase = await findPurchase(supabase, { stripe_subscription_id: obj.id });
+              const purchase = await resolvePurchase(supabase, obj, { stripe_subscription_id: obj.id });
               if (purchase) {
                 await supabase.from("purchase_records").update({
                   payment_status: "Cancelled",
@@ -184,7 +208,7 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
 
             // ── Invoice paid (subscription renewal) ─────────────────────────
             case "invoice.payment_succeeded": {
-              const purchase = await findPurchase(supabase, {
+              const purchase = await resolvePurchase(supabase, obj, {
                 stripe_subscription_id: obj.subscription,
                 stripe_customer_id: obj.customer,
               });
@@ -202,7 +226,7 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
 
             // ── Invoice failed (payment issue) ──────────────────────────────
             case "invoice.payment_failed": {
-              const purchase = await findPurchase(supabase, {
+              const purchase = await resolvePurchase(supabase, obj, {
                 stripe_subscription_id: obj.subscription,
                 stripe_customer_id: obj.customer,
               });
@@ -218,7 +242,7 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
 
             // ── One-time payment intent succeeded ───────────────────────────
             case "payment_intent.succeeded": {
-              const purchase = await findPurchase(supabase, { stripe_payment_intent_id: obj.id });
+              const purchase = await resolvePurchase(supabase, obj, { stripe_payment_intent_id: obj.id });
               if (purchase) {
                 await supabase.from("purchase_records").update({
                   payment_status: "Paid",
@@ -234,7 +258,7 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
 
             // ── Payment intent failed ────────────────────────────────────────
             case "payment_intent.payment_failed": {
-              const purchase = await findPurchase(supabase, { stripe_payment_intent_id: obj.id });
+              const purchase = await resolvePurchase(supabase, obj, { stripe_payment_intent_id: obj.id });
               if (purchase) {
                 await supabase.from("purchase_records").update({
                   payment_status: "Failed",
@@ -247,7 +271,7 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
 
             // ── Refund ───────────────────────────────────────────────────────
             case "charge.refunded": {
-              const purchase = await findPurchase(supabase, { stripe_payment_intent_id: obj.payment_intent });
+              const purchase = await resolvePurchase(supabase, obj, { stripe_payment_intent_id: obj.payment_intent });
               if (purchase) {
                 await supabase.from("purchase_records").update({
                   payment_status: "Refunded",
