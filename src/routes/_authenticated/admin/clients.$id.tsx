@@ -330,8 +330,8 @@ function ClientDetail() {
             )}
             {canPov && (
               <Button
-                variant="outline"
                 size="sm"
+                className="bg-warning/15 text-warning border border-warning/40 hover:bg-warning/25"
                 onClick={() => {
                   if (!form.user_id) {
                     toast.error("Client has no account yet — send a setup link first.");
@@ -341,7 +341,7 @@ function ClientDetail() {
                   navigate({ to: "/portal" });
                 }}
               >
-                <Eye className="mr-2 h-4 w-4" />View Client POV
+                <Eye className="mr-2 h-4 w-4" />Client POV
               </Button>
             )}
             <Button variant="outline" size="sm" onClick={() => setPriceCardOpen(true)}><Tag className="mr-2 h-4 w-4" />Assign Offer / View Price Card</Button>

@@ -1,17 +1,22 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
-import { PageHeader } from "@/components/app-shell";
-import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent,
+  DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 import { MessageThread, UnreadBadge, PriorityChip } from "@/components/message-thread";
-import { priorityTone, type ConversationState, type Message } from "@/lib/messages";
-import { Search, ExternalLink } from "lucide-react";
+import {
+  type ConversationState, type Message,
+  setConversationStatus, setConversationPriority, PRIORITIES,
+} from "@/lib/messages";
+import { Search, ChevronLeft, MoreHorizontal, ExternalLink } from "lucide-react";
 import { formatDistanceToNow, parseISO } from "date-fns";
 import { cn } from "@/lib/utils";
 
@@ -25,6 +30,7 @@ export const Route = createFileRoute("/_authenticated/admin/messages")({
 
 function MessagesInbox() {
   const { client: selectedFromUrl } = Route.useSearch();
+  const navigate = useNavigate();
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<Filter>("All");
@@ -136,87 +142,213 @@ function MessagesInbox() {
   const selected = clients.find((c) => c.id === selectedId);
   const selectedState = selectedId ? stateMap.get(selectedId) : undefined;
 
+  const selectClient = (id: string) => {
+    setSelectedId(id);
+    navigate({ to: "/admin/messages", search: { client: id }, replace: true });
+  };
+  const clearSelection = () => {
+    setSelectedId(null);
+    navigate({ to: "/admin/messages", search: {}, replace: true });
+  };
+
+  const updateStatus = async (status: ConversationState["status"]) => {
+    if (!selectedId) return;
+    await setConversationStatus(selectedId, status);
+    qc.invalidateQueries({ queryKey: ["conversation-states"] });
+  };
+  const updatePriority = async (priority: string) => {
+    if (!selectedId) return;
+    await setConversationPriority(selectedId, priority);
+    qc.invalidateQueries({ queryKey: ["conversation-states"] });
+  };
+
+  // Full-bleed two-pane layout. On <md: stacked — inbox OR conversation.
+  // On md+: persistent inbox sidebar (320–360px) + conversation pane.
   return (
-    <>
-      <PageHeader title="Messages" subtitle="Client conversations in one inbox." />
-      <div className="grid gap-4 p-6 md:p-8 lg:grid-cols-[360px_1fr]">
-        <Card className="border-border bg-card flex flex-col overflow-hidden">
-          <div className="border-b border-border p-3 space-y-2">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input className="pl-9" placeholder="Search client…" value={search} onChange={(e) => setSearch(e.target.value)} />
-            </div>
-            <Select value={filter} onValueChange={(v) => setFilter(v as Filter)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {FILTERS.map((f) => <SelectItem key={f} value={f}>{f}</SelectItem>)}
-              </SelectContent>
-            </Select>
+    <div
+      className="fixed inset-x-0 top-0 z-30 flex bg-background md:static md:inset-auto md:z-auto md:h-full md:flex-1"
+      style={{ height: "100dvh" }}
+    >
+      {/* Inbox sidebar */}
+      <aside
+        className={cn(
+          "flex w-full flex-col border-r border-border bg-card md:w-[340px] md:shrink-0",
+          selected ? "hidden md:flex" : "flex",
+        )}
+      >
+        <header
+          className="border-b border-border px-4 py-3"
+          style={{ paddingTop: "max(env(safe-area-inset-top), 0.75rem)" }}
+        >
+          <div className="mb-2 flex items-center justify-between">
+            <h1 className="text-lg font-black tracking-tight">Messages</h1>
+            <span className="text-[10px] uppercase tracking-widest text-muted-foreground">
+              {conversations.length}
+            </span>
           </div>
-          <div className="max-h-[600px] flex-1 overflow-y-auto">
-            {conversations.length === 0 ? (
-              <div className="p-6 text-center text-sm text-muted-foreground">No conversations.</div>
-            ) : conversations.map(({ client, state, last, unread }) => (
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              className="h-9 pl-9 text-base sm:text-sm"
+              placeholder="Search client…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+          <div className="mt-2 flex gap-1 overflow-x-auto pb-1">
+            {FILTERS.map((f) => (
               <button
-                key={client.id}
-                onClick={() => setSelectedId(client.id)}
+                key={f}
+                onClick={() => setFilter(f)}
                 className={cn(
-                  "flex w-full items-start gap-3 border-b border-border px-3 py-3 text-left transition hover:bg-secondary/40",
-                  selectedId === client.id && "bg-secondary/60",
+                  "shrink-0 rounded-full px-3 py-1 text-[11px] font-semibold transition",
+                  filter === f
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-secondary/60 text-muted-foreground hover:bg-secondary",
                 )}
               >
-                <Avatar className="h-9 w-9">
-                  <AvatarImage src={client.profile_picture_url ?? undefined} />
-                  <AvatarFallback>{(client.full_name ?? "?").slice(0, 1)}</AvatarFallback>
-                </Avatar>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="truncate text-sm font-semibold">{client.full_name}</span>
-                    {last && <span className="shrink-0 text-[10px] text-muted-foreground">{formatDistanceToNow(parseISO(last.created_at), { addSuffix: true })}</span>}
-                  </div>
-                  <div className="mt-0.5 flex items-center gap-1.5">
-                    <span className="truncate text-xs text-muted-foreground flex-1">
-                      {last ? (last.sender_role === "admin" ? "You: " : "") + (last.body || "(attachment)") : "No messages yet"}
-                    </span>
-                    <UnreadBadge count={unread} />
-                  </div>
-                  <div className="mt-1 flex flex-wrap gap-1">
-                    {state?.status === "needs_response" && <Badge variant="outline" className="border-primary/40 bg-primary/10 text-primary text-[10px]">Needs Response</Badge>}
-                    <PriorityChip priority={state?.priority} />
-                  </div>
-                </div>
+                {f}
               </button>
             ))}
           </div>
-        </Card>
-
-        <div className="space-y-3">
-          {selected ? (
-            <>
-              <Card className="flex flex-wrap items-center justify-between gap-3 border-border bg-card p-4">
-                <div className="flex items-center gap-3">
-                  <Avatar className="h-10 w-10">
-                    <AvatarImage src={selected.profile_picture_url ?? undefined} />
-                    <AvatarFallback>{(selected.full_name ?? "?").slice(0, 1)}</AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <div className="font-bold">{selected.full_name}</div>
-                    <div className="text-xs text-muted-foreground">{selected.email}</div>
-                  </div>
+        </header>
+        <div className="flex-1 overflow-y-auto">
+          {conversations.length === 0 ? (
+            <div className="p-6 text-center text-sm text-muted-foreground">No conversations.</div>
+          ) : conversations.map(({ client, state, last, unread }) => (
+            <button
+              key={client.id}
+              onClick={() => selectClient(client.id)}
+              className={cn(
+                "flex w-full items-start gap-3 border-b border-border/60 px-4 py-3 text-left transition hover:bg-secondary/40",
+                selectedId === client.id && "bg-secondary/60",
+              )}
+            >
+              <Avatar className="h-11 w-11 shrink-0">
+                <AvatarImage src={client.profile_picture_url ?? undefined} />
+                <AvatarFallback>{(client.full_name ?? "?").slice(0, 1)}</AvatarFallback>
+              </Avatar>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between gap-2">
+                  <span className={cn("truncate text-sm", unread > 0 ? "font-bold" : "font-semibold")}>
+                    {client.full_name}
+                  </span>
+                  {last && (
+                    <span className="shrink-0 text-[10px] text-muted-foreground">
+                      {formatDistanceToNow(parseISO(last.created_at), { addSuffix: false })}
+                    </span>
+                  )}
                 </div>
-                <Link to="/admin/clients/$id" params={{ id: selected.id }} className="flex items-center gap-1 text-xs font-semibold text-primary hover:underline">
-                  Open client profile <ExternalLink className="h-3 w-3" />
-                </Link>
-              </Card>
-              <MessageThread clientId={selected.id} role="admin" conversationState={selectedState ?? null} />
-            </>
-          ) : (
-            <Card className="grid h-[600px] place-items-center border-border bg-card text-sm text-muted-foreground">
-              Select a conversation to start.
-            </Card>
-          )}
+                <div className="mt-0.5 flex items-center gap-1.5">
+                  <span className={cn("truncate flex-1 text-xs", unread > 0 ? "text-foreground" : "text-muted-foreground")}>
+                    {last
+                      ? (last.sender_role === "admin" ? "You: " : "") + (last.body || "(attachment)")
+                      : "No messages yet"}
+                  </span>
+                  <UnreadBadge count={unread} />
+                </div>
+                <div className="mt-1 flex flex-wrap gap-1">
+                  {state?.status === "needs_response" && (
+                    <Badge variant="outline" className="border-primary/40 bg-primary/10 text-primary text-[10px]">
+                      Needs Response
+                    </Badge>
+                  )}
+                  <PriorityChip priority={state?.priority} />
+                </div>
+              </div>
+            </button>
+          ))}
         </div>
-      </div>
-    </>
+      </aside>
+
+      {/* Conversation pane */}
+      <section
+        className={cn(
+          "flex min-w-0 flex-1 flex-col",
+          selected ? "flex" : "hidden md:flex",
+        )}
+      >
+        {selected ? (
+          <>
+            <header
+              className="flex items-center gap-2 border-b border-border bg-card/80 px-3 py-2 backdrop-blur supports-[backdrop-filter]:bg-card/60 md:px-4"
+              style={{ paddingTop: "max(env(safe-area-inset-top), 0.5rem)" }}
+            >
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-9 w-9 shrink-0 md:hidden"
+                onClick={clearSelection}
+                aria-label="Back to inbox"
+              >
+                <ChevronLeft className="h-5 w-5" />
+              </Button>
+              <Avatar className="h-10 w-10 shrink-0">
+                <AvatarImage src={selected.profile_picture_url ?? undefined} />
+                <AvatarFallback>{(selected.full_name ?? "?").slice(0, 1)}</AvatarFallback>
+              </Avatar>
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-sm font-bold">{selected.full_name}</div>
+                <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                  {selectedState?.priority && selectedState.priority !== "Normal" && (
+                    <PriorityChip priority={selectedState.priority} />
+                  )}
+                  {selectedState?.status === "needs_response" && (
+                    <Badge variant="outline" className="border-primary/40 bg-primary/10 text-primary text-[10px]">
+                      Needs Response
+                    </Badge>
+                  )}
+                  {selectedState?.status === "resolved" && (
+                    <Badge variant="outline" className="border-emerald-500/40 bg-emerald-500/10 text-emerald-600 text-[10px]">
+                      Resolved
+                    </Badge>
+                  )}
+                  <span className="truncate">{selected.email}</span>
+                </div>
+              </div>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0">
+                    <MoreHorizontal className="h-5 w-5" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuLabel className="text-xs">Conversation</DropdownMenuLabel>
+                  <DropdownMenuItem asChild>
+                    <Link to="/admin/clients/$id" params={{ id: selected.id }}>
+                      <ExternalLink className="mr-2 h-4 w-4" /> Open client profile
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuLabel className="text-[10px] uppercase tracking-widest text-muted-foreground">Status</DropdownMenuLabel>
+                  <DropdownMenuItem onClick={() => updateStatus("open")}>Open</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => updateStatus("needs_response")}>Needs Response</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => updateStatus("resolved")}>Resolved</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => updateStatus("archived")}>Archived</DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuLabel className="text-[10px] uppercase tracking-widest text-muted-foreground">Priority</DropdownMenuLabel>
+                  {PRIORITIES.map((p) => (
+                    <DropdownMenuItem key={p} onClick={() => updatePriority(p)}>
+                      {p}{selectedState?.priority === p ? " ✓" : ""}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </header>
+            <MessageThread
+              clientId={selected.id}
+              role="admin"
+              conversationState={selectedState ?? null}
+              hideControls
+              fullBleed
+            />
+          </>
+        ) : (
+          <div className="grid flex-1 place-items-center text-sm text-muted-foreground">
+            Select a conversation to start.
+          </div>
+        )}
+      </section>
+    </div>
   );
 }

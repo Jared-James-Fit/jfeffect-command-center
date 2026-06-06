@@ -21,6 +21,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { derivePhase, displayTitle, toneClasses, type TrainingPhase } from "@/lib/training-phases";
 import { deriveTarget } from "@/lib/nutrition-cardio";
 import { PowerlifterBadge } from "@/components/powerlifter-badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 function summarizeCardio(list: any[]): string {
   if (!list || list.length === 0) return "";
@@ -290,11 +291,25 @@ function ClientsPage() {
                     return (
                     <tr key={c.id} className="border-b border-border/50 transition hover:bg-secondary/30 align-top">
                       <td className="px-4 py-3">
-                        <Link to="/admin/clients/$id" params={{ id: c.id }} className="font-semibold hover:text-primary">{c.full_name}</Link>
-                        <div className="text-xs text-muted-foreground">{c.email}</div>
-                       {c.is_powerlifter && (
-                         <div className="mt-1"><PowerlifterBadge label={c.powerlifter_badge_label} size="xs" /></div>
-                       )}
+                        <Link
+                          to="/admin/clients/$id"
+                          params={{ id: c.id }}
+                          className="flex items-start gap-3 hover:text-primary"
+                        >
+                          <Avatar className="h-9 w-9 shrink-0">
+                            <AvatarImage src={c.profile_picture_url ?? undefined} />
+                            <AvatarFallback className="text-xs">
+                              {(c.full_name ?? "?").split(" ").map((s: string) => s[0]).slice(0, 2).join("")}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="min-w-0">
+                            <div className="font-semibold truncate">{c.full_name}</div>
+                            <div className="text-xs text-muted-foreground truncate">{c.email}</div>
+                            {c.is_powerlifter && (
+                              <div className="mt-1"><PowerlifterBadge label={c.powerlifter_badge_label} size="xs" /></div>
+                            )}
+                          </div>
+                        </Link>
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">{c.coaching_type ?? "—"}</td>
                       <td className="px-4 py-3">
