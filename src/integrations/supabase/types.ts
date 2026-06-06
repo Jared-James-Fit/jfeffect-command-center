@@ -829,6 +829,7 @@ export type Database = {
           sessions_used: number
           start_date: string | null
           status: string
+          stripe_customer_id: string | null
           stripe_link: string | null
           tags: string[]
           tiktok: string | null
@@ -952,6 +953,7 @@ export type Database = {
           sessions_used?: number
           start_date?: string | null
           status?: string
+          stripe_customer_id?: string | null
           stripe_link?: string | null
           tags?: string[]
           tiktok?: string | null
@@ -1075,6 +1077,7 @@ export type Database = {
           sessions_used?: number
           start_date?: string | null
           status?: string
+          stripe_customer_id?: string | null
           stripe_link?: string | null
           tags?: string[]
           tiktok?: string | null
