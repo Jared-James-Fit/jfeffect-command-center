@@ -47,7 +47,10 @@ async function findPurchase(supabase: any, lookup: Record<string, string | null 
 /**
  * Resolve the purchase record for a Stripe event.
  * Primary: metadata.purchase_record_id (set by createCheckoutSessionForAssignment).
- * Fallback: legacy lookups (session id, payment link, subscription, customer).
+ * Fallback: lookups by Stripe IDs we ourselves stamped onto the row
+ * (checkout session id, subscription id, payment intent id, customer id).
+ * NOTE: legacy "build a URL from obj.payment_link" fallback was removed —
+ * obj.payment_link is a `plink_…` ID, not a URL slug, so that match never worked.
  */
 async function resolvePurchase(
   supabase: any,
@@ -63,6 +66,20 @@ async function resolvePurchase(
     if (data) return data;
   }
   return findPurchase(supabase, fallback);
+}
+
+/**
+ * Cancelled is a terminal state. Once a purchase_record is Cancelled we
+ * refuse to flip it back to Active/Active Subscription from a stale
+ * `customer.subscription.updated` event (Stripe can deliver events out of
+ * order, and the same subscription id may briefly report `active` after
+ * `deleted` has already been processed).
+ *
+ * The only legitimate way to reactivate a Cancelled record is to assign
+ * a NEW purchase / NEW subscription — which gets a new purchase_records row.
+ */
+function isTerminalCancelled(purchase: any): boolean {
+  return purchase?.payment_status === "Cancelled" || purchase?.service_status === "Cancelled";
 }
 
 /**
@@ -98,6 +115,24 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
         const obj = event?.data?.object ?? {};
         const now = new Date().toISOString();
 
+        // ── Duplicate-event protection ──────────────────────────────────────
+        // Stripe retries delivery on any non-2xx or timeout. We dedupe by
+        // event.id so repeated retries can't double-process the same event.
+        if (event?.id) {
+          const { error: dupErr } = await supabase
+            .from("processed_stripe_events")
+            .insert({ event_id: event.id, event_type: event.type ?? "unknown" });
+          if (dupErr) {
+            // 23505 = unique_violation → we've already processed this event.
+            if ((dupErr as any).code === "23505") {
+              return Response.json({ received: true, duplicate: true });
+            }
+            console.error("[stripe-webhook] dedupe insert failed", dupErr);
+            // Fail closed so Stripe retries rather than silently skipping.
+            return new Response("Dedupe store error", { status: 500 });
+          }
+        }
+
         try {
           switch (event.type) {
 
@@ -105,7 +140,6 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
             case "checkout.session.completed": {
               const purchase = await resolvePurchase(supabase, obj, {
                 stripe_checkout_session_id: obj.id,
-                stripe_payment_link: obj.payment_link ? `https://buy.stripe.com/${obj.payment_link}` : null,
               });
               if (purchase) {
                 await supabase.from("purchase_records").update({
@@ -143,6 +177,12 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
                   stripe_subscription_id: obj.id,
                   stripe_customer_id: obj.customer ?? null,
                   service_status: obj.status === "active" || obj.status === "trialing" ? "Active" : purchase.service_status,
+                  // Stamp term_end_date immediately so the admin dashboard
+                  // shows the next billing date without waiting for the
+                  // first customer.subscription.updated event.
+                  ...(obj.current_period_end
+                    ? { term_end_date: new Date(obj.current_period_end * 1000).toISOString().split("T")[0] }
+                    : {}),
                   last_payment_update_source: "stripe_webhook",
                   last_payment_update_at: now,
                 }).eq("id", purchase.id);
@@ -159,6 +199,16 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
                 stripe_customer_id: obj.customer,
               });
               if (purchase) {
+                // Cancelled is terminal — refuse to flip back to Active
+                // from a stale .updated arriving after .deleted. The matched
+                // row must also be tied to the SAME subscription id; a new
+                // subscription gets a new purchase_records row.
+                if (
+                  isTerminalCancelled(purchase) &&
+                  purchase.stripe_subscription_id === obj.id
+                ) {
+                  break;
+                }
                 // Map Stripe subscription status to app payment_status
                 const statusMap: Record<string, string> = {
                   active: "Active Subscription",

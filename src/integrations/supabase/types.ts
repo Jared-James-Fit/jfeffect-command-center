@@ -2493,6 +2493,27 @@ export type Database = {
           },
         ]
       }
+      processed_stripe_events: {
+        Row: {
+          created_at: string
+          event_id: string
+          event_type: string
+          processed_at: string
+        }
+        Insert: {
+          created_at?: string
+          event_id: string
+          event_type: string
+          processed_at?: string
+        }
+        Update: {
+          created_at?: string
+          event_id?: string
+          event_type?: string
+          processed_at?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
