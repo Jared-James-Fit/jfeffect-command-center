@@ -115,6 +115,24 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
         const obj = event?.data?.object ?? {};
         const now = new Date().toISOString();
 
+        // ── Duplicate-event protection ──────────────────────────────────────
+        // Stripe retries delivery on any non-2xx or timeout. We dedupe by
+        // event.id so repeated retries can't double-process the same event.
+        if (event?.id) {
+          const { error: dupErr } = await supabase
+            .from("processed_stripe_events")
+            .insert({ event_id: event.id, event_type: event.type ?? "unknown" });
+          if (dupErr) {
+            // 23505 = unique_violation → we've already processed this event.
+            if ((dupErr as any).code === "23505") {
+              return Response.json({ received: true, duplicate: true });
+            }
+            console.error("[stripe-webhook] dedupe insert failed", dupErr);
+            // Fail closed so Stripe retries rather than silently skipping.
+            return new Response("Dedupe store error", { status: 500 });
+          }
+        }
+
         try {
           switch (event.type) {
 
@@ -122,7 +140,6 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
             case "checkout.session.completed": {
               const purchase = await resolvePurchase(supabase, obj, {
                 stripe_checkout_session_id: obj.id,
-                stripe_payment_link: obj.payment_link ? `https://buy.stripe.com/${obj.payment_link}` : null,
               });
               if (purchase) {
                 await supabase.from("purchase_records").update({
