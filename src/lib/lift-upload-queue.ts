@@ -9,10 +9,10 @@
 // real background upload going if the user navigates away — we surface that
 // via the active() helper so the page can fire a beforeunload warning.
 
-import { initMediaUpload, finalizeMediaUpload, createSubmission } from "@/lib/drive.functions";
 import { uploadLiftClipToDrive } from "@/lib/lift-video-drive-upload";
-import { updateClientLiftVideoUpload } from "@/lib/lift-videos.functions";
 import { useSyncExternalStore } from "react";
+
+type ServerFn = (args: { data: any }) => Promise<any>;
 
 export type LiftUploadState =
   | { status: "queued"; progress: 0; fileName: string }
@@ -20,7 +20,7 @@ export type LiftUploadState =
   | { status: "done"; progress: 100; fileName: string }
   | { status: "failed"; progress: number; fileName: string; error: string };
 
-type Job = {
+export type LiftUploadJob = {
   videoId: string;
   clientId: string;
   clientName: string | null | undefined;
@@ -32,15 +32,15 @@ type Job = {
   urgent: boolean;
   painNote: string | null;
   submissionId: string | null;
-  initFn: typeof initMediaUpload;
-  finalizeFn: typeof finalizeMediaUpload;
-  createSubFn: typeof createSubmission;
-  updateFn: typeof updateClientLiftVideoUpload;
+  initFn: ServerFn;
+  finalizeFn: ServerFn;
+  createSubFn: ServerFn;
+  updateFn: ServerFn;
 };
 
 const states = new Map<string, LiftUploadState>();
 const listeners = new Set<() => void>();
-const queue: Job[] = [];
+const queue: LiftUploadJob[] = [];
 let running = false;
 
 function notify() { for (const l of listeners) l(); }
@@ -49,7 +49,7 @@ function setState(videoId: string, s: LiftUploadState) {
   notify();
 }
 
-export function enqueueLiftUpload(job: Job) {
+export function enqueueLiftUpload(job: LiftUploadJob) {
   setState(job.videoId, { status: "queued", progress: 0, fileName: job.file.name });
   queue.push(job);
   void runQueue();
@@ -69,7 +69,7 @@ async function runQueue() {
   }
 }
 
-async function processJob(job: Job) {
+async function processJob(job: LiftUploadJob) {
   setState(job.videoId, { status: "uploading", progress: 0, fileName: job.file.name });
   try {
     const res = await uploadLiftClipToDrive({
@@ -152,6 +152,6 @@ export function hasActiveUploads(): boolean {
 
 // Retry a previously failed upload. Caller must re-supply the File (browser
 // can't persist it across reload).
-export function retryLiftUpload(job: Job) {
+export function retryLiftUpload(job: LiftUploadJob) {
   enqueueLiftUpload(job);
 }
