@@ -78,6 +78,7 @@ export function LiftVideoDialog({ open, onOpenChange, clientId, userId, clientNa
   const multiUploadRef = useRef<HTMLInputElement | null>(null);
   const multiRecordRef = useRef<HTMLInputElement | null>(null);
   const [previewClip, setPreviewClip] = useState<Clip | null>(null);
+  const [sendError, setSendError] = useState<{ stage?: string; message: string } | null>(null);
 
   useEffect(() => {
     if (initial) {
@@ -236,6 +237,7 @@ export function LiftVideoDialog({ open, onOpenChange, clientId, userId, clientNa
     if (clips.length === 0) return toast.error("Add at least one video.");
 
     setSaving(true);
+    setSendError(null);
     try {
       const batchId = crypto.randomUUID();
       const total = clips.length;
@@ -324,6 +326,9 @@ export function LiftVideoDialog({ open, onOpenChange, clientId, userId, clientNa
       onSaved?.();
     } catch (e: any) {
       console.error(e);
+      const stage = (e as any)?.stage as string | undefined;
+      const rawMsg = (e?.message ?? String(e ?? "Unknown error")).replace(/^\[[^\]]+\]\s*/, "");
+      setSendError({ stage, message: rawMsg });
       toast.error(friendlyDriveError(e, role === "client" ? "client" : "admin"));
     } finally {
       setSaving(false);
@@ -522,6 +527,31 @@ export function LiftVideoDialog({ open, onOpenChange, clientId, userId, clientNa
 
             {!sent && (
               <DrawerFooter className="pt-2">
+                {sendError && (
+                  <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-left">
+                    <div className="flex items-start gap-2">
+                      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+                      <div className="min-w-0 space-y-1">
+                        <div className="text-sm font-semibold text-destructive">
+                          Upload failed{sendError.stage ? ` at "${sendError.stage}"` : ""}
+                        </div>
+                        <div className="break-words text-xs text-muted-foreground">
+                          {sendError.message}
+                        </div>
+                        <button
+                          type="button"
+                          className="text-[11px] text-muted-foreground underline-offset-2 hover:underline"
+                          onClick={() => {
+                            navigator.clipboard?.writeText(`stage=${sendError.stage ?? "unknown"} :: ${sendError.message}`);
+                            toast.success("Error details copied — send to Coach Jared.");
+                          }}
+                        >
+                          Copy details to send to Coach Jared
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
                 <Button
                   onClick={handleSave}
                   disabled={saving || clips.length === 0}
@@ -530,7 +560,7 @@ export function LiftVideoDialog({ open, onOpenChange, clientId, userId, clientNa
                   {saving ? (
                     <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Sending…</>
                   ) : (
-                    <><Send className="mr-2 h-4 w-4" /> Send {clips.length > 1 ? "Videos" : "Video"}</>
+                    <><Send className="mr-2 h-4 w-4" /> {sendError ? "Retry send" : `Send ${clips.length > 1 ? "Videos" : "Video"}`}</>
                   )}
                 </Button>
                 <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={saving} className="h-10">
