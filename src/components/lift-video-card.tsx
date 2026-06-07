@@ -26,6 +26,7 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import { UserAvatar } from "@/components/user-avatar";
 
 type Props = {
   video: LiftVideo;
@@ -33,9 +34,12 @@ type Props = {
   userId: string | null;
   onChanged?: () => void;
   onEdit?: (v: LiftVideo) => void;
+  /** Optional: client name/avatar for nicer comment attribution. */
+  clientName?: string | null;
+  clientAvatarPath?: string | null;
 };
 
-export function LiftVideoCard({ video, role, userId, onChanged, onEdit }: Props) {
+export function LiftVideoCard({ video, role, userId, onChanged, onEdit, clientName, clientAvatarPath }: Props) {
   const [comments, setComments] = useState<LiftVideoComment[]>([]);
   const [commentBody, setCommentBody] = useState("");
   const [isInternal, setIsInternal] = useState(false);
@@ -322,7 +326,24 @@ export function LiftVideoCard({ video, role, userId, onChanged, onEdit }: Props)
           {comments.map((c) => (
             <div key={c.id} className={`rounded-md border p-3 text-sm ${c.is_internal_note ? "border-warning/40 bg-warning/10" : c.author_role === "admin" ? "border-primary/30 bg-primary/5" : "border-border bg-secondary/30"}`}>
               <div className="mb-1 flex items-center gap-2 text-xs font-medium text-muted-foreground">
-                <span className="text-foreground">{c.author_role === "admin" ? "Coach Jared" : "You"}</span>
+                {(() => {
+                  const isAdmin = c.author_role === "admin";
+                  const name = isAdmin
+                    ? "Coach Jared"
+                    : (role === "admin" ? (clientName ?? "Client") : "You");
+                  const avatarPath = isAdmin ? null : (role === "admin" ? clientAvatarPath ?? null : null);
+                  return (
+                    <>
+                      <UserAvatar
+                        src={avatarPath}
+                        name={name}
+                        size={22}
+                        tone={isAdmin ? "primary" : "neutral"}
+                      />
+                      <span className="text-foreground">{name}</span>
+                    </>
+                  );
+                })()}
                 {c.is_internal_note && <Badge variant="outline" className="border-warning/40 bg-warning/10 text-warning">Internal</Badge>}
                 <span>· {format(parseISO(c.created_at), "MMM d, h:mm a")}</span>
               </div>
