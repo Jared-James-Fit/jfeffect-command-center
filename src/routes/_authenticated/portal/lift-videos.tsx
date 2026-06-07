@@ -11,12 +11,13 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Plus, Video, ChevronRight, MoreVertical, Pencil, Link2, MessageSquare, Trash2, Settings2 } from "lucide-react";
+import { Plus, Video, ChevronRight, MoreVertical, Pencil, Link2, Trash2, Settings2 } from "lucide-react";
 import { formatDistanceToNow, parseISO } from "date-fns";
 import { toast } from "sonner";
 import { listLiftVideos, markClientViewed, statusTone, deleteLiftVideos, type LiftVideo } from "@/lib/lift-videos";
 import { LiftVideoDialog } from "@/components/lift-video-dialog";
 import { LiftVideoCard } from "@/components/lift-video-card";
+import { ClientLiftVideoUploader } from "@/components/client-lift-video-uploader";
 
 export const Route = createFileRoute("/_authenticated/portal/lift-videos")({
   component: ClientLiftVideos,
@@ -140,30 +141,24 @@ function ClientLiftVideos() {
     <>
       <PageHeader title="Lift Videos" subtitle="Send lifts for coach review." />
       <div className="space-y-4 p-6 pb-32 md:p-8 md:pb-32">
-        <Card className="border-border bg-card p-4 flex items-center justify-between gap-3 rounded-2xl">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
-              <Video className="h-5 w-5" />
-            </div>
-            <div className="min-w-0">
-              <div className="font-semibold text-sm">Send a Lift Video</div>
-              <div className="text-xs text-muted-foreground truncate">Upload or record a video for Coach Jared.</div>
-            </div>
-          </div>
-          <Button size="sm" className="bg-gradient-primary font-semibold shrink-0" onClick={() => { setEditing(null); setOpen(true); }} disabled={!client?.id}>
-            <Plus className="mr-1 h-4 w-4" /> Upload
-          </Button>
-        </Card>
-
         {!client && (
           <Card className="border-border bg-card p-6 text-sm text-muted-foreground">
             Your coach hasn't set up your profile yet. Uploads will be available once they do.
           </Card>
         )}
 
+        {client && (
+          <ClientLiftVideoUploader
+            clientId={client.id}
+            clientName={(client as any).full_name}
+            userId={portalUserId ?? null}
+            onSaved={refresh}
+          />
+        )}
+
         {client && videos.length === 0 && (
           <Card className="border-border bg-card p-10 text-center text-sm text-muted-foreground">
-            No lift videos yet. Tap "Upload Lift Video" to send your first one.
+            No lift videos yet. Upload your first lift above.
           </Card>
         )}
 
