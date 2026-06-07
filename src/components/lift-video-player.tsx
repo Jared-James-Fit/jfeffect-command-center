@@ -12,20 +12,24 @@ export function LiftVideoPlayer({
   src,
   fallbackUrl,
   title = "Video",
+  embedFallbackUrl,
 }: {
   src: string;
   fallbackUrl?: string | null;
   title?: string;
+  embedFallbackUrl?: string | null;
 }) {
   const ref = useRef<HTMLVideoElement | null>(null);
   const [speed, setSpeed] = useState(1);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [slow, setSlow] = useState(false);
+  const [useEmbedFallback, setUseEmbedFallback] = useState(false);
   const [retryKey, setRetryKey] = useState(0);
 
   useEffect(() => {
     setStatus("loading");
     setSlow(false);
+    setUseEmbedFallback(false);
     const slowTimer = window.setTimeout(() => setSlow(true), 5000);
     return () => window.clearTimeout(slowTimer);
   }, [src, retryKey]);
@@ -49,6 +53,7 @@ export function LiftVideoPlayer({
     const v = ref.current;
     setRetryKey((k) => k + 1);
     setSlow(false);
+    setUseEmbedFallback(false);
     setStatus("loading");
     if (v) {
       v.load();
@@ -58,6 +63,45 @@ export function LiftVideoPlayer({
   return (
     <div className="space-y-2">
       <div className={cn("relative mx-auto aspect-video w-full overflow-hidden rounded-md border border-border bg-secondary/40")}>
+        {useEmbedFallback && embedFallbackUrl ? (
+          <iframe
+            key={`${embedFallbackUrl}-${retryKey}`}
+            src={embedFallbackUrl}
+            className="h-full w-full bg-secondary/40"
+            allow="autoplay; encrypted-media; fullscreen"
+            allowFullScreen
+            loading="lazy"
+            title={title}
+            onLoad={() => setStatus("ready")}
+          />
+        ) : (
+          <video
+            key={`${src}-${retryKey}`}
+            ref={ref}
+            src={src}
+            controls
+            playsInline
+            controlsList="nodownload"
+            preload="metadata"
+            aria-label={title}
+            onLoadedData={() => setStatus("ready")}
+            onCanPlay={() => setStatus("ready")}
+            onLoadedMetadata={(e) => {
+              const v = e.currentTarget;
+              v.playbackRate = speed;
+            }}
+            onError={() => {
+              if (embedFallbackUrl) {
+                setUseEmbedFallback(true);
+                setStatus("loading");
+                setSlow(false);
+              } else {
+                setStatus("error");
+              }
+            }}
+            className="h-full w-full object-contain"
+          />
+        )}
         {(status === "loading" || status === "error") && (
           <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 p-4 text-center">
             {status === "error" ? (
@@ -91,24 +135,6 @@ export function LiftVideoPlayer({
             )}
           </div>
         )}
-        <video
-          key={`${src}-${retryKey}`}
-          ref={ref}
-          src={src}
-          controls
-          playsInline
-          controlsList="nodownload"
-          preload="metadata"
-          aria-label={title}
-          onLoadedData={() => setStatus("ready")}
-          onCanPlay={() => setStatus("ready")}
-          onLoadedMetadata={(e) => {
-            const v = e.currentTarget;
-            v.playbackRate = speed;
-          }}
-          onError={() => setStatus("error")}
-          className="h-full w-full object-contain"
-        />
       </div>
       <div className="flex flex-wrap items-center gap-2 px-1 pb-1">
         <Button size="sm" variant="outline" onClick={() => skip(-5)} title="Back 5s">
