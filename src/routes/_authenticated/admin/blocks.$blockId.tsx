@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
-import { ArrowLeft, Plus, Trash2, Copy, Save, Clock, RotateCcw, Eye, EyeOff, GripVertical, MoreHorizontal, Columns2, Rows3, ChevronDown, ChevronRight, TrendingUp, Zap, LayoutGrid, CalendarDays, CalendarRange, User, Unlink } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, Copy, Save, Clock, RotateCcw, Eye, EyeOff, GripVertical, MoreHorizontal, Columns2, Rows3, ChevronDown, ChevronRight, TrendingUp, Zap, LayoutGrid, CalendarDays, CalendarRange, User, Unlink, ChevronsDownUp, ChevronsUpDown, Crosshair, Link2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   getBlockTree, addDay, addRow, updateRow, deleteRow, updateDay,
