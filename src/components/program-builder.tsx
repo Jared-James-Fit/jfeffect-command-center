@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, Star, GripVertical, Check, Loader2, AlertCircle, Circle } from "lucide-react";
+import { Search, Star, GripVertical, Check, Loader2, AlertCircle, Circle, Plus, Link as LinkIcon, Unlink } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // ---------------- Drag & drop payload helpers ----------------
@@ -208,12 +208,18 @@ export function ExerciseLibraryPanel({
   exercises,
   recentIds = [],
   onPick,
+  onQuickAdd,
+  selectedDayLabel,
   collapsed,
   onToggleCollapse,
 }: {
   exercises: ExerciseRef[];
   recentIds?: string[];
   onPick?: (id: string) => void;
+  /** Called by the row "+" button — should add to the currently selected day. */
+  onQuickAdd?: (id: string) => void;
+  /** Shown next to the search input, e.g. "→ Day 1". */
+  selectedDayLabel?: string | null;
   collapsed?: boolean;
   onToggleCollapse?: () => void;
 }) {
@@ -265,18 +271,25 @@ export function ExerciseLibraryPanel({
 
   return (
     <div className="flex h-full w-64 flex-col border-r border-border bg-card text-xs">
-      <div className="flex items-center gap-1 border-b border-border p-2">
-        <Search className="h-3 w-3 text-muted-foreground" />
-        <Input
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder="Search exercises…"
-          className="h-7 border-0 bg-transparent px-1 text-xs focus-visible:ring-0"
-        />
-        {onToggleCollapse && (
-          <Button size="icon" variant="ghost" className="h-6 w-6" onClick={onToggleCollapse} title="Hide">
-            ×
-          </Button>
+      <div className="border-b border-border">
+        <div className="flex items-center gap-1 p-2">
+          <Search className="h-3 w-3 text-muted-foreground" />
+          <Input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Search exercises…"
+            className="h-7 border-0 bg-transparent px-1 text-xs focus-visible:ring-0"
+          />
+          {onToggleCollapse && (
+            <Button size="icon" variant="ghost" className="h-6 w-6" onClick={onToggleCollapse} title="Hide">
+              ×
+            </Button>
+          )}
+        </div>
+        {(selectedDayLabel || onQuickAdd) && (
+          <div className="px-2 pb-1 text-[10px] text-muted-foreground">
+            {selectedDayLabel ? <>Adds to <span className="font-semibold text-foreground">{selectedDayLabel}</span></> : <>Click a day to select an add target</>}
+          </div>
         )}
       </div>
       <div className="flex flex-wrap gap-1 border-b border-border p-2">
@@ -322,7 +335,7 @@ export function ExerciseLibraryPanel({
             <div className="p-3 text-center text-[11px] text-muted-foreground">No exercises.</div>
           ) : (
             filtered.map((e) => (
-              <ExerciseItem key={e.id} ex={e} fav={favs.has(e.id)} onFav={toggleFav} onPick={onPick} />
+              <ExerciseItem key={e.id} ex={e} fav={favs.has(e.id)} onFav={toggleFav} onPick={onPick} onQuickAdd={onQuickAdd} />
             ))
           )}
         </Section>
@@ -347,27 +360,37 @@ function ExerciseItem({
   fav,
   onFav,
   onPick,
+  onQuickAdd,
 }: {
   ex: ExerciseRef;
   fav?: boolean;
   onFav: (id: string) => void;
   onPick?: (id: string) => void;
+  onQuickAdd?: (id: string) => void;
 }) {
+  const tagLine = [ex.muscle_group, ex.category].filter(Boolean).join(" · ");
   return (
     <div
       draggable
       onDragStart={(e) => setDragExercise(e, ex.id)}
       onDoubleClick={() => onPick?.(ex.id)}
-      title="Drag into a day, or double-click to add to first day"
+      title="Drag into a day, click + to add to selected day, or double-click to add to first day"
       className="group flex cursor-grab items-center gap-1 border-b border-border/50 px-2 py-1 hover:bg-secondary/50 active:cursor-grabbing"
     >
       <GripVertical className="h-3 w-3 shrink-0 text-muted-foreground/60" />
       <div className="min-w-0 flex-1">
         <div className="truncate text-xs">{ex.name}</div>
-        {ex.muscle_group && (
-          <div className="truncate text-[10px] text-muted-foreground">{ex.muscle_group}</div>
-        )}
+        {tagLine && <div className="truncate text-[10px] text-muted-foreground">{tagLine}</div>}
       </div>
+      {onQuickAdd && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onQuickAdd(ex.id); }}
+          className="opacity-0 group-hover:opacity-100 rounded p-0.5 text-primary hover:bg-primary/10"
+          title="Add to selected day"
+        >
+          <Plus className="h-3.5 w-3.5" />
+        </button>
+      )}
       <button
         onClick={(e) => { e.stopPropagation(); onFav(ex.id); }}
         className={cn(
@@ -502,4 +525,98 @@ export function movementAccent(name?: string | null): string {
   if (/deadlift|pull|row/.test(n)) return "bg-emerald-500/70";
   if (/curl|tricep|arm/.test(n)) return "bg-purple-500/60";
   return "bg-muted-foreground/40";
+}
+
+// ---------------- Edit scope dialog ----------------
+
+export type EditScopeChoice = "this" | "future" | "all" | "cancel";
+
+export function EditScopeDialog({
+  open,
+  onOpenChange,
+  onChoose,
+  customDownstream = 0,
+  description,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  onChoose: (choice: EditScopeChoice) => void;
+  /** Count of custom days downstream (warning case). */
+  customDownstream?: number;
+  description?: string;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={(v) => { if (!v) onChoose("cancel"); onOpenChange(v); }}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>How should this change apply?</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-2 text-sm">
+          {description && <p className="text-muted-foreground">{description}</p>}
+          {customDownstream > 0 && (
+            <p className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs">
+              {customDownstream} downstream day{customDownstream === 1 ? "" : "s"} {customDownstream === 1 ? "has" : "have"} custom edits and will be preserved.
+            </p>
+          )}
+          <div className="space-y-1.5 pt-2">
+            <ScopeButton label="This day only" hint="Change just this day. Future weeks stay as they are." onClick={() => onChoose("this")} />
+            <ScopeButton label="This day + future weeks" hint="Apply to this day and every later week's matching day (skips custom)." onClick={() => onChoose("future")} />
+            <ScopeButton label="All matching days in block" hint="Apply to every week's matching day in this block (skips custom)." onClick={() => onChoose("all")} />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onChoose("cancel")}>Cancel</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ScopeButton({ label, hint, onClick }: { label: string; hint: string; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className="w-full rounded-md border border-border p-2 text-left text-sm hover:border-primary hover:bg-primary/5"
+    >
+      <div className="font-semibold">{label}</div>
+      <div className="text-[11px] text-muted-foreground">{hint}</div>
+    </button>
+  );
+}
+
+// ---------------- Link badge ----------------
+
+export function LinkBadge({
+  isCustom,
+  sourceLabel,
+  onBreak,
+  onRelink,
+}: {
+  isCustom: boolean;
+  /** e.g. "W1 D2". null = no link. */
+  sourceLabel?: string | null;
+  onBreak?: () => void;
+  onRelink?: () => void;
+}) {
+  if (isCustom) {
+    return (
+      <Badge variant="outline" className="gap-1 border-amber-500/40 text-amber-500 text-[10px]">
+        <Unlink className="h-3 w-3" /> Custom
+        {onRelink && (
+          <button onClick={onRelink} className="ml-1 underline hover:text-amber-400" title="Re-link to previous week">re-link</button>
+        )}
+      </Badge>
+    );
+  }
+  if (sourceLabel) {
+    return (
+      <Badge variant="outline" className="gap-1 text-[10px] text-muted-foreground">
+        <LinkIcon className="h-3 w-3" /> Linked to {sourceLabel}
+        {onBreak && (
+          <button onClick={onBreak} className="ml-1 underline hover:text-foreground" title="Break link">break</button>
+        )}
+      </Badge>
+    );
+  }
+  return null;
 }

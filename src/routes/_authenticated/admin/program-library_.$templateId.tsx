@@ -162,6 +162,12 @@ function TemplateEditor() {
             <div className="flex h-[calc(100vh-220px)] gap-2 overflow-hidden rounded-md border border-border">
               <ExerciseLibraryPanel
                 exercises={exercises as ExerciseRef[]}
+                onQuickAdd={(exId) => {
+                  const ex = (exercises as any[]).find((e) => e.id === exId);
+                  appendRowToFirstDay(payload, type, { exercise_id: exId, exercise_name_override: ex?.name });
+                  setP({ ...payload });
+                  toast.success("Added to first day");
+                }}
                 onPick={(exId) => {
                   const ex = (exercises as any[]).find((e) => e.id === exId);
                   // append to first day found

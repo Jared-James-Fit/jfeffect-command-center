@@ -340,6 +340,14 @@ export async function addWeek(blockId: string) {
 
 /** Insert a new row from an exercise at a given position (defaults appended). */
 export async function addRowFromExercise(dayId: string, exerciseId: string, position?: number) {
+  // Look up the exercise so we can seed sensible defaults (time profile + rest)
+  const { data: ex } = await sb
+    .from("exercises")
+    .select("name, category, muscle_group")
+    .eq("id", exerciseId)
+    .maybeSingle();
+  const profile = inferTimeProfileFromExercise(ex);
+  const prof = TIME_PROFILES.find((p) => p.value === profile) ?? TIME_PROFILES[2];
   const { data: existing } = await sb
     .from("pl_exercise_rows")
     .select("id, sort_order")
@@ -359,13 +367,26 @@ export async function addRowFromExercise(dayId: string, exerciseId: string, posi
       sort_order: pos,
       exercise_id: exerciseId,
       sets: 3,
-      reps_text: "8-12",
-      time_profile: "accessory_compound",
+      reps_text: profile === "main_lift" ? "3-5" : "8-12",
+      time_profile: profile,
+      rest_seconds: prof.defaultRest,
     })
     .select("*")
     .single();
   if (error) throw error;
   return data;
+}
+
+/** Infer a default time profile from an exercise's category/name. */
+export function inferTimeProfileFromExercise(ex: { name?: string | null; category?: string | null; muscle_group?: string | null } | null | undefined): TimeProfile {
+  const cat = (ex?.category ?? "").toLowerCase();
+  const name = (ex?.name ?? "").toLowerCase();
+  if (cat === "warm-ups" || cat === "mobility" || /warm[- ]?up|mobility|activation/.test(name)) return "warmup_mobility";
+  if (cat === "cardio" || /cardio|conditioning|sprint|sled|prowler/.test(name)) return "conditioning";
+  if (/(^|\s)(comp |competition )?(back |front |high.bar |low.bar )?squat$|^bench press$|^deadlift$|^conventional deadlift$|^sumo deadlift$|^overhead press$|^ohp$/.test(name)) return "main_lift";
+  if (/squat|bench press|deadlift|overhead press|press$/.test(name)) return "secondary_lift";
+  if (/curl|extension|raise|fly|kickback|pulldown|pushdown|shrug|calf/.test(name)) return "accessory_isolation";
+  return "accessory_compound";
 }
 
 /** Move a row to a different day (or same day at a position). Shifts siblings. */
@@ -439,6 +460,8 @@ export async function copyWeek(srcWeekId: string, targetWeekId: string, opts: Co
         notes: opts.notes ? d.notes : null,
         duration_source: d.duration_source,
         duration_override_min: d.duration_override_min,
+        source_day_id: d.id,
+        is_custom: false,
       })
       .select("*")
       .single();
@@ -468,6 +491,150 @@ export async function copyWeek(srcWeekId: string, targetWeekId: string, opts: Co
       });
     }
   }
+}
+
+// ---------- Linked-week helpers ----------
+
+export type EditScope = "this" | "future" | "all";
+
+/** Resolve which day IDs an edit should apply to, given a scope. Custom days (other than the origin) are excluded. */
+export async function expandLinkedDays(dayId: string, scope: EditScope): Promise<string[]> {
+  if (scope === "this") return [dayId];
+  const { data: day } = await sb.from("pl_days").select("id, week_id, day_index").eq("id", dayId).maybeSingle();
+  if (!day) return [dayId];
+  const { data: week } = await sb.from("pl_weeks").select("id, block_id, week_index").eq("id", day.week_id).maybeSingle();
+  if (!week) return [dayId];
+  const { data: allWeeks } = await sb.from("pl_weeks").select("id, week_index").eq("block_id", week.block_id).order("week_index");
+  const weekIds = (allWeeks ?? [])
+    .filter((w: any) => scope === "all" || w.week_index >= week.week_index)
+    .map((w: any) => w.id);
+  if (!weekIds.length) return [dayId];
+  const { data: days } = await sb
+    .from("pl_days")
+    .select("id, is_custom")
+    .in("week_id", weekIds)
+    .eq("day_index", day.day_index);
+  return (days ?? [])
+    .filter((d: any) => d.id === dayId || !d.is_custom)
+    .map((d: any) => d.id);
+}
+
+/** Count downstream days (future weeks, same day_index) that are flagged custom — used for warning UX. */
+export async function countCustomDownstream(dayId: string): Promise<number> {
+  const { data: day } = await sb.from("pl_days").select("week_id, day_index").eq("id", dayId).maybeSingle();
+  if (!day) return 0;
+  const { data: week } = await sb.from("pl_weeks").select("block_id, week_index").eq("id", day.week_id).maybeSingle();
+  if (!week) return 0;
+  const { data: weeks } = await sb.from("pl_weeks").select("id").eq("block_id", week.block_id).gt("week_index", week.week_index);
+  const ids = (weeks ?? []).map((w: any) => w.id);
+  if (!ids.length) return 0;
+  const { data: days } = await sb.from("pl_days").select("id").in("week_id", ids).eq("day_index", day.day_index).eq("is_custom", true);
+  return (days ?? []).length;
+}
+
+/** Apply the same patch to a set of rows across days, matched by sort_order. */
+export async function applyRowPatchAcrossDays(originRowId: string, dayIds: string[], patch: Record<string, any>) {
+  const { data: origin } = await sb.from("pl_exercise_rows").select("sort_order, day_id").eq("id", originRowId).maybeSingle();
+  if (!origin) return;
+  await sb.from("pl_exercise_rows").update(patch).eq("id", originRowId);
+  for (const did of dayIds) {
+    if (did === origin.day_id) continue;
+    await sb.from("pl_exercise_rows").update(patch).eq("day_id", did).eq("sort_order", origin.sort_order);
+  }
+}
+
+/** Apply a day-level patch to a set of days. */
+export async function applyDayPatchAcrossDays(dayIds: string[], patch: Record<string, any>) {
+  if (!dayIds.length) return;
+  await sb.from("pl_days").update(patch).in("id", dayIds);
+}
+
+/** Break the link on a day so future cascades skip it. */
+export async function breakDayLink(dayId: string) {
+  await sb.from("pl_days").update({ is_custom: true }).eq("id", dayId);
+}
+
+/** Re-link a day to the same-day-index day in the previous week. */
+export async function relinkDay(dayId: string) {
+  const { data: day } = await sb.from("pl_days").select("week_id, day_index").eq("id", dayId).maybeSingle();
+  if (!day) return;
+  const { data: week } = await sb.from("pl_weeks").select("block_id, week_index").eq("id", day.week_id).maybeSingle();
+  if (!week) return;
+  const { data: prev } = await sb.from("pl_weeks").select("id").eq("block_id", week.block_id).eq("week_index", week.week_index - 1).maybeSingle();
+  if (!prev) return;
+  const { data: src } = await sb.from("pl_days").select("id").eq("week_id", prev.id).eq("day_index", day.day_index).maybeSingle();
+  await sb.from("pl_days").update({ source_day_id: src?.id ?? null, is_custom: false }).eq("id", dayId);
+}
+
+/** Copy one week into every other week in the same block. */
+export async function copyWeekToAll(srcWeekId: string, opts: CopyWeekOptions) {
+  const { data: src } = await sb.from("pl_weeks").select("block_id").eq("id", srcWeekId).maybeSingle();
+  if (!src) return { copied: 0 };
+  const { data: weeks } = await sb.from("pl_weeks").select("id").eq("block_id", src.block_id).neq("id", srcWeekId);
+  let copied = 0;
+  for (const w of (weeks ?? []) as any[]) {
+    await copyWeek(srcWeekId, w.id, opts);
+    copied++;
+  }
+  return { copied };
+}
+
+// ---------- Progression rules ----------
+
+export type ProgressionRuleType = "add_kg" | "add_lb" | "add_pct" | "repeat" | "deload";
+
+export interface ProgressionRule {
+  type: ProgressionRuleType;
+  amount?: number;
+  /** Substring filter on exercise name. Empty = apply to all rows. */
+  exerciseFilter?: string;
+}
+
+/** Walk weeks in order; for each week >= 2, derive new prescriptions from the previous week's rows. Skips custom days. */
+export async function applyProgression(blockId: string, rule: ProgressionRule): Promise<{ updated: number; skippedCustom: number }> {
+  const { data: weeks } = await sb.from("pl_weeks").select("id, week_index").eq("block_id", blockId).order("week_index");
+  if (!weeks || weeks.length < 2) return { updated: 0, skippedCustom: 0 };
+  let updated = 0;
+  let skippedCustom = 0;
+  const filter = (rule.exerciseFilter ?? "").trim().toLowerCase();
+
+  for (let i = 1; i < weeks.length; i++) {
+    const prevWeek = weeks[i - 1] as any;
+    const thisWeek = weeks[i] as any;
+    const { data: prevDays } = await sb.from("pl_days").select("id, day_index").eq("week_id", prevWeek.id);
+    const { data: thisDays } = await sb.from("pl_days").select("id, day_index, is_custom").eq("week_id", thisWeek.id);
+    for (const td of (thisDays ?? []) as any[]) {
+      if (td.is_custom) { skippedCustom++; continue; }
+      const pd = (prevDays ?? []).find((d: any) => d.day_index === td.day_index);
+      if (!pd) continue;
+      const { data: prevRows } = await sb.from("pl_exercise_rows").select("*, exercises(name)").eq("day_id", pd.id).order("sort_order");
+      const { data: thisRows } = await sb.from("pl_exercise_rows").select("id, sort_order").eq("day_id", td.id).order("sort_order");
+      for (const pr of (prevRows ?? []) as any[]) {
+        const tr = (thisRows ?? []).find((r: any) => r.sort_order === pr.sort_order);
+        if (!tr) continue;
+        const name: string = (pr.exercises?.name ?? pr.exercise_name_override ?? "").toLowerCase();
+        if (filter && !name.includes(filter)) continue;
+        const patch: Record<string, any> = {};
+        if (rule.type === "add_kg" && pr.load_kg != null) patch.load_kg = Number(pr.load_kg) + (rule.amount ?? 2.5);
+        else if (rule.type === "add_lb" && pr.load_lb != null) patch.load_lb = Number(pr.load_lb) + (rule.amount ?? 5);
+        else if (rule.type === "add_pct" && pr.percentage != null) patch.percentage = Number(pr.percentage) + (rule.amount ?? 2.5);
+        else if (rule.type === "repeat") {
+          if (pr.load_kg != null) patch.load_kg = pr.load_kg;
+          if (pr.load_lb != null) patch.load_lb = pr.load_lb;
+          if (pr.percentage != null) patch.percentage = pr.percentage;
+        } else if (rule.type === "deload") {
+          if (pr.load_kg != null) patch.load_kg = Math.round((Number(pr.load_kg) * 0.9) / 2.5) * 2.5;
+          if (pr.load_lb != null) patch.load_lb = Math.round((Number(pr.load_lb) * 0.9) / 5) * 5;
+          if (pr.percentage != null) patch.percentage = Math.round(Number(pr.percentage) * 0.9 * 10) / 10;
+        }
+        if (Object.keys(patch).length > 0) {
+          await sb.from("pl_exercise_rows").update(patch).eq("id", tr.id);
+          updated++;
+        }
+      }
+    }
+  }
+  return { updated, skippedCustom };
 }
 
 // ---------- Analytics / PRs ----------
