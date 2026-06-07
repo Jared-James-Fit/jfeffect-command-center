@@ -479,7 +479,7 @@ function WeekEditor({ week, setWeek, exercises, onCopyDayToFuture, hideHeader }:
         <Button size="sm" variant="outline" onClick={addDay}><Plus className="mr-1 h-3 w-3" /> Day</Button>
       )}
       {days.map((d: any, i: number) => (
-        <Card key={i} className="p-3">
+        <Card key={i} className="p-3 border-l-[3px] border-l-primary/40">
           <div className="mb-2 flex items-center gap-2">
             <Input className="max-w-xs font-bold" value={d.title ?? ""} onChange={(e) => { const copy = [...days]; copy[i] = { ...d, title: e.target.value }; setWeek({ ...week, days: copy }); }} />
             <Input className="max-w-xs" placeholder="Focus" value={d.focus ?? ""} onChange={(e) => { const copy = [...days]; copy[i] = { ...d, focus: e.target.value }; setWeek({ ...week, days: copy }); }} />
