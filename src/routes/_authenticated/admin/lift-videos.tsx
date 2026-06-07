@@ -351,21 +351,12 @@ function AdminLiftVideos() {
 /* -------------------------- Submission row ------------------------- */
 
 function ClientAvatar({ client, size = 40 }: { client: any; size?: number }) {
-  const initials = (client?.full_name ?? "?").trim().slice(0, 1).toUpperCase();
-  return client?.profile_picture_url ? (
-    <img
-      src={client.profile_picture_url}
-      alt=""
-      className="shrink-0 rounded-full object-cover"
-      style={{ width: size, height: size }}
+  return (
+    <UserAvatar
+      src={client?.profile_picture_url}
+      name={client?.full_name}
+      size={size}
     />
-  ) : (
-    <div
-      className="grid shrink-0 place-items-center rounded-full bg-secondary text-sm font-bold text-foreground"
-      style={{ width: size, height: size }}
-    >
-      {initials}
-    </div>
   );
 }
 
