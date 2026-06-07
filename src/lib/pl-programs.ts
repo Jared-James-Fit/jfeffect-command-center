@@ -357,7 +357,7 @@ export async function getClientResults(clientId: string) {
 }
 
 /** Group result history by exercise; return time-series est-1RM and current PR. */
-export function buildExerciseHistory(results: ReturnType<typeof getClientResults> extends Promise<infer R> ? R : never[]) {
+export function buildExerciseHistory(results: any[]) {
   const byEx = new Map<string, any[]>();
   for (const r of results as any[]) {
     if (!byEx.has(r.exercise_name)) byEx.set(r.exercise_name, []);
