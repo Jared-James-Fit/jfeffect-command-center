@@ -642,6 +642,12 @@ function PaymentLinksPage() {
         confirmLabel="Delete Selected Products"
         onConfirm={bulkDelete}
       />
+
+      <SharePaymentLinkDialog
+        product={sharing}
+        onClose={() => setSharing(null)}
+        onCopy={copyLink}
+      />
     </>
   );
 }
