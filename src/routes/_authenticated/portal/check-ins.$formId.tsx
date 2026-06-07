@@ -172,7 +172,7 @@ function ClientFormRenderer() {
       <PageHeader
         title={form.title}
         subtitle={submission.period_start ? `Week of ${submission.period_start}` : undefined}
-        right={<Badge className={statusTone(submission.status) + " border"}>{statusLabel(submission.status)}</Badge>}
+        actions={<Badge className={statusTone(submission.status) + " border"}>{statusLabel(submission.status)}</Badge>}
       />
 
       <div className="mx-auto max-w-3xl space-y-4 p-4 md:p-8">

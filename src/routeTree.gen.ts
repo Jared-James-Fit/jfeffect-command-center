@@ -66,6 +66,7 @@ import { Route as AuthenticatedAdminClientsIndexRouteImport } from './routes/_au
 import { Route as AuthenticatedAdminAgreementsIndexRouteImport } from './routes/_authenticated/admin/agreements.index'
 import { Route as LovableEmailQueueProcessRouteImport } from './routes/lovable/email/queue/process'
 import { Route as AuthenticatedPortalPurchasesIdRouteImport } from './routes/_authenticated/portal/purchases.$id'
+import { Route as AuthenticatedPortalCheckInsFormIdRouteImport } from './routes/_authenticated/portal/check-ins.$formId'
 import { Route as AuthenticatedAdminPurchasesIdRouteImport } from './routes/_authenticated/admin/purchases.$id'
 import { Route as AuthenticatedAdminCoachesIdRouteImport } from './routes/_authenticated/admin/coaches.$id'
 import { Route as AuthenticatedAdminClientsIdRouteImport } from './routes/_authenticated/admin/clients.$id'
@@ -398,6 +399,12 @@ const AuthenticatedPortalPurchasesIdRoute =
     path: '/$id',
     getParentRoute: () => AuthenticatedPortalPurchasesRoute,
   } as any)
+const AuthenticatedPortalCheckInsFormIdRoute =
+  AuthenticatedPortalCheckInsFormIdRouteImport.update({
+    id: '/$formId',
+    path: '/$formId',
+    getParentRoute: () => AuthenticatedPortalCheckInsRoute,
+  } as any)
 const AuthenticatedAdminPurchasesIdRoute =
   AuthenticatedAdminPurchasesIdRouteImport.update({
     id: '/$id',
@@ -459,7 +466,7 @@ export interface FileRoutesByFullPath {
   '/portal/account': typeof AuthenticatedPortalAccountRoute
   '/portal/calendar': typeof AuthenticatedPortalCalendarRoute
   '/portal/check-in': typeof AuthenticatedPortalCheckInRoute
-  '/portal/check-ins': typeof AuthenticatedPortalCheckInsRoute
+  '/portal/check-ins': typeof AuthenticatedPortalCheckInsRouteWithChildren
   '/portal/documents': typeof AuthenticatedPortalDocumentsRoute
   '/portal/exercises': typeof AuthenticatedPortalExercisesRoute
   '/portal/lift-videos': typeof AuthenticatedPortalLiftVideosRoute
@@ -478,6 +485,7 @@ export interface FileRoutesByFullPath {
   '/admin/clients/$id': typeof AuthenticatedAdminClientsIdRoute
   '/admin/coaches/$id': typeof AuthenticatedAdminCoachesIdRoute
   '/admin/purchases/$id': typeof AuthenticatedAdminPurchasesIdRoute
+  '/portal/check-ins/$formId': typeof AuthenticatedPortalCheckInsFormIdRoute
   '/portal/purchases/$id': typeof AuthenticatedPortalPurchasesIdRoute
   '/lovable/email/queue/process': typeof LovableEmailQueueProcessRoute
   '/admin/agreements/': typeof AuthenticatedAdminAgreementsIndexRoute
@@ -519,7 +527,7 @@ export interface FileRoutesByTo {
   '/portal/account': typeof AuthenticatedPortalAccountRoute
   '/portal/calendar': typeof AuthenticatedPortalCalendarRoute
   '/portal/check-in': typeof AuthenticatedPortalCheckInRoute
-  '/portal/check-ins': typeof AuthenticatedPortalCheckInsRoute
+  '/portal/check-ins': typeof AuthenticatedPortalCheckInsRouteWithChildren
   '/portal/documents': typeof AuthenticatedPortalDocumentsRoute
   '/portal/exercises': typeof AuthenticatedPortalExercisesRoute
   '/portal/lift-videos': typeof AuthenticatedPortalLiftVideosRoute
@@ -538,6 +546,7 @@ export interface FileRoutesByTo {
   '/admin/clients/$id': typeof AuthenticatedAdminClientsIdRoute
   '/admin/coaches/$id': typeof AuthenticatedAdminCoachesIdRoute
   '/admin/purchases/$id': typeof AuthenticatedAdminPurchasesIdRoute
+  '/portal/check-ins/$formId': typeof AuthenticatedPortalCheckInsFormIdRoute
   '/portal/purchases/$id': typeof AuthenticatedPortalPurchasesIdRoute
   '/lovable/email/queue/process': typeof LovableEmailQueueProcessRoute
   '/admin/agreements': typeof AuthenticatedAdminAgreementsIndexRoute
@@ -583,7 +592,7 @@ export interface FileRoutesById {
   '/_authenticated/portal/account': typeof AuthenticatedPortalAccountRoute
   '/_authenticated/portal/calendar': typeof AuthenticatedPortalCalendarRoute
   '/_authenticated/portal/check-in': typeof AuthenticatedPortalCheckInRoute
-  '/_authenticated/portal/check-ins': typeof AuthenticatedPortalCheckInsRoute
+  '/_authenticated/portal/check-ins': typeof AuthenticatedPortalCheckInsRouteWithChildren
   '/_authenticated/portal/documents': typeof AuthenticatedPortalDocumentsRoute
   '/_authenticated/portal/exercises': typeof AuthenticatedPortalExercisesRoute
   '/_authenticated/portal/lift-videos': typeof AuthenticatedPortalLiftVideosRoute
@@ -602,6 +611,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/clients/$id': typeof AuthenticatedAdminClientsIdRoute
   '/_authenticated/admin/coaches/$id': typeof AuthenticatedAdminCoachesIdRoute
   '/_authenticated/admin/purchases/$id': typeof AuthenticatedAdminPurchasesIdRoute
+  '/_authenticated/portal/check-ins/$formId': typeof AuthenticatedPortalCheckInsFormIdRoute
   '/_authenticated/portal/purchases/$id': typeof AuthenticatedPortalPurchasesIdRoute
   '/lovable/email/queue/process': typeof LovableEmailQueueProcessRoute
   '/_authenticated/admin/agreements/': typeof AuthenticatedAdminAgreementsIndexRoute
@@ -666,6 +676,7 @@ export interface FileRouteTypes {
     | '/admin/clients/$id'
     | '/admin/coaches/$id'
     | '/admin/purchases/$id'
+    | '/portal/check-ins/$formId'
     | '/portal/purchases/$id'
     | '/lovable/email/queue/process'
     | '/admin/agreements/'
@@ -726,6 +737,7 @@ export interface FileRouteTypes {
     | '/admin/clients/$id'
     | '/admin/coaches/$id'
     | '/admin/purchases/$id'
+    | '/portal/check-ins/$formId'
     | '/portal/purchases/$id'
     | '/lovable/email/queue/process'
     | '/admin/agreements'
@@ -789,6 +801,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/clients/$id'
     | '/_authenticated/admin/coaches/$id'
     | '/_authenticated/admin/purchases/$id'
+    | '/_authenticated/portal/check-ins/$formId'
     | '/_authenticated/portal/purchases/$id'
     | '/lovable/email/queue/process'
     | '/_authenticated/admin/agreements/'
@@ -1211,6 +1224,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedPortalPurchasesIdRouteImport
       parentRoute: typeof AuthenticatedPortalPurchasesRoute
     }
+    '/_authenticated/portal/check-ins/$formId': {
+      id: '/_authenticated/portal/check-ins/$formId'
+      path: '/$formId'
+      fullPath: '/portal/check-ins/$formId'
+      preLoaderRoute: typeof AuthenticatedPortalCheckInsFormIdRouteImport
+      parentRoute: typeof AuthenticatedPortalCheckInsRoute
+    }
     '/_authenticated/admin/purchases/$id': {
       id: '/_authenticated/admin/purchases/$id'
       path: '/$id'
@@ -1336,6 +1356,21 @@ const AuthenticatedAdminRouteRouteWithChildren =
     AuthenticatedAdminRouteRouteChildren,
   )
 
+interface AuthenticatedPortalCheckInsRouteChildren {
+  AuthenticatedPortalCheckInsFormIdRoute: typeof AuthenticatedPortalCheckInsFormIdRoute
+}
+
+const AuthenticatedPortalCheckInsRouteChildren: AuthenticatedPortalCheckInsRouteChildren =
+  {
+    AuthenticatedPortalCheckInsFormIdRoute:
+      AuthenticatedPortalCheckInsFormIdRoute,
+  }
+
+const AuthenticatedPortalCheckInsRouteWithChildren =
+  AuthenticatedPortalCheckInsRoute._addFileChildren(
+    AuthenticatedPortalCheckInsRouteChildren,
+  )
+
 interface AuthenticatedPortalPurchasesRouteChildren {
   AuthenticatedPortalPurchasesIdRoute: typeof AuthenticatedPortalPurchasesIdRoute
 }
@@ -1354,7 +1389,7 @@ interface AuthenticatedPortalRouteRouteChildren {
   AuthenticatedPortalAccountRoute: typeof AuthenticatedPortalAccountRoute
   AuthenticatedPortalCalendarRoute: typeof AuthenticatedPortalCalendarRoute
   AuthenticatedPortalCheckInRoute: typeof AuthenticatedPortalCheckInRoute
-  AuthenticatedPortalCheckInsRoute: typeof AuthenticatedPortalCheckInsRoute
+  AuthenticatedPortalCheckInsRoute: typeof AuthenticatedPortalCheckInsRouteWithChildren
   AuthenticatedPortalDocumentsRoute: typeof AuthenticatedPortalDocumentsRoute
   AuthenticatedPortalExercisesRoute: typeof AuthenticatedPortalExercisesRoute
   AuthenticatedPortalLiftVideosRoute: typeof AuthenticatedPortalLiftVideosRoute
@@ -1374,7 +1409,8 @@ const AuthenticatedPortalRouteRouteChildren: AuthenticatedPortalRouteRouteChildr
     AuthenticatedPortalAccountRoute: AuthenticatedPortalAccountRoute,
     AuthenticatedPortalCalendarRoute: AuthenticatedPortalCalendarRoute,
     AuthenticatedPortalCheckInRoute: AuthenticatedPortalCheckInRoute,
-    AuthenticatedPortalCheckInsRoute: AuthenticatedPortalCheckInsRoute,
+    AuthenticatedPortalCheckInsRoute:
+      AuthenticatedPortalCheckInsRouteWithChildren,
     AuthenticatedPortalDocumentsRoute: AuthenticatedPortalDocumentsRoute,
     AuthenticatedPortalExercisesRoute: AuthenticatedPortalExercisesRoute,
     AuthenticatedPortalLiftVideosRoute: AuthenticatedPortalLiftVideosRoute,
