@@ -13,6 +13,9 @@ import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import { assignClientToCoach, setCoachStatus } from "@/lib/coaches.functions";
 import { useAuth } from "@/lib/auth";
+import { UserAvatar } from "@/components/user-avatar";
+import { ProfilePictureCapture } from "@/components/profile-picture-capture";
+import { Camera, X, Trash2 } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/admin/coaches/$id")({
   component: CoachDetailPage,
@@ -23,6 +26,7 @@ function CoachDetailPage() {
   const { role } = useAuth();
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
+  const [editingPic, setEditingPic] = useState(false);
   const assignFn = useServerFn(assignClientToCoach);
   const statusFn = useServerFn(setCoachStatus);
 
@@ -43,7 +47,7 @@ function CoachDetailPage() {
     queryKey: ["clients-assignable"],
     queryFn: async () => {
       const { data } = await supabase.from("clients")
-        .select("id, full_name, email, status, assigned_coach_id")
+        .select("id, full_name, email, status, assigned_coach_id, profile_picture_url")
         .eq("archived", false)
         .order("full_name");
       return data ?? [];
@@ -89,10 +93,47 @@ function CoachDetailPage() {
 
   if (!coach) return <div className="p-8 text-sm text-muted-foreground">Loading coach…</div>;
 
+  const onPicUploaded = async (storagePath: string) => {
+    const { error } = await supabase
+      .from("coaches")
+      .update({ profile_picture_url: storagePath })
+      .eq("id", id);
+    if (error) return toast.error(error.message);
+    // Also mirror to profiles.avatar_url so the coach sees it in their own sidebar.
+    if (coach.user_id) {
+      await supabase.from("profiles").update({ avatar_url: storagePath }).eq("id", coach.user_id);
+    }
+    setEditingPic(false);
+    toast.success("Profile picture updated");
+    qc.invalidateQueries({ queryKey: ["coach", id] });
+  };
+
+  const removePic = async () => {
+    if (!coach.profile_picture_url) return;
+    if (!confirm("Remove this coach's profile picture?")) return;
+    const path = coach.profile_picture_url;
+    const { error } = await supabase
+      .from("coaches")
+      .update({ profile_picture_url: null })
+      .eq("id", id);
+    if (error) return toast.error(error.message);
+    if (coach.user_id) {
+      await supabase.from("profiles").update({ avatar_url: null }).eq("id", coach.user_id);
+    }
+    await supabase.storage.from("avatars").remove([path]).catch(() => {});
+    toast.success("Removed");
+    qc.invalidateQueries({ queryKey: ["coach", id] });
+  };
+
   return (
     <>
       <PageHeader
-        title={coach.full_name}
+        title={
+          <span className="flex items-center gap-3">
+            <UserAvatar src={coach.profile_picture_url} name={coach.full_name} size={44} ring />
+            <span>{coach.full_name}</span>
+          </span>
+        }
         subtitle={coach.email}
         actions={
           <Link to="/admin/coaches"><Button variant="outline" size="sm"><ArrowLeft className="mr-2 h-3 w-3" />All coaches</Button></Link>
@@ -101,7 +142,44 @@ function CoachDetailPage() {
       <div className="grid gap-4 p-6 md:grid-cols-3 md:p-8">
         <Card className="p-5">
           <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Profile</h3>
-          <div className="mt-3 space-y-2 text-sm">
+          <div className="mt-3 flex items-center gap-3">
+            <UserAvatar src={coach.profile_picture_url} name={coach.full_name} size={56} ring />
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" variant="outline" onClick={() => setEditingPic((v) => !v)}>
+                <Camera className="mr-1.5 h-3 w-3" />
+                {coach.profile_picture_url ? "Replace" : "Upload"}
+              </Button>
+              {coach.profile_picture_url && (
+                <Button size="sm" variant="ghost" onClick={removePic} className="text-destructive hover:text-destructive">
+                  <Trash2 className="mr-1.5 h-3 w-3" /> Remove
+                </Button>
+              )}
+            </div>
+          </div>
+          {editingPic && coach.user_id && (
+            <div className="mt-3 space-y-2 rounded-lg border border-border bg-secondary/30 p-3">
+              <div className="flex items-center justify-between">
+                <div className="text-xs font-semibold">Upload new picture</div>
+                <Button size="sm" variant="ghost" onClick={() => setEditingPic(false)}>
+                  <X className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+              <ProfilePictureCapture
+                userId={coach.user_id}
+                currentUrl={coach.profile_picture_url}
+                onUploaded={onPicUploaded}
+                allowFileUpload
+                mode="admin"
+                hidePreviewThumbnail
+              />
+            </div>
+          )}
+          {editingPic && !coach.user_id && (
+            <p className="mt-3 text-xs text-muted-foreground">
+              Coach hasn't accepted the invite yet — they can upload their own picture once signed in.
+            </p>
+          )}
+          <div className="mt-4 space-y-2 text-sm">
             <div><span className="text-muted-foreground">Name: </span>{coach.full_name}</div>
             <div><span className="text-muted-foreground">Email: </span>{coach.email}</div>
             {coach.phone ? <div><span className="text-muted-foreground">Phone: </span>{coach.phone}</div> : null}
@@ -142,9 +220,12 @@ function CoachDetailPage() {
             <ul className="space-y-2">
               {assigned.map((c) => (
                 <li key={c.id} className="flex items-center justify-between rounded-md border border-border p-2">
-                  <div>
-                    <Link to="/admin/clients/$id" params={{ id: c.id }} className="text-sm font-semibold hover:underline">{c.full_name}</Link>
-                    <div className="text-[11px] text-muted-foreground">{c.email}</div>
+                <div className="flex items-center gap-2 min-w-0">
+                  <UserAvatar src={(c as any).profile_picture_url} name={c.full_name} size={32} />
+                  <div className="min-w-0">
+                    <Link to="/admin/clients/$id" params={{ id: c.id }} className="text-sm font-semibold hover:underline truncate block">{c.full_name}</Link>
+                    <div className="text-[11px] text-muted-foreground truncate">{c.email}</div>
+                  </div>
                   </div>
                   <Button size="sm" variant="ghost" onClick={() => unassign(c.id)}>
                     <UserMinus className="mr-1 h-3 w-3" />Remove
@@ -164,10 +245,13 @@ function CoachDetailPage() {
           <ul className="space-y-2 max-h-96 overflow-auto">
             {filteredOther.map((c) => (
               <li key={c.id} className="flex items-center justify-between rounded-md border border-border p-2">
-                <div>
-                  <div className="text-sm font-semibold">{c.full_name}</div>
-                  <div className="text-[11px] text-muted-foreground">
-                    {c.email}{c.assigned_coach_id ? " · currently assigned to another coach" : ""}
+                <div className="flex items-center gap-2 min-w-0">
+                  <UserAvatar src={(c as any).profile_picture_url} name={c.full_name} size={32} />
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold truncate">{c.full_name}</div>
+                    <div className="text-[11px] text-muted-foreground truncate">
+                      {c.email}{c.assigned_coach_id ? " · currently assigned to another coach" : ""}
+                    </div>
                   </div>
                 </div>
                 <Button size="sm" onClick={() => assign(c.id)}>
