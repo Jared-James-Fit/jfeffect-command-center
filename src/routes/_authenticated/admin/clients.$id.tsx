@@ -820,6 +820,93 @@ function ClientDetail() {
         </AlertDialogContent>
       </AlertDialog>
       <PriceCardPickerDialog open={priceCardOpen} onClose={() => setPriceCardOpen(false)} fixedClientId={id} />
+
+      <AlertDialog open={deactivateOpen} onOpenChange={setDeactivateOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Deactivate this client?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Their account and history will be preserved, but they will no longer appear as an active client.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label>Reason (optional)</Label>
+              <Select value={deactivateReason} onValueChange={setDeactivateReason}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {DEACTIVATION_REASONS.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Internal note (admin only)</Label>
+              <Textarea value={deactivateNote} onChange={(e) => setDeactivateNote(e.target.value)} rows={3} />
+            </div>
+            <div className="flex items-center justify-between rounded-md border p-3">
+              <div>
+                <div className="text-sm font-medium">Disable client portal access</div>
+                <div className="text-xs text-muted-foreground">Recommended for ended coaching.</div>
+              </div>
+              <Switch checked={deactivateDisablePortal} onCheckedChange={setDeactivateDisablePortal} />
+            </div>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={async () => {
+                const t = toast.loading("Deactivating…");
+                try {
+                  await deactivateFn({ data: {
+                    clientId: id,
+                    reason: deactivateReason || undefined,
+                    note: deactivateNote || undefined,
+                    disablePortalAccess: deactivateDisablePortal,
+                  }});
+                  toast.success("Client deactivated", { id: t });
+                  setDeactivateOpen(false);
+                  qc.invalidateQueries({ queryKey: ["client", id] });
+                  qc.invalidateQueries({ queryKey: ["clients"] });
+                } catch (e: any) {
+                  toast.error(e?.message ?? "Failed", { id: t });
+                }
+              }}
+            >Deactivate Client</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={reactivateOpen} onOpenChange={setReactivateOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reactivate this client?</AlertDialogTitle>
+            <AlertDialogDescription>They will return to your Active Clients list.</AlertDialogDescription>
+          </AlertDialogHeader>
+          {form.portal_access_disabled && (
+            <div className="flex items-center justify-between rounded-md border p-3">
+              <div className="text-sm font-medium">Restore client portal access</div>
+              <Switch checked={reactivateRestorePortal} onCheckedChange={setReactivateRestorePortal} />
+            </div>
+          )}
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={async () => {
+                const t = toast.loading("Reactivating…");
+                try {
+                  await reactivateFn({ data: { clientId: id, restorePortalAccess: reactivateRestorePortal } });
+                  toast.success("Client reactivated", { id: t });
+                  setReactivateOpen(false);
+                  qc.invalidateQueries({ queryKey: ["client", id] });
+                  qc.invalidateQueries({ queryKey: ["clients"] });
+                } catch (e: any) {
+                  toast.error(e?.message ?? "Failed", { id: t });
+                }
+              }}
+            >Reactivate</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
