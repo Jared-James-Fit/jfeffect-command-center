@@ -19,6 +19,8 @@ import { listLiftVideos, statusTone as liftStatusTone } from "@/lib/lift-videos"
 import { formatDistanceToNow, parseISO } from "date-fns";
 import { HardDrive } from "lucide-react";
 import { UpcomingBirthdaysWidget } from "@/components/upcoming-birthdays-widget";
+import { Progress } from "@/components/ui/progress";
+import { format, parseISO as parseISODate } from "date-fns";
 
 export const Route = createFileRoute("/_authenticated/admin/")({
   component: AdminDashboard,
