@@ -208,12 +208,18 @@ export function ExerciseLibraryPanel({
   exercises,
   recentIds = [],
   onPick,
+  onQuickAdd,
+  selectedDayLabel,
   collapsed,
   onToggleCollapse,
 }: {
   exercises: ExerciseRef[];
   recentIds?: string[];
   onPick?: (id: string) => void;
+  /** Called by the row "+" button — should add to the currently selected day. */
+  onQuickAdd?: (id: string) => void;
+  /** Shown next to the search input, e.g. "→ Day 1". */
+  selectedDayLabel?: string | null;
   collapsed?: boolean;
   onToggleCollapse?: () => void;
 }) {
@@ -265,18 +271,25 @@ export function ExerciseLibraryPanel({
 
   return (
     <div className="flex h-full w-64 flex-col border-r border-border bg-card text-xs">
-      <div className="flex items-center gap-1 border-b border-border p-2">
-        <Search className="h-3 w-3 text-muted-foreground" />
-        <Input
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder="Search exercises…"
-          className="h-7 border-0 bg-transparent px-1 text-xs focus-visible:ring-0"
-        />
-        {onToggleCollapse && (
-          <Button size="icon" variant="ghost" className="h-6 w-6" onClick={onToggleCollapse} title="Hide">
-            ×
-          </Button>
+      <div className="border-b border-border">
+        <div className="flex items-center gap-1 p-2">
+          <Search className="h-3 w-3 text-muted-foreground" />
+          <Input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Search exercises…"
+            className="h-7 border-0 bg-transparent px-1 text-xs focus-visible:ring-0"
+          />
+          {onToggleCollapse && (
+            <Button size="icon" variant="ghost" className="h-6 w-6" onClick={onToggleCollapse} title="Hide">
+              ×
+            </Button>
+          )}
+        </div>
+        {(selectedDayLabel || onQuickAdd) && (
+          <div className="px-2 pb-1 text-[10px] text-muted-foreground">
+            {selectedDayLabel ? <>Adds to <span className="font-semibold text-foreground">{selectedDayLabel}</span></> : <>Click a day to select an add target</>}
+          </div>
         )}
       </div>
       <div className="flex flex-wrap gap-1 border-b border-border p-2">
@@ -322,7 +335,7 @@ export function ExerciseLibraryPanel({
             <div className="p-3 text-center text-[11px] text-muted-foreground">No exercises.</div>
           ) : (
             filtered.map((e) => (
-              <ExerciseItem key={e.id} ex={e} fav={favs.has(e.id)} onFav={toggleFav} onPick={onPick} />
+              <ExerciseItem key={e.id} ex={e} fav={favs.has(e.id)} onFav={toggleFav} onPick={onPick} onQuickAdd={onQuickAdd} />
             ))
           )}
         </Section>
@@ -347,27 +360,37 @@ function ExerciseItem({
   fav,
   onFav,
   onPick,
+  onQuickAdd,
 }: {
   ex: ExerciseRef;
   fav?: boolean;
   onFav: (id: string) => void;
   onPick?: (id: string) => void;
+  onQuickAdd?: (id: string) => void;
 }) {
+  const tagLine = [ex.muscle_group, ex.category].filter(Boolean).join(" · ");
   return (
     <div
       draggable
       onDragStart={(e) => setDragExercise(e, ex.id)}
       onDoubleClick={() => onPick?.(ex.id)}
-      title="Drag into a day, or double-click to add to first day"
+      title="Drag into a day, click + to add to selected day, or double-click to add to first day"
       className="group flex cursor-grab items-center gap-1 border-b border-border/50 px-2 py-1 hover:bg-secondary/50 active:cursor-grabbing"
     >
       <GripVertical className="h-3 w-3 shrink-0 text-muted-foreground/60" />
       <div className="min-w-0 flex-1">
         <div className="truncate text-xs">{ex.name}</div>
-        {ex.muscle_group && (
-          <div className="truncate text-[10px] text-muted-foreground">{ex.muscle_group}</div>
-        )}
+        {tagLine && <div className="truncate text-[10px] text-muted-foreground">{tagLine}</div>}
       </div>
+      {onQuickAdd && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onQuickAdd(ex.id); }}
+          className="opacity-0 group-hover:opacity-100 rounded p-0.5 text-primary hover:bg-primary/10"
+          title="Add to selected day"
+        >
+          <Plus className="h-3.5 w-3.5" />
+        </button>
+      )}
       <button
         onClick={(e) => { e.stopPropagation(); onFav(ex.id); }}
         className={cn(
