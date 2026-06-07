@@ -21,6 +21,7 @@ type Clip = {
   file?: File;
   url?: string;
   previewUrl?: string;
+  previewStatus?: "pending" | "ready" | "failed";
   note: string;
   duration?: number;
 };
@@ -75,19 +76,51 @@ export function ClientLiftVideoUploader({ clientId, clientName, userId, onSaved 
     if (!files || files.length === 0) return;
     const next: Clip[] = [];
     for (const f of Array.from(files)) {
+      // Basic guards only — never block on preview/metadata generation.
+      if (!f || f.size === 0) {
+        toast.error("That file looks empty. Try selecting it again.");
+        continue;
+      }
+      const looksVideo = (f.type || "").startsWith("video/") || /\.(mov|mp4|m4v|hevc|avi|3gp)$/i.test(f.name || "");
+      const looksImage = (f.type || "").startsWith("image/");
+      if (!looksVideo && !looksImage) {
+        toast.error(`Unsupported file: ${f.name || "selected item"}`);
+        continue;
+      }
       next.push({
         id: crypto.randomUUID(),
         kind: "file",
         file: f,
-        previewUrl: URL.createObjectURL(f),
+        // Defer createObjectURL + <video> mount so the "selected" UI
+        // paints instantly. iOS Safari otherwise blocks on .MOV decode.
+        previewUrl: undefined,
+        previewStatus: "pending",
         note: "",
       });
     }
+    if (next.length === 0) return;
     setClips((c) => {
       const merged = [...c, ...next];
       if (!activeId && merged.length) setActiveId(next[0].id);
       return merged;
     });
+    // Generate object URLs on the next idle/animation frame so React can
+    // commit the details panel first. The thumbnail then fills in.
+    const schedule = (cb: () => void) => {
+      const ric = (window as any).requestIdleCallback as undefined | ((cb: () => void) => number);
+      if (ric) ric(cb);
+      else setTimeout(cb, 50);
+    };
+    for (const clip of next) {
+      schedule(() => {
+        try {
+          const url = URL.createObjectURL(clip.file!);
+          setClips((c) => c.map((k) => (k.id === clip.id ? { ...k, previewUrl: url, previewStatus: "ready" } : k)));
+        } catch {
+          setClips((c) => c.map((k) => (k.id === clip.id ? { ...k, previewStatus: "failed" } : k)));
+        }
+      });
+    }
   };
 
   const addLinks = (raw: string) => {
