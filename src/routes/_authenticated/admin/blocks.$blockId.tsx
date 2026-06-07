@@ -110,9 +110,19 @@ function BlockEditor() {
   if (isLoading || !tree) return <div className="p-8 text-sm text-muted-foreground">Loading block…</div>;
   const { block, weeks, days, rows } = tree;
 
-  const visibleCount = view === 0 ? weeks.length : Math.min(view, weeks.length);
-  const clampedStart = Math.max(0, Math.min(startWeek, Math.max(0, weeks.length - visibleCount)));
-  const visibleWeeks = view === 0 ? weeks : weeks.slice(clampedStart, clampedStart + visibleCount);
+  // Which weeks to render based on the chosen view.
+  const focusedWeek =
+    (weeks as any[]).find((w: any) => w.week_index === focusedWeekIdx) ?? (weeks as any[])[0];
+  const focusedDay =
+    (days as any[]).find((d: any) => d.id === focusedDayId) ??
+    (days as any[]).find((d: any) => d.week_id === focusedWeek?.id) ??
+    (days as any[])[0];
+  const visibleWeeks: any[] =
+    view === "block" || view === "preview"
+      ? (weeks as any[])
+      : view === "week"
+        ? (focusedWeek ? [focusedWeek] : [])
+        : (focusedDay ? [(weeks as any[]).find((w: any) => w.id === focusedDay.week_id)] : []);
 
   // Day index helpers for link badges and cascade-relevance.
   const weekById = useMemo(() => new Map((weeks as any[]).map((w: any) => [w.id, w])), [weeks]);
@@ -222,12 +232,11 @@ function BlockEditor() {
               <button onClick={() => setDensity("compact")} className={cn("rounded px-2 py-0.5", density === "compact" && "bg-secondary")} title="Compact"><Rows3 className="h-3 w-3" /></button>
               <button onClick={() => setDensity("comfortable")} className={cn("rounded px-2 py-0.5", density === "comfortable" && "bg-secondary")} title="Comfortable"><Columns2 className="h-3 w-3" /></button>
             </div>
-            <div className="flex items-center gap-1 rounded-md border border-border bg-card p-0.5 text-[11px]">
-              {[1, 2, 4, 0].map((n) => (
-                <button key={n} onClick={() => setView(n as ViewMode)} className={cn("rounded px-2 py-0.5", view === n && "bg-secondary")}>
-                  {n === 0 ? "All" : `${n}w`}
-                </button>
-              ))}
+            <div className="flex items-center gap-0.5 rounded-md border border-border bg-card p-0.5 text-[11px]">
+              <ViewToggleBtn active={view === "block"} onClick={() => setView("block")} icon={<LayoutGrid className="h-3 w-3" />} label="Full Block" />
+              <ViewToggleBtn active={view === "week"} onClick={() => setView("week")} icon={<CalendarRange className="h-3 w-3" />} label="Weekly" />
+              <ViewToggleBtn active={view === "day"} onClick={() => setView("day")} icon={<CalendarDays className="h-3 w-3" />} label="Day" />
+              <ViewToggleBtn active={view === "preview"} onClick={() => setView("preview")} icon={<User className="h-3 w-3" />} label="Client" />
             </div>
             <Select value={block.status} onValueChange={(v) => run(() => updateBlock(blockId, { status: v as BlockStatus }))}>
               <SelectTrigger className="h-8 w-32 text-xs"><SelectValue /></SelectTrigger>
@@ -254,55 +263,147 @@ function BlockEditor() {
                 <TrendingUp className="mr-1 h-4 w-4" /> Progression…
               </Button>
             )}
+            {weeks.length > 1 && (
+              <Button size="sm" variant="outline" onClick={async () => {
+                if (!confirm("Break all linked days so future cascades stop touching them?")) return;
+                await save.wrap(() => breakAllLinks(blockId));
+                refresh();
+                toast.success("All days marked custom");
+              }}>
+                <Unlink className="mr-1 h-4 w-4" /> Break links
+              </Button>
+            )}
             <Button size="sm" variant="outline" onClick={() => setTplOpen(true)}><Save className="mr-1 h-4 w-4" /> Save Block as Template</Button>
           </div>
         </div>
 
-        {view !== 0 && weeks.length > visibleCount && (
-          <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
-            <Button size="sm" variant="ghost" disabled={clampedStart === 0} onClick={() => setStartWeek(Math.max(0, clampedStart - 1))}>‹ Prev</Button>
-            <span>Weeks {visibleWeeks.map((w: any) => w.week_index).join(", ")} of {weeks.length}</span>
-            <Button size="sm" variant="ghost" disabled={clampedStart + visibleCount >= weeks.length} onClick={() => setStartWeek(clampedStart + 1)}>Next ›</Button>
+        {view === "week" && weeks.length > 1 && (
+          <div className="flex flex-wrap items-center gap-1">
+            {(weeks as any[]).map((w: any) => (
+              <button
+                key={w.id}
+                onClick={() => setFocusedWeekIdx(w.week_index)}
+                className={cn(
+                  "rounded-md border px-2.5 py-1 text-[11px]",
+                  focusedWeek?.id === w.id ? "border-primary bg-primary/10 text-primary" : "border-border bg-card text-muted-foreground hover:text-foreground",
+                )}
+              >
+                Week {w.week_index}
+              </button>
+            ))}
+          </div>
+        )}
+        {view === "day" && (
+          <div className="flex flex-wrap items-center gap-1">
+            {(weeks as any[]).map((w: any) =>
+              (days as any[]).filter((d: any) => d.week_id === w.id).map((d: any) => (
+                <button
+                  key={d.id}
+                  onClick={() => { setFocusedDayId(d.id); setFocusedWeekIdx(w.week_index); }}
+                  className={cn(
+                    "rounded-md border px-2 py-1 text-[10px]",
+                    focusedDay?.id === d.id ? "border-primary bg-primary/10 text-primary" : "border-border bg-card text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  W{w.week_index} · {d.title || `D${d.day_index}`}
+                </button>
+              ))
+            )}
           </div>
         )}
 
         <div className="flex h-[calc(100vh-180px)] overflow-hidden rounded-md border border-border bg-background">
-          <ExerciseLibraryPanel
-            exercises={exercises as ExerciseRef[]}
-            recentIds={recentIds}
-            collapsed={libCollapsed}
-            onToggleCollapse={() => setLibCollapsed((v) => !v)}
-            selectedDayLabel={selectedDayLabel}
-            onQuickAdd={quickAddToSelected}
-            onPick={(exId) => {
-              const target = selectedDayId ? (dayById.get(selectedDayId) as any) : (days as any[])[0];
-              if (!target) { toast.error("Add a day first"); return; }
-              run(() => addRowFromExercise(target.id, exId));
-            }}
-          />
+          {view !== "preview" && (
+            <ExerciseLibraryPanel
+              exercises={exercises as ExerciseRef[]}
+              recentIds={recentIds}
+              collapsed={libCollapsed}
+              onToggleCollapse={() => setLibCollapsed((v) => !v)}
+              selectedDayLabel={selectedDayLabel}
+              onQuickAdd={quickAddToSelected}
+              onPick={(exId) => {
+                const target = selectedDayId ? (dayById.get(selectedDayId) as any) : (days as any[])[0];
+                if (!target) { toast.error("Add a day first"); return; }
+                run(() => addRowFromExercise(target.id, exId));
+              }}
+            />
+          )}
           <div className="flex-1 overflow-auto">
-            <div
-              className="grid h-full"
-              style={{ gridTemplateColumns: `repeat(${visibleWeeks.length || 1}, minmax(560px, 1fr))` }}
-            >
-              {visibleWeeks.map((w: any) => (
-                <WeekColumn
-                  key={w.id}
-                  week={w}
-                  days={days.filter((d: any) => d.week_id === w.id)}
-                  rows={rows}
+            {view === "preview" ? (
+              <ClientPreview weeks={weeks} days={days} rows={rows} />
+            ) : view === "day" && focusedDay ? (
+              <div className="p-3">
+                <DayBlock
+                  key={focusedDay.id}
+                  day={focusedDay}
+                  rows={(rows as any[]).filter((r: any) => r.day_id === focusedDay.id)}
                   exercises={exercises as ExerciseRef[]}
                   density={density}
                   onAction={run}
-                  selectedDayId={selectedDayId}
-                  onSelectDay={setSelectedDayId}
-                  dayLinkInfo={dayLinkInfo}
+                  selected={selectedDayId === focusedDay.id}
+                  onSelect={() => setSelectedDayId(focusedDay.id)}
+                  link={dayLinkInfo(focusedDay.id)}
                   onRowPatch={onRowPatch}
                   onDayPatch={onDayPatch}
-                  onCopyWeek={() => { setCopyDefault(w.id); setCopyOpen(true); }}
+                  weekIndex={(weekById.get(focusedDay.week_id) as any)?.week_index ?? 0}
+                  onCopyDayToFuture={async () => {
+                    const r = await save.wrap(() => copyDayToFutureWeeks(focusedDay.id));
+                    refresh();
+                    toast.success(`Copied to ${r?.copied ?? 0} future week(s)`);
+                  }}
                 />
-              ))}
-            </div>
+              </div>
+            ) : view === "block" ? (
+              <div className="flex flex-col">
+                {(weeks as any[]).map((w: any) => (
+                  <WeekColumn
+                    key={w.id}
+                    week={w}
+                    days={(days as any[]).filter((d: any) => d.week_id === w.id)}
+                    rows={rows}
+                    exercises={exercises as ExerciseRef[]}
+                    density={density}
+                    onAction={run}
+                    selectedDayId={selectedDayId}
+                    onSelectDay={setSelectedDayId}
+                    dayLinkInfo={dayLinkInfo}
+                    onRowPatch={onRowPatch}
+                    onDayPatch={onDayPatch}
+                    onCopyWeek={() => { setCopyDefault(w.id); setCopyOpen(true); }}
+                    onCopyDayToFuture={async (dayId: string) => {
+                      const r = await save.wrap(() => copyDayToFutureWeeks(dayId));
+                      refresh();
+                      toast.success(`Copied to ${r?.copied ?? 0} future week(s)`);
+                    }}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="grid h-full" style={{ gridTemplateColumns: `repeat(${visibleWeeks.length || 1}, minmax(560px, 1fr))` }}>
+                {visibleWeeks.map((w: any) => (
+                  <WeekColumn
+                    key={w.id}
+                    week={w}
+                    days={(days as any[]).filter((d: any) => d.week_id === w.id)}
+                    rows={rows}
+                    exercises={exercises as ExerciseRef[]}
+                    density={density}
+                    onAction={run}
+                    selectedDayId={selectedDayId}
+                    onSelectDay={setSelectedDayId}
+                    dayLinkInfo={dayLinkInfo}
+                    onRowPatch={onRowPatch}
+                    onDayPatch={onDayPatch}
+                    onCopyWeek={() => { setCopyDefault(w.id); setCopyOpen(true); }}
+                    onCopyDayToFuture={async (dayId: string) => {
+                      const r = await save.wrap(() => copyDayToFutureWeeks(dayId));
+                      refresh();
+                      toast.success(`Copied to ${r?.copied ?? 0} future week(s)`);
+                    }}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>
