@@ -194,6 +194,9 @@ function PaymentLinksPage() {
   const [editing, setEditing] = useState<{ open: boolean; product: Product | null }>({ open: false, product: null });
   const [assigning, setAssigning] = useState<any | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Product | null>(null);
+  const [manageMode, setManageMode] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
 
   const { data: agreementTemplates = [] } = useQuery({
     queryKey: ["agreement-templates-active-for-products"],
@@ -265,18 +268,79 @@ function PaymentLinksPage() {
 
   const hasFilters = searchQuery || statusFilter !== "all" || typeFilter !== "all" || structureFilter !== "all" || linkFilter !== "all";
 
+  const toggleSelected = (id: string) =>
+    setSelected((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const allSelected = visible.length > 0 && visible.every((p) => selected.has(p.id));
+  const toggleSelectAll = () => setSelected(allSelected ? new Set() : new Set(visible.map((p) => p.id)));
+  const exitManage = () => { setManageMode(false); setSelected(new Set()); };
+
+  const bulkArchive = async () => {
+    const ids = [...selected];
+    try {
+      await Promise.all(ids.map((id) => updateFn({ data: { id, status: "Archived" as const } })));
+      toast.success(`Archived ${ids.length} product${ids.length !== 1 ? "s" : ""}`);
+      exitManage();
+      qc.invalidateQueries({ queryKey: ["coaching-products"] });
+    } catch (e: any) { toast.error(e?.message ?? "Failed to archive"); }
+  };
+  const bulkDelete = async () => {
+    const ids = [...selected];
+    try {
+      await Promise.all(ids.map((id) => deleteFn({ data: { id } })));
+      toast.success(`Deleted ${ids.length} product${ids.length !== 1 ? "s" : ""}`);
+      exitManage();
+      qc.invalidateQueries({ queryKey: ["coaching-products"] });
+    } catch (e: any) { toast.error(e?.message ?? "Failed to delete"); }
+  };
+
+  function readiness(p: Product): { ready: boolean; missing: string[] } {
+    const missing: string[] = [];
+    if ((p.status ?? (p.active ? "Active" : "Draft")) !== "Active") missing.push("Not Active");
+    if (!p.price_cents || p.price_cents <= 0) missing.push("Missing Price");
+    if (!(p as any).stripe_price_id && !p.payment_link_url) missing.push("Missing Stripe Link");
+    if (!p.name?.trim()) missing.push("Missing Name");
+    return { ready: missing.length === 0, missing };
+  }
+
   return (
     <>
       <PageHeader
-        title="Stripe Payment Links / Products"
-        subtitle="Create products, attach Stripe links, assign them to clients, and track purchases."
+        title="Products & Payments"
+        subtitle="Create coaching products, connect Stripe checkout, assign products to clients, and track purchases."
         actions={
-          <Button className="bg-gradient-primary font-bold uppercase tracking-wide" onClick={() => setEditing({ open: true, product: null })}>
-            <Plus className="mr-2 h-4 w-4" /> New product
-          </Button>
+          <div className="flex gap-2">
+            {!manageMode ? (
+              <>
+                <Button variant="outline" onClick={() => setManageMode(true)}>
+                  <ListChecks className="mr-2 h-4 w-4" /> Manage products
+                </Button>
+                <Button className="bg-gradient-primary font-bold uppercase tracking-wide" onClick={() => setEditing({ open: true, product: null })}>
+                  <Plus className="mr-2 h-4 w-4" /> New product
+                </Button>
+              </>
+            ) : (
+              <Button variant="outline" onClick={exitManage}>Cancel</Button>
+            )}
+          </div>
         }
       />
       <div className="p-6 md:p-8 space-y-6">
+        {manageMode && (
+          <Card className="border-primary/30 bg-primary/5 p-3 flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-2">
+              <Checkbox checked={allSelected} onCheckedChange={toggleSelectAll} />
+              <span className="text-sm font-semibold">{selected.size} selected</span>
+            </div>
+            <div className="ml-auto flex flex-wrap gap-2">
+              <Button size="sm" variant="outline" disabled={selected.size === 0} onClick={bulkArchive}>
+                <Archive className="mr-1 h-3.5 w-3.5" /> Archive selected
+              </Button>
+              <Button size="sm" variant="destructive" disabled={selected.size === 0} onClick={() => setBulkDeleteOpen(true)}>
+                <Trash2 className="mr-1 h-3.5 w-3.5" /> Delete selected
+              </Button>
+            </div>
+          </Card>
+        )}
         <div className="flex flex-col gap-4">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -334,7 +398,12 @@ function PaymentLinksPage() {
         ) : (
           <div className="grid gap-4 md:grid-cols-2">
             {visible.map((p) => (
-              <Card key={p.id} className="border-border bg-card p-4 flex gap-4">
+              <Card key={p.id} className={`border-border bg-card p-4 flex gap-4 ${selected.has(p.id) ? "ring-2 ring-primary" : ""}`}>
+                {manageMode && (
+                  <div className="pt-1">
+                    <Checkbox checked={selected.has(p.id)} onCheckedChange={() => toggleSelected(p.id)} />
+                  </div>
+                )}
                 <div className="h-24 w-24 shrink-0 rounded-md bg-muted overflow-hidden">
                   {p.image_signed_url ? (
                     <img src={p.image_signed_url} alt={p.name} className="h-full w-full object-cover" />
@@ -348,6 +417,11 @@ function PaymentLinksPage() {
                       <div className="flex flex-wrap items-center gap-2">
                         <h3 className="font-bold truncate">{p.name}</h3>
                         <Badge variant={p.status === "Active" ? "default" : "outline"} className={p.status === "Active" ? "bg-gradient-primary" : ""}>{p.status ?? (p.active ? "Active" : "Draft")}</Badge>
+                        {readiness(p).ready && (
+                          <Badge className="bg-green-600 hover:bg-green-600 text-white border-0">
+                            <Sparkles className="h-3 w-3 mr-1" /> Ready
+                          </Badge>
+                        )}
                       </div>
                       <div className="text-xs text-muted-foreground">
                         {p.product_type ?? "Product"}{p.payment_structure ? ` · ${p.payment_structure}` : ""}{termLabel(p) ? ` · ${termLabel(p)}` : ""}
