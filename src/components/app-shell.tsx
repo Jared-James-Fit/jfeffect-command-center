@@ -1,8 +1,10 @@
-import type { ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useRouterState, useNavigate } from "@tanstack/react-router";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
-import { LogOut } from "lucide-react";
+import {
+  LogOut, ChevronLeft, ChevronRight, ChevronDown, Search, Settings as SettingsIcon,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { NotificationBell } from "@/components/notification-bell";
 import { useClientNavBadges, markNavSeen } from "@/hooks/use-client-nav-badges";
@@ -10,6 +12,12 @@ import { useKeyboardOpen } from "@/hooks/use-keyboard-open";
 import { UserAvatar } from "@/components/user-avatar";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
+  CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList,
+} from "@/components/ui/command";
 
 export interface NavItem {
   to: string;
@@ -29,13 +37,12 @@ function groupNavItems(items: NavItem[]) {
     map.set(key, list);
   }
   const order = [
-    "Command Center",
-    "Coaching",
-    "Scheduling",
-    "Sales & Payments",
-    "Agreements & Documents",
-    "Business Tools",
-    "Settings",
+    "Core",
+    "Programming",
+    "Business",
+    "Documents",
+    "Team / Ops",
+    "Account",
   ];
   const result: { label: string | undefined; items: NavItem[] }[] = [];
   for (const key of order) {
@@ -50,12 +57,67 @@ function groupNavItems(items: NavItem[]) {
   return result;
 }
 
+type SidebarMode = "expanded" | "compact" | "collapsed";
+const SIDEBAR_MODE_KEY = "jf-sidebar-mode";
+const SIDEBAR_COLLAPSED_SECTIONS_KEY = "jf-sidebar-collapsed-sections";
+const DEFAULT_COLLAPSED_SECTIONS = ["Documents", "Team / Ops"];
+
+function useSidebarMode() {
+  const [mode, setMode] = useState<SidebarMode>("expanded");
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(SIDEBAR_MODE_KEY) as SidebarMode | null;
+      if (stored === "expanded" || stored === "compact" || stored === "collapsed") {
+        setMode(stored);
+      }
+    } catch {}
+  }, []);
+  const update = (next: SidebarMode) => {
+    setMode(next);
+    try { localStorage.setItem(SIDEBAR_MODE_KEY, next); } catch {}
+  };
+  return [mode, update] as const;
+}
+
+function useCollapsedSections() {
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set(DEFAULT_COLLAPSED_SECTIONS));
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(SIDEBAR_COLLAPSED_SECTIONS_KEY);
+      if (raw) setCollapsed(new Set(JSON.parse(raw)));
+    } catch {}
+  }, []);
+  const toggle = (label: string) => {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(label)) next.delete(label); else next.add(label);
+      try { localStorage.setItem(SIDEBAR_COLLAPSED_SECTIONS_KEY, JSON.stringify(Array.from(next))); } catch {}
+      return next;
+    });
+  };
+  return [collapsed, toggle] as const;
+}
+
 export function AppShell({ items, title, children }: { items: NavItem[]; title: string; children: ReactNode }) {
   useKeyboardOpen();
   const { signOut, user } = useAuth();
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (r) => r.location.pathname });
   const navBadges = useClientNavBadges();
+  const [mode, setMode] = useSidebarMode();
+  const [collapsedSections, toggleSection] = useCollapsedSections();
+  const [paletteOpen, setPaletteOpen] = useState(false);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setPaletteOpen((o) => !o);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   const { data: me } = useQuery({
     queryKey: ["app-shell-me", user?.id],
@@ -89,65 +151,212 @@ export function AppShell({ items, title, children }: { items: NavItem[]; title: 
     navigate({ to: "/auth", replace: true });
   };
 
-  const grouped = groupNavItems(items);
+  const grouped = useMemo(() => groupNavItems(items), [items]);
   const bottomItems = items.slice(0, 5);
 
+  const isCollapsed = mode === "collapsed";
+  const isCompact = mode === "compact";
+  const sidebarWidthClass = isCollapsed ? "w-14" : isCompact ? "w-52" : "w-60";
+  const rowPadding = isCollapsed
+    ? "justify-center px-0 py-2"
+    : isCompact
+    ? "px-2.5 py-1.5 gap-2.5"
+    : "px-3 py-2 gap-3";
+  const rowText = isCompact ? "text-[13px]" : "text-sm";
+
+  const cycleMode = () => {
+    setMode(mode === "expanded" ? "compact" : mode === "compact" ? "collapsed" : "expanded");
+  };
+
   return (
+    <TooltipProvider delayDuration={250}>
     <div className="flex min-h-screen w-full bg-background text-foreground">
-      <aside className="hidden w-64 shrink-0 flex-col border-r border-sidebar-border bg-sidebar md:flex">
-        <div className="flex items-center gap-3 px-5 py-5 border-b border-sidebar-border">
-          <img src="/logo.png" alt="JF Effect" className="h-9 w-9 rounded-md shadow-glow object-cover" />
-          <div className="leading-tight">
-            <div className="text-sm font-black tracking-tight">JF EFFECT</div>
-            <div className="text-[10px] uppercase tracking-widest text-muted-foreground">{title}</div>
-          </div>
+      <aside
+        className={cn(
+          "hidden shrink-0 flex-col border-r border-sidebar-border bg-sidebar md:flex transition-[width] duration-200",
+          sidebarWidthClass,
+        )}
+      >
+        {/* Logo header */}
+        <div className={cn(
+          "flex items-center gap-2 border-b border-sidebar-border",
+          isCollapsed ? "justify-center px-2 py-3" : "px-3.5 py-3",
+        )}>
+          <img src="/logo.png" alt="JF Effect" className="h-8 w-8 rounded-md object-cover" />
+          {!isCollapsed && (
+            <div className="leading-tight min-w-0">
+              <div className="text-[13px] font-black tracking-tight">JF EFFECT</div>
+              <div className="truncate text-[9px] uppercase tracking-widest text-muted-foreground">{title}</div>
+            </div>
+          )}
         </div>
-        <nav className="flex-1 overflow-y-auto p-3">
-          <div className="space-y-4">
-            {grouped.map((group) => (
-              <div key={group.label ?? "default"}>
-                {group.label && (
-                  <div className="px-3 pb-1.5 pt-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                    {group.label}
-                  </div>
-                )}
-                <ul className="space-y-0.5">
-                  {group.items.map((item) => {
-                    const active = item.to === activeTo;
-                    const Icon = item.icon;
-                    return (
-                      <li key={item.to}>
-                        <Link
-                          to={item.to}
-                          className={cn(
-                            "flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
-                            active
-                              ? "bg-gradient-primary text-primary-foreground font-semibold shadow-glow"
-                              : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                          )}
-                        >
-                          <Icon className="h-4 w-4 shrink-0" />
-                          <span>{item.label}</span>
-                        </Link>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>
-            ))}
+
+        {/* Search / Cmd+K trigger */}
+        <div className={cn("border-b border-sidebar-border", isCollapsed ? "p-1.5" : "p-2")}>
+          {isCollapsed ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={() => setPaletteOpen(true)}
+                  className="mx-auto flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-foreground"
+                  aria-label="Search"
+                >
+                  <Search className="h-4 w-4" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="right">Search (⌘K)</TooltipContent>
+            </Tooltip>
+          ) : (
+            <button
+              onClick={() => setPaletteOpen(true)}
+              className="flex w-full items-center gap-2 rounded-md border border-sidebar-border bg-background/40 px-2.5 py-1.5 text-left text-xs text-muted-foreground hover:bg-sidebar-accent hover:text-foreground"
+            >
+              <Search className="h-3.5 w-3.5" />
+              <span className="flex-1">Search…</span>
+              <kbd className="rounded border border-sidebar-border bg-card px-1 py-0.5 text-[9px] font-mono">⌘K</kbd>
+            </button>
+          )}
+        </div>
+
+        <nav className={cn("flex-1 overflow-y-auto", isCollapsed ? "p-1.5" : "p-2")}>
+          <div className={isCollapsed ? "space-y-2" : "space-y-2.5"}>
+            {grouped.map((group) => {
+              const sectionCollapsed = group.label ? collapsedSections.has(group.label) : false;
+              return (
+                <div key={group.label ?? "default"}>
+                  {group.label && !isCollapsed && (
+                    <button
+                      onClick={() => toggleSection(group.label!)}
+                      className="group flex w-full items-center justify-between rounded px-2.5 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground"
+                    >
+                      <span>{group.label}</span>
+                      <ChevronDown
+                        className={cn(
+                          "h-3 w-3 transition-transform",
+                          sectionCollapsed && "-rotate-90",
+                        )}
+                      />
+                    </button>
+                  )}
+                  {group.label && isCollapsed && (
+                    <div className="my-1 mx-2 h-px bg-sidebar-border/60" />
+                  )}
+                  {(!sectionCollapsed || isCollapsed) && (
+                    <ul className="space-y-0.5">
+                      {group.items.map((item) => {
+                        const active = item.to === activeTo;
+                        const Icon = item.icon;
+                        const link = (
+                          <Link
+                            to={item.to}
+                            className={cn(
+                              "flex items-center rounded-md transition-colors",
+                              rowPadding,
+                              rowText,
+                              active
+                                ? "bg-primary/15 text-primary font-semibold border-l-2 border-primary"
+                                : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground border-l-2 border-transparent",
+                            )}
+                          >
+                            <Icon className="h-4 w-4 shrink-0" />
+                            {!isCollapsed && <span className="truncate">{item.label}</span>}
+                          </Link>
+                        );
+                        return (
+                          <li key={item.to}>
+                            {isCollapsed ? (
+                              <Tooltip>
+                                <TooltipTrigger asChild>{link}</TooltipTrigger>
+                                <TooltipContent side="right">{item.label}</TooltipContent>
+                              </Tooltip>
+                            ) : link}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </nav>
-        <div className="border-t border-sidebar-border p-3">
-          <div className="mb-2 flex items-center gap-2 px-1">
-            <UserAvatar src={me?.pic ?? null} name={me?.name ?? user?.email ?? ""} size={36} ring />
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-xs font-semibold">{me?.name || user?.email}</div>
-              <div className="truncate text-[10px] text-muted-foreground">{user?.email}</div>
+
+        {/* Footer */}
+        <div className={cn("border-t border-sidebar-border", isCollapsed ? "p-1.5" : "p-2")}>
+          {isCollapsed ? (
+            <div className="flex flex-col items-center gap-1">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Link to="/admin/account" className="rounded-full">
+                    <UserAvatar src={me?.pic ?? null} name={me?.name ?? user?.email ?? ""} size={28} ring />
+                  </Link>
+                </TooltipTrigger>
+                <TooltipContent side="right">{me?.name || user?.email}</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={handleSignOut}
+                    className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-destructive"
+                    aria-label="Sign out"
+                  >
+                    <LogOut className="h-3.5 w-3.5" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="right">Sign out</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={cycleMode}
+                    className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-foreground"
+                    aria-label="Expand sidebar"
+                  >
+                    <ChevronRight className="h-3.5 w-3.5" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="right">Expand sidebar</TooltipContent>
+              </Tooltip>
             </div>
-          </div>
-          <Button variant="ghost" size="sm" className="w-full justify-start" onClick={handleSignOut}>
-            <LogOut className="mr-2 h-4 w-4" /> Sign out
-          </Button>
+          ) : (
+            <div className="flex items-center gap-2">
+              <Link to="/admin/account" className="shrink-0">
+                <UserAvatar src={me?.pic ?? null} name={me?.name ?? user?.email ?? ""} size={28} ring />
+              </Link>
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-[11px] font-semibold leading-tight">{me?.name || user?.email}</div>
+                {!isCompact && (
+                  <div className="truncate text-[9px] text-muted-foreground leading-tight">{user?.email}</div>
+                )}
+              </div>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={cycleMode}
+                    className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-foreground"
+                    aria-label="Toggle sidebar density"
+                  >
+                    <ChevronLeft className="h-3.5 w-3.5" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="top">
+                  {mode === "expanded" ? "Compact" : mode === "compact" ? "Collapse" : "Expand"}
+                </TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={handleSignOut}
+                    className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-destructive"
+                    aria-label="Sign out"
+                  >
+                    <LogOut className="h-3.5 w-3.5" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="top">Sign out</TooltipContent>
+              </Tooltip>
+            </div>
+          )}
         </div>
       </aside>
 
@@ -159,6 +368,9 @@ export function AppShell({ items, title, children }: { items: NavItem[]; title: 
             <span className="text-sm font-black tracking-tight">{title}</span>
           </div>
           <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={() => setPaletteOpen(true)} aria-label="Search">
+              <Search className="h-4 w-4" />
+            </Button>
             <UserAvatar src={me?.pic ?? null} name={me?.name ?? user?.email ?? ""} size={28} ring />
             <Button variant="ghost" size="sm" onClick={handleSignOut}>
               <LogOut className="h-4 w-4" />
@@ -210,7 +422,44 @@ export function AppShell({ items, title, children }: { items: NavItem[]; title: 
           })}
         </nav>
       </div>
+
+      {/* Command palette */}
+      <CommandDialog open={paletteOpen} onOpenChange={setPaletteOpen}>
+        <CommandInput placeholder="Jump to a page…" />
+        <CommandList>
+          <CommandEmpty>No matches.</CommandEmpty>
+          {grouped.map((group) => (
+            <CommandGroup key={group.label ?? "all"} heading={group.label}>
+              {group.items.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <CommandItem
+                    key={item.to}
+                    value={`${group.label ?? ""} ${item.label} ${item.to}`}
+                    onSelect={() => {
+                      setPaletteOpen(false);
+                      navigate({ to: item.to });
+                    }}
+                  >
+                    <Icon className="mr-2 h-4 w-4" />
+                    {item.label}
+                  </CommandItem>
+                );
+              })}
+            </CommandGroup>
+          ))}
+          <CommandGroup heading="Actions">
+            <CommandItem onSelect={() => { setPaletteOpen(false); handleSignOut(); }}>
+              <LogOut className="mr-2 h-4 w-4" /> Sign out
+            </CommandItem>
+            <CommandItem onSelect={() => { setPaletteOpen(false); cycleMode(); }}>
+              <SettingsIcon className="mr-2 h-4 w-4" /> Toggle sidebar density
+            </CommandItem>
+          </CommandGroup>
+        </CommandList>
+      </CommandDialog>
     </div>
+    </TooltipProvider>
   );
 }
 

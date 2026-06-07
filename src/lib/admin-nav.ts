@@ -9,29 +9,35 @@ import {
 import type { NavItem } from "@/components/app-shell";
 
 export const adminNav: NavItem[] = [
-  { to: "/admin", label: "Dashboard", icon: LayoutDashboard, group: "Command Center" },
-  { to: "/admin/clients", label: "Clients", icon: Users, group: "Coaching" },
-  { to: "/admin/training-intelligence", label: "Training Intelligence", icon: Activity, group: "Coaching" },
-  { to: "/admin/messages", label: "Messages", icon: MessageCircle, group: "Coaching" },
-  { to: "/admin/lift-videos", label: "Lift Reviews", icon: Video, group: "Coaching" },
-  { to: "/admin/check-in-reviews", label: "Check-In Reviews", icon: ClipboardList, group: "Coaching" },
-  { to: "/admin/native-forms", label: "Form Builder", icon: FileEdit, group: "Coaching" },
-  { to: "/admin/coaches", label: "Coaches", icon: UserCheck, group: "Coaching" },
-  { to: "/admin/media-review", label: "Media Review Inbox", icon: Film, group: "Coaching" },
-  { to: "/admin/exercises", label: "Exercise Library", icon: Dumbbell, group: "Coaching" },
-  { to: "/admin/program-library", label: "Program Library", icon: BookOpen, group: "Coaching" },
-  { to: "/admin/calendar", label: "Calendar", icon: Calendar, group: "Scheduling" },
-  { to: "/admin/payment-links", label: "Products & Payments", icon: CreditCard, group: "Sales & Payments" },
-  { to: "/admin/payments", label: "Payments", icon: DollarSign, group: "Sales & Payments" },
-  { to: "/admin/purchases", label: "Purchase Records", icon: ClipboardCheck, group: "Sales & Payments" },
-  { to: "/admin/agreements", label: "Agreements", icon: FileSignature, group: "Agreements & Documents" },
-  { to: "/admin/forms", label: "Forms", icon: FileEdit, group: "Agreements & Documents" },
-  { to: "/admin/resources", label: "Resources", icon: FolderOpen, group: "Agreements & Documents" },
-  { to: "/admin/apps", label: "Integrations & Tools", icon: Layers, group: "Business Tools" },
-  { to: "/admin/business-systems", label: "Business Systems", icon: Briefcase, group: "Business Tools" },
-  { to: "/admin/account", label: "My Account", icon: UserCog, group: "Settings" },
-  { to: "/admin/settings", label: "Settings", icon: Settings, group: "Settings" },
-  { to: "/admin/archives", label: "Archive Manager", icon: Archive, group: "Settings" },
+  // CORE
+  { to: "/admin", label: "Dashboard", icon: LayoutDashboard, group: "Core" },
+  { to: "/admin/clients", label: "Clients", icon: Users, group: "Core" },
+  { to: "/admin/messages", label: "Messages", icon: MessageCircle, group: "Core" },
+  { to: "/admin/check-in-reviews", label: "Check-Ins", icon: ClipboardList, group: "Core" },
+  { to: "/admin/lift-videos", label: "Lift Reviews", icon: Video, group: "Core" },
+  { to: "/admin/training-intelligence", label: "Training Intel", icon: Activity, group: "Core" },
+  // PROGRAMMING
+  { to: "/admin/program-library", label: "Program Library", icon: BookOpen, group: "Programming" },
+  { to: "/admin/exercises", label: "Exercise Library", icon: Dumbbell, group: "Programming" },
+  { to: "/admin/native-forms", label: "Form Builder", icon: FileEdit, group: "Programming" },
+  // BUSINESS
+  { to: "/admin/payment-links", label: "Products", icon: CreditCard, group: "Business" },
+  { to: "/admin/payments", label: "Payments", icon: DollarSign, group: "Business" },
+  { to: "/admin/purchases", label: "Purchases", icon: ClipboardCheck, group: "Business" },
+  { to: "/admin/calendar", label: "Calendar", icon: Calendar, group: "Business" },
+  // DOCUMENTS
+  { to: "/admin/agreements", label: "Agreements", icon: FileSignature, group: "Documents" },
+  { to: "/admin/forms", label: "Forms", icon: FileEdit, group: "Documents" },
+  { to: "/admin/resources", label: "Resources", icon: FolderOpen, group: "Documents" },
+  // TEAM / OPS
+  { to: "/admin/coaches", label: "Coaches", icon: UserCheck, group: "Team / Ops" },
+  { to: "/admin/media-review", label: "Media Inbox", icon: Film, group: "Team / Ops" },
+  { to: "/admin/apps", label: "Integrations", icon: Layers, group: "Team / Ops" },
+  { to: "/admin/business-systems", label: "Operations", icon: Briefcase, group: "Team / Ops" },
+  { to: "/admin/archives", label: "Archive Manager", icon: Archive, group: "Team / Ops" },
+  // ACCOUNT
+  { to: "/admin/account", label: "Account", icon: UserCog, group: "Account" },
+  { to: "/admin/settings", label: "Settings", icon: Settings, group: "Account" },
 ];
 
 // Coach navigation: same client-coaching tools as admin, without business/admin sections.
