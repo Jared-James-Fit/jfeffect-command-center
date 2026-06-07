@@ -513,6 +513,9 @@ function ClientDetail() {
             <Link to="/admin/clients/$id" params={{ id }} search={{ tab: "account" }}><Button variant="outline" size="sm" className="w-full justify-start">Account & Access</Button></Link>
           </div>
         </Card>
+        <div className="md:col-span-3">
+          <ClientDriveFolderPanel clientId={id} />
+        </div>
         </div>
         </TabsContent>
 
