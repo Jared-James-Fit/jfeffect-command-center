@@ -409,28 +409,48 @@ function BlockEditor() {
               </div>
             ) : view === "block" ? (
               <div className="flex flex-col">
-                {(weeks as any[]).map((w: any) => (
-                  <WeekColumn
-                    key={w.id}
-                    week={w}
-                    days={(days as any[]).filter((d: any) => d.week_id === w.id)}
-                    rows={rows}
-                    exercises={exercises as ExerciseRef[]}
-                    density={density}
-                    onAction={run}
-                    selectedDayId={selectedDayId}
-                    onSelectDay={setSelectedDayId}
-                    dayLinkInfo={dayLinkInfo}
-                    onRowPatch={onRowPatch}
-                    onDayPatch={onDayPatch}
-                    onCopyWeek={() => { setCopyDefault(w.id); setCopyOpen(true); }}
-                    onCopyDayToFuture={async (dayId: string) => {
-                      const r = await save.wrap(() => copyDayToFutureWeeks(dayId));
-                      refresh();
-                      toast.success(`Copied to ${r?.copied ?? 0} future week(s)`);
-                    }}
-                  />
-                ))}
+                <FullBlockNav
+                  weeks={weeks as any[]}
+                  currentWeekIndex={currentWeekIndex}
+                  collapsedCount={collapsedWeekIds.size}
+                  onJump={jumpToWeek}
+                  onCollapseAll={collapseAllWeeks}
+                  onExpandAll={expandAllWeeks}
+                  onShowCurrent={() => {
+                    if (currentWeekIndex == null) return;
+                    const w = (weeks as any[]).find((x: any) => x.week_index === currentWeekIndex);
+                    if (w) jumpToWeek(w.id);
+                  }}
+                />
+                <div className="flex flex-col gap-4 p-3">
+                  {(weeks as any[]).map((w: any) => (
+                    <WeekColumn
+                      key={w.id}
+                      week={w}
+                      days={(days as any[]).filter((d: any) => d.week_id === w.id)}
+                      rows={rows}
+                      exercises={exercises as ExerciseRef[]}
+                      density={density}
+                      onAction={run}
+                      selectedDayId={selectedDayId}
+                      onSelectDay={setSelectedDayId}
+                      dayLinkInfo={dayLinkInfo}
+                      onRowPatch={onRowPatch}
+                      onDayPatch={onDayPatch}
+                      onCopyWeek={() => { setCopyDefault(w.id); setCopyOpen(true); }}
+                      onCopyDayToFuture={async (dayId: string) => {
+                        const r = await save.wrap(() => copyDayToFutureWeeks(dayId));
+                        refresh();
+                        toast.success(`Copied to ${r?.copied ?? 0} future week(s)`);
+                      }}
+                      stacked
+                      collapsed={collapsedWeekIds.has(w.id)}
+                      onToggleCollapse={() => toggleWeekCollapse(w.id)}
+                      isCurrent={currentWeekIndex === w.week_index}
+                      stats={weekStats.get(w.id)}
+                    />
+                  ))}
+                </div>
               </div>
             ) : (
               <div className="grid h-full" style={{ gridTemplateColumns: `repeat(${visibleWeeks.length || 1}, minmax(560px, 1fr))` }}>
@@ -454,6 +474,8 @@ function BlockEditor() {
                       refresh();
                       toast.success(`Copied to ${r?.copied ?? 0} future week(s)`);
                     }}
+                    isCurrent={currentWeekIndex === w.week_index}
+                    stats={weekStats.get(w.id)}
                   />
                 ))}
               </div>
