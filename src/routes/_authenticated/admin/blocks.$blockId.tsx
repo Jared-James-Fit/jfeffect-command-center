@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
-import { ArrowLeft, Plus, Trash2, Copy, Save, Clock, RotateCcw, Eye, EyeOff, GripVertical, MoreHorizontal, Columns2, Rows3, ChevronDown, ChevronRight, TrendingUp, Zap, LayoutGrid, CalendarDays, CalendarRange, User, Unlink } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, Copy, Save, Clock, RotateCcw, Eye, EyeOff, GripVertical, MoreHorizontal, Columns2, Rows3, ChevronDown, ChevronRight, TrendingUp, Zap, LayoutGrid, CalendarDays, CalendarRange, User, Unlink, ChevronsDownUp, ChevronsUpDown, Crosshair, Link2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   getBlockTree, addDay, addRow, updateRow, deleteRow, updateDay,
@@ -73,6 +73,7 @@ function BlockEditor() {
   const [density, setDensity] = useDensity();
   const [selectedDayId, setSelectedDayId] = useState<string | null>(null);
   const [progressionOpen, setProgressionOpen] = useState(false);
+  const [collapsedWeekIds, setCollapsedWeekIds] = useState<Set<string>>(new Set());
   const save = useSaveState();
 
   // --- Edit scope dialog state ---
@@ -109,6 +110,59 @@ function BlockEditor() {
 
   if (isLoading || !tree) return <div className="p-8 text-sm text-muted-foreground">Loading block…</div>;
   const { block, weeks, days, rows } = tree;
+
+  // Current week (1-based) based on block.start_date if available.
+  const currentWeekIndex: number | null = (() => {
+    const sd: string | null = (block as any).start_date ?? null;
+    if (!sd) return null;
+    const start = new Date(sd + "T00:00:00");
+    if (isNaN(start.getTime())) return null;
+    const now = new Date();
+    const ms = now.getTime() - start.getTime();
+    const offset = (block as any).week_start_index ?? 0;
+    const idx = Math.floor(ms / (7 * 86400000)) + 1 - (offset || 0);
+    if (idx < 1 || idx > (weeks as any[]).length) return null;
+    return idx;
+  })();
+
+  // Per-week stats: day count, row count, estimated total minutes, linked/custom counts.
+  const weekStats = useMemo(() => {
+    const map = new Map<string, { days: number; rows: number; minutes: number; linked: number; custom: number }>();
+    for (const w of weeks as any[]) {
+      const wDays = (days as any[]).filter((d: any) => d.week_id === w.id);
+      let rowCount = 0;
+      let minutes = 0;
+      let linked = 0;
+      let custom = 0;
+      for (const d of wDays) {
+        const dayRows = (rows as any[]).filter((r: any) => r.day_id === d.id);
+        rowCount += dayRows.length;
+        const auto = estimateDayMinutes(dayRows);
+        const shown = d.duration_source === "manual" && d.duration_override_min ? d.duration_override_min : auto;
+        minutes += shown || 0;
+        if (d.is_custom) custom++;
+        else if (d.source_day_id) linked++;
+      }
+      map.set(w.id, { days: wDays.length, rows: rowCount, minutes, linked, custom });
+    }
+    return map;
+  }, [weeks, days, rows]);
+
+  const toggleWeekCollapse = (wid: string) =>
+    setCollapsedWeekIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(wid)) next.delete(wid); else next.add(wid);
+      return next;
+    });
+  const collapseAllWeeks = () => setCollapsedWeekIds(new Set((weeks as any[]).map((w: any) => w.id)));
+  const expandAllWeeks = () => setCollapsedWeekIds(new Set());
+  const jumpToWeek = (wid: string) => {
+    setCollapsedWeekIds((prev) => { const n = new Set(prev); n.delete(wid); return n; });
+    requestAnimationFrame(() => {
+      const el = document.getElementById(`pl-week-${wid}`);
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  };
 
   // Which weeks to render based on the chosen view.
   const focusedWeek =
@@ -355,28 +409,48 @@ function BlockEditor() {
               </div>
             ) : view === "block" ? (
               <div className="flex flex-col">
-                {(weeks as any[]).map((w: any) => (
-                  <WeekColumn
-                    key={w.id}
-                    week={w}
-                    days={(days as any[]).filter((d: any) => d.week_id === w.id)}
-                    rows={rows}
-                    exercises={exercises as ExerciseRef[]}
-                    density={density}
-                    onAction={run}
-                    selectedDayId={selectedDayId}
-                    onSelectDay={setSelectedDayId}
-                    dayLinkInfo={dayLinkInfo}
-                    onRowPatch={onRowPatch}
-                    onDayPatch={onDayPatch}
-                    onCopyWeek={() => { setCopyDefault(w.id); setCopyOpen(true); }}
-                    onCopyDayToFuture={async (dayId: string) => {
-                      const r = await save.wrap(() => copyDayToFutureWeeks(dayId));
-                      refresh();
-                      toast.success(`Copied to ${r?.copied ?? 0} future week(s)`);
-                    }}
-                  />
-                ))}
+                <FullBlockNav
+                  weeks={weeks as any[]}
+                  currentWeekIndex={currentWeekIndex}
+                  collapsedCount={collapsedWeekIds.size}
+                  onJump={jumpToWeek}
+                  onCollapseAll={collapseAllWeeks}
+                  onExpandAll={expandAllWeeks}
+                  onShowCurrent={() => {
+                    if (currentWeekIndex == null) return;
+                    const w = (weeks as any[]).find((x: any) => x.week_index === currentWeekIndex);
+                    if (w) jumpToWeek(w.id);
+                  }}
+                />
+                <div className="flex flex-col gap-4 p-3">
+                  {(weeks as any[]).map((w: any) => (
+                    <WeekColumn
+                      key={w.id}
+                      week={w}
+                      days={(days as any[]).filter((d: any) => d.week_id === w.id)}
+                      rows={rows}
+                      exercises={exercises as ExerciseRef[]}
+                      density={density}
+                      onAction={run}
+                      selectedDayId={selectedDayId}
+                      onSelectDay={setSelectedDayId}
+                      dayLinkInfo={dayLinkInfo}
+                      onRowPatch={onRowPatch}
+                      onDayPatch={onDayPatch}
+                      onCopyWeek={() => { setCopyDefault(w.id); setCopyOpen(true); }}
+                      onCopyDayToFuture={async (dayId: string) => {
+                        const r = await save.wrap(() => copyDayToFutureWeeks(dayId));
+                        refresh();
+                        toast.success(`Copied to ${r?.copied ?? 0} future week(s)`);
+                      }}
+                      stacked
+                      collapsed={collapsedWeekIds.has(w.id)}
+                      onToggleCollapse={() => toggleWeekCollapse(w.id)}
+                      isCurrent={currentWeekIndex === w.week_index}
+                      stats={weekStats.get(w.id)}
+                    />
+                  ))}
+                </div>
               </div>
             ) : (
               <div className="grid h-full" style={{ gridTemplateColumns: `repeat(${visibleWeeks.length || 1}, minmax(560px, 1fr))` }}>
@@ -400,6 +474,8 @@ function BlockEditor() {
                       refresh();
                       toast.success(`Copied to ${r?.copied ?? 0} future week(s)`);
                     }}
+                    isCurrent={currentWeekIndex === w.week_index}
+                    stats={weekStats.get(w.id)}
                   />
                 ))}
               </div>
@@ -443,6 +519,7 @@ function BlockEditor() {
 function WeekColumn({
   week, days, rows, exercises, density, onAction, onCopyWeek,
   selectedDayId, onSelectDay, dayLinkInfo, onRowPatch, onDayPatch, onCopyDayToFuture,
+  stacked = false, collapsed = false, onToggleCollapse, isCurrent = false, stats,
 }: {
   week: any;
   days: any[];
@@ -457,11 +534,80 @@ function WeekColumn({
   onRowPatch: (rowId: string, dayId: string, patch: Record<string, any>) => void | Promise<void>;
   onDayPatch: (dayId: string, patch: Record<string, any>) => void | Promise<void>;
   onCopyDayToFuture?: (dayId: string) => void | Promise<void>;
+  stacked?: boolean;
+  collapsed?: boolean;
+  onToggleCollapse?: () => void;
+  isCurrent?: boolean;
+  stats?: { days: number; rows: number; minutes: number; linked: number; custom: number };
 }) {
+  const fmtDur = (m: number) => {
+    if (!m || m <= 0) return "—";
+    const h = Math.floor(m / 60);
+    const mm = Math.round(m % 60);
+    return h > 0 ? `${h}h ${mm}m` : `${mm}m`;
+  };
+  const linkLabel: string | null =
+    stats && stats.linked > 0 && stats.custom === 0 ? "Linked"
+    : stats && stats.custom > 0 && stats.linked === 0 ? "Custom"
+    : stats && stats.linked > 0 && stats.custom > 0 ? "Mixed"
+    : null;
+
   return (
-    <div className="flex min-w-0 flex-col border-r border-border last:border-r-0">
-      <div className="sticky top-0 z-20 flex items-center gap-2 border-b border-border bg-card/95 px-3 py-2 backdrop-blur">
-        <h3 className="text-sm font-bold">Week {week.week_index}</h3>
+    <div
+      id={`pl-week-${week.id}`}
+      className={cn(
+        "flex min-w-0 flex-col overflow-hidden",
+        stacked
+          ? cn(
+              "rounded-lg border-2 bg-card shadow-sm",
+              isCurrent ? "border-primary/70 shadow-[0_0_0_1px_color-mix(in_oklab,var(--primary)_30%,transparent)]" : "border-border",
+            )
+          : "border-r border-border last:border-r-0",
+      )}
+      style={stacked ? { borderLeftWidth: 6, borderLeftColor: "var(--primary)" } : undefined}
+    >
+      <div
+        className={cn(
+          "sticky top-0 z-20 flex flex-wrap items-center gap-2 border-b backdrop-blur",
+          stacked
+            ? "border-primary/20 bg-[color-mix(in_oklab,var(--primary)_8%,var(--card))] px-3 py-2"
+            : "border-border bg-card/95 px-3 py-2",
+        )}
+      >
+        {stacked && onToggleCollapse && (
+          <button
+            onClick={onToggleCollapse}
+            className="grid h-6 w-6 place-items-center rounded text-muted-foreground hover:bg-primary/10 hover:text-foreground"
+            title={collapsed ? "Expand week" : "Collapse week"}
+          >
+            {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          </button>
+        )}
+        <div className="flex items-baseline gap-2">
+          <span
+            className={cn(
+              "inline-flex h-6 items-center rounded-md px-2 text-[11px] font-bold uppercase tracking-wide",
+              "bg-primary text-primary-foreground",
+            )}
+          >
+            Week {week.week_index}
+          </span>
+          {stats && (
+            <span className="text-[11px] text-muted-foreground">
+              {stats.days} day{stats.days === 1 ? "" : "s"} · {stats.rows} row{stats.rows === 1 ? "" : "s"} · Est {fmtDur(stats.minutes)}
+            </span>
+          )}
+        </div>
+        {isCurrent && (
+          <Badge className="h-5 border-primary/40 bg-primary/15 px-1.5 text-[10px] font-semibold text-primary hover:bg-primary/20">
+            <Crosshair className="mr-1 h-3 w-3" /> Current Week
+          </Badge>
+        )}
+        {linkLabel && (
+          <Badge variant="outline" className="h-5 border-primary/30 bg-primary/5 px-1.5 text-[10px] text-primary">
+            <Link2 className="mr-1 h-3 w-3" /> {linkLabel}
+          </Badge>
+        )}
         <Input
           defaultValue={week.notes ?? ""}
           placeholder="Week notes"
@@ -487,7 +633,10 @@ function WeekColumn({
           </Button>
         </div>
       </div>
-      <div className="flex flex-col gap-2 p-2">
+      {collapsed ? null : (
+      <div
+        className={cn("flex flex-col gap-2 p-2", stacked && "bg-[color-mix(in_oklab,var(--primary)_2%,transparent)]")}
+      >
         {days.map((d: any) => (
           <DayBlock
             key={d.id}
@@ -510,6 +659,57 @@ function WeekColumn({
           <Plus className="mr-1 h-3 w-3" /> Add day
         </Button>
       </div>
+      )}
+    </div>
+  );
+}
+
+function FullBlockNav({
+  weeks, currentWeekIndex, collapsedCount, onJump, onCollapseAll, onExpandAll, onShowCurrent,
+}: {
+  weeks: any[];
+  currentWeekIndex: number | null;
+  collapsedCount: number;
+  onJump: (weekId: string) => void;
+  onCollapseAll: () => void;
+  onExpandAll: () => void;
+  onShowCurrent: () => void;
+}) {
+  const allCollapsed = collapsedCount === weeks.length && weeks.length > 0;
+  return (
+    <div className="sticky top-0 z-30 flex flex-wrap items-center gap-1.5 border-b border-primary/20 bg-[color-mix(in_oklab,var(--primary)_6%,var(--background))] px-3 py-2 backdrop-blur">
+      <span className="text-[11px] font-semibold uppercase tracking-wide text-primary">
+        Full Block · {weeks.length} week{weeks.length === 1 ? "" : "s"}
+      </span>
+      <div className="mx-2 h-4 w-px bg-border" />
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button size="sm" variant="outline" className="h-7 gap-1 text-[11px]">
+            <CalendarRange className="h-3 w-3" /> Jump to week <ChevronDown className="h-3 w-3 opacity-60" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="max-h-72 overflow-auto">
+          {weeks.map((w: any) => (
+            <DropdownMenuItem key={w.id} onClick={() => onJump(w.id)} className="text-xs">
+              Week {w.week_index}
+              {currentWeekIndex === w.week_index && (
+                <span className="ml-2 text-[10px] font-semibold text-primary">• current</span>
+              )}
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+      {currentWeekIndex != null && (
+        <Button size="sm" variant="outline" className="h-7 gap-1 text-[11px]" onClick={onShowCurrent}>
+          <Crosshair className="h-3 w-3 text-primary" /> Current week
+        </Button>
+      )}
+      <Button size="sm" variant="ghost" className="h-7 gap-1 text-[11px]" onClick={onCollapseAll} disabled={allCollapsed}>
+        <ChevronsDownUp className="h-3 w-3" /> Collapse all
+      </Button>
+      <Button size="sm" variant="ghost" className="h-7 gap-1 text-[11px]" onClick={onExpandAll} disabled={collapsedCount === 0}>
+        <ChevronsUpDown className="h-3 w-3" /> Expand all
+      </Button>
     </div>
   );
 }
@@ -565,7 +765,7 @@ function DayBlock({
   return (
     <Card
       className={cn(
-        "p-2 transition-colors cursor-pointer",
+        "p-2 transition-colors cursor-pointer border-l-[3px] border-l-primary/40 hover:border-l-primary/70",
         dragOver && "border-primary bg-primary/5",
         selected && "ring-2 ring-primary/60",
       )}
