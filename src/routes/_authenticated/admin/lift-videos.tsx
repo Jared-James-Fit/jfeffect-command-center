@@ -528,6 +528,8 @@ function ReviewDetail({
         role="admin"
         userId={userId}
         onChanged={onChanged}
+        clientName={client?.full_name}
+        clientAvatarPath={client?.profile_picture_url}
       />
     </div>
   );
