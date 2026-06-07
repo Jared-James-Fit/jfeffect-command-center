@@ -56,6 +56,7 @@ export function ClientLiftVideoUploader({ clientId, clientName, userId, onSaved 
   const multiUploadRef = useRef<HTMLInputElement | null>(null);
   const multiRecordRef = useRef<HTMLInputElement | null>(null);
   const carouselRef = useRef<HTMLDivElement | null>(null);
+  const pickerOpenedAtRef = useRef<{ source: "photos" | "record"; at: number } | null>(null);
 
   const reset = () => {
     setClips([]);
@@ -72,8 +73,24 @@ export function ClientLiftVideoUploader({ clientId, clientName, userId, onSaved 
     setShowOverall(false);
   };
 
+  const openPicker = (source: "photos" | "record") => {
+    pickerOpenedAtRef.current = { source, at: performance.now() };
+    if (source === "photos") multiUploadRef.current?.click();
+    else multiRecordRef.current?.click();
+  };
+
   const addFiles = (files: FileList | null) => {
     if (!files || files.length === 0) return;
+    const handoff = pickerOpenedAtRef.current;
+    if (handoff) {
+      console.info("[lift-video-picker] Files reached the app after native picker handoff", {
+        source: handoff.source,
+        handoffMs: Math.round(performance.now() - handoff.at),
+        fileCount: files.length,
+        totalBytes: Array.from(files).reduce((sum, file) => sum + file.size, 0),
+      });
+      pickerOpenedAtRef.current = null;
+    }
     const next: Clip[] = [];
     for (const f of Array.from(files)) {
       // Basic guards only — never block on preview/metadata generation.
@@ -91,36 +108,17 @@ export function ClientLiftVideoUploader({ clientId, clientName, userId, onSaved 
         id: crypto.randomUUID(),
         kind: "file",
         file: f,
-        // Defer createObjectURL + <video> mount so the "selected" UI
-        // paints instantly. iOS Safari otherwise blocks on .MOV decode.
+        // Do not create object URLs, thumbnails, metadata, or video elements
+        // here. On iPhone, the only acceptable post-handoff work is adding
+        // the File reference and painting the send/details UI.
         previewUrl: undefined,
         previewStatus: "pending",
         note: "",
       });
     }
     if (next.length === 0) return;
-    setClips((c) => {
-      const merged = [...c, ...next];
-      if (!activeId && merged.length) setActiveId(next[0].id);
-      return merged;
-    });
-    // Generate object URLs on the next idle/animation frame so React can
-    // commit the details panel first. The thumbnail then fills in.
-    const schedule = (cb: () => void) => {
-      const ric = (window as any).requestIdleCallback as undefined | ((cb: () => void) => number);
-      if (ric) ric(cb);
-      else setTimeout(cb, 50);
-    };
-    for (const clip of next) {
-      schedule(() => {
-        try {
-          const url = URL.createObjectURL(clip.file!);
-          setClips((c) => c.map((k) => (k.id === clip.id ? { ...k, previewUrl: url, previewStatus: "ready" } : k)));
-        } catch {
-          setClips((c) => c.map((k) => (k.id === clip.id ? { ...k, previewStatus: "failed" } : k)));
-        }
-      });
-    }
+    setClips((c) => [...c, ...next]);
+    if (!activeId) setActiveId(next[0].id);
   };
 
   const addLinks = (raw: string) => {
