@@ -579,6 +579,107 @@ export async function copyWeekToAll(srcWeekId: string, opts: CopyWeekOptions) {
   return { copied };
 }
 
+/** Copy one day's rows into the same day_index in every later week of the block. */
+export async function copyDayToFutureWeeks(dayId: string, opts: CopyWeekOptions = { prescriptions: true, notes: true }) {
+  const { data: day } = await sb.from("pl_days").select("id, week_id, day_index").eq("id", dayId).maybeSingle();
+  if (!day) return { copied: 0 };
+  const { data: week } = await sb.from("pl_weeks").select("block_id, week_index").eq("id", day.week_id).maybeSingle();
+  if (!week) return { copied: 0 };
+  const { data: laterWeeks } = await sb.from("pl_weeks").select("id, week_index").eq("block_id", week.block_id).gt("week_index", week.week_index).order("week_index");
+  let copied = 0;
+  for (const w of (laterWeeks ?? []) as any[]) {
+    await copyDayContent(dayId, w.id, day.day_index, opts);
+    copied++;
+  }
+  return { copied };
+}
+
+/** Copy one day's rows into the same day_index across the given week IDs. */
+export async function copyDayToWeeks(dayId: string, weekIds: string[], opts: CopyWeekOptions = { prescriptions: true, notes: true }) {
+  const { data: day } = await sb.from("pl_days").select("id, day_index").eq("id", dayId).maybeSingle();
+  if (!day) return { copied: 0 };
+  let copied = 0;
+  for (const wid of weekIds) {
+    await copyDayContent(dayId, wid, day.day_index, opts);
+    copied++;
+  }
+  return { copied };
+}
+
+/** Internal: replace the day at (weekId, dayIndex) with a clone of srcDayId. Creates the day if missing. */
+async function copyDayContent(srcDayId: string, targetWeekId: string, dayIndex: number, opts: CopyWeekOptions) {
+  const { data: src } = await sb.from("pl_days").select("*").eq("id", srcDayId).maybeSingle();
+  if (!src) return;
+  // Skip if the target day is flagged custom — preserve manual edits by default.
+  const { data: existing } = await sb.from("pl_days").select("id, is_custom").eq("week_id", targetWeekId).eq("day_index", dayIndex).maybeSingle();
+  if (existing?.is_custom) return;
+  // Delete existing day at this slot (cascades to rows).
+  if (existing) await sb.from("pl_days").delete().eq("id", existing.id);
+  const { data: newDay } = await sb
+    .from("pl_days")
+    .insert({
+      week_id: targetWeekId,
+      day_index: dayIndex,
+      title: src.title,
+      focus: src.focus,
+      notes: opts.notes ? src.notes : null,
+      duration_source: src.duration_source,
+      duration_override_min: src.duration_override_min,
+      source_day_id: src.id,
+      is_custom: false,
+    })
+    .select("*")
+    .single();
+  const { data: rows } = await sb.from("pl_exercise_rows").select("*").eq("day_id", srcDayId).order("sort_order");
+  for (const r of (rows ?? []) as any[]) {
+    await sb.from("pl_exercise_rows").insert({
+      day_id: newDay.id,
+      sort_order: r.sort_order,
+      exercise_id: r.exercise_id,
+      exercise_name_override: r.exercise_name_override,
+      sets: opts.prescriptions ? r.sets : null,
+      reps_text: opts.prescriptions ? r.reps_text : null,
+      rpe: opts.prescriptions ? r.rpe : null,
+      rir: opts.prescriptions ? r.rir : null,
+      percentage: opts.prescriptions ? r.percentage : null,
+      percentage_basis: opts.prescriptions ? r.percentage_basis : "manual",
+      load_kg: opts.prescriptions ? r.load_kg : null,
+      load_lb: opts.prescriptions ? r.load_lb : null,
+      rest_seconds: opts.prescriptions ? r.rest_seconds : null,
+      tempo: opts.prescriptions ? r.tempo : null,
+      time_profile: r.time_profile,
+      notes: opts.notes ? r.notes : null,
+    });
+  }
+}
+
+/** Delete every row in every day of every week with week_index > fromIndex in a block. Custom days are preserved. */
+export async function clearFutureWeeks(blockId: string, fromIndex: number) {
+  const { data: weeks } = await sb.from("pl_weeks").select("id").eq("block_id", blockId).gt("week_index", fromIndex);
+  let cleared = 0;
+  for (const w of (weeks ?? []) as any[]) {
+    const { data: days } = await sb.from("pl_days").select("id, is_custom").eq("week_id", w.id);
+    for (const d of (days ?? []) as any[]) {
+      if (d.is_custom) continue;
+      await sb.from("pl_exercise_rows").delete().eq("day_id", d.id);
+      cleared++;
+    }
+  }
+  return { cleared };
+}
+
+/** Flip every day in the block to is_custom = true (so cascades stop touching them). */
+export async function breakAllLinks(blockId: string) {
+  const { data: weeks } = await sb.from("pl_weeks").select("id").eq("block_id", blockId);
+  const weekIds = (weeks ?? []).map((w: any) => w.id);
+  if (!weekIds.length) return { updated: 0 };
+  const { data: days } = await sb.from("pl_days").select("id").in("week_id", weekIds);
+  const ids = (days ?? []).map((d: any) => d.id);
+  if (!ids.length) return { updated: 0 };
+  await sb.from("pl_days").update({ is_custom: true }).in("id", ids);
+  return { updated: ids.length };
+}
+
 // ---------- Progression rules ----------
 
 export type ProgressionRuleType = "add_kg" | "add_lb" | "add_pct" | "repeat" | "deload";

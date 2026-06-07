@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
-import { ArrowLeft, Plus, Trash2, Copy, Save, Clock, RotateCcw, Eye, EyeOff, GripVertical, MoreHorizontal, Columns2, Rows3, ChevronDown, ChevronRight, TrendingUp, Zap } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, Copy, Save, Clock, RotateCcw, Eye, EyeOff, GripVertical, MoreHorizontal, Columns2, Rows3, ChevronDown, ChevronRight, TrendingUp, Zap, LayoutGrid, CalendarDays, CalendarRange, User, Unlink } from "lucide-react";
 import { toast } from "sonner";
 import {
   getBlockTree, addDay, addRow, updateRow, deleteRow, updateDay,
@@ -20,6 +20,7 @@ import {
   BLOCK_STATUSES, addWeek, addRowFromExercise, moveRowToDay, duplicateRow, copyWeek,
   copyWeekToAll, expandLinkedDays, countCustomDownstream, applyRowPatchAcrossDays,
   applyDayPatchAcrossDays, breakDayLink, relinkDay, applyProgression,
+  copyDayToFutureWeeks, clearFutureWeeks, breakAllLinks,
   type TimeProfile, type PercentageBasis, type TrainingStyle, type BlockStatus,
   type EditScope, type ProgressionRuleType,
 } from "@/lib/pl-programs";
@@ -32,7 +33,10 @@ import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/admin/blocks/$blockId")({ component: BlockEditor });
 
-type ViewMode = 1 | 2 | 4 | 0; // 0 = all
+type BuilderView = "block" | "week" | "day" | "preview";
+const VIEW_KEY = "pl.builder.view";
+const VIEW_WEEK_KEY = "pl.builder.weekIdx";
+const VIEW_DAY_KEY = "pl.builder.dayId";
 
 /** Fields that should trigger an edit-scope prompt on linked days. */
 const CASCADE_ROW_KEYS = new Set([
@@ -47,8 +51,24 @@ function BlockEditor() {
   const [tplOpen, setTplOpen] = useState(false);
   const [copyOpen, setCopyOpen] = useState(false);
   const [copyDefault, setCopyDefault] = useState<string | undefined>(undefined);
-  const [view, setView] = useState<ViewMode>(1);
-  const [startWeek, setStartWeek] = useState(0);
+  const [view, setView] = useState<BuilderView>(() => {
+    if (typeof window === "undefined") return "block";
+    return ((localStorage.getItem(VIEW_KEY) as BuilderView) || "block");
+  });
+  const [focusedWeekIdx, setFocusedWeekIdx] = useState<number>(() => {
+    if (typeof window === "undefined") return 1;
+    return Number(localStorage.getItem(VIEW_WEEK_KEY) || 1);
+  });
+  const [focusedDayId, setFocusedDayId] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null;
+    return localStorage.getItem(VIEW_DAY_KEY);
+  });
+  useEffect(() => { try { localStorage.setItem(VIEW_KEY, view); } catch {} }, [view]);
+  useEffect(() => { try { localStorage.setItem(VIEW_WEEK_KEY, String(focusedWeekIdx)); } catch {} }, [focusedWeekIdx]);
+  useEffect(() => { try {
+    if (focusedDayId) localStorage.setItem(VIEW_DAY_KEY, focusedDayId);
+    else localStorage.removeItem(VIEW_DAY_KEY);
+  } catch {} }, [focusedDayId]);
   const [libCollapsed, setLibCollapsed] = useState(false);
   const [density, setDensity] = useDensity();
   const [selectedDayId, setSelectedDayId] = useState<string | null>(null);
@@ -90,9 +110,19 @@ function BlockEditor() {
   if (isLoading || !tree) return <div className="p-8 text-sm text-muted-foreground">Loading block…</div>;
   const { block, weeks, days, rows } = tree;
 
-  const visibleCount = view === 0 ? weeks.length : Math.min(view, weeks.length);
-  const clampedStart = Math.max(0, Math.min(startWeek, Math.max(0, weeks.length - visibleCount)));
-  const visibleWeeks = view === 0 ? weeks : weeks.slice(clampedStart, clampedStart + visibleCount);
+  // Which weeks to render based on the chosen view.
+  const focusedWeek =
+    (weeks as any[]).find((w: any) => w.week_index === focusedWeekIdx) ?? (weeks as any[])[0];
+  const focusedDay =
+    (days as any[]).find((d: any) => d.id === focusedDayId) ??
+    (days as any[]).find((d: any) => d.week_id === focusedWeek?.id) ??
+    (days as any[])[0];
+  const visibleWeeks: any[] =
+    view === "block" || view === "preview"
+      ? (weeks as any[])
+      : view === "week"
+        ? (focusedWeek ? [focusedWeek] : [])
+        : (focusedDay ? [(weeks as any[]).find((w: any) => w.id === focusedDay.week_id)] : []);
 
   // Day index helpers for link badges and cascade-relevance.
   const weekById = useMemo(() => new Map((weeks as any[]).map((w: any) => [w.id, w])), [weeks]);
@@ -202,12 +232,11 @@ function BlockEditor() {
               <button onClick={() => setDensity("compact")} className={cn("rounded px-2 py-0.5", density === "compact" && "bg-secondary")} title="Compact"><Rows3 className="h-3 w-3" /></button>
               <button onClick={() => setDensity("comfortable")} className={cn("rounded px-2 py-0.5", density === "comfortable" && "bg-secondary")} title="Comfortable"><Columns2 className="h-3 w-3" /></button>
             </div>
-            <div className="flex items-center gap-1 rounded-md border border-border bg-card p-0.5 text-[11px]">
-              {[1, 2, 4, 0].map((n) => (
-                <button key={n} onClick={() => setView(n as ViewMode)} className={cn("rounded px-2 py-0.5", view === n && "bg-secondary")}>
-                  {n === 0 ? "All" : `${n}w`}
-                </button>
-              ))}
+            <div className="flex items-center gap-0.5 rounded-md border border-border bg-card p-0.5 text-[11px]">
+              <ViewToggleBtn active={view === "block"} onClick={() => setView("block")} icon={<LayoutGrid className="h-3 w-3" />} label="Full Block" />
+              <ViewToggleBtn active={view === "week"} onClick={() => setView("week")} icon={<CalendarRange className="h-3 w-3" />} label="Weekly" />
+              <ViewToggleBtn active={view === "day"} onClick={() => setView("day")} icon={<CalendarDays className="h-3 w-3" />} label="Day" />
+              <ViewToggleBtn active={view === "preview"} onClick={() => setView("preview")} icon={<User className="h-3 w-3" />} label="Client" />
             </div>
             <Select value={block.status} onValueChange={(v) => run(() => updateBlock(blockId, { status: v as BlockStatus }))}>
               <SelectTrigger className="h-8 w-32 text-xs"><SelectValue /></SelectTrigger>
@@ -234,55 +263,147 @@ function BlockEditor() {
                 <TrendingUp className="mr-1 h-4 w-4" /> Progression…
               </Button>
             )}
+            {weeks.length > 1 && (
+              <Button size="sm" variant="outline" onClick={async () => {
+                if (!confirm("Break all linked days so future cascades stop touching them?")) return;
+                await save.wrap(() => breakAllLinks(blockId));
+                refresh();
+                toast.success("All days marked custom");
+              }}>
+                <Unlink className="mr-1 h-4 w-4" /> Break links
+              </Button>
+            )}
             <Button size="sm" variant="outline" onClick={() => setTplOpen(true)}><Save className="mr-1 h-4 w-4" /> Save Block as Template</Button>
           </div>
         </div>
 
-        {view !== 0 && weeks.length > visibleCount && (
-          <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
-            <Button size="sm" variant="ghost" disabled={clampedStart === 0} onClick={() => setStartWeek(Math.max(0, clampedStart - 1))}>‹ Prev</Button>
-            <span>Weeks {visibleWeeks.map((w: any) => w.week_index).join(", ")} of {weeks.length}</span>
-            <Button size="sm" variant="ghost" disabled={clampedStart + visibleCount >= weeks.length} onClick={() => setStartWeek(clampedStart + 1)}>Next ›</Button>
+        {view === "week" && weeks.length > 1 && (
+          <div className="flex flex-wrap items-center gap-1">
+            {(weeks as any[]).map((w: any) => (
+              <button
+                key={w.id}
+                onClick={() => setFocusedWeekIdx(w.week_index)}
+                className={cn(
+                  "rounded-md border px-2.5 py-1 text-[11px]",
+                  focusedWeek?.id === w.id ? "border-primary bg-primary/10 text-primary" : "border-border bg-card text-muted-foreground hover:text-foreground",
+                )}
+              >
+                Week {w.week_index}
+              </button>
+            ))}
+          </div>
+        )}
+        {view === "day" && (
+          <div className="flex flex-wrap items-center gap-1">
+            {(weeks as any[]).map((w: any) =>
+              (days as any[]).filter((d: any) => d.week_id === w.id).map((d: any) => (
+                <button
+                  key={d.id}
+                  onClick={() => { setFocusedDayId(d.id); setFocusedWeekIdx(w.week_index); }}
+                  className={cn(
+                    "rounded-md border px-2 py-1 text-[10px]",
+                    focusedDay?.id === d.id ? "border-primary bg-primary/10 text-primary" : "border-border bg-card text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  W{w.week_index} · {d.title || `D${d.day_index}`}
+                </button>
+              ))
+            )}
           </div>
         )}
 
         <div className="flex h-[calc(100vh-180px)] overflow-hidden rounded-md border border-border bg-background">
-          <ExerciseLibraryPanel
-            exercises={exercises as ExerciseRef[]}
-            recentIds={recentIds}
-            collapsed={libCollapsed}
-            onToggleCollapse={() => setLibCollapsed((v) => !v)}
-            selectedDayLabel={selectedDayLabel}
-            onQuickAdd={quickAddToSelected}
-            onPick={(exId) => {
-              const target = selectedDayId ? (dayById.get(selectedDayId) as any) : (days as any[])[0];
-              if (!target) { toast.error("Add a day first"); return; }
-              run(() => addRowFromExercise(target.id, exId));
-            }}
-          />
+          {view !== "preview" && (
+            <ExerciseLibraryPanel
+              exercises={exercises as ExerciseRef[]}
+              recentIds={recentIds}
+              collapsed={libCollapsed}
+              onToggleCollapse={() => setLibCollapsed((v) => !v)}
+              selectedDayLabel={selectedDayLabel}
+              onQuickAdd={quickAddToSelected}
+              onPick={(exId) => {
+                const target = selectedDayId ? (dayById.get(selectedDayId) as any) : (days as any[])[0];
+                if (!target) { toast.error("Add a day first"); return; }
+                run(() => addRowFromExercise(target.id, exId));
+              }}
+            />
+          )}
           <div className="flex-1 overflow-auto">
-            <div
-              className="grid h-full"
-              style={{ gridTemplateColumns: `repeat(${visibleWeeks.length || 1}, minmax(560px, 1fr))` }}
-            >
-              {visibleWeeks.map((w: any) => (
-                <WeekColumn
-                  key={w.id}
-                  week={w}
-                  days={days.filter((d: any) => d.week_id === w.id)}
-                  rows={rows}
+            {view === "preview" ? (
+              <ClientPreview weeks={weeks} days={days} rows={rows} />
+            ) : view === "day" && focusedDay ? (
+              <div className="p-3">
+                <DayBlock
+                  key={focusedDay.id}
+                  day={focusedDay}
+                  rows={(rows as any[]).filter((r: any) => r.day_id === focusedDay.id)}
                   exercises={exercises as ExerciseRef[]}
                   density={density}
                   onAction={run}
-                  selectedDayId={selectedDayId}
-                  onSelectDay={setSelectedDayId}
-                  dayLinkInfo={dayLinkInfo}
+                  selected={selectedDayId === focusedDay.id}
+                  onSelect={() => setSelectedDayId(focusedDay.id)}
+                  link={dayLinkInfo(focusedDay.id)}
                   onRowPatch={onRowPatch}
                   onDayPatch={onDayPatch}
-                  onCopyWeek={() => { setCopyDefault(w.id); setCopyOpen(true); }}
+                  weekIndex={(weekById.get(focusedDay.week_id) as any)?.week_index ?? 0}
+                  onCopyDayToFuture={async () => {
+                    const r = await save.wrap(() => copyDayToFutureWeeks(focusedDay.id));
+                    refresh();
+                    toast.success(`Copied to ${r?.copied ?? 0} future week(s)`);
+                  }}
                 />
-              ))}
-            </div>
+              </div>
+            ) : view === "block" ? (
+              <div className="flex flex-col">
+                {(weeks as any[]).map((w: any) => (
+                  <WeekColumn
+                    key={w.id}
+                    week={w}
+                    days={(days as any[]).filter((d: any) => d.week_id === w.id)}
+                    rows={rows}
+                    exercises={exercises as ExerciseRef[]}
+                    density={density}
+                    onAction={run}
+                    selectedDayId={selectedDayId}
+                    onSelectDay={setSelectedDayId}
+                    dayLinkInfo={dayLinkInfo}
+                    onRowPatch={onRowPatch}
+                    onDayPatch={onDayPatch}
+                    onCopyWeek={() => { setCopyDefault(w.id); setCopyOpen(true); }}
+                    onCopyDayToFuture={async (dayId: string) => {
+                      const r = await save.wrap(() => copyDayToFutureWeeks(dayId));
+                      refresh();
+                      toast.success(`Copied to ${r?.copied ?? 0} future week(s)`);
+                    }}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="grid h-full" style={{ gridTemplateColumns: `repeat(${visibleWeeks.length || 1}, minmax(560px, 1fr))` }}>
+                {visibleWeeks.map((w: any) => (
+                  <WeekColumn
+                    key={w.id}
+                    week={w}
+                    days={(days as any[]).filter((d: any) => d.week_id === w.id)}
+                    rows={rows}
+                    exercises={exercises as ExerciseRef[]}
+                    density={density}
+                    onAction={run}
+                    selectedDayId={selectedDayId}
+                    onSelectDay={setSelectedDayId}
+                    dayLinkInfo={dayLinkInfo}
+                    onRowPatch={onRowPatch}
+                    onDayPatch={onDayPatch}
+                    onCopyWeek={() => { setCopyDefault(w.id); setCopyOpen(true); }}
+                    onCopyDayToFuture={async (dayId: string) => {
+                      const r = await save.wrap(() => copyDayToFutureWeeks(dayId));
+                      refresh();
+                      toast.success(`Copied to ${r?.copied ?? 0} future week(s)`);
+                    }}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -321,7 +442,7 @@ function BlockEditor() {
 
 function WeekColumn({
   week, days, rows, exercises, density, onAction, onCopyWeek,
-  selectedDayId, onSelectDay, dayLinkInfo, onRowPatch, onDayPatch,
+  selectedDayId, onSelectDay, dayLinkInfo, onRowPatch, onDayPatch, onCopyDayToFuture,
 }: {
   week: any;
   days: any[];
@@ -335,6 +456,7 @@ function WeekColumn({
   dayLinkInfo: (id: string) => { sourceLabel: string | null; isCustom: boolean; hasSiblings: boolean };
   onRowPatch: (rowId: string, dayId: string, patch: Record<string, any>) => void | Promise<void>;
   onDayPatch: (dayId: string, patch: Record<string, any>) => void | Promise<void>;
+  onCopyDayToFuture?: (dayId: string) => void | Promise<void>;
 }) {
   return (
     <div className="flex min-w-0 flex-col border-r border-border last:border-r-0">
@@ -379,6 +501,8 @@ function WeekColumn({
             link={dayLinkInfo(d.id)}
             onRowPatch={onRowPatch}
             onDayPatch={onDayPatch}
+            weekIndex={week.week_index}
+            onCopyDayToFuture={onCopyDayToFuture ? () => onCopyDayToFuture(d.id) : undefined}
           />
         ))}
         <Button variant="outline" size="sm" className="h-7"
@@ -392,6 +516,7 @@ function WeekColumn({
 
 function DayBlock({
   day, rows, exercises, density, onAction, selected, onSelect, link, onRowPatch, onDayPatch,
+  weekIndex, onCopyDayToFuture,
 }: {
   day: any;
   rows: any[];
@@ -403,21 +528,38 @@ function DayBlock({
   link: { sourceLabel: string | null; isCustom: boolean; hasSiblings: boolean };
   onRowPatch: (rowId: string, dayId: string, patch: Record<string, any>) => void | Promise<void>;
   onDayPatch: (dayId: string, patch: Record<string, any>) => void | Promise<void>;
+  weekIndex?: number;
+  onCopyDayToFuture?: () => void | Promise<void>;
 }) {
   const [dragOver, setDragOver] = useState(false);
+  const [dropIndex, setDropIndex] = useState<number | null>(null);
+  const rowsRef = useRef<HTMLTableSectionElement | null>(null);
   const auto = estimateDayMinutes(rows);
   const shownMinutes = day.duration_source === "manual" && day.duration_override_min ? day.duration_override_min : auto;
 
   const onDrop = (e: React.DragEvent, position?: number) => {
     e.preventDefault();
     setDragOver(false);
+    const pos = position ?? dropIndex ?? undefined;
+    setDropIndex(null);
     const payload = readDrop(e);
     if (!payload) return;
     if (payload.kind === "exercise") {
-      onAction(() => addRowFromExercise(day.id, payload.exerciseId, position));
+      onAction(() => addRowFromExercise(day.id, payload.exerciseId, pos));
     } else if (payload.kind === "row") {
-      onAction(() => moveRowToDay(payload.rowId, day.id, position));
+      onAction(() => moveRowToDay(payload.rowId, day.id, pos));
     }
+  };
+
+  const computeDropIndex = (clientY: number): number => {
+    const tbody = rowsRef.current;
+    if (!tbody) return rows.length;
+    const trs = Array.from(tbody.querySelectorAll<HTMLTableRowElement>("tr[data-row-idx]"));
+    for (let i = 0; i < trs.length; i++) {
+      const r = trs[i].getBoundingClientRect();
+      if (clientY < r.top + r.height / 2) return i;
+    }
+    return trs.length;
   };
 
   return (
@@ -428,8 +570,18 @@ function DayBlock({
         selected && "ring-2 ring-primary/60",
       )}
       onClick={onSelect}
-      onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-      onDragLeave={() => setDragOver(false)}
+      onDragOver={(e) => {
+        e.preventDefault();
+        setDragOver(true);
+        setDropIndex(computeDropIndex(e.clientY));
+      }}
+      onDragLeave={(e) => {
+        // Only reset if cursor truly leaves the card
+        if (!(e.currentTarget as Node).contains(e.relatedTarget as Node)) {
+          setDragOver(false);
+          setDropIndex(null);
+        }
+      }}
       onDrop={(e) => onDrop(e)}
     >
       <div className="flex flex-wrap items-center gap-1.5 pb-1" onClick={(e) => e.stopPropagation()}>
@@ -466,6 +618,11 @@ function DayBlock({
             <DropdownMenuContent align="end">
               <DropdownMenuItem onClick={() => onAction(() => duplicateDay(day.id))}><Copy className="mr-2 h-3 w-3" /> Duplicate day</DropdownMenuItem>
               <DropdownMenuItem onClick={() => onAction(() => addRow(day.id, rows.length))}><Plus className="mr-2 h-3 w-3" /> Add empty row</DropdownMenuItem>
+              {onCopyDayToFuture && (
+                <DropdownMenuItem onClick={() => onCopyDayToFuture()}>
+                  <Zap className="mr-2 h-3 w-3" /> Copy day → future weeks
+                </DropdownMenuItem>
+              )}
               {link.sourceLabel && !link.isCustom && (
                 <DropdownMenuItem onClick={() => onAction(() => breakDayLink(day.id))}>Break link to {link.sourceLabel}</DropdownMenuItem>
               )}
@@ -497,18 +654,22 @@ function DayBlock({
               <th className="w-6"></th>
             </tr>
           </thead>
-          <tbody>
+          <tbody ref={rowsRef}>
             {rows.length === 0 && (
               <tr><td colSpan={9} className="px-2 py-4 text-center text-[11px] text-muted-foreground">
-                <div className="mb-2">Drag exercises here, or:</div>
+                <div className={cn("mb-2", dragOver && "text-primary")}>Drag exercises here, or:</div>
                 <div className="flex flex-wrap justify-center gap-1">
                   <Button size="sm" variant="outline" className="h-6 text-[10px]" onClick={() => onAction(() => addRow(day.id, 0))}>+ Empty row</Button>
                 </div>
               </td></tr>
             )}
-            {rows.map((r: any) => (
-              <CompactRow key={r.id} row={r} exercises={exercises} density={density} onAction={onAction} onRowPatch={onRowPatch} dayId={day.id} />
+            {rows.map((r: any, idx: number) => (
+              <Fragment key={r.id}>
+                {dragOver && dropIndex === idx && <InsertionRow />}
+                <CompactRow row={r} exercises={exercises} density={density} onAction={onAction} onRowPatch={onRowPatch} dayId={day.id} rowIdx={idx} />
+              </Fragment>
             ))}
+            {dragOver && dropIndex === rows.length && rows.length > 0 && <InsertionRow />}
           </tbody>
         </table>
       </div>
@@ -526,7 +687,7 @@ function DayBlock({
 }
 
 function CompactRow({
-  row, exercises, density, onAction, onRowPatch, dayId,
+  row, exercises, density, onAction, onRowPatch, dayId, rowIdx,
 }: {
   row: any;
   exercises: ExerciseRef[];
@@ -534,6 +695,7 @@ function CompactRow({
   onAction: (fn: () => Promise<any>) => void;
   onRowPatch: (rowId: string, dayId: string, patch: Record<string, any>) => void | Promise<void>;
   dayId: string;
+  rowIdx?: number;
 }) {
   const exName = row.exercises?.name ?? row.exercise_name_override ?? "(unnamed)";
   const accent = movementAccent(exName);
@@ -546,6 +708,7 @@ function CompactRow({
     <>
     <tr
       className="group border-b border-border/40 hover:bg-secondary/30"
+      data-row-idx={rowIdx}
       draggable
       onDragStart={(e) => setDragRow(e, row.id, dayId)}
     >
@@ -764,5 +927,85 @@ function ProgressionDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+// ---------------- View toggle button ----------------
+function ViewToggleBtn({ active, onClick, icon, label }: { active: boolean; onClick: () => void; icon: React.ReactNode; label: string }) {
+  return (
+    <button
+      onClick={onClick}
+      title={label}
+      className={cn(
+        "inline-flex items-center gap-1 rounded px-2 py-0.5 text-[11px]",
+        active ? "bg-secondary text-foreground" : "text-muted-foreground hover:text-foreground",
+      )}
+    >
+      {icon}
+      <span className="hidden md:inline">{label}</span>
+    </button>
+  );
+}
+
+// ---------------- Insertion-line row ----------------
+function InsertionRow() {
+  return (
+    <tr aria-hidden className="pointer-events-none">
+      <td colSpan={9} className="p-0">
+        <div className="h-0.5 w-full bg-primary" />
+      </td>
+    </tr>
+  );
+}
+
+// ---------------- Read-only client preview ----------------
+function ClientPreview({ weeks, days, rows }: { weeks: any[]; days: any[]; rows: any[] }) {
+  return (
+    <div className="space-y-4 p-4">
+      <div className="rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-xs text-primary">
+        Client preview — read-only view of what the client will see.
+      </div>
+      {(weeks as any[]).map((w: any) => (
+        <div key={w.id} className="space-y-2">
+          <h3 className="text-sm font-bold">Week {w.week_index}</h3>
+          <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-3">
+            {(days as any[]).filter((d: any) => d.week_id === w.id).map((d: any) => {
+              const dayRows = (rows as any[]).filter((r: any) => r.day_id === d.id);
+              return (
+                <Card key={d.id} className="p-3">
+                  <div className="mb-1 flex items-center justify-between">
+                    <div className="text-sm font-semibold">{d.title || `Day ${d.day_index}`}</div>
+                    {d.focus && <div className="text-[10px] text-muted-foreground">{d.focus}</div>}
+                  </div>
+                  {dayRows.length === 0 ? (
+                    <div className="text-[11px] text-muted-foreground">No exercises.</div>
+                  ) : (
+                    <ul className="space-y-1 text-[11px]">
+                      {dayRows.map((r: any) => {
+                        const name = r.exercises?.name ?? r.exercise_name_override ?? "(unnamed)";
+                        const prescription = [
+                          r.sets ? `${r.sets}×${r.reps_text ?? "?"}` : null,
+                          r.rpe ? `@${r.rpe} RPE` : null,
+                          r.percentage ? `${r.percentage}%` : null,
+                          r.load_kg ? `${r.load_kg}kg` : null,
+                          r.rest_seconds ? `${r.rest_seconds}s rest` : null,
+                        ].filter(Boolean).join(" · ");
+                        return (
+                          <li key={r.id}>
+                            <span className="font-medium">{name}</span>
+                            {prescription && <span className="text-muted-foreground"> — {prescription}</span>}
+                            {r.notes && <div className="pl-2 text-[10px] text-muted-foreground">{r.notes}</div>}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                  {d.notes && <div className="mt-2 rounded-sm bg-muted/40 px-2 py-1 text-[10px]">{d.notes}</div>}
+                </Card>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }

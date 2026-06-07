@@ -1,96 +1,124 @@
 
-# Program Builder v2 — Faster Library, Tighter Rows, Linked Weeks
+# Program Builder v3 — Full-Block View, View Toggle, True Drag/Drop, Propagation
 
-The current builder already has drag-and-drop, a left library panel, compact rows, and a Copy Week dialog. This plan closes the remaining gaps so it actually feels like a coaching sheet.
+The current builder still feels week-tab-bound. v3 turns it into a true full-block workspace, while keeping focused views available.
 
-## 1. Exercise Library + Add-to-Day flow
+## 1. View toggle (Full Block · Weekly · Day · Client Preview)
 
-**Library item (left panel)** — show more useful info, faster to add:
+Add a segmented toggle at the top of the block editor next to the existing density / collapse controls.
 
-- Two-line item: name (top), muscles · category (bottom)
-- Always-visible drag handle, plus a `+` button on hover that calls "Add to selected day"
-- Search filters across name, muscle, category, equipment, tags
+- `view = "block" | "week" | "day" | "preview"`
+- Default to last used view, stored in `localStorage` per-user under `pl.builder.view` (and `pl.builder.weekIndex`, `pl.builder.dayId`).
+- Replaces the existing `view: 1 | 2 | 4 | 0` "columns" toggle. Column count becomes a sub-option of Weekly view only ("Show 1 / 2 / 4 weeks side-by-side" stays available there for power users).
 
-**Selected day state** — new global per-block selection:
+Behavior per view:
+- **Full Block**: vertical stack — Week 1 panel → Week 2 panel → … Each week panel renders all its days as compact day cards in a horizontal scrollable strip (or grid on wide screens). Fully editable. Sticky week headers.
+- **Weekly**: current behavior. Week tabs (W1 / W2 / W3 / W4) live inside this view. Single week, all days, max editing comfort.
+- **Day**: pick a single day (selected day). Wide layout, full row chevron auto-expanded, ideal for fine-tuning.
+- **Client Preview**: read-only render that matches the client portal `workouts.$dayId` layout, navigable week → day. Reuses existing card components in read-only mode.
 
-- Clicking a day card sets it as "selected" (subtle primary ring)
-- Library `+` button and double-click add into the selected day
-- If none selected, toast: "Select a day first" and briefly pulse the first day
+The Exercise Library panel stays mounted on the left in Full Block / Weekly / Day views; hidden in Client Preview.
 
-**Auto-fill on add** — `addRowFromExercise` already inserts an `exercise_id`. Extend it to also seed:
+## 2. Full Block view internals
 
-- `time_profile` from the exercise category (squat/bench/dead → `main_lift`, accessory mapping)
-- `rest_seconds` from `TIME_PROFILES` defaults
-- The cues/demo come from the joined `exercises` row, so no DB change needed for display
+- Renders all weeks via `tree.weeks.map`.
+- Week header: title + linked/custom summary chips + per-week actions menu (Copy → All weeks, Copy → Next, Apply progression…, Clear, Insert week after).
+- Day cards inside each week use the same `CompactRow` table already built; row interactions reuse `onRowPatch`/`onDayPatch` scope-aware wrappers — no behavior regression.
+- Selected day highlight (ring) is global across all weeks; clicking any day in any week sets it as the library `+` target.
+- Sticky horizontal "Day 1 / Day 2 / Day 3" column header per week so coaches can scan down a column.
+- New "Column compare" toggle (Full Block only): switch a week panel to "stacked by day index" mode so Day 1 across Weeks 1-4 stacks vertically — implements the user's "Option 2" layout for progression scanning. Cheap to add as a CSS grid flip.
 
-## 2. Compact row polish
+## 3. Drag-and-drop overhaul
 
-- Default row height stays one line in Compact density (current ~28px is fine)
-- Add a tiny chevron at the row start to expand → reveals Notes, Tempo, Time profile, % basis, advanced calc on a second line
-- Move Tempo + Notes out of the always-visible columns into the expand panel; default visible columns: Movement | Sets | Reps | RPE | % | Load | Rest | (⋯ menu)
-- Day-notes input collapses to a "Add note" pill when empty; expands to a textarea when clicked
+Current drag works exercise → row insert but the insertion line / empty-day drop zones need polish.
 
-## 3. Linked weeks (piggyback)
+- Library items: keep `draggable=true` with `setDragRow`. Also keep `+` hover button (selected-day add) and double-click.
+- Each day card gets explicit drop zones:
+  - **Empty day**: big dashed "Drop exercise here" zone (already exists, polish styling and `dragover` highlight).
+  - **Between rows**: 6px gap line per row boundary, shows a 2px primary-colored insertion bar on `dragover`.
+  - **Above first row / below last row**: zones at the top and bottom of the row list.
+- Implementation: wrap row list in a single `<div>` with `onDragOver` → compute insertion index from `event.clientY` vs each row's `getBoundingClientRect`. Show insertion bar via state `dropIndex`.
+- On drop: insert at computed index (no extra click). Reuses existing `addRowFromExercise(dayId, exerciseId, position)` — extend to accept an `insertIndex`.
+- Existing rows remain draggable for reorder via `GripVertical` (already implemented). Same insertion-line logic applies to row→row drag.
 
-**Schema (new migration)** — add to `pl_days`:
+## 4. Copy / propagation toolkit
 
-- `source_day_id uuid null references pl_days(id) on delete set null` — the day this one is linked to
-- `is_custom boolean default false` — true once the user breaks the link / edits independently
+Most plumbing already exists (`copyWeekToAll`, `applyProgression`, `expandLinkedDays`, `breakDayLink`). v3 adds the UI surfaces and the one-click day-copy flow.
 
-The `copyWeek` helper already wipes + recreates target days. Update it to write `source_day_id` on each new day pointing to the matching source day (by `day_index`), with `is_custom = false`.
+Per-day actions menu (⋯ on day card):
+- **Copy day → same day in all future weeks** (new helper `copyDayToFutureWeeks(dayId)`).
+- **Copy day → selected weeks…** (small dialog with week checkboxes).
+- **Copy day → another day** (existing duplicate, retargeted).
+- **Break link / Re-link** (existing `breakDayLink` / `relinkDay`).
+- **Clear day** (delete all rows, keep day).
 
-**UI on the day header:**
+Per-week actions menu (existing) gains:
+- **Copy Week → all future weeks** (already `copyWeekToAll`).
+- **Copy Week → next week only**.
+- **Apply progression…** (already wired; surface in this menu too).
+- **Clear future weeks**.
 
-- Linked badge: `Linked to W{n} D{n}` (clickable → focuses the source day)
-- "Custom" badge once `is_custom = true`
-- Menu items: `Break link`, `Re-link to previous week`
+Block-level toolbar (Full Block view only):
+- "Copy Week 1 → entire block" (single click).
+- "Apply progression…" dialog (already implemented).
+- "Break all links" (already in pl-programs).
 
-**Edit-scope modal** — when a coach edits a row/day field on a *linked* day, show:
+All cascading writes that touch linked days route through the existing `EditScopeDialog` when targets contain `is_custom = true` (warning: "Some future weeks have custom edits — overwrite or preserve?"). Default action is **Preserve**.
 
-- This day only (sets `is_custom = true` on this day; future linked days stop following it because they link to the *previous* week's day chain, but we still preserve their content)
-- This day + future weeks (cascades the same patch to all downstream days whose `source_day_id` chain reaches this day and that are not `is_custom`)
-- All matching days in block (every day with same `day_index` regardless of link)
+## 5. Edit-scope dialog refinements
+
+Wording matches the user's spec exactly:
+- "This day only"
+- "This day and future weeks"
+- "Entire block"
+- "Break link / make custom"
+- "Cancel"
+
+When future weeks contain custom days and the user picks "future" or "entire block", append a second confirmation step inside the same dialog:
+- Preserve custom edits (default)
+- Overwrite custom edits
 - Cancel
 
-Implement once in a `useEditScope` helper that wraps `updateRow` / `updateDay` / row insert / row delete and resolves the affected day IDs server-side via a small `expandLinkedDays(dayId, scope)` function in `pl-programs.ts`.
+## 6. Compactness pass
 
-If any downstream day is `is_custom = true`, show a confirmation: "Some future weeks have custom edits — overwrite or preserve?".
+- Default row height: keep one line. Move Tempo + Notes columns off the always-visible set in Full Block view; reveal via existing row chevron.
+- Day-notes input becomes "Add note" pill until clicked.
+- Week header collapses to a single 32px bar in Full Block view, expanding on click.
+- Library item: two-line layout (name / muscle · category).
 
-## 4. Block-wide shortcuts
+## 7. Client Preview view
 
-Top toolbar additions next to existing Copy Week:
+- Read-only.
+- Renders each week → each day using the same compact table but with inputs swapped for plain text.
+- Adds a "View as client" notice banner.
+- Reuses existing portal `workouts.$dayId` styling for fidelity.
 
-- **Copy Week 1 → All weeks** (single click; uses existing `copyWeek` in a loop, sets links)
-- **Apply progression…** dialog: pick lift filter + rule (+2.5kg/wk, +5lb/wk, +2.5%, repeat, deload -10%); writes new `load_kg` / `percentage` per week
-- **Break all links** (sets `is_custom = true` everywhere)
+## 8. Files
 
-Empty-day state updates: instead of just "Drag exercise here", add buttons:
+Changed:
+- `src/routes/_authenticated/admin/blocks.$blockId.tsx` — replace `ViewMode` with `BuilderView`, add view toggle, render Full Block / Weekly / Day / Client Preview layouts, wire localStorage persistence, add per-day actions menu, drop-zone wiring at day level.
+- `src/components/program-builder.tsx` — extend drag/drop helpers with insertion-index calculation, add `InsertionLine`, `DropZone`, `DayActionsMenu`, `ClientPreviewDay`, `CopyDayDialog` components; keep existing exports stable.
+- `src/lib/pl-programs.ts` — add `copyDayToFutureWeeks(dayId)`, `copyDayToWeeks(dayId, weekIndexes)`, `clearFutureWeeks(blockId, fromWeekIndex)`, extend `addRowFromExercise` with `insertIndex`.
 
-- Add Row · Copy from Week 1 Day N · Copy from previous week
+No DB schema changes (the v2 migration with `source_day_id` / `is_custom` already covers linked-week state).
 
-## 5. Files
+## 9. Out of scope
 
-**New / changed:**
-
-- `supabase/migrations/<ts>_pl_day_links.sql` — `source_day_id`, `is_custom`, indexes, plus grant noop (table already granted)
-- `src/lib/pl-programs.ts` — extend `addRowFromExercise` to seed time_profile/rest from exercise category; add `linkDay`, `breakDayLink`, `expandLinkedDays`, `copyWeekAll`, `applyProgression`; update `copyWeek` to set links
-- `src/components/program-builder.tsx` — selected-day context, library `+` button, expandable row chevron, edit-scope dialog component, link badges
-- `src/routes/_authenticated/admin/blocks.$blockId.tsx` — wire selected-day state, replace direct `updateRow`/`updateDay` calls with scope-aware wrappers, add toolbar buttons and empty-state actions
-- `src/routes/_authenticated/admin/program-library_.$templateId.tsx` — minor: same library `+` / select-day works inside the in-memory JSON editor too (best-effort, no linking — templates stay simple)
-
-## 6. Out of scope (kept simple this pass)
-
-- Per-row template save / row library — not part of "faster builder", separate feature
-- Full formula engine (Week2 = Week1 + 2.5kg as a live computed field) — the "apply progression" button writes the values, which is what coaches actually want and avoids stale formulas
-- Mobile drag rebuild — desktop drag + tap-to-add via the `+` button already covers iPad
+- Real-time multi-coach editing.
+- Mobile drag rebuild (tap-to-add via `+` still covers iPad).
+- Per-row template library (separate feature).
 
 ## Acceptance checklist
 
-1. Click Day 1 → ring highlight; library `+` adds rows into Day 1 with correct time_profile/rest
-2. Drag from library still works; drop on a row inserts at that position
-3. Row chevron expands to show Notes/Tempo/% basis; collapsed default is one line
-4. Build Week 1 → click "Copy Week 1 → All weeks" → Weeks 2–N populated, each day shows "Linked to W1 D{n}"
-5. Edit a set count on W2 D1 → scope modal appears → "This day only" sets W2 D1 to Custom, W3 D1 stays linked to W1
-6. Same edit with "This + future weeks" → W3/W4 update, W2 still linked
-7. "Apply progression: +2.5kg/wk to Squat" updates loads across weeks; custom days are skipped with toast
-8. Break link on W3 D1 → badge flips to Custom; subsequent cascades skip it
+1. View toggle visible at top; switching persists across reloads.
+2. Full Block view shows all weeks; every row editable inline; selected day works across weeks.
+3. Weekly view still shows week tabs and focused editing.
+4. Day view shows one day full-width with expanded rows.
+5. Client Preview is read-only and matches portal styling.
+6. Drag library exercise into empty day → row appears, no `+` click.
+7. Drag between rows → insertion bar appears at exact gap, drop lands there.
+8. Day ⋯ menu → "Copy day → all future weeks" populates W2/W3/W4 same day; linked badges appear.
+9. Editing a linked W2 D1 prompts edit-scope dialog; "This day only" sets W2 D1 to Custom; W3 D1 stays linked.
+10. "Apply progression: +2.5kg/wk Squat" skips custom days with toast.
+11. Toolbar "Copy Week 1 → entire block" populates W2–W4; "Break all links" flips everything to Custom.
+12. Save → refresh → view, week, day, linked/custom states all persist.
