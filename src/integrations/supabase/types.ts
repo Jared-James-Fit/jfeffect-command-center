@@ -1716,14 +1716,23 @@ export type Database = {
           custom_tag: string | null
           custom_training_day: string | null
           date_performed: string | null
+          drive_embed_url: string | null
           exercise: string
+          file_size_bytes: number | null
+          file_type: string | null
           id: string
           important_date_id: string | null
           is_urgent: boolean
           liked_at: string | null
           liked_by: string | null
           load_text: string | null
+          original_drive_file_id: string | null
+          original_drive_url: string | null
           phase_id: string | null
+          playback_error: string | null
+          preview_error: string | null
+          preview_status: string
+          preview_url: string | null
           program_day: string | null
           question_for_coach: string | null
           reps: number | null
@@ -1736,6 +1745,7 @@ export type Database = {
           thumbnail_url: string | null
           training_day: string | null
           updated_at: string
+          upload_status: string
           uploaded_by: string | null
           video_source: string
           video_storage_path: string | null
@@ -1756,14 +1766,23 @@ export type Database = {
           custom_tag?: string | null
           custom_training_day?: string | null
           date_performed?: string | null
+          drive_embed_url?: string | null
           exercise?: string
+          file_size_bytes?: number | null
+          file_type?: string | null
           id?: string
           important_date_id?: string | null
           is_urgent?: boolean
           liked_at?: string | null
           liked_by?: string | null
           load_text?: string | null
+          original_drive_file_id?: string | null
+          original_drive_url?: string | null
           phase_id?: string | null
+          playback_error?: string | null
+          preview_error?: string | null
+          preview_status?: string
+          preview_url?: string | null
           program_day?: string | null
           question_for_coach?: string | null
           reps?: number | null
@@ -1776,6 +1795,7 @@ export type Database = {
           thumbnail_url?: string | null
           training_day?: string | null
           updated_at?: string
+          upload_status?: string
           uploaded_by?: string | null
           video_source?: string
           video_storage_path?: string | null
@@ -1796,14 +1816,23 @@ export type Database = {
           custom_tag?: string | null
           custom_training_day?: string | null
           date_performed?: string | null
+          drive_embed_url?: string | null
           exercise?: string
+          file_size_bytes?: number | null
+          file_type?: string | null
           id?: string
           important_date_id?: string | null
           is_urgent?: boolean
           liked_at?: string | null
           liked_by?: string | null
           load_text?: string | null
+          original_drive_file_id?: string | null
+          original_drive_url?: string | null
           phase_id?: string | null
+          playback_error?: string | null
+          preview_error?: string | null
+          preview_status?: string
+          preview_url?: string | null
           program_day?: string | null
           question_for_coach?: string | null
           reps?: number | null
@@ -1816,6 +1845,7 @@ export type Database = {
           thumbnail_url?: string | null
           training_day?: string | null
           updated_at?: string
+          upload_status?: string
           uploaded_by?: string | null
           video_source?: string
           video_storage_path?: string | null
