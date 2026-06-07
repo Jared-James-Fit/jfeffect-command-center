@@ -38,6 +38,7 @@ import { Route as AuthenticatedPortalCheckInRouteImport } from './routes/_authen
 import { Route as AuthenticatedPortalCalendarRouteImport } from './routes/_authenticated/portal/calendar'
 import { Route as AuthenticatedPortalAccountRouteImport } from './routes/_authenticated/portal/account'
 import { Route as AuthenticatedAdminTrainingPhasesRouteImport } from './routes/_authenticated/admin/training-phases'
+import { Route as AuthenticatedAdminTrainingIntelligenceRouteImport } from './routes/_authenticated/admin/training-intelligence'
 import { Route as AuthenticatedAdminTestimonialsRouteImport } from './routes/_authenticated/admin/testimonials'
 import { Route as AuthenticatedAdminSopsRouteImport } from './routes/_authenticated/admin/sops'
 import { Route as AuthenticatedAdminSettingsRouteImport } from './routes/_authenticated/admin/settings'
@@ -242,6 +243,12 @@ const AuthenticatedAdminTrainingPhasesRoute =
   AuthenticatedAdminTrainingPhasesRouteImport.update({
     id: '/training-phases',
     path: '/training-phases',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
+const AuthenticatedAdminTrainingIntelligenceRoute =
+  AuthenticatedAdminTrainingIntelligenceRouteImport.update({
+    id: '/training-intelligence',
+    path: '/training-intelligence',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
 const AuthenticatedAdminTestimonialsRoute =
@@ -535,6 +542,7 @@ export interface FileRoutesByFullPath {
   '/admin/settings': typeof AuthenticatedAdminSettingsRoute
   '/admin/sops': typeof AuthenticatedAdminSopsRoute
   '/admin/testimonials': typeof AuthenticatedAdminTestimonialsRoute
+  '/admin/training-intelligence': typeof AuthenticatedAdminTrainingIntelligenceRoute
   '/admin/training-phases': typeof AuthenticatedAdminTrainingPhasesRoute
   '/portal/account': typeof AuthenticatedPortalAccountRoute
   '/portal/calendar': typeof AuthenticatedPortalCalendarRoute
@@ -606,6 +614,7 @@ export interface FileRoutesByTo {
   '/admin/settings': typeof AuthenticatedAdminSettingsRoute
   '/admin/sops': typeof AuthenticatedAdminSopsRoute
   '/admin/testimonials': typeof AuthenticatedAdminTestimonialsRoute
+  '/admin/training-intelligence': typeof AuthenticatedAdminTrainingIntelligenceRoute
   '/admin/training-phases': typeof AuthenticatedAdminTrainingPhasesRoute
   '/portal/account': typeof AuthenticatedPortalAccountRoute
   '/portal/calendar': typeof AuthenticatedPortalCalendarRoute
@@ -681,6 +690,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/settings': typeof AuthenticatedAdminSettingsRoute
   '/_authenticated/admin/sops': typeof AuthenticatedAdminSopsRoute
   '/_authenticated/admin/testimonials': typeof AuthenticatedAdminTestimonialsRoute
+  '/_authenticated/admin/training-intelligence': typeof AuthenticatedAdminTrainingIntelligenceRoute
   '/_authenticated/admin/training-phases': typeof AuthenticatedAdminTrainingPhasesRoute
   '/_authenticated/portal/account': typeof AuthenticatedPortalAccountRoute
   '/_authenticated/portal/calendar': typeof AuthenticatedPortalCalendarRoute
@@ -756,6 +766,7 @@ export interface FileRouteTypes {
     | '/admin/settings'
     | '/admin/sops'
     | '/admin/testimonials'
+    | '/admin/training-intelligence'
     | '/admin/training-phases'
     | '/portal/account'
     | '/portal/calendar'
@@ -827,6 +838,7 @@ export interface FileRouteTypes {
     | '/admin/settings'
     | '/admin/sops'
     | '/admin/testimonials'
+    | '/admin/training-intelligence'
     | '/admin/training-phases'
     | '/portal/account'
     | '/portal/calendar'
@@ -901,6 +913,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/settings'
     | '/_authenticated/admin/sops'
     | '/_authenticated/admin/testimonials'
+    | '/_authenticated/admin/training-intelligence'
     | '/_authenticated/admin/training-phases'
     | '/_authenticated/portal/account'
     | '/_authenticated/portal/calendar'
@@ -1156,6 +1169,13 @@ declare module '@tanstack/react-router' {
       path: '/training-phases'
       fullPath: '/admin/training-phases'
       preLoaderRoute: typeof AuthenticatedAdminTrainingPhasesRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
+    '/_authenticated/admin/training-intelligence': {
+      id: '/_authenticated/admin/training-intelligence'
+      path: '/training-intelligence'
+      fullPath: '/admin/training-intelligence'
+      preLoaderRoute: typeof AuthenticatedAdminTrainingIntelligenceRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
     '/_authenticated/admin/testimonials': {
@@ -1536,6 +1556,7 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminSettingsRoute: typeof AuthenticatedAdminSettingsRoute
   AuthenticatedAdminSopsRoute: typeof AuthenticatedAdminSopsRoute
   AuthenticatedAdminTestimonialsRoute: typeof AuthenticatedAdminTestimonialsRoute
+  AuthenticatedAdminTrainingIntelligenceRoute: typeof AuthenticatedAdminTrainingIntelligenceRoute
   AuthenticatedAdminTrainingPhasesRoute: typeof AuthenticatedAdminTrainingPhasesRoute
   AuthenticatedAdminIndexRoute: typeof AuthenticatedAdminIndexRoute
   AuthenticatedAdminAgreementsSignedRoute: typeof AuthenticatedAdminAgreementsSignedRoute
@@ -1581,6 +1602,8 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
     AuthenticatedAdminSettingsRoute: AuthenticatedAdminSettingsRoute,
     AuthenticatedAdminSopsRoute: AuthenticatedAdminSopsRoute,
     AuthenticatedAdminTestimonialsRoute: AuthenticatedAdminTestimonialsRoute,
+    AuthenticatedAdminTrainingIntelligenceRoute:
+      AuthenticatedAdminTrainingIntelligenceRoute,
     AuthenticatedAdminTrainingPhasesRoute:
       AuthenticatedAdminTrainingPhasesRoute,
     AuthenticatedAdminIndexRoute: AuthenticatedAdminIndexRoute,
