@@ -540,6 +540,24 @@ export function LiftVideoDialog({ open, onOpenChange, clientId, userId, clientNa
             )}
           </div>
         </DrawerContent>
+        <Dialog open={!!previewClip} onOpenChange={(o) => { if (!o) setPreviewClip(null); }}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle className="truncate">
+                {previewClip?.file?.name || "Video preview"}
+              </DialogTitle>
+            </DialogHeader>
+            {previewClip?.previewUrl && (
+              <video
+                src={previewClip.previewUrl}
+                className="w-full rounded-lg bg-black"
+                controls
+                autoPlay
+                playsInline
+              />
+            )}
+          </DialogContent>
+        </Dialog>
       </Drawer>
     );
   }
