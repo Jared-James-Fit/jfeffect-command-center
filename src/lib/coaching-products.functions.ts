@@ -370,3 +370,60 @@ export const toggleCoachingProductActive = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return { ok: true };
   });
+
+// ─── Generate / refresh a shareable Stripe Payment Link for a product ─────
+// Uses Stripe's /payment_links endpoint to produce a reusable URL that admin
+// can copy and paste into texts, DMs, email, etc. Persists the URL + id back
+// onto the coaching_products row.
+export const generatePaymentLinkForProduct = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) => z.object({ id: z.string().uuid() }).parse(input))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context as any;
+    await assertAdmin(supabase, userId);
+
+    const { data: product, error } = await supabase
+      .from("coaching_products")
+      .select("id, name, stripe_price_id, stripe_payment_link_id, payment_link_url, mode, payment_structure")
+      .eq("id", data.id)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!product) throw new Error("Product not found");
+    if (!product.stripe_price_id) {
+      throw new Error("Add a Stripe Price ID to this product before generating a payment link.");
+    }
+
+    // Deactivate the old payment link (if any) so we always return one current URL.
+    if (product.stripe_payment_link_id) {
+      try {
+        await stripeFetch(`/payment_links/${product.stripe_payment_link_id}`, {
+          method: "POST",
+          body: formEncode({ active: false }),
+        });
+      } catch {
+        // best-effort; keep going
+      }
+    }
+
+    const link = await stripeFetch("/payment_links", {
+      method: "POST",
+      body: formEncode({
+        "line_items[0][price]": product.stripe_price_id,
+        "line_items[0][quantity]": 1,
+        allow_promotion_codes: true,
+        "metadata[product_id]": product.id,
+      }),
+    });
+
+    const { error: upErr } = await supabase
+      .from("coaching_products")
+      .update({
+        stripe_payment_link_id: link.id,
+        payment_link_url: link.url,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", data.id);
+    if (upErr) throw new Error(upErr.message);
+
+    return { url: link.url as string, id: link.id as string };
+  });
