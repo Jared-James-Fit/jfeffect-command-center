@@ -94,3 +94,42 @@ export async function createOwnedClientLiftVideo(input: ClientLiftVideoRow, user
   if (error) throw error;
   return created;
 }
+
+export async function updateOwnedClientLiftVideo(
+  id: string,
+  patch: Partial<ClientLiftVideoRow>,
+  userId: string,
+) {
+  // Confirm ownership: only the original uploader may patch the row.
+  const { data: existing, error: lookupError } = await (supabaseAdmin as any)
+    .from("lift_videos")
+    .select("id, uploaded_by")
+    .eq("id", id)
+    .maybeSingle();
+  if (lookupError) throw lookupError;
+  if (!existing) throw new Error("Lift video not found.");
+  if (existing.uploaded_by !== userId) {
+    throw new Error("You can only update lift videos you submitted.");
+  }
+
+  const allowed: Record<string, unknown> = {};
+  const keys: (keyof ClientLiftVideoRow)[] = [
+    "video_url", "video_source", "thumbnail_url",
+    "original_drive_file_id", "original_drive_url", "drive_embed_url",
+    "file_type", "file_size_bytes",
+    "upload_status", "playback_error", "status",
+  ];
+  for (const k of keys) {
+    if (k in patch) allowed[k as string] = (patch as any)[k];
+  }
+  if (Object.keys(allowed).length === 0) return existing;
+
+  const { data: updated, error } = await (supabaseAdmin as any)
+    .from("lift_videos")
+    .update(allowed)
+    .eq("id", id)
+    .select("*")
+    .single();
+  if (error) throw error;
+  return updated;
+}

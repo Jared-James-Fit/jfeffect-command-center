@@ -50,6 +50,32 @@ export const createClientLiftVideo = createServerFn({ method: "POST" })
     return createOwnedClientLiftVideo(data, context.userId);
   });
 
+// Patch an already-created lift video after the background Drive upload
+// completes (or fails). Scoped to rows the caller uploaded.
+const ClientLiftVideoUpdateInput = z.object({
+  id: z.string().uuid(),
+  video_url: z.string().max(1000).nullable().optional(),
+  video_source: z.enum(["link", "upload"]).optional(),
+  thumbnail_url: z.string().max(1000).nullable().optional(),
+  original_drive_file_id: z.string().max(200).nullable().optional(),
+  original_drive_url: z.string().max(1000).nullable().optional(),
+  drive_embed_url: z.string().max(1000).nullable().optional(),
+  file_type: z.string().max(200).nullable().optional(),
+  file_size_bytes: z.number().int().min(0).nullable().optional(),
+  upload_status: z.string().max(100).nullable().optional(),
+  playback_error: z.string().max(2000).nullable().optional(),
+  status: z.string().max(100).optional(),
+});
+
+export const updateClientLiftVideoUpload = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data) => ClientLiftVideoUpdateInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const { updateOwnedClientLiftVideo } = await import("./lift-videos.server");
+    const { id, ...patch } = data;
+    return updateOwnedClientLiftVideo(id, patch, context.userId);
+  });
+
 function fileIdFromUrl(url: string | null | undefined) {
   if (!url) return null;
   return url.match(/\/file\/d\/([A-Za-z0-9_-]+)/)?.[1]

@@ -29,6 +29,8 @@ import {
 import { cn } from "@/lib/utils";
 import { UserAvatar } from "@/components/user-avatar";
 import { copyLiftVideoStorageToDrive, refreshLiftVideoDriveDiagnostics } from "@/lib/lift-videos.functions";
+import { useLiftUploadState } from "@/lib/lift-upload-queue";
+import { Progress } from "@/components/ui/progress";
 
 type Props = {
   video: LiftVideo;
@@ -166,6 +168,10 @@ export function LiftVideoCard({ video, role, userId, onChanged, onEdit, clientNa
     ? null
     : video.preview_error || video.playback_error || (driveFileId ? "Preview not ready yet." : openUrl ? "Preview URL missing." : "Original video link missing.");
 
+  const liveUpload = useLiftUploadState(video.id);
+  const isUploading = video.upload_status === "Uploading" || liveUpload?.status === "uploading" || liveUpload?.status === "queued";
+  const uploadFailed = (video.upload_status === "Upload Failed" && !openUrl) || liveUpload?.status === "failed";
+
   return (
     <Card className="border-border bg-card p-5 space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -250,7 +256,38 @@ export function LiftVideoCard({ video, role, userId, onChanged, onEdit, clientNa
       )}
 
       <div className="overflow-hidden rounded-md border border-border bg-card">
-        {playablePreviewUrl ? (
+        {isUploading && !openUrl ? (
+          <div className="flex min-h-40 flex-col items-center justify-center gap-3 bg-secondary/30 p-6 text-center text-sm">
+            <Loader2 className="h-6 w-6 animate-spin text-primary" />
+            <div>
+              <div className="font-medium text-foreground">Video is still uploading…</div>
+              <div className="mt-1 text-xs text-muted-foreground">
+                {role === "client"
+                  ? "Keep this screen open until upload finishes."
+                  : "Client video has not finished uploading yet."}
+              </div>
+            </div>
+            {liveUpload?.status === "uploading" && (
+              <div className="w-full max-w-xs space-y-1">
+                <Progress value={liveUpload.progress} className="h-1.5" />
+                <div className="text-[11px] text-muted-foreground">{liveUpload.progress}%</div>
+              </div>
+            )}
+          </div>
+        ) : uploadFailed ? (
+          <div className="flex min-h-40 flex-col items-center justify-center gap-3 bg-destructive/5 p-6 text-center text-sm">
+            <AlertTriangle className="h-6 w-6 text-destructive" />
+            <div>
+              <div className="font-medium text-destructive">Upload failed</div>
+              <div className="mt-1 text-xs text-muted-foreground break-words">
+                {liveUpload?.status === "failed" ? liveUpload.error : video.playback_error || "The video did not finish uploading to Google Drive."}
+              </div>
+              {role === "client" && (
+                <div className="mt-2 text-xs text-muted-foreground">Re-send this clip from the uploader above to retry.</div>
+              )}
+            </div>
+          </div>
+        ) : playablePreviewUrl ? (
           <LiftVideoPlayer
             src={playablePreviewUrl}
             fallbackUrl={openUrl}
