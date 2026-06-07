@@ -731,10 +731,10 @@ function ProductFormDialog({
               </div>
               <div>
                 <Label>Checkout Mode</Label>
-                <Select value={form.checkoutMode} onValueChange={(v) => set("checkoutMode", v as any)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                <Select value={form.checkoutMode || "__none"} onValueChange={(v) => set("checkoutMode", (v === "__none" ? "" : v) as any)}>
+                  <SelectTrigger><SelectValue placeholder="Select checkout mode" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="auto">Auto (infer from billing interval)</SelectItem>
+                    <SelectItem value="__none">— Select —</SelectItem>
                     <SelectItem value="payment">One-time payment</SelectItem>
                     <SelectItem value="subscription">Subscription</SelectItem>
                   </SelectContent>
