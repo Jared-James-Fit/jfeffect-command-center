@@ -18,6 +18,7 @@ import { setupDriveRoot, testDriveConnection } from "@/lib/drive.functions";
 import { updateSignNowSettings, testSignNowConnection } from "@/lib/agreements.functions";
 import { Mail, Send, FolderOpen, ExternalLink, ShieldCheck } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
+import { AccountProfileSettings } from "@/components/account-profile-settings";
 
 export const Route = createFileRoute("/_authenticated/admin/settings")({ component: SettingsPage });
 
@@ -103,11 +104,7 @@ function SettingsPage() {
     <>
       <PageHeader title="Settings" subtitle="Account & access" />
       <div className="grid gap-6 p-6 md:grid-cols-2 md:p-8">
-        <Card className="border-border bg-card p-6 space-y-3">
-          <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Your Account</h3>
-          <div className="text-sm"><span className="text-muted-foreground">Email:</span> {user?.email}</div>
-          <div className="text-sm"><span className="text-muted-foreground">User ID:</span> <code className="text-xs">{user?.id}</code></div>
-        </Card>
+        <AccountProfileSettings title="Your Profile" roleLabel="Admin / Owner" />
 
         <Card className="border-primary/30 bg-primary/5 p-6 space-y-3">
           <h3 className="text-xs uppercase tracking-widest text-primary">Admin Access</h3>
