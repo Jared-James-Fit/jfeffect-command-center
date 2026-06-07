@@ -43,6 +43,16 @@ export type LiftVideo = {
   video_storage_path: string | null;
   video_source: "link" | "upload";
   thumbnail_url: string | null;
+  original_drive_file_id?: string | null;
+  original_drive_url?: string | null;
+  drive_embed_url?: string | null;
+  preview_url?: string | null;
+  preview_status?: "not_generated" | "processing" | "ready" | "failed" | string | null;
+  preview_error?: string | null;
+  file_type?: string | null;
+  file_size_bytes?: number | null;
+  upload_status?: string | null;
+  playback_error?: string | null;
   status: LiftVideoStatus;
   watched_at: string | null;
   watched_by: string | null;
@@ -130,6 +140,16 @@ export async function createLiftVideo(input: Partial<LiftVideo> & { client_id: s
     video_storage_path: input.video_storage_path ?? null,
     video_source: input.video_source ?? "link",
     thumbnail_url: input.thumbnail_url ?? null,
+    original_drive_file_id: (input as any).original_drive_file_id ?? null,
+    original_drive_url: (input as any).original_drive_url ?? null,
+    drive_embed_url: (input as any).drive_embed_url ?? null,
+    preview_url: (input as any).preview_url ?? null,
+    preview_status: (input as any).preview_status ?? "not_generated",
+    preview_error: (input as any).preview_error ?? null,
+    file_type: (input as any).file_type ?? null,
+    file_size_bytes: (input as any).file_size_bytes ?? null,
+    upload_status: (input as any).upload_status ?? (input.video_url ? "Submitted" : "Unknown"),
+    playback_error: (input as any).playback_error ?? null,
     status: input.status ?? "New Upload",
     batch_id: (input as any).batch_id ?? null,
     batch_note: (input as any).batch_note ?? null,
@@ -296,6 +316,20 @@ export function driveVideoStreamUrl(url: string) {
 export function driveOpenUrl(url: string) {
   const id = driveFileId(url);
   return id ? `https://drive.google.com/file/d/${id}/view` : url;
+}
+
+export function liftVideoDriveFileId(v: Partial<LiftVideo>) {
+  return v.original_drive_file_id
+    ?? (v.original_drive_url ? driveFileId(v.original_drive_url) : null)
+    ?? (v.drive_embed_url ? driveFileId(v.drive_embed_url) : null)
+    ?? (v.video_url ? driveFileId(v.video_url) : null)
+    ?? null;
+}
+
+export function liftVideoOpenUrl(v: Partial<LiftVideo>) {
+  const id = liftVideoDriveFileId(v);
+  if (id) return driveOpenUrl(`https://drive.google.com/file/d/${id}/view`);
+  return v.original_drive_url ?? v.video_url ?? null;
 }
 
 export const LIFT_VIDEO_QUICK_REPLIES: string[] = [
