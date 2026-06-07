@@ -102,7 +102,7 @@ function AdminLiftVideos() {
   const { user } = useAuth();
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState<FilterKey>("all");
+  const [filter, setFilter] = useState<FilterKey>("new");
   const [openKey, setOpenKey] = useState<string | null>(null);
   const [activeClipId, setActiveClipId] = useState<string | null>(null);
   const [manageMode, setManageMode] = useState(false);
