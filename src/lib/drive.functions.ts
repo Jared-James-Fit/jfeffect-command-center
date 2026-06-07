@@ -5,11 +5,14 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 const MEDIA_TYPE_SUBFOLDERS = [
   "Chat Media",
   "Lift Videos",
-  "Check-In Media",
+  "Check-In Videos",
   "Progress Photos",
+  "Training Videos",
+  "Form Videos",
+  "Technique Videos",
   "Documents",
   "Agreements",
-  "Other",
+  "Other Media",
 ] as const;
 
 const DEFAULT_ROOT_FOLDER_NAME = "JF Effect Client Files";
