@@ -144,7 +144,7 @@ function ClientsPage() {
   const { data: nutTargets = [] } = useQuery({
     queryKey: ["nutrition-targets", "all-status"],
     queryFn: async () => {
-      const { data } = await supabase.from("nutrition_targets").select("id, client_id, start_date, end_date, status, ending_soon_days").neq("status", "Archived");
+      const { data } = await supabase.from("nutrition_targets").select("id, client_id, start_date, end_date, status, ending_soon_days, updated_at").neq("status", "Archived");
       return data ?? [];
     },
   });
