@@ -66,7 +66,8 @@ function TemplateEditor() {
   });
   const { data: exercises = [] } = useQuery({
     queryKey: ["exercises-min"],
-    queryFn: async () => (await supabase.from("exercises").select("id, name").order("name")).data ?? [],
+    queryFn: async () =>
+      (await supabase.from("exercises").select("id, name, muscle_group, category, tags").order("name")).data ?? [],
   });
 
   // local working state
