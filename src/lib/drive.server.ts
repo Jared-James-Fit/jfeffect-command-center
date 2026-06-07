@@ -80,10 +80,17 @@ export async function driveInitResumableUpload(params: {
   });
   if (!res.ok) {
     const text = await res.text().catch(() => "");
+    console.error(`[drive.resumable-init] gateway ${res.status}`, { fileName: params.fileName, mimeType: params.mimeType, sizeBytes: params.sizeBytes, body: text.slice(0, 500) });
     throw new Error(`Drive resumable init ${res.status}: ${text.slice(0, 500)}`);
   }
   const uploadUrl = res.headers.get("location") || res.headers.get("Location");
-  if (!uploadUrl) throw new Error("Drive did not return a resumable upload URL");
+  if (!uploadUrl) {
+    const headerDump: string[] = [];
+    res.headers.forEach((v, k) => headerDump.push(`${k}=${v.slice(0, 80)}`));
+    console.error("[drive.resumable-init] missing Location header", { headers: headerDump });
+    throw new Error(`Drive did not return a resumable upload URL. Gateway headers: ${headerDump.join(", ").slice(0, 400)}`);
+  }
+  console.log(`[drive.resumable-init] ok`, { fileName: params.fileName, mimeType: params.mimeType, sizeBytes: params.sizeBytes, uploadHost: uploadUrl.split("?")[0] });
   return { uploadUrl };
 }
 
