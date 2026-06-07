@@ -77,6 +77,7 @@ export function LiftVideoDialog({ open, onOpenChange, clientId, userId, clientNa
   const [showLinkInput, setShowLinkInput] = useState(false);
   const multiUploadRef = useRef<HTMLInputElement | null>(null);
   const multiRecordRef = useRef<HTMLInputElement | null>(null);
+  const [previewClip, setPreviewClip] = useState<Clip | null>(null);
 
   useEffect(() => {
     if (initial) {
