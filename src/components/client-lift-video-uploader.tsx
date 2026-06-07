@@ -374,6 +374,13 @@ export function ClientLiftVideoUploader({ clientId, clientName, userId, onSaved 
                           playsInline
                           preload="none"
                         />
+                      ) : clip.kind === "file" ? (
+                        <div className="flex h-full w-full flex-col items-center justify-center gap-1 bg-gradient-to-br from-muted to-muted/60 px-2 text-center">
+                          <Film className="h-5 w-5 text-muted-foreground/70" />
+                          <span className="text-[9px] font-medium text-muted-foreground">
+                            {clip.previewStatus === "failed" ? "Preview unavailable" : "Preview loading…"}
+                          </span>
+                        </div>
                       ) : (
                         <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-muted to-muted/60">
                           <LinkIcon className="h-6 w-6 text-muted-foreground" />
