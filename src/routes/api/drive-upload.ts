@@ -58,7 +58,7 @@ export const Route = createFileRoute("/api/drive-upload")({
           const upstream = await fetch(uploadUrl, {
             method: "PUT",
             headers: { "Content-Type": mimeType || file.type || "application/octet-stream" },
-            body: await file.arrayBuffer(),
+            body: file,
           });
           const text = await upstream.text();
           if (!upstream.ok) {
