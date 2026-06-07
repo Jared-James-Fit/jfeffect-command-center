@@ -15,6 +15,37 @@ import { toast } from "sonner";
 import { Upload, Link as LinkIcon, Loader2, Video as VideoIcon, Send, X, AlertTriangle, CheckCircle2, ChevronDown, MessageSquare, Play, Film } from "lucide-react";
 import { useLiftUploadActiveCount } from "@/lib/lift-upload-queue";
 
+type DiagSample = {
+  pickerOpenedAt: number | null;
+  pickerOpenedSource: "photos" | "record" | null;
+  fileHandoffAt: number | null;
+  detailsRenderedAt: number | null;
+  handoffToDetailsMs: number | null;
+  fileSizes: number[];
+  fileTypes: string[];
+  clipCount: number;
+  anyPreviewPending: boolean;
+};
+
+function useDiagnosticsEnabled() {
+  const [on, setOn] = useState(false);
+  useEffect(() => {
+    try {
+      const url = new URL(window.location.href);
+      if (url.searchParams.get("diag") === "1") {
+        localStorage.setItem("lift_upload_diag", "1");
+      }
+      if (url.searchParams.get("diag") === "0") {
+        localStorage.removeItem("lift_upload_diag");
+      }
+      setOn(localStorage.getItem("lift_upload_diag") === "1");
+    } catch {
+      setOn(false);
+    }
+  }, []);
+  return on;
+}
+
 type Clip = {
   id: string;
   kind: "file" | "link";
@@ -57,6 +88,37 @@ export function ClientLiftVideoUploader({ clientId, clientName, userId, onSaved 
   const multiRecordRef = useRef<HTMLInputElement | null>(null);
   const carouselRef = useRef<HTMLDivElement | null>(null);
   const pickerOpenedAtRef = useRef<{ source: "photos" | "record"; at: number } | null>(null);
+  const diagEnabled = useDiagnosticsEnabled();
+  const [diag, setDiag] = useState<DiagSample>({
+    pickerOpenedAt: null,
+    pickerOpenedSource: null,
+    fileHandoffAt: null,
+    detailsRenderedAt: null,
+    handoffToDetailsMs: null,
+    fileSizes: [],
+    fileTypes: [],
+    clipCount: 0,
+    anyPreviewPending: false,
+  });
+  const handoffStampRef = useRef<number | null>(null);
+  // When clips count rises after a fresh handoff, mark details-rendered on
+  // the very next paint to measure handoff -> details-render latency.
+  useEffect(() => {
+    if (handoffStampRef.current == null) return;
+    const handoffAt = handoffStampRef.current;
+    handoffStampRef.current = null;
+    const raf = requestAnimationFrame(() => {
+      const now = performance.now();
+      setDiag((d) => ({
+        ...d,
+        detailsRenderedAt: now,
+        handoffToDetailsMs: Math.round(now - handoffAt),
+        clipCount: clips.length,
+        anyPreviewPending: clips.some((c) => c.kind === "file" && c.previewStatus === "pending"),
+      }));
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [clips]);
 
   const reset = () => {
     setClips([]);
@@ -75,6 +137,16 @@ export function ClientLiftVideoUploader({ clientId, clientName, userId, onSaved 
 
   const openPicker = (source: "photos" | "record") => {
     pickerOpenedAtRef.current = { source, at: performance.now() };
+    if (diagEnabled) {
+      setDiag((d) => ({
+        ...d,
+        pickerOpenedAt: pickerOpenedAtRef.current!.at,
+        pickerOpenedSource: source,
+        fileHandoffAt: null,
+        detailsRenderedAt: null,
+        handoffToDetailsMs: null,
+      }));
+    }
     if (source === "photos") multiUploadRef.current?.click();
     else multiRecordRef.current?.click();
   };
@@ -90,6 +162,17 @@ export function ClientLiftVideoUploader({ clientId, clientName, userId, onSaved 
         totalBytes: Array.from(files).reduce((sum, file) => sum + file.size, 0),
       });
       pickerOpenedAtRef.current = null;
+    }
+    const now = performance.now();
+    handoffStampRef.current = now;
+    if (diagEnabled) {
+      const arr = Array.from(files);
+      setDiag((d) => ({
+        ...d,
+        fileHandoffAt: now,
+        fileSizes: arr.map((f) => f.size),
+        fileTypes: arr.map((f) => f.type || "(unknown)"),
+      }));
     }
     const next: Clip[] = [];
     for (const f of Array.from(files)) {
