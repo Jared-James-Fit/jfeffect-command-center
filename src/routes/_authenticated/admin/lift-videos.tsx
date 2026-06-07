@@ -389,6 +389,18 @@ function SubmissionRow({
   onOpen: () => void;
 }) {
   const exerciseLabel = sub.clips.length > 1 ? `${sub.clips.length} clips` : sub.latest.exercise || "Video";
+  const uploadingCount = sub.clips.filter((c) => c.upload_status === "Uploading").length;
+  const failedCount = sub.clips.filter((c) => c.upload_status === "Upload Failed").length;
+  const displayStatus: string = uploadingCount > 0
+    ? `Uploading${sub.clips.length > 1 ? ` ${sub.clips.length - uploadingCount}/${sub.clips.length}` : "…"}`
+    : failedCount > 0
+      ? "Upload Failed"
+      : sub.status;
+  const statusClasses = uploadingCount > 0
+    ? "border-blue-500/40 bg-blue-500/10 text-blue-600"
+    : failedCount > 0
+      ? "border-destructive/40 bg-destructive/10 text-destructive"
+      : statusTone(sub.status);
   return (
     <Card
       onClick={() => { if (!manageMode) onOpen(); }}
@@ -427,8 +439,8 @@ function SubmissionRow({
             );
           })()}
           <div className="mt-1 flex flex-wrap items-center gap-1.5">
-            <Badge variant="outline" className={cn("h-5 px-1.5 text-[10px]", statusTone(sub.status))}>
-              {sub.status}
+            <Badge variant="outline" className={cn("h-5 px-1.5 text-[10px]", statusClasses)}>
+              {displayStatus}
             </Badge>
             <span className="text-[10px] text-muted-foreground">
               {formatDistanceToNow(parseISO(sub.latest.created_at), { addSuffix: true })}
