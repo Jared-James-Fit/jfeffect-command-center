@@ -184,7 +184,7 @@ export function ProfilePictureCapture({
             playsInline
             muted
             autoPlay
-            className="aspect-square w-full object-cover"
+            className="aspect-square w-full -scale-x-100 object-cover"
           />
         </div>
       )}
