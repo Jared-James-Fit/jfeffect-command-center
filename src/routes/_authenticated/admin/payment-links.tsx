@@ -680,35 +680,6 @@ function ProductFormDialog({
             </div>
           </div>
 
-          <div className="md:col-span-2 rounded-md border border-border bg-secondary/20 p-3 space-y-2">
-            <div className="flex items-center justify-between gap-2">
-              <Label>Stripe payment link</Label>
-              {linkConnected ? (
-                <Badge variant="outline" className="text-xs"><CheckCircle2 className="h-3 w-3 mr-1 text-primary" />Stripe Link Connected</Badge>
-              ) : (
-                <Badge variant="outline" className="text-xs text-destructive border-destructive/40"><AlertTriangle className="h-3 w-3 mr-1" />Missing Stripe Link</Badge>
-              )}
-            </div>
-            <Input
-              value={form.paymentLinkUrl}
-              onChange={(e) => set("paymentLinkUrl", e.target.value)}
-              placeholder="https://buy.stripe.com/..."
-              type="url"
-            />
-            <div className="flex flex-wrap items-center gap-2">
-              {linkConnected && (
-                <>
-                  <Button type="button" size="sm" variant="outline" onClick={() => { navigator.clipboard.writeText(form.paymentLinkUrl); toast.success("Copied"); }}><Copy className="h-3.5 w-3.5 mr-1" />Copy</Button>
-                  <a href={form.paymentLinkUrl} target="_blank" rel="noreferrer"><Button type="button" size="sm" variant="outline"><ExternalLink className="h-3.5 w-3.5 mr-1" />Open</Button></a>
-                  <Button type="button" size="sm" variant="ghost" onClick={() => set("paymentLinkUrl", "")}>Replace Link</Button>
-                </>
-              )}
-            </div>
-            {!linkConnected && (
-              <p className="text-xs text-muted-foreground">You can save without a link — paste it later. Stripe collects the money; this app organizes it.</p>
-            )}
-          </div>
-
           {/* ── Stripe Checkout Session fields ─────────────────────────── */}
           <div className="md:col-span-2 rounded-md border border-primary/20 bg-primary/5 p-3 space-y-3">
             <div className="text-xs font-semibold uppercase tracking-widest text-primary">Stripe Checkout Session</div>
