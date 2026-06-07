@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
@@ -687,7 +687,7 @@ function DayBlock({
 }
 
 function CompactRow({
-  row, exercises, density, onAction, onRowPatch, dayId,
+  row, exercises, density, onAction, onRowPatch, dayId, rowIdx,
 }: {
   row: any;
   exercises: ExerciseRef[];
@@ -695,6 +695,7 @@ function CompactRow({
   onAction: (fn: () => Promise<any>) => void;
   onRowPatch: (rowId: string, dayId: string, patch: Record<string, any>) => void | Promise<void>;
   dayId: string;
+  rowIdx?: number;
 }) {
   const exName = row.exercises?.name ?? row.exercise_name_override ?? "(unnamed)";
   const accent = movementAccent(exName);
@@ -707,6 +708,7 @@ function CompactRow({
     <>
     <tr
       className="group border-b border-border/40 hover:bg-secondary/30"
+      data-row-idx={rowIdx}
       draggable
       onDragStart={(e) => setDragRow(e, row.id, dayId)}
     >
