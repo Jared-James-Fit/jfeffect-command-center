@@ -261,14 +261,16 @@ export function LiftVideoDialog({ open, onOpenChange, clientId, userId, clientNa
               initFn, finalizeFn, createSubFn,
             });
             driveSubmissionId = res.submissionId;
-            videoUrl = res.url;
+            videoUrl = res.driveUrl ?? res.url;
             storagePath = null;
+            (clip as any).driveMeta = res;
           } catch (driveError) {
             console.warn("Drive upload failed; falling back to lift video storage", driveError);
             if (!userId) throw driveError;
             const fallback = await uploadVideoFile(clip.file, userId);
             videoUrl = fallback.url;
             storagePath = fallback.path;
+            (clip as any).driveMeta = null;
           }
           source = "upload";
         } else if (clip.kind === "link" && clip.url) {
@@ -281,6 +283,7 @@ export function LiftVideoDialog({ open, onOpenChange, clientId, userId, clientNa
           .filter(Boolean)
           .join("\n");
 
+        const driveMeta = (clip as any).driveMeta;
         const liftVideoPayload = {
           client_id: clientId,
           exercise: "",
@@ -291,6 +294,15 @@ export function LiftVideoDialog({ open, onOpenChange, clientId, userId, clientNa
           video_url: videoUrl,
           video_storage_path: storagePath,
           video_source: source,
+          thumbnail_url: driveMeta?.thumbnailUrl ?? null,
+          original_drive_file_id: driveMeta?.driveFileId ?? null,
+          original_drive_url: driveMeta?.driveUrl ?? null,
+          drive_embed_url: driveMeta?.driveEmbedUrl ?? null,
+          preview_url: null,
+          preview_status: driveMeta ? "not_generated" : (storagePath ? "ready" : "not_generated"),
+          file_type: driveMeta?.mimeType ?? clip.file?.type ?? null,
+          file_size_bytes: driveMeta?.sizeBytes ?? clip.file?.size ?? null,
+          upload_status: driveMeta ? "Drive uploaded" : (storagePath ? "App storage fallback" : "Submitted"),
           status: "New Upload",
           batch_id: batchId,
           batch_note: sharedNote || null,
