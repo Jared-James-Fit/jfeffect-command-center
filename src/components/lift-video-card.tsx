@@ -28,7 +28,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { UserAvatar } from "@/components/user-avatar";
-import { refreshLiftVideoDriveDiagnostics } from "@/lib/lift-videos.functions";
+import { copyLiftVideoStorageToDrive, refreshLiftVideoDriveDiagnostics } from "@/lib/lift-videos.functions";
 
 type Props = {
   video: LiftVideo;
@@ -52,7 +52,9 @@ export function LiftVideoCard({ video, role, userId, onChanged, onEdit, clientNa
   const [embedRetry, setEmbedRetry] = useState(0);
   const [lastPlaybackError, setLastPlaybackError] = useState<string | null>(null);
   const [diagnosing, setDiagnosing] = useState(false);
+  const [copyingToDrive, setCopyingToDrive] = useState(false);
   const refreshDiagnostics = useServerFn(refreshLiftVideoDriveDiagnostics);
+  const copyToDrive = useServerFn(copyLiftVideoStorageToDrive);
 
   const loadComments = async () => {
     const c = await listComments(video.id, { includeInternal: role === "admin" });
@@ -126,6 +128,19 @@ export function LiftVideoCard({ video, role, userId, onChanged, onEdit, clientNa
       toast.error(e?.message ?? "Drive video check failed");
     } finally {
       setDiagnosing(false);
+    }
+  };
+
+  const repairDriveCopy = async () => {
+    setCopyingToDrive(true);
+    try {
+      const result = await copyToDrive({ data: { videoId: video.id } });
+      if (result?.ok) toast.success("Video copied to Drive");
+      onChanged?.();
+    } catch (e: any) {
+      toast.error(e?.message ?? "Could not copy video to Drive");
+    } finally {
+      setCopyingToDrive(false);
     }
   };
 
