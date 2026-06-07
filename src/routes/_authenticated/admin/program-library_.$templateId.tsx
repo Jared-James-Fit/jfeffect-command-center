@@ -127,7 +127,21 @@ function TemplateEditor() {
           </TabsContent>
 
           <TabsContent value="structure" className="mt-3">
-            <StructureEditor type={type} payload={payload} setPayload={setP} exercises={exercises as any[]} />
+            <div className="flex h-[calc(100vh-220px)] gap-2 overflow-hidden rounded-md border border-border">
+              <ExerciseLibraryPanel
+                exercises={exercises as ExerciseRef[]}
+                onPick={(exId) => {
+                  const ex = (exercises as any[]).find((e) => e.id === exId);
+                  // append to first day found
+                  appendRowToFirstDay(payload, type, { exercise_id: exId, exercise_name_override: ex?.name });
+                  setP({ ...payload });
+                  toast.success("Added to first day — drag onto a specific day for placement");
+                }}
+              />
+              <div className="flex-1 overflow-auto p-2">
+                <StructureEditor type={type} payload={payload} setPayload={setP} exercises={exercises as any[]} />
+              </div>
+            </div>
           </TabsContent>
         </Tabs>
       </div>
