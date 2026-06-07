@@ -1100,6 +1100,94 @@ export type Database = {
           },
         ]
       }
+      coach_followups: {
+        Row: {
+          client_id: string
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          due_date: string | null
+          id: string
+          notes: string | null
+          reason: string
+          source: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          client_id: string
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          due_date?: string | null
+          id?: string
+          notes?: string | null
+          reason: string
+          source?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          due_date?: string | null
+          id?: string
+          notes?: string | null
+          reason?: string
+          source?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "coach_followups_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      coach_intel_reviews: {
+        Row: {
+          alert_key: string
+          alert_kind: string
+          client_id: string
+          id: string
+          note: string | null
+          reviewed_at: string
+          reviewed_by: string | null
+        }
+        Insert: {
+          alert_key: string
+          alert_kind: string
+          client_id: string
+          id?: string
+          note?: string | null
+          reviewed_at?: string
+          reviewed_by?: string | null
+        }
+        Update: {
+          alert_key?: string
+          alert_kind?: string
+          client_id?: string
+          id?: string
+          note?: string | null
+          reviewed_at?: string
+          reviewed_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "coach_intel_reviews_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       coach_invites: {
         Row: {
           accepted_at: string | null
@@ -1132,6 +1220,65 @@ export type Database = {
           token?: string
         }
         Relationships: []
+      }
+      coach_pain_flags: {
+        Row: {
+          client_id: string
+          created_at: string
+          day_title: string | null
+          exercise: string | null
+          id: string
+          matched_keywords: string[]
+          note_date: string | null
+          note_text: string
+          source: string
+          source_id: string
+          status: string
+          status_note: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          day_title?: string | null
+          exercise?: string | null
+          id?: string
+          matched_keywords?: string[]
+          note_date?: string | null
+          note_text: string
+          source: string
+          source_id: string
+          status?: string
+          status_note?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          day_title?: string | null
+          exercise?: string | null
+          id?: string
+          matched_keywords?: string[]
+          note_date?: string | null
+          note_text?: string
+          source?: string
+          source_id?: string
+          status?: string
+          status_note?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "coach_pain_flags_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       coaches: {
         Row: {
