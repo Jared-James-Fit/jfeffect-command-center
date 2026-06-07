@@ -99,8 +99,7 @@ export const refreshLiftVideoDriveDiagnostics = createServerFn({ method: "POST" 
   .middleware([requireSupabaseAuth])
   .inputValidator((data) => z.object({ videoId: z.string().uuid() }).parse(data))
   .handler(async ({ data, context }) => {
-    const { data: roles } = await context.supabase.from("user_roles" as any).select("role").eq("user_id", context.userId);
-    if (!roles?.some((r: any) => r.role === "admin")) throw new Error("Admin only");
+    await requireAdmin(context);
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { driveGetFile, driveShareAnyoneReader, driveEmbedUrl, driveViewUrl } = await import("./drive.server");
@@ -146,4 +145,69 @@ export const refreshLiftVideoDriveDiagnostics = createServerFn({ method: "POST" 
       await (supabaseAdmin as any).from("lift_videos").update({ playback_error: reason, upload_status: "Drive check failed" }).eq("id", data.videoId);
       return { ok: false, fileId, reason };
     }
+  });
+
+export const copyLiftVideoStorageToDrive = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data) => z.object({ videoId: z.string().uuid() }).parse(data))
+  .handler(async ({ data, context }) => {
+    await requireAdmin(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { driveShareAnyoneReader, driveEmbedUrl, driveViewUrl } = await import("./drive.server");
+    const { data: video, error } = await (supabaseAdmin as any)
+      .from("lift_videos")
+      .select("id, client_id, video_storage_path, original_drive_file_id, file_type")
+      .eq("id", data.videoId)
+      .single();
+    if (error) throw error;
+    if (video.original_drive_file_id) return { ok: true, fileId: video.original_drive_file_id, alreadyInDrive: true };
+    if (!video.video_storage_path) throw new Error("No app-storage video exists to copy into Drive.");
+
+    const { data: bytes, error: downloadError } = await supabaseAdmin.storage.from("lift-videos").download(video.video_storage_path);
+    if (downloadError) throw downloadError;
+    const folderId = await ensureDriveLiftFolder(supabaseAdmin, video.client_id);
+    const fileName = video.video_storage_path.split("/").pop() ?? `lift-video-${video.id}.mp4`;
+    const mimeType = video.file_type || bytes.type || "video/mp4";
+    const url = "https://connector-gateway.lovable.dev/google_drive/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true&fields=id,webViewLink,thumbnailLink,mimeType,size";
+    const metadata = { name: fileName, parents: [folderId], mimeType };
+    const form = new FormData();
+    form.append("metadata", new Blob([JSON.stringify(metadata)], { type: "application/json" }));
+    form.append("file", bytes, fileName);
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.LOVABLE_API_KEY}`,
+        "X-Connection-Api-Key": process.env.GOOGLE_DRIVE_API_KEY ?? "",
+      },
+      body: form,
+    });
+    if (!res.ok) throw new Error(`Drive copy failed ${res.status}: ${(await res.text()).slice(0, 300)}`);
+    const uploaded = await res.json();
+    await driveShareAnyoneReader(uploaded.id);
+    await (supabaseAdmin as any).from("media_items").insert({
+      client_id: video.client_id,
+      media_type: "Lift Videos",
+      drive_file_id: uploaded.id,
+      drive_url: uploaded.webViewLink ?? driveViewUrl(uploaded.id),
+      drive_embed_url: driveEmbedUrl(uploaded.id),
+      drive_folder_id: folderId,
+      file_name: fileName,
+      mime_type: uploaded.mimeType ?? mimeType,
+      size_bytes: uploaded.size ? Number(uploaded.size) : bytes.size,
+      thumbnail_url: uploaded.thumbnailLink ?? null,
+      uploaded_by: context.userId,
+      uploaded_by_role: "admin",
+      status: "Pending Review",
+    });
+    await (supabaseAdmin as any).from("lift_videos").update({
+      original_drive_file_id: uploaded.id,
+      original_drive_url: uploaded.webViewLink ?? driveViewUrl(uploaded.id),
+      drive_embed_url: driveEmbedUrl(uploaded.id),
+      thumbnail_url: uploaded.thumbnailLink ?? null,
+      file_type: uploaded.mimeType ?? mimeType,
+      file_size_bytes: uploaded.size ? Number(uploaded.size) : bytes.size,
+      upload_status: "Drive copied",
+      playback_error: null,
+    }).eq("id", data.videoId);
+    return { ok: true, fileId: uploaded.id, driveUrl: uploaded.webViewLink ?? driveViewUrl(uploaded.id) };
   });
