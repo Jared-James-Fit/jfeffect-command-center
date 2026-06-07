@@ -1,75 +1,113 @@
-# Program Builder + Program Library (Phase 1 MVP)
+# Program Builder Sheet-Style Rebuild
 
-This is a huge system. I'll build it in **phases** so you get something usable fast, then layer advanced features on top. Below is **Phase 1** — the minimum that feels clean, fast, and useful for both powerlifting and bodybuilding clients.
+Goal: make the Program Builder (block editor + Program Library template editor) feel like a compact coaching spreadsheet — fast inline editing, drag-and-drop exercises from a sticky library panel, copy-week-forward, and multi-week side-by-side view. Coach edits never overwrite client logs.
 
-Reply **"go"** to approve and I'll start. Reply **"slim"** if you want me to cut templates/library from Phase 1 and ship only the per-client builder first.
+## Scope
 
----
+In scope (admin/coach surfaces only):
+- `src/routes/_authenticated/admin/blocks.$blockId.tsx` (live client blocks)
+- `src/routes/_authenticated/admin/program-library_.$templateId.tsx` (templates)
+- Shared builder components under `src/components/program-builder/`
+- Helpers in `src/lib/pl-programs.ts` (copy week with options, row defaults from exercise)
 
-## Phase 1 scope (build now)
+Out of scope (do not touch):
+- Client workout view (`portal/workouts.$dayId.tsx`) stays clean/spacious
+- Training Intelligence, Phases, analytics
+- DB schema (current `pl_rows` already supports coach fields; client results live in separate `pl_set_logs` / completions and are never written by builder)
 
-### Data model (new tables, `pl_` prefix, with RLS + grants)
+## Layout
 
-- `pl_preps` — prep/phase: title, goal_type, event_name, event_date, event_location, federation, weight_class, division, start_date, end_date, total_weeks, current_focus, status (Planned/Active/Completed/Archived), coach_notes, client_visible, client_id
-- `pl_blocks` — prep_id (nullable), client_id, name, week_start_index, weeks, training_focus, goal, status, coach_notes, client_visible
-- `pl_weeks` — block_id, week_index, notes
-- `pl_days` — week_id, day_index, title, focus, notes, duration_estimate_min (auto), duration_override_min (manual), duration_source
-- `pl_exercise_rows` — day_id, sort_order, exercise_id (FK exercises, nullable), exercise_name_override, sets, reps_text (supports "8", "8-12", "AMRAP"), rpe, rir, percentage, percentage_basis (1rm/training_max/est_1rm/top_set/prev_set/prev_week/manual), basis_row_id, load_kg, load_lb, rest_seconds, tempo, time_profile, intensity_techniques[], progression_method, notes, estimated_seconds (auto), estimated_seconds_override
-- `pl_row_results` — row_id, client_id, set_index, actual_load, actual_reps, actual_rpe, actual_rir, notes, video_url, completed_at
-- `pl_day_completions` — day_id, client_id, completed_at, actual_duration_min, client_notes
-- `pl_client_maxes` — client_id, lift, one_rm, training_max, estimated_1rm, unit, updated_at
-- `pl_templates` — name, template_type (full_prep/block/week/day/exercise_row), training_style (powerlifting/bodybuilding/strength/lifestyle/hybrid/rehab/conditioning/custom), training_focus, tags[], status (Draft/Active/Archived), weeks, days_per_week, est_duration_min, goal, notes, payload jsonb (snapshot of structure), created_by
+Desktop:
+```
+┌─────────────┬───────────────────────────────────────────────┐
+│ Exercise    │ Top bar: weeks | view (1/2/4/all) | copy week │
+│ Library     │ density | save state                          │
+│ (sticky)    ├───────────────────────────────────────────────┤
+│ search      │ Week N                       [copy ▾][+ day]  │
+│ filters     │ ┌─ Day 1 (Squat)  ~62 min ─────────────────┐  │
+│ recent      │ │ pri | movement | s | reps | %/RPE | load │  │
+│ list (drag) │ │ ... inline-edit rows, drag handles       │  │
+│             │ └──────────────────────────────────────────┘  │
+│             │ ┌─ Day 2 ... ┐                                │
+└─────────────┴───────────────────────────────────────────────┘
+```
+- Multi-week mode: render N weeks horizontally with shared sticky column headers.
+- iPad: collapsible library panel; one week default.
+- iPhone: redirect message — "Use desktop/iPad for builder; client view available."
 
-RLS: admin full · coaches via `is_assigned_coach(client_id)` · clients read own where `client_visible=true` · clients insert own `pl_row_results` / `pl_day_completions`.
+## Compact grid
 
-### Core lib — `src/lib/pl-programs.ts`
+- New `<ProgramGrid>` component: dense table, ~28px row height in Compact, ~36px in Comfortable. Toggle in top bar, persisted in localStorage (`pb.density`).
+- Columns (configurable, hidden by default if empty across day): Priority chip · Movement · Sets · Reps · %·Basis · RPE · RIR · Load · Rest · Tempo · Notes.
+- Inline inputs use shared `<CellInput>` with: Tab → next cell, Shift+Tab → prev, Enter → cell below, Esc → revert. Save on blur + debounced autosave (existing `updateRow`).
+- Left priority chip uses color tokens: `--accent-squat`, `--accent-bench`, `--accent-dl`, `--muted` for accessory. Defined in `src/styles.css` as oklch tokens; JF red stays brand accent.
 
-- **Duration estimator**: warm-up buffer (10 min general + 10/main lift) + working set time (45–60s/set) + rest from row or default-by-profile (main 240 / secondary 180 / compound 120 / isolation 60) + 3 min transitions. Returns range (±10%), rounded to nearest 5 min.
-- **Percentage resolver**: 1RM / training_max / est_1rm (from `pl_client_maxes`) · top_set / prev_set via `basis_row_id` · prev_week via same row index in week N-1 · rounding to 2.5kg / 5lb based on client `preferred_weight_unit`.
-- **Template snapshot/apply**: serialize a prep/block/week/day subtree to `pl_templates.payload`; apply payload to create a deep-copied subtree at chosen placement.
+## Exercise library panel
 
-### Admin / Coach UI
+- New `<ExerciseLibraryPanel>`: search input, quick-filter chips (Squat/Bench/DL/Chest/Back/Shoulders/Quads/Hams/Glutes/Arms/Accessories/Mobility), Recent (last 10 used in this block, from rows), Favorites (localStorage `pb.fav`).
+- HTML5 drag-and-drop (no new dep): `draggable` items with `dataTransfer.setData("application/x-pb-exercise", id)`.
+- Drop zones:
+  - Day body → append row with defaults pulled from exercise (rest, tempo, notes if present on `exercises` table; otherwise blanks).
+  - Between rows → insert at position.
+  - Row drag handles use same dnd for reorder + cross-day move (`dataTransfer` carries row id + source day id).
+- Reuses existing `addRow` / `moveRow` / new `moveRowToDay(rowId, dayId, position)`.
 
-- `/admin/program-library` — list, search, filter (template_type / training_style / focus / tag / status), CRUD, duplicate, archive, "Add to Client" flow (pick client → placement: new/existing prep → block → week → day → confirm).
-- `/admin/program-library/$id` — template editor (same grid component as client block editor; persists to `pl_templates.payload`).
-- Add a **Training Program** tab to `/admin/clients/$id`:
-  - Current Prep card with countdown ("8 weeks out" / event name).
-  - Blocks list — programmed + "Not programmed yet" placeholders.
-  - Buttons: New Prep · New Block · Add From Library · Save As Template.
-- `/admin/clients/$id/program/preps/$prepId` — full prep view (all blocks, which weeks are programmed, gaps).
-- `/admin/clients/$id/program/blocks/$blockId` — **Google-Sheets-style grid editor**:
-  - Week tabs across top; day cards/rows below.
-  - Per row: Exercise (autocomplete from Exercise Library) · Sets · Reps/Range · RPE/RIR · %/Load · Rest · Tempo · Est.Time · Notes.
-  - Top-set ↔ backoff linking via `basis_row_id`.
-  - Auto-recalc load from client maxes / linked row on edit.
-  - Per-day duration auto-calculated; manual override with **Recalculate** + **Clear Override** buttons.
-  - Buttons: Duplicate Week · Duplicate Day · Save Day/Week/Block As Template · Add From Library.
+## Copy week
 
-### Client UI
+- New helper `copyWeek(sourceWeekId, targetWeekId, opts)` in `pl-programs.ts`:
+  - opts: `{ exercises: true, prescriptions: bool, notes: bool, clearClientResults: true (always) }`
+  - Implementation: read source days+rows, upsert into target week (replace target days). Never touches `pl_day_completions` / `pl_set_logs`.
+- UI: "Copy Week ▾" menu in week header — Copy Forward (next week, creating if needed), Copy To… (dialog with target week + options checkboxes). Default: exercises + prescriptions + notes; client results never copied.
 
-- `/portal/program` (existing) — add **Current Prep/Phase** card with countdown if event_date set.
-- `/portal/workouts` (new) — list of today + upcoming days with estimated duration.
-- `/portal/workouts/$dayId` — clean mobile workout view:
-  - Demo video link per exercise (from Exercise Library).
-  - Per-set inputs: actual load / reps / RPE / RIR / notes.
-  - "Mark Workout Complete" with optional actual duration.
+## Multi-week view
 
-### Out of scope for Phase 1
+- Top bar toggle: 1 / 2 / 4 / All weeks. State in URL search param `?view=2`.
+- Grid container uses CSS grid with `grid-template-columns: repeat(var(--cols), minmax(560px, 1fr))` and horizontal scroll.
+- Sticky column headers per week; sticky week header row at top of scroll container.
 
-- **Phase 2**: progress graphs · training history archive UI · PR detection · exercise-library time-profile editor · completed-prep summaries · muscle-group weekly volume tracker · template folders.
-- **Phase 3**: estimated-vs-actual analytics · AI block summaries · notification fan-out · advanced template-sync · drag-and-drop column customization · intensity-technique structured logging.
+## Coach vs client separation
 
----
+- Builder only edits `pl_rows` (programmed fields). Client logs live in `pl_set_logs` / completion tables — builder never reads/writes them. Add a read-only "Logged" indicator badge on rows that already have client logs in the current block (small dot + tooltip "Client has logged this row — edits won't affect past logs").
 
-## Effort estimate
+## Save state
 
-- 1 large migration (~11 tables, RLS, grants, indexes)
-- 1 core lib file (`pl-programs.ts`)
-- ~6 admin routes/components
-- ~3 client routes
-- Shared grid editor component (~400 lines)
-- **~15–18 files total**
+- Top-right pill: Saved / Saving… / Unsaved / Error. Driven by a small `useSaveState` hook wrapping mutation lifecycle.
 
-Several hours of generation. Once approved I'll batch the migration first, then build admin → client in order.
+## Template editor parity
 
-Reply **go** to start, or tell me what to trim.
+- `program-library_.$templateId.tsx` reuses the same `<ProgramGrid>` + `<ExerciseLibraryPanel>` + copy-week. New template opens directly in builder with Week 1 / Day 1 seeded.
+
+## Files
+
+New:
+- `src/components/program-builder/ProgramGrid.tsx`
+- `src/components/program-builder/ExerciseLibraryPanel.tsx`
+- `src/components/program-builder/CellInput.tsx`
+- `src/components/program-builder/CopyWeekDialog.tsx`
+- `src/components/program-builder/use-save-state.ts`
+- `src/components/program-builder/dnd.ts` (drag payload helpers)
+
+Edited:
+- `src/lib/pl-programs.ts` — add `copyWeek`, `moveRowToDay`, `insertRowAt`, `getExerciseDefaults`.
+- `src/routes/_authenticated/admin/blocks.$blockId.tsx` — replace current week tabs with new builder shell.
+- `src/routes/_authenticated/admin/program-library_.$templateId.tsx` — same shell.
+- `src/styles.css` — priority/movement accent tokens.
+
+## Testing checklist (manual against preview)
+
+1. Open template → builder loads with library panel + grid.
+2. Search "squat" → drag onto Day 1 → row appears with defaults.
+3. Edit sets/reps/%/load via Tab+Enter without mouse.
+4. Drag row up/down within day; drag row to Day 2.
+5. Copy Week 1 → Week 2 with default options; client results untouched.
+6. Switch to 2-week view; edit Week 2 micro-adjustments.
+7. Toggle Compact/Comfortable density; persists on reload.
+8. Save state pill cycles Saving → Saved.
+9. Client view of an assigned day still renders the clean spacious layout.
+10. Template assign → client sees workout; coach edits to future week don't overwrite client's logged sets.
+
+## Notes / non-goals
+
+- Using native HTML5 DnD (no `dnd-kit` install) to keep bundle lean; if reorder UX feels rough during QA, swap to `@dnd-kit/core` in a follow-up.
+- Keyboard arrow-key cell navigation is best-effort; Tab/Enter are guaranteed.
+- Mobile builder is intentionally minimal — iPhone shows "open on larger screen" notice; client workout view is unchanged.
