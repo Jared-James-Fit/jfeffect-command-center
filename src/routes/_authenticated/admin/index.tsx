@@ -105,10 +105,19 @@ function AdminDashboard() {
     },
   });
 
+  // Include every phase whose end_date is in (or before the end of) the current week,
+  // plus anything already past due. Sorted by end_date so coach sees most urgent first.
+  const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 }); // Monday
+  const weekEnd = endOfWeek(new Date(), { weekStartsOn: 1 });     // Sunday
   const deadlines = phaseRows
     .map((r) => ({ ...r, derived: derivePhase(r) }))
-    .filter((r) => ["ending-soon", "due-today", "past-due"].includes(r.derived.state))
-    .slice(0, 8);
+    .filter((r) => {
+      if (["completed", "archived", "upcoming"].includes(r.derived.state)) return false;
+      const end = parseISO(r.end_date);
+      return end <= weekEnd; // past-due, due-today, or expiring this week
+    })
+    .sort((a, b) => a.end_date.localeCompare(b.end_date));
+  void weekStart;
 
   const { data: ptSessions = [] } = useQuery({
     queryKey: ["pt-sessions"],
@@ -274,7 +283,7 @@ function AdminDashboard() {
     { label: "Update Phase", to: "/admin/training-phases", icon: Timer },
     { label: "Nutrition Targets", to: "/admin/nutrition-targets", icon: Apple },
     { label: "Cardio Targets", to: "/admin/cardio-targets", icon: Heart },
-    { label: "Review Check-Ins", to: "/admin/check-ins", icon: ClipboardCheck },
+    { label: "Phase Deadlines", to: "/admin/training-phases", icon: Timer },
     { label: "Programs", to: "/admin/programs", icon: FileText },
     { label: "Add Exercise", to: "/admin/exercises", icon: Dumbbell },
     { label: "Create Product", to: "/admin/payment-links", icon: Package },
