@@ -16,11 +16,10 @@ import { deriveTarget } from "@/lib/nutrition-cardio";
 import { statusTone, fmtTimeRange } from "@/lib/pt-sessions";
 import type { ConversationState, Message } from "@/lib/messages";
 import { listLiftVideos, statusTone as liftStatusTone } from "@/lib/lift-videos";
-import { formatDistanceToNow, parseISO } from "date-fns";
+import { formatDistanceToNow, parseISO, format, startOfWeek, endOfWeek } from "date-fns";
 import { HardDrive } from "lucide-react";
 import { UpcomingBirthdaysWidget } from "@/components/upcoming-birthdays-widget";
 import { Progress } from "@/components/ui/progress";
-import { format, parseISO as parseISODate } from "date-fns";
 
 export const Route = createFileRoute("/_authenticated/admin/")({
   component: AdminDashboard,
