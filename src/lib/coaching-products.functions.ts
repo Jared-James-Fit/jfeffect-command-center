@@ -183,6 +183,11 @@ export const updateCoachingProduct = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context as any;
     await assertAdmin(supabase, userId);
+    // Load existing row so we can detect currency changes and sync Stripe.
+    const { data: existing, error: exErr } = await supabase
+      .from("coaching_products").select("*").eq("id", data.id).maybeSingle();
+    if (exErr) throw new Error(exErr.message);
+    if (!existing) throw new Error("Product not found");
     const patch: any = { updated_at: new Date().toISOString() };
     if (data.name !== undefined) patch.name = data.name;
     if (data.description !== undefined) patch.description = data.description ?? null;
@@ -207,9 +212,71 @@ export const updateCoachingProduct = createServerFn({ method: "POST" })
     if (data.pastedPaymentLinkUrl !== undefined) patch.payment_link_url = data.pastedPaymentLinkUrl ?? null;
     if (data.stripePriceId !== undefined) patch.stripe_price_id = data.stripePriceId ?? null;
     if (data.checkoutMode !== undefined) patch.mode = data.checkoutMode;
+
+    // ── Stripe currency sync ───────────────────────────────────────────
+    // Stripe Prices are immutable, so when the admin changes currency (or
+    // amount) on a product that already has a Stripe product, we create a
+    // brand-new Price in the new currency and archive the old one.
+    const newCurrency = (patch.currency ?? existing.currency) as string;
+    const newAmount = (patch.price_cents ?? existing.price_cents) as number;
+    const oldCurrency = existing.currency as string;
+    const oldAmount = existing.price_cents as number;
+    const currencyChanged = newCurrency.toLowerCase() !== (oldCurrency ?? "").toLowerCase();
+    const amountChanged = Number(newAmount) !== Number(oldAmount);
+    const stripeProductId = existing.stripe_product_id as string | null;
+    const userOverrodePriceId =
+      data.stripePriceId !== undefined &&
+      (data.stripePriceId ?? null) !== (existing.stripe_price_id ?? null);
+    const warnings: string[] = [];
+    if (stripeProductId && !userOverrodePriceId && (currencyChanged || amountChanged) && newAmount >= 50) {
+      try {
+        // Look up the old price to preserve recurring interval if any.
+        let recurring: { interval: string; interval_count?: number } | null = null;
+        if (existing.stripe_price_id) {
+          try {
+            const oldPrice = await stripeFetch(`/prices/${existing.stripe_price_id}`);
+            if (oldPrice?.recurring) {
+              recurring = {
+                interval: oldPrice.recurring.interval,
+                interval_count: oldPrice.recurring.interval_count,
+              };
+            }
+          } catch (e: any) {
+            warnings.push(`Lookup old price failed: ${e.message}`);
+          }
+        }
+        const priceParams: Record<string, string | number> = {
+          product: stripeProductId,
+          unit_amount: newAmount,
+          currency: newCurrency.toLowerCase(),
+        };
+        if (recurring) {
+          priceParams["recurring[interval]"] = recurring.interval;
+          if (recurring.interval_count) priceParams["recurring[interval_count]"] = recurring.interval_count;
+        }
+        const created = await stripeFetch("/prices", {
+          method: "POST",
+          body: formEncode(priceParams),
+        });
+        patch.stripe_price_id = created.id;
+        if (existing.stripe_price_id) {
+          try {
+            await stripeFetch(`/prices/${existing.stripe_price_id}`, {
+              method: "POST",
+              body: formEncode({ active: false }),
+            });
+          } catch (e: any) {
+            warnings.push(`Archive old price failed: ${e.message}`);
+          }
+        }
+      } catch (e: any) {
+        throw new Error(`Stripe sync failed: ${e.message}`);
+      }
+    }
+
     const { error } = await supabase.from("coaching_products").update(patch).eq("id", data.id);
     if (error) throw new Error(error.message);
-    return { ok: true };
+    return { ok: true, warnings, newStripePriceId: patch.stripe_price_id ?? null };
   });
 
 export const duplicateCoachingProduct = createServerFn({ method: "POST" })
