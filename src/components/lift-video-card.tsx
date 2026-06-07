@@ -42,6 +42,8 @@ export function LiftVideoCard({ video, role, userId, onChanged, onEdit }: Props)
   const [posting, setPosting] = useState(false);
   const [embedUrl, setEmbedUrl] = useState<string | null>(null);
   const [signedUrl, setSignedUrl] = useState<string | null>(null);
+  const [embedStatus, setEmbedStatus] = useState<"idle" | "loading" | "ready" | "slow" | "error">("idle");
+  const [embedRetry, setEmbedRetry] = useState(0);
 
   const loadComments = async () => {
     const c = await listComments(video.id, { includeInternal: role === "admin" });
@@ -51,6 +53,9 @@ export function LiftVideoCard({ video, role, userId, onChanged, onEdit }: Props)
 
   useEffect(() => {
     let cancel = false;
+    setEmbedUrl(null);
+    setSignedUrl(null);
+    setEmbedStatus("idle");
     (async () => {
       if (video.video_storage_path) {
         const u = await getSignedVideoUrl(video.video_storage_path);
@@ -62,6 +67,17 @@ export function LiftVideoCard({ video, role, userId, onChanged, onEdit }: Props)
     })();
     return () => { cancel = true; };
   }, [video.video_storage_path, video.video_url]);
+
+  useEffect(() => {
+    if (!embedUrl) return;
+    setEmbedStatus("loading");
+    const slowTimer = window.setTimeout(() => setEmbedStatus((s) => (s === "loading" ? "slow" : s)), 5000);
+    const errorTimer = window.setTimeout(() => setEmbedStatus((s) => (s === "loading" || s === "slow" ? "error" : s)), 12000);
+    return () => {
+      window.clearTimeout(slowTimer);
+      window.clearTimeout(errorTimer);
+    };
+  }, [embedUrl, embedRetry]);
 
   const post = async () => {
     if (!commentBody.trim()) return;
