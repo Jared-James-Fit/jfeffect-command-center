@@ -33,6 +33,7 @@ import { ProfilePictureCapture } from "@/components/profile-picture-capture";
 import { MessageThread } from "@/components/message-thread";
 import type { ConversationState } from "@/lib/messages";
 import { AgreementStatusPanel } from "@/components/agreement-status-panel";
+import { ClientDriveFolderPanel } from "@/components/client-drive-folder-panel";
 import { PurchaseRecordsPanel } from "@/components/purchase-records-panel";
 import { PriceCardPickerDialog } from "@/components/price-card-picker-dialog";
 import { AgreementsPanel } from "@/components/agreements-panel";
