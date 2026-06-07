@@ -336,6 +336,11 @@ export function ClientLiftVideoUploader({ clientId, clientName, userId, onSaved 
             <div className="flex items-center justify-between">
               <div className="text-xs font-medium text-muted-foreground">
                 {clips.length} clip{clips.length === 1 ? "" : "s"} selected
+                {clips.some((c) => c.kind === "file" && c.previewStatus === "pending") && (
+                  <span className="ml-2 text-[10px] font-normal text-muted-foreground/80">
+                    · preview loading…
+                  </span>
+                )}
               </div>
               <button
                 type="button"
