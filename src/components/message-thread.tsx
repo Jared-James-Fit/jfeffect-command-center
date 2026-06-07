@@ -16,6 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
+import { UserAvatar } from "@/components/user-avatar";
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
@@ -494,6 +495,8 @@ export function MessageThread({
   conversationState,
   hideControls = false,
   fullBleed = false,
+  peerName,
+  peerAvatarPath,
 }: {
   clientId: string;
   role: SenderRole;
@@ -502,6 +505,9 @@ export function MessageThread({
   /** When true, render as full-height chat (no card border) and let the
    *  parent control overall height. Composer sits flush at the bottom. */
   fullBleed?: boolean;
+  /** Other participant (for avatar next to incoming bubbles). */
+  peerName?: string | null;
+  peerAvatarPath?: string | null;
 }) {
   const { user } = useAuth();
   const qc = useQueryClient();
@@ -714,8 +720,29 @@ export function MessageThread({
           </div>
         ) : visibleMessages.map((m) => {
           const mine = m.sender_role === role;
+          const otherName = mine
+            ? null
+            : m.is_internal_note
+            ? "Internal Note"
+            : role === "admin"
+            ? peerName ?? "Client"
+            : peerName ?? "Coach Jared";
+          const otherAvatar = mine || m.is_internal_note
+            ? null
+            : role === "admin"
+            ? peerAvatarPath ?? null
+            : null;
           return (
-            <div key={m.id} className={cn("flex", mine ? "justify-end" : "justify-start")}>
+            <div key={m.id} className={cn("flex items-end gap-2", mine ? "justify-end" : "justify-start")}>
+              {!mine && (
+                <UserAvatar
+                  src={otherAvatar}
+                  name={otherName}
+                  size={28}
+                  tone={m.is_internal_note ? "accent" : "neutral"}
+                  className="mb-1"
+                />
+              )}
               <div className={cn(
                 "max-w-[80%] rounded-2xl px-3 py-2 text-sm shadow-sm",
                 m.is_internal_note
