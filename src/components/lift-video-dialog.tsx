@@ -78,6 +78,7 @@ export function LiftVideoDialog({ open, onOpenChange, clientId, userId, clientNa
   const multiUploadRef = useRef<HTMLInputElement | null>(null);
   const multiRecordRef = useRef<HTMLInputElement | null>(null);
   const [previewClip, setPreviewClip] = useState<Clip | null>(null);
+  const [sendError, setSendError] = useState<{ stage?: string; message: string } | null>(null);
 
   useEffect(() => {
     if (initial) {
@@ -236,6 +237,7 @@ export function LiftVideoDialog({ open, onOpenChange, clientId, userId, clientNa
     if (clips.length === 0) return toast.error("Add at least one video.");
 
     setSaving(true);
+    setSendError(null);
     try {
       const batchId = crypto.randomUUID();
       const total = clips.length;
@@ -324,6 +326,9 @@ export function LiftVideoDialog({ open, onOpenChange, clientId, userId, clientNa
       onSaved?.();
     } catch (e: any) {
       console.error(e);
+      const stage = (e as any)?.stage as string | undefined;
+      const rawMsg = (e?.message ?? String(e ?? "Unknown error")).replace(/^\[[^\]]+\]\s*/, "");
+      setSendError({ stage, message: rawMsg });
       toast.error(friendlyDriveError(e, role === "client" ? "client" : "admin"));
     } finally {
       setSaving(false);
