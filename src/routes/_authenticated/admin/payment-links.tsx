@@ -237,7 +237,6 @@ function PaymentLinksPage() {
   const [statusFilter, setStatusFilter] = useState<"all" | "Active" | "Draft" | "Archived">("all");
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [structureFilter, setStructureFilter] = useState<string>("all");
-  const [linkFilter, setLinkFilter] = useState<"all" | "linked" | "missing">("all");
 
   const filteredItems = useMemo(() => {
     return items.filter((p) => {
@@ -251,20 +250,13 @@ function PaymentLinksPage() {
       const matchesStatus = statusFilter === "all" || s === statusFilter;
       const matchesType = typeFilter === "all" || (p.product_type ?? "") === typeFilter;
       const matchesStructure = structureFilter === "all" || (p.payment_structure ?? "") === structureFilter;
-      const matchesLink = linkFilter === "all" || (linkFilter === "linked" ? !!p.payment_link_url : !p.payment_link_url);
-      return matchesSearch && matchesStatus && matchesType && matchesStructure && matchesLink;
+      return matchesSearch && matchesStatus && matchesType && matchesStructure;
     });
-  }, [items, searchQuery, statusFilter, typeFilter, structureFilter, linkFilter]);
+  }, [items, searchQuery, statusFilter, typeFilter, structureFilter]);
 
   const visible = filteredItems;
 
-  async function copyLink(url: string | null) {
-    if (!url) return;
-    await navigator.clipboard.writeText(url);
-    toast.success("Payment link copied");
-  }
-
-  const hasFilters = searchQuery || statusFilter !== "all" || typeFilter !== "all" || structureFilter !== "all" || linkFilter !== "all";
+  const hasFilters = searchQuery || statusFilter !== "all" || typeFilter !== "all" || structureFilter !== "all";
 
   const toggleSelected = (id: string) =>
     setSelected((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
@@ -295,7 +287,9 @@ function PaymentLinksPage() {
     const missing: string[] = [];
     if ((p.status ?? (p.active ? "Active" : "Draft")) !== "Active") missing.push("Not Active");
     if (!p.price_cents || p.price_cents <= 0) missing.push("Missing Price");
-    if (!(p as any).stripe_price_id && !p.payment_link_url) missing.push("Missing Stripe Link");
+    if (!(p as any).stripe_price_id) missing.push("Missing Stripe Price ID");
+    const mode = (p as any).mode;
+    if (mode !== "payment" && mode !== "subscription") missing.push("Missing Checkout Mode");
     if (!p.name?.trim()) missing.push("Missing Name");
     return { ready: missing.length === 0, missing };
   }
