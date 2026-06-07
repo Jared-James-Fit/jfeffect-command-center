@@ -968,3 +968,70 @@ function ProductFormDialog({
     </Dialog>
   );
 }
+
+function SharePaymentLinkDialog({
+  product, onClose, onCopy,
+}: {
+  product: Product | null;
+  onClose: () => void;
+  onCopy: (url: string) => void;
+}) {
+  const url = product?.payment_link_url ?? "";
+  const template = product
+    ? `Hey! Here's your secure payment link for ${product.name}:\n\n${url}\n\nLet me know once you've completed checkout and I'll get you set up.`
+    : "";
+  return (
+    <Dialog open={!!product} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Share payment link</DialogTitle>
+        </DialogHeader>
+        {product && (
+          <div className="space-y-4">
+            <div>
+              <div className="text-sm font-semibold">{product.name}</div>
+              <div className="text-xs text-muted-foreground">
+                {product.currency.toUpperCase()} {formatPrice(product.price_cents, product.currency)}
+                {product.payment_structure ? ` · ${product.payment_structure}` : ""}
+              </div>
+            </div>
+            <div>
+              <Label className="text-xs">Payment link URL</Label>
+              <div className="mt-1 flex gap-2">
+                <Input readOnly value={url} className="font-mono text-xs" onFocus={(e) => e.currentTarget.select()} />
+                <Button size="sm" variant="outline" onClick={() => onCopy(url)}>
+                  <Copy className="h-3.5 w-3.5 mr-1" /> Copy
+                </Button>
+              </div>
+              <p className="text-[11px] text-muted-foreground mt-1">
+                This is a real, reusable Stripe payment link. Anyone with this URL can pay.
+              </p>
+            </div>
+            <div>
+              <Label className="text-xs">Quick message (optional)</Label>
+              <Textarea
+                rows={5}
+                readOnly
+                value={template}
+                onFocus={(e) => e.currentTarget.select()}
+                className="text-sm"
+              />
+              <div className="mt-2 flex gap-2">
+                <Button size="sm" variant="outline" onClick={async () => {
+                  try { await navigator.clipboard.writeText(template); toast.success("Message copied."); } catch { toast.error("Could not copy."); }
+                }}>
+                  <Copy className="h-3.5 w-3.5 mr-1" /> Copy message
+                </Button>
+                <a href={url} target="_blank" rel="noreferrer">
+                  <Button size="sm" variant="outline">
+                    <ExternalLink className="h-3.5 w-3.5 mr-1" /> Open checkout
+                  </Button>
+                </a>
+              </div>
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
