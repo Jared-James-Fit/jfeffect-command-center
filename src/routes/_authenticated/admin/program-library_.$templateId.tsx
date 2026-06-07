@@ -11,7 +11,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { ArrowLeft, Plus, Trash2, Save, Clock, Copy, LayoutGrid, CalendarRange, ArrowRight } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, Save, Clock, Copy, LayoutGrid, CalendarRange, ArrowRight, ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, Link2 } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import {
   getTemplate, updateTemplate, summarizeTemplatePayload, TIME_PROFILES,
@@ -246,6 +247,29 @@ function FullPrepEditor({ payload, setPayload, exercises }: any) {
 function BlockPayloadEditor({ weeksData, setWeeksData, exercises }: { weeksData: any[]; setWeeksData: (wd: any[]) => void; exercises: any[] }) {
   const [activeIdx, setActiveIdx] = useState(0);
   const [view, setView] = useState<"block" | "week">("block");
+  const [collapsed, setCollapsed] = useState<Set<number>>(new Set());
+  const toggleCollapse = (i: number) => setCollapsed((p) => { const n = new Set(p); if (n.has(i)) n.delete(i); else n.add(i); return n; });
+  const collapseAll = () => setCollapsed(new Set(weeksData.map((_, i) => i)));
+  const expandAll = () => setCollapsed(new Set());
+  const jumpToWeek = (i: number) => {
+    setCollapsed((p) => { const n = new Set(p); n.delete(i); return n; });
+    requestAnimationFrame(() => {
+      const el = document.getElementById(`tpl-week-${i}`);
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  };
+  const weekStats = useMemo(() => weeksData.map((w: any) => {
+    const days = w.days || [];
+    let rowCount = 0;
+    let minutes = 0;
+    for (const d of days) {
+      const dr = d.rows || [];
+      rowCount += dr.length;
+      minutes += estimateDayMinutes(dr) || 0;
+    }
+    return { days: days.length, rows: rowCount, minutes };
+  }), [weeksData]);
+  const fmtDur = (m: number) => { if (!m || m <= 0) return "—"; const h = Math.floor(m/60); const mm = Math.round(m%60); return h > 0 ? `${h}h ${mm}m` : `${mm}m`; };
   const addWeek = () => {
     const nextIdx = (weeksData[weeksData.length - 1]?.week_index ?? 0) + 1;
     setWeeksData([...weeksData, { week_index: nextIdx, days: [{ day_index: 1, title: "Day 1", rows: [] }] }]);
@@ -341,34 +365,89 @@ function BlockPayloadEditor({ weeksData, setWeeksData, exercises }: { weeksData:
         </>
       ) : (
         <div className="space-y-4">
+          {weeksData.length > 0 && (
+            <div className="sticky top-12 z-10 flex flex-wrap items-center gap-1.5 rounded-md border border-primary/20 bg-[color-mix(in_oklab,var(--primary)_6%,var(--background))] px-3 py-2">
+              <span className="text-[11px] font-semibold uppercase tracking-wide text-primary">
+                Full Block · {weeksData.length} week{weeksData.length === 1 ? "" : "s"}
+              </span>
+              <div className="mx-2 h-4 w-px bg-border" />
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button size="sm" variant="outline" className="h-7 gap-1 text-[11px]">
+                    <CalendarRange className="h-3 w-3" /> Jump to week <ChevronDown className="h-3 w-3 opacity-60" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="max-h-72 overflow-auto">
+                  {weeksData.map((w: any, i: number) => (
+                    <DropdownMenuItem key={i} onClick={() => jumpToWeek(i)} className="text-xs">Week {w.week_index}</DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <Button size="sm" variant="ghost" className="h-7 gap-1 text-[11px]" onClick={collapseAll} disabled={collapsed.size === weeksData.length}>
+                <ChevronsDownUp className="h-3 w-3" /> Collapse all
+              </Button>
+              <Button size="sm" variant="ghost" className="h-7 gap-1 text-[11px]" onClick={expandAll} disabled={collapsed.size === 0}>
+                <ChevronsUpDown className="h-3 w-3" /> Expand all
+              </Button>
+            </div>
+          )}
           {weeksData.length === 0 && (
             <p className="rounded-md border border-dashed border-border p-4 text-center text-xs text-muted-foreground">
               No weeks yet. Click <em>Add week</em> to start.
             </p>
           )}
-          {weeksData.map((w: any, wi: number) => (
-            <Card key={wi} className="p-3 space-y-2">
-              <div className="flex items-center gap-2">
-                <div className="text-sm font-bold">Week {w.week_index}</div>
-                <Badge variant="outline" className="text-[10px]">{(w.days || []).length}d · {(w.days || []).reduce((n: number, d: any) => n + ((d.rows || []).length), 0)} rows</Badge>
-                <Input className="h-7 max-w-xs text-xs" placeholder="Week notes" value={w.notes ?? ""} onChange={(e) => { const c = [...weeksData]; c[wi] = { ...w, notes: e.target.value }; setWeeksData(c); }} />
-                <div className="ml-auto flex gap-1">
-                  <Button size="sm" variant="ghost" onClick={() => copyWeekToFuture(wi)} title="Copy week → all future weeks">
-                    <Copy className="mr-1 h-3 w-3" /> → future
-                  </Button>
-                  <Button size="icon" variant="ghost" onClick={() => dupWeek(wi)} title="Duplicate week"><Copy className="h-4 w-4" /></Button>
-                  <Button size="icon" variant="ghost" className="text-destructive" onClick={() => delWeek(wi)}><Trash2 className="h-4 w-4" /></Button>
+          {weeksData.map((w: any, wi: number) => {
+            const isCollapsed = collapsed.has(wi);
+            const s = weekStats[wi] ?? { days: 0, rows: 0, minutes: 0 };
+            return (
+              <Card
+                key={wi}
+                id={`tpl-week-${wi}`}
+                className="overflow-hidden p-0 border-2 border-border"
+                style={{ borderLeftWidth: 6, borderLeftColor: "var(--primary)" }}
+              >
+                <div className="flex flex-wrap items-center gap-2 border-b border-primary/20 bg-[color-mix(in_oklab,var(--primary)_8%,var(--card))] px-3 py-2">
+                  <button
+                    onClick={() => toggleCollapse(wi)}
+                    className="grid h-6 w-6 place-items-center rounded text-muted-foreground hover:bg-primary/10 hover:text-foreground"
+                    title={isCollapsed ? "Expand week" : "Collapse week"}
+                  >
+                    {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                  </button>
+                  <span className="inline-flex h-6 items-center rounded-md bg-primary px-2 text-[11px] font-bold uppercase tracking-wide text-primary-foreground">
+                    Week {w.week_index}
+                  </span>
+                  <span className="text-[11px] text-muted-foreground">
+                    {s.days} day{s.days === 1 ? "" : "s"} · {s.rows} row{s.rows === 1 ? "" : "s"} · Est {fmtDur(s.minutes)}
+                  </span>
+                  <Input
+                    className="h-7 max-w-[200px] border-0 bg-transparent text-xs focus-visible:ring-1"
+                    placeholder="Week notes"
+                    value={w.notes ?? ""}
+                    onChange={(e) => { const c = [...weeksData]; c[wi] = { ...w, notes: e.target.value }; setWeeksData(c); }}
+                  />
+                  <div className="ml-auto flex gap-1">
+                    <Button size="sm" variant="ghost" className="h-7 text-[11px]" onClick={() => copyWeekToFuture(wi)} title="Copy week → all future weeks">
+                      <Copy className="mr-1 h-3 w-3" /> → future
+                    </Button>
+                    <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => dupWeek(wi)} title="Duplicate week"><Copy className="h-4 w-4" /></Button>
+                    <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => delWeek(wi)}><Trash2 className="h-4 w-4" /></Button>
+                  </div>
                 </div>
-              </div>
-              <WeekEditor
-                week={w}
-                setWeek={(nw) => { const c = [...weeksData]; c[wi] = nw; setWeeksData(c); }}
-                exercises={exercises}
-                onCopyDayToFuture={(di) => copyDayToFuture(wi, di)}
-                hideHeader
-              />
-            </Card>
-          ))}
+                {!isCollapsed && (
+                  <div className="bg-[color-mix(in_oklab,var(--primary)_2%,transparent)] p-3">
+                    <WeekEditor
+                      week={w}
+                      setWeek={(nw) => { const c = [...weeksData]; c[wi] = nw; setWeeksData(c); }}
+                      exercises={exercises}
+                      onCopyDayToFuture={(di) => copyDayToFuture(wi, di)}
+                      hideHeader
+                    />
+                  </div>
+                )}
+              </Card>
+            );
+          })}
         </div>
       )}
     </div>
@@ -400,7 +479,7 @@ function WeekEditor({ week, setWeek, exercises, onCopyDayToFuture, hideHeader }:
         <Button size="sm" variant="outline" onClick={addDay}><Plus className="mr-1 h-3 w-3" /> Day</Button>
       )}
       {days.map((d: any, i: number) => (
-        <Card key={i} className="p-3">
+        <Card key={i} className="p-3 border-l-[3px] border-l-primary/40">
           <div className="mb-2 flex items-center gap-2">
             <Input className="max-w-xs font-bold" value={d.title ?? ""} onChange={(e) => { const copy = [...days]; copy[i] = { ...d, title: e.target.value }; setWeek({ ...week, days: copy }); }} />
             <Input className="max-w-xs" placeholder="Focus" value={d.focus ?? ""} onChange={(e) => { const copy = [...days]; copy[i] = { ...d, focus: e.target.value }; setWeek({ ...week, days: copy }); }} />
