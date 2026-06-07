@@ -14,6 +14,7 @@ import {
   driveOpenUrl, type LiftVideo, type LiftVideoStatus,
 } from "@/lib/lift-videos";
 import { LiftVideoCard } from "@/components/lift-video-card";
+import { UserAvatar } from "@/components/user-avatar";
 import { format, parseISO, formatDistanceToNow } from "date-fns";
 import {
   AlertTriangle, Video, Trash2, Play, ChevronRight, ChevronLeft,
