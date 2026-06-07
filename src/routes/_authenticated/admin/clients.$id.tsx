@@ -76,7 +76,7 @@ export const Route = createFileRoute("/_authenticated/admin/clients/$id")({
   component: ClientDetail,
 });
 
-const STATUSES = ["Active", "New Client", "Needs Attention", "Check-In Overdue", "Payment Overdue", "Injured / Modified Plan", "Paused", "Cancelling", "Archived", "High Priority"];
+const STATUSES = ["Active", "New Client", "Needs Attention", "Check-In Overdue", "Payment Overdue", "Injured / Modified Plan", "Paused", "Cancelling", "Deactivated", "Archived", "High Priority"];
 const PAY_STATUSES = ["Not Sent", "Sent", "Paid", "Failed", "Overdue", "Cancelled", "Refunded"];
 const ACCOUNT_FIELDS = ["first_name", "last_name", "preferred_name", "email", "phone", "date_of_birth", "height_cm", "preferred_height_unit", "address", "city", "province", "postal_code", "country", "timezone", "emergency_contact_name", "emergency_contact_phone"] as const;
 
