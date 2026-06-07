@@ -44,6 +44,7 @@ export function LiftVideoCard({ video, role, userId, onChanged, onEdit }: Props)
   const [signedUrl, setSignedUrl] = useState<string | null>(null);
   const [embedStatus, setEmbedStatus] = useState<"idle" | "loading" | "ready" | "slow" | "error">("idle");
   const [embedRetry, setEmbedRetry] = useState(0);
+  const [showEmbedFallback, setShowEmbedFallback] = useState(false);
 
   const loadComments = async () => {
     const c = await listComments(video.id, { includeInternal: role === "admin" });
@@ -71,9 +72,12 @@ export function LiftVideoCard({ video, role, userId, onChanged, onEdit }: Props)
   useEffect(() => {
     if (!embedUrl) return;
     setEmbedStatus("loading");
+    setShowEmbedFallback(false);
+    const fallbackTimer = window.setTimeout(() => setShowEmbedFallback(true), 5000);
     const slowTimer = window.setTimeout(() => setEmbedStatus((s) => (s === "loading" ? "slow" : s)), 5000);
     const errorTimer = window.setTimeout(() => setEmbedStatus((s) => (s === "loading" || s === "slow" ? "error" : s)), 12000);
     return () => {
+      window.clearTimeout(fallbackTimer);
       window.clearTimeout(slowTimer);
       window.clearTimeout(errorTimer);
     };
@@ -219,7 +223,10 @@ export function LiftVideoCard({ video, role, userId, onChanged, onEdit }: Props)
             />
             </div>
             {openUrl && (
-              <div className="flex justify-end px-2 pb-2">
+              <div className="flex flex-wrap items-center justify-between gap-2 px-2 pb-2">
+                {showEmbedFallback ? (
+                  <div className="text-xs text-muted-foreground">Preview stuck? Open the original in Drive.</div>
+                ) : <div />}
                 <Button size="sm" variant="ghost" asChild>
                   <a href={openUrl} target="_blank" rel="noreferrer">
                     <Maximize2 className="mr-1 h-3 w-3" /> Open in {isDrive(video.video_url ?? "") ? "Drive" : "new tab"}
