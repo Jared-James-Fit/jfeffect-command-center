@@ -375,3 +375,45 @@ function ClientLiftVideos() {
     </>
   );
 }
+
+/* ------------------------- Background upload UI ------------------------- */
+
+function UploadGuard() {
+  const active = useLiftUploadActiveCount();
+  useEffect(() => {
+    if (!active) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "Your video is still uploading. Leaving now may cancel the upload.";
+      return e.returnValue;
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [active]);
+  if (!active) return null;
+  return (
+    <div className="border-b border-warning/30 bg-warning/10 px-6 py-2 text-center text-xs text-warning">
+      {active} clip{active === 1 ? "" : "s"} uploading — keep this screen open until upload finishes.
+    </div>
+  );
+}
+
+function ClipUploadRow({ videoId, fallbackName }: { videoId: string; fallbackName: string }) {
+  const state = useLiftUploadState(videoId);
+  if (!state) return null;
+  const name = state.fileName || fallbackName;
+  if (state.status === "failed") {
+    return (
+      <div className="text-[10px] text-destructive truncate">Upload failed: {state.error}</div>
+    );
+  }
+  return (
+    <div className="space-y-0.5">
+      <div className="flex items-center justify-between gap-2 text-[10px] text-muted-foreground">
+        <span className="truncate">{name}</span>
+        <span>{state.status === "uploading" ? `${state.progress}%` : state.status === "queued" ? "Queued" : "Done"}</span>
+      </div>
+      <Progress value={state.status === "done" ? 100 : state.progress} className="h-1" />
+    </div>
+  );
+}
