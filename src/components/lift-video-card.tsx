@@ -75,14 +75,11 @@ export function LiftVideoCard({ video, role, userId, onChanged, onEdit, clientNa
         if (isYouTube(video.video_url)) setEmbedUrl(youTubeEmbed(video.video_url));
         else if (isDrive(video.video_url)) setEmbedUrl(drivePreview(video.video_url));
       }
-      if (!cancel) {
-        // Drive fallback: build an embed from any known Drive ID even when
-        // video_url itself isn't a Drive URL (legacy rows / embed-only rows).
-        const driveId =
-          (video as any).original_drive_file_id ??
-          ((video as any).original_drive_url ? (await import("@/lib/lift-videos")).driveFileId((video as any).original_drive_url) : null) ??
-          ((video as any).drive_embed_url ? (await import("@/lib/lift-videos")).driveFileId((video as any).drive_embed_url) : null);
-        if (driveId && !video.video_storage_path) {
+      // Drive fallback: build an embed from any known Drive ID even when
+      // video_url itself isn't a Drive URL (legacy rows / embed-only rows).
+      if (!cancel && !video.video_storage_path) {
+        const driveId = liftVideoDriveFileId(video);
+        if (driveId) {
           setEmbedUrl((prev) => prev ?? `https://drive.google.com/file/d/${driveId}/preview`);
         }
       }
