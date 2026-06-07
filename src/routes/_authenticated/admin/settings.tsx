@@ -319,6 +319,126 @@ function DriveIntegrationCard() {
   );
 }
 
+function ArchiveSettingsCard() {
+  const qc = useQueryClient();
+  const getFn = useServerFn(getArchiveSettings);
+  const updateFn = useServerFn(updateArchiveSettings);
+  const runFn = useServerFn(runAutoArchiveNow);
+  const { data: s } = useQuery({
+    queryKey: ["media-archive-settings"],
+    queryFn: () => getFn({ data: {} as any }),
+  });
+  const [busy, setBusy] = useState(false);
+  const [running, setRunning] = useState(false);
+
+  const setRetention = async (field: string, days: number) => {
+    await updateFn({ data: { [field]: days } as any });
+    qc.invalidateQueries({ queryKey: ["media-archive-settings"] });
+  };
+
+  const setAuto = async (v: boolean) => {
+    setBusy(true);
+    try {
+      await updateFn({ data: { auto_archive_enabled: v } });
+      qc.invalidateQueries({ queryKey: ["media-archive-settings"] });
+    } finally { setBusy(false); }
+  };
+
+  const setVisibility = async (v: string) => {
+    await updateFn({ data: { default_visibility: v as any } });
+    qc.invalidateQueries({ queryKey: ["media-archive-settings"] });
+  };
+
+  const runNow = async () => {
+    setRunning(true);
+    try {
+      const r: any = await runFn({ data: {} as any });
+      if (r?.skipped) toast.message("Auto-archive is disabled — turn it on first.");
+      else toast.success(`Sweep done — chat:${r.chat ?? 0} lift:${r.lift ?? 0} media:${r.media ?? 0} failed:${r.failed ?? 0}`);
+      qc.invalidateQueries({ queryKey: ["media-archive-settings"] });
+    } catch (e: any) { toast.error(e?.message ?? "Sweep failed"); }
+    finally { setRunning(false); }
+  };
+
+  const RETENTIONS = [
+    { value: 30, label: "30 days" },
+    { value: 90, label: "90 days" },
+    { value: 180, label: "6 months" },
+    { value: 365, label: "1 year" },
+    { value: 0, label: "Never" },
+  ];
+
+  const cur: any = s ?? {};
+
+  return (
+    <Card className="border-border bg-card p-5 space-y-3">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <FolderOpen className="h-5 w-5 text-primary" />
+          <h2 className="text-base font-bold">Media Auto-Archive to Drive</h2>
+        </div>
+        <Badge variant={cur.auto_archive_enabled ? "default" : "outline"}>
+          {cur.auto_archive_enabled ? "Enabled" : "Disabled"}
+        </Badge>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Move old chat photos/videos, lift videos, and check-in media to each client's Drive folder after the retention window. Originals are kept until Drive confirms the upload.
+      </p>
+
+      <label className="flex items-center gap-2 text-xs">
+        <Switch checked={!!cur.auto_archive_enabled} onCheckedChange={setAuto} disabled={busy} />
+        Run nightly auto-archive sweep
+      </label>
+
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        {[
+          { field: "chat_media_retention_days", label: "Chat media (photos/videos)" },
+          { field: "lift_video_retention_days", label: "Lift videos" },
+          { field: "checkin_retention_days", label: "Check-in media" },
+          { field: "progress_retention_days", label: "Progress photos" },
+        ].map(({ field, label }) => (
+          <div key={field}>
+            <Label className="text-xs">{label}</Label>
+            <Select
+              value={String(cur[field] ?? 180)}
+              onValueChange={(v) => setRetention(field, parseInt(v, 10))}
+            >
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {RETENTIONS.map((r) => (
+                  <SelectItem key={r.value} value={String(r.value)}>{r.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        ))}
+        <div className="sm:col-span-2">
+          <Label className="text-xs">Default visibility after archive</Label>
+          <Select value={cur.default_visibility ?? "follow_original"} onValueChange={setVisibility}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="follow_original">Follow original visibility</SelectItem>
+              <SelectItem value="visible_to_client">Visible to client</SelectItem>
+              <SelectItem value="admin_only">Admin only</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <Button variant="outline" size="sm" onClick={runNow} disabled={running}>
+          {running ? "Running…" : "Run sweep now"}
+        </Button>
+        {cur.last_run_at && (
+          <span className="text-xs text-muted-foreground">
+            Last run: {new Date(cur.last_run_at).toLocaleString()} — {cur.last_run_summary}
+          </span>
+        )}
+      </div>
+    </Card>
+  );
+}
+
 function SignNowIntegrationCard() {
   const qc = useQueryClient();
   const updateFn = useServerFn(updateSignNowSettings);
