@@ -71,6 +71,7 @@ import { Route as AuthenticatedAdminCoachesIndexRouteImport } from './routes/_au
 import { Route as AuthenticatedAdminClientsIndexRouteImport } from './routes/_authenticated/admin/clients.index'
 import { Route as AuthenticatedAdminAgreementsIndexRouteImport } from './routes/_authenticated/admin/agreements.index'
 import { Route as LovableEmailQueueProcessRouteImport } from './routes/lovable/email/queue/process'
+import { Route as ApiPublicHooksMediaArchiveRouteImport } from './routes/api/public/hooks/media-archive'
 import { Route as AuthenticatedPortalWorkoutsDayIdRouteImport } from './routes/_authenticated/portal/workouts.$dayId'
 import { Route as AuthenticatedPortalPurchasesIdRouteImport } from './routes/_authenticated/portal/purchases.$id'
 import { Route as AuthenticatedPortalCheckInsFormIdRouteImport } from './routes/_authenticated/portal/check-ins.$formId'
@@ -441,6 +442,12 @@ const LovableEmailQueueProcessRoute =
     path: '/lovable/email/queue/process',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicHooksMediaArchiveRoute =
+  ApiPublicHooksMediaArchiveRouteImport.update({
+    id: '/api/public/hooks/media-archive',
+    path: '/api/public/hooks/media-archive',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const AuthenticatedPortalWorkoutsDayIdRoute =
   AuthenticatedPortalWorkoutsDayIdRouteImport.update({
     id: '/$dayId',
@@ -581,6 +588,7 @@ export interface FileRoutesByFullPath {
   '/portal/check-ins/$formId': typeof AuthenticatedPortalCheckInsFormIdRoute
   '/portal/purchases/$id': typeof AuthenticatedPortalPurchasesIdRoute
   '/portal/workouts/$dayId': typeof AuthenticatedPortalWorkoutsDayIdRoute
+  '/api/public/hooks/media-archive': typeof ApiPublicHooksMediaArchiveRoute
   '/lovable/email/queue/process': typeof LovableEmailQueueProcessRoute
   '/admin/agreements/': typeof AuthenticatedAdminAgreementsIndexRoute
   '/admin/clients/': typeof AuthenticatedAdminClientsIndexRoute
@@ -654,6 +662,7 @@ export interface FileRoutesByTo {
   '/portal/check-ins/$formId': typeof AuthenticatedPortalCheckInsFormIdRoute
   '/portal/purchases/$id': typeof AuthenticatedPortalPurchasesIdRoute
   '/portal/workouts/$dayId': typeof AuthenticatedPortalWorkoutsDayIdRoute
+  '/api/public/hooks/media-archive': typeof ApiPublicHooksMediaArchiveRoute
   '/lovable/email/queue/process': typeof LovableEmailQueueProcessRoute
   '/admin/agreements': typeof AuthenticatedAdminAgreementsIndexRoute
   '/admin/clients': typeof AuthenticatedAdminClientsIndexRoute
@@ -731,6 +740,7 @@ export interface FileRoutesById {
   '/_authenticated/portal/check-ins/$formId': typeof AuthenticatedPortalCheckInsFormIdRoute
   '/_authenticated/portal/purchases/$id': typeof AuthenticatedPortalPurchasesIdRoute
   '/_authenticated/portal/workouts/$dayId': typeof AuthenticatedPortalWorkoutsDayIdRoute
+  '/api/public/hooks/media-archive': typeof ApiPublicHooksMediaArchiveRoute
   '/lovable/email/queue/process': typeof LovableEmailQueueProcessRoute
   '/_authenticated/admin/agreements/': typeof AuthenticatedAdminAgreementsIndexRoute
   '/_authenticated/admin/clients/': typeof AuthenticatedAdminClientsIndexRoute
@@ -808,6 +818,7 @@ export interface FileRouteTypes {
     | '/portal/check-ins/$formId'
     | '/portal/purchases/$id'
     | '/portal/workouts/$dayId'
+    | '/api/public/hooks/media-archive'
     | '/lovable/email/queue/process'
     | '/admin/agreements/'
     | '/admin/clients/'
@@ -881,6 +892,7 @@ export interface FileRouteTypes {
     | '/portal/check-ins/$formId'
     | '/portal/purchases/$id'
     | '/portal/workouts/$dayId'
+    | '/api/public/hooks/media-archive'
     | '/lovable/email/queue/process'
     | '/admin/agreements'
     | '/admin/clients'
@@ -957,6 +969,7 @@ export interface FileRouteTypes {
     | '/_authenticated/portal/check-ins/$formId'
     | '/_authenticated/portal/purchases/$id'
     | '/_authenticated/portal/workouts/$dayId'
+    | '/api/public/hooks/media-archive'
     | '/lovable/email/queue/process'
     | '/_authenticated/admin/agreements/'
     | '/_authenticated/admin/clients/'
@@ -976,6 +989,7 @@ export interface RootRouteChildren {
   ApiDriveUploadRoute: typeof ApiDriveUploadRoute
   ApiPublicSignnowWebhookRoute: typeof ApiPublicSignnowWebhookRoute
   ApiPublicStripeWebhookRoute: typeof ApiPublicStripeWebhookRoute
+  ApiPublicHooksMediaArchiveRoute: typeof ApiPublicHooksMediaArchiveRoute
   LovableEmailQueueProcessRoute: typeof LovableEmailQueueProcessRoute
 }
 
@@ -1415,6 +1429,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LovableEmailQueueProcessRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/media-archive': {
+      id: '/api/public/hooks/media-archive'
+      path: '/api/public/hooks/media-archive'
+      fullPath: '/api/public/hooks/media-archive'
+      preLoaderRoute: typeof ApiPublicHooksMediaArchiveRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_authenticated/portal/workouts/$dayId': {
       id: '/_authenticated/portal/workouts/$dayId'
       path: '/$dayId'
@@ -1754,6 +1775,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiDriveUploadRoute: ApiDriveUploadRoute,
   ApiPublicSignnowWebhookRoute: ApiPublicSignnowWebhookRoute,
   ApiPublicStripeWebhookRoute: ApiPublicStripeWebhookRoute,
+  ApiPublicHooksMediaArchiveRoute: ApiPublicHooksMediaArchiveRoute,
   LovableEmailQueueProcessRoute: LovableEmailQueueProcessRoute,
 }
 export const routeTree = rootRouteImport
