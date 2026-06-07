@@ -53,6 +53,7 @@ import { Route as AuthenticatedAdminNutritionTargetsRouteImport } from './routes
 import { Route as AuthenticatedAdminNativeFormsRouteImport } from './routes/_authenticated/admin/native-forms'
 import { Route as AuthenticatedAdminMessagesRouteImport } from './routes/_authenticated/admin/messages'
 import { Route as AuthenticatedAdminMediaReviewRouteImport } from './routes/_authenticated/admin/media-review'
+import { Route as AuthenticatedAdminMediaArchivesRouteImport } from './routes/_authenticated/admin/media-archives'
 import { Route as AuthenticatedAdminLiftVideosRouteImport } from './routes/_authenticated/admin/lift-videos'
 import { Route as AuthenticatedAdminFormsRouteImport } from './routes/_authenticated/admin/forms'
 import { Route as AuthenticatedAdminExercisesRouteImport } from './routes/_authenticated/admin/exercises'
@@ -336,6 +337,12 @@ const AuthenticatedAdminMediaReviewRoute =
     path: '/media-review',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
+const AuthenticatedAdminMediaArchivesRoute =
+  AuthenticatedAdminMediaArchivesRouteImport.update({
+    id: '/media-archives',
+    path: '/media-archives',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
 const AuthenticatedAdminLiftVideosRoute =
   AuthenticatedAdminLiftVideosRouteImport.update({
     id: '/lift-videos',
@@ -543,6 +550,7 @@ export interface FileRoutesByFullPath {
   '/admin/exercises': typeof AuthenticatedAdminExercisesRoute
   '/admin/forms': typeof AuthenticatedAdminFormsRoute
   '/admin/lift-videos': typeof AuthenticatedAdminLiftVideosRoute
+  '/admin/media-archives': typeof AuthenticatedAdminMediaArchivesRoute
   '/admin/media-review': typeof AuthenticatedAdminMediaReviewRoute
   '/admin/messages': typeof AuthenticatedAdminMessagesRoute
   '/admin/native-forms': typeof AuthenticatedAdminNativeFormsRoute
@@ -617,6 +625,7 @@ export interface FileRoutesByTo {
   '/admin/exercises': typeof AuthenticatedAdminExercisesRoute
   '/admin/forms': typeof AuthenticatedAdminFormsRoute
   '/admin/lift-videos': typeof AuthenticatedAdminLiftVideosRoute
+  '/admin/media-archives': typeof AuthenticatedAdminMediaArchivesRoute
   '/admin/media-review': typeof AuthenticatedAdminMediaReviewRoute
   '/admin/messages': typeof AuthenticatedAdminMessagesRoute
   '/admin/native-forms': typeof AuthenticatedAdminNativeFormsRoute
@@ -695,6 +704,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/exercises': typeof AuthenticatedAdminExercisesRoute
   '/_authenticated/admin/forms': typeof AuthenticatedAdminFormsRoute
   '/_authenticated/admin/lift-videos': typeof AuthenticatedAdminLiftVideosRoute
+  '/_authenticated/admin/media-archives': typeof AuthenticatedAdminMediaArchivesRoute
   '/_authenticated/admin/media-review': typeof AuthenticatedAdminMediaReviewRoute
   '/_authenticated/admin/messages': typeof AuthenticatedAdminMessagesRoute
   '/_authenticated/admin/native-forms': typeof AuthenticatedAdminNativeFormsRoute
@@ -773,6 +783,7 @@ export interface FileRouteTypes {
     | '/admin/exercises'
     | '/admin/forms'
     | '/admin/lift-videos'
+    | '/admin/media-archives'
     | '/admin/media-review'
     | '/admin/messages'
     | '/admin/native-forms'
@@ -847,6 +858,7 @@ export interface FileRouteTypes {
     | '/admin/exercises'
     | '/admin/forms'
     | '/admin/lift-videos'
+    | '/admin/media-archives'
     | '/admin/media-review'
     | '/admin/messages'
     | '/admin/native-forms'
@@ -924,6 +936,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/exercises'
     | '/_authenticated/admin/forms'
     | '/_authenticated/admin/lift-videos'
+    | '/_authenticated/admin/media-archives'
     | '/_authenticated/admin/media-review'
     | '/_authenticated/admin/messages'
     | '/_authenticated/admin/native-forms'
@@ -1303,6 +1316,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminMediaReviewRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
+    '/_authenticated/admin/media-archives': {
+      id: '/_authenticated/admin/media-archives'
+      path: '/media-archives'
+      fullPath: '/admin/media-archives'
+      preLoaderRoute: typeof AuthenticatedAdminMediaArchivesRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
     '/_authenticated/admin/lift-videos': {
       id: '/_authenticated/admin/lift-videos'
       path: '/lift-videos'
@@ -1569,6 +1589,7 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminExercisesRoute: typeof AuthenticatedAdminExercisesRoute
   AuthenticatedAdminFormsRoute: typeof AuthenticatedAdminFormsRoute
   AuthenticatedAdminLiftVideosRoute: typeof AuthenticatedAdminLiftVideosRoute
+  AuthenticatedAdminMediaArchivesRoute: typeof AuthenticatedAdminMediaArchivesRoute
   AuthenticatedAdminMediaReviewRoute: typeof AuthenticatedAdminMediaReviewRoute
   AuthenticatedAdminMessagesRoute: typeof AuthenticatedAdminMessagesRoute
   AuthenticatedAdminNativeFormsRoute: typeof AuthenticatedAdminNativeFormsRoute
@@ -1614,6 +1635,7 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
     AuthenticatedAdminExercisesRoute: AuthenticatedAdminExercisesRoute,
     AuthenticatedAdminFormsRoute: AuthenticatedAdminFormsRoute,
     AuthenticatedAdminLiftVideosRoute: AuthenticatedAdminLiftVideosRoute,
+    AuthenticatedAdminMediaArchivesRoute: AuthenticatedAdminMediaArchivesRoute,
     AuthenticatedAdminMediaReviewRoute: AuthenticatedAdminMediaReviewRoute,
     AuthenticatedAdminMessagesRoute: AuthenticatedAdminMessagesRoute,
     AuthenticatedAdminNativeFormsRoute: AuthenticatedAdminNativeFormsRoute,
