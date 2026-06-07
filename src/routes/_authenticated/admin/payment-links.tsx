@@ -121,7 +121,6 @@ type FormState = {
   paymentStructure: string;
   termLength: string;
   termUnit: string;
-  paymentLinkUrl: string;
   includedFeaturesText: string;
   agreementRequired: boolean;
   agreementTemplateId: string | null;
@@ -131,7 +130,7 @@ type FormState = {
   imageFile: File | null;
   imagePreview: string | null;
   stripePriceId: string;
-  checkoutMode: "payment" | "subscription" | "auto";
+  checkoutMode: "payment" | "subscription" | "";
   generateStripeProduct: boolean;
   billingInterval: "month" | "year" | "week" | "day" | "";
   accessLevel: string;
@@ -141,11 +140,11 @@ function emptyForm(): FormState {
   return {
     name: "", productType: "Online Coaching", description: "", details: "",
     priceText: "", currency: "CAD", paymentStructure: "One-time payment",
-    termLength: "", termUnit: "Months", paymentLinkUrl: "",
+    termLength: "", termUnit: "Months",
     includedFeaturesText: "", agreementRequired: false, agreementTemplateId: null,
     agreementBeforeService: false, status: "Active", notes: "",
     imageFile: null, imagePreview: null,
-    stripePriceId: "", checkoutMode: "auto",
+    stripePriceId: "", checkoutMode: "",
     generateStripeProduct: false, billingInterval: "", accessLevel: "",
   };
 }
@@ -161,7 +160,6 @@ function productToForm(p: Product): FormState {
     paymentStructure: p.payment_structure ?? "One-time payment",
     termLength: p.term_length ? String(p.term_length) : "",
     termUnit: p.term_unit ?? "Months",
-    paymentLinkUrl: p.payment_link_url ?? "",
     includedFeaturesText: (p.included_features ?? []).join("\n"),
     agreementRequired: !!p.agreement_required,
     agreementTemplateId: p.agreement_template_id ?? null,
@@ -171,7 +169,7 @@ function productToForm(p: Product): FormState {
     imageFile: null,
     imagePreview: p.image_signed_url ?? null,
     stripePriceId: (p as any).stripe_price_id ?? "",
-    checkoutMode: ((p as any).mode === "subscription" || (p as any).mode === "payment" ? (p as any).mode : "auto") as "payment" | "subscription" | "auto",
+    checkoutMode: ((p as any).mode === "subscription" || (p as any).mode === "payment" ? (p as any).mode : "") as "payment" | "subscription" | "",
     generateStripeProduct: false,
     billingInterval: "",
     accessLevel: "",
@@ -239,7 +237,6 @@ function PaymentLinksPage() {
   const [statusFilter, setStatusFilter] = useState<"all" | "Active" | "Draft" | "Archived">("all");
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [structureFilter, setStructureFilter] = useState<string>("all");
-  const [linkFilter, setLinkFilter] = useState<"all" | "linked" | "missing">("all");
 
   const filteredItems = useMemo(() => {
     return items.filter((p) => {
@@ -253,20 +250,13 @@ function PaymentLinksPage() {
       const matchesStatus = statusFilter === "all" || s === statusFilter;
       const matchesType = typeFilter === "all" || (p.product_type ?? "") === typeFilter;
       const matchesStructure = structureFilter === "all" || (p.payment_structure ?? "") === structureFilter;
-      const matchesLink = linkFilter === "all" || (linkFilter === "linked" ? !!p.payment_link_url : !p.payment_link_url);
-      return matchesSearch && matchesStatus && matchesType && matchesStructure && matchesLink;
+      return matchesSearch && matchesStatus && matchesType && matchesStructure;
     });
-  }, [items, searchQuery, statusFilter, typeFilter, structureFilter, linkFilter]);
+  }, [items, searchQuery, statusFilter, typeFilter, structureFilter]);
 
   const visible = filteredItems;
 
-  async function copyLink(url: string | null) {
-    if (!url) return;
-    await navigator.clipboard.writeText(url);
-    toast.success("Payment link copied");
-  }
-
-  const hasFilters = searchQuery || statusFilter !== "all" || typeFilter !== "all" || structureFilter !== "all" || linkFilter !== "all";
+  const hasFilters = searchQuery || statusFilter !== "all" || typeFilter !== "all" || structureFilter !== "all";
 
   const toggleSelected = (id: string) =>
     setSelected((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
@@ -297,7 +287,9 @@ function PaymentLinksPage() {
     const missing: string[] = [];
     if ((p.status ?? (p.active ? "Active" : "Draft")) !== "Active") missing.push("Not Active");
     if (!p.price_cents || p.price_cents <= 0) missing.push("Missing Price");
-    if (!(p as any).stripe_price_id && !p.payment_link_url) missing.push("Missing Stripe Link");
+    if (!(p as any).stripe_price_id) missing.push("Missing Stripe Price ID");
+    const mode = (p as any).mode;
+    if (mode !== "payment" && mode !== "subscription") missing.push("Missing Checkout Mode");
     if (!p.name?.trim()) missing.push("Missing Name");
     return { ready: missing.length === 0, missing };
   }
@@ -361,12 +353,8 @@ function PaymentLinksPage() {
             <Badge variant={statusFilter === "Active" ? "default" : "outline"} className="cursor-pointer" onClick={() => setStatusFilter("Active")}>Active</Badge>
             <Badge variant={statusFilter === "Draft" ? "default" : "outline"} className="cursor-pointer" onClick={() => setStatusFilter("Draft")}>Draft</Badge>
             <Badge variant={statusFilter === "Archived" ? "default" : "outline"} className="cursor-pointer" onClick={() => setStatusFilter("Archived")}>Archived</Badge>
-            <div className="w-px h-5 bg-border mx-1" />
-            <Badge variant={linkFilter === "all" ? "default" : "outline"} className="cursor-pointer" onClick={() => setLinkFilter("all")}>All links</Badge>
-            <Badge variant={linkFilter === "linked" ? "default" : "outline"} className="cursor-pointer" onClick={() => setLinkFilter("linked")}>Has Stripe Link</Badge>
-            <Badge variant={linkFilter === "missing" ? "default" : "outline"} className="cursor-pointer" onClick={() => setLinkFilter("missing")}>Missing Link</Badge>
             {hasFilters && (
-              <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => { setSearchQuery(""); setStatusFilter("all"); setTypeFilter("all"); setStructureFilter("all"); setLinkFilter("all"); }}>
+              <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => { setSearchQuery(""); setStatusFilter("all"); setTypeFilter("all"); setStructureFilter("all"); }}>
                 <X className="h-3 w-3 mr-1" /> Clear filters
               </Button>
             )}
@@ -431,39 +419,25 @@ function PaymentLinksPage() {
                   </div>
                   <div className="mt-2 flex flex-wrap gap-1.5">
                     {(() => {
-                      const hasPrice = !!(p as any).stripe_price_id;
-                      const hasLink = !!p.payment_link_url;
-                      if (hasPrice) {
+                      const r = readiness(p);
+                      if (r.ready) {
                         return (
                           <Badge variant="outline" className="text-xs border-primary/40 text-primary">
                             <CheckCircle2 className="h-3 w-3 mr-1" />Checkout Ready
                           </Badge>
                         );
                       }
-                      if (hasLink) {
-                        return (
-                          <Badge variant="outline" className="text-xs border-amber-500/40 text-amber-600 dark:text-amber-400">
-                            <AlertTriangle className="h-3 w-3 mr-1" />Legacy Payment Link (no Price ID)
-                          </Badge>
-                        );
-                      }
-                      return (
-                        <Badge variant="outline" className="text-xs text-destructive border-destructive/40">
-                          <AlertTriangle className="h-3 w-3 mr-1" />Missing Stripe Price ID
+                      return r.missing.map((m) => (
+                        <Badge key={m} variant="outline" className="text-xs text-destructive border-destructive/40">
+                          <AlertTriangle className="h-3 w-3 mr-1" />{m}
                         </Badge>
-                      );
+                      ));
                     })()}
                     {p.agreement_required && <Badge variant="outline" className="text-xs"><FileSignature className="h-3 w-3 mr-1" />Agreement Required</Badge>}
                   </div>
                   {p.description && <p className="text-sm mt-2 line-clamp-2 text-muted-foreground">{p.description}</p>}
                   <div className="mt-3 flex flex-wrap gap-2">
                     <Button size="sm" className="bg-gradient-primary font-bold uppercase" onClick={() => setAssigning(productToOfferLike(p))}>Assign to client</Button>
-                    {p.payment_link_url && (
-                      <>
-                        <Button size="sm" variant="outline" onClick={() => copyLink(p.payment_link_url)} title="Copy link"><Copy className="h-3.5 w-3.5" /></Button>
-                        <a href={p.payment_link_url} target="_blank" rel="noreferrer"><Button size="sm" variant="outline"><ExternalLink className="h-3.5 w-3.5" /></Button></a>
-                      </>
-                    )}
                     <Button size="sm" variant="outline" onClick={() => setEditing({ open: true, product: p })}><Pencil className="h-3.5 w-3.5" /></Button>
                     <Button size="sm" variant="ghost" onClick={() => duplicateMutation.mutate(p.id)}><Copy className="h-3.5 w-3.5" /></Button>
                     {p.status === "Archived" ? (
@@ -576,9 +550,8 @@ function ProductFormDialog({
         agreementBeforeService: form.agreementRequired ? form.agreementBeforeService : false,
         status: form.status,
         notes: form.notes.trim() || null,
-        pastedPaymentLinkUrl: form.paymentLinkUrl.trim() || null,
         stripePriceId: form.stripePriceId.trim() || null,
-        checkoutMode: form.checkoutMode,
+        checkoutMode: form.checkoutMode || "auto",
         billingInterval: (form.billingInterval as any) || null,
         accessLevel: form.accessLevel ? parseInt(form.accessLevel, 10) : null,
       };
@@ -597,8 +570,6 @@ function ProductFormDialog({
       setSubmitting(false);
     }
   };
-
-  const linkConnected = !!form.paymentLinkUrl.trim();
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
@@ -685,35 +656,6 @@ function ProductFormDialog({
             </div>
           </div>
 
-          <div className="md:col-span-2 rounded-md border border-border bg-secondary/20 p-3 space-y-2">
-            <div className="flex items-center justify-between gap-2">
-              <Label>Stripe payment link</Label>
-              {linkConnected ? (
-                <Badge variant="outline" className="text-xs"><CheckCircle2 className="h-3 w-3 mr-1 text-primary" />Stripe Link Connected</Badge>
-              ) : (
-                <Badge variant="outline" className="text-xs text-destructive border-destructive/40"><AlertTriangle className="h-3 w-3 mr-1" />Missing Stripe Link</Badge>
-              )}
-            </div>
-            <Input
-              value={form.paymentLinkUrl}
-              onChange={(e) => set("paymentLinkUrl", e.target.value)}
-              placeholder="https://buy.stripe.com/..."
-              type="url"
-            />
-            <div className="flex flex-wrap items-center gap-2">
-              {linkConnected && (
-                <>
-                  <Button type="button" size="sm" variant="outline" onClick={() => { navigator.clipboard.writeText(form.paymentLinkUrl); toast.success("Copied"); }}><Copy className="h-3.5 w-3.5 mr-1" />Copy</Button>
-                  <a href={form.paymentLinkUrl} target="_blank" rel="noreferrer"><Button type="button" size="sm" variant="outline"><ExternalLink className="h-3.5 w-3.5 mr-1" />Open</Button></a>
-                  <Button type="button" size="sm" variant="ghost" onClick={() => set("paymentLinkUrl", "")}>Replace Link</Button>
-                </>
-              )}
-            </div>
-            {!linkConnected && (
-              <p className="text-xs text-muted-foreground">You can save without a link — paste it later. Stripe collects the money; this app organizes it.</p>
-            )}
-          </div>
-
           {/* ── Stripe Checkout Session fields ─────────────────────────── */}
           <div className="md:col-span-2 rounded-md border border-primary/20 bg-primary/5 p-3 space-y-3">
             <div className="text-xs font-semibold uppercase tracking-widest text-primary">Stripe Checkout Session</div>
@@ -765,10 +707,10 @@ function ProductFormDialog({
               </div>
               <div>
                 <Label>Checkout Mode</Label>
-                <Select value={form.checkoutMode} onValueChange={(v) => set("checkoutMode", v as any)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                <Select value={form.checkoutMode || "__none"} onValueChange={(v) => set("checkoutMode", (v === "__none" ? "" : v) as any)}>
+                  <SelectTrigger><SelectValue placeholder="Select checkout mode" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="auto">Auto (infer from billing interval)</SelectItem>
+                    <SelectItem value="__none">— Select —</SelectItem>
                     <SelectItem value="payment">One-time payment</SelectItem>
                     <SelectItem value="subscription">Subscription</SelectItem>
                   </SelectContent>
