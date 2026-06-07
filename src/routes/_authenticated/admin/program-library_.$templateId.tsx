@@ -247,6 +247,29 @@ function FullPrepEditor({ payload, setPayload, exercises }: any) {
 function BlockPayloadEditor({ weeksData, setWeeksData, exercises }: { weeksData: any[]; setWeeksData: (wd: any[]) => void; exercises: any[] }) {
   const [activeIdx, setActiveIdx] = useState(0);
   const [view, setView] = useState<"block" | "week">("block");
+  const [collapsed, setCollapsed] = useState<Set<number>>(new Set());
+  const toggleCollapse = (i: number) => setCollapsed((p) => { const n = new Set(p); if (n.has(i)) n.delete(i); else n.add(i); return n; });
+  const collapseAll = () => setCollapsed(new Set(weeksData.map((_, i) => i)));
+  const expandAll = () => setCollapsed(new Set());
+  const jumpToWeek = (i: number) => {
+    setCollapsed((p) => { const n = new Set(p); n.delete(i); return n; });
+    requestAnimationFrame(() => {
+      const el = document.getElementById(`tpl-week-${i}`);
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  };
+  const weekStats = useMemo(() => weeksData.map((w: any) => {
+    const days = w.days || [];
+    let rowCount = 0;
+    let minutes = 0;
+    for (const d of days) {
+      const dr = d.rows || [];
+      rowCount += dr.length;
+      minutes += estimateDayMinutes(dr) || 0;
+    }
+    return { days: days.length, rows: rowCount, minutes };
+  }), [weeksData]);
+  const fmtDur = (m: number) => { if (!m || m <= 0) return "—"; const h = Math.floor(m/60); const mm = Math.round(m%60); return h > 0 ? `${h}h ${mm}m` : `${mm}m`; };
   const addWeek = () => {
     const nextIdx = (weeksData[weeksData.length - 1]?.week_index ?? 0) + 1;
     setWeeksData([...weeksData, { week_index: nextIdx, days: [{ day_index: 1, title: "Day 1", rows: [] }] }]);
