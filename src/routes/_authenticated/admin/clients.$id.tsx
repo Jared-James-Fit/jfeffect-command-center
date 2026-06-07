@@ -15,6 +15,7 @@ import { ArrowLeft, ExternalLink, Save, Trash2, Mail, Archive, KeyRound, Copy, C
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import { inviteClient, deleteClient, getSetupLink, sendPasswordReset, markSetupComplete, setNeedsAdminHelp } from "@/lib/clients.functions";
+import { deactivateClient, reactivateClient, DEACTIVATION_REASONS } from "@/lib/client-deactivation.functions";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { TrainingPhasesPanel } from "@/components/training-phases-panel";
 import { ImportantDatesPanel } from "@/components/important-dates-panel";
@@ -96,6 +97,14 @@ function ClientDetail() {
   const sendResetFn = useServerFn(sendPasswordReset);
   const markCompleteFn = useServerFn(markSetupComplete);
   const needsHelpFn = useServerFn(setNeedsAdminHelp);
+  const deactivateFn = useServerFn(deactivateClient);
+  const reactivateFn = useServerFn(reactivateClient);
+  const [deactivateOpen, setDeactivateOpen] = useState(false);
+  const [deactivateReason, setDeactivateReason] = useState<string>("Coaching ended");
+  const [deactivateNote, setDeactivateNote] = useState<string>("");
+  const [deactivateDisablePortal, setDeactivateDisablePortal] = useState<boolean>(true);
+  const [reactivateOpen, setReactivateOpen] = useState(false);
+  const [reactivateRestorePortal, setReactivateRestorePortal] = useState(true);
 
   const { data } = useQuery({
     queryKey: ["client", id],
