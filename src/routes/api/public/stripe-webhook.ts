@@ -223,7 +223,8 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
                 const newPaymentStatus = statusMap[obj.status] ?? purchase.payment_status;
                 const newServiceStatus =
                   obj.status === "active" || obj.status === "trialing" ? "Active"
-                  : obj.status === "canceled" ? "Cancelled"
+                  // Fix 2: cancel_at_period_end=true → keep access until subscription.deleted fires
+                  : obj.status === "canceled" && !obj.cancel_at_period_end ? "Cancelled"
                   : purchase.service_status;
 
                 await supabase.from("purchase_records").update({
@@ -265,6 +266,8 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
               if (purchase) {
                 await supabase.from("purchase_records").update({
                   payment_status: "Active Subscription",
+                  // Fix 3: reactivate service_status on successful renewal (handles Overdue recovery)
+                  service_status: "Active",
                   paid_at: now,
                   stripe_receipt_url: obj.hosted_invoice_url ?? purchase.stripe_receipt_url,
                   last_payment_update_source: "stripe_webhook",
@@ -273,7 +276,6 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
               }
               break;
             }
-
             // ── Invoice failed (payment issue) ──────────────────────────────
             case "invoice.payment_failed": {
               const purchase = await resolvePurchase(supabase, obj, {
@@ -325,6 +327,8 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
               if (purchase) {
                 await supabase.from("purchase_records").update({
                   payment_status: "Refunded",
+                  // Fix 1: revoke access on refund
+                  service_status: "Cancelled",
                   last_payment_update_source: "stripe_webhook",
                   last_payment_update_at: now,
                 }).eq("id", purchase.id);
