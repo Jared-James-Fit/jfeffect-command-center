@@ -18,7 +18,7 @@ import {
   estimateDayMinutes, durationRange, PERCENTAGE_BASES, type TrainingStyle,
 } from "@/lib/pl-programs";
 
-export const Route = createFileRoute("/_authenticated/admin/program-library/$templateId")({
+export const Route = createFileRoute("/_authenticated/admin/program-library_/$templateId")({
   component: TemplateEditor,
 });
 
