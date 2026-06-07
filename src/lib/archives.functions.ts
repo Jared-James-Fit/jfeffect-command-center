@@ -76,7 +76,8 @@ export const listArchived = createServerFn({ method: "POST" })
     for (const src of wanted) {
       const cols = ["id", src.nameField, "archived_at", "archived_by"];
       if (src.hasClientId) cols.push("client_id");
-      let q = supabaseAdmin.from(src.table).select(cols.join(",")).eq("archived", true).limit(data.limit);
+      const admin: any = supabaseAdmin;
+      let q = admin.from(src.table).select(cols.join(",")).eq("archived", true).limit(data.limit);
       if (data.search) q = q.ilike(src.nameField, `%${data.search}%`);
       const { data: rows, error } = await q;
       if (error) {
@@ -141,7 +142,8 @@ export const restoreArchivedItems = createServerFn({ method: "POST" })
         const src = sourceFor(it.type);
         const patch: any = { archived: false, archived_at: null, archived_by: null };
         if (src.table === "clients") patch.status = "Active";
-        const { error } = await supabaseAdmin.from(src.table).update(patch).eq("id", it.id);
+        const admin: any = supabaseAdmin;
+        const { error } = await admin.from(src.table).update(patch).eq("id", it.id);
         if (error) throw new Error(error.message);
         results.push({ type: it.type, id: it.id, ok: true });
       } catch (e: any) {
@@ -168,7 +170,8 @@ export const permanentlyDeleteArchivedItems = createServerFn({ method: "POST" })
     for (const it of data.items) {
       try {
         const src = sourceFor(it.type);
-        const { error } = await supabaseAdmin.from(src.table).delete().eq("id", it.id);
+        const admin: any = supabaseAdmin;
+        const { error } = await admin.from(src.table).delete().eq("id", it.id);
         if (error) throw new Error(error.message);
         results.push({ type: it.type, id: it.id, ok: true });
       } catch (e: any) {
