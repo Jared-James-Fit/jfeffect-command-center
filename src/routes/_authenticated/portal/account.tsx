@@ -10,13 +10,14 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Eye, EyeOff, Save, ShieldAlert, CreditCard, Settings } from "lucide-react";
+import { Save, ShieldAlert, CreditCard, Settings } from "lucide-react";
 import { toast } from "sonner";
 import { createCustomerPortalSession } from "@/lib/stripe-checkout.functions";
 import { ProfilePictureCapture } from "@/components/profile-picture-capture";
 import { SocialHandlesEditor } from "@/components/social-handles-editor";
 import { SOCIAL_FIELDS } from "@/lib/social-handles";
 import { BasicInfoForm } from "@/components/basic-info-form";
+import { ChangePasswordCard } from "@/components/change-password-card";
 
 export const Route = createFileRoute("/_authenticated/portal/account")({
   component: AccountPage,
@@ -29,8 +30,6 @@ function AccountPage() {
   const { user } = useAuth();
   const qc = useQueryClient();
   const [form, setForm] = useState<any>(null);
-  const [pwd, setPwd] = useState({ current: "", next: "", confirm: "", showCurrent: false, showNext: false });
-  const [pwdBusy, setPwdBusy] = useState(false);
 
   const { data: client } = useQuery({
     queryKey: ["my-client-account", portalUserId],
@@ -118,24 +117,6 @@ function AccountPage() {
     setForm({ ...form, profile_picture_url: path });
   };
 
-  const changePassword = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (pwd.next.length < 8) return toast.error("Password must be at least 8 characters");
-    if (pwd.next !== pwd.confirm) return toast.error("Passwords don't match");
-    setPwdBusy(true);
-    // Verify current password by reauthenticating
-    const { error: signInErr } = await supabase.auth.signInWithPassword({ email: user.email!, password: pwd.current });
-    if (signInErr) {
-      setPwdBusy(false);
-      return toast.error("Current password is incorrect");
-    }
-    const { error } = await supabase.auth.updateUser({ password: pwd.next });
-    setPwdBusy(false);
-    if (error) return toast.error(error.message);
-    toast.success("Password updated");
-    setPwd({ current: "", next: "", confirm: "", showCurrent: false, showNext: false });
-  };
-
   return (
     <>
       <PageHeader
@@ -190,37 +171,9 @@ function AccountPage() {
           <SocialHandlesEditor values={form} onChange={(k, v) => set(k, v)} />
         </Card>
 
-        <Card className="border-border bg-card p-6 md:col-span-3 space-y-4">
-          <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Change Password</h3>
-          <form onSubmit={changePassword} className="grid gap-3 md:grid-cols-3">
-            <div>
-              <Label>Current password</Label>
-              <div className="relative">
-                <Input type={pwd.showCurrent ? "text" : "password"} value={pwd.current} onChange={(e) => setPwd({ ...pwd, current: e.target.value })} required />
-                <button type="button" onClick={() => setPwd({ ...pwd, showCurrent: !pwd.showCurrent })} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground">
-                  {pwd.showCurrent ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
-              </div>
-            </div>
-            <div>
-              <Label>New password</Label>
-              <div className="relative">
-                <Input type={pwd.showNext ? "text" : "password"} value={pwd.next} onChange={(e) => setPwd({ ...pwd, next: e.target.value })} required minLength={8} />
-                <button type="button" onClick={() => setPwd({ ...pwd, showNext: !pwd.showNext })} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground">
-                  {pwd.showNext ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
-              </div>
-            </div>
-            <div>
-              <Label>Confirm new password</Label>
-              <Input type={pwd.showNext ? "text" : "password"} value={pwd.confirm} onChange={(e) => setPwd({ ...pwd, confirm: e.target.value })} required minLength={8} />
-            </div>
-            <div className="md:col-span-3">
-              <p className="mb-2 text-[11px] text-muted-foreground">Minimum 8 characters. Use a mix of letters and numbers.</p>
-              <Button type="submit" disabled={pwdBusy} className="bg-gradient-primary uppercase font-bold">{pwdBusy ? "Updating…" : "Update password"}</Button>
-            </div>
-          </form>
-        </Card>
+        <div className="md:col-span-3">
+          <ChangePasswordCard />
+        </div>
 
         {/* ── Billing & Subscription ─────────────────────────────────────── */}
         <BillingSection clientId={client?.id} />
