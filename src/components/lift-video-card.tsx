@@ -194,6 +194,19 @@ export function LiftVideoCard({ video, role, userId, onChanged, onEdit, clientNa
         </Button>
       )}
 
+      {/* Client context — shown BEFORE the preview so reviewers always
+          see notes/questions even if the embed is slow or broken. */}
+      <div className="rounded-md border border-border bg-secondary/30 p-3 text-sm whitespace-pre-wrap">
+        <div className="mb-1 text-[10px] uppercase tracking-widest text-muted-foreground">Client notes</div>
+        {video.client_notes ? video.client_notes : <span className="text-muted-foreground italic">No notes added.</span>}
+      </div>
+      {video.question_for_coach && (
+        <div className="rounded-md border border-primary/30 bg-primary/5 p-3 text-sm whitespace-pre-wrap">
+          <div className="mb-1 text-[10px] uppercase tracking-widest text-primary">Question for coach</div>
+          {video.question_for_coach}
+        </div>
+      )}
+
       <div className="overflow-hidden rounded-md border border-border bg-card">
         {signedUrl ? (
           <LiftVideoPlayer
@@ -261,19 +274,6 @@ export function LiftVideoCard({ video, role, userId, onChanged, onEdit, clientNa
           <div className="min-h-48 p-6 text-center text-xs text-muted-foreground">Google Drive link missing for this video.</div>
         )}
       </div>
-
-      {video.client_notes && (
-        <div className="rounded-md border border-border bg-secondary/30 p-3 text-sm whitespace-pre-wrap">
-          <div className="mb-1 text-[10px] uppercase tracking-widest text-muted-foreground">Client notes</div>
-          {video.client_notes}
-        </div>
-      )}
-      {video.question_for_coach && (
-        <div className="rounded-md border border-primary/30 bg-primary/5 p-3 text-sm whitespace-pre-wrap">
-          <div className="mb-1 text-[10px] uppercase tracking-widest text-primary">Question for coach</div>
-          {video.question_for_coach}
-        </div>
-      )}
 
       {/* Watched / liked / reviewed indicators */}
       <div className="flex flex-wrap items-center gap-2 text-xs">
