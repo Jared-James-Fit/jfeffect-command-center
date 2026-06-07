@@ -22,6 +22,8 @@ import { derivePhase, displayTitle, toneClasses, type TrainingPhase } from "@/li
 import { deriveTarget } from "@/lib/nutrition-cardio";
 import { PowerlifterBadge } from "@/components/powerlifter-badge";
 import { UserAvatar } from "@/components/user-avatar";
+import { format, parseISO, differenceInDays } from "date-fns";
+import type { ConversationState, Message } from "@/lib/messages";
 
 function summarizeCardio(list: any[]): string {
   if (!list || list.length === 0) return "";
@@ -35,8 +37,19 @@ function summarizeCardio(list: any[]): string {
   if (t.intensity) parts.push(t.intensity);
   return parts.join(" · ");
 }
-import { format, parseISO } from "date-fns";
-import type { ConversationState, Message } from "@/lib/messages";
+
+function daysSinceUpdated(dateStr: string | null | undefined): number | null {
+  if (!dateStr) return null;
+  return differenceInDays(new Date(), new Date(dateStr));
+}
+
+function nutritionUpdateTone(days: number | null): { tone: string; label: string } | null {
+  if (days === null) return null;
+  if (days >= 30) return { tone: "border-destructive/40 bg-destructive/10 text-destructive", label: `${days}d overdue` };
+  if (days >= 20) return { tone: "border-orange-400/40 bg-orange-400/10 text-orange-500", label: `${days}d due` };
+  if (days >= 14) return { tone: "border-warning/40 bg-warning/10 text-warning", label: `${days}d due` };
+  return null;
+}
 function AddCell({ id, tab, label }: { id: string; tab: "training" | "nutrition" | "cardio"; label: string }) {
   return (
     <Link to="/admin/clients/$id" params={{ id }} search={{ tab }} className="text-xs font-semibold text-primary hover:underline">
