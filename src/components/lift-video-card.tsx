@@ -208,13 +208,17 @@ export function LiftVideoCard({ video, role, userId, onChanged, onEdit, clientNa
       )}
 
       <div className="overflow-hidden rounded-md border border-border bg-card">
-        {signedUrl ? (
+        {playablePreviewUrl ? (
           <LiftVideoPlayer
-            src={signedUrl}
+            src={playablePreviewUrl}
             fallbackUrl={openUrl}
-            embedFallbackUrl={embedUrl}
+            embedFallbackUrl={null}
             thumbnailUrl={video.thumbnail_url}
             title={video.exercise || "Lift video"}
+            onPlaybackError={(message) => {
+              setLastPlaybackError(message);
+              if (role === "admin") setPlaybackError(video.id, message).catch(() => {});
+            }}
           />
         ) : embedUrl ? (
           <div className="space-y-2">
@@ -267,13 +271,39 @@ export function LiftVideoCard({ video, role, userId, onChanged, onEdit, clientNa
             </div>
           </div>
         ) : openUrl ? (
-          <a href={openUrl} target="_blank" rel="noreferrer" className="flex min-h-48 items-center justify-center gap-2 bg-secondary/30 p-6 text-sm text-primary">
-            Watch in Drive <ExternalLink className="h-3 w-3" />
-          </a>
+          <div className="flex min-h-40 flex-col items-center justify-center gap-3 bg-secondary/30 p-6 text-center text-sm">
+            <div>
+              <div className="font-medium text-foreground">{previewReason}</div>
+              <div className="mt-1 text-xs text-muted-foreground">Use the original Drive video for review.</div>
+            </div>
+            <Button asChild>
+              <a href={openUrl} target="_blank" rel="noreferrer">
+                Watch in Drive <ExternalLink className="ml-2 h-3 w-3" />
+              </a>
+            </Button>
+          </div>
         ) : (
           <div className="min-h-48 p-6 text-center text-xs text-muted-foreground">Google Drive link missing for this video.</div>
         )}
       </div>
+
+      {role === "admin" && (
+        <details className="rounded-md border border-border bg-secondary/20 p-3 text-xs">
+          <summary className="cursor-pointer font-medium text-muted-foreground">Video diagnostics</summary>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            <DebugLine label="Original Drive file ID" value={driveFileId ?? "Missing"} good={!!driveFileId} />
+            <DebugLine label="Original Drive URL" value={openUrl ?? "Missing"} good={!!openUrl} />
+            <DebugLine label="Open in Drive" value={openUrl ? "Available" : "Missing"} good={!!openUrl} />
+            <DebugLine label="Preview URL" value={video.preview_url || "Missing"} good={!!video.preview_url} />
+            <DebugLine label="Preview status" value={video.preview_status || (playablePreviewUrl ? "ready" : "not_generated")} good={!!playablePreviewUrl || video.preview_status === "ready"} />
+            <DebugLine label="Thumbnail URL" value={video.thumbnail_url || "Missing"} good={!!video.thumbnail_url} />
+            <DebugLine label="File type" value={video.file_type || "Unknown"} good={!!video.file_type} />
+            <DebugLine label="File size" value={formatBytes(video.file_size_bytes)} good={!!video.file_size_bytes} />
+            <DebugLine label="Upload status" value={video.upload_status || "Unknown"} good={video.upload_status === "Drive uploaded" || video.upload_status === "App storage fallback"} />
+            <DebugLine label="Playback error" value={lastPlaybackError || video.playback_error || "None"} good={!(lastPlaybackError || video.playback_error)} />
+          </div>
+        </details>
+      )}
 
       {/* Watched / liked / reviewed indicators */}
       <div className="flex flex-wrap items-center gap-2 text-xs">
