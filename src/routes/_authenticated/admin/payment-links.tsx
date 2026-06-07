@@ -680,8 +680,16 @@ function ProductFormDialog({
                 <SelectContent>
                   <SelectItem value="CAD">CAD</SelectItem>
                   <SelectItem value="USD">USD</SelectItem>
+                  <SelectItem value="EUR">EUR</SelectItem>
+                  <SelectItem value="GBP">GBP</SelectItem>
+                  <SelectItem value="AUD">AUD</SelectItem>
                 </SelectContent>
               </Select>
+              {product && form.currency.toLowerCase() !== (product.currency ?? "").toLowerCase() && (
+                <p className="mt-1 text-[11px] text-amber-600">
+                  Changing currency will create a new Stripe price in {form.currency} and archive the old one on save.
+                </p>
+              )}
             </div>
           </div>
 
