@@ -150,7 +150,18 @@ function ClientPurchase() {
           {r.stripe_payment_link && (
             <Card className="border-border bg-card p-5 space-y-3">
               <div className="text-xs uppercase tracking-widest text-muted-foreground">Payment</div>
-              <Badge variant="outline">{r.payment_status}</Badge>
+              <Badge
+                variant="outline"
+                className={
+                  paid || r.payment_status === "Active Subscription"
+                    ? "border-green-500/40 text-green-500 bg-green-500/10"
+                    : r.payment_status === "Cancelled"
+                      ? "border-border text-muted-foreground"
+                      : "border-warning/40 text-warning bg-warning/5"
+                }
+              >
+                {paid ? "Paid · Active" : r.payment_status === "Active Subscription" ? "Active subscription" : r.payment_status === "Cancelled" ? "Cancelled" : "Payment setup needed"}
+              </Badge>
               <Button onClick={goToStripe} disabled={!accepted} className="w-full bg-gradient-primary font-bold uppercase">
                 {paid ? "Manage payment" : "Pay now"} <ExternalLink className="ml-2 h-4 w-4" />
               </Button>
