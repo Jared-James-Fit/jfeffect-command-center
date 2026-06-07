@@ -463,6 +463,36 @@ function PaymentLinksPage() {
                   {p.description && <p className="text-sm mt-2 line-clamp-2 text-muted-foreground">{p.description}</p>}
                   <div className="mt-3 flex flex-wrap gap-2">
                     <Button size="sm" className="bg-gradient-primary font-bold uppercase" onClick={() => setAssigning(productToOfferLike(p))}>Assign to client</Button>
+                    {p.payment_link_url ? (
+                      <>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={async () => {
+                            await navigator.clipboard.writeText(p.payment_link_url!);
+                            toast.success("Payment link copied — paste anywhere (text, DM, email).");
+                          }}
+                          title="Copy the saved Stripe Payment Link so you can send it manually"
+                        >
+                          <Copy className="h-3.5 w-3.5 mr-1" />Copy link
+                        </Button>
+                        <a href={p.payment_link_url} target="_blank" rel="noreferrer">
+                          <Button size="sm" variant="outline" title="Open the live payment link in a new tab">
+                            <ExternalLink className="h-3.5 w-3.5 mr-1" />Open link
+                          </Button>
+                        </a>
+                      </>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setEditing({ open: true, product: p })}
+                        title="No shareable Stripe Payment Link saved yet. Edit the product and paste a Stripe Payment Link URL."
+                        className="border-amber-500/40 text-amber-500 hover:bg-amber-500/10"
+                      >
+                        <AlertTriangle className="h-3.5 w-3.5 mr-1" />Add payment link
+                      </Button>
+                    )}
                     <Button size="sm" variant="outline" onClick={() => setPreviewing(p)} title="Preview client-facing product page"><Eye className="h-3.5 w-3.5 mr-1" />Preview</Button>
                     <Button
                       size="sm"
