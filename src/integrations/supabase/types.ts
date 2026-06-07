@@ -3240,8 +3240,10 @@ export type Database = {
           duration_source: string
           focus: string | null
           id: string
+          is_custom: boolean
           notes: string | null
           scheduled_date: string | null
+          source_day_id: string | null
           title: string | null
           updated_at: string
           week_id: string
@@ -3254,8 +3256,10 @@ export type Database = {
           duration_source?: string
           focus?: string | null
           id?: string
+          is_custom?: boolean
           notes?: string | null
           scheduled_date?: string | null
+          source_day_id?: string | null
           title?: string | null
           updated_at?: string
           week_id: string
@@ -3268,13 +3272,22 @@ export type Database = {
           duration_source?: string
           focus?: string | null
           id?: string
+          is_custom?: boolean
           notes?: string | null
           scheduled_date?: string | null
+          source_day_id?: string | null
           title?: string | null
           updated_at?: string
           week_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "pl_days_source_day_id_fkey"
+            columns: ["source_day_id"]
+            isOneToOne: false
+            referencedRelation: "pl_days"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "pl_days_week_id_fkey"
             columns: ["week_id"]
