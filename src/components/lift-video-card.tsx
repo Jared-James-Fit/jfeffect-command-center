@@ -427,3 +427,20 @@ function Stat({ label, value }: { label: string; value: string }) {
     </div>
   );
 }
+
+function DebugLine({ label, value, good }: { label: string; value: string; good?: boolean }) {
+  return (
+    <div className="min-w-0 rounded border border-border bg-card p-2">
+      <div className="mb-1 text-[10px] uppercase tracking-widest text-muted-foreground">{label}</div>
+      <div className={cn("break-all", good ? "text-foreground" : "text-destructive")}>{value}</div>
+    </div>
+  );
+}
+
+function formatBytes(value: number | null | undefined) {
+  if (!value) return "Unknown";
+  if (value < 1024) return `${value} B`;
+  const mb = value / 1024 / 1024;
+  if (mb < 1024) return `${mb.toFixed(1)} MB`;
+  return `${(mb / 1024).toFixed(2)} GB`;
+}
