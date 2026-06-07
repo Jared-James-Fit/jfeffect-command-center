@@ -13,7 +13,7 @@ import {
   listLiftVideos, markAdminViewed, deleteLiftVideos, statusTone,
   liftVideoOpenUrl, type LiftVideo, type LiftVideoStatus,
 } from "@/lib/lift-videos";
-import { LiftVideoCard } from "@/components/lift-video-card";
+import { AdminLiftReviewThread } from "@/components/admin-lift-review-thread";
 import { UserAvatar } from "@/components/user-avatar";
 import { format, parseISO, formatDistanceToNow } from "date-fns";
 import {
@@ -530,11 +530,10 @@ function ReviewDetail({
         )}
       </Card>
 
-      {/* Reuse existing player + feedback */}
-      <LiftVideoCard
+      {/* iMessage-style review thread */}
+      <AdminLiftReviewThread
         key={activeClip.id}
         video={activeClip}
-        role="admin"
         userId={userId}
         onChanged={onChanged}
         clientName={client?.full_name}
