@@ -352,7 +352,16 @@ function ClientsPage() {
                       <td className="px-4 py-3">
                         {dNut ? (
                           <Link to="/admin/clients/$id" params={{ id: c.id }} search={{ tab: "nutrition" }}>
-                            <Badge variant="outline" className={`${dNut.tone} cursor-pointer hover:opacity-80`}>{dNut.label}</Badge>
+                            <div className="space-y-1">
+                              <Badge variant="outline" className={`${dNut.tone} cursor-pointer hover:opacity-80`}>{dNut.label}</Badge>
+                              {(() => {
+                                const days = daysSinceUpdated(nut.updated_at);
+                                const freshness = nutritionUpdateTone(days);
+                                return freshness ? (
+                                  <Badge variant="outline" className={`${freshness.tone} text-[10px]`}>{freshness.label}</Badge>
+                                ) : null;
+                              })()}
+                            </div>
                           </Link>
                         ) : <AddCell id={c.id} tab="nutrition" label="Add Nutrition Targets" />}
                       </td>
