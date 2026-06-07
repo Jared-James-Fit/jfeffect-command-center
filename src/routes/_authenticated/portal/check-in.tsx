@@ -1,13 +1,11 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
-import { usePortalUserId } from "@/lib/client-impersonation";
-import { supabase } from "@/integrations/supabase/client";
-import { PageHeader } from "@/components/app-shell";
-import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { ClipboardCheck, ExternalLink, MessageCircle } from "lucide-react";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 
-export const Route = createFileRoute("/_authenticated/portal/check-in")({ component: CheckIn });
+export const Route = createFileRoute("/_authenticated/portal/check-in")({
+  beforeLoad: () => {
+    throw redirect({ to: "/portal/check-ins" });
+  },
+  component: () => null,
+});
 
 function CheckIn() {
   const portalUserId = usePortalUserId();
