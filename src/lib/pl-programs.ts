@@ -421,7 +421,9 @@ export const PREP_STATUSES: PrepStatus[] = ["Planned", "Active", "Completed", "A
 export const BLOCK_STATUSES: BlockStatus[] = ["Draft", "Active", "Completed", "Archived"];
 
 export async function listTemplates(opts: { type?: TemplateType | "all"; style?: TrainingStyle | "all"; q?: string }) {
-  let q = sb.from("pl_templates").select("*").eq("archived", false);
+  let q = sb.from("pl_templates").select("*");
+  if (!(opts as any).includeArchived) q = q.eq("archived", false);
+  else if ((opts as any).onlyArchived) q = q.eq("archived", true);
   if (opts.type && opts.type !== "all") q = q.eq("template_type", opts.type);
   if (opts.style && opts.style !== "all") q = q.eq("training_style", opts.style);
   if (opts.q) q = q.ilike("name", `%${opts.q}%`);
@@ -430,20 +432,180 @@ export async function listTemplates(opts: { type?: TemplateType | "all"; style?:
   return data ?? [];
 }
 
-export async function createTemplate(input: { name: string; template_type: TemplateType; training_style: TrainingStyle; training_focus?: string; goal?: string; notes?: string; weeks?: number; days_per_week?: number; payload?: any }) {
+export async function createTemplate(input: { name: string; template_type: TemplateType; training_style: TrainingStyle; training_focus?: string; goal?: string; notes?: string; weeks?: number; days_per_week?: number; est_duration_min?: number; tags?: string[]; payload?: any }) {
   const { data, error } = await sb.from("pl_templates").insert(input).select("*").single();
   if (error) throw error;
   return data;
 }
 
-export async function applyTemplateToClient(opts: { templateId: string; clientId: string; prepId?: string | null; name?: string }) {
+export async function getTemplate(id: string) {
+  const { data, error } = await sb.from("pl_templates").select("*").eq("id", id).maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+export async function updateTemplate(id: string, patch: Record<string, any>) {
+  const { error } = await sb.from("pl_templates").update(patch).eq("id", id);
+  if (error) throw error;
+}
+
+export async function duplicateTemplate(id: string) {
+  const tpl = await getTemplate(id);
+  if (!tpl) throw new Error("Template not found");
+  const { id: _i, created_at: _c, updated_at: _u, created_by: _b, ...rest } = tpl;
+  const { data, error } = await sb.from("pl_templates").insert({ ...rest, name: `${tpl.name} (copy)`, archived: false }).select("*").single();
+  if (error) throw error;
+  return data;
+}
+
+export async function setTemplateArchived(id: string, archived: boolean) {
+  await updateTemplate(id, { archived });
+}
+
+export async function deleteTemplate(id: string) {
+  const { error } = await sb.from("pl_templates").delete().eq("id", id);
+  if (error) throw error;
+}
+
+/** Count weeks/days/rows in a template payload for summary display. */
+export function summarizeTemplatePayload(tpl: any) {
+  const p = tpl?.payload || {};
+  if (tpl?.template_type === "full_prep") {
+    const blocks = p.blocks_data || [];
+    const weeks = blocks.reduce((s: number, b: any) => s + (b.weeks_data?.length || 0), 0);
+    const days = blocks.reduce((s: number, b: any) => s + (b.weeks_data || []).reduce((ss: number, w: any) => ss + (w.days?.length || 0), 0), 0);
+    const rows = blocks.reduce((s: number, b: any) => s + (b.weeks_data || []).reduce((ss: number, w: any) => ss + (w.days || []).reduce((sss: number, d: any) => sss + (d.rows?.length || 0), 0), 0), 0);
+    return { blocks: blocks.length, weeks, days, rows };
+  }
+  if (tpl?.template_type === "block") {
+    const wd = p.weeks_data || [];
+    const days = wd.reduce((s: number, w: any) => s + (w.days?.length || 0), 0);
+    const rows = wd.reduce((s: number, w: any) => s + (w.days || []).reduce((ss: number, d: any) => ss + (d.rows?.length || 0), 0), 0);
+    return { blocks: 1, weeks: wd.length, days, rows };
+  }
+  if (tpl?.template_type === "week") {
+    const days = (p.days || []).length;
+    const rows = (p.days || []).reduce((s: number, d: any) => s + (d.rows?.length || 0), 0);
+    return { blocks: 0, weeks: 1, days, rows };
+  }
+  if (tpl?.template_type === "day") {
+    return { blocks: 0, weeks: 0, days: 1, rows: (p.rows || []).length };
+  }
+  return { blocks: 0, weeks: 0, days: 0, rows: 1 };
+}
+
+async function insertWeekTree(blockId: string, weekIndex: number, w: any) {
+  const { data: newWeek } = await sb.from("pl_weeks").insert({ block_id: blockId, week_index: weekIndex, notes: w.notes ?? null }).select("*").single();
+  for (const d of (w.days || [])) await insertDayTree(newWeek.id, d.day_index ?? 1, d);
+  return newWeek;
+}
+async function insertDayTree(weekId: string, dayIndex: number, d: any) {
+  const { data: newDay } = await sb.from("pl_days").insert({ week_id: weekId, day_index: dayIndex, title: d.title ?? null, focus: d.focus ?? null, notes: d.notes ?? null }).select("*").single();
+  let i = 0;
+  for (const r of (d.rows || [])) {
+    await insertRow(newDay.id, i++, r);
+  }
+  return newDay;
+}
+async function insertRow(dayId: string, sortOrder: number, r: any) {
+  await sb.from("pl_exercise_rows").insert({
+    day_id: dayId, sort_order: r.sort_order ?? sortOrder, exercise_id: r.exercise_id ?? null,
+    exercise_name_override: r.exercise_name_override ?? null, sets: r.sets ?? null, reps_text: r.reps_text ?? null,
+    rpe: r.rpe ?? null, rir: r.rir ?? null, percentage: r.percentage ?? null, percentage_basis: r.percentage_basis ?? null,
+    load_kg: r.load_kg ?? null, load_lb: r.load_lb ?? null, rest_seconds: r.rest_seconds ?? null,
+    tempo: r.tempo ?? null, time_profile: r.time_profile ?? "accessory_compound", notes: r.notes ?? null,
+  });
+}
+
+export type TemplatePlacement =
+  | { mode: "new_prep"; prep?: { title?: string; goal_type?: string; event_name?: string | null; event_date?: string | null } }
+  | { mode: "existing_prep"; prepId: string }
+  | { mode: "standalone_block" }
+  | { mode: "into_block"; blockId: string }
+  | { mode: "into_week"; weekId: string }
+  | { mode: "into_day"; dayId: string };
+
+export async function applyTemplateToClient(opts: { templateId: string; clientId: string; placement?: TemplatePlacement; prepId?: string | null; name?: string; clientVisible?: boolean }) {
   const { data: tpl, error: te } = await sb.from("pl_templates").select("*").eq("id", opts.templateId).maybeSingle();
   if (te) throw te;
   if (!tpl) throw new Error("Template not found");
   const payload = tpl.payload || {};
+  const placement: TemplatePlacement = opts.placement ?? (opts.prepId ? { mode: "existing_prep", prepId: opts.prepId } : { mode: "standalone_block" });
+
+  // ---- full_prep: create new prep + N blocks
+  if (tpl.template_type === "full_prep") {
+    const prepInfo = (placement as any).prep || {};
+    const prep = await createPrep({
+      client_id: opts.clientId,
+      title: prepInfo.title || opts.name || tpl.name,
+      goal_type: prepInfo.goal_type || payload.prep?.goal_type,
+      event_name: prepInfo.event_name ?? payload.prep?.event_name ?? null,
+      event_date: prepInfo.event_date ?? payload.prep?.event_date ?? null,
+      total_weeks: payload.prep?.total_weeks ?? null,
+      status: "Planned",
+      client_visible: opts.clientVisible ?? true,
+    });
+    for (const b of (payload.blocks_data || [])) {
+      const blk = await createBlock({
+        client_id: opts.clientId, prep_id: prep.id, name: b.name || "Block",
+        weeks: (b.weeks_data?.length || b.weeks || 4), training_focus: b.training_focus ?? null,
+      });
+      if (Array.isArray(b.weeks_data) && b.weeks_data.length) {
+        await sb.from("pl_weeks").delete().eq("block_id", blk.id);
+        let idx = 1;
+        for (const w of b.weeks_data) await insertWeekTree(blk.id, w.week_index ?? idx++, w);
+      }
+    }
+    return { prepId: prep.id };
+  }
+
+  // ---- week: append into existing block
+  if (tpl.template_type === "week") {
+    if (placement.mode !== "into_block") throw new Error("Week templates need a target block");
+    const { data: existing } = await sb.from("pl_weeks").select("week_index").eq("block_id", placement.blockId);
+    const nextIdx = Math.max(0, ...((existing ?? []).map((w: any) => w.week_index ?? 0))) + 1;
+    await insertWeekTree(placement.blockId, nextIdx, payload);
+    await sb.from("pl_blocks").update({ weeks: nextIdx }).eq("id", placement.blockId);
+    return { blockId: placement.blockId };
+  }
+
+  // ---- day: append into existing week
+  if (tpl.template_type === "day") {
+    if (placement.mode !== "into_week") throw new Error("Day templates need a target week");
+    const { data: existing } = await sb.from("pl_days").select("day_index").eq("week_id", placement.weekId);
+    const nextIdx = Math.max(0, ...((existing ?? []).map((d: any) => d.day_index ?? 0))) + 1;
+    await insertDayTree(placement.weekId, nextIdx, payload);
+    return { weekId: placement.weekId };
+  }
+
+  // ---- exercise_row: append into existing day
+  if (tpl.template_type === "exercise_row") {
+    if (placement.mode !== "into_day") throw new Error("Row templates need a target day");
+    const { data: existing } = await sb.from("pl_exercise_rows").select("sort_order").eq("day_id", placement.dayId);
+    const nextSort = Math.max(0, ...((existing ?? []).map((r: any) => r.sort_order ?? 0))) + 1;
+    await insertRow(placement.dayId, nextSort, payload);
+    return { dayId: placement.dayId };
+  }
+
+  // ---- block (default)
+  let targetPrepId: string | null = null;
+  if (placement.mode === "existing_prep") targetPrepId = placement.prepId;
+  if (placement.mode === "new_prep") {
+    const prepInfo = (placement as any).prep || {};
+    const prep = await createPrep({
+      client_id: opts.clientId,
+      title: prepInfo.title || `${opts.name || tpl.name} Prep`,
+      goal_type: prepInfo.goal_type,
+      event_name: prepInfo.event_name ?? null,
+      event_date: prepInfo.event_date ?? null,
+      status: "Planned",
+      client_visible: opts.clientVisible ?? true,
+    });
+    targetPrepId = prep.id;
+  }
   const block = await createBlock({
     client_id: opts.clientId,
-    prep_id: opts.prepId ?? null,
+    prep_id: targetPrepId,
     name: opts.name ?? tpl.name,
     weeks: tpl.weeks ?? payload.weeks ?? 4,
     training_focus: tpl.training_focus ?? null,
@@ -452,23 +614,10 @@ export async function applyTemplateToClient(opts: { templateId: string; clientId
   if (Array.isArray(payload.weeks_data)) {
     // Replace seeded weeks
     await sb.from("pl_weeks").delete().eq("block_id", block.id);
-    for (const w of payload.weeks_data) {
-      const { data: newWeek } = await sb.from("pl_weeks").insert({ block_id: block.id, week_index: w.week_index, notes: w.notes ?? null }).select("*").single();
-      for (const d of (w.days || [])) {
-        const { data: newDay } = await sb.from("pl_days").insert({ week_id: newWeek.id, day_index: d.day_index, title: d.title ?? null, focus: d.focus ?? null, notes: d.notes ?? null }).select("*").single();
-        for (const r of (d.rows || [])) {
-          await sb.from("pl_exercise_rows").insert({
-            day_id: newDay.id, sort_order: r.sort_order ?? 0, exercise_id: r.exercise_id ?? null,
-            exercise_name_override: r.exercise_name_override ?? null, sets: r.sets ?? null, reps_text: r.reps_text ?? null,
-            rpe: r.rpe ?? null, rir: r.rir ?? null, percentage: r.percentage ?? null, percentage_basis: r.percentage_basis ?? null,
-            load_kg: r.load_kg ?? null, load_lb: r.load_lb ?? null, rest_seconds: r.rest_seconds ?? null,
-            tempo: r.tempo ?? null, time_profile: r.time_profile ?? "accessory_compound", notes: r.notes ?? null,
-          });
-        }
-      }
-    }
+    let idx = 1;
+    for (const w of payload.weeks_data) await insertWeekTree(block.id, w.week_index ?? idx++, w);
   }
-  return block;
+  return { blockId: block.id, prepId: targetPrepId };
 }
 
 export async function saveBlockAsTemplate(blockId: string, name: string, style: TrainingStyle) {
