@@ -156,7 +156,7 @@ function AdminLiftVideos() {
   useEffect(() => {
     if (openSub) setActiveClipId(openSub.clips[0]?.id ?? null);
     else setActiveClipId(null);
-  }, [openKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [openKey]);
 
   // Mark active clip as viewed
   useEffect(() => {
@@ -167,7 +167,10 @@ function AdminLiftVideos() {
 
   // Bulk selection (manage mode)
   const toggleOne = (key: string) => setSelected((p) => {
-    const n = new Set(p); n.has(key) ? n.delete(key) : n.add(key); return n;
+    const n = new Set(p);
+    if (n.has(key)) n.delete(key);
+    else n.add(key);
+    return n;
   });
   const allSelected = submissions.length > 0 && submissions.every((s) => selected.has(s.key));
   const someSelected = selected.size > 0 && !allSelected;

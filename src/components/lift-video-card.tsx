@@ -50,7 +50,7 @@ export function LiftVideoCard({ video, role, userId, onChanged, onEdit }: Props)
     const c = await listComments(video.id, { includeInternal: role === "admin" });
     setComments(c);
   };
-  useEffect(() => { loadComments(); /* eslint-disable-next-line */ }, [video.id]);
+  useEffect(() => { loadComments(); }, [video.id]);
 
   useEffect(() => {
     let cancel = false;
