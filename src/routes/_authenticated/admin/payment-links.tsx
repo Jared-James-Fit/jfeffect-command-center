@@ -121,7 +121,6 @@ type FormState = {
   paymentStructure: string;
   termLength: string;
   termUnit: string;
-  paymentLinkUrl: string;
   includedFeaturesText: string;
   agreementRequired: boolean;
   agreementTemplateId: string | null;
@@ -131,7 +130,7 @@ type FormState = {
   imageFile: File | null;
   imagePreview: string | null;
   stripePriceId: string;
-  checkoutMode: "payment" | "subscription" | "auto";
+  checkoutMode: "payment" | "subscription" | "";
   generateStripeProduct: boolean;
   billingInterval: "month" | "year" | "week" | "day" | "";
   accessLevel: string;
@@ -141,11 +140,11 @@ function emptyForm(): FormState {
   return {
     name: "", productType: "Online Coaching", description: "", details: "",
     priceText: "", currency: "CAD", paymentStructure: "One-time payment",
-    termLength: "", termUnit: "Months", paymentLinkUrl: "",
+    termLength: "", termUnit: "Months",
     includedFeaturesText: "", agreementRequired: false, agreementTemplateId: null,
     agreementBeforeService: false, status: "Active", notes: "",
     imageFile: null, imagePreview: null,
-    stripePriceId: "", checkoutMode: "auto",
+    stripePriceId: "", checkoutMode: "",
     generateStripeProduct: false, billingInterval: "", accessLevel: "",
   };
 }
@@ -161,7 +160,6 @@ function productToForm(p: Product): FormState {
     paymentStructure: p.payment_structure ?? "One-time payment",
     termLength: p.term_length ? String(p.term_length) : "",
     termUnit: p.term_unit ?? "Months",
-    paymentLinkUrl: p.payment_link_url ?? "",
     includedFeaturesText: (p.included_features ?? []).join("\n"),
     agreementRequired: !!p.agreement_required,
     agreementTemplateId: p.agreement_template_id ?? null,
@@ -171,7 +169,7 @@ function productToForm(p: Product): FormState {
     imageFile: null,
     imagePreview: p.image_signed_url ?? null,
     stripePriceId: (p as any).stripe_price_id ?? "",
-    checkoutMode: ((p as any).mode === "subscription" || (p as any).mode === "payment" ? (p as any).mode : "auto") as "payment" | "subscription" | "auto",
+    checkoutMode: ((p as any).mode === "subscription" || (p as any).mode === "payment" ? (p as any).mode : "") as "payment" | "subscription" | "",
     generateStripeProduct: false,
     billingInterval: "",
     accessLevel: "",
