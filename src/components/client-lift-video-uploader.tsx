@@ -7,7 +7,8 @@ import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { createClientLiftVideo } from "@/lib/lift-videos.functions";
 import { initMediaUpload, finalizeMediaUpload, createSubmission } from "@/lib/drive.functions";
-import { uploadLiftClipToDrive } from "@/lib/lift-video-drive-upload";
+import { updateClientLiftVideoUpload } from "@/lib/lift-videos.functions";
+import { enqueueLiftUpload } from "@/lib/lift-upload-queue";
 import { friendlyDriveError } from "@/lib/drive-errors";
 import { createLiftVideo } from "@/lib/lift-videos";
 import { toast } from "sonner";
@@ -35,6 +36,7 @@ export function ClientLiftVideoUploader({ clientId, clientName, userId, onSaved 
   const finalizeFn = useServerFn(finalizeMediaUpload);
   const createSubFn = useServerFn(createSubmission);
   const createClientLiftVideoFn = useServerFn(createClientLiftVideo);
+  const updateClientLiftVideoFn = useServerFn(updateClientLiftVideoUpload);
 
   const [clips, setClips] = useState<Clip[]>([]);
   const [batchNote, setBatchNote] = useState("");
@@ -137,83 +139,80 @@ export function ClientLiftVideoUploader({ clientId, clientName, userId, onSaved 
       const total = clips.length;
       const sharedNote = batchNote.trim();
       const urgentNote = isUrgent ? urgentText.trim() : "";
-      let driveSubmissionId: string | null = null;
+      const combinedQuestion = isUrgent && urgentNote
+        ? `⚠️ Pain / discomfort / urgent: ${urgentNote}`
+        : "";
 
+      // 1) Create lift_videos rows immediately so the submission appears in
+      //    the client list as "Uploading" before Drive does any work.
+      const created: Array<{ row: any; clip: Clip; index: number }> = [];
       for (let i = 0; i < clips.length; i++) {
         const clip = clips[i];
-        let videoUrl: string | null = null;
-        let storagePath: string | null = null;
-        let source: "link" | "upload" = "link";
-
-        if (clip.kind === "file" && clip.file) {
-          const perClipNote = clip.note.trim() || sharedNote || null;
-          try {
-            const res = await uploadLiftClipToDrive({
-              clientId, clientName, file: clip.file,
-              index: i + 1, total,
-              batchNote: sharedNote || null,
-              perClipNote,
-              urgent: isUrgent,
-              painNote: isUrgent ? urgentNote || null : null,
-              submissionId: driveSubmissionId,
-              initFn, finalizeFn, createSubFn,
-            });
-            driveSubmissionId = res.submissionId;
-            videoUrl = res.driveUrl ?? res.url;
-            storagePath = null;
-            (clip as any).driveMeta = res;
-          } catch (driveError) {
-            console.warn("Drive upload failed; lift video was not saved without Drive metadata", driveError);
-            throw driveError;
-          }
-          source = "upload";
-        } else if (clip.kind === "link" && clip.url) {
-          videoUrl = clip.url;
-          source = "link";
-        }
-
-        const combinedQuestion = [isUrgent && urgentNote ? `⚠️ Pain / discomfort / urgent: ${urgentNote}` : ""]
-          .filter(Boolean)
-          .join("\n");
-
-        const driveMeta = (clip as any).driveMeta;
         const clipNote = clip.note.trim();
         const combinedNote = [clipNote, sharedNote].filter(Boolean).join("\n\n") || null;
-        const liftVideoPayload = {
+        const isFile = clip.kind === "file" && !!clip.file;
+        const payload: any = {
           client_id: clientId,
           exercise: "",
           tag: isUrgent ? "Pain / Discomfort" : "Normal Review",
           is_urgent: isUrgent,
           client_notes: combinedNote,
           question_for_coach: combinedQuestion || null,
-          video_url: videoUrl,
-          video_storage_path: storagePath,
-          video_source: source,
-          thumbnail_url: driveMeta?.thumbnailUrl ?? null,
-          original_drive_file_id: driveMeta?.driveFileId ?? null,
-          original_drive_url: driveMeta?.driveUrl ?? null,
-          drive_embed_url: driveMeta?.driveEmbedUrl ?? null,
+          video_url: isFile ? null : (clip.url ?? null),
+          video_storage_path: null,
+          video_source: isFile ? "upload" : "link",
+          thumbnail_url: null,
           preview_url: null,
-          preview_status: driveMeta ? "not_generated" : (storagePath ? "ready" : "not_generated"),
-          file_type: driveMeta?.mimeType ?? clip.file?.type ?? null,
-          file_size_bytes: driveMeta?.sizeBytes ?? clip.file?.size ?? null,
-          upload_status: driveMeta ? "Drive uploaded" : (storagePath ? "App storage fallback" : "Submitted"),
-          status: "New Upload" as const,
+          preview_status: "not_generated",
+          file_type: clip.file?.type ?? null,
+          file_size_bytes: clip.file?.size ?? null,
+          upload_status: isFile ? "Uploading" : "Submitted",
+          status: isFile ? "New Upload" : "New Upload",
           batch_id: batchId,
           batch_note: sharedNote || null,
           batch_size: total,
           batch_index: i + 1,
         };
-
+        let row: any;
         try {
-          await createClientLiftVideoFn({ data: liftVideoPayload });
+          row = await createClientLiftVideoFn({ data: payload });
         } catch (saveError) {
           console.warn("Server lift video save failed; falling back to client insert", saveError);
           if (!userId) throw saveError;
-          await createLiftVideo({ ...liftVideoPayload, uploaded_by: userId } as any);
+          row = await createLiftVideo({ ...payload, uploaded_by: userId } as any);
         }
+        created.push({ row, clip, index: i + 1 });
       }
 
+      // 2) Kick off background Drive uploads for file clips. The row already
+      //    exists in the DB — the queue patches it with Drive metadata when
+      //    each upload finishes (or marks it "Upload Failed" on error).
+      for (const item of created) {
+        if (item.clip.kind !== "file" || !item.clip.file) continue;
+        const perClipNote = item.clip.note.trim() || sharedNote || null;
+        enqueueLiftUpload({
+          videoId: item.row.id,
+          clientId,
+          clientName,
+          file: item.clip.file,
+          index: item.index,
+          total,
+          batchNote: sharedNote || null,
+          perClipNote,
+          urgent: isUrgent,
+          painNote: isUrgent ? urgentNote || null : null,
+          submissionId: null,
+          initFn, finalizeFn, createSubFn,
+          updateFn: updateClientLiftVideoFn,
+        });
+      }
+
+      const fileCount = created.filter((c) => c.clip.kind === "file").length;
+      if (fileCount > 0) {
+        toast.success(`Submission sent — uploading ${fileCount} clip${fileCount === 1 ? "" : "s"} in the background.`);
+      } else {
+        toast.success("Submission sent to Coach Jared.");
+      }
       setSent(true);
       onSaved?.();
     } catch (e: any) {
@@ -228,12 +227,17 @@ export function ClientLiftVideoUploader({ clientId, clientName, userId, onSaved 
   };
 
   if (sent) {
+    const fileClipCount = clips.filter((c) => c.kind === "file").length;
     return (
       <div className="rounded-2xl border border-border bg-card p-8 text-center space-y-3">
         <CheckCircle2 className="mx-auto h-12 w-12 text-emerald-500" />
-        <div className="text-base font-semibold">Sent to Coach Jared</div>
+        <div className="text-base font-semibold">
+          {fileClipCount > 0 ? "Uploading in the background" : "Sent to Coach Jared"}
+        </div>
         <div className="text-sm text-muted-foreground">
-          You'll see feedback here once it's reviewed.
+          {fileClipCount > 0
+            ? "Your submission appears below with live upload progress. Keep this screen open until upload finishes."
+            : "You'll see feedback here once it's reviewed."}
         </div>
         <Button className="mt-2" onClick={reset}>Send another video</Button>
       </div>
