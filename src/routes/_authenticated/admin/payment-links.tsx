@@ -192,6 +192,7 @@ function PaymentLinksPage() {
 
   const [editing, setEditing] = useState<{ open: boolean; product: Product | null }>({ open: false, product: null });
   const [assigning, setAssigning] = useState<any | null>(null);
+  const [previewing, setPreviewing] = useState<Product | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Product | null>(null);
   const [manageMode, setManageMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -439,6 +440,7 @@ function PaymentLinksPage() {
                   {p.description && <p className="text-sm mt-2 line-clamp-2 text-muted-foreground">{p.description}</p>}
                   <div className="mt-3 flex flex-wrap gap-2">
                     <Button size="sm" className="bg-gradient-primary font-bold uppercase" onClick={() => setAssigning(productToOfferLike(p))}>Assign to client</Button>
+                    <Button size="sm" variant="outline" onClick={() => setPreviewing(p)} title="Preview client-facing product page"><Eye className="h-3.5 w-3.5 mr-1" />Preview</Button>
                     <Button size="sm" variant="outline" onClick={() => setEditing({ open: true, product: p })}><Pencil className="h-3.5 w-3.5" /></Button>
                     <Button size="sm" variant="ghost" onClick={() => duplicateMutation.mutate(p.id)}><Copy className="h-3.5 w-3.5" /></Button>
                     {p.status === "Archived" ? (
@@ -464,6 +466,17 @@ function PaymentLinksPage() {
       />
 
       <AssignOfferDialog offer={assigning} onClose={() => setAssigning(null)} />
+
+      <OfferDetailDialog
+        offer={previewing ? productToOfferLike(previewing) : null}
+        onClose={() => setPreviewing(null)}
+        onAssign={(o) => { setPreviewing(null); setAssigning(o); }}
+        onEdit={() => {
+          const p = previewing;
+          setPreviewing(null);
+          if (p) setEditing({ open: true, product: p });
+        }}
+      />
 
       <DoubleConfirmDeleteDialog
         open={!!pendingDelete}
