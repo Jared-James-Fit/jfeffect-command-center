@@ -498,6 +498,16 @@ function PaymentLinksPage() {
         confirmLabel="Delete Product"
         onConfirm={() => { if (pendingDelete) deleteMutation.mutate(pendingDelete.id); }}
       />
+
+      <DoubleConfirmDeleteDialog
+        open={bulkDeleteOpen}
+        onOpenChange={setBulkDeleteOpen}
+        count={selected.size}
+        title={`Delete ${selected.size} selected product${selected.size !== 1 ? "s" : ""}?`}
+        message={`You selected ${selected.size} product${selected.size !== 1 ? "s" : ""}. This removes them from your product library. Past purchase records are preserved.`}
+        confirmLabel="Delete Selected Products"
+        onConfirm={bulkDelete}
+      />
     </>
   );
 }
@@ -594,7 +604,7 @@ function ProductFormDialog({
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{product ? "Edit Product / Payment Link" : "Create Product / Payment Link"}</DialogTitle>
+          <DialogTitle>{product ? "Edit Product" : "New Product"}</DialogTitle>
         </DialogHeader>
         <form
           onSubmit={(e) => { e.preventDefault(); handleSave(); }}
