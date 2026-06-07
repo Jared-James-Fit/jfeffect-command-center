@@ -16,9 +16,10 @@ import { deriveTarget } from "@/lib/nutrition-cardio";
 import { statusTone, fmtTimeRange } from "@/lib/pt-sessions";
 import type { ConversationState, Message } from "@/lib/messages";
 import { listLiftVideos, statusTone as liftStatusTone } from "@/lib/lift-videos";
-import { formatDistanceToNow, parseISO } from "date-fns";
+import { formatDistanceToNow, parseISO, format, startOfWeek, endOfWeek } from "date-fns";
 import { HardDrive } from "lucide-react";
 import { UpcomingBirthdaysWidget } from "@/components/upcoming-birthdays-widget";
+import { Progress } from "@/components/ui/progress";
 
 export const Route = createFileRoute("/_authenticated/admin/")({
   component: AdminDashboard,
@@ -104,10 +105,19 @@ function AdminDashboard() {
     },
   });
 
+  // Include every phase whose end_date is in (or before the end of) the current week,
+  // plus anything already past due. Sorted by end_date so coach sees most urgent first.
+  const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 }); // Monday
+  const weekEnd = endOfWeek(new Date(), { weekStartsOn: 1 });     // Sunday
   const deadlines = phaseRows
     .map((r) => ({ ...r, derived: derivePhase(r) }))
-    .filter((r) => ["ending-soon", "due-today", "past-due"].includes(r.derived.state))
-    .slice(0, 8);
+    .filter((r) => {
+      if (["completed", "archived", "upcoming"].includes(r.derived.state)) return false;
+      const end = parseISO(r.end_date);
+      return end <= weekEnd; // past-due, due-today, or expiring this week
+    })
+    .sort((a, b) => a.end_date.localeCompare(b.end_date));
+  void weekStart;
 
   const { data: ptSessions = [] } = useQuery({
     queryKey: ["pt-sessions"],
@@ -273,7 +283,7 @@ function AdminDashboard() {
     { label: "Update Phase", to: "/admin/training-phases", icon: Timer },
     { label: "Nutrition Targets", to: "/admin/nutrition-targets", icon: Apple },
     { label: "Cardio Targets", to: "/admin/cardio-targets", icon: Heart },
-    { label: "Review Check-Ins", to: "/admin/check-ins", icon: ClipboardCheck },
+    { label: "Phase Deadlines", to: "/admin/training-phases", icon: Timer },
     { label: "Programs", to: "/admin/programs", icon: FileText },
     { label: "Add Exercise", to: "/admin/exercises", icon: Dumbbell },
     { label: "Create Product", to: "/admin/payment-links", icon: Package },
@@ -513,33 +523,71 @@ function AdminDashboard() {
         <Card className="border-border bg-card p-6">
           <div className="mb-4 flex items-center justify-between">
             <h2 className="flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-muted-foreground">
-              <Timer className="h-4 w-4" /> Training Phase Deadlines
+              <Timer className="h-4 w-4" /> Training Phase Deadlines · This Week
             </h2>
             <Link to="/admin/training-phases" className="text-xs font-semibold text-primary hover:underline">View all →</Link>
           </div>
+          {(() => {
+            const pastDue = deadlines.filter((p) => p.derived.state === "past-due").length;
+            const dueToday = deadlines.filter((p) => p.derived.state === "due-today").length;
+            const thisWeek = deadlines.length - pastDue - dueToday;
+            return (
+              <div className="mb-4 grid gap-3 sm:grid-cols-3 text-xs">
+                <MiniStat label="Past due" value={pastDue} tone={pastDue > 0 ? "warn" : undefined} />
+                <MiniStat label="Due today" value={dueToday} tone={dueToday > 0 ? "warn" : undefined} />
+                <MiniStat label="Ending this week" value={thisWeek} />
+              </div>
+            );
+          })()}
           {deadlines.length === 0 ? (
             <div className="rounded-md border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-              No phases ending soon. You're ahead.
+              No phases due this week. You're ahead.
             </div>
           ) : (
-            <ul className="divide-y divide-border">
+            <div className="divide-y divide-border">
               {deadlines.map((p) => (
-                <li key={p.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5">
-                  <div className="flex items-center gap-3">
-                    <Badge variant="outline" className={toneClasses(p.derived.tone)}>{p.derived.label}</Badge>
-                    {p.clients && (
-                      <Link to="/admin/clients/$id" params={{ id: p.clients.id }} className="text-sm font-semibold hover:underline">
+                <div key={p.id} className="grid grid-cols-12 items-center gap-3 py-3">
+                  <div className="col-span-12 md:col-span-3 min-w-0">
+                    {p.clients ? (
+                      <Link to="/admin/clients/$id" params={{ id: p.clients.id }} search={{ tab: "training" }} className="block text-sm font-semibold hover:underline truncate">
                         {p.clients.full_name}
                       </Link>
-                    )}
-                    <span className="text-xs text-muted-foreground">{displayTitle(p)}</span>
+                    ) : <span className="text-sm text-muted-foreground">—</span>}
+                    <div className="text-xs text-muted-foreground truncate">{displayTitle(p)}</div>
                   </div>
-                  <span className="text-xs text-muted-foreground">
-                    {p.derived.daysRemaining < 0 ? `${Math.abs(p.derived.daysRemaining)}d past due` : `${p.derived.daysRemaining}d left`}
-                  </span>
-                </li>
+                  <div className="col-span-6 md:col-span-2 text-xs">
+                    <div className="font-medium">{p.phase_type}</div>
+                    <div className="text-muted-foreground">Ends {format(parseISO(p.end_date), "EEE MMM d")}</div>
+                  </div>
+                  <div className="col-span-6 md:col-span-2">
+                    <Badge variant="outline" className={toneClasses(p.derived.tone)}>
+                      {p.derived.daysRemaining < 0
+                        ? `${Math.abs(p.derived.daysRemaining)}d past due`
+                        : p.derived.daysRemaining === 0
+                        ? "Due today"
+                        : `${p.derived.daysRemaining}d left`}
+                    </Badge>
+                  </div>
+                  <div className="col-span-8 md:col-span-3">
+                    <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                      <span>Week {p.derived.currentWeek} / {p.derived.totalWeeks}</span>
+                      <span>{p.derived.percentComplete}%</span>
+                    </div>
+                    <Progress value={p.derived.percentComplete} className="mt-1 h-1.5" />
+                  </div>
+                  <div className="col-span-4 md:col-span-2 flex items-center justify-end gap-2">
+                    {p.program_link && (
+                      <a href={p.program_link} target="_blank" rel="noreferrer" className="text-xs font-semibold text-primary hover:underline inline-flex items-center gap-1">
+                        Program <ExternalLink className="h-3 w-3" />
+                      </a>
+                    )}
+                    <Link to="/admin/clients/$id" params={{ id: p.client_id }} search={{ tab: "training" }} className="text-xs font-semibold text-primary hover:underline">
+                      Update →
+                    </Link>
+                  </div>
+                </div>
               ))}
-            </ul>
+            </div>
           )}
         </Card>
 
