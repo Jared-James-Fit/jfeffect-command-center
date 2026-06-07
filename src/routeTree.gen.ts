@@ -53,6 +53,7 @@ import { Route as AuthenticatedAdminNutritionTargetsRouteImport } from './routes
 import { Route as AuthenticatedAdminNativeFormsRouteImport } from './routes/_authenticated/admin/native-forms'
 import { Route as AuthenticatedAdminMessagesRouteImport } from './routes/_authenticated/admin/messages'
 import { Route as AuthenticatedAdminMediaReviewRouteImport } from './routes/_authenticated/admin/media-review'
+import { Route as AuthenticatedAdminMediaArchivesRouteImport } from './routes/_authenticated/admin/media-archives'
 import { Route as AuthenticatedAdminLiftVideosRouteImport } from './routes/_authenticated/admin/lift-videos'
 import { Route as AuthenticatedAdminFormsRouteImport } from './routes/_authenticated/admin/forms'
 import { Route as AuthenticatedAdminExercisesRouteImport } from './routes/_authenticated/admin/exercises'
@@ -71,6 +72,7 @@ import { Route as AuthenticatedAdminCoachesIndexRouteImport } from './routes/_au
 import { Route as AuthenticatedAdminClientsIndexRouteImport } from './routes/_authenticated/admin/clients.index'
 import { Route as AuthenticatedAdminAgreementsIndexRouteImport } from './routes/_authenticated/admin/agreements.index'
 import { Route as LovableEmailQueueProcessRouteImport } from './routes/lovable/email/queue/process'
+import { Route as ApiPublicHooksMediaArchiveRouteImport } from './routes/api/public/hooks/media-archive'
 import { Route as AuthenticatedPortalWorkoutsDayIdRouteImport } from './routes/_authenticated/portal/workouts.$dayId'
 import { Route as AuthenticatedPortalPurchasesIdRouteImport } from './routes/_authenticated/portal/purchases.$id'
 import { Route as AuthenticatedPortalCheckInsFormIdRouteImport } from './routes/_authenticated/portal/check-ins.$formId'
@@ -335,6 +337,12 @@ const AuthenticatedAdminMediaReviewRoute =
     path: '/media-review',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
+const AuthenticatedAdminMediaArchivesRoute =
+  AuthenticatedAdminMediaArchivesRouteImport.update({
+    id: '/media-archives',
+    path: '/media-archives',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
 const AuthenticatedAdminLiftVideosRoute =
   AuthenticatedAdminLiftVideosRouteImport.update({
     id: '/lift-videos',
@@ -441,6 +449,12 @@ const LovableEmailQueueProcessRoute =
     path: '/lovable/email/queue/process',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicHooksMediaArchiveRoute =
+  ApiPublicHooksMediaArchiveRouteImport.update({
+    id: '/api/public/hooks/media-archive',
+    path: '/api/public/hooks/media-archive',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const AuthenticatedPortalWorkoutsDayIdRoute =
   AuthenticatedPortalWorkoutsDayIdRouteImport.update({
     id: '/$dayId',
@@ -536,6 +550,7 @@ export interface FileRoutesByFullPath {
   '/admin/exercises': typeof AuthenticatedAdminExercisesRoute
   '/admin/forms': typeof AuthenticatedAdminFormsRoute
   '/admin/lift-videos': typeof AuthenticatedAdminLiftVideosRoute
+  '/admin/media-archives': typeof AuthenticatedAdminMediaArchivesRoute
   '/admin/media-review': typeof AuthenticatedAdminMediaReviewRoute
   '/admin/messages': typeof AuthenticatedAdminMessagesRoute
   '/admin/native-forms': typeof AuthenticatedAdminNativeFormsRoute
@@ -581,6 +596,7 @@ export interface FileRoutesByFullPath {
   '/portal/check-ins/$formId': typeof AuthenticatedPortalCheckInsFormIdRoute
   '/portal/purchases/$id': typeof AuthenticatedPortalPurchasesIdRoute
   '/portal/workouts/$dayId': typeof AuthenticatedPortalWorkoutsDayIdRoute
+  '/api/public/hooks/media-archive': typeof ApiPublicHooksMediaArchiveRoute
   '/lovable/email/queue/process': typeof LovableEmailQueueProcessRoute
   '/admin/agreements/': typeof AuthenticatedAdminAgreementsIndexRoute
   '/admin/clients/': typeof AuthenticatedAdminClientsIndexRoute
@@ -609,6 +625,7 @@ export interface FileRoutesByTo {
   '/admin/exercises': typeof AuthenticatedAdminExercisesRoute
   '/admin/forms': typeof AuthenticatedAdminFormsRoute
   '/admin/lift-videos': typeof AuthenticatedAdminLiftVideosRoute
+  '/admin/media-archives': typeof AuthenticatedAdminMediaArchivesRoute
   '/admin/media-review': typeof AuthenticatedAdminMediaReviewRoute
   '/admin/messages': typeof AuthenticatedAdminMessagesRoute
   '/admin/native-forms': typeof AuthenticatedAdminNativeFormsRoute
@@ -654,6 +671,7 @@ export interface FileRoutesByTo {
   '/portal/check-ins/$formId': typeof AuthenticatedPortalCheckInsFormIdRoute
   '/portal/purchases/$id': typeof AuthenticatedPortalPurchasesIdRoute
   '/portal/workouts/$dayId': typeof AuthenticatedPortalWorkoutsDayIdRoute
+  '/api/public/hooks/media-archive': typeof ApiPublicHooksMediaArchiveRoute
   '/lovable/email/queue/process': typeof LovableEmailQueueProcessRoute
   '/admin/agreements': typeof AuthenticatedAdminAgreementsIndexRoute
   '/admin/clients': typeof AuthenticatedAdminClientsIndexRoute
@@ -686,6 +704,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/exercises': typeof AuthenticatedAdminExercisesRoute
   '/_authenticated/admin/forms': typeof AuthenticatedAdminFormsRoute
   '/_authenticated/admin/lift-videos': typeof AuthenticatedAdminLiftVideosRoute
+  '/_authenticated/admin/media-archives': typeof AuthenticatedAdminMediaArchivesRoute
   '/_authenticated/admin/media-review': typeof AuthenticatedAdminMediaReviewRoute
   '/_authenticated/admin/messages': typeof AuthenticatedAdminMessagesRoute
   '/_authenticated/admin/native-forms': typeof AuthenticatedAdminNativeFormsRoute
@@ -731,6 +750,7 @@ export interface FileRoutesById {
   '/_authenticated/portal/check-ins/$formId': typeof AuthenticatedPortalCheckInsFormIdRoute
   '/_authenticated/portal/purchases/$id': typeof AuthenticatedPortalPurchasesIdRoute
   '/_authenticated/portal/workouts/$dayId': typeof AuthenticatedPortalWorkoutsDayIdRoute
+  '/api/public/hooks/media-archive': typeof ApiPublicHooksMediaArchiveRoute
   '/lovable/email/queue/process': typeof LovableEmailQueueProcessRoute
   '/_authenticated/admin/agreements/': typeof AuthenticatedAdminAgreementsIndexRoute
   '/_authenticated/admin/clients/': typeof AuthenticatedAdminClientsIndexRoute
@@ -763,6 +783,7 @@ export interface FileRouteTypes {
     | '/admin/exercises'
     | '/admin/forms'
     | '/admin/lift-videos'
+    | '/admin/media-archives'
     | '/admin/media-review'
     | '/admin/messages'
     | '/admin/native-forms'
@@ -808,6 +829,7 @@ export interface FileRouteTypes {
     | '/portal/check-ins/$formId'
     | '/portal/purchases/$id'
     | '/portal/workouts/$dayId'
+    | '/api/public/hooks/media-archive'
     | '/lovable/email/queue/process'
     | '/admin/agreements/'
     | '/admin/clients/'
@@ -836,6 +858,7 @@ export interface FileRouteTypes {
     | '/admin/exercises'
     | '/admin/forms'
     | '/admin/lift-videos'
+    | '/admin/media-archives'
     | '/admin/media-review'
     | '/admin/messages'
     | '/admin/native-forms'
@@ -881,6 +904,7 @@ export interface FileRouteTypes {
     | '/portal/check-ins/$formId'
     | '/portal/purchases/$id'
     | '/portal/workouts/$dayId'
+    | '/api/public/hooks/media-archive'
     | '/lovable/email/queue/process'
     | '/admin/agreements'
     | '/admin/clients'
@@ -912,6 +936,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/exercises'
     | '/_authenticated/admin/forms'
     | '/_authenticated/admin/lift-videos'
+    | '/_authenticated/admin/media-archives'
     | '/_authenticated/admin/media-review'
     | '/_authenticated/admin/messages'
     | '/_authenticated/admin/native-forms'
@@ -957,6 +982,7 @@ export interface FileRouteTypes {
     | '/_authenticated/portal/check-ins/$formId'
     | '/_authenticated/portal/purchases/$id'
     | '/_authenticated/portal/workouts/$dayId'
+    | '/api/public/hooks/media-archive'
     | '/lovable/email/queue/process'
     | '/_authenticated/admin/agreements/'
     | '/_authenticated/admin/clients/'
@@ -976,6 +1002,7 @@ export interface RootRouteChildren {
   ApiDriveUploadRoute: typeof ApiDriveUploadRoute
   ApiPublicSignnowWebhookRoute: typeof ApiPublicSignnowWebhookRoute
   ApiPublicStripeWebhookRoute: typeof ApiPublicStripeWebhookRoute
+  ApiPublicHooksMediaArchiveRoute: typeof ApiPublicHooksMediaArchiveRoute
   LovableEmailQueueProcessRoute: typeof LovableEmailQueueProcessRoute
 }
 
@@ -1289,6 +1316,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminMediaReviewRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
+    '/_authenticated/admin/media-archives': {
+      id: '/_authenticated/admin/media-archives'
+      path: '/media-archives'
+      fullPath: '/admin/media-archives'
+      preLoaderRoute: typeof AuthenticatedAdminMediaArchivesRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
     '/_authenticated/admin/lift-videos': {
       id: '/_authenticated/admin/lift-videos'
       path: '/lift-videos'
@@ -1413,6 +1447,13 @@ declare module '@tanstack/react-router' {
       path: '/lovable/email/queue/process'
       fullPath: '/lovable/email/queue/process'
       preLoaderRoute: typeof LovableEmailQueueProcessRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/hooks/media-archive': {
+      id: '/api/public/hooks/media-archive'
+      path: '/api/public/hooks/media-archive'
+      fullPath: '/api/public/hooks/media-archive'
+      preLoaderRoute: typeof ApiPublicHooksMediaArchiveRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated/portal/workouts/$dayId': {
@@ -1548,6 +1589,7 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminExercisesRoute: typeof AuthenticatedAdminExercisesRoute
   AuthenticatedAdminFormsRoute: typeof AuthenticatedAdminFormsRoute
   AuthenticatedAdminLiftVideosRoute: typeof AuthenticatedAdminLiftVideosRoute
+  AuthenticatedAdminMediaArchivesRoute: typeof AuthenticatedAdminMediaArchivesRoute
   AuthenticatedAdminMediaReviewRoute: typeof AuthenticatedAdminMediaReviewRoute
   AuthenticatedAdminMessagesRoute: typeof AuthenticatedAdminMessagesRoute
   AuthenticatedAdminNativeFormsRoute: typeof AuthenticatedAdminNativeFormsRoute
@@ -1593,6 +1635,7 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
     AuthenticatedAdminExercisesRoute: AuthenticatedAdminExercisesRoute,
     AuthenticatedAdminFormsRoute: AuthenticatedAdminFormsRoute,
     AuthenticatedAdminLiftVideosRoute: AuthenticatedAdminLiftVideosRoute,
+    AuthenticatedAdminMediaArchivesRoute: AuthenticatedAdminMediaArchivesRoute,
     AuthenticatedAdminMediaReviewRoute: AuthenticatedAdminMediaReviewRoute,
     AuthenticatedAdminMessagesRoute: AuthenticatedAdminMessagesRoute,
     AuthenticatedAdminNativeFormsRoute: AuthenticatedAdminNativeFormsRoute,
@@ -1754,6 +1797,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiDriveUploadRoute: ApiDriveUploadRoute,
   ApiPublicSignnowWebhookRoute: ApiPublicSignnowWebhookRoute,
   ApiPublicStripeWebhookRoute: ApiPublicStripeWebhookRoute,
+  ApiPublicHooksMediaArchiveRoute: ApiPublicHooksMediaArchiveRoute,
   LovableEmailQueueProcessRoute: LovableEmailQueueProcessRoute,
 }
 export const routeTree = rootRouteImport

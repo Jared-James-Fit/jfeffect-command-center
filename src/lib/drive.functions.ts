@@ -3,14 +3,15 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 const MEDIA_TYPE_SUBFOLDERS = [
+  "Chat Media",
   "Lift Videos",
   "Check-In Videos",
   "Progress Photos",
   "Training Videos",
   "Form Videos",
   "Technique Videos",
-  "Agreements",
   "Documents",
+  "Agreements",
   "Other Media",
 ] as const;
 

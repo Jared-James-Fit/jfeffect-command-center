@@ -101,3 +101,54 @@ export function driveEmbedUrl(fileId: string) {
 export function driveViewUrl(fileId: string) {
   return `https://drive.google.com/file/d/${fileId}/view`;
 }
+
+// Find an existing folder by exact name under a given parent. Returns null if missing.
+export async function driveFindFolderByName(name: string, parentId: string) {
+  const q = encodeURIComponent(
+    `mimeType = 'application/vnd.google-apps.folder' and trashed = false and name = '${name.replace(/'/g, "\\'")}' and '${parentId}' in parents`,
+  );
+  const res = await driveJson<{ files?: Array<{ id: string; name: string; webViewLink?: string }> }>(
+    `/drive/v3/files?q=${q}&fields=files(id,name,webViewLink)&supportsAllDrives=true&includeItemsFromAllDrives=true`,
+  );
+  return res.files?.[0] ?? null;
+}
+
+// Get-or-create a named subfolder under parent.
+export async function driveEnsureFolder(name: string, parentId: string) {
+  const found = await driveFindFolderByName(name, parentId);
+  if (found) return found;
+  return driveCreateFolder(name, parentId);
+}
+
+// One-shot multipart upload (file content + metadata) — preferred for archive
+// jobs because we already have the bytes in memory after fetching the original.
+export async function driveMultipartUpload(params: {
+  fileName: string;
+  mimeType: string;
+  parentId: string;
+  body: ArrayBuffer | Uint8Array;
+}) {
+  const boundary = `lovable-${Math.random().toString(36).slice(2)}`;
+  const meta = { name: params.fileName, parents: [params.parentId], mimeType: params.mimeType };
+  const bytes = params.body instanceof Uint8Array ? params.body : new Uint8Array(params.body);
+  const enc = new TextEncoder();
+  const head = enc.encode(
+    `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(meta)}\r\n--${boundary}\r\nContent-Type: ${params.mimeType}\r\n\r\n`,
+  );
+  const tail = enc.encode(`\r\n--${boundary}--`);
+  const body = new Uint8Array(head.length + bytes.length + tail.length);
+  body.set(head, 0);
+  body.set(bytes, head.length);
+  body.set(tail, head.length + bytes.length);
+  const url = `${GATEWAY}/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true&fields=id,name,mimeType,size,webViewLink,thumbnailLink`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { ...gwHeaders(), "Content-Type": `multipart/related; boundary=${boundary}` },
+    body,
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`Drive multipart upload ${res.status}: ${text.slice(0, 500)}`);
+  }
+  return (await res.json()) as { id: string; name: string; mimeType: string; size?: string; webViewLink?: string; thumbnailLink?: string };
+}

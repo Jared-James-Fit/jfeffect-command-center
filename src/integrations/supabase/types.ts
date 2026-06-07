@@ -2005,6 +2005,7 @@ export type Database = {
       lift_videos: {
         Row: {
           admin_last_viewed_at: string | null
+          archive_status: string | null
           archived: boolean
           archived_at: string | null
           archived_by: string | null
@@ -2020,6 +2021,9 @@ export type Database = {
           custom_training_day: string | null
           date_performed: string | null
           drive_embed_url: string | null
+          drive_file_id: string | null
+          drive_folder_id: string | null
+          drive_url: string | null
           exercise: string
           file_size_bytes: number | null
           file_type: string | null
@@ -2058,6 +2062,7 @@ export type Database = {
         }
         Insert: {
           admin_last_viewed_at?: string | null
+          archive_status?: string | null
           archived?: boolean
           archived_at?: string | null
           archived_by?: string | null
@@ -2073,6 +2078,9 @@ export type Database = {
           custom_training_day?: string | null
           date_performed?: string | null
           drive_embed_url?: string | null
+          drive_file_id?: string | null
+          drive_folder_id?: string | null
+          drive_url?: string | null
           exercise?: string
           file_size_bytes?: number | null
           file_type?: string | null
@@ -2111,6 +2119,7 @@ export type Database = {
         }
         Update: {
           admin_last_viewed_at?: string | null
+          archive_status?: string | null
           archived?: boolean
           archived_at?: string | null
           archived_by?: string | null
@@ -2126,6 +2135,9 @@ export type Database = {
           custom_training_day?: string | null
           date_performed?: string | null
           drive_embed_url?: string | null
+          drive_file_id?: string | null
+          drive_folder_id?: string | null
+          drive_url?: string | null
           exercise?: string
           file_size_bytes?: number | null
           file_type?: string | null
@@ -2163,6 +2175,131 @@ export type Database = {
           watched_by?: string | null
         }
         Relationships: []
+      }
+      media_archive_settings: {
+        Row: {
+          auto_archive_enabled: boolean
+          chat_media_retention_days: number
+          checkin_retention_days: number
+          created_at: string
+          default_visibility: string
+          id: string
+          last_run_at: string | null
+          last_run_summary: string | null
+          lift_video_retention_days: number
+          progress_retention_days: number
+          singleton: boolean
+          updated_at: string
+        }
+        Insert: {
+          auto_archive_enabled?: boolean
+          chat_media_retention_days?: number
+          checkin_retention_days?: number
+          created_at?: string
+          default_visibility?: string
+          id?: string
+          last_run_at?: string | null
+          last_run_summary?: string | null
+          lift_video_retention_days?: number
+          progress_retention_days?: number
+          singleton?: boolean
+          updated_at?: string
+        }
+        Update: {
+          auto_archive_enabled?: boolean
+          chat_media_retention_days?: number
+          checkin_retention_days?: number
+          created_at?: string
+          default_visibility?: string
+          id?: string
+          last_run_at?: string | null
+          last_run_summary?: string | null
+          lift_video_retention_days?: number
+          progress_retention_days?: number
+          singleton?: boolean
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      media_archives: {
+        Row: {
+          archive_status: string
+          archived_at: string | null
+          attempts: number
+          client_id: string
+          created_at: string
+          created_by: string | null
+          drive_file_id: string | null
+          drive_folder_id: string | null
+          drive_folder_path: string | null
+          drive_url: string | null
+          file_name: string | null
+          id: string
+          last_error: string | null
+          mime_type: string | null
+          restored_at: string | null
+          size_bytes: number | null
+          source_id: string
+          source_subkey: string | null
+          source_type: string
+          updated_at: string
+          visibility: string
+        }
+        Insert: {
+          archive_status?: string
+          archived_at?: string | null
+          attempts?: number
+          client_id: string
+          created_at?: string
+          created_by?: string | null
+          drive_file_id?: string | null
+          drive_folder_id?: string | null
+          drive_folder_path?: string | null
+          drive_url?: string | null
+          file_name?: string | null
+          id?: string
+          last_error?: string | null
+          mime_type?: string | null
+          restored_at?: string | null
+          size_bytes?: number | null
+          source_id: string
+          source_subkey?: string | null
+          source_type: string
+          updated_at?: string
+          visibility?: string
+        }
+        Update: {
+          archive_status?: string
+          archived_at?: string | null
+          attempts?: number
+          client_id?: string
+          created_at?: string
+          created_by?: string | null
+          drive_file_id?: string | null
+          drive_folder_id?: string | null
+          drive_folder_path?: string | null
+          drive_url?: string | null
+          file_name?: string | null
+          id?: string
+          last_error?: string | null
+          mime_type?: string | null
+          restored_at?: string | null
+          size_bytes?: number | null
+          source_id?: string
+          source_subkey?: string | null
+          source_type?: string
+          updated_at?: string
+          visibility?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "media_archives_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       media_comments: {
         Row: {
@@ -2254,6 +2391,7 @@ export type Database = {
       media_items: {
         Row: {
           admin_last_viewed_at: string | null
+          archive_status: string | null
           archived: boolean
           archived_at: string | null
           archived_by: string | null
@@ -2290,6 +2428,7 @@ export type Database = {
         }
         Insert: {
           admin_last_viewed_at?: string | null
+          archive_status?: string | null
           archived?: boolean
           archived_at?: string | null
           archived_by?: string | null
@@ -2326,6 +2465,7 @@ export type Database = {
         }
         Update: {
           admin_last_viewed_at?: string | null
+          archive_status?: string | null
           archived?: boolean
           archived_at?: string | null
           archived_by?: string | null

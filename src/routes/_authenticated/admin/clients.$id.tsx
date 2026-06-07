@@ -33,6 +33,7 @@ import { ProfilePictureCapture } from "@/components/profile-picture-capture";
 import { MessageThread } from "@/components/message-thread";
 import type { ConversationState } from "@/lib/messages";
 import { AgreementStatusPanel } from "@/components/agreement-status-panel";
+import { ClientDriveFolderPanel } from "@/components/client-drive-folder-panel";
 import { PurchaseRecordsPanel } from "@/components/purchase-records-panel";
 import { PriceCardPickerDialog } from "@/components/price-card-picker-dialog";
 import { AgreementsPanel } from "@/components/agreements-panel";
@@ -512,6 +513,9 @@ function ClientDetail() {
             <Link to="/admin/clients/$id" params={{ id }} search={{ tab: "account" }}><Button variant="outline" size="sm" className="w-full justify-start">Account & Access</Button></Link>
           </div>
         </Card>
+        <div className="md:col-span-3">
+          <ClientDriveFolderPanel clientId={id} />
+        </div>
         </div>
         </TabsContent>
 
