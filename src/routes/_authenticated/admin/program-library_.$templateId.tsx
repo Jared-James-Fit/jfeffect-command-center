@@ -11,12 +11,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { ArrowLeft, Plus, Trash2, Save, Clock, Copy } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, Save, Clock, Copy, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
 import {
   getTemplate, updateTemplate, summarizeTemplatePayload, TIME_PROFILES,
   estimateDayMinutes, durationRange, PERCENTAGE_BASES, type TrainingStyle,
 } from "@/lib/pl-programs";
+import { ExerciseLibraryPanel, readDrop, type ExerciseRef } from "@/components/program-builder";
 
 export const Route = createFileRoute("/_authenticated/admin/program-library_/$templateId")({
   component: TemplateEditor,
@@ -84,7 +85,7 @@ function TemplateEditor() {
   return (
     <>
       <PageHeader title={meta.name || "Template"} subtitle={`${type.replace("_", " ")} · ${summary.weeks}w · ${summary.days}d · ${summary.rows} rows`} />
-      <div className="p-4 md:p-8 space-y-4">
+      <div className="p-3 md:p-4 space-y-3">
         <div className="flex flex-wrap items-center gap-2">
           <Link to="/admin/program-library" className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground">
             <ArrowLeft className="mr-1 h-4 w-4" /> Back to library
