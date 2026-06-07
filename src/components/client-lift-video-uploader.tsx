@@ -339,7 +339,7 @@ export function ClientLiftVideoUploader({ clientId, clientName, userId, onSaved 
                           className="h-full w-full object-cover"
                           muted
                           playsInline
-                          preload="metadata"
+                          preload="none"
                         />
                       ) : (
                         <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-muted to-muted/60">
