@@ -135,7 +135,7 @@ export function AppShell({ items, title, children }: { items: NavItem[]; title: 
           </Button>
         </header>
 
-        <main className="flex-1 overflow-x-hidden pb-[calc(110px+env(safe-area-inset-bottom))] md:pb-0">
+        <main className="flex-1 overflow-x-hidden pb-[calc(140px+env(safe-area-inset-bottom))] md:pb-0">
           {children}
         </main>
 
