@@ -19,6 +19,37 @@ import {
 } from "@/lib/pl-programs";
 import { ExerciseLibraryPanel, readDrop, type ExerciseRef } from "@/components/program-builder";
 
+// Append a row into the first day reachable inside any template payload shape.
+function appendRowToFirstDay(payload: any, type: string, row: any) {
+  const stamp = { sort_order: 0, sets: 3, reps_text: "8-12", time_profile: "accessory_compound", ...row };
+  const pushIntoDay = (d: any) => {
+    d.rows = d.rows || [];
+    d.rows.push({ ...stamp, sort_order: d.rows.length });
+  };
+  if (type === "exercise_row") {
+    Object.assign(payload, stamp);
+    return;
+  }
+  if (type === "day") { pushIntoDay(payload); return; }
+  if (type === "week") {
+    const d = (payload.days || [])[0];
+    if (d) pushIntoDay(d);
+    return;
+  }
+  if (type === "block") {
+    const w = (payload.weeks_data || [])[0];
+    const d = (w?.days || [])[0];
+    if (d) pushIntoDay(d);
+    return;
+  }
+  if (type === "full_prep") {
+    const b = (payload.blocks_data || [])[0];
+    const w = (b?.weeks_data || [])[0];
+    const d = (w?.days || [])[0];
+    if (d) pushIntoDay(d);
+  }
+}
+
 export const Route = createFileRoute("/_authenticated/admin/program-library_/$templateId")({
   component: TemplateEditor,
 });
