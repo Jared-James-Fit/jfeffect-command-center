@@ -89,7 +89,7 @@ export const sendPaymentLinkEmail = createServerFn({ method: "POST" })
     const { data: settings } = await supabase
       .from("email_sender_settings").select("*").eq("singleton", true).maybeSingle();
 
-    const subject = "Your JF Effect payment link";
+    const subject = `Action required: Set up payment for ${rec.offer_name}`;
     const body = [
       `Hi ${rec.clients.full_name?.split(" ")[0] ?? "there"},`,
       ``,
