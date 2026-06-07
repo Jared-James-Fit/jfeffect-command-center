@@ -77,6 +77,7 @@ export function LiftVideoDialog({ open, onOpenChange, clientId, userId, clientNa
   const [showLinkInput, setShowLinkInput] = useState(false);
   const multiUploadRef = useRef<HTMLInputElement | null>(null);
   const multiRecordRef = useRef<HTMLInputElement | null>(null);
+  const [previewClip, setPreviewClip] = useState<Clip | null>(null);
 
   useEffect(() => {
     if (initial) {
@@ -423,23 +424,43 @@ export function LiftVideoDialog({ open, onOpenChange, clientId, userId, clientNa
                       {clips.map((clip, idx) => (
                         <div key={clip.id} className="rounded-xl border border-border bg-card/50 p-2">
                           <div className="flex items-center gap-2.5 min-w-0">
-                            <div className="flex h-10 w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-muted">
+                            <button
+                              type="button"
+                              onClick={() => { if (clip.kind === "file" && clip.previewUrl) setPreviewClip(clip); else if (clip.kind === "link" && clip.url) window.open(clip.url, "_blank", "noopener"); }}
+                              className="group relative flex h-14 w-20 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-muted hover:ring-2 hover:ring-primary/50 transition"
+                              aria-label="Preview video"
+                            >
                               {clip.kind === "file" && clip.previewUrl ? (
-                                <video src={clip.previewUrl} className="h-full w-full object-cover" muted playsInline preload="metadata" />
+                                <>
+                                  <video
+                                    src={`${clip.previewUrl}#t=0.1`}
+                                    className="h-full w-full object-cover"
+                                    muted
+                                    playsInline
+                                    preload="auto"
+                                  />
+                                  <div className="pointer-events-none absolute inset-0 grid place-items-center bg-black/30 opacity-0 group-hover:opacity-100 transition">
+                                    <VideoIcon className="h-5 w-5 text-white" />
+                                  </div>
+                                </>
                               ) : (
                                 <LinkIcon className="h-4 w-4 text-muted-foreground" />
                               )}
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <div className="truncate text-sm font-medium">
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => { if (clip.kind === "file" && clip.previewUrl) setPreviewClip(clip); else if (clip.kind === "link" && clip.url) window.open(clip.url, "_blank", "noopener"); }}
+                              className="min-w-0 flex-1 text-left"
+                            >
+                              <div className="truncate text-sm font-medium hover:underline">
                                 {clip.kind === "file" ? (clip.file?.name || `Video ${idx + 1}`) : (clip.url || "Link")}
                               </div>
                               <div className="text-xs text-muted-foreground">
                                 {clip.kind === "file"
                                   ? `${((clip.file?.size ?? 0) / 1024 / 1024).toFixed(1)} MB`
-                                  : "Link"}
+                                  : "Tap to open link"}
                               </div>
-                            </div>
+                            </button>
                             <Button type="button" size="icon" variant="ghost" className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive" onClick={() => removeClip(clip.id)}>
                               <X className="h-4 w-4" />
                             </Button>
@@ -519,6 +540,24 @@ export function LiftVideoDialog({ open, onOpenChange, clientId, userId, clientNa
             )}
           </div>
         </DrawerContent>
+        <Dialog open={!!previewClip} onOpenChange={(o) => { if (!o) setPreviewClip(null); }}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle className="truncate">
+                {previewClip?.file?.name || "Video preview"}
+              </DialogTitle>
+            </DialogHeader>
+            {previewClip?.previewUrl && (
+              <video
+                src={previewClip.previewUrl}
+                className="w-full rounded-lg bg-black"
+                controls
+                autoPlay
+                playsInline
+              />
+            )}
+          </DialogContent>
+        </Dialog>
       </Drawer>
     );
   }
