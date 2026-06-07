@@ -11,7 +11,7 @@ import {
   LIFT_VIDEO_STATUSES, statusTone, clientFacingStatus,
   listComments, addComment, markWatched, toggleLike, markReviewed, setStatus,
   getSignedVideoUrl, deleteLiftVideo,
-  isYouTube, isDrive, youTubeEmbed, drivePreview, driveOpenUrl,
+  isYouTube, isDrive, youTubeEmbed, drivePreview, driveOpenUrl, driveVideoStreamUrl,
   LIFT_VIDEO_QUICK_REPLIES,
 } from "@/lib/lift-videos";
 import { format, parseISO, formatDistanceToNow } from "date-fns";
@@ -42,6 +42,7 @@ export function LiftVideoCard({ video, role, userId, onChanged, onEdit }: Props)
   const [posting, setPosting] = useState(false);
   const [embedUrl, setEmbedUrl] = useState<string | null>(null);
   const [signedUrl, setSignedUrl] = useState<string | null>(null);
+  const [streamUrl, setStreamUrl] = useState<string | null>(null);
   const [embedStatus, setEmbedStatus] = useState<"idle" | "loading" | "ready" | "slow" | "error">("idle");
   const [embedRetry, setEmbedRetry] = useState(0);
   const [showEmbedFallback, setShowEmbedFallback] = useState(false);
@@ -56,6 +57,7 @@ export function LiftVideoCard({ video, role, userId, onChanged, onEdit }: Props)
     let cancel = false;
     setEmbedUrl(null);
     setSignedUrl(null);
+    setStreamUrl(null);
     setEmbedStatus("idle");
     (async () => {
       if (video.video_storage_path) {
@@ -63,7 +65,10 @@ export function LiftVideoCard({ video, role, userId, onChanged, onEdit }: Props)
         if (!cancel) setSignedUrl(u);
       } else if (video.video_url) {
         if (isYouTube(video.video_url)) setEmbedUrl(youTubeEmbed(video.video_url));
-        else if (isDrive(video.video_url)) setEmbedUrl(drivePreview(video.video_url));
+        else if (isDrive(video.video_url)) {
+          setStreamUrl(driveVideoStreamUrl(video.video_url));
+          setEmbedUrl(drivePreview(video.video_url));
+        }
       }
     })();
     return () => { cancel = true; };
@@ -180,7 +185,9 @@ export function LiftVideoCard({ video, role, userId, onChanged, onEdit }: Props)
       )}
 
       <div className="overflow-hidden rounded-md border border-border bg-card">
-        {embedUrl ? (
+        {signedUrl || streamUrl ? (
+          <LiftVideoPlayer src={(signedUrl || streamUrl)!} fallbackUrl={openUrl} title={video.exercise || "Lift video"} />
+        ) : embedUrl ? (
           <div className="space-y-2">
             <div className="relative aspect-video w-full overflow-hidden rounded-md bg-secondary/40">
               {embedStatus !== "ready" && (
@@ -235,8 +242,6 @@ export function LiftVideoCard({ video, role, userId, onChanged, onEdit }: Props)
               </div>
             )}
           </div>
-        ) : signedUrl ? (
-          <LiftVideoPlayer src={signedUrl} fallbackUrl={openUrl} title={video.exercise || "Lift video"} />
         ) : openUrl ? (
           <a href={openUrl} target="_blank" rel="noreferrer" className="flex min-h-48 items-center justify-center gap-2 bg-secondary/30 p-6 text-sm text-primary">
             Open video link <ExternalLink className="h-3 w-3" />
