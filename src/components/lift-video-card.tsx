@@ -12,7 +12,7 @@ import {
   LIFT_VIDEO_STATUSES, statusTone, clientFacingStatus,
   listComments, addComment, markWatched, toggleLike, markReviewed, setStatus,
   getSignedVideoUrl, deleteLiftVideo, setPlaybackError,
-  isYouTube, isDrive, youTubeEmbed, liftVideoOpenUrl, liftVideoDriveFileId,
+  isYouTube, isDrive, youTubeEmbed, drivePreview, liftVideoOpenUrl, liftVideoDriveFileId,
   LIFT_VIDEO_QUICK_REPLIES,
 } from "@/lib/lift-videos";
 import { format, parseISO, formatDistanceToNow } from "date-fns";
@@ -73,6 +73,15 @@ export function LiftVideoCard({ video, role, userId, onChanged, onEdit, clientNa
         if (!cancel) setSignedUrl(u);
       } else if (video.video_url) {
         if (isYouTube(video.video_url)) setEmbedUrl(youTubeEmbed(video.video_url));
+        else if (isDrive(video.video_url)) setEmbedUrl(drivePreview(video.video_url));
+      }
+      // Drive fallback: build an embed from any known Drive ID even when
+      // video_url itself isn't a Drive URL (legacy rows / embed-only rows).
+      if (!cancel && !video.video_storage_path) {
+        const driveId = liftVideoDriveFileId(video);
+        if (driveId) {
+          setEmbedUrl((prev) => prev ?? `https://drive.google.com/file/d/${driveId}/preview`);
+        }
       }
     })();
     return () => { cancel = true; };
