@@ -26,6 +26,7 @@ export const adminNav: NavItem[] = [
   { to: "/admin/resources", label: "Resources", icon: FolderOpen, group: "Agreements & Documents" },
   { to: "/admin/apps", label: "Integrations & Tools", icon: Layers, group: "Business Tools" },
   { to: "/admin/business-systems", label: "Business Systems", icon: Briefcase, group: "Business Tools" },
+  { to: "/admin/account", label: "My Account", icon: UserCog, group: "Settings" },
   { to: "/admin/settings", label: "Settings", icon: Settings, group: "Settings" },
 ];
 
