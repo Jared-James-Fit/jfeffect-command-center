@@ -374,6 +374,19 @@ function ClientDetail() {
         }
       />
       <div className="p-6 md:p-8">
+      {form.status === "Deactivated" && (
+        <div className="mb-4 rounded-md border border-warning/40 bg-warning/10 px-4 py-3 text-sm">
+          <div className="font-semibold text-warning">Account Deactivated</div>
+          <div className="text-muted-foreground">
+            {form.deactivated_at ? `Deactivated ${new Date(form.deactivated_at).toLocaleDateString()}` : "Deactivated"}
+            {form.deactivation_reason ? ` · ${form.deactivation_reason}` : ""}
+            {form.portal_access_disabled ? " · Portal access disabled" : " · Portal access still enabled"}
+          </div>
+          {form.deactivation_note && (
+            <div className="mt-1 text-xs text-muted-foreground italic">Note: {form.deactivation_note}</div>
+          )}
+        </div>
+      )}
       <Tabs
         value={tab ?? "summary"}
         onValueChange={(v) => navigate({ to: ".", params: { id }, search: { tab: v as TabValue }, replace: true })}
