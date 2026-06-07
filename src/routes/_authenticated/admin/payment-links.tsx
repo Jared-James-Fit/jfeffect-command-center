@@ -353,12 +353,8 @@ function PaymentLinksPage() {
             <Badge variant={statusFilter === "Active" ? "default" : "outline"} className="cursor-pointer" onClick={() => setStatusFilter("Active")}>Active</Badge>
             <Badge variant={statusFilter === "Draft" ? "default" : "outline"} className="cursor-pointer" onClick={() => setStatusFilter("Draft")}>Draft</Badge>
             <Badge variant={statusFilter === "Archived" ? "default" : "outline"} className="cursor-pointer" onClick={() => setStatusFilter("Archived")}>Archived</Badge>
-            <div className="w-px h-5 bg-border mx-1" />
-            <Badge variant={linkFilter === "all" ? "default" : "outline"} className="cursor-pointer" onClick={() => setLinkFilter("all")}>All links</Badge>
-            <Badge variant={linkFilter === "linked" ? "default" : "outline"} className="cursor-pointer" onClick={() => setLinkFilter("linked")}>Has Stripe Link</Badge>
-            <Badge variant={linkFilter === "missing" ? "default" : "outline"} className="cursor-pointer" onClick={() => setLinkFilter("missing")}>Missing Link</Badge>
             {hasFilters && (
-              <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => { setSearchQuery(""); setStatusFilter("all"); setTypeFilter("all"); setStructureFilter("all"); setLinkFilter("all"); }}>
+              <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => { setSearchQuery(""); setStatusFilter("all"); setTypeFilter("all"); setStructureFilter("all"); }}>
                 <X className="h-3 w-3 mr-1" /> Clear filters
               </Button>
             )}
