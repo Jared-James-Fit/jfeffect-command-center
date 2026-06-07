@@ -289,6 +289,10 @@ export function drivePreview(url: string) {
   const id = driveFileId(url);
   return id ? `https://drive.google.com/file/d/${id}/preview` : null;
 }
+export function driveVideoStreamUrl(url: string) {
+  const id = driveFileId(url);
+  return id ? `https://drive.google.com/uc?export=download&id=${id}` : null;
+}
 export function driveOpenUrl(url: string) {
   const id = driveFileId(url);
   return id ? `https://drive.google.com/file/d/${id}/view` : url;
