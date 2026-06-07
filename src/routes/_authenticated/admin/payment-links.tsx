@@ -131,6 +131,9 @@ type FormState = {
   imagePreview: string | null;
   stripePriceId: string;
   checkoutMode: "payment" | "subscription" | "auto";
+  generateStripeProduct: boolean;
+  billingInterval: "month" | "year" | "week" | "day" | "";
+  accessLevel: string;
 };
 
 function emptyForm(): FormState {
@@ -142,6 +145,7 @@ function emptyForm(): FormState {
     agreementBeforeService: false, status: "Active", notes: "",
     imageFile: null, imagePreview: null,
     stripePriceId: "", checkoutMode: "auto",
+    generateStripeProduct: false, billingInterval: "", accessLevel: "",
   };
 }
 
@@ -167,6 +171,9 @@ function productToForm(p: Product): FormState {
     imagePreview: p.image_signed_url ?? null,
     stripePriceId: (p as any).stripe_price_id ?? "",
     checkoutMode: ((p as any).mode === "subscription" || (p as any).mode === "payment" ? (p as any).mode : "auto") as "payment" | "subscription" | "auto",
+    generateStripeProduct: false,
+    billingInterval: "",
+    accessLevel: "",
   };
 }
 
@@ -487,13 +494,15 @@ function ProductFormDialog({
         pastedPaymentLinkUrl: form.paymentLinkUrl.trim() || null,
         stripePriceId: form.stripePriceId.trim() || null,
         checkoutMode: form.checkoutMode,
+        billingInterval: (form.billingInterval as any) || null,
+        accessLevel: form.accessLevel ? parseInt(form.accessLevel, 10) : null,
       };
 
       if (product) {
         await updateFn({ data: { id: product.id, ...payload, ...(imagePath !== undefined ? { imagePath } : {}) } as any });
         toast.success("Product updated");
       } else {
-        await createFn({ data: { ...payload, imagePath: imagePath ?? null, generateStripeLink: false } as any });
+        await createFn({ data: { ...payload, imagePath: imagePath ?? null, generateStripeLink: form.generateStripeProduct } as any });
         toast.success("Product saved");
       }
       onSaved();
@@ -621,31 +630,84 @@ function ProductFormDialog({
           </div>
 
           {/* ── Stripe Checkout Session fields ─────────────────────────── */}
-          <div className="md:col-span-2 rounded-md border border-border bg-secondary/20 p-3 space-y-3">
-            <div className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Stripe Checkout Session</div>
+          <div className="md:col-span-2 rounded-md border border-primary/20 bg-primary/5 p-3 space-y-3">
+            <div className="text-xs font-semibold uppercase tracking-widest text-primary">Stripe Checkout Session</div>
+
+            {/* Auto-create toggle */}
+            {!product && (
+              <div className="rounded-md border border-border bg-secondary/30 p-3 space-y-2">
+                <div className="flex items-center gap-3">
+                  <Switch checked={form.generateStripeProduct} onCheckedChange={(v) => set("generateStripeProduct", v)} />
+                  <div>
+                    <Label className="text-sm">Auto-create Stripe Product &amp; Price</Label>
+                    <p className="text-xs text-muted-foreground">Creates a Stripe Product and Price automatically using the name, price, currency, and billing interval below. The Stripe Price ID is saved to this product.</p>
+                  </div>
+                </div>
+                {form.generateStripeProduct && (
+                  <div>
+                    <Label className="text-xs">Billing interval (leave blank for one-time)</Label>
+                    <Select value={form.billingInterval} onValueChange={(v) => set("billingInterval", v as any)}>
+                      <SelectTrigger><SelectValue placeholder="One-time (no interval)" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="">One-time payment</SelectItem>
+                        <SelectItem value="month">Monthly</SelectItem>
+                        <SelectItem value="year">Annual</SelectItem>
+                        <SelectItem value="week">Weekly</SelectItem>
+                        <SelectItem value="day">Daily</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground mt-1">For subscriptions, choose the billing interval. For paid-in-full packages, leave blank.</p>
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="grid md:grid-cols-2 gap-3">
               <div>
                 <Label>Stripe Price ID</Label>
                 <Input
                   value={form.stripePriceId}
                   onChange={(e) => set("stripePriceId", e.target.value)}
-                  placeholder="price_1ABC..."
+                  placeholder={form.generateStripeProduct ? "Will be filled automatically" : "price_1ABC..."}
                   className="font-mono text-xs"
+                  disabled={form.generateStripeProduct && !product}
                 />
-                <p className="text-xs text-muted-foreground mt-1">From Stripe Dashboard → Products → Prices. Required for in-app checkout.</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {form.generateStripeProduct && !product
+                    ? "Auto-created from Stripe when you save."
+                    : "From Stripe Dashboard → Products → Prices. Required for in-app checkout."}
+                </p>
               </div>
               <div>
                 <Label>Checkout Mode</Label>
                 <Select value={form.checkoutMode} onValueChange={(v) => set("checkoutMode", v as any)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="auto">Auto (infer from payment structure)</SelectItem>
+                    <SelectItem value="auto">Auto (infer from billing interval)</SelectItem>
                     <SelectItem value="payment">One-time payment</SelectItem>
                     <SelectItem value="subscription">Subscription</SelectItem>
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground mt-1">Controls whether Stripe Checkout creates a subscription or a one-time charge.</p>
               </div>
+            </div>
+
+            {/* Access level */}
+            <div>
+              <Label>Access level (0–5)</Label>
+              <Select value={form.accessLevel} onValueChange={(v) => set("accessLevel", v)}>
+                <SelectTrigger><SelectValue placeholder="Select access level" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">Not set</SelectItem>
+                  <SelectItem value="0">0 — App access only</SelectItem>
+                  <SelectItem value="1">1 — Self-led program</SelectItem>
+                  <SelectItem value="2">2 — Basic coaching</SelectItem>
+                  <SelectItem value="3">3 — Full coaching</SelectItem>
+                  <SelectItem value="4">4 — Coaching Plus</SelectItem>
+                  <SelectItem value="5">5 — Private coaching</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground mt-1">Used to control what content and features the client can access after payment.</p>
             </div>
           </div>
 

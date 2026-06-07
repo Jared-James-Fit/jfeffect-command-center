@@ -90,6 +90,10 @@ const createSchema = z.object({
   // Stripe Checkout Session fields
   stripePriceId: z.string().trim().max(100).optional().nullable(),
   checkoutMode: z.enum(["payment", "subscription", "auto"]).optional().default("auto"),
+  // Billing interval for subscription prices (used when auto-creating Stripe price)
+  billingInterval: z.enum(["month", "year", "week", "day"]).optional().nullable(),
+  // Access level (0-5) for display purposes
+  accessLevel: z.number().int().min(0).max(5).optional().nullable(),
 });
 
 export const createCoachingProduct = createServerFn({ method: "POST" })
@@ -112,13 +116,18 @@ export const createCoachingProduct = createServerFn({ method: "POST" })
           ...(data.description ? { description: data.description } : {}),
         }),
       });
+      const isSubscription = data.checkoutMode === "subscription" || (data.checkoutMode !== "payment" && !!data.billingInterval);
+      const priceParams: Record<string, string | number> = {
+        product: product.id,
+        unit_amount: data.priceCents,
+        currency: data.currency.toLowerCase(),
+      };
+      if (isSubscription && data.billingInterval) {
+        priceParams["recurring[interval]"] = data.billingInterval;
+      }
       const price = await stripeFetch("/prices", {
         method: "POST",
-        body: formEncode({
-          product: product.id,
-          unit_amount: data.priceCents,
-          currency: data.currency.toLowerCase(),
-        }),
+        body: formEncode(priceParams),
       });
       const link = await stripeFetch("/payment_links", {
         method: "POST",
