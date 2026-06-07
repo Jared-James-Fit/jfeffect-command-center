@@ -191,7 +191,6 @@ function WeekColumn({
           onBlur={(e) => {
             if (e.target.value !== (week.notes ?? "")) {
               onAction(async () => {
-                const { supabase } = await import("@/integrations/supabase/client");
                 await (supabase as any).from("pl_weeks").update({ notes: e.target.value }).eq("id", week.id);
               });
             }
