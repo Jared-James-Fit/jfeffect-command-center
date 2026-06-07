@@ -242,3 +242,86 @@ export const attachManualPaymentLink = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return { ok: true, product: row };
   });
+
+const CancelPurchase = z.object({
+  id: z.string().uuid(),
+  reason: z.string().max(500).optional().nullable(),
+});
+
+async function tryStripeDeactivate(link: string | null | undefined) {
+  if (!link || !process.env.STRIPE_SECRET_KEY) return;
+  try {
+    // Find the payment link by URL and deactivate it
+    const list: any = await stripeFetch(`/payment_links?limit=100`).catch(() => null);
+    const match = list?.data?.find((pl: any) => pl?.url === link);
+    if (match?.id) {
+      await stripeFetch(`/payment_links/${match.id}`, {
+        method: "POST",
+        body: formEncode({ active: false }),
+      }).catch(() => {});
+    }
+  } catch {
+    // best effort
+  }
+}
+
+export const cancelPurchaseRequest = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => CancelPurchase.parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context as any;
+    await assertAdmin(supabase, userId);
+    const { data: rec } = await supabase
+      .from("purchase_records")
+      .select("id, client_id, payment_status, stripe_payment_link, offer_name")
+      .eq("id", data.id)
+      .single();
+    if (!rec) throw new Error("Purchase not found");
+    if (rec.payment_status === "Paid" || rec.payment_status === "Active Subscription") {
+      throw new Error("Cannot cancel a purchase that is already paid or active. Refund it instead.");
+    }
+    await tryStripeDeactivate(rec.stripe_payment_link);
+    const { error } = await supabase.from("purchase_records").update({
+      payment_status: "Cancelled",
+      status: "Cancelled",
+      last_payment_update_source: "manual",
+      last_payment_update_at: new Date().toISOString(),
+    }).eq("id", data.id);
+    if (error) throw new Error(error.message);
+    await supabase.from("client_activity_log").insert({
+      client_id: rec.client_id,
+      actor_user_id: userId,
+      actor_role: "admin",
+      action: "purchase_payment_request_cancelled",
+      details: { purchase_id: data.id, offer_name: rec.offer_name, reason: data.reason ?? null },
+    });
+    return { ok: true };
+  });
+
+export const deletePurchaseRecord = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ id: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context as any;
+    await assertAdmin(supabase, userId);
+    const { data: rec } = await supabase
+      .from("purchase_records")
+      .select("id, client_id, payment_status, stripe_payment_link, offer_name")
+      .eq("id", data.id)
+      .single();
+    if (!rec) throw new Error("Purchase not found");
+    if (rec.payment_status === "Paid" || rec.payment_status === "Active Subscription") {
+      throw new Error("Cannot delete a paid or active purchase. Cancel/refund first.");
+    }
+    await tryStripeDeactivate(rec.stripe_payment_link);
+    const { error } = await supabase.from("purchase_records").delete().eq("id", data.id);
+    if (error) throw new Error(error.message);
+    await supabase.from("client_activity_log").insert({
+      client_id: rec.client_id,
+      actor_user_id: userId,
+      actor_role: "admin",
+      action: "purchase_payment_request_deleted",
+      details: { purchase_id: data.id, offer_name: rec.offer_name },
+    });
+    return { ok: true };
+  });
