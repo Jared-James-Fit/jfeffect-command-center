@@ -358,6 +358,15 @@ function ClientDetail() {
             )}
             <Button variant="outline" size="sm" onClick={() => setPriceCardOpen(true)}><Tag className="mr-2 h-4 w-4" />Assign Offer / View Price Card</Button>
             <Button variant="outline" size="sm" onClick={sendSetup}><Mail className="mr-2 h-4 w-4" />Send setup link</Button>
+            {form.status === "Deactivated" ? (
+              <Button variant="outline" size="sm" onClick={() => setReactivateOpen(true)}>
+                <Eye className="mr-2 h-4 w-4" />Reactivate
+              </Button>
+            ) : (
+              <Button variant="outline" size="sm" onClick={() => setDeactivateOpen(true)}>
+                <Eye className="mr-2 h-4 w-4" />Deactivate
+              </Button>
+            )}
             <Button variant="outline" size="sm" onClick={archive}><Archive className="mr-2 h-4 w-4" />{form.archived ? "Restore" : "Archive"}</Button>
             <Button variant="outline" size="sm" className="text-destructive hover:text-destructive" onClick={() => setDeleteStep(1)}><Trash2 className="mr-2 h-4 w-4" />Delete</Button>
             <Button size="sm" className="bg-gradient-primary uppercase font-bold" onClick={save}><Save className="mr-2 h-4 w-4" />Save</Button>
