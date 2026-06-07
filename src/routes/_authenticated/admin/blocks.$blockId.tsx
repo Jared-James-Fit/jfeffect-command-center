@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
-import { ArrowLeft, Plus, Trash2, Copy, Save, Clock, RotateCcw, Eye, EyeOff, GripVertical, MoreHorizontal, Columns2, Rows3, ChevronDown, ChevronRight, TrendingUp, Zap } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, Copy, Save, Clock, RotateCcw, Eye, EyeOff, GripVertical, MoreHorizontal, Columns2, Rows3, ChevronDown, ChevronRight, TrendingUp, Zap, LayoutGrid, CalendarDays, CalendarRange, User, Unlink } from "lucide-react";
 import { toast } from "sonner";
 import {
   getBlockTree, addDay, addRow, updateRow, deleteRow, updateDay,
@@ -20,6 +20,7 @@ import {
   BLOCK_STATUSES, addWeek, addRowFromExercise, moveRowToDay, duplicateRow, copyWeek,
   copyWeekToAll, expandLinkedDays, countCustomDownstream, applyRowPatchAcrossDays,
   applyDayPatchAcrossDays, breakDayLink, relinkDay, applyProgression,
+  copyDayToFutureWeeks, clearFutureWeeks, breakAllLinks,
   type TimeProfile, type PercentageBasis, type TrainingStyle, type BlockStatus,
   type EditScope, type ProgressionRuleType,
 } from "@/lib/pl-programs";
@@ -32,7 +33,10 @@ import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/admin/blocks/$blockId")({ component: BlockEditor });
 
-type ViewMode = 1 | 2 | 4 | 0; // 0 = all
+type BuilderView = "block" | "week" | "day" | "preview";
+const VIEW_KEY = "pl.builder.view";
+const VIEW_WEEK_KEY = "pl.builder.weekIdx";
+const VIEW_DAY_KEY = "pl.builder.dayId";
 
 /** Fields that should trigger an edit-scope prompt on linked days. */
 const CASCADE_ROW_KEYS = new Set([
@@ -47,8 +51,24 @@ function BlockEditor() {
   const [tplOpen, setTplOpen] = useState(false);
   const [copyOpen, setCopyOpen] = useState(false);
   const [copyDefault, setCopyDefault] = useState<string | undefined>(undefined);
-  const [view, setView] = useState<ViewMode>(1);
-  const [startWeek, setStartWeek] = useState(0);
+  const [view, setView] = useState<BuilderView>(() => {
+    if (typeof window === "undefined") return "block";
+    return ((localStorage.getItem(VIEW_KEY) as BuilderView) || "block");
+  });
+  const [focusedWeekIdx, setFocusedWeekIdx] = useState<number>(() => {
+    if (typeof window === "undefined") return 1;
+    return Number(localStorage.getItem(VIEW_WEEK_KEY) || 1);
+  });
+  const [focusedDayId, setFocusedDayId] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null;
+    return localStorage.getItem(VIEW_DAY_KEY);
+  });
+  useEffect(() => { try { localStorage.setItem(VIEW_KEY, view); } catch {} }, [view]);
+  useEffect(() => { try { localStorage.setItem(VIEW_WEEK_KEY, String(focusedWeekIdx)); } catch {} }, [focusedWeekIdx]);
+  useEffect(() => { try {
+    if (focusedDayId) localStorage.setItem(VIEW_DAY_KEY, focusedDayId);
+    else localStorage.removeItem(VIEW_DAY_KEY);
+  } catch {} }, [focusedDayId]);
   const [libCollapsed, setLibCollapsed] = useState(false);
   const [density, setDensity] = useDensity();
   const [selectedDayId, setSelectedDayId] = useState<string | null>(null);
