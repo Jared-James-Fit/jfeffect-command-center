@@ -20,6 +20,16 @@ type ClientLiftVideoRow = {
   video_storage_path?: string | null;
   video_source?: "link" | "upload";
   thumbnail_url?: string | null;
+  original_drive_file_id?: string | null;
+  original_drive_url?: string | null;
+  drive_embed_url?: string | null;
+  preview_url?: string | null;
+  preview_status?: string | null;
+  preview_error?: string | null;
+  file_type?: string | null;
+  file_size_bytes?: number | null;
+  upload_status?: string | null;
+  playback_error?: string | null;
   status?: string;
   batch_id?: string | null;
   batch_note?: string | null;
@@ -62,6 +72,16 @@ export async function createOwnedClientLiftVideo(input: ClientLiftVideoRow, user
       video_storage_path: input.video_storage_path ?? null,
       video_source: input.video_source ?? "link",
       thumbnail_url: input.thumbnail_url ?? null,
+      original_drive_file_id: input.original_drive_file_id ?? null,
+      original_drive_url: input.original_drive_url ?? null,
+      drive_embed_url: input.drive_embed_url ?? null,
+      preview_url: input.preview_url ?? null,
+      preview_status: input.preview_status ?? "not_generated",
+      preview_error: input.preview_error ?? null,
+      file_type: input.file_type ?? null,
+      file_size_bytes: input.file_size_bytes ?? null,
+      upload_status: input.upload_status ?? "Submitted",
+      playback_error: input.playback_error ?? null,
       status: input.status ?? "New Upload",
       batch_id: input.batch_id ?? null,
       batch_note: input.batch_note ?? null,
