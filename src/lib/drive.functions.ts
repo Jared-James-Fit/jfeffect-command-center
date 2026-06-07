@@ -3,15 +3,13 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 const MEDIA_TYPE_SUBFOLDERS = [
+  "Chat Media",
   "Lift Videos",
-  "Check-In Videos",
+  "Check-In Media",
   "Progress Photos",
-  "Training Videos",
-  "Form Videos",
-  "Technique Videos",
-  "Agreements",
   "Documents",
-  "Other Media",
+  "Agreements",
+  "Other",
 ] as const;
 
 const DEFAULT_ROOT_FOLDER_NAME = "JF Effect Client Files";
