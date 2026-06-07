@@ -7,6 +7,9 @@ import { cn } from "@/lib/utils";
 import { NotificationBell } from "@/components/notification-bell";
 import { useClientNavBadges, markNavSeen } from "@/hooks/use-client-nav-badges";
 import { useKeyboardOpen } from "@/hooks/use-keyboard-open";
+import { UserAvatar } from "@/components/user-avatar";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 
 export interface NavItem {
   to: string;
@@ -53,6 +56,25 @@ export function AppShell({ items, title, children }: { items: NavItem[]; title: 
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (r) => r.location.pathname });
   const navBadges = useClientNavBadges();
+
+  const { data: me } = useQuery({
+    queryKey: ["app-shell-me", user?.id],
+    enabled: !!user?.id,
+    queryFn: async () => {
+      const [{ data: profile }, { data: coach }, { data: client }] = await Promise.all([
+        supabase.from("profiles").select("full_name, avatar_url").eq("id", user!.id).maybeSingle(),
+        supabase.from("coaches").select("full_name, profile_picture_url").eq("user_id", user!.id).maybeSingle(),
+        supabase.from("clients").select("full_name, profile_picture_url").eq("user_id", user!.id).maybeSingle(),
+      ]);
+      const name = coach?.full_name || client?.full_name || profile?.full_name || user!.email || "";
+      const pic =
+        coach?.profile_picture_url ||
+        client?.profile_picture_url ||
+        profile?.avatar_url ||
+        null;
+      return { name, pic };
+    },
+  });
 
   const activeTo = items.reduce<string | null>((best, item) => {
     const matches =
@@ -116,7 +138,13 @@ export function AppShell({ items, title, children }: { items: NavItem[]; title: 
           </div>
         </nav>
         <div className="border-t border-sidebar-border p-3">
-          <div className="mb-2 px-2 text-xs text-muted-foreground truncate">{user?.email}</div>
+          <div className="mb-2 flex items-center gap-2 px-1">
+            <UserAvatar src={me?.pic ?? null} name={me?.name ?? user?.email ?? ""} size={36} ring />
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-xs font-semibold">{me?.name || user?.email}</div>
+              <div className="truncate text-[10px] text-muted-foreground">{user?.email}</div>
+            </div>
+          </div>
           <Button variant="ghost" size="sm" className="w-full justify-start" onClick={handleSignOut}>
             <LogOut className="mr-2 h-4 w-4" /> Sign out
           </Button>
@@ -130,9 +158,12 @@ export function AppShell({ items, title, children }: { items: NavItem[]; title: 
             <img src="/logo.png" alt="JF Effect" className="h-8 w-8 rounded-md object-cover" />
             <span className="text-sm font-black tracking-tight">{title}</span>
           </div>
-          <Button variant="ghost" size="sm" onClick={handleSignOut}>
-            <LogOut className="h-4 w-4" />
-          </Button>
+          <div className="flex items-center gap-2">
+            <UserAvatar src={me?.pic ?? null} name={me?.name ?? user?.email ?? ""} size={28} ring />
+            <Button variant="ghost" size="sm" onClick={handleSignOut}>
+              <LogOut className="h-4 w-4" />
+            </Button>
+          </div>
         </header>
 
         <main className="flex-1 overflow-x-hidden pb-[calc(140px+env(safe-area-inset-bottom))] md:pb-0">
