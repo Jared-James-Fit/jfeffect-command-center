@@ -16,7 +16,7 @@ import { DoubleConfirmDeleteDialog } from "@/components/double-confirm-delete-di
 import { AssignOfferDialog } from "@/components/assign-offer-dialog";
 import { OfferDetailDialog } from "@/components/offer-detail-dialog";
 import { toast } from "sonner";
-import { Copy, ExternalLink, Loader2, Plus, Trash2, ImagePlus, Pencil, Archive, ArchiveRestore, FileSignature, AlertTriangle, CheckCircle2, Search, X, ListChecks, Sparkles, Eye } from "lucide-react";
+import { Copy, ExternalLink, Loader2, Plus, Trash2, ImagePlus, Pencil, Archive, ArchiveRestore, FileSignature, AlertTriangle, CheckCircle2, Search, X, ListChecks, Sparkles, Eye, CreditCard } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -26,6 +26,7 @@ import {
   duplicateCoachingProduct,
   deleteCoachingProduct,
 } from "@/lib/coaching-products.functions";
+import { createPreviewCheckoutSession } from "@/lib/stripe-checkout.functions";
 
 export const Route = createFileRoute("/_authenticated/admin/payment-links")({
   component: PaymentLinksPage,
@@ -184,6 +185,28 @@ function PaymentLinksPage() {
   const updateFn = useServerFn(updateCoachingProduct);
   const duplicateFn = useServerFn(duplicateCoachingProduct);
   const deleteFn = useServerFn(deleteCoachingProduct);
+  const previewCheckoutFn = useServerFn(createPreviewCheckoutSession);
+  const [previewingCheckout, setPreviewingCheckout] = useState<string | null>(null);
+
+  const handleStripePreview = async (p: Product) => {
+    const r = readiness(p);
+    if (!(p as any).stripe_price_id) {
+      toast.error("Add a Stripe Price ID to this product before previewing checkout.");
+      return;
+    }
+    setPreviewingCheckout(p.id);
+    try {
+      const res = await previewCheckoutFn({
+        data: { productId: p.id, origin: window.location.origin },
+      });
+      window.open(res.url, "_blank", "noopener,noreferrer");
+      toast.success("Opened Stripe checkout preview in a new tab.");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to generate preview");
+    } finally {
+      setPreviewingCheckout(null);
+    }
+  };
 
   const { data, isLoading } = useQuery({
     queryKey: ["coaching-products"],
@@ -441,6 +464,20 @@ function PaymentLinksPage() {
                   <div className="mt-3 flex flex-wrap gap-2">
                     <Button size="sm" className="bg-gradient-primary font-bold uppercase" onClick={() => setAssigning(productToOfferLike(p))}>Assign to client</Button>
                     <Button size="sm" variant="outline" onClick={() => setPreviewing(p)} title="Preview client-facing product page"><Eye className="h-3.5 w-3.5 mr-1" />Preview</Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleStripePreview(p)}
+                      disabled={previewingCheckout === p.id}
+                      title="Open the real Stripe-hosted checkout page in a new tab (branding & colors are edited in your Stripe Dashboard → Settings → Branding)"
+                    >
+                      {previewingCheckout === p.id ? (
+                        <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+                      ) : (
+                        <CreditCard className="h-3.5 w-3.5 mr-1" />
+                      )}
+                      Stripe Preview
+                    </Button>
                     <Button size="sm" variant="outline" onClick={() => setEditing({ open: true, product: p })}><Pencil className="h-3.5 w-3.5" /></Button>
                     <Button size="sm" variant="ghost" onClick={() => duplicateMutation.mutate(p.id)}><Copy className="h-3.5 w-3.5" /></Button>
                     {p.status === "Archived" ? (
