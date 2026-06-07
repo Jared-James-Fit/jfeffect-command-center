@@ -11,13 +11,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { ArrowLeft, Plus, Trash2, Save, Clock, Copy } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, Save, Clock, Copy, LayoutGrid, CalendarRange, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
 import {
   getTemplate, updateTemplate, summarizeTemplatePayload, TIME_PROFILES,
   estimateDayMinutes, durationRange, PERCENTAGE_BASES, type TrainingStyle,
 } from "@/lib/pl-programs";
-import { ExerciseLibraryPanel, type ExerciseRef } from "@/components/program-builder";
+import { ExerciseLibraryPanel, type ExerciseRef, DND_EXERCISE, readDrop } from "@/components/program-builder";
+import { cn } from "@/lib/utils";
 
 // Append a row into the first day reachable inside any template payload shape.
 function appendRowToFirstDay(payload: any, type: string, row: any) {
@@ -244,6 +245,7 @@ function FullPrepEditor({ payload, setPayload, exercises }: any) {
 
 function BlockPayloadEditor({ weeksData, setWeeksData, exercises }: { weeksData: any[]; setWeeksData: (wd: any[]) => void; exercises: any[] }) {
   const [activeIdx, setActiveIdx] = useState(0);
+  const [view, setView] = useState<"block" | "week">("block");
   const addWeek = () => {
     const nextIdx = (weeksData[weeksData.length - 1]?.week_index ?? 0) + 1;
     setWeeksData([...weeksData, { week_index: nextIdx, days: [{ day_index: 1, title: "Day 1", rows: [] }] }]);
@@ -260,34 +262,120 @@ function BlockPayloadEditor({ weeksData, setWeeksData, exercises }: { weeksData:
     setWeeksData(weeksData.filter((_, j) => j !== i));
     if (activeIdx >= weeksData.length - 1) setActiveIdx(Math.max(0, activeIdx - 1));
   };
+  const copyWeekToFuture = (i: number) => {
+    const src = weeksData[i];
+    if (!src) return;
+    const next = weeksData.map((w, j) => {
+      if (j <= i) return w;
+      const c = JSON.parse(JSON.stringify(src));
+      c.week_index = w.week_index;
+      return c;
+    });
+    setWeeksData(next);
+    toast.success(`Copied Week ${src.week_index} → future weeks`);
+  };
+  const copyWeek1ToAll = () => {
+    if (weeksData.length < 2) return;
+    copyWeekToFuture(0);
+  };
+  const copyDayToFuture = (weekIdx: number, dayIdx: number) => {
+    const srcDay = weeksData[weekIdx]?.days?.[dayIdx];
+    if (!srcDay) return;
+    const next = weeksData.map((w, j) => {
+      if (j <= weekIdx) return w;
+      const days = [...(w.days || [])];
+      const clone = JSON.parse(JSON.stringify(srcDay));
+      const existing = days.findIndex((d: any) => d.day_index === srcDay.day_index);
+      if (existing >= 0) days[existing] = clone;
+      else days.push(clone);
+      return { ...w, days };
+    });
+    setWeeksData(next);
+    toast.success(`Copied Day ${srcDay.day_index} → future weeks`);
+  };
   return (
     <div className="space-y-2">
-      <div className="flex flex-wrap items-center gap-1">
-        {weeksData.map((w: any, i: number) => (
-          <button key={i} onClick={() => setActiveIdx(i)} className={`rounded-md border px-2 py-1 text-xs ${activeIdx === i ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground"}`}>
-            Week {w.week_index}
+      <div className="sticky top-0 z-20 -mx-2 mb-2 flex flex-wrap items-center gap-2 border-b border-border bg-background/95 px-2 py-2 backdrop-blur">
+        <div className="inline-flex rounded-md border border-border p-0.5">
+          <button onClick={() => setView("block")} className={cn("inline-flex items-center gap-1 rounded px-2 py-1 text-xs", view === "block" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}>
+            <LayoutGrid className="h-3 w-3" /> Full Block
           </button>
-        ))}
-        <Button size="sm" variant="ghost" onClick={addWeek}><Plus className="h-3 w-3" /></Button>
-        {weeksData[activeIdx] && (
-          <>
-            <Button size="sm" variant="ghost" onClick={() => dupWeek(activeIdx)} title="Duplicate week"><Copy className="h-3 w-3" /></Button>
-            <Button size="sm" variant="ghost" className="text-destructive" onClick={() => delWeek(activeIdx)} title="Delete week"><Trash2 className="h-3 w-3" /></Button>
-          </>
+          <button onClick={() => setView("week")} className={cn("inline-flex items-center gap-1 rounded px-2 py-1 text-xs", view === "week" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}>
+            <CalendarRange className="h-3 w-3" /> Weekly
+          </button>
+        </div>
+        {view === "block" && weeksData.length > 1 && (
+          <Button size="sm" variant="outline" onClick={copyWeek1ToAll}>
+            <Copy className="mr-1 h-3 w-3" /> Copy Week 1 → all weeks
+          </Button>
         )}
+        <Button size="sm" variant="ghost" className="ml-auto" onClick={addWeek}>
+          <Plus className="mr-1 h-3 w-3" /> Add week
+        </Button>
       </div>
-      {weeksData[activeIdx] && (
-        <WeekEditor
-          week={weeksData[activeIdx]}
-          setWeek={(w) => { const copy = [...weeksData]; copy[activeIdx] = w; setWeeksData(copy); }}
-          exercises={exercises}
-        />
+
+      {view === "week" ? (
+        <>
+          <div className="flex flex-wrap items-center gap-1">
+            {weeksData.map((w: any, i: number) => (
+              <button key={i} onClick={() => setActiveIdx(i)} className={`rounded-md border px-2 py-1 text-xs ${activeIdx === i ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground"}`}>
+                Week {w.week_index}
+              </button>
+            ))}
+            {weeksData[activeIdx] && (
+              <>
+                <Button size="sm" variant="ghost" onClick={() => dupWeek(activeIdx)} title="Duplicate week"><Copy className="h-3 w-3" /></Button>
+                <Button size="sm" variant="ghost" onClick={() => copyWeekToFuture(activeIdx)} title="Copy week → future weeks"><ArrowRight className="h-3 w-3" /></Button>
+                <Button size="sm" variant="ghost" className="text-destructive" onClick={() => delWeek(activeIdx)} title="Delete week"><Trash2 className="h-3 w-3" /></Button>
+              </>
+            )}
+          </div>
+          {weeksData[activeIdx] && (
+            <WeekEditor
+              week={weeksData[activeIdx]}
+              setWeek={(w) => { const copy = [...weeksData]; copy[activeIdx] = w; setWeeksData(copy); }}
+              exercises={exercises}
+              onCopyDayToFuture={(di) => copyDayToFuture(activeIdx, di)}
+            />
+          )}
+        </>
+      ) : (
+        <div className="space-y-4">
+          {weeksData.length === 0 && (
+            <p className="rounded-md border border-dashed border-border p-4 text-center text-xs text-muted-foreground">
+              No weeks yet. Click <em>Add week</em> to start.
+            </p>
+          )}
+          {weeksData.map((w: any, wi: number) => (
+            <Card key={wi} className="p-3 space-y-2">
+              <div className="flex items-center gap-2">
+                <div className="text-sm font-bold">Week {w.week_index}</div>
+                <Badge variant="outline" className="text-[10px]">{(w.days || []).length}d · {(w.days || []).reduce((n: number, d: any) => n + ((d.rows || []).length), 0)} rows</Badge>
+                <Input className="h-7 max-w-xs text-xs" placeholder="Week notes" value={w.notes ?? ""} onChange={(e) => { const c = [...weeksData]; c[wi] = { ...w, notes: e.target.value }; setWeeksData(c); }} />
+                <div className="ml-auto flex gap-1">
+                  <Button size="sm" variant="ghost" onClick={() => copyWeekToFuture(wi)} title="Copy week → all future weeks">
+                    <Copy className="mr-1 h-3 w-3" /> → future
+                  </Button>
+                  <Button size="icon" variant="ghost" onClick={() => dupWeek(wi)} title="Duplicate week"><Copy className="h-4 w-4" /></Button>
+                  <Button size="icon" variant="ghost" className="text-destructive" onClick={() => delWeek(wi)}><Trash2 className="h-4 w-4" /></Button>
+                </div>
+              </div>
+              <WeekEditor
+                week={w}
+                setWeek={(nw) => { const c = [...weeksData]; c[wi] = nw; setWeeksData(c); }}
+                exercises={exercises}
+                onCopyDayToFuture={(di) => copyDayToFuture(wi, di)}
+                hideHeader
+              />
+            </Card>
+          ))}
+        </div>
       )}
     </div>
   );
 }
 
-function WeekEditor({ week, setWeek, exercises }: { week: any; setWeek: (w: any) => void; exercises: any[] }) {
+function WeekEditor({ week, setWeek, exercises, onCopyDayToFuture, hideHeader }: { week: any; setWeek: (w: any) => void; exercises: any[]; onCopyDayToFuture?: (dayIdx: number) => void; hideHeader?: boolean }) {
   const days = week.days || [];
   const addDay = () => {
     const nextIdx = (days[days.length - 1]?.day_index ?? 0) + 1;
@@ -302,16 +390,26 @@ function WeekEditor({ week, setWeek, exercises }: { week: any; setWeek: (w: any)
   const delDay = (i: number) => { if (!confirm("Remove day?")) return; setWeek({ ...week, days: days.filter((_: any, j: number) => j !== i) }); };
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-2">
-        <Input className="max-w-xs" placeholder="Week notes" value={week.notes ?? ""} onChange={(e) => setWeek({ ...week, notes: e.target.value })} />
+      {!hideHeader && (
+        <div className="flex items-center gap-2">
+          <Input className="max-w-xs" placeholder="Week notes" value={week.notes ?? ""} onChange={(e) => setWeek({ ...week, notes: e.target.value })} />
+          <Button size="sm" variant="outline" onClick={addDay}><Plus className="mr-1 h-3 w-3" /> Day</Button>
+        </div>
+      )}
+      {hideHeader && days.length === 0 && (
         <Button size="sm" variant="outline" onClick={addDay}><Plus className="mr-1 h-3 w-3" /> Day</Button>
-      </div>
+      )}
       {days.map((d: any, i: number) => (
         <Card key={i} className="p-3">
           <div className="mb-2 flex items-center gap-2">
             <Input className="max-w-xs font-bold" value={d.title ?? ""} onChange={(e) => { const copy = [...days]; copy[i] = { ...d, title: e.target.value }; setWeek({ ...week, days: copy }); }} />
             <Input className="max-w-xs" placeholder="Focus" value={d.focus ?? ""} onChange={(e) => { const copy = [...days]; copy[i] = { ...d, focus: e.target.value }; setWeek({ ...week, days: copy }); }} />
             <div className="ml-auto flex gap-1">
+              {onCopyDayToFuture && (
+                <Button size="sm" variant="ghost" onClick={() => onCopyDayToFuture(i)} title="Copy this day → same day in future weeks">
+                  <ArrowRight className="mr-1 h-3 w-3" /> → future
+                </Button>
+              )}
               <Button size="icon" variant="ghost" onClick={() => dupDay(i)} title="Duplicate"><Copy className="h-4 w-4" /></Button>
               <Button size="icon" variant="ghost" className="text-destructive" onClick={() => delDay(i)}><Trash2 className="h-4 w-4" /></Button>
             </div>
@@ -319,23 +417,60 @@ function WeekEditor({ week, setWeek, exercises }: { week: any; setWeek: (w: any)
           <DayEditor day={d} setDay={(nd) => { const copy = [...days]; copy[i] = nd; setWeek({ ...week, days: copy }); }} exercises={exercises} />
         </Card>
       ))}
+      {hideHeader && days.length > 0 && (
+        <Button size="sm" variant="ghost" onClick={addDay}><Plus className="mr-1 h-3 w-3" /> Day</Button>
+      )}
     </div>
   );
 }
 
 function DayEditor({ day, setDay, exercises }: { day: any; setDay: (d: any) => void; exercises: any[] }) {
   const rows = day.rows || [];
+  const [dragOver, setDragOver] = useState(false);
   const addRow = () => setDay({ ...day, rows: [...rows, { sort_order: rows.length, sets: 3, reps_text: "8-12", time_profile: "accessory_compound" }] });
+  const insertExercise = (exId: string, atIndex?: number) => {
+    const ex = (exercises as any[]).find((x) => x.id === exId);
+    const newRow = { sort_order: 0, sets: 3, reps_text: "8-12", time_profile: "accessory_compound", exercise_id: exId, exercise_name_override: ex?.name };
+    const next = [...rows];
+    const idx = atIndex ?? next.length;
+    next.splice(idx, 0, newRow);
+    setDay({ ...day, rows: next.map((r: any, i: number) => ({ ...r, sort_order: i })) });
+  };
   const dayMin = useMemo(() => estimateDayMinutes(rows), [rows]);
 
   return (
-    <div className="space-y-2">
+    <div
+      className={cn(
+        "space-y-2 rounded-md transition-colors",
+        dragOver && "ring-2 ring-primary ring-offset-1 bg-primary/5",
+      )}
+      onDragOver={(e) => {
+        if (Array.from(e.dataTransfer.types).includes(DND_EXERCISE)) {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = "copy";
+          if (!dragOver) setDragOver(true);
+        }
+      }}
+      onDragLeave={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOver(false);
+      }}
+      onDrop={(e) => {
+        setDragOver(false);
+        const drop = readDrop(e);
+        if (drop?.kind === "exercise") {
+          e.preventDefault();
+          insertExercise(drop.exerciseId);
+        }
+      }}
+    >
       <div className="flex items-center justify-between text-[11px] text-muted-foreground">
         <span className="inline-flex items-center gap-1"><Clock className="h-3 w-3" /> Est {durationRange(dayMin)}</span>
         <Button size="sm" variant="outline" onClick={addRow}><Plus className="mr-1 h-3 w-3" /> Row</Button>
       </div>
       {rows.length === 0 ? (
-        <p className="rounded-md border border-dashed border-border p-3 text-center text-xs text-muted-foreground">No exercises yet.</p>
+        <p className="rounded-md border border-dashed border-border p-3 text-center text-xs text-muted-foreground">
+          {dragOver ? "Drop exercise here" : "Drag exercises from the library, or click + Row"}
+        </p>
       ) : (
         <div className="space-y-1">
           {rows.map((r: any, i: number) => (
