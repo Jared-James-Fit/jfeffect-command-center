@@ -11,12 +11,14 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { ArrowLeft, Plus, Trash2, Copy, Save, Clock, RotateCcw } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, Copy, Save, Clock, RotateCcw, ArrowUp, ArrowDown, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 import {
   getBlockTree, addDay, addRow, updateRow, deleteRow, updateDay,
   estimateDayMinutes, durationRange, TIME_PROFILES, PERCENTAGE_BASES,
-  saveBlockAsTemplate, type TimeProfile, type PercentageBasis, type TrainingStyle,
+  saveBlockAsTemplate, updateBlock, duplicateDay, duplicateWeek, deleteDay, deleteWeek, moveRow,
+  BLOCK_STATUSES,
+  type TimeProfile, type PercentageBasis, type TrainingStyle, type BlockStatus,
 } from "@/lib/pl-programs";
 
 export const Route = createFileRoute("/_authenticated/admin/blocks/$blockId")({ component: BlockEditor });
@@ -51,7 +53,14 @@ function BlockEditor() {
           <Link to="/admin/client-programs/$clientId" params={{ clientId: block.client_id }} className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground">
             <ArrowLeft className="mr-1 h-4 w-4" /> Back to client programs
           </Link>
-          <div className="ml-auto flex gap-2">
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            <Select value={block.status} onValueChange={async (v) => { await updateBlock(blockId, { status: v as BlockStatus }); refresh(); toast.success(`Status: ${v}`); }}>
+              <SelectTrigger className="h-8 w-32 text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>{BLOCK_STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+            </Select>
+            <Button size="sm" variant="outline" onClick={async () => { await updateBlock(blockId, { client_visible: !block.client_visible }); refresh(); }}>
+              {block.client_visible ? <><Eye className="mr-1 h-4 w-4" /> Visible</> : <><EyeOff className="mr-1 h-4 w-4" /> Hidden</>}
+            </Button>
             <Button size="sm" variant="outline" onClick={() => setTplOpen(true)}><Save className="mr-1 h-4 w-4" /> Save Block as Template</Button>
           </div>
         </div>
@@ -67,6 +76,17 @@ function BlockEditor() {
             const weekDays = days.filter((d: any) => d.week_id === w.id);
             return (
               <TabsContent key={w.id} value={w.id} className="space-y-4">
+                <div className="flex flex-wrap gap-2">
+                  <Button size="sm" variant="outline" onClick={async () => { await duplicateWeek(w.id); refresh(); toast.success("Week duplicated"); }}>
+                    <Copy className="mr-1 h-4 w-4" /> Duplicate Week
+                  </Button>
+                  <Button size="sm" variant="ghost" className="text-destructive" onClick={async () => {
+                    if (!confirm("Delete this entire week and all its days/exercises?")) return;
+                    await deleteWeek(w.id); refresh(); toast.success("Week deleted");
+                  }}>
+                    <Trash2 className="mr-1 h-4 w-4" /> Delete Week
+                  </Button>
+                </div>
                 {weekDays.map((d: any) => {
                   const dayRows = rows.filter((r: any) => r.day_id === d.id);
                   return (
@@ -100,6 +120,15 @@ function DayCard({ day, rows, exercises, onChange }: { day: any; rows: any[]; ex
         <div className="flex items-center gap-2">
           <Input value={day.title ?? ""} onChange={(e) => updateDay(day.id, { title: e.target.value }).then(onChange)} className="w-56 font-bold" placeholder={`Day ${day.day_index}`} />
           <Input value={day.focus ?? ""} onChange={(e) => updateDay(day.id, { focus: e.target.value }).then(onChange)} className="w-48" placeholder="Focus (e.g. Squat + Bench)" />
+          <Button size="icon" variant="ghost" className="h-7 w-7" title="Duplicate day" onClick={async () => { await duplicateDay(day.id); onChange(); toast.success("Day duplicated"); }}>
+            <Copy className="h-3 w-3" />
+          </Button>
+          <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" title="Delete day" onClick={async () => {
+            if (!confirm("Delete this day and all its exercises?")) return;
+            await deleteDay(day.id); onChange(); toast.success("Day deleted");
+          }}>
+            <Trash2 className="h-3 w-3" />
+          </Button>
         </div>
         <div className="flex items-center gap-2 text-xs">
           <Clock className="h-3 w-3 text-muted-foreground" />
@@ -196,9 +225,17 @@ function RowEditor({ row, exercises, onChange }: { row: any; exercises: any[]; o
       </td>
       <td className="p-1 min-w-[160px]"><Input className="h-8 text-xs" value={local.notes ?? ""} onChange={(e) => setLocal({ ...local, notes: e.target.value })} onBlur={(e) => save({ notes: e.target.value })} /></td>
       <td className="p-1">
-        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={async () => { await deleteRow(row.id); onChange(); }}>
-          <Trash2 className="h-3 w-3" />
-        </Button>
+        <div className="flex">
+          <Button size="icon" variant="ghost" className="h-7 w-7" title="Move up" onClick={async () => { await moveRow(row.id, "up"); onChange(); }}>
+            <ArrowUp className="h-3 w-3" />
+          </Button>
+          <Button size="icon" variant="ghost" className="h-7 w-7" title="Move down" onClick={async () => { await moveRow(row.id, "down"); onChange(); }}>
+            <ArrowDown className="h-3 w-3" />
+          </Button>
+          <Button size="icon" variant="ghost" className="h-7 w-7" title="Delete" onClick={async () => { await deleteRow(row.id); onChange(); }}>
+            <Trash2 className="h-3 w-3" />
+          </Button>
+        </div>
       </td>
     </tr>
   );

@@ -78,6 +78,8 @@ import { Route as AuthenticatedAdminClientsIdRouteImport } from './routes/_authe
 import { Route as AuthenticatedAdminClientProgramsClientIdRouteImport } from './routes/_authenticated/admin/client-programs.$clientId'
 import { Route as AuthenticatedAdminBlocksBlockIdRouteImport } from './routes/_authenticated/admin/blocks.$blockId'
 import { Route as AuthenticatedAdminAgreementsSignedRouteImport } from './routes/_authenticated/admin/agreements.signed'
+import { Route as AuthenticatedAdminClientProgramsClientIdHistoryRouteImport } from './routes/_authenticated/admin/client-programs.$clientId.history'
+import { Route as AuthenticatedAdminClientProgramsClientIdAnalyticsRouteImport } from './routes/_authenticated/admin/client-programs.$clientId.analytics'
 
 const SitemapRoute = SitemapRouteImport.update({
   id: '/sitemap',
@@ -478,6 +480,18 @@ const AuthenticatedAdminAgreementsSignedRoute =
     path: '/agreements/signed',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
+const AuthenticatedAdminClientProgramsClientIdHistoryRoute =
+  AuthenticatedAdminClientProgramsClientIdHistoryRouteImport.update({
+    id: '/history',
+    path: '/history',
+    getParentRoute: () => AuthenticatedAdminClientProgramsClientIdRoute,
+  } as any)
+const AuthenticatedAdminClientProgramsClientIdAnalyticsRoute =
+  AuthenticatedAdminClientProgramsClientIdAnalyticsRouteImport.update({
+    id: '/analytics',
+    path: '/analytics',
+    getParentRoute: () => AuthenticatedAdminClientProgramsClientIdRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -536,7 +550,7 @@ export interface FileRoutesByFullPath {
   '/portal/': typeof AuthenticatedPortalIndexRoute
   '/admin/agreements/signed': typeof AuthenticatedAdminAgreementsSignedRoute
   '/admin/blocks/$blockId': typeof AuthenticatedAdminBlocksBlockIdRoute
-  '/admin/client-programs/$clientId': typeof AuthenticatedAdminClientProgramsClientIdRoute
+  '/admin/client-programs/$clientId': typeof AuthenticatedAdminClientProgramsClientIdRouteWithChildren
   '/admin/clients/$id': typeof AuthenticatedAdminClientsIdRoute
   '/admin/coaches/$id': typeof AuthenticatedAdminCoachesIdRoute
   '/admin/purchases/$id': typeof AuthenticatedAdminPurchasesIdRoute
@@ -548,6 +562,8 @@ export interface FileRoutesByFullPath {
   '/admin/clients/': typeof AuthenticatedAdminClientsIndexRoute
   '/admin/coaches/': typeof AuthenticatedAdminCoachesIndexRoute
   '/portal/agreements/': typeof AuthenticatedPortalAgreementsIndexRoute
+  '/admin/client-programs/$clientId/analytics': typeof AuthenticatedAdminClientProgramsClientIdAnalyticsRoute
+  '/admin/client-programs/$clientId/history': typeof AuthenticatedAdminClientProgramsClientIdHistoryRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -604,7 +620,7 @@ export interface FileRoutesByTo {
   '/portal': typeof AuthenticatedPortalIndexRoute
   '/admin/agreements/signed': typeof AuthenticatedAdminAgreementsSignedRoute
   '/admin/blocks/$blockId': typeof AuthenticatedAdminBlocksBlockIdRoute
-  '/admin/client-programs/$clientId': typeof AuthenticatedAdminClientProgramsClientIdRoute
+  '/admin/client-programs/$clientId': typeof AuthenticatedAdminClientProgramsClientIdRouteWithChildren
   '/admin/clients/$id': typeof AuthenticatedAdminClientsIdRoute
   '/admin/coaches/$id': typeof AuthenticatedAdminCoachesIdRoute
   '/admin/purchases/$id': typeof AuthenticatedAdminPurchasesIdRoute
@@ -616,6 +632,8 @@ export interface FileRoutesByTo {
   '/admin/clients': typeof AuthenticatedAdminClientsIndexRoute
   '/admin/coaches': typeof AuthenticatedAdminCoachesIndexRoute
   '/portal/agreements': typeof AuthenticatedPortalAgreementsIndexRoute
+  '/admin/client-programs/$clientId/analytics': typeof AuthenticatedAdminClientProgramsClientIdAnalyticsRoute
+  '/admin/client-programs/$clientId/history': typeof AuthenticatedAdminClientProgramsClientIdHistoryRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -676,7 +694,7 @@ export interface FileRoutesById {
   '/_authenticated/portal/': typeof AuthenticatedPortalIndexRoute
   '/_authenticated/admin/agreements/signed': typeof AuthenticatedAdminAgreementsSignedRoute
   '/_authenticated/admin/blocks/$blockId': typeof AuthenticatedAdminBlocksBlockIdRoute
-  '/_authenticated/admin/client-programs/$clientId': typeof AuthenticatedAdminClientProgramsClientIdRoute
+  '/_authenticated/admin/client-programs/$clientId': typeof AuthenticatedAdminClientProgramsClientIdRouteWithChildren
   '/_authenticated/admin/clients/$id': typeof AuthenticatedAdminClientsIdRoute
   '/_authenticated/admin/coaches/$id': typeof AuthenticatedAdminCoachesIdRoute
   '/_authenticated/admin/purchases/$id': typeof AuthenticatedAdminPurchasesIdRoute
@@ -688,6 +706,8 @@ export interface FileRoutesById {
   '/_authenticated/admin/clients/': typeof AuthenticatedAdminClientsIndexRoute
   '/_authenticated/admin/coaches/': typeof AuthenticatedAdminCoachesIndexRoute
   '/_authenticated/portal/agreements/': typeof AuthenticatedPortalAgreementsIndexRoute
+  '/_authenticated/admin/client-programs/$clientId/analytics': typeof AuthenticatedAdminClientProgramsClientIdAnalyticsRoute
+  '/_authenticated/admin/client-programs/$clientId/history': typeof AuthenticatedAdminClientProgramsClientIdHistoryRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -760,6 +780,8 @@ export interface FileRouteTypes {
     | '/admin/clients/'
     | '/admin/coaches/'
     | '/portal/agreements/'
+    | '/admin/client-programs/$clientId/analytics'
+    | '/admin/client-programs/$clientId/history'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -828,6 +850,8 @@ export interface FileRouteTypes {
     | '/admin/clients'
     | '/admin/coaches'
     | '/portal/agreements'
+    | '/admin/client-programs/$clientId/analytics'
+    | '/admin/client-programs/$clientId/history'
   id:
     | '__root__'
     | '/'
@@ -899,6 +923,8 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/clients/'
     | '/_authenticated/admin/coaches/'
     | '/_authenticated/portal/agreements/'
+    | '/_authenticated/admin/client-programs/$clientId/analytics'
+    | '/_authenticated/admin/client-programs/$clientId/history'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -1399,6 +1425,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminAgreementsSignedRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
+    '/_authenticated/admin/client-programs/$clientId/history': {
+      id: '/_authenticated/admin/client-programs/$clientId/history'
+      path: '/history'
+      fullPath: '/admin/client-programs/$clientId/history'
+      preLoaderRoute: typeof AuthenticatedAdminClientProgramsClientIdHistoryRouteImport
+      parentRoute: typeof AuthenticatedAdminClientProgramsClientIdRoute
+    }
+    '/_authenticated/admin/client-programs/$clientId/analytics': {
+      id: '/_authenticated/admin/client-programs/$clientId/analytics'
+      path: '/analytics'
+      fullPath: '/admin/client-programs/$clientId/analytics'
+      preLoaderRoute: typeof AuthenticatedAdminClientProgramsClientIdAnalyticsRouteImport
+      parentRoute: typeof AuthenticatedAdminClientProgramsClientIdRoute
+    }
   }
 }
 
@@ -1414,6 +1454,24 @@ const AuthenticatedAdminPurchasesRouteChildren: AuthenticatedAdminPurchasesRoute
 const AuthenticatedAdminPurchasesRouteWithChildren =
   AuthenticatedAdminPurchasesRoute._addFileChildren(
     AuthenticatedAdminPurchasesRouteChildren,
+  )
+
+interface AuthenticatedAdminClientProgramsClientIdRouteChildren {
+  AuthenticatedAdminClientProgramsClientIdAnalyticsRoute: typeof AuthenticatedAdminClientProgramsClientIdAnalyticsRoute
+  AuthenticatedAdminClientProgramsClientIdHistoryRoute: typeof AuthenticatedAdminClientProgramsClientIdHistoryRoute
+}
+
+const AuthenticatedAdminClientProgramsClientIdRouteChildren: AuthenticatedAdminClientProgramsClientIdRouteChildren =
+  {
+    AuthenticatedAdminClientProgramsClientIdAnalyticsRoute:
+      AuthenticatedAdminClientProgramsClientIdAnalyticsRoute,
+    AuthenticatedAdminClientProgramsClientIdHistoryRoute:
+      AuthenticatedAdminClientProgramsClientIdHistoryRoute,
+  }
+
+const AuthenticatedAdminClientProgramsClientIdRouteWithChildren =
+  AuthenticatedAdminClientProgramsClientIdRoute._addFileChildren(
+    AuthenticatedAdminClientProgramsClientIdRouteChildren,
   )
 
 interface AuthenticatedAdminRouteRouteChildren {
@@ -1447,7 +1505,7 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminIndexRoute: typeof AuthenticatedAdminIndexRoute
   AuthenticatedAdminAgreementsSignedRoute: typeof AuthenticatedAdminAgreementsSignedRoute
   AuthenticatedAdminBlocksBlockIdRoute: typeof AuthenticatedAdminBlocksBlockIdRoute
-  AuthenticatedAdminClientProgramsClientIdRoute: typeof AuthenticatedAdminClientProgramsClientIdRoute
+  AuthenticatedAdminClientProgramsClientIdRoute: typeof AuthenticatedAdminClientProgramsClientIdRouteWithChildren
   AuthenticatedAdminClientsIdRoute: typeof AuthenticatedAdminClientsIdRoute
   AuthenticatedAdminCoachesIdRoute: typeof AuthenticatedAdminCoachesIdRoute
   AuthenticatedAdminAgreementsIndexRoute: typeof AuthenticatedAdminAgreementsIndexRoute
@@ -1495,7 +1553,7 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
       AuthenticatedAdminAgreementsSignedRoute,
     AuthenticatedAdminBlocksBlockIdRoute: AuthenticatedAdminBlocksBlockIdRoute,
     AuthenticatedAdminClientProgramsClientIdRoute:
-      AuthenticatedAdminClientProgramsClientIdRoute,
+      AuthenticatedAdminClientProgramsClientIdRouteWithChildren,
     AuthenticatedAdminClientsIdRoute: AuthenticatedAdminClientsIdRoute,
     AuthenticatedAdminCoachesIdRoute: AuthenticatedAdminCoachesIdRoute,
     AuthenticatedAdminAgreementsIndexRoute:
