@@ -1,131 +1,115 @@
-# Client Activity, Compliance & Notifications
 
-A big feature surface. To keep it shippable and avoid a half-broken dashboard, I'll build it in 4 phases. You can stop me after any phase if you want to ship and iterate.
+# Native Form & Check-In System (Replaces Fillout)
 
----
-
-## Phase 1 — Activity tracking foundation (ship first)
-
-The whole system rests on reliably knowing *when* a client did something. Build this first.
-
-### Database
-
-New columns on `public.clients`:
-- `last_signed_in_at timestamptz`
-- `last_active_at timestamptz`
-- `last_active_route text` (e.g. "/portal/program")
-- `compliance_status text default 'On Track'` — On Track | Watch | Needs Follow-Up | Non-Compliant | Paused
-- `compliance_status_updated_at timestamptz`
-- `compliance_tracking_enabled boolean default true`
-
-New table `public.client_compliance_settings` (1:1 with clients) — per-client rules:
-- check_in_required, check_in_due_day
-- bodyweight_expected, bodyweight_frequency_per_week
-- lift_videos_expected, lift_video_frequency_per_week
-- progress_photos_expected
-- inactivity_threshold_days (default 7)
-- followup_threshold_days (default 14)
-- notes
-
-(Re-uses the existing `client_activity_log` table for the timeline — already exists.)
-
-### Client → app heartbeat
-- `useActivityHeartbeat()` hook mounted in the authenticated portal layout.
-- On mount + route change + every 3 min while tab visible → calls a `pingActivity` server fn that updates `last_active_at` and `last_active_route` (throttled server-side to once / 60s).
-- On successful sign-in / session restore → updates `last_signed_in_at`.
-
-### Activity log writes
-Hook the existing tables I already touch from server code so an `client_activity_log` row is inserted when:
-- bodyweight logged, goal set/reached, lift video uploaded (incl. urgent), message sent, check-in submitted, progress metric logged, agreement signed, payment completed.
+A full-native form builder + submission + review system, modeled on the JF Check-In Fillout form but with no Fillout dependency.
 
 ---
 
-## Phase 2 — Client profile + clients list surfaces
+## 1. Database (new tables)
 
-### Client profile (admin + coach view)
-New **App Activity** card on `clients.$id`:
-- Status pill (Online now / Active today / Inactive Xd / Never signed in)
-- Last signed in, Last active, Last viewed page
-- Most recent action (pulled from `client_activity_log`)
-- Compliance pill + "Follow-up needed: Yes/No"
+- **forms** *(extend existing `forms` table or new `native_forms`)* — title, description, type (`weekly_check_in`, `intake`, `custom`, …), recurring frequency (`none|weekly|biweekly|monthly`), active, archived, created_by, version.
+- **form_questions** — form_id, order_index, type (`short_text|long_text|number|single_choice|multi_choice|dropdown|rating|date|file|video`), label, help_text, required, options (jsonb), validation (jsonb min/max/regex), conditional_logic (jsonb: `{show_if:[{question_id, op, value}]}`).
+- **form_assignments** — form_id, client_id (nullable), client_group (nullable), recurrence, next_due_at.
+- **form_submissions** — form_id, client_id, status (`not_started|in_progress|submitted|pending_review|reviewed`), started_at, submitted_at, reviewed_at, reviewed_by, week_index (for recurring).
+- **form_answers** — submission_id, question_id, value_text, value_number, value_json, file_url.
+- **form_submission_files** — submission_id, question_id, storage_path, mime, size, original_name.
+- **form_reviews** — submission_id, coach_id, reply_text, sent_to_messenger_at, message_id.
 
-New **Compliance Settings** card (collapsible) with the per-client toggles above.
+All with RLS:
+- Client: read/write own submissions; read forms assigned to them.
+- Coach: read submissions of assigned clients; write reviews.
+- Admin: full access.
 
-New **Activity Timeline** card — last 20 entries from `client_activity_log`, simple list.
-
-### Clients list
-Add one new column: **Activity** showing a single compact badge — Online / Active today / Inactive 7d / Inactive 14d+ / Never signed in. Compliance shown only when not "On Track" to keep the table clean.
-
----
-
-## Phase 3 — Compliance engine + Needs Follow-Up
-
-### Compliance evaluator
-Pure TS function `evaluateCompliance(client, settings, lastActions) → status + reasons[]`. Runs:
-1. Server-side cron-ish: a scheduled server fn (called on admin dashboard load + nightly via `pg_cron` calling `/api/public/recompute-compliance` with a shared secret) recomputes every active client.
-2. Inline: whenever a tracked event fires, recompute that one client.
-
-Logic per request:
-- Inactive 7d → Watch · Inactive 14d → Needs Follow-Up · Inactive 30d → Non-Compliant
-- Check-in overdue past due_day → Needs Follow-Up
-- Bodyweight/lift video frequency missed → Watch then Needs Follow-Up
-- Unsigned agreement blocking service → Needs Follow-Up
-- Paused/archived client → Paused (skip evaluation)
-
-### Needs Follow-Up view
-- New admin route `/admin/follow-up` + dashboard widget version.
-- Lists clients with status ≠ On Track, sorted by severity then last_active.
-- Each row: name, last active, missed item(s), status, **Message Client** button (opens existing message thread pre-filled with a template, admin edits before sending — no auto-send).
-- Coach version filters to assigned clients automatically.
+Storage: new private bucket `form-uploads` for files/videos (linked to submission). Videos uploaded via signed URL flow — never stored in DB.
 
 ---
 
-## Phase 4 — Notifications & milestones
+## 2. Coach/Admin — Form Builder
 
-### Notifications table
-New `public.notifications`:
-- recipient_user_id, recipient_role (admin|coach)
-- client_id (nullable), priority (normal|important|urgent)
-- type (e.g. `lift_video_uploaded`, `bodyweight_goal_reached`, `urgent_lift_video`, `compliance_changed`)
-- title, body, link_to
-- read_at, created_at
+Route: `/admin/forms` (extend existing) + `/admin/forms/$id/edit`
 
-`notification_preferences` table — per-user toggles for each event type. Sensible defaults on.
-
-### Wiring
-Notifications written from the same server fns that already perform the action:
-- lift video insert → `lift_video_uploaded` (+ `urgent_lift_video` if `is_urgent`)
-- message insert from client → `client_message`
-- check-in submit, bodyweight log, goal set/changed/**reached**, progress metric → respective types
-- agreement signed, payment success/failure
-- compliance status transitions → `compliance_changed`
-- Milestone detection (new bodyweight low/high during phase, goal reached) — added to the bodyweight save server fn.
-- PR detection (rep PR, est-1RM PR) — added when admin/client logs a lift in progress metrics. **Note:** PR/rep/volume PRs require structured set-level logging which we don't currently capture beyond freeform `load_text`. I'll support bodyweight + manually-tagged "PR" entries first; full automatic strength PR detection needs a separate dedicated logging surface — flagging as a follow-up.
-
-Routing: admin gets everything they've opted into; assigned coach gets a copy for their clients only.
-
-### Surfaces
-- Extend existing `NotificationBell` to read from `notifications` table (currently it has different content — I'll merge).
-- Badges on Lift Video Review, Check-Ins, Messages, Agreements, Payments — based on unread counts per type.
-- Mark-as-read on view; "mark all read" action.
-
-### Settings
-`/admin/settings` → notification preferences toggles (already a page, will add a section).
+- List of forms with green "Active & Assigned" indicator (active + ≥1 assignment + ≥1 question).
+- Builder UI:
+  - Add/edit/delete/reorder questions (drag handle).
+  - Field types: short text, long text, number, single choice, multi choice, dropdown, rating (1–5/10), date, file, video.
+  - Required toggle, help text, options editor.
+  - Conditional logic editor: "Show this question if [Question X] [equals/not equals/contains/>/<] [value]".
+  - Duplicate form button.
+  - Assign to clients (multi-select) or "all active clients".
+  - Recurring schedule (weekly / biweekly / monthly / one-time) with day-of-week.
 
 ---
 
-## Out of scope / follow-ups
+## 3. Coach/Admin — Review Inbox
 
-- True real-time presence ("typing now" / websocket online indicator) — heartbeat gives "online now" within ~3 min which matches your "2–5 min" spec; skipping presence websockets.
-- Automatic strength PR detection (set-level rep/load/1RM history) — needs a dedicated lifting log; flagged above.
-- Push notifications to phone — current scope is in-app only.
-- Email digests of compliance — can layer on later using the existing email sender.
+Route: `/admin/check-in-submissions`
+
+- Inbox grouped by status: Pending Review → Reviewed.
+- Filter by client, form, date.
+- Detail view shows every question + answer, file/video previews.
+- "Quick Reply" composer at top → on send:
+  1. Creates `form_reviews` row.
+  2. Marks submission `reviewed`.
+  3. **Posts the reply as a coach message into the client's messenger thread** with a header line like *"Re: Weekly Check-In — Nov 12"* and a deep link back to the submission.
+  4. Client can continue the conversation in messenger normally.
 
 ---
 
-## What I'd like to confirm before coding
+## 4. Client Experience
 
-1. **Ship order** — OK to ship phase by phase (each phase is independently useful), or do you want everything in one drop?
-2. **Coach scope** — coaches see assigned clients only by default. OK?
-3. **PR detection** — confirm the limitation above is acceptable for v1 (bodyweight milestones + manually flagged PRs only).
-4. **Heartbeat cost** — every 3 min while a client has the app open writes one row to `clients`. Across your client count this is negligible, but it does mean `clients.updated_at` will tick frequently. OK, or do you want activity stored on a separate `client_presence` table to keep `clients.updated_at` stable?
+Route: `/portal/check-ins` (replaces existing Fillout link page)
+
+- List of assigned forms with status badge (Not Started / In Progress / Submitted / Pending Review / Reviewed).
+- For recurring forms, shows current period's instance + history of past weeks.
+- Form renderer:
+  - One question at a time on mobile, or scrollable list on desktop.
+  - Honors required + conditional logic.
+  - **Auto-saves on every change** → `form_submissions.status = in_progress`.
+  - Resume from last unsaved spot.
+  - File/video upload via signed URL to `form-uploads` bucket.
+  - Final "Submit" → status `pending_review`.
+- "Form History" tab showing all past submissions.
+
+---
+
+## 5. Pre-Seed: JF Check-In
+
+Seed a `Weekly Check-In` form with the 23 questions from your Zapier payload (name, training week, phase, life updates, digestion, wins/PRs/injuries, workout feel, nutrition adherence, water, hunger, starvation, fasted bodyweight, sleep, stress, stress cause, cardio, cardio shortfall, etc.) as Short/Long/Number/Choice types — recurring weekly.
+
+---
+
+## 6. Permissions
+
+- RLS on every table.
+- `requireSupabaseAuth` server functions for builder mutations + submission reads.
+- File uploads via signed URLs, validated server-side.
+
+---
+
+## 7. Mobile
+
+- Form renderer uses existing mobile-tuned UI primitives (one-question-at-a-time mode under `md:`).
+- Large tap targets, safe-area padding, iOS keyboard handling already in app shell.
+
+---
+
+## 8. Cleanup
+
+- Remove Fillout link/button from `/portal/check-in` (replace with native renderer).
+- Remove Zapier-webhook plan from prior message (no longer needed).
+- Keep existing `check_in_links` table for backwards compat but hide UI behind a "Legacy" toggle.
+
+---
+
+## Scope of this build
+
+This is a large, multi-day feature (~15+ files, ~6 new tables, builder + renderer + inbox + messenger integration). I'll build it in this order so each step is independently usable:
+
+1. Schema + RLS + seed JF Check-In form.
+2. Client form renderer with auto-save + status.
+3. Coach review inbox + quick-reply → messenger.
+4. Form builder (CRUD questions, conditional logic, assignments).
+5. Recurring schedule + history.
+6. Polish: green active indicator, mobile pass, remove Fillout references.
+
+Confirm and I'll start at step 1 with the migration.
