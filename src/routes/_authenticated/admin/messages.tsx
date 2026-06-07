@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { UserAvatar } from "@/components/user-avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -224,10 +224,12 @@ function MessagesInbox() {
                 selectedId === client.id && "bg-secondary/60",
               )}
             >
-              <Avatar className="h-11 w-11 shrink-0">
-                <AvatarImage src={client.profile_picture_url ?? undefined} />
-                <AvatarFallback>{(client.full_name ?? "?").slice(0, 1)}</AvatarFallback>
-              </Avatar>
+              <UserAvatar
+                src={client.profile_picture_url}
+                name={client.full_name}
+                size={44}
+                ring
+              />
               <div className="min-w-0 flex-1">
                 <div className="flex items-center justify-between gap-2">
                   <span className={cn("truncate text-sm", unread > 0 ? "font-bold" : "font-semibold")}>
@@ -283,10 +285,12 @@ function MessagesInbox() {
               >
                 <ChevronLeft className="h-5 w-5" />
               </Button>
-              <Avatar className="h-10 w-10 shrink-0">
-                <AvatarImage src={selected.profile_picture_url ?? undefined} />
-                <AvatarFallback>{(selected.full_name ?? "?").slice(0, 1)}</AvatarFallback>
-              </Avatar>
+              <UserAvatar
+                src={selected.profile_picture_url}
+                name={selected.full_name}
+                size={40}
+                ring
+              />
               <div className="min-w-0 flex-1">
                 <div className="truncate text-sm font-bold">{selected.full_name}</div>
                 <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
@@ -341,6 +345,8 @@ function MessagesInbox() {
               conversationState={selectedState ?? null}
               hideControls
               fullBleed
+              peerName={selected.full_name}
+              peerAvatarPath={selected.profile_picture_url}
             />
           </>
         ) : (

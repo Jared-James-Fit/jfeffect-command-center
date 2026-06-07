@@ -15,6 +15,7 @@ import { AlertTriangle, Video, Image as ImageIcon, FileText as FileIcon, Trash2 
 import { format, parseISO, formatDistanceToNow } from "date-fns";
 import { listMediaItems, deleteMediaItems, MEDIA_STATUSES, MEDIA_TYPES, statusTone, type MediaStatus, type MediaType } from "@/lib/media";
 import { MediaItemCard } from "@/components/media-item-card";
+import { UserAvatar } from "@/components/user-avatar";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 
@@ -163,8 +164,7 @@ function AdminMediaReview() {
                     <div onClick={(e) => e.stopPropagation()} className="pt-1">
                       <Checkbox checked={selected.has(v.id)} onCheckedChange={() => toggleOne(v.id)} />
                     </div>
-                    {c?.profile_picture_url ? <img src={c.profile_picture_url} alt="" className="h-10 w-10 rounded-full object-cover" />
-                      : <div className="grid h-10 w-10 place-items-center rounded-full bg-secondary text-xs font-bold">{(c?.full_name ?? "?").slice(0,1)}</div>}
+                    <UserAvatar src={c?.profile_picture_url} name={c?.full_name} size={40} />
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="font-bold truncate">{c?.full_name ?? "Client"}</span>

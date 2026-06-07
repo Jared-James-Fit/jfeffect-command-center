@@ -21,7 +21,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { derivePhase, displayTitle, toneClasses, type TrainingPhase } from "@/lib/training-phases";
 import { deriveTarget } from "@/lib/nutrition-cardio";
 import { PowerlifterBadge } from "@/components/powerlifter-badge";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { UserAvatar } from "@/components/user-avatar";
 
 function summarizeCardio(list: any[]): string {
   if (!list || list.length === 0) return "";
@@ -296,12 +296,11 @@ function ClientsPage() {
                           params={{ id: c.id }}
                           className="flex items-start gap-3 hover:text-primary"
                         >
-                          <Avatar className="h-9 w-9 shrink-0">
-                            <AvatarImage src={c.profile_picture_url ?? undefined} />
-                            <AvatarFallback className="text-xs">
-                              {(c.full_name ?? "?").split(" ").map((s: string) => s[0]).slice(0, 2).join("")}
-                            </AvatarFallback>
-                          </Avatar>
+                          <UserAvatar
+                            src={c.profile_picture_url}
+                            name={c.full_name}
+                            size={36}
+                          />
                           <div className="min-w-0">
                             <div className="font-semibold truncate">{c.full_name}</div>
                             <div className="text-xs text-muted-foreground truncate">{c.email}</div>
