@@ -2241,6 +2241,332 @@ export type Database = {
           },
         ]
       }
+      nf_answers: {
+        Row: {
+          created_at: string
+          id: string
+          question_id: string
+          submission_id: string
+          updated_at: string
+          value_json: Json | null
+          value_number: number | null
+          value_text: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          question_id: string
+          submission_id: string
+          updated_at?: string
+          value_json?: Json | null
+          value_number?: number | null
+          value_text?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          question_id?: string
+          submission_id?: string
+          updated_at?: string
+          value_json?: Json | null
+          value_number?: number | null
+          value_text?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nf_answers_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "nf_questions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nf_answers_submission_id_fkey"
+            columns: ["submission_id"]
+            isOneToOne: false
+            referencedRelation: "nf_submissions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      nf_assignments: {
+        Row: {
+          assigned_by: string | null
+          client_id: string
+          created_at: string
+          form_id: string
+          id: string
+          next_due_at: string | null
+          recurrence: string
+          updated_at: string
+        }
+        Insert: {
+          assigned_by?: string | null
+          client_id: string
+          created_at?: string
+          form_id: string
+          id?: string
+          next_due_at?: string | null
+          recurrence?: string
+          updated_at?: string
+        }
+        Update: {
+          assigned_by?: string | null
+          client_id?: string
+          created_at?: string
+          form_id?: string
+          id?: string
+          next_due_at?: string | null
+          recurrence?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nf_assignments_form_id_fkey"
+            columns: ["form_id"]
+            isOneToOne: false
+            referencedRelation: "nf_forms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      nf_files: {
+        Row: {
+          created_at: string
+          id: string
+          mime_type: string | null
+          original_name: string | null
+          question_id: string
+          size_bytes: number | null
+          storage_path: string
+          submission_id: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          mime_type?: string | null
+          original_name?: string | null
+          question_id: string
+          size_bytes?: number | null
+          storage_path: string
+          submission_id: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          mime_type?: string | null
+          original_name?: string | null
+          question_id?: string
+          size_bytes?: number | null
+          storage_path?: string
+          submission_id?: string
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nf_files_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "nf_questions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nf_files_submission_id_fkey"
+            columns: ["submission_id"]
+            isOneToOne: false
+            referencedRelation: "nf_submissions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      nf_forms: {
+        Row: {
+          active: boolean
+          archived: boolean
+          created_at: string
+          created_by: string | null
+          description: string | null
+          form_type: string
+          id: string
+          recurrence: string
+          recurrence_day: string | null
+          title: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          active?: boolean
+          archived?: boolean
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          form_type?: string
+          id?: string
+          recurrence?: string
+          recurrence_day?: string | null
+          title: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          active?: boolean
+          archived?: boolean
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          form_type?: string
+          id?: string
+          recurrence?: string
+          recurrence_day?: string | null
+          title?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: []
+      }
+      nf_questions: {
+        Row: {
+          conditional_logic: Json
+          created_at: string
+          form_id: string
+          help_text: string | null
+          id: string
+          label: string
+          options: Json
+          order_index: number
+          question_type: string
+          required: boolean
+          updated_at: string
+          validation: Json
+        }
+        Insert: {
+          conditional_logic?: Json
+          created_at?: string
+          form_id: string
+          help_text?: string | null
+          id?: string
+          label: string
+          options?: Json
+          order_index?: number
+          question_type: string
+          required?: boolean
+          updated_at?: string
+          validation?: Json
+        }
+        Update: {
+          conditional_logic?: Json
+          created_at?: string
+          form_id?: string
+          help_text?: string | null
+          id?: string
+          label?: string
+          options?: Json
+          order_index?: number
+          question_type?: string
+          required?: boolean
+          updated_at?: string
+          validation?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nf_questions_form_id_fkey"
+            columns: ["form_id"]
+            isOneToOne: false
+            referencedRelation: "nf_forms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      nf_reviews: {
+        Row: {
+          created_at: string
+          id: string
+          message_id: string | null
+          reply_text: string
+          reviewer_user_id: string
+          sent_to_messenger_at: string | null
+          submission_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          message_id?: string | null
+          reply_text: string
+          reviewer_user_id: string
+          sent_to_messenger_at?: string | null
+          submission_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          message_id?: string | null
+          reply_text?: string
+          reviewer_user_id?: string
+          sent_to_messenger_at?: string | null
+          submission_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nf_reviews_submission_id_fkey"
+            columns: ["submission_id"]
+            isOneToOne: false
+            referencedRelation: "nf_submissions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      nf_submissions: {
+        Row: {
+          client_id: string
+          created_at: string
+          form_id: string
+          id: string
+          period_start: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          started_at: string
+          status: string
+          submitted_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          form_id: string
+          id?: string
+          period_start?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          started_at?: string
+          status?: string
+          submitted_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          form_id?: string
+          id?: string
+          period_start?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          started_at?: string
+          status?: string
+          submitted_at?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nf_submissions_form_id_fkey"
+            columns: ["form_id"]
+            isOneToOne: false
+            referencedRelation: "nf_forms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       nutrition_target_days: {
         Row: {
           calories: number | null
