@@ -570,8 +570,18 @@ function DayBlock({
         selected && "ring-2 ring-primary/60",
       )}
       onClick={onSelect}
-      onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-      onDragLeave={() => setDragOver(false)}
+      onDragOver={(e) => {
+        e.preventDefault();
+        setDragOver(true);
+        setDropIndex(computeDropIndex(e.clientY));
+      }}
+      onDragLeave={(e) => {
+        // Only reset if cursor truly leaves the card
+        if (!(e.currentTarget as Node).contains(e.relatedTarget as Node)) {
+          setDragOver(false);
+          setDropIndex(null);
+        }
+      }}
       onDrop={(e) => onDrop(e)}
     >
       <div className="flex flex-wrap items-center gap-1.5 pb-1" onClick={(e) => e.stopPropagation()}>
@@ -608,6 +618,11 @@ function DayBlock({
             <DropdownMenuContent align="end">
               <DropdownMenuItem onClick={() => onAction(() => duplicateDay(day.id))}><Copy className="mr-2 h-3 w-3" /> Duplicate day</DropdownMenuItem>
               <DropdownMenuItem onClick={() => onAction(() => addRow(day.id, rows.length))}><Plus className="mr-2 h-3 w-3" /> Add empty row</DropdownMenuItem>
+              {onCopyDayToFuture && (
+                <DropdownMenuItem onClick={() => onCopyDayToFuture()}>
+                  <Zap className="mr-2 h-3 w-3" /> Copy day → future weeks
+                </DropdownMenuItem>
+              )}
               {link.sourceLabel && !link.isCustom && (
                 <DropdownMenuItem onClick={() => onAction(() => breakDayLink(day.id))}>Break link to {link.sourceLabel}</DropdownMenuItem>
               )}
@@ -639,18 +654,22 @@ function DayBlock({
               <th className="w-6"></th>
             </tr>
           </thead>
-          <tbody>
+          <tbody ref={rowsRef}>
             {rows.length === 0 && (
               <tr><td colSpan={9} className="px-2 py-4 text-center text-[11px] text-muted-foreground">
-                <div className="mb-2">Drag exercises here, or:</div>
+                <div className={cn("mb-2", dragOver && "text-primary")}>Drag exercises here, or:</div>
                 <div className="flex flex-wrap justify-center gap-1">
                   <Button size="sm" variant="outline" className="h-6 text-[10px]" onClick={() => onAction(() => addRow(day.id, 0))}>+ Empty row</Button>
                 </div>
               </td></tr>
             )}
-            {rows.map((r: any) => (
-              <CompactRow key={r.id} row={r} exercises={exercises} density={density} onAction={onAction} onRowPatch={onRowPatch} dayId={day.id} />
+            {rows.map((r: any, idx: number) => (
+              <Fragment key={r.id}>
+                {dragOver && dropIndex === idx && <InsertionRow />}
+                <CompactRow row={r} exercises={exercises} density={density} onAction={onAction} onRowPatch={onRowPatch} dayId={day.id} rowIdx={idx} />
+              </Fragment>
             ))}
+            {dragOver && dropIndex === rows.length && rows.length > 0 && <InsertionRow />}
           </tbody>
         </table>
       </div>
