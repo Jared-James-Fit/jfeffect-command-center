@@ -187,7 +187,38 @@ function PaymentLinksPage() {
   const duplicateFn = useServerFn(duplicateCoachingProduct);
   const deleteFn = useServerFn(deleteCoachingProduct);
   const previewCheckoutFn = useServerFn(createPreviewCheckoutSession);
+  const generateLinkFn = useServerFn(generatePaymentLinkForProduct);
   const [previewingCheckout, setPreviewingCheckout] = useState<string | null>(null);
+  const [generatingLink, setGeneratingLink] = useState<string | null>(null);
+  const [sharing, setSharing] = useState<Product | null>(null);
+
+  const handleGenerateLink = async (p: Product) => {
+    if (!(p as any).stripe_price_id) {
+      toast.error("Add a Stripe Price ID first.");
+      setEditing({ open: true, product: p });
+      return;
+    }
+    setGeneratingLink(p.id);
+    try {
+      const res = await generateLinkFn({ data: { id: p.id } });
+      toast.success("Payment link ready — copy and share anywhere.");
+      qc.invalidateQueries({ queryKey: ["coaching-products"] });
+      try { await navigator.clipboard.writeText(res.url); } catch {}
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to generate payment link");
+    } finally {
+      setGeneratingLink(null);
+    }
+  };
+
+  const copyLink = async (url: string) => {
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success("Payment link copied — paste into text, DM, or email.");
+    } catch {
+      toast.error("Could not copy. Long-press the link to copy manually.");
+    }
+  };
 
   const handleStripePreview = async (p: Product) => {
     const r = readiness(p);
