@@ -419,39 +419,25 @@ function PaymentLinksPage() {
                   </div>
                   <div className="mt-2 flex flex-wrap gap-1.5">
                     {(() => {
-                      const hasPrice = !!(p as any).stripe_price_id;
-                      const hasLink = !!p.payment_link_url;
-                      if (hasPrice) {
+                      const r = readiness(p);
+                      if (r.ready) {
                         return (
                           <Badge variant="outline" className="text-xs border-primary/40 text-primary">
                             <CheckCircle2 className="h-3 w-3 mr-1" />Checkout Ready
                           </Badge>
                         );
                       }
-                      if (hasLink) {
-                        return (
-                          <Badge variant="outline" className="text-xs border-amber-500/40 text-amber-600 dark:text-amber-400">
-                            <AlertTriangle className="h-3 w-3 mr-1" />Legacy Payment Link (no Price ID)
-                          </Badge>
-                        );
-                      }
-                      return (
-                        <Badge variant="outline" className="text-xs text-destructive border-destructive/40">
-                          <AlertTriangle className="h-3 w-3 mr-1" />Missing Stripe Price ID
+                      return r.missing.map((m) => (
+                        <Badge key={m} variant="outline" className="text-xs text-destructive border-destructive/40">
+                          <AlertTriangle className="h-3 w-3 mr-1" />{m}
                         </Badge>
-                      );
+                      ));
                     })()}
                     {p.agreement_required && <Badge variant="outline" className="text-xs"><FileSignature className="h-3 w-3 mr-1" />Agreement Required</Badge>}
                   </div>
                   {p.description && <p className="text-sm mt-2 line-clamp-2 text-muted-foreground">{p.description}</p>}
                   <div className="mt-3 flex flex-wrap gap-2">
                     <Button size="sm" className="bg-gradient-primary font-bold uppercase" onClick={() => setAssigning(productToOfferLike(p))}>Assign to client</Button>
-                    {p.payment_link_url && (
-                      <>
-                        <Button size="sm" variant="outline" onClick={() => copyLink(p.payment_link_url)} title="Copy link"><Copy className="h-3.5 w-3.5" /></Button>
-                        <a href={p.payment_link_url} target="_blank" rel="noreferrer"><Button size="sm" variant="outline"><ExternalLink className="h-3.5 w-3.5" /></Button></a>
-                      </>
-                    )}
                     <Button size="sm" variant="outline" onClick={() => setEditing({ open: true, product: p })}><Pencil className="h-3.5 w-3.5" /></Button>
                     <Button size="sm" variant="ghost" onClick={() => duplicateMutation.mutate(p.id)}><Copy className="h-3.5 w-3.5" /></Button>
                     {p.status === "Archived" ? (
