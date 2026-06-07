@@ -4,7 +4,7 @@ import {
   Settings, Briefcase, Apple, ClipboardCheck, UserCog, MessageCircle, Video,
   UserCheck, FileSignature, Film,
   ClipboardList, FileEdit,
-  Scale,
+  Scale, BookOpen, Activity,
 } from "lucide-react";
 import type { NavItem } from "@/components/app-shell";
 
@@ -18,6 +18,7 @@ export const adminNav: NavItem[] = [
   { to: "/admin/coaches", label: "Coaches", icon: UserCheck, group: "Coaching" },
   { to: "/admin/media-review", label: "Media Review Inbox", icon: Film, group: "Coaching" },
   { to: "/admin/exercises", label: "Exercise Library", icon: Dumbbell, group: "Coaching" },
+  { to: "/admin/program-library", label: "Program Library", icon: BookOpen, group: "Coaching" },
   { to: "/admin/calendar", label: "Calendar", icon: Calendar, group: "Scheduling" },
   { to: "/admin/payment-links", label: "Products & Payments", icon: CreditCard, group: "Sales & Payments" },
   { to: "/admin/payments", label: "Payments", icon: DollarSign, group: "Sales & Payments" },
@@ -41,6 +42,7 @@ export const coachNav: NavItem[] = [
   { to: "/admin/media-review", label: "Media Review Inbox", icon: Film },
   { to: "/admin/calendar", label: "Calendar", icon: Calendar },
   { to: "/admin/exercises", label: "Exercise Library", icon: Dumbbell },
+  { to: "/admin/program-library", label: "Program Library", icon: BookOpen },
   { to: "/admin/resources", label: "Resources", icon: FolderOpen },
   { to: "/admin/account", label: "My Account", icon: UserCog },
 ];
@@ -49,6 +51,7 @@ export const clientNav: NavItem[] = [
   { to: "/portal", label: "Dashboard", icon: LayoutDashboard },
   { to: "/portal/messages", label: "Messages", icon: MessageCircle },
   { to: "/portal/program", label: "My Program", icon: FileText },
+  { to: "/portal/workouts", label: "Workouts", icon: Activity },
   { to: "/portal/lift-videos", label: "Lift Videos", icon: Video },
   { to: "/portal/check-ins", label: "Check-Ins & Forms", icon: ClipboardCheck },
   { to: "/portal/nutrition-targets", label: "Nutrition Targets", icon: Apple },

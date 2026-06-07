@@ -1,115 +1,75 @@
+# Program Builder + Program Library (Phase 1 MVP)
 
-# Native Form & Check-In System (Replaces Fillout)
+This is a huge system. I'll build it in **phases** so you get something usable fast, then layer advanced features on top. Below is **Phase 1** — the minimum that feels clean, fast, and useful for both powerlifting and bodybuilding clients.
 
-A full-native form builder + submission + review system, modeled on the JF Check-In Fillout form but with no Fillout dependency.
-
----
-
-## 1. Database (new tables)
-
-- **forms** *(extend existing `forms` table or new `native_forms`)* — title, description, type (`weekly_check_in`, `intake`, `custom`, …), recurring frequency (`none|weekly|biweekly|monthly`), active, archived, created_by, version.
-- **form_questions** — form_id, order_index, type (`short_text|long_text|number|single_choice|multi_choice|dropdown|rating|date|file|video`), label, help_text, required, options (jsonb), validation (jsonb min/max/regex), conditional_logic (jsonb: `{show_if:[{question_id, op, value}]}`).
-- **form_assignments** — form_id, client_id (nullable), client_group (nullable), recurrence, next_due_at.
-- **form_submissions** — form_id, client_id, status (`not_started|in_progress|submitted|pending_review|reviewed`), started_at, submitted_at, reviewed_at, reviewed_by, week_index (for recurring).
-- **form_answers** — submission_id, question_id, value_text, value_number, value_json, file_url.
-- **form_submission_files** — submission_id, question_id, storage_path, mime, size, original_name.
-- **form_reviews** — submission_id, coach_id, reply_text, sent_to_messenger_at, message_id.
-
-All with RLS:
-- Client: read/write own submissions; read forms assigned to them.
-- Coach: read submissions of assigned clients; write reviews.
-- Admin: full access.
-
-Storage: new private bucket `form-uploads` for files/videos (linked to submission). Videos uploaded via signed URL flow — never stored in DB.
+Reply **"go"** to approve and I'll start. Reply **"slim"** if you want me to cut templates/library from Phase 1 and ship only the per-client builder first.
 
 ---
 
-## 2. Coach/Admin — Form Builder
+## Phase 1 scope (build now)
 
-Route: `/admin/forms` (extend existing) + `/admin/forms/$id/edit`
+### Data model (new tables, `pl_` prefix, with RLS + grants)
 
-- List of forms with green "Active & Assigned" indicator (active + ≥1 assignment + ≥1 question).
-- Builder UI:
-  - Add/edit/delete/reorder questions (drag handle).
-  - Field types: short text, long text, number, single choice, multi choice, dropdown, rating (1–5/10), date, file, video.
-  - Required toggle, help text, options editor.
-  - Conditional logic editor: "Show this question if [Question X] [equals/not equals/contains/>/<] [value]".
-  - Duplicate form button.
-  - Assign to clients (multi-select) or "all active clients".
-  - Recurring schedule (weekly / biweekly / monthly / one-time) with day-of-week.
+- `pl_preps` — prep/phase: title, goal_type, event_name, event_date, event_location, federation, weight_class, division, start_date, end_date, total_weeks, current_focus, status (Planned/Active/Completed/Archived), coach_notes, client_visible, client_id
+- `pl_blocks` — prep_id (nullable), client_id, name, week_start_index, weeks, training_focus, goal, status, coach_notes, client_visible
+- `pl_weeks` — block_id, week_index, notes
+- `pl_days` — week_id, day_index, title, focus, notes, duration_estimate_min (auto), duration_override_min (manual), duration_source
+- `pl_exercise_rows` — day_id, sort_order, exercise_id (FK exercises, nullable), exercise_name_override, sets, reps_text (supports "8", "8-12", "AMRAP"), rpe, rir, percentage, percentage_basis (1rm/training_max/est_1rm/top_set/prev_set/prev_week/manual), basis_row_id, load_kg, load_lb, rest_seconds, tempo, time_profile, intensity_techniques[], progression_method, notes, estimated_seconds (auto), estimated_seconds_override
+- `pl_row_results` — row_id, client_id, set_index, actual_load, actual_reps, actual_rpe, actual_rir, notes, video_url, completed_at
+- `pl_day_completions` — day_id, client_id, completed_at, actual_duration_min, client_notes
+- `pl_client_maxes` — client_id, lift, one_rm, training_max, estimated_1rm, unit, updated_at
+- `pl_templates` — name, template_type (full_prep/block/week/day/exercise_row), training_style (powerlifting/bodybuilding/strength/lifestyle/hybrid/rehab/conditioning/custom), training_focus, tags[], status (Draft/Active/Archived), weeks, days_per_week, est_duration_min, goal, notes, payload jsonb (snapshot of structure), created_by
 
----
+RLS: admin full · coaches via `is_assigned_coach(client_id)` · clients read own where `client_visible=true` · clients insert own `pl_row_results` / `pl_day_completions`.
 
-## 3. Coach/Admin — Review Inbox
+### Core lib — `src/lib/pl-programs.ts`
 
-Route: `/admin/check-in-submissions`
+- **Duration estimator**: warm-up buffer (10 min general + 10/main lift) + working set time (45–60s/set) + rest from row or default-by-profile (main 240 / secondary 180 / compound 120 / isolation 60) + 3 min transitions. Returns range (±10%), rounded to nearest 5 min.
+- **Percentage resolver**: 1RM / training_max / est_1rm (from `pl_client_maxes`) · top_set / prev_set via `basis_row_id` · prev_week via same row index in week N-1 · rounding to 2.5kg / 5lb based on client `preferred_weight_unit`.
+- **Template snapshot/apply**: serialize a prep/block/week/day subtree to `pl_templates.payload`; apply payload to create a deep-copied subtree at chosen placement.
 
-- Inbox grouped by status: Pending Review → Reviewed.
-- Filter by client, form, date.
-- Detail view shows every question + answer, file/video previews.
-- "Quick Reply" composer at top → on send:
-  1. Creates `form_reviews` row.
-  2. Marks submission `reviewed`.
-  3. **Posts the reply as a coach message into the client's messenger thread** with a header line like *"Re: Weekly Check-In — Nov 12"* and a deep link back to the submission.
-  4. Client can continue the conversation in messenger normally.
+### Admin / Coach UI
 
----
+- `/admin/program-library` — list, search, filter (template_type / training_style / focus / tag / status), CRUD, duplicate, archive, "Add to Client" flow (pick client → placement: new/existing prep → block → week → day → confirm).
+- `/admin/program-library/$id` — template editor (same grid component as client block editor; persists to `pl_templates.payload`).
+- Add a **Training Program** tab to `/admin/clients/$id`:
+  - Current Prep card with countdown ("8 weeks out" / event name).
+  - Blocks list — programmed + "Not programmed yet" placeholders.
+  - Buttons: New Prep · New Block · Add From Library · Save As Template.
+- `/admin/clients/$id/program/preps/$prepId` — full prep view (all blocks, which weeks are programmed, gaps).
+- `/admin/clients/$id/program/blocks/$blockId` — **Google-Sheets-style grid editor**:
+  - Week tabs across top; day cards/rows below.
+  - Per row: Exercise (autocomplete from Exercise Library) · Sets · Reps/Range · RPE/RIR · %/Load · Rest · Tempo · Est.Time · Notes.
+  - Top-set ↔ backoff linking via `basis_row_id`.
+  - Auto-recalc load from client maxes / linked row on edit.
+  - Per-day duration auto-calculated; manual override with **Recalculate** + **Clear Override** buttons.
+  - Buttons: Duplicate Week · Duplicate Day · Save Day/Week/Block As Template · Add From Library.
 
-## 4. Client Experience
+### Client UI
 
-Route: `/portal/check-ins` (replaces existing Fillout link page)
+- `/portal/program` (existing) — add **Current Prep/Phase** card with countdown if event_date set.
+- `/portal/workouts` (new) — list of today + upcoming days with estimated duration.
+- `/portal/workouts/$dayId` — clean mobile workout view:
+  - Demo video link per exercise (from Exercise Library).
+  - Per-set inputs: actual load / reps / RPE / RIR / notes.
+  - "Mark Workout Complete" with optional actual duration.
 
-- List of assigned forms with status badge (Not Started / In Progress / Submitted / Pending Review / Reviewed).
-- For recurring forms, shows current period's instance + history of past weeks.
-- Form renderer:
-  - One question at a time on mobile, or scrollable list on desktop.
-  - Honors required + conditional logic.
-  - **Auto-saves on every change** → `form_submissions.status = in_progress`.
-  - Resume from last unsaved spot.
-  - File/video upload via signed URL to `form-uploads` bucket.
-  - Final "Submit" → status `pending_review`.
-- "Form History" tab showing all past submissions.
+### Out of scope for Phase 1
 
----
-
-## 5. Pre-Seed: JF Check-In
-
-Seed a `Weekly Check-In` form with the 23 questions from your Zapier payload (name, training week, phase, life updates, digestion, wins/PRs/injuries, workout feel, nutrition adherence, water, hunger, starvation, fasted bodyweight, sleep, stress, stress cause, cardio, cardio shortfall, etc.) as Short/Long/Number/Choice types — recurring weekly.
-
----
-
-## 6. Permissions
-
-- RLS on every table.
-- `requireSupabaseAuth` server functions for builder mutations + submission reads.
-- File uploads via signed URLs, validated server-side.
+- **Phase 2**: progress graphs · training history archive UI · PR detection · exercise-library time-profile editor · completed-prep summaries · muscle-group weekly volume tracker · template folders.
+- **Phase 3**: estimated-vs-actual analytics · AI block summaries · notification fan-out · advanced template-sync · drag-and-drop column customization · intensity-technique structured logging.
 
 ---
 
-## 7. Mobile
+## Effort estimate
 
-- Form renderer uses existing mobile-tuned UI primitives (one-question-at-a-time mode under `md:`).
-- Large tap targets, safe-area padding, iOS keyboard handling already in app shell.
+- 1 large migration (~11 tables, RLS, grants, indexes)
+- 1 core lib file (`pl-programs.ts`)
+- ~6 admin routes/components
+- ~3 client routes
+- Shared grid editor component (~400 lines)
+- **~15–18 files total**
 
----
+Several hours of generation. Once approved I'll batch the migration first, then build admin → client in order.
 
-## 8. Cleanup
-
-- Remove Fillout link/button from `/portal/check-in` (replace with native renderer).
-- Remove Zapier-webhook plan from prior message (no longer needed).
-- Keep existing `check_in_links` table for backwards compat but hide UI behind a "Legacy" toggle.
-
----
-
-## Scope of this build
-
-This is a large, multi-day feature (~15+ files, ~6 new tables, builder + renderer + inbox + messenger integration). I'll build it in this order so each step is independently usable:
-
-1. Schema + RLS + seed JF Check-In form.
-2. Client form renderer with auto-save + status.
-3. Coach review inbox + quick-reply → messenger.
-4. Form builder (CRUD questions, conditional logic, assignments).
-5. Recurring schedule + history.
-6. Polish: green active indicator, mobile pass, remove Fillout references.
-
-Confirm and I'll start at step 1 with the migration.
+Reply **go** to start, or tell me what to trim.

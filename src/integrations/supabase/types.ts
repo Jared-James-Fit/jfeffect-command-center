@@ -2936,6 +2936,533 @@ export type Database = {
           },
         ]
       }
+      pl_blocks: {
+        Row: {
+          client_id: string
+          client_visible: boolean
+          coach_notes: string | null
+          created_at: string
+          created_by: string | null
+          end_date: string | null
+          goal: string | null
+          id: string
+          name: string
+          prep_id: string | null
+          sort_order: number
+          start_date: string | null
+          status: string
+          training_focus: string | null
+          updated_at: string
+          week_start_index: number | null
+          weeks: number
+        }
+        Insert: {
+          client_id: string
+          client_visible?: boolean
+          coach_notes?: string | null
+          created_at?: string
+          created_by?: string | null
+          end_date?: string | null
+          goal?: string | null
+          id?: string
+          name: string
+          prep_id?: string | null
+          sort_order?: number
+          start_date?: string | null
+          status?: string
+          training_focus?: string | null
+          updated_at?: string
+          week_start_index?: number | null
+          weeks?: number
+        }
+        Update: {
+          client_id?: string
+          client_visible?: boolean
+          coach_notes?: string | null
+          created_at?: string
+          created_by?: string | null
+          end_date?: string | null
+          goal?: string | null
+          id?: string
+          name?: string
+          prep_id?: string | null
+          sort_order?: number
+          start_date?: string | null
+          status?: string
+          training_focus?: string | null
+          updated_at?: string
+          week_start_index?: number | null
+          weeks?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pl_blocks_prep_id_fkey"
+            columns: ["prep_id"]
+            isOneToOne: false
+            referencedRelation: "pl_preps"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pl_client_maxes: {
+        Row: {
+          client_id: string
+          created_at: string
+          estimated_1rm: number | null
+          id: string
+          lift: string
+          notes: string | null
+          one_rm: number | null
+          training_max: number | null
+          unit: string
+          updated_at: string
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          estimated_1rm?: number | null
+          id?: string
+          lift: string
+          notes?: string | null
+          one_rm?: number | null
+          training_max?: number | null
+          unit?: string
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          estimated_1rm?: number | null
+          id?: string
+          lift?: string
+          notes?: string | null
+          one_rm?: number | null
+          training_max?: number | null
+          unit?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      pl_day_completions: {
+        Row: {
+          actual_duration_min: number | null
+          client_id: string
+          client_notes: string | null
+          completed_at: string
+          created_at: string
+          day_id: string
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          actual_duration_min?: number | null
+          client_id: string
+          client_notes?: string | null
+          completed_at?: string
+          created_at?: string
+          day_id: string
+          id?: string
+          updated_at?: string
+        }
+        Update: {
+          actual_duration_min?: number | null
+          client_id?: string
+          client_notes?: string | null
+          completed_at?: string
+          created_at?: string
+          day_id?: string
+          id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pl_day_completions_day_id_fkey"
+            columns: ["day_id"]
+            isOneToOne: false
+            referencedRelation: "pl_days"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pl_days: {
+        Row: {
+          created_at: string
+          day_index: number
+          duration_estimate_min: number | null
+          duration_override_min: number | null
+          duration_source: string
+          focus: string | null
+          id: string
+          notes: string | null
+          scheduled_date: string | null
+          title: string | null
+          updated_at: string
+          week_id: string
+        }
+        Insert: {
+          created_at?: string
+          day_index: number
+          duration_estimate_min?: number | null
+          duration_override_min?: number | null
+          duration_source?: string
+          focus?: string | null
+          id?: string
+          notes?: string | null
+          scheduled_date?: string | null
+          title?: string | null
+          updated_at?: string
+          week_id: string
+        }
+        Update: {
+          created_at?: string
+          day_index?: number
+          duration_estimate_min?: number | null
+          duration_override_min?: number | null
+          duration_source?: string
+          focus?: string | null
+          id?: string
+          notes?: string | null
+          scheduled_date?: string | null
+          title?: string | null
+          updated_at?: string
+          week_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pl_days_week_id_fkey"
+            columns: ["week_id"]
+            isOneToOne: false
+            referencedRelation: "pl_weeks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pl_exercise_rows: {
+        Row: {
+          basis_row_id: string | null
+          created_at: string
+          day_id: string
+          estimated_seconds: number | null
+          estimated_seconds_override: number | null
+          exercise_id: string | null
+          exercise_name_override: string | null
+          id: string
+          intensity_techniques: string[]
+          load_kg: number | null
+          load_lb: number | null
+          notes: string | null
+          percentage: number | null
+          percentage_basis: string | null
+          progression_method: string | null
+          reps_text: string | null
+          rest_seconds: number | null
+          rir: string | null
+          rpe: string | null
+          sets: number | null
+          sort_order: number
+          tempo: string | null
+          time_profile: string
+          updated_at: string
+        }
+        Insert: {
+          basis_row_id?: string | null
+          created_at?: string
+          day_id: string
+          estimated_seconds?: number | null
+          estimated_seconds_override?: number | null
+          exercise_id?: string | null
+          exercise_name_override?: string | null
+          id?: string
+          intensity_techniques?: string[]
+          load_kg?: number | null
+          load_lb?: number | null
+          notes?: string | null
+          percentage?: number | null
+          percentage_basis?: string | null
+          progression_method?: string | null
+          reps_text?: string | null
+          rest_seconds?: number | null
+          rir?: string | null
+          rpe?: string | null
+          sets?: number | null
+          sort_order?: number
+          tempo?: string | null
+          time_profile?: string
+          updated_at?: string
+        }
+        Update: {
+          basis_row_id?: string | null
+          created_at?: string
+          day_id?: string
+          estimated_seconds?: number | null
+          estimated_seconds_override?: number | null
+          exercise_id?: string | null
+          exercise_name_override?: string | null
+          id?: string
+          intensity_techniques?: string[]
+          load_kg?: number | null
+          load_lb?: number | null
+          notes?: string | null
+          percentage?: number | null
+          percentage_basis?: string | null
+          progression_method?: string | null
+          reps_text?: string | null
+          rest_seconds?: number | null
+          rir?: string | null
+          rpe?: string | null
+          sets?: number | null
+          sort_order?: number
+          tempo?: string | null
+          time_profile?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pl_exercise_rows_basis_row_id_fkey"
+            columns: ["basis_row_id"]
+            isOneToOne: false
+            referencedRelation: "pl_exercise_rows"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pl_exercise_rows_day_id_fkey"
+            columns: ["day_id"]
+            isOneToOne: false
+            referencedRelation: "pl_days"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pl_exercise_rows_exercise_id_fkey"
+            columns: ["exercise_id"]
+            isOneToOne: false
+            referencedRelation: "exercises"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pl_preps: {
+        Row: {
+          client_id: string
+          client_visible: boolean
+          coach_notes: string | null
+          created_at: string
+          created_by: string | null
+          current_focus: string | null
+          division: string | null
+          end_date: string | null
+          event_date: string | null
+          event_location: string | null
+          event_name: string | null
+          federation: string | null
+          goal_type: string
+          id: string
+          start_date: string | null
+          status: string
+          title: string
+          total_weeks: number | null
+          updated_at: string
+          weight_class: string | null
+        }
+        Insert: {
+          client_id: string
+          client_visible?: boolean
+          coach_notes?: string | null
+          created_at?: string
+          created_by?: string | null
+          current_focus?: string | null
+          division?: string | null
+          end_date?: string | null
+          event_date?: string | null
+          event_location?: string | null
+          event_name?: string | null
+          federation?: string | null
+          goal_type?: string
+          id?: string
+          start_date?: string | null
+          status?: string
+          title: string
+          total_weeks?: number | null
+          updated_at?: string
+          weight_class?: string | null
+        }
+        Update: {
+          client_id?: string
+          client_visible?: boolean
+          coach_notes?: string | null
+          created_at?: string
+          created_by?: string | null
+          current_focus?: string | null
+          division?: string | null
+          end_date?: string | null
+          event_date?: string | null
+          event_location?: string | null
+          event_name?: string | null
+          federation?: string | null
+          goal_type?: string
+          id?: string
+          start_date?: string | null
+          status?: string
+          title?: string
+          total_weeks?: number | null
+          updated_at?: string
+          weight_class?: string | null
+        }
+        Relationships: []
+      }
+      pl_row_results: {
+        Row: {
+          actual_load: number | null
+          actual_load_unit: string | null
+          actual_reps: number | null
+          actual_rir: string | null
+          actual_rpe: string | null
+          client_id: string
+          completed_at: string | null
+          created_at: string
+          id: string
+          notes: string | null
+          row_id: string
+          set_index: number
+          updated_at: string
+          video_url: string | null
+        }
+        Insert: {
+          actual_load?: number | null
+          actual_load_unit?: string | null
+          actual_reps?: number | null
+          actual_rir?: string | null
+          actual_rpe?: string | null
+          client_id: string
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          notes?: string | null
+          row_id: string
+          set_index: number
+          updated_at?: string
+          video_url?: string | null
+        }
+        Update: {
+          actual_load?: number | null
+          actual_load_unit?: string | null
+          actual_reps?: number | null
+          actual_rir?: string | null
+          actual_rpe?: string | null
+          client_id?: string
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          notes?: string | null
+          row_id?: string
+          set_index?: number
+          updated_at?: string
+          video_url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pl_row_results_row_id_fkey"
+            columns: ["row_id"]
+            isOneToOne: false
+            referencedRelation: "pl_exercise_rows"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pl_templates: {
+        Row: {
+          archived: boolean
+          created_at: string
+          created_by: string | null
+          days_per_week: number | null
+          est_duration_min: number | null
+          goal: string | null
+          id: string
+          name: string
+          notes: string | null
+          payload: Json
+          status: string
+          tags: string[]
+          template_type: string
+          training_focus: string | null
+          training_style: string
+          updated_at: string
+          weeks: number | null
+        }
+        Insert: {
+          archived?: boolean
+          created_at?: string
+          created_by?: string | null
+          days_per_week?: number | null
+          est_duration_min?: number | null
+          goal?: string | null
+          id?: string
+          name: string
+          notes?: string | null
+          payload?: Json
+          status?: string
+          tags?: string[]
+          template_type?: string
+          training_focus?: string | null
+          training_style?: string
+          updated_at?: string
+          weeks?: number | null
+        }
+        Update: {
+          archived?: boolean
+          created_at?: string
+          created_by?: string | null
+          days_per_week?: number | null
+          est_duration_min?: number | null
+          goal?: string | null
+          id?: string
+          name?: string
+          notes?: string | null
+          payload?: Json
+          status?: string
+          tags?: string[]
+          template_type?: string
+          training_focus?: string | null
+          training_style?: string
+          updated_at?: string
+          weeks?: number | null
+        }
+        Relationships: []
+      }
+      pl_weeks: {
+        Row: {
+          block_id: string
+          created_at: string
+          id: string
+          notes: string | null
+          updated_at: string
+          week_index: number
+        }
+        Insert: {
+          block_id: string
+          created_at?: string
+          id?: string
+          notes?: string | null
+          updated_at?: string
+          week_index: number
+        }
+        Update: {
+          block_id?: string
+          created_at?: string
+          id?: string
+          notes?: string | null
+          updated_at?: string
+          week_index?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pl_weeks_block_id_fkey"
+            columns: ["block_id"]
+            isOneToOne: false
+            referencedRelation: "pl_blocks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       processed_stripe_events: {
         Row: {
           created_at: string
