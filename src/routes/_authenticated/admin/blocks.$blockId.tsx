@@ -442,7 +442,7 @@ function BlockEditor() {
 
 function WeekColumn({
   week, days, rows, exercises, density, onAction, onCopyWeek,
-  selectedDayId, onSelectDay, dayLinkInfo, onRowPatch, onDayPatch,
+  selectedDayId, onSelectDay, dayLinkInfo, onRowPatch, onDayPatch, onCopyDayToFuture,
 }: {
   week: any;
   days: any[];
@@ -456,6 +456,7 @@ function WeekColumn({
   dayLinkInfo: (id: string) => { sourceLabel: string | null; isCustom: boolean; hasSiblings: boolean };
   onRowPatch: (rowId: string, dayId: string, patch: Record<string, any>) => void | Promise<void>;
   onDayPatch: (dayId: string, patch: Record<string, any>) => void | Promise<void>;
+  onCopyDayToFuture?: (dayId: string) => void | Promise<void>;
 }) {
   return (
     <div className="flex min-w-0 flex-col border-r border-border last:border-r-0">
@@ -500,6 +501,8 @@ function WeekColumn({
             link={dayLinkInfo(d.id)}
             onRowPatch={onRowPatch}
             onDayPatch={onDayPatch}
+            weekIndex={week.week_index}
+            onCopyDayToFuture={onCopyDayToFuture ? () => onCopyDayToFuture(d.id) : undefined}
           />
         ))}
         <Button variant="outline" size="sm" className="h-7"
@@ -513,6 +516,7 @@ function WeekColumn({
 
 function DayBlock({
   day, rows, exercises, density, onAction, selected, onSelect, link, onRowPatch, onDayPatch,
+  weekIndex, onCopyDayToFuture,
 }: {
   day: any;
   rows: any[];
@@ -524,21 +528,38 @@ function DayBlock({
   link: { sourceLabel: string | null; isCustom: boolean; hasSiblings: boolean };
   onRowPatch: (rowId: string, dayId: string, patch: Record<string, any>) => void | Promise<void>;
   onDayPatch: (dayId: string, patch: Record<string, any>) => void | Promise<void>;
+  weekIndex?: number;
+  onCopyDayToFuture?: () => void | Promise<void>;
 }) {
   const [dragOver, setDragOver] = useState(false);
+  const [dropIndex, setDropIndex] = useState<number | null>(null);
+  const rowsRef = useRef<HTMLTableSectionElement | null>(null);
   const auto = estimateDayMinutes(rows);
   const shownMinutes = day.duration_source === "manual" && day.duration_override_min ? day.duration_override_min : auto;
 
   const onDrop = (e: React.DragEvent, position?: number) => {
     e.preventDefault();
     setDragOver(false);
+    const pos = position ?? dropIndex ?? undefined;
+    setDropIndex(null);
     const payload = readDrop(e);
     if (!payload) return;
     if (payload.kind === "exercise") {
-      onAction(() => addRowFromExercise(day.id, payload.exerciseId, position));
+      onAction(() => addRowFromExercise(day.id, payload.exerciseId, pos));
     } else if (payload.kind === "row") {
-      onAction(() => moveRowToDay(payload.rowId, day.id, position));
+      onAction(() => moveRowToDay(payload.rowId, day.id, pos));
     }
+  };
+
+  const computeDropIndex = (clientY: number): number => {
+    const tbody = rowsRef.current;
+    if (!tbody) return rows.length;
+    const trs = Array.from(tbody.querySelectorAll<HTMLTableRowElement>("tr[data-row-idx]"));
+    for (let i = 0; i < trs.length; i++) {
+      const r = trs[i].getBoundingClientRect();
+      if (clientY < r.top + r.height / 2) return i;
+    }
+    return trs.length;
   };
 
   return (
