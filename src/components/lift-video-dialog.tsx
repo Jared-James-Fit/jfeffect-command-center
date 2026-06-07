@@ -265,12 +265,8 @@ export function LiftVideoDialog({ open, onOpenChange, clientId, userId, clientNa
             storagePath = null;
             (clip as any).driveMeta = res;
           } catch (driveError) {
-            console.warn("Drive upload failed; falling back to lift video storage", driveError);
-            if (!userId) throw driveError;
-            const fallback = await uploadVideoFile(clip.file, userId);
-            videoUrl = fallback.url;
-            storagePath = fallback.path;
-            (clip as any).driveMeta = null;
+            console.warn("Drive upload failed; lift video was not saved without Drive metadata", driveError);
+            throw driveError;
           }
           source = "upload";
         } else if (clip.kind === "link" && clip.url) {
