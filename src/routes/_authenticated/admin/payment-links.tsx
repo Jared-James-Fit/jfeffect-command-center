@@ -479,9 +479,16 @@ function PaymentLinksPage() {
                       const r = readiness(p);
                       if (r.ready) {
                         return (
-                          <Badge variant="outline" className="text-xs border-primary/40 text-primary">
-                            <CheckCircle2 className="h-3 w-3 mr-1" />Checkout Ready
-                          </Badge>
+                          <>
+                            <Badge variant="outline" className="text-xs border-primary/40 text-primary">
+                              <CheckCircle2 className="h-3 w-3 mr-1" />Checkout Ready
+                            </Badge>
+                            {p.payment_link_url && (
+                              <Badge variant="outline" className="text-xs border-green-600/40 text-green-600">
+                                <Link2 className="h-3 w-3 mr-1" />Payment Link Ready
+                              </Badge>
+                            )}
+                          </>
                         );
                       }
                       return r.missing.map((m) => (
