@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { ArrowLeft, Plus, Calendar, Target, Layers, History, BarChart3 } from "lucide-react";
 import { toast } from "sonner";
 import { listClientPreps, listClientBlocks, createPrep, createBlock, countdownLabel, updatePrep, updateBlock, GOAL_TYPES, TRAINING_FOCUSES, PREP_STATUSES, BLOCK_STATUSES, type PrepStatus, type BlockStatus } from "@/lib/pl-programs";
+import { ClientTrainingIntelCard } from "@/components/client-training-intel-card";
 
 export const Route = createFileRoute("/_authenticated/admin/client-programs/$clientId")({ component: ClientProgramsPage });
 
@@ -53,6 +54,8 @@ function ClientProgramsPage() {
             <Button variant="outline"><BarChart3 className="mr-2 h-4 w-4" /> Analytics & PRs</Button>
           </Link>
         </div>
+
+        <ClientTrainingIntelCard clientId={clientId} />
 
         <section>
           <h2 className="mb-3 text-sm font-bold uppercase tracking-widest text-muted-foreground">Preps / Phases</h2>

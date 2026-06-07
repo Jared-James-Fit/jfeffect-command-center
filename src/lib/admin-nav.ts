@@ -11,6 +11,7 @@ import type { NavItem } from "@/components/app-shell";
 export const adminNav: NavItem[] = [
   { to: "/admin", label: "Dashboard", icon: LayoutDashboard, group: "Command Center" },
   { to: "/admin/clients", label: "Clients", icon: Users, group: "Coaching" },
+  { to: "/admin/training-intelligence", label: "Training Intelligence", icon: Activity, group: "Coaching" },
   { to: "/admin/messages", label: "Messages", icon: MessageCircle, group: "Coaching" },
   { to: "/admin/lift-videos", label: "Lift Reviews", icon: Video, group: "Coaching" },
   { to: "/admin/check-in-reviews", label: "Check-In Reviews", icon: ClipboardList, group: "Coaching" },
@@ -36,6 +37,7 @@ export const adminNav: NavItem[] = [
 export const coachNav: NavItem[] = [
   { to: "/admin", label: "Dashboard", icon: LayoutDashboard },
   { to: "/admin/clients", label: "My Clients", icon: Users },
+  { to: "/admin/training-intelligence", label: "Training Intelligence", icon: Activity },
   { to: "/admin/messages", label: "Messages", icon: MessageCircle },
   { to: "/admin/lift-videos", label: "Lift Reviews", icon: Video },
   { to: "/admin/check-in-reviews", label: "Check-In Reviews", icon: ClipboardList },
