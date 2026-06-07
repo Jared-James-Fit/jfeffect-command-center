@@ -157,6 +157,10 @@ export function LiftVideoDialog({ open, onOpenChange, clientId, userId, clientNa
         video_url: videoUrl,
         video_storage_path: storagePath,
         video_source: source,
+        preview_status: storagePath ? "ready" : "not_generated",
+        file_type: file?.type || null,
+        file_size_bytes: file?.size ?? null,
+        upload_status: storagePath ? "App storage fallback" : "Submitted",
       };
 
       if (initial) {
