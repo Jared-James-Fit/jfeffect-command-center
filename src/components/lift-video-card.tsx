@@ -11,13 +11,13 @@ import {
   LIFT_VIDEO_STATUSES, statusTone, clientFacingStatus,
   listComments, addComment, markWatched, toggleLike, markReviewed, setStatus,
   getSignedVideoUrl, deleteLiftVideo,
-  isYouTube, isDrive, youTubeEmbed, drivePreview,
+  isYouTube, isDrive, youTubeEmbed, drivePreview, driveOpenUrl,
   LIFT_VIDEO_QUICK_REPLIES,
 } from "@/lib/lift-videos";
 import { format, parseISO, formatDistanceToNow } from "date-fns";
 import {
   Eye, ThumbsUp, CheckCircle2, MessageSquare, AlertTriangle, ExternalLink, Trash2, Edit3, Loader2,
-  AlertCircle, Archive, Zap, MoreVertical, Maximize2,
+  AlertCircle, Archive, Zap, MoreVertical, Maximize2, RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
 import { LiftVideoPlayer } from "@/components/lift-video-player";
@@ -25,6 +25,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import { cn } from "@/lib/utils";
 
 type Props = {
   video: LiftVideo;
