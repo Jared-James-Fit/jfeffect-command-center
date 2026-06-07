@@ -10,8 +10,8 @@ import {
   type LiftVideo, type LiftVideoComment,
   LIFT_VIDEO_STATUSES, statusTone, clientFacingStatus,
   listComments, addComment, markWatched, toggleLike, markReviewed, setStatus,
-  getSignedVideoUrl, deleteLiftVideo,
-  isYouTube, isDrive, youTubeEmbed, drivePreview, driveOpenUrl,
+  getSignedVideoUrl, deleteLiftVideo, setPlaybackError,
+  isYouTube, isDrive, youTubeEmbed, liftVideoOpenUrl, liftVideoDriveFileId,
   LIFT_VIDEO_QUICK_REPLIES,
 } from "@/lib/lift-videos";
 import { format, parseISO, formatDistanceToNow } from "date-fns";
@@ -48,6 +48,7 @@ export function LiftVideoCard({ video, role, userId, onChanged, onEdit, clientNa
   const [signedUrl, setSignedUrl] = useState<string | null>(null);
   const [embedStatus, setEmbedStatus] = useState<"idle" | "loading" | "ready" | "slow" | "error">("idle");
   const [embedRetry, setEmbedRetry] = useState(0);
+  const [lastPlaybackError, setLastPlaybackError] = useState<string | null>(null);
 
   const loadComments = async () => {
     const c = await listComments(video.id, { includeInternal: role === "admin" });
@@ -66,12 +67,6 @@ export function LiftVideoCard({ video, role, userId, onChanged, onEdit, clientNa
         if (!cancel) setSignedUrl(u);
       } else if (video.video_url) {
         if (isYouTube(video.video_url)) setEmbedUrl(youTubeEmbed(video.video_url));
-        else if (isDrive(video.video_url)) {
-          // Drive direct-stream URLs return the virus-scan interstitial for
-          // larger video files, which made the player hang. Use the iframe
-          // /preview embed instead — and always surface "Watch in Drive".
-          setEmbedUrl(drivePreview(video.video_url));
-        }
       }
     })();
     return () => { cancel = true; };
@@ -122,7 +117,12 @@ export function LiftVideoCard({ video, role, userId, onChanged, onEdit, clientNa
   const isReviewed = !!video.reviewed_at;
   const clientCanDelete = role === "client" && video.uploaded_by === userId && !isReviewed;
   const clientCanEdit = role === "client" && video.uploaded_by === userId && !isReviewed;
-  const openUrl = video.video_url ? (isDrive(video.video_url) ? driveOpenUrl(video.video_url) : video.video_url) : null;
+  const driveFileId = liftVideoDriveFileId(video);
+  const openUrl = liftVideoOpenUrl(video);
+  const playablePreviewUrl = signedUrl ?? (video.preview_status === "ready" && video.preview_url && !isDrive(video.preview_url) ? video.preview_url : null);
+  const previewReason = playablePreviewUrl
+    ? null
+    : video.preview_error || video.playback_error || (driveFileId ? "Preview not ready yet." : openUrl ? "Preview URL missing." : "Original video link missing.");
 
   return (
     <Card className="border-border bg-card p-5 space-y-4">
