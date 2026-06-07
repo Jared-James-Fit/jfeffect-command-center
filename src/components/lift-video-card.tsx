@@ -324,6 +324,12 @@ export function LiftVideoCard({ video, role, userId, onChanged, onEdit, clientNa
         <details className="rounded-md border border-border bg-secondary/20 p-3 text-xs">
           <summary className="cursor-pointer font-medium text-muted-foreground">Video diagnostics</summary>
           <div className="mt-3 flex justify-end">
+            {!driveFileId && video.video_storage_path && (
+              <Button size="sm" variant="outline" onClick={repairDriveCopy} disabled={copyingToDrive} className="mr-2">
+                {copyingToDrive ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <ExternalLink className="mr-1 h-3 w-3" />}
+                Copy to Drive
+              </Button>
+            )}
             <Button size="sm" variant="outline" onClick={runDiagnostics} disabled={diagnosing}>
               {diagnosing ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <RefreshCw className="mr-1 h-3 w-3" />}
               Verify Drive video
