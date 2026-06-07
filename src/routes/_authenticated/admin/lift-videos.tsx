@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   listLiftVideos, markAdminViewed, deleteLiftVideos, statusTone,
-  type LiftVideo, type LiftVideoStatus,
+  driveOpenUrl, type LiftVideo, type LiftVideoStatus,
 } from "@/lib/lift-videos";
 import { LiftVideoCard } from "@/components/lift-video-card";
 import { format, parseISO, formatDistanceToNow } from "date-fns";
@@ -294,7 +294,7 @@ function AdminLiftVideos() {
 
             <div className="space-y-2 pb-28 lg:pb-6">
               {submissions.length === 0 && (
-                <Card className="border-border bg-card p-10 text-center">
+              <Card className="border-border bg-card p-10 text-center">
                   <Inbox className="mx-auto mb-2 h-6 w-6 text-muted-foreground" />
                   <div className="text-sm font-medium">Inbox empty</div>
                   <div className="text-xs text-muted-foreground">No submissions match your filters.</div>
@@ -370,12 +370,12 @@ function ThumbBlock({ count, urgent }: { count: number; urgent: boolean }) {
   return (
     <div
       className={cn(
-        "relative grid h-16 w-24 shrink-0 place-items-center overflow-hidden rounded-md border bg-black",
+        "relative grid h-16 w-24 shrink-0 place-items-center overflow-hidden rounded-md border bg-secondary/60",
         urgent ? "border-destructive/40" : "border-border"
       )}
     >
-      <Play className="h-6 w-6 text-white/70" />
-      <div className="absolute bottom-1 right-1 rounded bg-black/70 px-1 py-0.5 text-[9px] font-bold uppercase tracking-widest text-white/90">
+      <Play className="h-6 w-6 text-muted-foreground" />
+      <div className="absolute bottom-1 right-1 rounded bg-card/90 px-1 py-0.5 text-[9px] font-bold uppercase tracking-widest text-muted-foreground">
         {count > 1 ? `${count} clips` : "Video"}
       </div>
     </div>
@@ -434,7 +434,9 @@ function SubmissionRow({
           </div>
         </div>
         {!manageMode && (
-          <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground transition group-hover:translate-x-0.5 group-hover:text-primary" />
+          <Button size="sm" variant="outline" className="h-8 shrink-0 px-2 text-xs">
+            Review <ChevronRight className="ml-1 h-4 w-4" />
+          </Button>
         )}
       </div>
     </Card>
@@ -456,13 +458,13 @@ function ReviewDetail({
   isMobile?: boolean;
 }) {
   return (
-    <div className="space-y-4 pb-28 lg:pb-4">
+    <div className="space-y-4 pb-[calc(150px+env(safe-area-inset-bottom))] lg:pb-4">
       {/* Header */}
       <Card className="border-border bg-card p-3">
         <div className="flex items-center gap-3">
           {isMobile && (
             <Button size="sm" variant="ghost" onClick={onBack} className="h-8 px-2">
-              <ChevronLeft className="mr-1 h-4 w-4" /> Inbox
+              <ChevronLeft className="mr-1 h-4 w-4" /> Lift Reviews
             </Button>
           )}
           <ClientAvatar client={client} size={36} />
@@ -493,7 +495,7 @@ function ReviewDetail({
               </DropdownMenuItem>
               {activeClip.video_url && (
                 <DropdownMenuItem asChild>
-                  <a href={activeClip.video_url} target="_blank" rel="noreferrer">
+                  <a href={driveOpenUrl(activeClip.video_url)} target="_blank" rel="noreferrer">
                     <ExternalLink className="mr-2 h-4 w-4" /> Open in Drive
                   </a>
                 </DropdownMenuItem>
