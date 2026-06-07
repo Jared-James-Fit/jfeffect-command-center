@@ -7,12 +7,13 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { ExternalLink, FileText, Heart, Dumbbell, Target, Video, Calendar, Apple } from "lucide-react";
+import { ExternalLink, FileText, Heart, Dumbbell, Target, Video, Calendar, Apple, Activity } from "lucide-react";
 import { derivePhase, displayTitle, toneClasses, type TrainingPhase } from "@/lib/training-phases";
 import { deriveImportantDate, dateTypeLabel, importantToneClasses, type ImportantDate } from "@/lib/important-dates";
 import { dayTypeLabel, dayTypeTone, formatDays } from "@/lib/training-schedule";
 import { formatCalorieTarget } from "@/lib/nutrition-cardio";
 import { format, parseISO } from "date-fns";
+import { getActivePrep, countdownLabel } from "@/lib/pl-programs";
 
 export const Route = createFileRoute("/_authenticated/portal/program")({ component: MyProgram });
 
@@ -100,10 +101,43 @@ function MyProgram() {
   });
   const upcomingDates = importantDates.filter((d) => !["completed", "archived"].includes(deriveImportantDate(d).state));
 
+  const { data: activePrep } = useQuery({
+    queryKey: ["my-active-prep", client?.id],
+    enabled: !!client?.id,
+    queryFn: () => getActivePrep(client!.id),
+  });
+
   return (
     <>
       <PageHeader title="My Program" subtitle={activePhase ? displayTitle(activePhase) : (client?.program_phase ?? "Current training phase")} />
       <div className="p-6 md:p-8 space-y-6">
+        {activePrep && (activePrep as any).client_visible !== false && (
+          <Card className="border-primary/30 bg-primary/5 p-6">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <Target className="h-8 w-8 text-primary" />
+                <div>
+                  <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Current Prep</div>
+                  <h2 className="text-xl font-black">{(activePrep as any).title}</h2>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {(activePrep as any).goal_type}
+                    {(activePrep as any).event_name && ` · ${(activePrep as any).event_name}`}
+                    {(activePrep as any).event_date && ` · ${(activePrep as any).event_date}`}
+                  </p>
+                </div>
+              </div>
+              {countdownLabel((activePrep as any).event_date) && (
+                <Badge variant="outline" className="text-base font-bold">{countdownLabel((activePrep as any).event_date)}</Badge>
+              )}
+            </div>
+            <div className="mt-4">
+              <Link to="/portal/workouts">
+                <Button variant="outline" size="sm"><Activity className="mr-1 h-4 w-4" /> Open Workouts</Button>
+              </Link>
+            </div>
+          </Card>
+        )}
+
         {hasSchedule && (
           <Card className="border-border bg-card p-6">
             <h2 className="mb-3 flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-muted-foreground">
