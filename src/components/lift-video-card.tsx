@@ -115,6 +115,20 @@ export function LiftVideoCard({ video, role, userId, onChanged, onEdit, clientNa
     catch (e: any) { toast.error(e.message ?? "Failed"); }
   };
 
+  const runDiagnostics = async () => {
+    setDiagnosing(true);
+    try {
+      const result = await refreshDiagnostics({ data: { videoId: video.id } });
+      if (result?.ok) toast.success("Drive video verified");
+      else toast.error(result?.reason ?? "Drive video check failed");
+      onChanged?.();
+    } catch (e: any) {
+      toast.error(e?.message ?? "Drive video check failed");
+    } finally {
+      setDiagnosing(false);
+    }
+  };
+
   const dayLabel = video.training_day === "Custom" ? video.custom_training_day : video.training_day;
   const tagLabel = video.tag === "Custom" ? video.custom_tag : video.tag;
   const displayStatus = role === "client" ? clientFacingStatus(video) : video.status;
