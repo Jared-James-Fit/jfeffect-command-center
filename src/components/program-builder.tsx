@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, Star, GripVertical, Check, Loader2, AlertCircle, Circle } from "lucide-react";
+import { Search, Star, GripVertical, Check, Loader2, AlertCircle, Circle, Plus, Link as LinkIcon, Unlink } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // ---------------- Drag & drop payload helpers ----------------
