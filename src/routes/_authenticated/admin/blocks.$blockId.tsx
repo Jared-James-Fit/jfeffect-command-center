@@ -73,6 +73,7 @@ function BlockEditor() {
   const [density, setDensity] = useDensity();
   const [selectedDayId, setSelectedDayId] = useState<string | null>(null);
   const [progressionOpen, setProgressionOpen] = useState(false);
+  const [collapsedWeekIds, setCollapsedWeekIds] = useState<Set<string>>(new Set());
   const save = useSaveState();
 
   // --- Edit scope dialog state ---
@@ -109,6 +110,59 @@ function BlockEditor() {
 
   if (isLoading || !tree) return <div className="p-8 text-sm text-muted-foreground">Loading block…</div>;
   const { block, weeks, days, rows } = tree;
+
+  // Current week (1-based) based on block.start_date if available.
+  const currentWeekIndex: number | null = (() => {
+    const sd: string | null = (block as any).start_date ?? null;
+    if (!sd) return null;
+    const start = new Date(sd + "T00:00:00");
+    if (isNaN(start.getTime())) return null;
+    const now = new Date();
+    const ms = now.getTime() - start.getTime();
+    const offset = (block as any).week_start_index ?? 0;
+    const idx = Math.floor(ms / (7 * 86400000)) + 1 - (offset || 0);
+    if (idx < 1 || idx > (weeks as any[]).length) return null;
+    return idx;
+  })();
+
+  // Per-week stats: day count, row count, estimated total minutes, linked/custom counts.
+  const weekStats = useMemo(() => {
+    const map = new Map<string, { days: number; rows: number; minutes: number; linked: number; custom: number }>();
+    for (const w of weeks as any[]) {
+      const wDays = (days as any[]).filter((d: any) => d.week_id === w.id);
+      let rowCount = 0;
+      let minutes = 0;
+      let linked = 0;
+      let custom = 0;
+      for (const d of wDays) {
+        const dayRows = (rows as any[]).filter((r: any) => r.day_id === d.id);
+        rowCount += dayRows.length;
+        const auto = estimateDayMinutes(dayRows);
+        const shown = d.duration_source === "manual" && d.duration_override_min ? d.duration_override_min : auto;
+        minutes += shown || 0;
+        if (d.is_custom) custom++;
+        else if (d.source_day_id) linked++;
+      }
+      map.set(w.id, { days: wDays.length, rows: rowCount, minutes, linked, custom });
+    }
+    return map;
+  }, [weeks, days, rows]);
+
+  const toggleWeekCollapse = (wid: string) =>
+    setCollapsedWeekIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(wid)) next.delete(wid); else next.add(wid);
+      return next;
+    });
+  const collapseAllWeeks = () => setCollapsedWeekIds(new Set((weeks as any[]).map((w: any) => w.id)));
+  const expandAllWeeks = () => setCollapsedWeekIds(new Set());
+  const jumpToWeek = (wid: string) => {
+    setCollapsedWeekIds((prev) => { const n = new Set(prev); n.delete(wid); return n; });
+    requestAnimationFrame(() => {
+      const el = document.getElementById(`pl-week-${wid}`);
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  };
 
   // Which weeks to render based on the chosen view.
   const focusedWeek =
