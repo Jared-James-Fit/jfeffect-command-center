@@ -15,6 +15,7 @@ export function LiftVideoPlayer({
   embedFallbackUrl,
   thumbnailUrl,
   initialOrientation,
+  onPlaybackError,
 }: {
   src: string;
   fallbackUrl?: string | null;
@@ -22,6 +23,7 @@ export function LiftVideoPlayer({
   embedFallbackUrl?: string | null;
   thumbnailUrl?: string | null;
   initialOrientation?: "portrait" | "landscape" | "unknown";
+  onPlaybackError?: (message: string) => void;
 }) {
   const ref = useRef<HTMLVideoElement | null>(null);
   const [speed, setSpeed] = useState(1);
@@ -133,7 +135,19 @@ export function LiftVideoPlayer({
                 setOrientation(v.videoHeight > v.videoWidth ? "portrait" : "landscape");
               }
             }}
-            onError={() => {
+            onError={(event) => {
+              const media = event.currentTarget;
+              const code = media.error?.code;
+              const message = code === MediaError.MEDIA_ERR_NETWORK
+                ? "Playback blocked by network/CORS or the signed URL expired."
+                : code === MediaError.MEDIA_ERR_DECODE
+                  ? "Unsupported video format or codec for this device."
+                  : code === MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED
+                    ? "Video source is not playable in this browser."
+                    : code === MediaError.MEDIA_ERR_ABORTED
+                      ? "Playback was aborted."
+                      : "Unknown playback error.";
+              onPlaybackError?.(message);
               if (embedFallbackUrl) {
                 setUseEmbedFallback(true);
                 setStatus("loading");
