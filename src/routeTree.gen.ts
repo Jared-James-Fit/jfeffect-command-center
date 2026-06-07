@@ -54,6 +54,7 @@ import { Route as AuthenticatedAdminFormsRouteImport } from './routes/_authentic
 import { Route as AuthenticatedAdminExercisesRouteImport } from './routes/_authenticated/admin/exercises'
 import { Route as AuthenticatedAdminContentIdeasRouteImport } from './routes/_authenticated/admin/content-ideas'
 import { Route as AuthenticatedAdminCheckInsRouteImport } from './routes/_authenticated/admin/check-ins'
+import { Route as AuthenticatedAdminCheckInReviewsRouteImport } from './routes/_authenticated/admin/check-in-reviews'
 import { Route as AuthenticatedAdminCardioTargetsRouteImport } from './routes/_authenticated/admin/cardio-targets'
 import { Route as AuthenticatedAdminCalendarRouteImport } from './routes/_authenticated/admin/calendar'
 import { Route as AuthenticatedAdminBusinessSystemsRouteImport } from './routes/_authenticated/admin/business-systems'
@@ -328,6 +329,12 @@ const AuthenticatedAdminCheckInsRoute =
     path: '/check-ins',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
+const AuthenticatedAdminCheckInReviewsRoute =
+  AuthenticatedAdminCheckInReviewsRouteImport.update({
+    id: '/check-in-reviews',
+    path: '/check-in-reviews',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
 const AuthenticatedAdminCardioTargetsRoute =
   AuthenticatedAdminCardioTargetsRouteImport.update({
     id: '/cardio-targets',
@@ -445,6 +452,7 @@ export interface FileRoutesByFullPath {
   '/admin/business-systems': typeof AuthenticatedAdminBusinessSystemsRoute
   '/admin/calendar': typeof AuthenticatedAdminCalendarRoute
   '/admin/cardio-targets': typeof AuthenticatedAdminCardioTargetsRoute
+  '/admin/check-in-reviews': typeof AuthenticatedAdminCheckInReviewsRoute
   '/admin/check-ins': typeof AuthenticatedAdminCheckInsRoute
   '/admin/content-ideas': typeof AuthenticatedAdminContentIdeasRoute
   '/admin/exercises': typeof AuthenticatedAdminExercisesRoute
@@ -506,6 +514,7 @@ export interface FileRoutesByTo {
   '/admin/business-systems': typeof AuthenticatedAdminBusinessSystemsRoute
   '/admin/calendar': typeof AuthenticatedAdminCalendarRoute
   '/admin/cardio-targets': typeof AuthenticatedAdminCardioTargetsRoute
+  '/admin/check-in-reviews': typeof AuthenticatedAdminCheckInReviewsRoute
   '/admin/check-ins': typeof AuthenticatedAdminCheckInsRoute
   '/admin/content-ideas': typeof AuthenticatedAdminContentIdeasRoute
   '/admin/exercises': typeof AuthenticatedAdminExercisesRoute
@@ -571,6 +580,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/business-systems': typeof AuthenticatedAdminBusinessSystemsRoute
   '/_authenticated/admin/calendar': typeof AuthenticatedAdminCalendarRoute
   '/_authenticated/admin/cardio-targets': typeof AuthenticatedAdminCardioTargetsRoute
+  '/_authenticated/admin/check-in-reviews': typeof AuthenticatedAdminCheckInReviewsRoute
   '/_authenticated/admin/check-ins': typeof AuthenticatedAdminCheckInsRoute
   '/_authenticated/admin/content-ideas': typeof AuthenticatedAdminContentIdeasRoute
   '/_authenticated/admin/exercises': typeof AuthenticatedAdminExercisesRoute
@@ -636,6 +646,7 @@ export interface FileRouteTypes {
     | '/admin/business-systems'
     | '/admin/calendar'
     | '/admin/cardio-targets'
+    | '/admin/check-in-reviews'
     | '/admin/check-ins'
     | '/admin/content-ideas'
     | '/admin/exercises'
@@ -697,6 +708,7 @@ export interface FileRouteTypes {
     | '/admin/business-systems'
     | '/admin/calendar'
     | '/admin/cardio-targets'
+    | '/admin/check-in-reviews'
     | '/admin/check-ins'
     | '/admin/content-ideas'
     | '/admin/exercises'
@@ -761,6 +773,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/business-systems'
     | '/_authenticated/admin/calendar'
     | '/_authenticated/admin/cardio-targets'
+    | '/_authenticated/admin/check-in-reviews'
     | '/_authenticated/admin/check-ins'
     | '/_authenticated/admin/content-ideas'
     | '/_authenticated/admin/exercises'
@@ -1140,6 +1153,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminCheckInsRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
+    '/_authenticated/admin/check-in-reviews': {
+      id: '/_authenticated/admin/check-in-reviews'
+      path: '/check-in-reviews'
+      fullPath: '/admin/check-in-reviews'
+      preLoaderRoute: typeof AuthenticatedAdminCheckInReviewsRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
     '/_authenticated/admin/cardio-targets': {
       id: '/_authenticated/admin/cardio-targets'
       path: '/cardio-targets'
@@ -1283,6 +1303,7 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminBusinessSystemsRoute: typeof AuthenticatedAdminBusinessSystemsRoute
   AuthenticatedAdminCalendarRoute: typeof AuthenticatedAdminCalendarRoute
   AuthenticatedAdminCardioTargetsRoute: typeof AuthenticatedAdminCardioTargetsRoute
+  AuthenticatedAdminCheckInReviewsRoute: typeof AuthenticatedAdminCheckInReviewsRoute
   AuthenticatedAdminCheckInsRoute: typeof AuthenticatedAdminCheckInsRoute
   AuthenticatedAdminContentIdeasRoute: typeof AuthenticatedAdminContentIdeasRoute
   AuthenticatedAdminExercisesRoute: typeof AuthenticatedAdminExercisesRoute
@@ -1319,6 +1340,8 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
       AuthenticatedAdminBusinessSystemsRoute,
     AuthenticatedAdminCalendarRoute: AuthenticatedAdminCalendarRoute,
     AuthenticatedAdminCardioTargetsRoute: AuthenticatedAdminCardioTargetsRoute,
+    AuthenticatedAdminCheckInReviewsRoute:
+      AuthenticatedAdminCheckInReviewsRoute,
     AuthenticatedAdminCheckInsRoute: AuthenticatedAdminCheckInsRoute,
     AuthenticatedAdminContentIdeasRoute: AuthenticatedAdminContentIdeasRoute,
     AuthenticatedAdminExercisesRoute: AuthenticatedAdminExercisesRoute,
