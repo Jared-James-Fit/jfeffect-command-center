@@ -132,11 +132,25 @@ export async function uploadToDrive(uploadUrl: string, file: File, onProgress?: 
     }
     const xhr = new XMLHttpRequest();
     try {
-      xhr.open("PUT", uploadUrl, true);
+      xhr.open("POST", "/api/drive-upload", true);
     } catch (e: any) {
-      return reject(new Error(`Drive upload could not open PUT to ${uploadUrl.slice(0, 80)}: ${e?.message ?? e}`));
+      return reject(new Error(`Drive upload could not start: ${e?.message ?? e}`));
     }
-    xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
+    supabase.auth.getSession().then(({ data }) => {
+      const token = data.session?.access_token;
+      if (!token) {
+        reject(new Error("Drive upload could not start because your session expired. Please sign in again."));
+        return;
+      }
+
+      const body = new FormData();
+      body.append("uploadUrl", uploadUrl);
+      body.append("mimeType", file.type || "application/octet-stream");
+      body.append("file", file, file.name || "upload");
+
+      xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+      xhr.send(body);
+    }).catch((e: any) => reject(new Error(`Drive upload could not read your session: ${e?.message ?? e}`)));
     // Surface timeouts and aborts as clear errors instead of silent network-error.
     xhr.timeout = 10 * 60 * 1000; // 10 minutes
     if (onProgress) {
@@ -158,9 +172,8 @@ export async function uploadToDrive(uploadUrl: string, file: File, onProgress?: 
         reject(new Error(`Drive PUT failed: HTTP ${xhr.status}${detail ? ` — ${detail}` : ""}`));
       }
     };
-    xhr.onerror = () => reject(new Error(`Network/CORS error during Drive PUT (status ${xhr.status || 0}). The browser was blocked from uploading to: ${uploadUrl.split("?")[0]}`));
-    xhr.ontimeout = () => reject(new Error(`Drive PUT timed out after 10 min (${Math.round((file.size || 0) / 1024 / 1024)} MB)`));
-    xhr.onabort = () => reject(new Error("Drive PUT was aborted by the browser"));
-    xhr.send(file);
+    xhr.onerror = () => reject(new Error(`Network error while sending the video through the app upload route (status ${xhr.status || 0}).`));
+    xhr.ontimeout = () => reject(new Error(`Drive upload timed out after 10 min (${Math.round((file.size || 0) / 1024 / 1024)} MB)`));
+    xhr.onabort = () => reject(new Error("Drive upload was aborted by the browser"));
   });
 }
