@@ -494,56 +494,96 @@ function PaymentLinksPage() {
                   </div>
                   {p.description && <p className="text-sm mt-2 line-clamp-2 text-muted-foreground">{p.description}</p>}
                   <div className="mt-3 flex flex-wrap gap-2">
-                    <Button size="sm" className="bg-gradient-primary font-bold uppercase" onClick={() => setAssigning(productToOfferLike(p))}>Assign to client</Button>
-                    {p.payment_link_url ? (
-                      <>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={async () => {
-                            await navigator.clipboard.writeText(p.payment_link_url!);
-                            toast.success("Payment link copied — paste anywhere (text, DM, email).");
-                          }}
-                          title="Copy the saved Stripe Payment Link so you can send it manually"
-                        >
-                          <Copy className="h-3.5 w-3.5 mr-1" />Copy link
-                        </Button>
-                        <a href={p.payment_link_url} target="_blank" rel="noreferrer">
-                          <Button size="sm" variant="outline" title="Open the live payment link in a new tab">
-                            <ExternalLink className="h-3.5 w-3.5 mr-1" />Open link
+                    {(() => {
+                      const r = readiness(p);
+                      const archived = p.status === "Archived";
+                      const hasPriceId = !!(p as any).stripe_price_id;
+                      const hasLink = !!p.payment_link_url;
+                      if (archived) {
+                        return (
+                          <>
+                            <Button size="sm" variant="outline" onClick={() => setStatusMutation.mutate({ id: p.id, status: "Draft" })}>
+                              <ArchiveRestore className="h-3.5 w-3.5 mr-1" /> Restore
+                            </Button>
+                            <Button size="sm" variant="outline" onClick={() => setEditing({ open: true, product: p })}>
+                              <Pencil className="h-3.5 w-3.5 mr-1" /> Edit
+                            </Button>
+                          </>
+                        );
+                      }
+                      return (
+                        <>
+                          <Button size="sm" className="bg-gradient-primary font-bold uppercase" onClick={() => setAssigning(productToOfferLike(p))}>
+                            Assign to client
                           </Button>
-                        </a>
-                      </>
-                    ) : (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setEditing({ open: true, product: p })}
-                        title="No shareable Stripe Payment Link saved yet. Edit the product and paste a Stripe Payment Link URL."
-                        className="border-amber-500/40 text-amber-500 hover:bg-amber-500/10"
-                      >
-                        <AlertTriangle className="h-3.5 w-3.5 mr-1" />Add payment link
-                      </Button>
-                    )}
-                    <Button size="sm" variant="outline" onClick={() => setPreviewing(p)} title="Preview client-facing product page"><Eye className="h-3.5 w-3.5 mr-1" />Preview</Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => handleStripePreview(p)}
-                      disabled={previewingCheckout === p.id}
-                      title="Open the real Stripe-hosted checkout page in a new tab (branding & colors are edited in your Stripe Dashboard → Settings → Branding)"
-                    >
-                      {previewingCheckout === p.id ? (
-                        <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
-                      ) : (
-                        <CreditCard className="h-3.5 w-3.5 mr-1" />
-                      )}
-                      Stripe Preview
-                    </Button>
-                    <Button size="sm" variant="outline" onClick={() => setEditing({ open: true, product: p })}><Pencil className="h-3.5 w-3.5" /></Button>
-                    <Button size="sm" variant="ghost" onClick={() => duplicateMutation.mutate(p.id)}><Copy className="h-3.5 w-3.5" /></Button>
+                          {hasLink && (
+                            <>
+                              <Button size="sm" variant="outline" onClick={() => copyLink(p.payment_link_url!)} title="Copy the Stripe payment link to share manually">
+                                <Copy className="h-3.5 w-3.5 mr-1" /> Copy payment link
+                              </Button>
+                              <Button size="sm" variant="outline" onClick={() => setSharing(p)} title="Open share panel with message templates">
+                                <Share2 className="h-3.5 w-3.5 mr-1" /> Share
+                              </Button>
+                              <a href={p.payment_link_url!} target="_blank" rel="noreferrer">
+                                <Button size="sm" variant="outline" title="Open the live payment link in a new tab">
+                                  <ExternalLink className="h-3.5 w-3.5 mr-1" /> Open checkout
+                                </Button>
+                              </a>
+                            </>
+                          )}
+                          {!hasLink && hasPriceId && r.ready && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleGenerateLink(p)}
+                              disabled={generatingLink === p.id}
+                              title="Create a reusable Stripe payment link you can copy and send anywhere"
+                            >
+                              {generatingLink === p.id
+                                ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+                                : <Wand2 className="h-3.5 w-3.5 mr-1" />}
+                              Generate payment link
+                            </Button>
+                          )}
+                          {!hasPriceId && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="border-amber-500/40 text-amber-500 hover:bg-amber-500/10"
+                              onClick={() => setEditing({ open: true, product: p })}
+                              title="This product needs a Stripe Price ID and checkout mode before clients can pay."
+                            >
+                              <AlertTriangle className="h-3.5 w-3.5 mr-1" /> Complete Stripe setup
+                            </Button>
+                          )}
+                          <Button size="sm" variant="outline" onClick={() => setPreviewing(p)} title="Preview the client-facing product card">
+                            <Eye className="h-3.5 w-3.5 mr-1" /> Preview
+                          </Button>
+                          {hasPriceId && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleStripePreview(p)}
+                              disabled={previewingCheckout === p.id}
+                              title="Open the live Stripe-hosted checkout page in a new tab"
+                            >
+                              {previewingCheckout === p.id
+                                ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+                                : <CreditCard className="h-3.5 w-3.5 mr-1" />}
+                              Open Stripe checkout
+                            </Button>
+                          )}
+                          <Button size="sm" variant="outline" onClick={() => setEditing({ open: true, product: p })} title="Edit product">
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => duplicateMutation.mutate(p.id)} title="Duplicate">
+                            <Copy className="h-3.5 w-3.5" />
+                          </Button>
+                        </>
+                      );
+                    })()}
                     {p.status === "Archived" ? (
-                      <Button size="sm" variant="ghost" onClick={() => setStatusMutation.mutate({ id: p.id, status: "Draft" })} title="Restore"><ArchiveRestore className="h-3.5 w-3.5" /></Button>
+                      null
                     ) : (
                       <Button size="sm" variant="ghost" onClick={() => setStatusMutation.mutate({ id: p.id, status: "Archived" })} title="Archive"><Archive className="h-3.5 w-3.5" /></Button>
                     )}
