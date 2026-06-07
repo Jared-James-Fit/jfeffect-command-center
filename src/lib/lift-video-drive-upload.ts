@@ -11,6 +11,11 @@ import { buildDriveDisplayName } from "@/lib/media-naming";
 export type LiftDriveUploadResult = {
   url: string;
   driveFileId: string;
+  driveUrl: string | null;
+  driveEmbedUrl: string | null;
+  thumbnailUrl: string | null;
+  mimeType: string | null;
+  sizeBytes: number | null;
   mediaItemId: string | null;
   submissionId: string | null;
 };
@@ -62,6 +67,17 @@ export async function uploadLiftClipToDrive(args: Args): Promise<LiftDriveUpload
     clipOrder: args.index - 1, urgent: !!args.urgent,
     painNote: args.painNote ?? null, uploadedByRole: "client",
   }});
-  const url: string = row?.drive_embed_url ?? row?.drive_url ?? `https://drive.google.com/file/d/${uploaded.id}/preview`;
-  return { url, driveFileId: uploaded.id, mediaItemId: row?.id ?? null, submissionId: subId };
+  const driveUrl: string = row?.drive_url ?? `https://drive.google.com/file/d/${uploaded.id}/view`;
+  const driveEmbedUrl: string = row?.drive_embed_url ?? `https://drive.google.com/file/d/${uploaded.id}/preview`;
+  return {
+    url: driveUrl,
+    driveFileId: uploaded.id,
+    driveUrl,
+    driveEmbedUrl,
+    thumbnailUrl: row?.thumbnail_url ?? null,
+    mimeType: row?.mime_type ?? args.file.type || null,
+    sizeBytes: row?.size_bytes ?? args.file.size ?? null,
+    mediaItemId: row?.id ?? null,
+    submissionId: subId,
+  };
 }
