@@ -9,6 +9,20 @@ import { Badge } from "@/components/ui/badge";
 import { ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 
+function statusBadgeClass(s?: string | null) {
+  if (s === "Paid" || s === "Active Subscription") return "border-green-500/40 text-green-500 bg-green-500/10";
+  if (s === "Overdue" || s === "Failed" || s === "Manual Payment Needed") return "border-destructive/40 text-destructive bg-destructive/5";
+  if (s === "Cancelled" || s === "Refunded" || s === "Expired") return "border-border text-muted-foreground";
+  return "border-warning/40 text-warning bg-warning/5";
+}
+function statusLabel(s?: string | null) {
+  if (s === "Paid") return "Paid · Active";
+  if (s === "Active Subscription") return "Active subscription";
+  if (s === "Cancelled") return "Cancelled";
+  if (!s || s === "Not Sent" || s === "Sent" || s === "Pending") return "Payment setup needed";
+  return s;
+}
+
 export const Route = createFileRoute("/_authenticated/portal/purchases")({
   component: MyPurchases,
   validateSearch: (s: Record<string, unknown>) => ({
@@ -75,7 +89,7 @@ function MyPurchases() {
                     </div>
                     <div className="flex items-center gap-2">
                       {!r.terms_accepted && <Badge className="bg-gradient-primary">Action needed</Badge>}
-                      <Badge variant="outline">{r.payment_status}</Badge>
+                      <Badge variant="outline" className={statusBadgeClass(r.payment_status)}>{statusLabel(r.payment_status)}</Badge>
                       <ChevronRight className="h-4 w-4 text-muted-foreground" />
                     </div>
                   </Card>
