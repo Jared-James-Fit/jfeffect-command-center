@@ -251,6 +251,10 @@ export async function setStatus(videoId: string, status: LiftVideoStatus) {
   await updateLiftVideo(videoId, { status } as any);
 }
 
+export async function setPlaybackError(videoId: string, message: string | null) {
+  await updateLiftVideo(videoId, { playback_error: message } as any);
+}
+
 export async function uploadVideoFile(file: File, userId: string) {
   const ext = file.name.split(".").pop()?.toLowerCase() ?? "mp4";
   const path = `${userId}/${Date.now()}-${crypto.randomUUID()}.${ext}`;
