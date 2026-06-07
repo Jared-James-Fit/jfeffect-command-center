@@ -35,15 +35,18 @@ export function LiftVideoPlayer({
   }, [src, retryKey]);
 
   const skip = (delta: number) => {
+    if (useEmbedFallback) return;
     const v = ref.current;
     if (!v) return;
     v.currentTime = Math.max(0, Math.min((v.duration || 0), v.currentTime + delta));
   };
   const setRate = (r: number) => {
     setSpeed(r);
+    if (useEmbedFallback) return;
     if (ref.current) ref.current.playbackRate = r;
   };
   const goFullscreen = () => {
+    if (useEmbedFallback) return;
     const v = ref.current as any;
     if (!v) return;
     const fn = v.requestFullscreen || v.webkitEnterFullscreen || v.webkitRequestFullscreen;
@@ -157,7 +160,7 @@ export function LiftVideoPlayer({
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
-        <Button size="sm" variant="outline" onClick={goFullscreen} title="Fullscreen" className="ml-auto">
+        <Button size="sm" variant="outline" onClick={goFullscreen} title="Fullscreen" className="ml-auto" disabled={useEmbedFallback}>
           <Maximize2 className="mr-1 h-3 w-3" /> Fullscreen
         </Button>
         {fallbackUrl && (
