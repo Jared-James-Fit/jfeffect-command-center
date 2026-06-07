@@ -477,6 +477,7 @@ function ReviewDetail({
               {sub.dayLabel && <>{sub.dayLabel} · </>}
               {sub.clips.length} clip{sub.clips.length === 1 ? "" : "s"} · Uploaded{" "}
               {formatDistanceToNow(parseISO(sub.latest.created_at), { addSuffix: true })}
+              {sub.latest.date_performed && <> · Performed {format(parseISO(sub.latest.date_performed), "MMM d")}</>}
             </div>
           </div>
           <Badge variant="outline" className={cn("h-6", statusTone(sub.status))}>{sub.status}</Badge>
