@@ -56,6 +56,7 @@ export function ClientLiftVideoUploader({ clientId, clientName, userId, onSaved 
   const multiUploadRef = useRef<HTMLInputElement | null>(null);
   const multiRecordRef = useRef<HTMLInputElement | null>(null);
   const carouselRef = useRef<HTMLDivElement | null>(null);
+  const pickerOpenedAtRef = useRef<{ source: "photos" | "record"; at: number } | null>(null);
 
   const reset = () => {
     setClips([]);
@@ -72,8 +73,24 @@ export function ClientLiftVideoUploader({ clientId, clientName, userId, onSaved 
     setShowOverall(false);
   };
 
+  const openPicker = (source: "photos" | "record") => {
+    pickerOpenedAtRef.current = { source, at: performance.now() };
+    if (source === "photos") multiUploadRef.current?.click();
+    else multiRecordRef.current?.click();
+  };
+
   const addFiles = (files: FileList | null) => {
     if (!files || files.length === 0) return;
+    const handoff = pickerOpenedAtRef.current;
+    if (handoff) {
+      console.info("[lift-video-picker] Files reached the app after native picker handoff", {
+        source: handoff.source,
+        handoffMs: Math.round(performance.now() - handoff.at),
+        fileCount: files.length,
+        totalBytes: Array.from(files).reduce((sum, file) => sum + file.size, 0),
+      });
+      pickerOpenedAtRef.current = null;
+    }
     const next: Clip[] = [];
     for (const f of Array.from(files)) {
       // Basic guards only — never block on preview/metadata generation.
@@ -91,36 +108,17 @@ export function ClientLiftVideoUploader({ clientId, clientName, userId, onSaved 
         id: crypto.randomUUID(),
         kind: "file",
         file: f,
-        // Defer createObjectURL + <video> mount so the "selected" UI
-        // paints instantly. iOS Safari otherwise blocks on .MOV decode.
+        // Do not create object URLs, thumbnails, metadata, or video elements
+        // here. On iPhone, the only acceptable post-handoff work is adding
+        // the File reference and painting the send/details UI.
         previewUrl: undefined,
         previewStatus: "pending",
         note: "",
       });
     }
     if (next.length === 0) return;
-    setClips((c) => {
-      const merged = [...c, ...next];
-      if (!activeId && merged.length) setActiveId(next[0].id);
-      return merged;
-    });
-    // Generate object URLs on the next idle/animation frame so React can
-    // commit the details panel first. The thumbnail then fills in.
-    const schedule = (cb: () => void) => {
-      const ric = (window as any).requestIdleCallback as undefined | ((cb: () => void) => number);
-      if (ric) ric(cb);
-      else setTimeout(cb, 50);
-    };
-    for (const clip of next) {
-      schedule(() => {
-        try {
-          const url = URL.createObjectURL(clip.file!);
-          setClips((c) => c.map((k) => (k.id === clip.id ? { ...k, previewUrl: url, previewStatus: "ready" } : k)));
-        } catch {
-          setClips((c) => c.map((k) => (k.id === clip.id ? { ...k, previewStatus: "failed" } : k)));
-        }
-      });
-    }
+    setClips((c) => [...c, ...next]);
+    if (!activeId) setActiveId(next[0].id);
   };
 
   const addLinks = (raw: string) => {
@@ -294,18 +292,21 @@ export function ClientLiftVideoUploader({ clientId, clientName, userId, onSaved 
 
         {/* Compact action row */}
         <div className="grid grid-cols-3 gap-2">
-          <Button type="button" variant="outline" size="sm" className="h-10 rounded-xl gap-1.5" onClick={() => multiUploadRef.current?.click()}>
+          <Button type="button" variant="outline" size="sm" className="h-10 rounded-xl gap-1.5" onClick={() => openPicker("photos")}>
             <Upload className="h-4 w-4" />
-            <span className="text-xs font-medium">Upload</span>
+            <span className="text-xs font-medium">Photos</span>
           </Button>
-          <Button type="button" variant="outline" size="sm" className="h-10 rounded-xl gap-1.5" onClick={() => multiRecordRef.current?.click()}>
+          <Button type="button" variant="default" size="sm" className="h-10 rounded-xl gap-1.5" onClick={() => openPicker("record")}>
             <VideoIcon className="h-4 w-4" />
-            <span className="text-xs font-medium">Record</span>
+            <span className="text-xs font-medium">Record Now</span>
           </Button>
           <Button type="button" variant={showLinkInput ? "secondary" : "outline"} size="sm" className="h-10 rounded-xl gap-1.5" onClick={() => setShowLinkInput((v) => !v)}>
             <LinkIcon className="h-4 w-4" />
-            <span className="text-xs font-medium">Link</span>
+            <span className="text-xs font-medium">Paste Link</span>
           </Button>
+        </div>
+        <div className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
+          Record Now is usually fastest. Short clips send fastest. Videos stored in iCloud may take a moment to prepare before this screen opens.
         </div>
 
         {showLinkInput && (
@@ -338,7 +339,7 @@ export function ClientLiftVideoUploader({ clientId, clientName, userId, onSaved 
                 {clips.length} clip{clips.length === 1 ? "" : "s"} selected
                 {clips.some((c) => c.kind === "file" && c.previewStatus === "pending") && (
                   <span className="ml-2 text-[10px] font-normal text-muted-foreground/80">
-                    · preview loading…
+                    · ready to send
                   </span>
                 )}
               </div>
@@ -383,7 +384,7 @@ export function ClientLiftVideoUploader({ clientId, clientName, userId, onSaved 
                         <div className="flex h-full w-full flex-col items-center justify-center gap-1 bg-gradient-to-br from-muted to-muted/60 px-2 text-center">
                           <Film className="h-5 w-5 text-muted-foreground/70" />
                           <span className="text-[9px] font-medium text-muted-foreground">
-                            {clip.previewStatus === "failed" ? "Preview unavailable" : "Preview loading…"}
+                            {clip.previewStatus === "failed" ? "Preview unavailable" : "Selected"}
                           </span>
                         </div>
                       ) : (
