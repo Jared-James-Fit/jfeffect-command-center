@@ -292,18 +292,21 @@ export function ClientLiftVideoUploader({ clientId, clientName, userId, onSaved 
 
         {/* Compact action row */}
         <div className="grid grid-cols-3 gap-2">
-          <Button type="button" variant="outline" size="sm" className="h-10 rounded-xl gap-1.5" onClick={() => multiUploadRef.current?.click()}>
+          <Button type="button" variant="outline" size="sm" className="h-10 rounded-xl gap-1.5" onClick={() => openPicker("photos")}>
             <Upload className="h-4 w-4" />
-            <span className="text-xs font-medium">Upload</span>
+            <span className="text-xs font-medium">Photos</span>
           </Button>
-          <Button type="button" variant="outline" size="sm" className="h-10 rounded-xl gap-1.5" onClick={() => multiRecordRef.current?.click()}>
+          <Button type="button" variant="default" size="sm" className="h-10 rounded-xl gap-1.5" onClick={() => openPicker("record")}>
             <VideoIcon className="h-4 w-4" />
-            <span className="text-xs font-medium">Record</span>
+            <span className="text-xs font-medium">Record Now</span>
           </Button>
           <Button type="button" variant={showLinkInput ? "secondary" : "outline"} size="sm" className="h-10 rounded-xl gap-1.5" onClick={() => setShowLinkInput((v) => !v)}>
             <LinkIcon className="h-4 w-4" />
             <span className="text-xs font-medium">Link</span>
           </Button>
+        </div>
+        <div className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
+          Record Now is usually fastest. Short clips send fastest. Videos stored in iCloud may take a moment to prepare before this screen opens.
         </div>
 
         {showLinkInput && (
@@ -336,7 +339,7 @@ export function ClientLiftVideoUploader({ clientId, clientName, userId, onSaved 
                 {clips.length} clip{clips.length === 1 ? "" : "s"} selected
                 {clips.some((c) => c.kind === "file" && c.previewStatus === "pending") && (
                   <span className="ml-2 text-[10px] font-normal text-muted-foreground/80">
-                    · preview loading…
+                    · ready to send
                   </span>
                 )}
               </div>
@@ -381,7 +384,7 @@ export function ClientLiftVideoUploader({ clientId, clientName, userId, onSaved 
                         <div className="flex h-full w-full flex-col items-center justify-center gap-1 bg-gradient-to-br from-muted to-muted/60 px-2 text-center">
                           <Film className="h-5 w-5 text-muted-foreground/70" />
                           <span className="text-[9px] font-medium text-muted-foreground">
-                            {clip.previewStatus === "failed" ? "Preview unavailable" : "Preview loading…"}
+                            {clip.previewStatus === "failed" ? "Preview unavailable" : "Selected"}
                           </span>
                         </div>
                       ) : (
