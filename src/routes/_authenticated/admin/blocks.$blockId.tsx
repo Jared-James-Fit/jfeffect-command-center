@@ -139,7 +139,7 @@ function DayCard({ day, rows, exercises, onChange }: { day: any; rows: any[]; ex
               <RotateCcw className="mr-1 h-3 w-3" /> Clear
             </Button>
           )}
-          <Input type="number" placeholder="Override min" className="w-28" value={day.duration_override_min ?? ""} onChange={(e) => {
+          <Input type="number" inputMode="numeric" placeholder="Override min" className="w-28" value={day.duration_override_min ?? ""} onChange={(e) => {
             const v = parseInt(e.target.value);
             if (Number.isFinite(v)) updateDay(day.id, { duration_override_min: v, duration_source: "manual" }).then(onChange);
           }} />
@@ -201,21 +201,21 @@ function RowEditor({ row, exercises, onChange }: { row: any; exercises: any[]; o
           <Input className="h-7 mt-1 text-xs" placeholder="Custom name" value={local.exercise_name_override ?? ""} onChange={(e) => setLocal({ ...local, exercise_name_override: e.target.value })} onBlur={(e) => save({ exercise_name_override: e.target.value })} />
         )}
       </td>
-      <td className="p-1"><Input className="h-8 w-14 text-xs" type="number" value={local.sets ?? ""} onChange={(e) => setLocal({ ...local, sets: parseInt(e.target.value) || null })} onBlur={(e) => save({ sets: parseInt(e.target.value) || null })} /></td>
+      <td className="p-1"><Input className="h-8 w-14 text-xs" type="number" inputMode="numeric" value={local.sets ?? ""} onChange={(e) => setLocal({ ...local, sets: parseInt(e.target.value) || null })} onBlur={(e) => save({ sets: parseInt(e.target.value) || null })} /></td>
       <td className="p-1"><Input className="h-8 w-20 text-xs" value={local.reps_text ?? ""} placeholder="8 or 8-12" onChange={(e) => setLocal({ ...local, reps_text: e.target.value })} onBlur={(e) => save({ reps_text: e.target.value })} /></td>
-      <td className="p-1"><Input className="h-8 w-16 text-xs" value={local.rpe ?? ""} placeholder="8" onChange={(e) => setLocal({ ...local, rpe: e.target.value })} onBlur={(e) => save({ rpe: e.target.value })} /></td>
-      <td className="p-1"><Input className="h-8 w-16 text-xs" value={local.rir ?? ""} placeholder="2" onChange={(e) => setLocal({ ...local, rir: e.target.value })} onBlur={(e) => save({ rir: e.target.value })} /></td>
+      <td className="p-1"><Input className="h-8 w-16 text-xs" inputMode="decimal" value={local.rpe ?? ""} placeholder="8" onChange={(e) => setLocal({ ...local, rpe: e.target.value })} onBlur={(e) => save({ rpe: e.target.value })} /></td>
+      <td className="p-1"><Input className="h-8 w-16 text-xs" inputMode="decimal" value={local.rir ?? ""} placeholder="2" onChange={(e) => setLocal({ ...local, rir: e.target.value })} onBlur={(e) => save({ rir: e.target.value })} /></td>
       <td className="p-1">
         <div className="flex gap-1">
-          <Input className="h-8 w-16 text-xs" type="number" value={local.percentage ?? ""} placeholder="80" onChange={(e) => setLocal({ ...local, percentage: parseFloat(e.target.value) || null })} onBlur={(e) => save({ percentage: parseFloat(e.target.value) || null })} />
+          <Input className="h-8 w-16 text-xs" type="number" inputMode="decimal" value={local.percentage ?? ""} placeholder="80" onChange={(e) => setLocal({ ...local, percentage: parseFloat(e.target.value) || null })} onBlur={(e) => save({ percentage: parseFloat(e.target.value) || null })} />
           <Select value={local.percentage_basis ?? "manual"} onValueChange={(v) => save({ percentage_basis: v as PercentageBasis })}>
             <SelectTrigger className="h-8 w-28 text-xs"><SelectValue /></SelectTrigger>
             <SelectContent>{PERCENTAGE_BASES.map((b) => <SelectItem key={b.value} value={b.value}>{b.label}</SelectItem>)}</SelectContent>
           </Select>
         </div>
       </td>
-      <td className="p-1"><Input className="h-8 w-20 text-xs" type="number" value={local.load_kg ?? ""} placeholder="kg" onChange={(e) => setLocal({ ...local, load_kg: parseFloat(e.target.value) || null })} onBlur={(e) => save({ load_kg: parseFloat(e.target.value) || null })} /></td>
-      <td className="p-1"><Input className="h-8 w-20 text-xs" type="number" value={local.rest_seconds ?? ""} placeholder="180" onChange={(e) => setLocal({ ...local, rest_seconds: parseInt(e.target.value) || null })} onBlur={(e) => save({ rest_seconds: parseInt(e.target.value) || null })} /></td>
+      <td className="p-1"><Input className="h-8 w-20 text-xs" type="number" inputMode="decimal" value={local.load_kg ?? ""} placeholder="kg" onChange={(e) => setLocal({ ...local, load_kg: parseFloat(e.target.value) || null })} onBlur={(e) => save({ load_kg: parseFloat(e.target.value) || null })} /></td>
+      <td className="p-1"><Input className="h-8 w-20 text-xs" type="number" inputMode="numeric" value={local.rest_seconds ?? ""} placeholder="180" onChange={(e) => setLocal({ ...local, rest_seconds: parseInt(e.target.value) || null })} onBlur={(e) => save({ rest_seconds: parseInt(e.target.value) || null })} /></td>
       <td className="p-1"><Input className="h-8 w-20 text-xs" value={local.tempo ?? ""} placeholder="3-1-1" onChange={(e) => setLocal({ ...local, tempo: e.target.value })} onBlur={(e) => save({ tempo: e.target.value })} /></td>
       <td className="p-1">
         <Select value={local.time_profile ?? "accessory_compound"} onValueChange={(v) => save({ time_profile: v as TimeProfile })}>
