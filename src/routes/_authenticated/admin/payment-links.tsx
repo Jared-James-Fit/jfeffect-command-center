@@ -574,9 +574,8 @@ function ProductFormDialog({
         agreementBeforeService: form.agreementRequired ? form.agreementBeforeService : false,
         status: form.status,
         notes: form.notes.trim() || null,
-        pastedPaymentLinkUrl: form.paymentLinkUrl.trim() || null,
         stripePriceId: form.stripePriceId.trim() || null,
-        checkoutMode: form.checkoutMode,
+        checkoutMode: form.checkoutMode || "auto",
         billingInterval: (form.billingInterval as any) || null,
         accessLevel: form.accessLevel ? parseInt(form.accessLevel, 10) : null,
       };
@@ -595,8 +594,6 @@ function ProductFormDialog({
       setSubmitting(false);
     }
   };
-
-  const linkConnected = !!form.paymentLinkUrl.trim();
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
