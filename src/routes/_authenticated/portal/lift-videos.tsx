@@ -11,12 +11,13 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Plus, Video, ChevronRight, MoreVertical, Pencil, Link2, MessageSquare, Trash2, Settings2 } from "lucide-react";
+import { Plus, Video, ChevronRight, MoreVertical, Pencil, Link2, Trash2, Settings2 } from "lucide-react";
 import { formatDistanceToNow, parseISO } from "date-fns";
 import { toast } from "sonner";
 import { listLiftVideos, markClientViewed, statusTone, deleteLiftVideos, type LiftVideo } from "@/lib/lift-videos";
 import { LiftVideoDialog } from "@/components/lift-video-dialog";
 import { LiftVideoCard } from "@/components/lift-video-card";
+import { ClientLiftVideoUploader } from "@/components/client-lift-video-uploader";
 
 export const Route = createFileRoute("/_authenticated/portal/lift-videos")({
   component: ClientLiftVideos,
