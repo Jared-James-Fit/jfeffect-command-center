@@ -19,6 +19,8 @@ import { LiftVideoDialog } from "@/components/lift-video-dialog";
 import { LiftVideoCard } from "@/components/lift-video-card";
 import { ClientLiftVideoUploader } from "@/components/client-lift-video-uploader";
 import { useLiftUploadActiveCount, useLiftUploadState } from "@/lib/lift-upload-queue";
+import { useBlocker } from "@tanstack/react-router";
+import { AlertTriangle, Loader2 } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 
 export const Route = createFileRoute("/_authenticated/portal/lift-videos")({
@@ -134,7 +136,7 @@ function ClientLiftVideos() {
   function feedbackLabel(clips: LiftVideo[]) {
     // Live upload states take priority over normal status labels so the
     // client sees instant feedback while the file is still moving.
-    if (clips.some((c) => c.upload_status === "Uploading")) return "Uploading…";
+    if (clips.some((c) => c.upload_status === "Uploading")) return "Uploading — stay on screen";
     if (clips.some((c) => c.upload_status === "Upload Failed")) return "Upload Failed";
     if (clips.some((c) => c.status === "Needs Follow-Up")) return "Needs Follow-Up";
     if (clips.some((c) => c.status === "Reviewed")) return "Reviewed by Jared";
@@ -225,7 +227,7 @@ function ClientLiftVideos() {
             const v = g.head;
             const count = g.clips.length;
             const fb = feedbackLabel(g.clips);
-            const isUploading = fb === "Uploading…";
+            const isUploading = fb.startsWith("Uploading");
             const uploadFailed = fb === "Upload Failed";
             const reviewed = !isUploading && !uploadFailed && fb !== "Awaiting Review" && fb !== "Watched";
             const canEdit = count === 1 && !v.reviewed_at;
@@ -390,11 +392,54 @@ function UploadGuard() {
     window.addEventListener("beforeunload", handler);
     return () => window.removeEventListener("beforeunload", handler);
   }, [active]);
-  if (!active) return null;
+
+  // Block in-app navigation (TanStack Router) with a confirm dialog when
+  // any clip is still uploading. iPhone PWAs background-suspend tabs quickly
+  // and can kill the XHR — staying on this screen is the only reliable path.
+  const { status, proceed, reset } = useBlocker({
+    shouldBlockFn: () => active > 0,
+    withResolver: true,
+  });
+
+  if (!active && status !== "blocked") return null;
+
   return (
-    <div className="border-b border-warning/30 bg-warning/10 px-6 py-2 text-center text-xs text-warning">
-      {active} clip{active === 1 ? "" : "s"} uploading — keep this screen open until upload finishes.
-    </div>
+    <>
+      {active > 0 && (
+        <div className="sticky top-0 z-40 border-b-2 border-amber-500/50 bg-amber-500/15 px-4 py-3 backdrop-blur">
+          <div className="mx-auto flex max-w-3xl items-start gap-3">
+            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
+            <div className="min-w-0 flex-1 space-y-0.5">
+              <div className="text-sm font-bold text-amber-700 dark:text-amber-400">
+                Do Not Leave This Screen
+              </div>
+              <div className="text-xs text-foreground/80">
+                {active} clip{active === 1 ? "" : "s"} uploading. Do not close the app, lock your phone, or switch apps until all clips say <span className="font-semibold">Awaiting Review</span>.
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      <AlertDialog open={status === "blocked"}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-amber-600" />
+              Upload still in progress
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Leaving now may cancel your video upload. Stay on this screen until it finishes.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction onClick={() => reset?.()}>Stay Here</AlertDialogAction>
+            <AlertDialogCancel onClick={() => proceed?.()} className="text-muted-foreground">
+              Leave Anyway
+            </AlertDialogCancel>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
 
@@ -404,14 +449,20 @@ function ClipUploadRow({ videoId, fallbackName }: { videoId: string; fallbackNam
   const name = state.fileName || fallbackName;
   if (state.status === "failed") {
     return (
-      <div className="text-[10px] text-destructive truncate">Upload failed: {state.error}</div>
+      <div className="text-[10px] text-destructive truncate">
+        Upload Failed — {state.error}. Please retry and stay on the screen.
+      </div>
     );
   }
+  const label =
+    state.status === "uploading" ? `${state.progress}% — stay on screen` :
+    state.status === "queued" ? "Queued — stay on screen" :
+    "Uploaded";
   return (
     <div className="space-y-0.5">
       <div className="flex items-center justify-between gap-2 text-[10px] text-muted-foreground">
         <span className="truncate">{name}</span>
-        <span>{state.status === "uploading" ? `${state.progress}%` : state.status === "queued" ? "Queued" : "Done"}</span>
+        <span className={state.status !== "done" ? "font-semibold text-amber-600 dark:text-amber-400" : ""}>{label}</span>
       </div>
       <Progress value={state.status === "done" ? 100 : state.progress} className="h-1" />
     </div>

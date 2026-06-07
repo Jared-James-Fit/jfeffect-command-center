@@ -13,6 +13,7 @@ import { friendlyDriveError } from "@/lib/drive-errors";
 import { createLiftVideo } from "@/lib/lift-videos";
 import { toast } from "sonner";
 import { Upload, Link as LinkIcon, Loader2, Video as VideoIcon, Send, X, AlertTriangle, CheckCircle2, ChevronDown, MessageSquare, Play, Film } from "lucide-react";
+import { useLiftUploadActiveCount } from "@/lib/lift-upload-queue";
 
 type Clip = {
   id: string;
@@ -228,20 +229,7 @@ export function ClientLiftVideoUploader({ clientId, clientName, userId, onSaved 
 
   if (sent) {
     const fileClipCount = clips.filter((c) => c.kind === "file").length;
-    return (
-      <div className="rounded-2xl border border-border bg-card p-8 text-center space-y-3">
-        <CheckCircle2 className="mx-auto h-12 w-12 text-emerald-500" />
-        <div className="text-base font-semibold">
-          {fileClipCount > 0 ? "Uploading in the background" : "Sent to Coach Jared"}
-        </div>
-        <div className="text-sm text-muted-foreground">
-          {fileClipCount > 0
-            ? "Your submission appears below with live upload progress. Keep this screen open until upload finishes."
-            : "You'll see feedback here once it's reviewed."}
-        </div>
-        <Button className="mt-2" onClick={reset}>Send another video</Button>
-      </div>
-    );
+    return <SentState fileClipCount={fileClipCount} onReset={reset} />;
   }
 
   return (
@@ -522,5 +510,50 @@ export function ClientLiftVideoUploader({ clientId, clientName, userId, onSaved 
         </DialogContent>
       </Dialog>
     </>
+  );
+}
+
+function SentState({ fileClipCount, onReset }: { fileClipCount: number; onReset: () => void }) {
+  const active = useLiftUploadActiveCount();
+  const isUploading = fileClipCount > 0 && active > 0;
+
+  if (isUploading) {
+    return (
+      <div className="rounded-2xl border-2 border-amber-500/50 bg-amber-500/5 p-6 text-center space-y-3">
+        <div className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-amber-500/20">
+          <Loader2 className="h-7 w-7 animate-spin text-amber-600" />
+        </div>
+        <div className="text-lg font-bold text-amber-700 dark:text-amber-400">
+          Do Not Leave This Screen
+        </div>
+        <div className="space-y-2 text-sm text-foreground/90">
+          <p>Your video is still uploading.</p>
+          <p className="text-muted-foreground">
+            If you close the app, lock your phone, switch apps, or leave this screen before the upload finishes, the upload may fail.
+          </p>
+        </div>
+        <div className="rounded-lg bg-amber-500/10 px-3 py-2 text-sm font-medium text-amber-700 dark:text-amber-400">
+          {active} clip{active === 1 ? "" : "s"} uploading. Stay here until upload is complete.
+        </div>
+        <Button disabled className="mt-2 w-full">
+          <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Upload in Progress…
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-2xl border border-border bg-card p-8 text-center space-y-3">
+      <CheckCircle2 className="mx-auto h-12 w-12 text-emerald-500" />
+      <div className="text-base font-semibold">
+        {fileClipCount > 0 ? "Upload Complete" : "Sent to Coach Jared"}
+      </div>
+      <div className="text-sm text-muted-foreground">
+        {fileClipCount > 0
+          ? "All videos uploaded successfully. Sent to Coach Jared — awaiting review."
+          : "You'll see feedback here once it's reviewed."}
+      </div>
+      <Button className="mt-2" onClick={onReset}>Send another video</Button>
+    </div>
   );
 }
