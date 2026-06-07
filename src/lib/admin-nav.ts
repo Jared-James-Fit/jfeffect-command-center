@@ -41,10 +41,8 @@ export const coachNav: NavItem[] = [
   { to: "/admin/calendar", label: "Calendar", icon: Calendar },
   { to: "/admin/exercises", label: "Exercise Library", icon: Dumbbell },
   { to: "/admin/resources", label: "Resources", icon: FolderOpen },
+  { to: "/admin/account", label: "My Account", icon: UserCog },
 ];
-
-// Append My Account to coach nav
-coachNav.push({ to: "/admin/account", label: "My Account", icon: UserCog });
 
 export const clientNav: NavItem[] = [
   { to: "/portal", label: "Dashboard", icon: LayoutDashboard },
