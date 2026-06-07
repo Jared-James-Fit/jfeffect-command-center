@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -27,6 +28,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { UserAvatar } from "@/components/user-avatar";
+import { refreshLiftVideoDriveDiagnostics } from "@/lib/lift-videos.functions";
 
 type Props = {
   video: LiftVideo;
@@ -49,6 +51,8 @@ export function LiftVideoCard({ video, role, userId, onChanged, onEdit, clientNa
   const [embedStatus, setEmbedStatus] = useState<"idle" | "loading" | "ready" | "slow" | "error">("idle");
   const [embedRetry, setEmbedRetry] = useState(0);
   const [lastPlaybackError, setLastPlaybackError] = useState<string | null>(null);
+  const [diagnosing, setDiagnosing] = useState(false);
+  const refreshDiagnostics = useServerFn(refreshLiftVideoDriveDiagnostics);
 
   const loadComments = async () => {
     const c = await listComments(video.id, { includeInternal: role === "admin" });
