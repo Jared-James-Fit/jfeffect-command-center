@@ -11,7 +11,7 @@ import {
   LIFT_VIDEO_STATUSES, statusTone, clientFacingStatus,
   listComments, addComment, markWatched, toggleLike, markReviewed, setStatus,
   getSignedVideoUrl, deleteLiftVideo,
-  isYouTube, isDrive, youTubeEmbed, drivePreview, driveOpenUrl, driveVideoStreamUrl,
+  isYouTube, isDrive, youTubeEmbed, drivePreview, driveOpenUrl,
   LIFT_VIDEO_QUICK_REPLIES,
 } from "@/lib/lift-videos";
 import { format, parseISO, formatDistanceToNow } from "date-fns";
@@ -42,7 +42,6 @@ export function LiftVideoCard({ video, role, userId, onChanged, onEdit }: Props)
   const [posting, setPosting] = useState(false);
   const [embedUrl, setEmbedUrl] = useState<string | null>(null);
   const [signedUrl, setSignedUrl] = useState<string | null>(null);
-  const [streamUrl, setStreamUrl] = useState<string | null>(null);
   const [embedStatus, setEmbedStatus] = useState<"idle" | "loading" | "ready" | "slow" | "error">("idle");
   const [embedRetry, setEmbedRetry] = useState(0);
   const [showEmbedFallback, setShowEmbedFallback] = useState(false);
@@ -57,7 +56,6 @@ export function LiftVideoCard({ video, role, userId, onChanged, onEdit }: Props)
     let cancel = false;
     setEmbedUrl(null);
     setSignedUrl(null);
-    setStreamUrl(null);
     setEmbedStatus("idle");
     (async () => {
       if (video.video_storage_path) {
@@ -66,7 +64,9 @@ export function LiftVideoCard({ video, role, userId, onChanged, onEdit }: Props)
       } else if (video.video_url) {
         if (isYouTube(video.video_url)) setEmbedUrl(youTubeEmbed(video.video_url));
         else if (isDrive(video.video_url)) {
-          setStreamUrl(driveVideoStreamUrl(video.video_url));
+          // Drive direct-stream URLs return the virus-scan interstitial for
+          // larger video files, which made the player hang. Use the iframe
+          // /preview embed instead — and always surface "Watch in Drive".
           setEmbedUrl(drivePreview(video.video_url));
         }
       }
@@ -80,7 +80,7 @@ export function LiftVideoCard({ video, role, userId, onChanged, onEdit }: Props)
     setShowEmbedFallback(false);
     const fallbackTimer = window.setTimeout(() => setShowEmbedFallback(true), 5000);
     const slowTimer = window.setTimeout(() => setEmbedStatus((s) => (s === "loading" ? "slow" : s)), 5000);
-    const errorTimer = window.setTimeout(() => setEmbedStatus((s) => (s === "loading" || s === "slow" ? "error" : s)), 12000);
+    const errorTimer = window.setTimeout(() => setEmbedStatus((s) => (s === "loading" || s === "slow" ? "error" : s)), 10000);
     return () => {
       window.clearTimeout(fallbackTimer);
       window.clearTimeout(slowTimer);
@@ -184,41 +184,59 @@ export function LiftVideoCard({ video, role, userId, onChanged, onEdit }: Props)
         </div>
       )}
 
+      {/* Primary Drive action — always visible, never blocked by preview load */}
+      {openUrl && (
+        <Button asChild className="w-full sm:w-auto">
+          <a href={openUrl} target="_blank" rel="noreferrer">
+            <ExternalLink className="mr-2 h-4 w-4" />
+            Watch in {isDrive(video.video_url ?? "") ? "Drive" : "new tab"} (original quality)
+          </a>
+        </Button>
+      )}
+
       <div className="overflow-hidden rounded-md border border-border bg-card">
-        {signedUrl || streamUrl ? (
+        {signedUrl ? (
           <LiftVideoPlayer
-            src={(signedUrl || streamUrl)!}
+            src={signedUrl}
             fallbackUrl={openUrl}
             embedFallbackUrl={embedUrl}
+            thumbnailUrl={video.thumbnail_url}
             title={video.exercise || "Lift video"}
           />
         ) : embedUrl ? (
           <div className="space-y-2">
-            <div className="relative aspect-video w-full overflow-hidden rounded-md bg-secondary/40">
+            <div
+              className="relative aspect-video w-full overflow-hidden rounded-md bg-black"
+              style={
+                video.thumbnail_url && embedStatus !== "ready"
+                  ? { backgroundImage: `url(${video.thumbnail_url})`, backgroundSize: "cover", backgroundPosition: "center" }
+                  : undefined
+              }
+            >
               {embedStatus !== "ready" && (
-                <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 p-4 text-center">
-                  {embedStatus === "error" ? <AlertTriangle className="h-6 w-6 text-muted-foreground" /> : <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />}
+                <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-black/50 p-4 text-center text-white">
+                  {embedStatus === "error" ? <AlertTriangle className="h-6 w-6" /> : <Loader2 className="h-5 w-5 animate-spin" />}
                   <div>
                     <div className="text-sm font-medium">
-                      {embedStatus === "error" ? (isDrive(video.video_url ?? "") ? "Google Drive permission issue." : "Video preview could not load.") : "Loading video…"}
+                      {embedStatus === "error" ? (isDrive(video.video_url ?? "") ? "Preview unavailable (Drive permissions)." : "Preview unavailable.") : "Loading preview…"}
                     </div>
                     {(embedStatus === "slow" || embedStatus === "error") && (
-                      <div className="mt-1 text-xs text-muted-foreground">
-                        {embedStatus === "slow" ? "Video is taking longer than expected." : "Video cannot be previewed. Open in Google Drive."}
+                      <div className="mt-1 text-xs text-white/70">
+                        {embedStatus === "slow" ? "Taking longer than expected — watch in Drive instead." : "Watch the original in Google Drive."}
                       </div>
                     )}
                   </div>
                   {(embedStatus === "slow" || embedStatus === "error") && (
                     <div className="flex flex-wrap justify-center gap-2">
                       {openUrl && (
-                        <Button size="sm" variant="outline" asChild>
+                        <Button size="sm" asChild>
                           <a href={openUrl} target="_blank" rel="noreferrer">
-                            Open in Drive <ExternalLink className="ml-1 h-3 w-3" />
+                            Watch in Drive <ExternalLink className="ml-1 h-3 w-3" />
                           </a>
                         </Button>
                       )}
-                      <Button size="sm" variant="ghost" onClick={() => setEmbedRetry((r) => r + 1)}>
-                        <RefreshCw className="mr-1 h-3 w-3" /> Retry
+                      <Button size="sm" variant="secondary" onClick={() => setEmbedRetry((r) => r + 1)}>
+                        <RefreshCw className="mr-1 h-3 w-3" /> Retry Preview
                       </Button>
                     </div>
                   )}
@@ -234,25 +252,13 @@ export function LiftVideoCard({ video, role, userId, onChanged, onEdit }: Props)
               onLoad={() => setEmbedStatus("ready")}
             />
             </div>
-            {openUrl && (
-              <div className="flex flex-wrap items-center justify-between gap-2 px-2 pb-2">
-                {showEmbedFallback ? (
-                  <div className="text-xs text-muted-foreground">Preview stuck? Open the original in Drive.</div>
-                ) : <div />}
-                <Button size="sm" variant="ghost" asChild>
-                  <a href={openUrl} target="_blank" rel="noreferrer">
-                    <Maximize2 className="mr-1 h-3 w-3" /> Open in {isDrive(video.video_url ?? "") ? "Drive" : "new tab"}
-                  </a>
-                </Button>
-              </div>
-            )}
           </div>
         ) : openUrl ? (
           <a href={openUrl} target="_blank" rel="noreferrer" className="flex min-h-48 items-center justify-center gap-2 bg-secondary/30 p-6 text-sm text-primary">
-            Open video link <ExternalLink className="h-3 w-3" />
+            Watch in Drive <ExternalLink className="h-3 w-3" />
           </a>
         ) : (
-          <div className="min-h-48 p-6 text-center text-xs text-muted-foreground">Video file not found.</div>
+          <div className="min-h-48 p-6 text-center text-xs text-muted-foreground">Google Drive link missing for this video.</div>
         )}
       </div>
 
