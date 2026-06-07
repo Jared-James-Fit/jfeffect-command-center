@@ -17,7 +17,7 @@ import {
 import { format, parseISO, formatDistanceToNow } from "date-fns";
 import {
   Eye, ThumbsUp, CheckCircle2, MessageSquare, AlertTriangle, ExternalLink, Trash2, Edit3, Loader2,
-  AlertCircle, Archive, Zap, MoreVertical, Maximize2, RefreshCw,
+  AlertCircle, Archive, Zap, MoreVertical, RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
 import { LiftVideoPlayer } from "@/components/lift-video-player";
@@ -44,7 +44,6 @@ export function LiftVideoCard({ video, role, userId, onChanged, onEdit }: Props)
   const [signedUrl, setSignedUrl] = useState<string | null>(null);
   const [embedStatus, setEmbedStatus] = useState<"idle" | "loading" | "ready" | "slow" | "error">("idle");
   const [embedRetry, setEmbedRetry] = useState(0);
-  const [showEmbedFallback, setShowEmbedFallback] = useState(false);
 
   const loadComments = async () => {
     const c = await listComments(video.id, { includeInternal: role === "admin" });
@@ -77,12 +76,9 @@ export function LiftVideoCard({ video, role, userId, onChanged, onEdit }: Props)
   useEffect(() => {
     if (!embedUrl) return;
     setEmbedStatus("loading");
-    setShowEmbedFallback(false);
-    const fallbackTimer = window.setTimeout(() => setShowEmbedFallback(true), 5000);
     const slowTimer = window.setTimeout(() => setEmbedStatus((s) => (s === "loading" ? "slow" : s)), 5000);
     const errorTimer = window.setTimeout(() => setEmbedStatus((s) => (s === "loading" || s === "slow" ? "error" : s)), 10000);
     return () => {
-      window.clearTimeout(fallbackTimer);
       window.clearTimeout(slowTimer);
       window.clearTimeout(errorTimer);
     };
