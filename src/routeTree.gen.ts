@@ -47,6 +47,7 @@ import { Route as AuthenticatedAdminPaymentsRouteImport } from './routes/_authen
 import { Route as AuthenticatedAdminPaymentLinksRouteImport } from './routes/_authenticated/admin/payment-links'
 import { Route as AuthenticatedAdminOffersRouteImport } from './routes/_authenticated/admin/offers'
 import { Route as AuthenticatedAdminNutritionTargetsRouteImport } from './routes/_authenticated/admin/nutrition-targets'
+import { Route as AuthenticatedAdminNativeFormsRouteImport } from './routes/_authenticated/admin/native-forms'
 import { Route as AuthenticatedAdminMessagesRouteImport } from './routes/_authenticated/admin/messages'
 import { Route as AuthenticatedAdminMediaReviewRouteImport } from './routes/_authenticated/admin/media-review'
 import { Route as AuthenticatedAdminLiftVideosRouteImport } from './routes/_authenticated/admin/lift-videos'
@@ -288,6 +289,12 @@ const AuthenticatedAdminNutritionTargetsRoute =
     path: '/nutrition-targets',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
+const AuthenticatedAdminNativeFormsRoute =
+  AuthenticatedAdminNativeFormsRouteImport.update({
+    id: '/native-forms',
+    path: '/native-forms',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
 const AuthenticatedAdminMessagesRoute =
   AuthenticatedAdminMessagesRouteImport.update({
     id: '/messages',
@@ -460,6 +467,7 @@ export interface FileRoutesByFullPath {
   '/admin/lift-videos': typeof AuthenticatedAdminLiftVideosRoute
   '/admin/media-review': typeof AuthenticatedAdminMediaReviewRoute
   '/admin/messages': typeof AuthenticatedAdminMessagesRoute
+  '/admin/native-forms': typeof AuthenticatedAdminNativeFormsRoute
   '/admin/nutrition-targets': typeof AuthenticatedAdminNutritionTargetsRoute
   '/admin/offers': typeof AuthenticatedAdminOffersRoute
   '/admin/payment-links': typeof AuthenticatedAdminPaymentLinksRoute
@@ -522,6 +530,7 @@ export interface FileRoutesByTo {
   '/admin/lift-videos': typeof AuthenticatedAdminLiftVideosRoute
   '/admin/media-review': typeof AuthenticatedAdminMediaReviewRoute
   '/admin/messages': typeof AuthenticatedAdminMessagesRoute
+  '/admin/native-forms': typeof AuthenticatedAdminNativeFormsRoute
   '/admin/nutrition-targets': typeof AuthenticatedAdminNutritionTargetsRoute
   '/admin/offers': typeof AuthenticatedAdminOffersRoute
   '/admin/payment-links': typeof AuthenticatedAdminPaymentLinksRoute
@@ -588,6 +597,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/lift-videos': typeof AuthenticatedAdminLiftVideosRoute
   '/_authenticated/admin/media-review': typeof AuthenticatedAdminMediaReviewRoute
   '/_authenticated/admin/messages': typeof AuthenticatedAdminMessagesRoute
+  '/_authenticated/admin/native-forms': typeof AuthenticatedAdminNativeFormsRoute
   '/_authenticated/admin/nutrition-targets': typeof AuthenticatedAdminNutritionTargetsRoute
   '/_authenticated/admin/offers': typeof AuthenticatedAdminOffersRoute
   '/_authenticated/admin/payment-links': typeof AuthenticatedAdminPaymentLinksRoute
@@ -654,6 +664,7 @@ export interface FileRouteTypes {
     | '/admin/lift-videos'
     | '/admin/media-review'
     | '/admin/messages'
+    | '/admin/native-forms'
     | '/admin/nutrition-targets'
     | '/admin/offers'
     | '/admin/payment-links'
@@ -716,6 +727,7 @@ export interface FileRouteTypes {
     | '/admin/lift-videos'
     | '/admin/media-review'
     | '/admin/messages'
+    | '/admin/native-forms'
     | '/admin/nutrition-targets'
     | '/admin/offers'
     | '/admin/payment-links'
@@ -781,6 +793,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/lift-videos'
     | '/_authenticated/admin/media-review'
     | '/_authenticated/admin/messages'
+    | '/_authenticated/admin/native-forms'
     | '/_authenticated/admin/nutrition-targets'
     | '/_authenticated/admin/offers'
     | '/_authenticated/admin/payment-links'
@@ -1104,6 +1117,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminNutritionTargetsRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
+    '/_authenticated/admin/native-forms': {
+      id: '/_authenticated/admin/native-forms'
+      path: '/native-forms'
+      fullPath: '/admin/native-forms'
+      preLoaderRoute: typeof AuthenticatedAdminNativeFormsRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
     '/_authenticated/admin/messages': {
       id: '/_authenticated/admin/messages'
       path: '/messages'
@@ -1311,6 +1331,7 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminLiftVideosRoute: typeof AuthenticatedAdminLiftVideosRoute
   AuthenticatedAdminMediaReviewRoute: typeof AuthenticatedAdminMediaReviewRoute
   AuthenticatedAdminMessagesRoute: typeof AuthenticatedAdminMessagesRoute
+  AuthenticatedAdminNativeFormsRoute: typeof AuthenticatedAdminNativeFormsRoute
   AuthenticatedAdminNutritionTargetsRoute: typeof AuthenticatedAdminNutritionTargetsRoute
   AuthenticatedAdminOffersRoute: typeof AuthenticatedAdminOffersRoute
   AuthenticatedAdminPaymentLinksRoute: typeof AuthenticatedAdminPaymentLinksRoute
@@ -1349,6 +1370,7 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
     AuthenticatedAdminLiftVideosRoute: AuthenticatedAdminLiftVideosRoute,
     AuthenticatedAdminMediaReviewRoute: AuthenticatedAdminMediaReviewRoute,
     AuthenticatedAdminMessagesRoute: AuthenticatedAdminMessagesRoute,
+    AuthenticatedAdminNativeFormsRoute: AuthenticatedAdminNativeFormsRoute,
     AuthenticatedAdminNutritionTargetsRoute:
       AuthenticatedAdminNutritionTargetsRoute,
     AuthenticatedAdminOffersRoute: AuthenticatedAdminOffersRoute,

@@ -108,7 +108,8 @@ function FormEditorDialog({ form, open, onClose }: { form: NfForm; open: boolean
   const { data: questions = [] } = useQuery({ queryKey: ["nf-questions", form.id], queryFn: () => listQuestions(form.id) });
 
   async function saveSettings() {
-    await upsertForm({ id: form.id, ...local });
+    const { id: _ignore, ...patch } = local;
+    await upsertForm({ id: form.id, ...patch });
     qc.invalidateQueries({ queryKey: ["nf-forms"] });
     toast.success("Saved");
   }
