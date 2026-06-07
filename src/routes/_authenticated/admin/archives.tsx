@@ -3,7 +3,7 @@ import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { Archive, RotateCcw, Trash2, Search, Eye } from "lucide-react";
+import { RotateCcw, Trash2, Search, Eye } from "lucide-react";
 
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
@@ -126,8 +126,7 @@ function ArchivesPage() {
     <div className="space-y-4">
       <PageHeader
         title="Archive Manager"
-        description="One place to view, restore, or permanently delete everything archived across the app."
-        icon={Archive}
+        subtitle="One place to view, restore, or permanently delete everything archived across the app."
       />
 
       <Card className="p-4 space-y-3">

@@ -63,6 +63,7 @@ import { Route as AuthenticatedAdminCardioTargetsRouteImport } from './routes/_a
 import { Route as AuthenticatedAdminCalendarRouteImport } from './routes/_authenticated/admin/calendar'
 import { Route as AuthenticatedAdminBusinessSystemsRouteImport } from './routes/_authenticated/admin/business-systems'
 import { Route as AuthenticatedAdminAutomationsRouteImport } from './routes/_authenticated/admin/automations'
+import { Route as AuthenticatedAdminArchivesRouteImport } from './routes/_authenticated/admin/archives'
 import { Route as AuthenticatedAdminAppsRouteImport } from './routes/_authenticated/admin/apps'
 import { Route as AuthenticatedAdminAccountRouteImport } from './routes/_authenticated/admin/account'
 import { Route as AuthenticatedPortalAgreementsIndexRouteImport } from './routes/_authenticated/portal/agreements.index'
@@ -393,6 +394,12 @@ const AuthenticatedAdminAutomationsRoute =
     path: '/automations',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
+const AuthenticatedAdminArchivesRoute =
+  AuthenticatedAdminArchivesRouteImport.update({
+    id: '/archives',
+    path: '/archives',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
 const AuthenticatedAdminAppsRoute = AuthenticatedAdminAppsRouteImport.update({
   id: '/apps',
   path: '/apps',
@@ -518,6 +525,7 @@ export interface FileRoutesByFullPath {
   '/api/drive-upload': typeof ApiDriveUploadRoute
   '/admin/account': typeof AuthenticatedAdminAccountRoute
   '/admin/apps': typeof AuthenticatedAdminAppsRoute
+  '/admin/archives': typeof AuthenticatedAdminArchivesRoute
   '/admin/automations': typeof AuthenticatedAdminAutomationsRoute
   '/admin/business-systems': typeof AuthenticatedAdminBusinessSystemsRoute
   '/admin/calendar': typeof AuthenticatedAdminCalendarRoute
@@ -590,6 +598,7 @@ export interface FileRoutesByTo {
   '/api/drive-upload': typeof ApiDriveUploadRoute
   '/admin/account': typeof AuthenticatedAdminAccountRoute
   '/admin/apps': typeof AuthenticatedAdminAppsRoute
+  '/admin/archives': typeof AuthenticatedAdminArchivesRoute
   '/admin/automations': typeof AuthenticatedAdminAutomationsRoute
   '/admin/business-systems': typeof AuthenticatedAdminBusinessSystemsRoute
   '/admin/calendar': typeof AuthenticatedAdminCalendarRoute
@@ -666,6 +675,7 @@ export interface FileRoutesById {
   '/api/drive-upload': typeof ApiDriveUploadRoute
   '/_authenticated/admin/account': typeof AuthenticatedAdminAccountRoute
   '/_authenticated/admin/apps': typeof AuthenticatedAdminAppsRoute
+  '/_authenticated/admin/archives': typeof AuthenticatedAdminArchivesRoute
   '/_authenticated/admin/automations': typeof AuthenticatedAdminAutomationsRoute
   '/_authenticated/admin/business-systems': typeof AuthenticatedAdminBusinessSystemsRoute
   '/_authenticated/admin/calendar': typeof AuthenticatedAdminCalendarRoute
@@ -742,6 +752,7 @@ export interface FileRouteTypes {
     | '/api/drive-upload'
     | '/admin/account'
     | '/admin/apps'
+    | '/admin/archives'
     | '/admin/automations'
     | '/admin/business-systems'
     | '/admin/calendar'
@@ -814,6 +825,7 @@ export interface FileRouteTypes {
     | '/api/drive-upload'
     | '/admin/account'
     | '/admin/apps'
+    | '/admin/archives'
     | '/admin/automations'
     | '/admin/business-systems'
     | '/admin/calendar'
@@ -889,6 +901,7 @@ export interface FileRouteTypes {
     | '/api/drive-upload'
     | '/_authenticated/admin/account'
     | '/_authenticated/admin/apps'
+    | '/_authenticated/admin/archives'
     | '/_authenticated/admin/automations'
     | '/_authenticated/admin/business-systems'
     | '/_authenticated/admin/calendar'
@@ -1346,6 +1359,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminAutomationsRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
+    '/_authenticated/admin/archives': {
+      id: '/_authenticated/admin/archives'
+      path: '/archives'
+      fullPath: '/admin/archives'
+      preLoaderRoute: typeof AuthenticatedAdminArchivesRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
     '/_authenticated/admin/apps': {
       id: '/_authenticated/admin/apps'
       path: '/apps'
@@ -1517,6 +1537,7 @@ const AuthenticatedAdminClientProgramsClientIdRouteWithChildren =
 interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminAccountRoute: typeof AuthenticatedAdminAccountRoute
   AuthenticatedAdminAppsRoute: typeof AuthenticatedAdminAppsRoute
+  AuthenticatedAdminArchivesRoute: typeof AuthenticatedAdminArchivesRoute
   AuthenticatedAdminAutomationsRoute: typeof AuthenticatedAdminAutomationsRoute
   AuthenticatedAdminBusinessSystemsRoute: typeof AuthenticatedAdminBusinessSystemsRoute
   AuthenticatedAdminCalendarRoute: typeof AuthenticatedAdminCalendarRoute
@@ -1559,6 +1580,7 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
   {
     AuthenticatedAdminAccountRoute: AuthenticatedAdminAccountRoute,
     AuthenticatedAdminAppsRoute: AuthenticatedAdminAppsRoute,
+    AuthenticatedAdminArchivesRoute: AuthenticatedAdminArchivesRoute,
     AuthenticatedAdminAutomationsRoute: AuthenticatedAdminAutomationsRoute,
     AuthenticatedAdminBusinessSystemsRoute:
       AuthenticatedAdminBusinessSystemsRoute,
