@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -11,7 +11,7 @@ import { uploadLiftClipToDrive } from "@/lib/lift-video-drive-upload";
 import { friendlyDriveError } from "@/lib/drive-errors";
 import { createLiftVideo } from "@/lib/lift-videos";
 import { toast } from "sonner";
-import { Upload, Link as LinkIcon, Loader2, Video as VideoIcon, Send, X, AlertTriangle, CheckCircle2, ChevronDown } from "lucide-react";
+import { Upload, Link as LinkIcon, Loader2, Video as VideoIcon, Send, X, AlertTriangle, CheckCircle2, ChevronDown, MessageSquare, Play, Film } from "lucide-react";
 
 type Clip = {
   id: string;
@@ -20,6 +20,7 @@ type Clip = {
   url?: string;
   previewUrl?: string;
   note: string;
+  duration?: number;
 };
 
 type Props = {
@@ -45,9 +46,12 @@ export function ClientLiftVideoUploader({ clientId, clientName, userId, onSaved 
   const [sent, setSent] = useState(false);
   const [sendError, setSendError] = useState<{ stage?: string; message: string } | null>(null);
   const [previewClip, setPreviewClip] = useState<Clip | null>(null);
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [showOverall, setShowOverall] = useState(false);
 
   const multiUploadRef = useRef<HTMLInputElement | null>(null);
   const multiRecordRef = useRef<HTMLInputElement | null>(null);
+  const carouselRef = useRef<HTMLDivElement | null>(null);
 
   const reset = () => {
     setClips([]);
@@ -60,6 +64,8 @@ export function ClientLiftVideoUploader({ clientId, clientName, userId, onSaved 
     setSent(false);
     setSendError(null);
     setPreviewClip(null);
+    setActiveId(null);
+    setShowOverall(false);
   };
 
   const addFiles = (files: FileList | null) => {
@@ -74,7 +80,11 @@ export function ClientLiftVideoUploader({ clientId, clientName, userId, onSaved 
         note: "",
       });
     }
-    setClips((c) => [...c, ...next]);
+    setClips((c) => {
+      const merged = [...c, ...next];
+      if (!activeId && merged.length) setActiveId(next[0].id);
+      return merged;
+    });
   };
 
   const addLinks = (raw: string) => {
@@ -86,17 +96,36 @@ export function ClientLiftVideoUploader({ clientId, clientName, userId, onSaved 
       url,
       note: "",
     }));
-    setClips((c) => [...c, ...next]);
+    setClips((c) => {
+      const merged = [...c, ...next];
+      if (!activeId && merged.length) setActiveId(next[0].id);
+      return merged;
+    });
     setPasteLink("");
+    setShowLinkInput(false);
   };
 
   const removeClip = (id: string) => {
     setClips((c) => {
       const x = c.find((k) => k.id === id);
       if (x?.previewUrl) URL.revokeObjectURL(x.previewUrl);
-      return c.filter((k) => k.id !== id);
+      const next = c.filter((k) => k.id !== id);
+      if (activeId === id) setActiveId(next[0]?.id ?? null);
+      return next;
     });
   };
+
+  const updateClipNote = (id: string, note: string) => {
+    setClips((c) => c.map((k) => (k.id === id ? { ...k, note } : k)));
+  };
+
+  const activeClip = clips.find((c) => c.id === activeId) ?? clips[0] ?? null;
+
+  useEffect(() => {
+    if (clips.length && !clips.find((c) => c.id === activeId)) {
+      setActiveId(clips[0].id);
+    }
+  }, [clips, activeId]);
 
   const handleSend = async () => {
     if (clips.length === 0) return toast.error("Add at least one video.");
@@ -117,7 +146,7 @@ export function ClientLiftVideoUploader({ clientId, clientName, userId, onSaved 
         let source: "link" | "upload" = "link";
 
         if (clip.kind === "file" && clip.file) {
-          const perClipNote = sharedNote || null;
+          const perClipNote = clip.note.trim() || sharedNote || null;
           try {
             const res = await uploadLiftClipToDrive({
               clientId, clientName, file: clip.file,
@@ -148,12 +177,14 @@ export function ClientLiftVideoUploader({ clientId, clientName, userId, onSaved 
           .join("\n");
 
         const driveMeta = (clip as any).driveMeta;
+        const clipNote = clip.note.trim();
+        const combinedNote = [clipNote, sharedNote].filter(Boolean).join("\n\n") || null;
         const liftVideoPayload = {
           client_id: clientId,
           exercise: "",
           tag: isUrgent ? "Pain / Discomfort" : "Normal Review",
           is_urgent: isUrgent,
-          client_notes: sharedNote || null,
+          client_notes: combinedNote,
           question_for_coach: combinedQuestion || null,
           video_url: videoUrl,
           video_storage_path: storagePath,
