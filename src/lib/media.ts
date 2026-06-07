@@ -127,9 +127,18 @@ export async function markWatched(itemId: string, userId: string) {
 // Returns the Drive file id from the final PUT response body.
 export async function uploadToDrive(uploadUrl: string, file: File, onProgress?: (pct: number) => void): Promise<{ id: string }> {
   return new Promise((resolve, reject) => {
+    if (!uploadUrl || !/^https?:\/\//i.test(uploadUrl)) {
+      return reject(new Error(`Drive upload aborted: invalid upload URL "${String(uploadUrl).slice(0, 80)}"`));
+    }
     const xhr = new XMLHttpRequest();
-    xhr.open("PUT", uploadUrl, true);
+    try {
+      xhr.open("PUT", uploadUrl, true);
+    } catch (e: any) {
+      return reject(new Error(`Drive upload could not open PUT to ${uploadUrl.slice(0, 80)}: ${e?.message ?? e}`));
+    }
     xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
+    // Surface timeouts and aborts as clear errors instead of silent network-error.
+    xhr.timeout = 10 * 60 * 1000; // 10 minutes
     if (onProgress) {
       xhr.upload.onprogress = (e) => {
         if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100));
@@ -145,10 +154,13 @@ export async function uploadToDrive(uploadUrl: string, file: File, onProgress?: 
           reject(new Error("Drive upload completed but response was not JSON"));
         }
       } else {
-        reject(new Error(`Drive upload failed: ${xhr.status} ${xhr.responseText?.slice(0, 200) ?? ""}`));
+        const detail = (xhr.responseText || "").slice(0, 300).replace(/\s+/g, " ").trim();
+        reject(new Error(`Drive PUT failed: HTTP ${xhr.status}${detail ? ` — ${detail}` : ""}`));
       }
     };
-    xhr.onerror = () => reject(new Error("Network error during Drive upload"));
+    xhr.onerror = () => reject(new Error(`Network/CORS error during Drive PUT (status ${xhr.status || 0}). The browser was blocked from uploading to: ${uploadUrl.split("?")[0]}`));
+    xhr.ontimeout = () => reject(new Error(`Drive PUT timed out after 10 min (${Math.round((file.size || 0) / 1024 / 1024)} MB)`));
+    xhr.onabort = () => reject(new Error("Drive PUT was aborted by the browser"));
     xhr.send(file);
   });
 }
