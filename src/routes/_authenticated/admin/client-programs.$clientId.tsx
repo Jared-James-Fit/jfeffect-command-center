@@ -11,9 +11,9 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { ArrowLeft, Plus, Calendar, Target, Layers } from "lucide-react";
+import { ArrowLeft, Plus, Calendar, Target, Layers, History, BarChart3 } from "lucide-react";
 import { toast } from "sonner";
-import { listClientPreps, listClientBlocks, createPrep, createBlock, countdownLabel, GOAL_TYPES, TRAINING_FOCUSES, type PrepStatus } from "@/lib/pl-programs";
+import { listClientPreps, listClientBlocks, createPrep, createBlock, countdownLabel, updatePrep, updateBlock, GOAL_TYPES, TRAINING_FOCUSES, PREP_STATUSES, BLOCK_STATUSES, type PrepStatus, type BlockStatus } from "@/lib/pl-programs";
 
 export const Route = createFileRoute("/_authenticated/admin/client-programs/$clientId")({ component: ClientProgramsPage });
 
@@ -46,6 +46,12 @@ function ClientProgramsPage() {
         <div className="flex flex-wrap gap-2">
           <Button onClick={() => setPrepOpen(true)}><Target className="mr-2 h-4 w-4" /> New Prep / Phase</Button>
           <Button onClick={() => setBlockOpen(true)} variant="outline"><Layers className="mr-2 h-4 w-4" /> New Block</Button>
+          <Link to="/admin/client-programs/$clientId/history" params={{ clientId }}>
+            <Button variant="outline"><History className="mr-2 h-4 w-4" /> History</Button>
+          </Link>
+          <Link to="/admin/client-programs/$clientId/analytics" params={{ clientId }}>
+            <Button variant="outline"><BarChart3 className="mr-2 h-4 w-4" /> Analytics & PRs</Button>
+          </Link>
         </div>
 
         <section>
@@ -64,7 +70,10 @@ function ClientProgramsPage() {
                         <div className="font-bold text-lg">{p.title}</div>
                         <div className="text-xs text-muted-foreground">{p.goal_type}</div>
                       </div>
-                      <Badge variant="outline">{p.status}</Badge>
+                      <Select value={p.status} onValueChange={async (v) => { await updatePrep(p.id, { status: v as PrepStatus }); refresh(); toast.success(`Status: ${v}`); }}>
+                        <SelectTrigger className="h-7 w-28 text-xs"><SelectValue /></SelectTrigger>
+                        <SelectContent>{PREP_STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+                      </Select>
                     </div>
                     {p.event_name && (
                       <div className="mt-2 text-sm">
@@ -99,15 +108,18 @@ function ClientProgramsPage() {
           ) : (
             <div className="grid gap-2">
               {(blocks as any[]).map((b) => (
-                <Link key={b.id} to="/admin/blocks/$blockId" params={{ blockId: b.id }}>
-                  <Card className="p-3 flex items-center justify-between hover:bg-secondary/30">
+                <Card key={b.id} className="p-3 flex items-center justify-between hover:bg-secondary/30">
+                  <Link to="/admin/blocks/$blockId" params={{ blockId: b.id }} className="flex-1">
                     <div>
                       <div className="font-bold">{b.name}</div>
-                      <div className="text-xs text-muted-foreground">{b.weeks} weeks · {b.training_focus ?? "—"} · {b.status}</div>
+                      <div className="text-xs text-muted-foreground">{b.weeks} weeks · {b.training_focus ?? "—"}</div>
                     </div>
-                    <Badge variant="outline">{b.status}</Badge>
-                  </Card>
-                </Link>
+                  </Link>
+                  <Select value={b.status} onValueChange={async (v) => { await updateBlock(b.id, { status: v as BlockStatus }); refresh(); toast.success(`Status: ${v}`); }}>
+                    <SelectTrigger className="h-7 w-28 text-xs"><SelectValue /></SelectTrigger>
+                    <SelectContent>{BLOCK_STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+                  </Select>
+                </Card>
               ))}
             </div>
           )}

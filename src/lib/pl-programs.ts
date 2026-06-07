@@ -238,6 +238,188 @@ export async function updateDay(dayId: string, patch: Record<string, any>) {
   if (error) throw error;
 }
 
+export async function updateBlock(blockId: string, patch: Record<string, any>) {
+  const { error } = await sb.from("pl_blocks").update(patch).eq("id", blockId);
+  if (error) throw error;
+}
+
+export async function updatePrep(prepId: string, patch: Record<string, any>) {
+  const { error } = await sb.from("pl_preps").update(patch).eq("id", prepId);
+  if (error) throw error;
+}
+
+export async function deleteDay(dayId: string) {
+  const { error } = await sb.from("pl_days").delete().eq("id", dayId);
+  if (error) throw error;
+}
+
+export async function deleteWeek(weekId: string) {
+  const { error } = await sb.from("pl_weeks").delete().eq("id", weekId);
+  if (error) throw error;
+}
+
+export async function duplicateDay(dayId: string) {
+  const { data: src } = await sb.from("pl_days").select("*").eq("id", dayId).maybeSingle();
+  if (!src) throw new Error("Day not found");
+  const { data: siblings } = await sb.from("pl_days").select("day_index").eq("week_id", src.week_id);
+  const nextIdx = Math.max(0, ...(siblings ?? []).map((s: any) => s.day_index ?? 0)) + 1;
+  const { data: newDay, error } = await sb.from("pl_days").insert({
+    week_id: src.week_id, day_index: nextIdx,
+    title: (src.title ?? `Day ${src.day_index}`) + " (copy)",
+    focus: src.focus, notes: src.notes,
+    duration_estimate_min: src.duration_estimate_min,
+  }).select("*").single();
+  if (error) throw error;
+  const { data: rows } = await sb.from("pl_exercise_rows").select("*").eq("day_id", dayId).order("sort_order");
+  for (const r of rows ?? []) {
+    const { id, created_at, updated_at, day_id, ...rest } = r;
+    await sb.from("pl_exercise_rows").insert({ ...rest, day_id: newDay.id });
+  }
+  return newDay;
+}
+
+export async function duplicateWeek(weekId: string) {
+  const { data: src } = await sb.from("pl_weeks").select("*").eq("id", weekId).maybeSingle();
+  if (!src) throw new Error("Week not found");
+  const { data: siblings } = await sb.from("pl_weeks").select("week_index").eq("block_id", src.block_id);
+  const nextIdx = Math.max(0, ...(siblings ?? []).map((s: any) => s.week_index ?? 0)) + 1;
+  const { data: newWeek, error } = await sb.from("pl_weeks").insert({
+    block_id: src.block_id, week_index: nextIdx, notes: src.notes,
+  }).select("*").single();
+  if (error) throw error;
+  // bump block.weeks
+  await sb.from("pl_blocks").update({ weeks: nextIdx }).eq("id", src.block_id);
+  const { data: days } = await sb.from("pl_days").select("*").eq("week_id", weekId).order("day_index");
+  for (const d of days ?? []) {
+    const { data: newDay } = await sb.from("pl_days").insert({
+      week_id: newWeek.id, day_index: d.day_index, title: d.title, focus: d.focus, notes: d.notes,
+      duration_estimate_min: d.duration_estimate_min,
+    }).select("*").single();
+    const { data: rows } = await sb.from("pl_exercise_rows").select("*").eq("day_id", d.id).order("sort_order");
+    for (const r of rows ?? []) {
+      const { id, created_at, updated_at, day_id, ...rest } = r;
+      await sb.from("pl_exercise_rows").insert({ ...rest, day_id: newDay.id });
+    }
+  }
+  return newWeek;
+}
+
+export async function moveRow(rowId: string, direction: "up" | "down") {
+  const { data: row } = await sb.from("pl_exercise_rows").select("*").eq("id", rowId).maybeSingle();
+  if (!row) return;
+  const { data: siblings } = await sb.from("pl_exercise_rows").select("id, sort_order").eq("day_id", row.day_id).order("sort_order");
+  const idx = (siblings ?? []).findIndex((s: any) => s.id === rowId);
+  const swapIdx = direction === "up" ? idx - 1 : idx + 1;
+  if (swapIdx < 0 || swapIdx >= (siblings ?? []).length) return;
+  const other = (siblings as any[])[swapIdx];
+  await sb.from("pl_exercise_rows").update({ sort_order: other.sort_order }).eq("id", rowId);
+  await sb.from("pl_exercise_rows").update({ sort_order: row.sort_order }).eq("id", other.id);
+}
+
+// ---------- Analytics / PRs ----------
+export function epley1RM(load: number, reps: number): number {
+  if (!load || !reps || reps < 1) return 0;
+  if (reps === 1) return load;
+  return Math.round(load * (1 + reps / 30) * 10) / 10;
+}
+
+export interface LiftResultPoint {
+  date: string;
+  load: number;
+  reps: number;
+  est_1rm: number;
+  exercise_name: string;
+  rpe?: string | null;
+}
+
+/** Pull all completed sets for a client, joined with exercise + muscle group. */
+export async function getClientResults(clientId: string) {
+  const { data, error } = await sb
+    .from("pl_row_results")
+    .select("id, set_index, actual_load, actual_reps, actual_rpe, completed_at, row_id, pl_exercise_rows(exercise_id, exercise_name_override, exercises(name, muscle_group, category))")
+    .eq("client_id", clientId)
+    .not("actual_load", "is", null)
+    .not("actual_reps", "is", null)
+    .order("completed_at", { ascending: true });
+  if (error) throw error;
+  return (data ?? []).map((r: any) => ({
+    id: r.id,
+    set_index: r.set_index,
+    load: Number(r.actual_load) || 0,
+    reps: Number(r.actual_reps) || 0,
+    rpe: r.actual_rpe,
+    date: r.completed_at,
+    est_1rm: epley1RM(Number(r.actual_load) || 0, Number(r.actual_reps) || 0),
+    exercise_name: r.pl_exercise_rows?.exercises?.name ?? r.pl_exercise_rows?.exercise_name_override ?? "Unknown",
+    muscle_group: r.pl_exercise_rows?.exercises?.muscle_group ?? "Other",
+    category: r.pl_exercise_rows?.exercises?.category ?? null,
+  }));
+}
+
+/** Group result history by exercise; return time-series est-1RM and current PR. */
+export function buildExerciseHistory(results: ReturnType<typeof getClientResults> extends Promise<infer R> ? R : never[]) {
+  const byEx = new Map<string, any[]>();
+  for (const r of results as any[]) {
+    if (!byEx.has(r.exercise_name)) byEx.set(r.exercise_name, []);
+    byEx.get(r.exercise_name)!.push(r);
+  }
+  const out: { name: string; pr: any; latest_est: number; points: any[] }[] = [];
+  for (const [name, pts] of byEx) {
+    const pr = pts.reduce((best, p) => (p.est_1rm > (best?.est_1rm ?? 0) ? p : best), null as any);
+    const latest = pts[pts.length - 1];
+    out.push({ name, pr, latest_est: latest?.est_1rm ?? 0, points: pts });
+  }
+  return out.sort((a, b) => (b.pr?.est_1rm ?? 0) - (a.pr?.est_1rm ?? 0));
+}
+
+/** Sets per muscle group in the last `days` days. */
+export function weeklyMuscleVolume(results: any[], days = 7) {
+  const cutoff = Date.now() - days * 86400000;
+  const tally = new Map<string, number>();
+  for (const r of results) {
+    if (!r.date || new Date(r.date).getTime() < cutoff) continue;
+    const k = r.muscle_group || "Other";
+    tally.set(k, (tally.get(k) ?? 0) + 1);
+  }
+  return [...tally.entries()].map(([muscle, sets]) => ({ muscle, sets })).sort((a, b) => b.sets - a.sets);
+}
+
+/** Newest est-1RM PR per exercise in last `days` days. */
+export function recentPRs(results: any[], days = 30) {
+  const cutoff = Date.now() - days * 86400000;
+  const recent = results.filter((r) => r.date && new Date(r.date).getTime() >= cutoff);
+  const all = results;
+  const prs: any[] = [];
+  const byEx = new Map<string, any[]>();
+  for (const r of all) {
+    if (!byEx.has(r.exercise_name)) byEx.set(r.exercise_name, []);
+    byEx.get(r.exercise_name)!.push(r);
+  }
+  for (const r of recent) {
+    const history = byEx.get(r.exercise_name) ?? [];
+    const priorMax = history.filter((h) => h.date && new Date(h.date).getTime() < new Date(r.date).getTime()).reduce((m, h) => Math.max(m, h.est_1rm), 0);
+    if (r.est_1rm > priorMax && priorMax > 0) {
+      prs.push({ ...r, prior_est: priorMax, delta: r.est_1rm - priorMax });
+    }
+  }
+  return prs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+}
+
+/** Active prep for client (most recent Active, then Planned). */
+export async function getActivePrep(clientId: string) {
+  const { data } = await sb.from("pl_preps").select("*").eq("client_id", clientId).in("status", ["Active", "Planned"]).order("created_at", { ascending: false }).limit(1).maybeSingle();
+  return data;
+}
+
+export async function getCompletedHistory(clientId: string) {
+  const { data: preps } = await sb.from("pl_preps").select("*").eq("client_id", clientId).in("status", ["Completed", "Archived"]).order("end_date", { ascending: false });
+  const { data: blocks } = await sb.from("pl_blocks").select("*").eq("client_id", clientId).in("status", ["Completed", "Archived"]).order("updated_at", { ascending: false });
+  return { preps: preps ?? [], blocks: blocks ?? [] };
+}
+
+export const PREP_STATUSES: PrepStatus[] = ["Planned", "Active", "Completed", "Archived"];
+export const BLOCK_STATUSES: BlockStatus[] = ["Draft", "Active", "Completed", "Archived"];
+
 export async function listTemplates(opts: { type?: TemplateType | "all"; style?: TrainingStyle | "all"; q?: string }) {
   let q = sb.from("pl_templates").select("*").eq("archived", false);
   if (opts.type && opts.type !== "all") q = q.eq("template_type", opts.type);
