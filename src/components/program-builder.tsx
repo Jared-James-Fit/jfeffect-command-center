@@ -526,3 +526,97 @@ export function movementAccent(name?: string | null): string {
   if (/curl|tricep|arm/.test(n)) return "bg-purple-500/60";
   return "bg-muted-foreground/40";
 }
+
+// ---------------- Edit scope dialog ----------------
+
+export type EditScopeChoice = "this" | "future" | "all" | "cancel";
+
+export function EditScopeDialog({
+  open,
+  onOpenChange,
+  onChoose,
+  customDownstream = 0,
+  description,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  onChoose: (choice: EditScopeChoice) => void;
+  /** Count of custom days downstream (warning case). */
+  customDownstream?: number;
+  description?: string;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={(v) => { if (!v) onChoose("cancel"); onOpenChange(v); }}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>How should this change apply?</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-2 text-sm">
+          {description && <p className="text-muted-foreground">{description}</p>}
+          {customDownstream > 0 && (
+            <p className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs">
+              {customDownstream} downstream day{customDownstream === 1 ? "" : "s"} {customDownstream === 1 ? "has" : "have"} custom edits and will be preserved.
+            </p>
+          )}
+          <div className="space-y-1.5 pt-2">
+            <ScopeButton label="This day only" hint="Change just this day. Future weeks stay as they are." onClick={() => onChoose("this")} />
+            <ScopeButton label="This day + future weeks" hint="Apply to this day and every later week's matching day (skips custom)." onClick={() => onChoose("future")} />
+            <ScopeButton label="All matching days in block" hint="Apply to every week's matching day in this block (skips custom)." onClick={() => onChoose("all")} />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onChoose("cancel")}>Cancel</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ScopeButton({ label, hint, onClick }: { label: string; hint: string; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className="w-full rounded-md border border-border p-2 text-left text-sm hover:border-primary hover:bg-primary/5"
+    >
+      <div className="font-semibold">{label}</div>
+      <div className="text-[11px] text-muted-foreground">{hint}</div>
+    </button>
+  );
+}
+
+// ---------------- Link badge ----------------
+
+export function LinkBadge({
+  isCustom,
+  sourceLabel,
+  onBreak,
+  onRelink,
+}: {
+  isCustom: boolean;
+  /** e.g. "W1 D2". null = no link. */
+  sourceLabel?: string | null;
+  onBreak?: () => void;
+  onRelink?: () => void;
+}) {
+  if (isCustom) {
+    return (
+      <Badge variant="outline" className="gap-1 border-amber-500/40 text-amber-500 text-[10px]">
+        <Unlink className="h-3 w-3" /> Custom
+        {onRelink && (
+          <button onClick={onRelink} className="ml-1 underline hover:text-amber-400" title="Re-link to previous week">re-link</button>
+        )}
+      </Badge>
+    );
+  }
+  if (sourceLabel) {
+    return (
+      <Badge variant="outline" className="gap-1 text-[10px] text-muted-foreground">
+        <LinkIcon className="h-3 w-3" /> Linked to {sourceLabel}
+        {onBreak && (
+          <button onClick={onBreak} className="ml-1 underline hover:text-foreground" title="Break link">break</button>
+        )}
+      </Badge>
+    );
+  }
+  return null;
+}
