@@ -18,6 +18,8 @@ import { listLiftVideos, markClientViewed, statusTone, deleteLiftVideos, type Li
 import { LiftVideoDialog } from "@/components/lift-video-dialog";
 import { LiftVideoCard } from "@/components/lift-video-card";
 import { ClientLiftVideoUploader } from "@/components/client-lift-video-uploader";
+import { useLiftUploadActiveCount, useLiftUploadState } from "@/lib/lift-upload-queue";
+import { Progress } from "@/components/ui/progress";
 
 export const Route = createFileRoute("/_authenticated/portal/lift-videos")({
   component: ClientLiftVideos,
@@ -130,6 +132,10 @@ function ClientLiftVideos() {
   };
 
   function feedbackLabel(clips: LiftVideo[]) {
+    // Live upload states take priority over normal status labels so the
+    // client sees instant feedback while the file is still moving.
+    if (clips.some((c) => c.upload_status === "Uploading")) return "Uploading…";
+    if (clips.some((c) => c.upload_status === "Upload Failed")) return "Upload Failed";
     if (clips.some((c) => c.status === "Needs Follow-Up")) return "Needs Follow-Up";
     if (clips.some((c) => c.status === "Reviewed")) return "Reviewed by Jared";
     if (clips.some((c) => c.status === "Commented" || c.reviewed_at)) return "Feedback Added";
@@ -140,6 +146,7 @@ function ClientLiftVideos() {
   return (
     <>
       <PageHeader title="Lift Videos" subtitle="Send lifts for coach review." />
+      <UploadGuard />
       <div className="space-y-4 p-6 pb-32 md:p-8 md:pb-32">
         {!client && (
           <Card className="border-border bg-card p-6 text-sm text-muted-foreground">
@@ -218,7 +225,9 @@ function ClientLiftVideos() {
             const v = g.head;
             const count = g.clips.length;
             const fb = feedbackLabel(g.clips);
-            const reviewed = fb !== "Awaiting Review" && fb !== "Watched";
+            const isUploading = fb === "Uploading…";
+            const uploadFailed = fb === "Upload Failed";
+            const reviewed = !isUploading && !uploadFailed && fb !== "Awaiting Review" && fb !== "Watched";
             const canEdit = count === 1 && !v.reviewed_at;
             return (
               <Card
@@ -259,10 +268,26 @@ function ClientLiftVideos() {
                       {formatDistanceToNow(parseISO(v.created_at), { addSuffix: true })}
                     </div>
                     <div className="mt-1.5">
-                      <Badge variant="outline" className={`${statusTone(reviewed ? "Reviewed" : "Awaiting Review")} text-[10px] px-1.5 py-0`}>
+                      <Badge
+                        variant="outline"
+                        className={`${
+                          uploadFailed
+                            ? "border-destructive/40 bg-destructive/10 text-destructive"
+                            : isUploading
+                              ? "border-blue-500/40 bg-blue-500/10 text-blue-600"
+                              : statusTone(reviewed ? "Reviewed" : "Awaiting Review")
+                        } text-[10px] px-1.5 py-0`}
+                      >
                         {fb}
                       </Badge>
                     </div>
+                    {isUploading && (
+                      <div className="mt-1.5 space-y-1">
+                        {g.clips.map((c) => (
+                          <ClipUploadRow key={c.id} videoId={c.id} fallbackName={c.exercise || c.client_notes?.slice(0, 30) || `Clip ${c.batch_index ?? ""}`} />
+                        ))}
+                      </div>
+                    )}
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
                     <Button size="sm" variant="ghost" className="h-8 px-2 text-xs" onClick={(e) => { e.stopPropagation(); setDetailKey(g.key); }}>
