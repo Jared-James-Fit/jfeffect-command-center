@@ -277,9 +277,21 @@ export function youTubeEmbed(url: string) {
   const m = url.match(/(?:v=|youtu\.be\/|embed\/)([\w-]{6,})/);
   return m ? `https://www.youtube.com/embed/${m[1]}` : null;
 }
+export function driveFileId(url: string) {
+  const m =
+    url.match(/\/file\/d\/([\w-]+)/) ||
+    url.match(/[?&]id=([\w-]+)/) ||
+    url.match(/\/uc\?[^#]*id=([\w-]+)/) ||
+    url.match(/\/open\?[^#]*id=([\w-]+)/);
+  return m?.[1] ?? null;
+}
 export function drivePreview(url: string) {
-  const m = url.match(/\/file\/d\/([\w-]+)/) || url.match(/[?&]id=([\w-]+)/);
-  return m ? `https://drive.google.com/file/d/${m[1]}/preview` : null;
+  const id = driveFileId(url);
+  return id ? `https://drive.google.com/file/d/${id}/preview` : null;
+}
+export function driveOpenUrl(url: string) {
+  const id = driveFileId(url);
+  return id ? `https://drive.google.com/file/d/${id}/view` : url;
 }
 
 export const LIFT_VIDEO_QUICK_REPLIES: string[] = [
