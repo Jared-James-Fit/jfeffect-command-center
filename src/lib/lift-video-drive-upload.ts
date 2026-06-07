@@ -75,7 +75,7 @@ export async function uploadLiftClipToDrive(args: Args): Promise<LiftDriveUpload
     driveUrl,
     driveEmbedUrl,
     thumbnailUrl: row?.thumbnail_url ?? null,
-    mimeType: row?.mime_type ?? args.file.type || null,
+    mimeType: row?.mime_type ?? (args.file.type || null),
     sizeBytes: row?.size_bytes ?? args.file.size ?? null,
     mediaItemId: row?.id ?? null,
     submissionId: subId,
