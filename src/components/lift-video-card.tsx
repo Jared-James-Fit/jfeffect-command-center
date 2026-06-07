@@ -222,7 +222,7 @@ export function LiftVideoCard({ video, role, userId, onChanged, onEdit }: Props)
               <div className="flex justify-end px-2 pb-2">
                 <Button size="sm" variant="ghost" asChild>
                   <a href={openUrl} target="_blank" rel="noreferrer">
-                    <Maximize2 className="mr-1 h-3 w-3" /> Open in {isDrive(video.video_url) ? "Drive" : "new tab"}
+                    <Maximize2 className="mr-1 h-3 w-3" /> Open in {isDrive(video.video_url ?? "") ? "Drive" : "new tab"}
                   </a>
                 </Button>
               </div>
