@@ -16,7 +16,7 @@ import { DoubleConfirmDeleteDialog } from "@/components/double-confirm-delete-di
 import { AssignOfferDialog } from "@/components/assign-offer-dialog";
 import { OfferDetailDialog } from "@/components/offer-detail-dialog";
 import { toast } from "sonner";
-import { Copy, ExternalLink, Loader2, Plus, Trash2, ImagePlus, Pencil, Archive, ArchiveRestore, FileSignature, AlertTriangle, CheckCircle2, Search, X, ListChecks, Sparkles, Eye, CreditCard } from "lucide-react";
+import { Copy, ExternalLink, Loader2, Plus, Trash2, ImagePlus, Pencil, Archive, ArchiveRestore, FileSignature, AlertTriangle, CheckCircle2, Search, X, ListChecks, Sparkles, Eye, CreditCard, Link2, Share2, Wand2 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -25,6 +25,7 @@ import {
   updateCoachingProduct,
   duplicateCoachingProduct,
   deleteCoachingProduct,
+  generatePaymentLinkForProduct,
 } from "@/lib/coaching-products.functions";
 import { createPreviewCheckoutSession } from "@/lib/stripe-checkout.functions";
 
