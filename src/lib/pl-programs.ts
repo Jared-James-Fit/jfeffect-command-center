@@ -340,6 +340,14 @@ export async function addWeek(blockId: string) {
 
 /** Insert a new row from an exercise at a given position (defaults appended). */
 export async function addRowFromExercise(dayId: string, exerciseId: string, position?: number) {
+  // Look up the exercise so we can seed sensible defaults (time profile + rest)
+  const { data: ex } = await sb
+    .from("exercises")
+    .select("name, category, muscle_group")
+    .eq("id", exerciseId)
+    .maybeSingle();
+  const profile = inferTimeProfileFromExercise(ex);
+  const prof = TIME_PROFILES.find((p) => p.value === profile) ?? TIME_PROFILES[2];
   const { data: existing } = await sb
     .from("pl_exercise_rows")
     .select("id, sort_order")
@@ -359,13 +367,26 @@ export async function addRowFromExercise(dayId: string, exerciseId: string, posi
       sort_order: pos,
       exercise_id: exerciseId,
       sets: 3,
-      reps_text: "8-12",
-      time_profile: "accessory_compound",
+      reps_text: profile === "main_lift" ? "3-5" : "8-12",
+      time_profile: profile,
+      rest_seconds: prof.defaultRest,
     })
     .select("*")
     .single();
   if (error) throw error;
   return data;
+}
+
+/** Infer a default time profile from an exercise's category/name. */
+export function inferTimeProfileFromExercise(ex: { name?: string | null; category?: string | null; muscle_group?: string | null } | null | undefined): TimeProfile {
+  const cat = (ex?.category ?? "").toLowerCase();
+  const name = (ex?.name ?? "").toLowerCase();
+  if (cat === "warm-ups" || cat === "mobility" || /warm[- ]?up|mobility|activation/.test(name)) return "warmup_mobility";
+  if (cat === "cardio" || /cardio|conditioning|sprint|sled|prowler/.test(name)) return "conditioning";
+  if (/(^|\s)(comp |competition )?(back |front |high.bar |low.bar )?squat$|^bench press$|^deadlift$|^conventional deadlift$|^sumo deadlift$|^overhead press$|^ohp$/.test(name)) return "main_lift";
+  if (/squat|bench press|deadlift|overhead press|press$/.test(name)) return "secondary_lift";
+  if (/curl|extension|raise|fly|kickback|pulldown|pushdown|shrug|calf/.test(name)) return "accessory_isolation";
+  return "accessory_compound";
 }
 
 /** Move a row to a different day (or same day at a position). Shifts siblings. */
