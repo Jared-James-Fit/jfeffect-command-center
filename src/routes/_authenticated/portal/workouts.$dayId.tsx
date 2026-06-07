@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { usePortalUserId } from "@/lib/client-impersonation";
@@ -87,16 +87,35 @@ function WorkoutDay() {
 
         <Card className="p-4 space-y-3">
           <div className="text-sm font-bold">Workout Notes</div>
-          <Textarea value={notes || (completion?.client_notes ?? "")} onChange={(e) => setNotes(e.target.value)} placeholder="How did it feel? Any pain, PRs, surprises?" />
+          <Textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder={completion?.client_notes || "How did it feel? Any pain, PRs, surprises?"}
+          />
           <div className="flex items-center gap-2">
-            <Input type="number" className="w-32" placeholder="Actual min" value={actualMin || (completion?.actual_duration_min?.toString() ?? "")} onChange={(e) => setActualMin(e.target.value)} />
+            <Input
+              type="number"
+              inputMode="numeric"
+              className="w-32"
+              placeholder={completion?.actual_duration_min ? `${completion.actual_duration_min} min` : "Actual min"}
+              value={actualMin}
+              onChange={(e) => setActualMin(e.target.value)}
+            />
             <Button onClick={async () => {
               if (!client?.id) return;
               try {
-                const payload = { day_id: dayId, client_id: client.id, client_notes: notes || completion?.client_notes || null, actual_duration_min: actualMin ? parseInt(actualMin) : (completion?.actual_duration_min ?? null), completed_at: new Date().toISOString() };
+                const payload = {
+                  day_id: dayId,
+                  client_id: client.id,
+                  client_notes: notes.length > 0 ? notes : (completion?.client_notes ?? null),
+                  actual_duration_min: actualMin ? parseInt(actualMin) : (completion?.actual_duration_min ?? null),
+                  completed_at: new Date().toISOString(),
+                };
                 if (completion) await sb.from("pl_day_completions").update(payload).eq("id", completion.id);
                 else await sb.from("pl_day_completions").insert(payload);
                 toast.success("Workout marked complete");
+                setNotes("");
+                setActualMin("");
                 refresh();
               } catch (e: any) { toast.error(e.message); }
             }}>
@@ -112,6 +131,7 @@ function WorkoutDay() {
 function ExerciseBlock({ row, clientId, existingResults, onChange }: { row: any; clientId: string | undefined; existingResults: any[]; onChange: () => void }) {
   const name = row.exercises?.name ?? row.exercise_name_override ?? "Exercise";
   const video = row.exercises?.video_url ?? row.exercises?.vimeo_embed_url ?? null;
+  const cues = row.exercises?.cues ?? null;
   const setCount = Math.max(1, row.sets ?? 1);
 
   return (
@@ -133,23 +153,36 @@ function ExerciseBlock({ row, clientId, existingResults, onChange }: { row: any;
         {video && <a href={video} target="_blank" rel="noreferrer"><Button size="sm" variant="outline">Demo <ExternalLink className="ml-1 h-3 w-3" /></Button></a>}
       </div>
 
+      {cues && (
+        <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground border-l-2 border-border pl-2">
+          {typeof cues === "string" ? cues : Array.isArray(cues) ? cues.join(" · ") : null}
+        </p>
+      )}
+
       <div className="mt-3 space-y-2">
         {Array.from({ length: setCount }).map((_, i) => {
           const existing = existingResults.find((x) => x.set_index === i + 1);
-          return <SetRow key={i} rowId={row.id} clientId={clientId} setIndex={i + 1} existing={existing} onChange={onChange} />;
+          return <SetRow key={i} rowId={row.id} clientId={clientId} setIndex={i + 1} existing={existing} targetReps={row.reps_text} targetRpe={row.rpe} onChange={onChange} />;
         })}
       </div>
     </Card>
   );
 }
 
-function SetRow({ rowId, clientId, setIndex, existing, onChange }: { rowId: string; clientId: string | undefined; setIndex: number; existing?: any; onChange: () => void }) {
+function SetRow({ rowId, clientId, setIndex, existing, targetReps, targetRpe, onChange }: { rowId: string; clientId: string | undefined; setIndex: number; existing?: any; targetReps?: string | null; targetRpe?: string | null; onChange: () => void }) {
   const [load, setLoad] = useState(existing?.actual_load?.toString() ?? "");
   const [reps, setReps] = useState(existing?.actual_reps?.toString() ?? "");
   const [rpe, setRpe] = useState(existing?.actual_rpe ?? "");
 
+  useEffect(() => {
+    setLoad(existing?.actual_load?.toString() ?? "");
+    setReps(existing?.actual_reps?.toString() ?? "");
+    setRpe(existing?.actual_rpe ?? "");
+  }, [existing?.id, existing?.actual_load, existing?.actual_reps, existing?.actual_rpe]);
+
   const save = async () => {
     if (!clientId) return;
+    if (!load && !reps && !rpe && !existing) return;
     const payload = { row_id: rowId, client_id: clientId, set_index: setIndex, actual_load: load ? parseFloat(load) : null, actual_reps: reps ? parseInt(reps) : null, actual_rpe: rpe || null, completed_at: new Date().toISOString() };
     try {
       if (existing) await sb.from("pl_row_results").update(payload).eq("id", existing.id);
@@ -161,9 +194,9 @@ function SetRow({ rowId, clientId, setIndex, existing, onChange }: { rowId: stri
   return (
     <div className="flex items-center gap-2 text-xs">
       <span className="w-10 font-mono text-muted-foreground">Set {setIndex}</span>
-      <Input className="h-8 w-20" placeholder="Load" value={load} onChange={(e) => setLoad(e.target.value)} onBlur={save} />
-      <Input className="h-8 w-16" placeholder="Reps" value={reps} onChange={(e) => setReps(e.target.value)} onBlur={save} />
-      <Input className="h-8 w-16" placeholder="RPE" value={rpe} onChange={(e) => setRpe(e.target.value)} onBlur={save} />
+      <Input className="h-9 w-20" inputMode="decimal" placeholder="kg" value={load} onChange={(e) => setLoad(e.target.value)} onBlur={save} />
+      <Input className="h-9 w-16" inputMode="numeric" placeholder={targetReps || "reps"} value={reps} onChange={(e) => setReps(e.target.value)} onBlur={save} />
+      <Input className="h-9 w-16" inputMode="decimal" placeholder={targetRpe ? `@${targetRpe}` : "RPE"} value={rpe} onChange={(e) => setRpe(e.target.value)} onBlur={save} />
       {existing?.completed_at && <CheckCircle2 className="h-4 w-4 text-green-500" />}
     </div>
   );
