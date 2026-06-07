@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
@@ -11,25 +11,35 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
-import { ArrowLeft, Plus, Trash2, Copy, Save, Clock, RotateCcw, Eye, EyeOff, GripVertical, MoreHorizontal, Columns2, Rows3, ChevronDown } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, Copy, Save, Clock, RotateCcw, Eye, EyeOff, GripVertical, MoreHorizontal, Columns2, Rows3, ChevronDown, ChevronRight, TrendingUp, Zap } from "lucide-react";
 import { toast } from "sonner";
 import {
   getBlockTree, addDay, addRow, updateRow, deleteRow, updateDay,
   estimateDayMinutes, durationRange, TIME_PROFILES, PERCENTAGE_BASES,
   saveBlockAsTemplate, updateBlock, duplicateDay, duplicateWeek, deleteDay, deleteWeek, moveRow,
   BLOCK_STATUSES, addWeek, addRowFromExercise, moveRowToDay, duplicateRow, copyWeek,
+  copyWeekToAll, expandLinkedDays, countCustomDownstream, applyRowPatchAcrossDays,
+  applyDayPatchAcrossDays, breakDayLink, relinkDay, applyProgression,
   type TimeProfile, type PercentageBasis, type TrainingStyle, type BlockStatus,
+  type EditScope, type ProgressionRuleType,
 } from "@/lib/pl-programs";
 import {
   ExerciseLibraryPanel, CellInput, CopyWeekDialog, useDensity, DENSITY_CLASSES,
   useSaveState, SaveStatePill, readDrop, setDragRow, movementAccent, inferPriority,
-  type ExerciseRef,
+  EditScopeDialog, LinkBadge, type EditScopeChoice, type ExerciseRef,
 } from "@/components/program-builder";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/admin/blocks/$blockId")({ component: BlockEditor });
 
 type ViewMode = 1 | 2 | 4 | 0; // 0 = all
+
+/** Fields that should trigger an edit-scope prompt on linked days. */
+const CASCADE_ROW_KEYS = new Set([
+  "sets", "reps_text", "rpe", "rir", "percentage", "percentage_basis",
+  "load_kg", "load_lb", "rest_seconds", "tempo", "time_profile",
+]);
+const CASCADE_DAY_KEYS = new Set(["title", "focus"]);
 
 function BlockEditor() {
   const { blockId } = Route.useParams();
@@ -41,7 +51,27 @@ function BlockEditor() {
   const [startWeek, setStartWeek] = useState(0);
   const [libCollapsed, setLibCollapsed] = useState(false);
   const [density, setDensity] = useDensity();
+  const [selectedDayId, setSelectedDayId] = useState<string | null>(null);
+  const [progressionOpen, setProgressionOpen] = useState(false);
   const save = useSaveState();
+
+  // --- Edit scope dialog state ---
+  const scopeResolver = useRef<((c: EditScopeChoice) => void) | null>(null);
+  const [scopeOpen, setScopeOpen] = useState(false);
+  const [scopeCustomCount, setScopeCustomCount] = useState(0);
+  const [scopeDescription, setScopeDescription] = useState<string | undefined>();
+  const askScope = (description: string, customCount: number) =>
+    new Promise<EditScopeChoice>((resolve) => {
+      scopeResolver.current = resolve;
+      setScopeDescription(description);
+      setScopeCustomCount(customCount);
+      setScopeOpen(true);
+    });
+  const onScopeChoose = (c: EditScopeChoice) => {
+    setScopeOpen(false);
+    scopeResolver.current?.(c);
+    scopeResolver.current = null;
+  };
 
   const { data: tree, isLoading } = useQuery({
     queryKey: ["pl-block-tree", blockId],
@@ -63,6 +93,87 @@ function BlockEditor() {
   const visibleCount = view === 0 ? weeks.length : Math.min(view, weeks.length);
   const clampedStart = Math.max(0, Math.min(startWeek, Math.max(0, weeks.length - visibleCount)));
   const visibleWeeks = view === 0 ? weeks : weeks.slice(clampedStart, clampedStart + visibleCount);
+
+  // Day index helpers for link badges and cascade-relevance.
+  const weekById = useMemo(() => new Map((weeks as any[]).map((w: any) => [w.id, w])), [weeks]);
+  const dayById = useMemo(() => new Map((days as any[]).map((d: any) => [d.id, d])), [days]);
+  const siblingCount = useMemo(() => {
+    // For each day, how many other days share the same day_index in this block
+    const byIdx = new Map<number, number>();
+    for (const d of days as any[]) byIdx.set(d.day_index, (byIdx.get(d.day_index) ?? 0) + 1);
+    return byIdx;
+  }, [days]);
+
+  const selectedDay = selectedDayId ? (dayById.get(selectedDayId) as any) : null;
+  const selectedDayLabel = selectedDay
+    ? `W${(weekById.get(selectedDay.week_id) as any)?.week_index ?? "?"} ${selectedDay.title || `D${selectedDay.day_index}`}`
+    : null;
+
+  const dayLinkInfo = (dayId: string): { sourceLabel: string | null; isCustom: boolean; hasSiblings: boolean } => {
+    const d = dayById.get(dayId) as any;
+    if (!d) return { sourceLabel: null, isCustom: false, hasSiblings: false };
+    const hasSiblings = (siblingCount.get(d.day_index) ?? 0) > 1;
+    const isCustom = !!d.is_custom;
+    let sourceLabel: string | null = null;
+    if (d.source_day_id) {
+      const sd = dayById.get(d.source_day_id) as any;
+      if (sd) {
+        const sw = weekById.get(sd.week_id) as any;
+        sourceLabel = `W${sw?.week_index ?? "?"} D${sd.day_index}`;
+      }
+    }
+    return { sourceLabel, isCustom, hasSiblings };
+  };
+
+  // Scope-aware row patch
+  const onRowPatch = async (rowId: string, dayId: string, patch: Record<string, any>) => {
+    const keys = Object.keys(patch);
+    const cascadable = keys.some((k) => CASCADE_ROW_KEYS.has(k));
+    const { hasSiblings, isCustom } = dayLinkInfo(dayId);
+    if (!cascadable || !hasSiblings || isCustom) {
+      run(() => updateRow(rowId, patch));
+      return;
+    }
+    const customCount = await countCustomDownstream(dayId);
+    const choice = await askScope("This day is linked to other weeks. Apply this change to:", customCount);
+    if (choice === "cancel") { refresh(); return; }
+    save.wrap(async () => {
+      if (choice === "this") {
+        await updateRow(rowId, patch);
+      } else {
+        const dayIds = await expandLinkedDays(dayId, choice as EditScope);
+        await applyRowPatchAcrossDays(rowId, dayIds, patch);
+      }
+      refresh();
+    }).catch((e: any) => toast.error(e.message));
+  };
+
+  const onDayPatch = async (dayId: string, patch: Record<string, any>) => {
+    const keys = Object.keys(patch);
+    const cascadable = keys.some((k) => CASCADE_DAY_KEYS.has(k));
+    const { hasSiblings, isCustom } = dayLinkInfo(dayId);
+    if (!cascadable || !hasSiblings || isCustom) {
+      run(() => updateDay(dayId, patch));
+      return;
+    }
+    const customCount = await countCustomDownstream(dayId);
+    const choice = await askScope("Apply this day-level change to:", customCount);
+    if (choice === "cancel") { refresh(); return; }
+    save.wrap(async () => {
+      if (choice === "this") {
+        await updateDay(dayId, patch);
+      } else {
+        const dayIds = await expandLinkedDays(dayId, choice as EditScope);
+        await applyDayPatchAcrossDays(dayIds, patch);
+      }
+      refresh();
+    }).catch((e: any) => toast.error(e.message));
+  };
+
+  const quickAddToSelected = (exId: string) => {
+    if (!selectedDayId) { toast.error("Select a day first (click a day card)"); return; }
+    run(() => addRowFromExercise(selectedDayId, exId));
+  };
 
   const recentIds = useMemo(() => {
     const seen = new Set<string>();
@@ -107,6 +218,22 @@ function BlockEditor() {
             </Button>
             <Button size="sm" variant="outline" onClick={() => run(() => addWeek(blockId))}><Plus className="mr-1 h-4 w-4" /> Week</Button>
             <Button size="sm" variant="outline" onClick={() => { setCopyDefault(undefined); setCopyOpen(true); }}><Copy className="mr-1 h-4 w-4" /> Copy week…</Button>
+            {weeks.length > 1 && (
+              <Button size="sm" variant="outline" onClick={async () => {
+                if (!confirm(`Copy Week 1 into all ${weeks.length - 1} other weeks? This replaces those weeks.`)) return;
+                const wk1 = (weeks as any[])[0];
+                await save.wrap(() => copyWeekToAll(wk1.id, { prescriptions: true, notes: true }));
+                refresh();
+                toast.success("Week 1 copied to all weeks");
+              }}>
+                <Zap className="mr-1 h-4 w-4" /> W1 → All
+              </Button>
+            )}
+            {weeks.length > 1 && (
+              <Button size="sm" variant="outline" onClick={() => setProgressionOpen(true)}>
+                <TrendingUp className="mr-1 h-4 w-4" /> Progression…
+              </Button>
+            )}
             <Button size="sm" variant="outline" onClick={() => setTplOpen(true)}><Save className="mr-1 h-4 w-4" /> Save Block as Template</Button>
           </div>
         </div>
@@ -125,10 +252,12 @@ function BlockEditor() {
             recentIds={recentIds}
             collapsed={libCollapsed}
             onToggleCollapse={() => setLibCollapsed((v) => !v)}
+            selectedDayLabel={selectedDayLabel}
+            onQuickAdd={quickAddToSelected}
             onPick={(exId) => {
-              const firstDay = days[0];
-              if (!firstDay) { toast.error("Add a day first"); return; }
-              run(() => addRowFromExercise(firstDay.id, exId));
+              const target = selectedDayId ? (dayById.get(selectedDayId) as any) : (days as any[])[0];
+              if (!target) { toast.error("Add a day first"); return; }
+              run(() => addRowFromExercise(target.id, exId));
             }}
           />
           <div className="flex-1 overflow-auto">
@@ -145,6 +274,11 @@ function BlockEditor() {
                   exercises={exercises as ExerciseRef[]}
                   density={density}
                   onAction={run}
+                  selectedDayId={selectedDayId}
+                  onSelectDay={setSelectedDayId}
+                  dayLinkInfo={dayLinkInfo}
+                  onRowPatch={onRowPatch}
+                  onDayPatch={onDayPatch}
                   onCopyWeek={() => { setCopyDefault(w.id); setCopyOpen(true); }}
                 />
               ))}
@@ -165,12 +299,29 @@ function BlockEditor() {
           toast.success("Week copied");
         }}
       />
+      <EditScopeDialog
+        open={scopeOpen}
+        onOpenChange={setScopeOpen}
+        onChoose={onScopeChoose}
+        customDownstream={scopeCustomCount}
+        description={scopeDescription}
+      />
+      <ProgressionDialog
+        open={progressionOpen}
+        onOpenChange={setProgressionOpen}
+        onApply={async (rule) => {
+          const res = await save.wrap(() => applyProgression(blockId, rule));
+          refresh();
+          toast.success(`Updated ${res?.updated ?? 0} rows${res?.skippedCustom ? ` · skipped ${res.skippedCustom} custom days` : ""}`);
+        }}
+      />
     </>
   );
 }
 
 function WeekColumn({
   week, days, rows, exercises, density, onAction, onCopyWeek,
+  selectedDayId, onSelectDay, dayLinkInfo, onRowPatch, onDayPatch,
 }: {
   week: any;
   days: any[];
@@ -179,6 +330,11 @@ function WeekColumn({
   density: "compact" | "comfortable";
   onAction: (fn: () => Promise<any>) => void;
   onCopyWeek: () => void;
+  selectedDayId: string | null;
+  onSelectDay: (id: string | null) => void;
+  dayLinkInfo: (id: string) => { sourceLabel: string | null; isCustom: boolean; hasSiblings: boolean };
+  onRowPatch: (rowId: string, dayId: string, patch: Record<string, any>) => void | Promise<void>;
+  onDayPatch: (dayId: string, patch: Record<string, any>) => void | Promise<void>;
 }) {
   return (
     <div className="flex min-w-0 flex-col border-r border-border last:border-r-0">
@@ -218,6 +374,11 @@ function WeekColumn({
             exercises={exercises}
             density={density}
             onAction={onAction}
+            selected={selectedDayId === d.id}
+            onSelect={() => onSelectDay(d.id)}
+            link={dayLinkInfo(d.id)}
+            onRowPatch={onRowPatch}
+            onDayPatch={onDayPatch}
           />
         ))}
         <Button variant="outline" size="sm" className="h-7"
@@ -230,13 +391,18 @@ function WeekColumn({
 }
 
 function DayBlock({
-  day, rows, exercises, density, onAction,
+  day, rows, exercises, density, onAction, selected, onSelect, link, onRowPatch, onDayPatch,
 }: {
   day: any;
   rows: any[];
   exercises: ExerciseRef[];
   density: "compact" | "comfortable";
   onAction: (fn: () => Promise<any>) => void;
+  selected: boolean;
+  onSelect: () => void;
+  link: { sourceLabel: string | null; isCustom: boolean; hasSiblings: boolean };
+  onRowPatch: (rowId: string, dayId: string, patch: Record<string, any>) => void | Promise<void>;
+  onDayPatch: (dayId: string, patch: Record<string, any>) => void | Promise<void>;
 }) {
   const [dragOver, setDragOver] = useState(false);
   const auto = estimateDayMinutes(rows);
@@ -255,23 +421,35 @@ function DayBlock({
   };
 
   return (
-    <Card className={cn("p-2 transition-colors", dragOver && "border-primary bg-primary/5")}
+    <Card
+      className={cn(
+        "p-2 transition-colors cursor-pointer",
+        dragOver && "border-primary bg-primary/5",
+        selected && "ring-2 ring-primary/60",
+      )}
+      onClick={onSelect}
       onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
       onDragLeave={() => setDragOver(false)}
       onDrop={(e) => onDrop(e)}
     >
-      <div className="flex items-center gap-1.5 pb-1">
+      <div className="flex flex-wrap items-center gap-1.5 pb-1" onClick={(e) => e.stopPropagation()}>
         <Input
           defaultValue={day.title ?? ""}
           placeholder={`Day ${day.day_index}`}
           className="h-6 max-w-[180px] border-0 bg-transparent px-1 text-xs font-bold focus-visible:ring-1"
-          onBlur={(e) => { if (e.target.value !== (day.title ?? "")) onAction(() => updateDay(day.id, { title: e.target.value })); }}
+          onBlur={(e) => { if (e.target.value !== (day.title ?? "")) onDayPatch(day.id, { title: e.target.value }); }}
         />
         <Input
           defaultValue={day.focus ?? ""}
           placeholder="Focus"
           className="h-6 max-w-[160px] border-0 bg-transparent px-1 text-[11px] text-muted-foreground focus-visible:ring-1"
-          onBlur={(e) => { if (e.target.value !== (day.focus ?? "")) onAction(() => updateDay(day.id, { focus: e.target.value })); }}
+          onBlur={(e) => { if (e.target.value !== (day.focus ?? "")) onDayPatch(day.id, { focus: e.target.value }); }}
+        />
+        <LinkBadge
+          isCustom={link.isCustom}
+          sourceLabel={link.sourceLabel}
+          onBreak={link.sourceLabel && !link.isCustom ? () => onAction(() => breakDayLink(day.id)) : undefined}
+          onRelink={link.isCustom ? () => onAction(() => relinkDay(day.id)) : undefined}
         />
         <div className="ml-auto flex items-center gap-1 text-[10px] text-muted-foreground">
           <Clock className="h-3 w-3" />
@@ -288,6 +466,12 @@ function DayBlock({
             <DropdownMenuContent align="end">
               <DropdownMenuItem onClick={() => onAction(() => duplicateDay(day.id))}><Copy className="mr-2 h-3 w-3" /> Duplicate day</DropdownMenuItem>
               <DropdownMenuItem onClick={() => onAction(() => addRow(day.id, rows.length))}><Plus className="mr-2 h-3 w-3" /> Add empty row</DropdownMenuItem>
+              {link.sourceLabel && !link.isCustom && (
+                <DropdownMenuItem onClick={() => onAction(() => breakDayLink(day.id))}>Break link to {link.sourceLabel}</DropdownMenuItem>
+              )}
+              {link.isCustom && (
+                <DropdownMenuItem onClick={() => onAction(() => relinkDay(day.id))}>Re-link to previous week</DropdownMenuItem>
+              )}
               <DropdownMenuSeparator />
               <DropdownMenuItem className="text-destructive"
                 onClick={() => { if (confirm("Delete day?")) onAction(() => deleteDay(day.id)); }}>
@@ -298,11 +482,11 @@ function DayBlock({
         </div>
       </div>
 
-      <div className="overflow-x-auto" data-pb-grid data-pb-cols="8">
+      <div className="overflow-x-auto" data-pb-grid data-pb-cols="8" onClick={(e) => e.stopPropagation()}>
         <table className="w-full border-collapse text-[11px]">
           <thead>
             <tr className="border-b border-border text-[9px] uppercase tracking-wider text-muted-foreground">
-              <th className="w-6"></th>
+              <th className="w-10"></th>
               <th className="px-1 text-left">Movement</th>
               <th className="w-10 px-1">Sets</th>
               <th className="w-16 px-1">Reps</th>
@@ -310,28 +494,29 @@ function DayBlock({
               <th className="w-16 px-1">% / Basis</th>
               <th className="w-16 px-1">Load</th>
               <th className="w-12 px-1">Rest</th>
-              <th className="w-14 px-1">Tempo</th>
-              <th className="px-1 text-left">Notes</th>
               <th className="w-6"></th>
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 && (
-              <tr><td colSpan={11} className="px-2 py-3 text-center text-[11px] text-muted-foreground">
-                Drag an exercise from the library, or use ⋯ → Add empty row.
+              <tr><td colSpan={9} className="px-2 py-4 text-center text-[11px] text-muted-foreground">
+                <div className="mb-2">Drag exercises here, or:</div>
+                <div className="flex flex-wrap justify-center gap-1">
+                  <Button size="sm" variant="outline" className="h-6 text-[10px]" onClick={() => onAction(() => addRow(day.id, 0))}>+ Empty row</Button>
+                </div>
               </td></tr>
             )}
             {rows.map((r: any) => (
-              <CompactRow key={r.id} row={r} exercises={exercises} density={density} onAction={onAction} dayId={day.id} />
+              <CompactRow key={r.id} row={r} exercises={exercises} density={density} onAction={onAction} onRowPatch={onRowPatch} dayId={day.id} />
             ))}
           </tbody>
         </table>
       </div>
 
-      <div className="mt-1 flex items-center gap-1 text-[10px] text-muted-foreground">
+      <div className="mt-1 flex items-center gap-1 text-[10px] text-muted-foreground" onClick={(e) => e.stopPropagation()}>
         <Input
           defaultValue={day.notes ?? ""}
-          placeholder="Day notes / cues"
+          placeholder={day.notes ? "" : "+ Note"}
           className="h-6 border-0 bg-transparent px-1 text-[11px] focus-visible:ring-1"
           onBlur={(e) => { if (e.target.value !== (day.notes ?? "")) onAction(() => updateDay(day.id, { notes: e.target.value })); }}
         />
@@ -341,20 +526,24 @@ function DayBlock({
 }
 
 function CompactRow({
-  row, exercises, density, onAction, dayId,
+  row, exercises, density, onAction, onRowPatch, dayId,
 }: {
   row: any;
   exercises: ExerciseRef[];
   density: "compact" | "comfortable";
   onAction: (fn: () => Promise<any>) => void;
+  onRowPatch: (rowId: string, dayId: string, patch: Record<string, any>) => void | Promise<void>;
   dayId: string;
 }) {
   const exName = row.exercises?.name ?? row.exercise_name_override ?? "(unnamed)";
   const accent = movementAccent(exName);
   const priority = inferPriority(row.time_profile, exName);
   const cell = DENSITY_CLASSES[density].cell;
+  const [expanded, setExpanded] = useState(false);
+  const patch = (p: Record<string, any>) => onRowPatch(row.id, dayId, p);
 
   return (
+    <>
     <tr
       className="group border-b border-border/40 hover:bg-secondary/30"
       draggable
@@ -362,7 +551,12 @@ function CompactRow({
     >
       <td className={cn(cell, "relative")}>
         <div className={cn("absolute left-0 top-0 h-full w-1", accent)} title={priority} />
-        <GripVertical className="h-3 w-3 cursor-grab text-muted-foreground/40 group-hover:text-muted-foreground" />
+        <div className="flex items-center gap-0.5 pl-1">
+          <button onClick={() => setExpanded((v) => !v)} className="text-muted-foreground/70 hover:text-foreground" title={expanded ? "Collapse" : "Expand"}>
+            {expanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+          </button>
+          <GripVertical className="h-3 w-3 cursor-grab text-muted-foreground/40 group-hover:text-muted-foreground" />
+        </div>
       </td>
       <td className={cell}>
         {row.exercise_id ? (
@@ -383,21 +577,21 @@ function CompactRow({
       </td>
       <td className={cell}>
         <CellInput density={density} type="number" inputMode="numeric" value={row.sets}
-          onCommit={(v) => onAction(() => updateRow(row.id, { sets: parseInt(v) || null }))} />
+          onCommit={(v) => patch({ sets: parseInt(v) || null })} />
       </td>
       <td className={cell}>
         <CellInput density={density} value={row.reps_text} placeholder="8-12"
-          onCommit={(v) => onAction(() => updateRow(row.id, { reps_text: v || null }))} />
+          onCommit={(v) => patch({ reps_text: v || null })} />
       </td>
       <td className={cell}>
         <CellInput density={density} inputMode="decimal" value={row.rpe} placeholder="8"
-          onCommit={(v) => onAction(() => updateRow(row.id, { rpe: v || null }))} />
+          onCommit={(v) => patch({ rpe: v || null })} />
       </td>
       <td className={cell}>
         <div className="flex gap-0.5">
           <CellInput density={density} className="w-12" inputMode="decimal" value={row.percentage} placeholder="%"
-            onCommit={(v) => onAction(() => updateRow(row.id, { percentage: parseFloat(v) || null }))} />
-          <Select value={row.percentage_basis ?? "manual"} onValueChange={(v) => onAction(() => updateRow(row.id, { percentage_basis: v as PercentageBasis }))}>
+            onCommit={(v) => patch({ percentage: parseFloat(v) || null })} />
+          <Select value={row.percentage_basis ?? "manual"} onValueChange={(v) => patch({ percentage_basis: v as PercentageBasis })}>
             <SelectTrigger className={cn("border-0 bg-transparent px-1", DENSITY_CLASSES[density].input)}>
               <SelectValue />
             </SelectTrigger>
@@ -407,19 +601,11 @@ function CompactRow({
       </td>
       <td className={cell}>
         <CellInput density={density} inputMode="decimal" value={row.load_kg} placeholder="kg"
-          onCommit={(v) => onAction(() => updateRow(row.id, { load_kg: parseFloat(v) || null }))} />
+          onCommit={(v) => patch({ load_kg: parseFloat(v) || null })} />
       </td>
       <td className={cell}>
         <CellInput density={density} inputMode="numeric" value={row.rest_seconds} placeholder="s"
-          onCommit={(v) => onAction(() => updateRow(row.id, { rest_seconds: parseInt(v) || null }))} />
-      </td>
-      <td className={cell}>
-        <CellInput density={density} value={row.tempo} placeholder="3-1-1"
-          onCommit={(v) => onAction(() => updateRow(row.id, { tempo: v || null }))} />
-      </td>
-      <td className={cell}>
-        <CellInput density={density} value={row.notes} placeholder="cue / note"
-          onCommit={(v) => onAction(() => updateRow(row.id, { notes: v || null }))} />
+          onCommit={(v) => patch({ rest_seconds: parseInt(v) || null })} />
       </td>
       <td className={cell}>
         <DropdownMenu>
@@ -437,6 +623,41 @@ function CompactRow({
         </DropdownMenu>
       </td>
     </tr>
+    {expanded && (
+      <tr className="border-b border-border/40 bg-secondary/10">
+        <td colSpan={9} className="px-2 py-1.5">
+          <div className="grid grid-cols-1 gap-1.5 md:grid-cols-3">
+            <label className="flex items-center gap-1 text-[10px] text-muted-foreground">
+              <span className="w-12 uppercase">Tempo</span>
+              <CellInput density={density} value={row.tempo} placeholder="3-1-1"
+                onCommit={(v) => patch({ tempo: v || null })} />
+            </label>
+            <label className="flex items-center gap-1 text-[10px] text-muted-foreground">
+              <span className="w-12 uppercase">Profile</span>
+              <Select value={row.time_profile ?? "accessory_compound"} onValueChange={(v) => patch({ time_profile: v as TimeProfile })}>
+                <SelectTrigger className={cn("border-0 bg-transparent px-1 focus:ring-1", DENSITY_CLASSES[density].input)}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {TIME_PROFILES.map((p) => <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </label>
+            <label className="flex items-center gap-1 text-[10px] text-muted-foreground">
+              <span className="w-12 uppercase">RIR</span>
+              <CellInput density={density} value={row.rir} placeholder="2"
+                onCommit={(v) => patch({ rir: v || null })} />
+            </label>
+            <label className="col-span-1 flex items-start gap-1 text-[10px] text-muted-foreground md:col-span-3">
+              <span className="mt-1 w-12 uppercase">Notes</span>
+              <CellInput density={density} value={row.notes} placeholder="cue / note / form reminder"
+                onCommit={(v) => onAction(() => updateRow(row.id, { notes: v || null }))} />
+            </label>
+          </div>
+        </td>
+      </tr>
+    )}
+    </>
   );
 }
 
