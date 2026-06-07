@@ -186,7 +186,12 @@ export function LiftVideoCard({ video, role, userId, onChanged, onEdit }: Props)
 
       <div className="overflow-hidden rounded-md border border-border bg-card">
         {signedUrl || streamUrl ? (
-          <LiftVideoPlayer src={(signedUrl || streamUrl)!} fallbackUrl={openUrl} title={video.exercise || "Lift video"} />
+          <LiftVideoPlayer
+            src={(signedUrl || streamUrl)!}
+            fallbackUrl={openUrl}
+            embedFallbackUrl={embedUrl}
+            title={video.exercise || "Lift video"}
+          />
         ) : embedUrl ? (
           <div className="space-y-2">
             <div className="relative aspect-video w-full overflow-hidden rounded-md bg-secondary/40">
