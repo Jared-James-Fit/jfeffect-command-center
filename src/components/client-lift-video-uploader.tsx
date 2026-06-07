@@ -15,6 +15,37 @@ import { toast } from "sonner";
 import { Upload, Link as LinkIcon, Loader2, Video as VideoIcon, Send, X, AlertTriangle, CheckCircle2, ChevronDown, MessageSquare, Play, Film } from "lucide-react";
 import { useLiftUploadActiveCount } from "@/lib/lift-upload-queue";
 
+type DiagSample = {
+  pickerOpenedAt: number | null;
+  pickerOpenedSource: "photos" | "record" | null;
+  fileHandoffAt: number | null;
+  detailsRenderedAt: number | null;
+  handoffToDetailsMs: number | null;
+  fileSizes: number[];
+  fileTypes: string[];
+  clipCount: number;
+  anyPreviewPending: boolean;
+};
+
+function useDiagnosticsEnabled() {
+  const [on, setOn] = useState(false);
+  useEffect(() => {
+    try {
+      const url = new URL(window.location.href);
+      if (url.searchParams.get("diag") === "1") {
+        localStorage.setItem("lift_upload_diag", "1");
+      }
+      if (url.searchParams.get("diag") === "0") {
+        localStorage.removeItem("lift_upload_diag");
+      }
+      setOn(localStorage.getItem("lift_upload_diag") === "1");
+    } catch {
+      setOn(false);
+    }
+  }, []);
+  return on;
+}
+
 type Clip = {
   id: string;
   kind: "file" | "link";
@@ -57,6 +88,37 @@ export function ClientLiftVideoUploader({ clientId, clientName, userId, onSaved 
   const multiRecordRef = useRef<HTMLInputElement | null>(null);
   const carouselRef = useRef<HTMLDivElement | null>(null);
   const pickerOpenedAtRef = useRef<{ source: "photos" | "record"; at: number } | null>(null);
+  const diagEnabled = useDiagnosticsEnabled();
+  const [diag, setDiag] = useState<DiagSample>({
+    pickerOpenedAt: null,
+    pickerOpenedSource: null,
+    fileHandoffAt: null,
+    detailsRenderedAt: null,
+    handoffToDetailsMs: null,
+    fileSizes: [],
+    fileTypes: [],
+    clipCount: 0,
+    anyPreviewPending: false,
+  });
+  const handoffStampRef = useRef<number | null>(null);
+  // When clips count rises after a fresh handoff, mark details-rendered on
+  // the very next paint to measure handoff -> details-render latency.
+  useEffect(() => {
+    if (handoffStampRef.current == null) return;
+    const handoffAt = handoffStampRef.current;
+    handoffStampRef.current = null;
+    const raf = requestAnimationFrame(() => {
+      const now = performance.now();
+      setDiag((d) => ({
+        ...d,
+        detailsRenderedAt: now,
+        handoffToDetailsMs: Math.round(now - handoffAt),
+        clipCount: clips.length,
+        anyPreviewPending: clips.some((c) => c.kind === "file" && c.previewStatus === "pending"),
+      }));
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [clips]);
 
   const reset = () => {
     setClips([]);
@@ -75,6 +137,16 @@ export function ClientLiftVideoUploader({ clientId, clientName, userId, onSaved 
 
   const openPicker = (source: "photos" | "record") => {
     pickerOpenedAtRef.current = { source, at: performance.now() };
+    if (diagEnabled) {
+      setDiag((d) => ({
+        ...d,
+        pickerOpenedAt: pickerOpenedAtRef.current!.at,
+        pickerOpenedSource: source,
+        fileHandoffAt: null,
+        detailsRenderedAt: null,
+        handoffToDetailsMs: null,
+      }));
+    }
     if (source === "photos") multiUploadRef.current?.click();
     else multiRecordRef.current?.click();
   };
@@ -90,6 +162,17 @@ export function ClientLiftVideoUploader({ clientId, clientName, userId, onSaved 
         totalBytes: Array.from(files).reduce((sum, file) => sum + file.size, 0),
       });
       pickerOpenedAtRef.current = null;
+    }
+    const now = performance.now();
+    handoffStampRef.current = now;
+    if (diagEnabled) {
+      const arr = Array.from(files);
+      setDiag((d) => ({
+        ...d,
+        fileHandoffAt: now,
+        fileSizes: arr.map((f) => f.size),
+        fileTypes: arr.map((f) => f.type || "(unknown)"),
+      }));
     }
     const next: Clip[] = [];
     for (const f of Array.from(files)) {
@@ -534,6 +617,41 @@ export function ClientLiftVideoUploader({ clientId, clientName, userId, onSaved 
             <><Send className="mr-2 h-4 w-4" /> {sendError ? "Retry send" : `Send ${clips.length > 1 ? "Videos" : "Video"}`}</>
           )}
         </Button>
+
+        {diagEnabled && (
+          <details className="group rounded-lg border border-dashed border-border bg-muted/20 px-3 py-2 text-[11px]">
+            <summary className="flex cursor-pointer list-none items-center gap-1 font-medium text-muted-foreground hover:text-foreground">
+              <ChevronDown className="h-3 w-3 transition-transform group-open:rotate-180" />
+              Upload diagnostics (admin)
+            </summary>
+            <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 font-mono text-[10.5px] leading-relaxed text-muted-foreground">
+              <span>Picker source</span><span className="text-foreground">{diag.pickerOpenedSource ?? "—"}</span>
+              <span>Picker opened</span><span className="text-foreground">{diag.pickerOpenedAt != null ? `${Math.round(diag.pickerOpenedAt)}ms` : "—"}</span>
+              <span>File handoff</span><span className="text-foreground">{diag.fileHandoffAt != null ? `${Math.round(diag.fileHandoffAt)}ms` : "—"}</span>
+              <span>Picker → handoff</span><span className="text-foreground">{diag.fileHandoffAt != null && diag.pickerOpenedAt != null ? `${Math.round(diag.fileHandoffAt - diag.pickerOpenedAt)}ms (iOS)` : "—"}</span>
+              <span>Details rendered</span><span className="text-foreground">{diag.detailsRenderedAt != null ? `${Math.round(diag.detailsRenderedAt)}ms` : "—"}</span>
+              <span>Handoff → details</span><span className="text-foreground">{diag.handoffToDetailsMs != null ? `${diag.handoffToDetailsMs}ms (app)` : "—"}</span>
+              <span>Clip count</span><span className="text-foreground">{diag.clipCount}</span>
+              <span>Preview pending</span><span className="text-foreground">{String(diag.anyPreviewPending)}</span>
+              <span>File sizes</span><span className="text-foreground break-all">{diag.fileSizes.length ? diag.fileSizes.map((b) => `${(b / 1024 / 1024).toFixed(1)}MB`).join(", ") : "—"}</span>
+              <span>File types</span><span className="text-foreground break-all">{diag.fileTypes.length ? diag.fileTypes.join(", ") : "—"}</span>
+            </div>
+            <div className="mt-2 flex items-center justify-between gap-2 text-[10px] text-muted-foreground">
+              <span>Enabled via ?diag=1 or localStorage.lift_upload_diag</span>
+              <button
+                type="button"
+                className="underline-offset-2 hover:underline"
+                onClick={() => {
+                  const payload = JSON.stringify(diag, null, 2);
+                  navigator.clipboard?.writeText(payload);
+                  toast.success("Diagnostics copied to clipboard.");
+                }}
+              >
+                Copy
+              </button>
+            </div>
+          </details>
+        )}
       </div>
 
       {/* Preview dialog */}
