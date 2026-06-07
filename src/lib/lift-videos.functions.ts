@@ -57,6 +57,44 @@ function fileIdFromUrl(url: string | null | undefined) {
     ?? null;
 }
 
+async function requireAdmin(context: any) {
+  const { data: roles } = await context.supabase.from("user_roles" as any).select("role").eq("user_id", context.userId);
+  if (!roles?.some((r: any) => r.role === "admin")) throw new Error("Admin only");
+}
+
+async function ensureDriveLiftFolder(supabaseAdmin: any, clientId: string) {
+  const { driveCreateFolder } = await import("./drive.server");
+  const { data: settings } = await supabaseAdmin.from("media_drive_settings").select("root_folder_id,status").limit(1).maybeSingle();
+  if (!settings?.root_folder_id || settings.status !== "Ready") throw new Error("Google Drive root folder is not ready.");
+
+  const { data: existing } = await supabaseAdmin.from("client_drive_folders").select("*").eq("client_id", clientId).maybeSingle();
+  const subfolders = { ...(existing?.subfolders ?? {}) } as Record<string, string>;
+  if (subfolders["Lift Videos"]) return subfolders["Lift Videos"];
+
+  const { data: client } = await supabaseAdmin.from("clients").select("id, full_name").eq("id", clientId).single();
+  let folderId = existing?.folder_id as string | undefined;
+  let folderUrl = existing?.folder_url as string | undefined;
+  if (!folderId) {
+    const created = await driveCreateFolder(`${client.full_name} (${String(clientId).slice(0, 8)})`, settings.root_folder_id);
+    folderId = created.id;
+    folderUrl = created.webViewLink ?? `https://drive.google.com/drive/folders/${folderId}`;
+  }
+  const liftFolder = await driveCreateFolder("Lift Videos", folderId);
+  subfolders["Lift Videos"] = liftFolder.id;
+  const payload = {
+    client_id: clientId,
+    folder_id: folderId,
+    folder_url: folderUrl,
+    folder_name: `${client.full_name} (${String(clientId).slice(0, 8)})`,
+    subfolders,
+    status: "Created",
+    last_error: null,
+  };
+  if (existing) await supabaseAdmin.from("client_drive_folders").update(payload).eq("id", existing.id);
+  else await supabaseAdmin.from("client_drive_folders").insert(payload);
+  return liftFolder.id;
+}
+
 export const refreshLiftVideoDriveDiagnostics = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data) => z.object({ videoId: z.string().uuid() }).parse(data))
