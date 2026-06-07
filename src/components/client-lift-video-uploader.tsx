@@ -617,6 +617,41 @@ export function ClientLiftVideoUploader({ clientId, clientName, userId, onSaved 
             <><Send className="mr-2 h-4 w-4" /> {sendError ? "Retry send" : `Send ${clips.length > 1 ? "Videos" : "Video"}`}</>
           )}
         </Button>
+
+        {diagEnabled && (
+          <details className="group rounded-lg border border-dashed border-border bg-muted/20 px-3 py-2 text-[11px]">
+            <summary className="flex cursor-pointer list-none items-center gap-1 font-medium text-muted-foreground hover:text-foreground">
+              <ChevronDown className="h-3 w-3 transition-transform group-open:rotate-180" />
+              Upload diagnostics (admin)
+            </summary>
+            <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 font-mono text-[10.5px] leading-relaxed text-muted-foreground">
+              <span>Picker source</span><span className="text-foreground">{diag.pickerOpenedSource ?? "—"}</span>
+              <span>Picker opened</span><span className="text-foreground">{diag.pickerOpenedAt != null ? `${Math.round(diag.pickerOpenedAt)}ms` : "—"}</span>
+              <span>File handoff</span><span className="text-foreground">{diag.fileHandoffAt != null ? `${Math.round(diag.fileHandoffAt)}ms` : "—"}</span>
+              <span>Picker → handoff</span><span className="text-foreground">{diag.fileHandoffAt != null && diag.pickerOpenedAt != null ? `${Math.round(diag.fileHandoffAt - diag.pickerOpenedAt)}ms (iOS)` : "—"}</span>
+              <span>Details rendered</span><span className="text-foreground">{diag.detailsRenderedAt != null ? `${Math.round(diag.detailsRenderedAt)}ms` : "—"}</span>
+              <span>Handoff → details</span><span className="text-foreground">{diag.handoffToDetailsMs != null ? `${diag.handoffToDetailsMs}ms (app)` : "—"}</span>
+              <span>Clip count</span><span className="text-foreground">{diag.clipCount}</span>
+              <span>Preview pending</span><span className="text-foreground">{String(diag.anyPreviewPending)}</span>
+              <span>File sizes</span><span className="text-foreground break-all">{diag.fileSizes.length ? diag.fileSizes.map((b) => `${(b / 1024 / 1024).toFixed(1)}MB`).join(", ") : "—"}</span>
+              <span>File types</span><span className="text-foreground break-all">{diag.fileTypes.length ? diag.fileTypes.join(", ") : "—"}</span>
+            </div>
+            <div className="mt-2 flex items-center justify-between gap-2 text-[10px] text-muted-foreground">
+              <span>Enabled via ?diag=1 or localStorage.lift_upload_diag</span>
+              <button
+                type="button"
+                className="underline-offset-2 hover:underline"
+                onClick={() => {
+                  const payload = JSON.stringify(diag, null, 2);
+                  navigator.clipboard?.writeText(payload);
+                  toast.success("Diagnostics copied to clipboard.");
+                }}
+              >
+                Copy
+              </button>
+            </div>
+          </details>
+        )}
       </div>
 
       {/* Preview dialog */}
