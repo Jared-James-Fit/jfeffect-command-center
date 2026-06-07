@@ -17,7 +17,7 @@ import {
   getTemplate, updateTemplate, summarizeTemplatePayload, TIME_PROFILES,
   estimateDayMinutes, durationRange, PERCENTAGE_BASES, type TrainingStyle,
 } from "@/lib/pl-programs";
-import { ExerciseLibraryPanel, readDrop, type ExerciseRef } from "@/components/program-builder";
+import { ExerciseLibraryPanel, type ExerciseRef } from "@/components/program-builder";
 
 // Append a row into the first day reachable inside any template payload shape.
 function appendRowToFirstDay(payload: any, type: string, row: any) {
