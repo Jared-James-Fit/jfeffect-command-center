@@ -765,7 +765,7 @@ function DayBlock({
   return (
     <Card
       className={cn(
-        "p-2 transition-colors cursor-pointer",
+        "p-2 transition-colors cursor-pointer border-l-[3px] border-l-primary/40 hover:border-l-primary/70",
         dragOver && "border-primary bg-primary/5",
         selected && "ring-2 ring-primary/60",
       )}
