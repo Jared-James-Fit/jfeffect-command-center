@@ -16,7 +16,7 @@ import { DoubleConfirmDeleteDialog } from "@/components/double-confirm-delete-di
 import { AssignOfferDialog } from "@/components/assign-offer-dialog";
 import { OfferDetailDialog } from "@/components/offer-detail-dialog";
 import { toast } from "sonner";
-import { Copy, ExternalLink, Loader2, Plus, Trash2, ImagePlus, Pencil, Archive, ArchiveRestore, FileSignature, AlertTriangle, CheckCircle2, Search, X, ListChecks, Sparkles, Eye, CreditCard } from "lucide-react";
+import { Copy, ExternalLink, Loader2, Plus, Trash2, ImagePlus, Pencil, Archive, ArchiveRestore, FileSignature, AlertTriangle, CheckCircle2, Search, X, ListChecks, Sparkles, Eye, CreditCard, Link2, Share2, Wand2 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -25,6 +25,7 @@ import {
   updateCoachingProduct,
   duplicateCoachingProduct,
   deleteCoachingProduct,
+  generatePaymentLinkForProduct,
 } from "@/lib/coaching-products.functions";
 import { createPreviewCheckoutSession } from "@/lib/stripe-checkout.functions";
 
@@ -186,7 +187,38 @@ function PaymentLinksPage() {
   const duplicateFn = useServerFn(duplicateCoachingProduct);
   const deleteFn = useServerFn(deleteCoachingProduct);
   const previewCheckoutFn = useServerFn(createPreviewCheckoutSession);
+  const generateLinkFn = useServerFn(generatePaymentLinkForProduct);
   const [previewingCheckout, setPreviewingCheckout] = useState<string | null>(null);
+  const [generatingLink, setGeneratingLink] = useState<string | null>(null);
+  const [sharing, setSharing] = useState<Product | null>(null);
+
+  const handleGenerateLink = async (p: Product) => {
+    if (!(p as any).stripe_price_id) {
+      toast.error("Add a Stripe Price ID first.");
+      setEditing({ open: true, product: p });
+      return;
+    }
+    setGeneratingLink(p.id);
+    try {
+      const res = await generateLinkFn({ data: { id: p.id } });
+      toast.success("Payment link ready — copy and share anywhere.");
+      qc.invalidateQueries({ queryKey: ["coaching-products"] });
+      try { await navigator.clipboard.writeText(res.url); } catch {}
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to generate payment link");
+    } finally {
+      setGeneratingLink(null);
+    }
+  };
+
+  const copyLink = async (url: string) => {
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success("Payment link copied — paste into text, DM, or email.");
+    } catch {
+      toast.error("Could not copy. Long-press the link to copy manually.");
+    }
+  };
 
   const handleStripePreview = async (p: Product) => {
     const r = readiness(p);
@@ -447,9 +479,16 @@ function PaymentLinksPage() {
                       const r = readiness(p);
                       if (r.ready) {
                         return (
-                          <Badge variant="outline" className="text-xs border-primary/40 text-primary">
-                            <CheckCircle2 className="h-3 w-3 mr-1" />Checkout Ready
-                          </Badge>
+                          <>
+                            <Badge variant="outline" className="text-xs border-primary/40 text-primary">
+                              <CheckCircle2 className="h-3 w-3 mr-1" />Checkout Ready
+                            </Badge>
+                            {p.payment_link_url && (
+                              <Badge variant="outline" className="text-xs border-green-600/40 text-green-600">
+                                <Link2 className="h-3 w-3 mr-1" />Payment Link Ready
+                              </Badge>
+                            )}
+                          </>
                         );
                       }
                       return r.missing.map((m) => (
@@ -462,56 +501,96 @@ function PaymentLinksPage() {
                   </div>
                   {p.description && <p className="text-sm mt-2 line-clamp-2 text-muted-foreground">{p.description}</p>}
                   <div className="mt-3 flex flex-wrap gap-2">
-                    <Button size="sm" className="bg-gradient-primary font-bold uppercase" onClick={() => setAssigning(productToOfferLike(p))}>Assign to client</Button>
-                    {p.payment_link_url ? (
-                      <>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={async () => {
-                            await navigator.clipboard.writeText(p.payment_link_url!);
-                            toast.success("Payment link copied — paste anywhere (text, DM, email).");
-                          }}
-                          title="Copy the saved Stripe Payment Link so you can send it manually"
-                        >
-                          <Copy className="h-3.5 w-3.5 mr-1" />Copy link
-                        </Button>
-                        <a href={p.payment_link_url} target="_blank" rel="noreferrer">
-                          <Button size="sm" variant="outline" title="Open the live payment link in a new tab">
-                            <ExternalLink className="h-3.5 w-3.5 mr-1" />Open link
+                    {(() => {
+                      const r = readiness(p);
+                      const archived = p.status === "Archived";
+                      const hasPriceId = !!(p as any).stripe_price_id;
+                      const hasLink = !!p.payment_link_url;
+                      if (archived) {
+                        return (
+                          <>
+                            <Button size="sm" variant="outline" onClick={() => setStatusMutation.mutate({ id: p.id, status: "Draft" })}>
+                              <ArchiveRestore className="h-3.5 w-3.5 mr-1" /> Restore
+                            </Button>
+                            <Button size="sm" variant="outline" onClick={() => setEditing({ open: true, product: p })}>
+                              <Pencil className="h-3.5 w-3.5 mr-1" /> Edit
+                            </Button>
+                          </>
+                        );
+                      }
+                      return (
+                        <>
+                          <Button size="sm" className="bg-gradient-primary font-bold uppercase" onClick={() => setAssigning(productToOfferLike(p))}>
+                            Assign to client
                           </Button>
-                        </a>
-                      </>
-                    ) : (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setEditing({ open: true, product: p })}
-                        title="No shareable Stripe Payment Link saved yet. Edit the product and paste a Stripe Payment Link URL."
-                        className="border-amber-500/40 text-amber-500 hover:bg-amber-500/10"
-                      >
-                        <AlertTriangle className="h-3.5 w-3.5 mr-1" />Add payment link
-                      </Button>
-                    )}
-                    <Button size="sm" variant="outline" onClick={() => setPreviewing(p)} title="Preview client-facing product page"><Eye className="h-3.5 w-3.5 mr-1" />Preview</Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => handleStripePreview(p)}
-                      disabled={previewingCheckout === p.id}
-                      title="Open the real Stripe-hosted checkout page in a new tab (branding & colors are edited in your Stripe Dashboard → Settings → Branding)"
-                    >
-                      {previewingCheckout === p.id ? (
-                        <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
-                      ) : (
-                        <CreditCard className="h-3.5 w-3.5 mr-1" />
-                      )}
-                      Stripe Preview
-                    </Button>
-                    <Button size="sm" variant="outline" onClick={() => setEditing({ open: true, product: p })}><Pencil className="h-3.5 w-3.5" /></Button>
-                    <Button size="sm" variant="ghost" onClick={() => duplicateMutation.mutate(p.id)}><Copy className="h-3.5 w-3.5" /></Button>
+                          {hasLink && (
+                            <>
+                              <Button size="sm" variant="outline" onClick={() => copyLink(p.payment_link_url!)} title="Copy the Stripe payment link to share manually">
+                                <Copy className="h-3.5 w-3.5 mr-1" /> Copy payment link
+                              </Button>
+                              <Button size="sm" variant="outline" onClick={() => setSharing(p)} title="Open share panel with message templates">
+                                <Share2 className="h-3.5 w-3.5 mr-1" /> Share
+                              </Button>
+                              <a href={p.payment_link_url!} target="_blank" rel="noreferrer">
+                                <Button size="sm" variant="outline" title="Open the live payment link in a new tab">
+                                  <ExternalLink className="h-3.5 w-3.5 mr-1" /> Open checkout
+                                </Button>
+                              </a>
+                            </>
+                          )}
+                          {!hasLink && hasPriceId && r.ready && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleGenerateLink(p)}
+                              disabled={generatingLink === p.id}
+                              title="Create a reusable Stripe payment link you can copy and send anywhere"
+                            >
+                              {generatingLink === p.id
+                                ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+                                : <Wand2 className="h-3.5 w-3.5 mr-1" />}
+                              Generate payment link
+                            </Button>
+                          )}
+                          {!hasPriceId && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="border-amber-500/40 text-amber-500 hover:bg-amber-500/10"
+                              onClick={() => setEditing({ open: true, product: p })}
+                              title="This product needs a Stripe Price ID and checkout mode before clients can pay."
+                            >
+                              <AlertTriangle className="h-3.5 w-3.5 mr-1" /> Complete Stripe setup
+                            </Button>
+                          )}
+                          <Button size="sm" variant="outline" onClick={() => setPreviewing(p)} title="Preview the client-facing product card">
+                            <Eye className="h-3.5 w-3.5 mr-1" /> Preview
+                          </Button>
+                          {hasPriceId && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleStripePreview(p)}
+                              disabled={previewingCheckout === p.id}
+                              title="Open the live Stripe-hosted checkout page in a new tab"
+                            >
+                              {previewingCheckout === p.id
+                                ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+                                : <CreditCard className="h-3.5 w-3.5 mr-1" />}
+                              Open Stripe checkout
+                            </Button>
+                          )}
+                          <Button size="sm" variant="outline" onClick={() => setEditing({ open: true, product: p })} title="Edit product">
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => duplicateMutation.mutate(p.id)} title="Duplicate">
+                            <Copy className="h-3.5 w-3.5" />
+                          </Button>
+                        </>
+                      );
+                    })()}
                     {p.status === "Archived" ? (
-                      <Button size="sm" variant="ghost" onClick={() => setStatusMutation.mutate({ id: p.id, status: "Draft" })} title="Restore"><ArchiveRestore className="h-3.5 w-3.5" /></Button>
+                      null
                     ) : (
                       <Button size="sm" variant="ghost" onClick={() => setStatusMutation.mutate({ id: p.id, status: "Archived" })} title="Archive"><Archive className="h-3.5 w-3.5" /></Button>
                     )}
@@ -562,6 +641,12 @@ function PaymentLinksPage() {
         message={`You selected ${selected.size} product${selected.size !== 1 ? "s" : ""}. This removes them from your product library. Past purchase records are preserved.`}
         confirmLabel="Delete Selected Products"
         onConfirm={bulkDelete}
+      />
+
+      <SharePaymentLinkDialog
+        product={sharing}
+        onClose={() => setSharing(null)}
+        onCopy={copyLink}
       />
     </>
   );
@@ -879,6 +964,73 @@ function ProductFormDialog({
             </Button>
           </div>
         </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function SharePaymentLinkDialog({
+  product, onClose, onCopy,
+}: {
+  product: Product | null;
+  onClose: () => void;
+  onCopy: (url: string) => void;
+}) {
+  const url = product?.payment_link_url ?? "";
+  const template = product
+    ? `Hey! Here's your secure payment link for ${product.name}:\n\n${url}\n\nLet me know once you've completed checkout and I'll get you set up.`
+    : "";
+  return (
+    <Dialog open={!!product} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Share payment link</DialogTitle>
+        </DialogHeader>
+        {product && (
+          <div className="space-y-4">
+            <div>
+              <div className="text-sm font-semibold">{product.name}</div>
+              <div className="text-xs text-muted-foreground">
+                {product.currency.toUpperCase()} {formatPrice(product.price_cents, product.currency)}
+                {product.payment_structure ? ` · ${product.payment_structure}` : ""}
+              </div>
+            </div>
+            <div>
+              <Label className="text-xs">Payment link URL</Label>
+              <div className="mt-1 flex gap-2">
+                <Input readOnly value={url} className="font-mono text-xs" onFocus={(e) => e.currentTarget.select()} />
+                <Button size="sm" variant="outline" onClick={() => onCopy(url)}>
+                  <Copy className="h-3.5 w-3.5 mr-1" /> Copy
+                </Button>
+              </div>
+              <p className="text-[11px] text-muted-foreground mt-1">
+                This is a real, reusable Stripe payment link. Anyone with this URL can pay.
+              </p>
+            </div>
+            <div>
+              <Label className="text-xs">Quick message (optional)</Label>
+              <Textarea
+                rows={5}
+                readOnly
+                value={template}
+                onFocus={(e) => e.currentTarget.select()}
+                className="text-sm"
+              />
+              <div className="mt-2 flex gap-2">
+                <Button size="sm" variant="outline" onClick={async () => {
+                  try { await navigator.clipboard.writeText(template); toast.success("Message copied."); } catch { toast.error("Could not copy."); }
+                }}>
+                  <Copy className="h-3.5 w-3.5 mr-1" /> Copy message
+                </Button>
+                <a href={url} target="_blank" rel="noreferrer">
+                  <Button size="sm" variant="outline">
+                    <ExternalLink className="h-3.5 w-3.5 mr-1" /> Open checkout
+                  </Button>
+                </a>
+              </div>
+            </div>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );
