@@ -731,10 +731,10 @@ function ProductFormDialog({
                 {form.generateStripeProduct && (
                   <div>
                     <Label className="text-xs">Billing interval (leave blank for one-time)</Label>
-                    <Select value={form.billingInterval} onValueChange={(v) => set("billingInterval", v as any)}>
+                    <Select value={form.billingInterval || "__none"} onValueChange={(v) => set("billingInterval", (v === "__none" ? "" : v) as any)}>
                       <SelectTrigger><SelectValue placeholder="One-time (no interval)" /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">One-time payment</SelectItem>
+                        <SelectItem value="__none">One-time payment</SelectItem>
                         <SelectItem value="month">Monthly</SelectItem>
                         <SelectItem value="year">Annual</SelectItem>
                         <SelectItem value="week">Weekly</SelectItem>
@@ -780,10 +780,10 @@ function ProductFormDialog({
             {/* Access level */}
             <div>
               <Label>Access level (0–5)</Label>
-              <Select value={form.accessLevel} onValueChange={(v) => set("accessLevel", v)}>
+              <Select value={form.accessLevel || "__none"} onValueChange={(v) => set("accessLevel", v === "__none" ? "" : v)}>
                 <SelectTrigger><SelectValue placeholder="Select access level" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Not set</SelectItem>
+                  <SelectItem value="__none">Not set</SelectItem>
                   <SelectItem value="0">0 — App access only</SelectItem>
                   <SelectItem value="1">1 — Self-led program</SelectItem>
                   <SelectItem value="2">2 — Basic coaching</SelectItem>
