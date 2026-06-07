@@ -664,6 +664,56 @@ function WeekColumn({
   );
 }
 
+function FullBlockNav({
+  weeks, currentWeekIndex, collapsedCount, onJump, onCollapseAll, onExpandAll, onShowCurrent,
+}: {
+  weeks: any[];
+  currentWeekIndex: number | null;
+  collapsedCount: number;
+  onJump: (weekId: string) => void;
+  onCollapseAll: () => void;
+  onExpandAll: () => void;
+  onShowCurrent: () => void;
+}) {
+  const allCollapsed = collapsedCount === weeks.length && weeks.length > 0;
+  return (
+    <div className="sticky top-0 z-30 flex flex-wrap items-center gap-1.5 border-b border-primary/20 bg-[color-mix(in_oklab,var(--primary)_6%,var(--background))] px-3 py-2 backdrop-blur">
+      <span className="text-[11px] font-semibold uppercase tracking-wide text-primary">
+        Full Block · {weeks.length} week{weeks.length === 1 ? "" : "s"}
+      </span>
+      <div className="mx-2 h-4 w-px bg-border" />
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button size="sm" variant="outline" className="h-7 gap-1 text-[11px]">
+            <CalendarRange className="h-3 w-3" /> Jump to week <ChevronDown className="h-3 w-3 opacity-60" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="max-h-72 overflow-auto">
+          {weeks.map((w: any) => (
+            <DropdownMenuItem key={w.id} onClick={() => onJump(w.id)} className="text-xs">
+              Week {w.week_index}
+              {currentWeekIndex === w.week_index && (
+                <span className="ml-2 text-[10px] font-semibold text-primary">• current</span>
+              )}
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+      {currentWeekIndex != null && (
+        <Button size="sm" variant="outline" className="h-7 gap-1 text-[11px]" onClick={onShowCurrent}>
+          <Crosshair className="h-3 w-3 text-primary" /> Current week
+        </Button>
+      )}
+      <Button size="sm" variant="ghost" className="h-7 gap-1 text-[11px]" onClick={onCollapseAll} disabled={allCollapsed}>
+        <ChevronsDownUp className="h-3 w-3" /> Collapse all
+      </Button>
+      <Button size="sm" variant="ghost" className="h-7 gap-1 text-[11px]" onClick={onExpandAll} disabled={collapsedCount === 0}>
+        <ChevronsUpDown className="h-3 w-3" /> Expand all
+      </Button>
+    </div>
+  );
+}
+
 function DayBlock({
   day, rows, exercises, density, onAction, selected, onSelect, link, onRowPatch, onDayPatch,
   weekIndex, onCopyDayToFuture,
