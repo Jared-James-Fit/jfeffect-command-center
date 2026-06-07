@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Rewind, FastForward, Gauge, Maximize2, Loader2, AlertTriangle, ExternalLink, RefreshCw } from "lucide-react";
 import {
@@ -21,21 +21,14 @@ export function LiftVideoPlayer({
   const [speed, setSpeed] = useState(1);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [slow, setSlow] = useState(false);
-  const [orientation, setOrientation] = useState<"unknown" | "landscape" | "portrait">("unknown");
   const [retryKey, setRetryKey] = useState(0);
 
   useEffect(() => {
     setStatus("loading");
     setSlow(false);
-    setOrientation("unknown");
     const slowTimer = window.setTimeout(() => setSlow(true), 5000);
     return () => window.clearTimeout(slowTimer);
   }, [src, retryKey]);
-
-  const aspectClass = useMemo(() => {
-    if (orientation === "portrait") return "aspect-[9/16] max-h-[68vh] w-auto max-w-full";
-    return "aspect-video w-full";
-  }, [orientation]);
 
   const skip = (delta: number) => {
     const v = ref.current;
@@ -64,7 +57,7 @@ export function LiftVideoPlayer({
 
   return (
     <div className="space-y-2">
-      <div className={cn("relative mx-auto overflow-hidden rounded-md border border-border bg-secondary/40", aspectClass)}>
+      <div className={cn("relative mx-auto aspect-video w-full overflow-hidden rounded-md border border-border bg-secondary/40")}>
         {(status === "loading" || status === "error") && (
           <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 p-4 text-center">
             {status === "error" ? (
@@ -111,8 +104,6 @@ export function LiftVideoPlayer({
           onCanPlay={() => setStatus("ready")}
           onLoadedMetadata={(e) => {
             const v = e.currentTarget;
-            if (v.videoHeight > v.videoWidth) setOrientation("portrait");
-            else if (v.videoWidth > 0) setOrientation("landscape");
             v.playbackRate = speed;
           }}
           onError={() => setStatus("error")}
