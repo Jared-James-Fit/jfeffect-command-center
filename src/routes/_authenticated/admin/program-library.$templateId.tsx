@@ -15,7 +15,7 @@ import { ArrowLeft, Plus, Trash2, Save, Clock, Copy } from "lucide-react";
 import { toast } from "sonner";
 import {
   getTemplate, updateTemplate, summarizeTemplatePayload, TIME_PROFILES,
-  estimateDayMinutes, durationRange, type TrainingStyle,
+  estimateDayMinutes, durationRange, PERCENTAGE_BASES, type TrainingStyle,
 } from "@/lib/pl-programs";
 
 export const Route = createFileRoute("/_authenticated/admin/program-library/$templateId")({
