@@ -929,3 +929,83 @@ function ProgressionDialog({
     </Dialog>
   );
 }
+// ---------------- View toggle button ----------------
+function ViewToggleBtn({ active, onClick, icon, label }: { active: boolean; onClick: () => void; icon: React.ReactNode; label: string }) {
+  return (
+    <button
+      onClick={onClick}
+      title={label}
+      className={cn(
+        "inline-flex items-center gap-1 rounded px-2 py-0.5 text-[11px]",
+        active ? "bg-secondary text-foreground" : "text-muted-foreground hover:text-foreground",
+      )}
+    >
+      {icon}
+      <span className="hidden md:inline">{label}</span>
+    </button>
+  );
+}
+
+// ---------------- Insertion-line row ----------------
+function InsertionRow() {
+  return (
+    <tr aria-hidden className="pointer-events-none">
+      <td colSpan={9} className="p-0">
+        <div className="h-0.5 w-full bg-primary" />
+      </td>
+    </tr>
+  );
+}
+
+// ---------------- Read-only client preview ----------------
+function ClientPreview({ weeks, days, rows }: { weeks: any[]; days: any[]; rows: any[] }) {
+  return (
+    <div className="space-y-4 p-4">
+      <div className="rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-xs text-primary">
+        Client preview — read-only view of what the client will see.
+      </div>
+      {(weeks as any[]).map((w: any) => (
+        <div key={w.id} className="space-y-2">
+          <h3 className="text-sm font-bold">Week {w.week_index}</h3>
+          <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-3">
+            {(days as any[]).filter((d: any) => d.week_id === w.id).map((d: any) => {
+              const dayRows = (rows as any[]).filter((r: any) => r.day_id === d.id);
+              return (
+                <Card key={d.id} className="p-3">
+                  <div className="mb-1 flex items-center justify-between">
+                    <div className="text-sm font-semibold">{d.title || `Day ${d.day_index}`}</div>
+                    {d.focus && <div className="text-[10px] text-muted-foreground">{d.focus}</div>}
+                  </div>
+                  {dayRows.length === 0 ? (
+                    <div className="text-[11px] text-muted-foreground">No exercises.</div>
+                  ) : (
+                    <ul className="space-y-1 text-[11px]">
+                      {dayRows.map((r: any) => {
+                        const name = r.exercises?.name ?? r.exercise_name_override ?? "(unnamed)";
+                        const prescription = [
+                          r.sets ? `${r.sets}×${r.reps_text ?? "?"}` : null,
+                          r.rpe ? `@${r.rpe} RPE` : null,
+                          r.percentage ? `${r.percentage}%` : null,
+                          r.load_kg ? `${r.load_kg}kg` : null,
+                          r.rest_seconds ? `${r.rest_seconds}s rest` : null,
+                        ].filter(Boolean).join(" · ");
+                        return (
+                          <li key={r.id}>
+                            <span className="font-medium">{name}</span>
+                            {prescription && <span className="text-muted-foreground"> — {prescription}</span>}
+                            {r.notes && <div className="pl-2 text-[10px] text-muted-foreground">{r.notes}</div>}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                  {d.notes && <div className="mt-2 rounded-sm bg-muted/40 px-2 py-1 text-[10px]">{d.notes}</div>}
+                </Card>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
