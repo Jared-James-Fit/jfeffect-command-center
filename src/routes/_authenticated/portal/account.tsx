@@ -8,8 +8,6 @@ import { useAuth } from "@/lib/auth";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Save, ShieldAlert, CreditCard, Settings } from "lucide-react";
 import { toast } from "sonner";
 import { createCustomerPortalSession } from "@/lib/stripe-checkout.functions";
