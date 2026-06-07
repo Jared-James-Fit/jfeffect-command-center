@@ -47,18 +47,16 @@ export const Route = createFileRoute("/api/drive-upload")({
         try {
           await requireUser(request);
 
-          const form = await request.formData();
-          const uploadUrl = assertDriveUploadUrl(String(form.get("uploadUrl") ?? ""));
-          const mimeType = String(form.get("mimeType") ?? "application/octet-stream");
-          const file = form.get("file");
-          if (!(file instanceof File)) {
-            return json({ error: "Missing video file" }, { status: 400 });
+          const uploadUrl = assertDriveUploadUrl(request.headers.get("x-drive-upload-url") ?? "");
+          const mimeType = request.headers.get("content-type") || "application/octet-stream";
+          if (!request.body) {
+            return json({ error: "Missing video file body" }, { status: 400 });
           }
 
           const upstream = await fetch(uploadUrl, {
             method: "PUT",
-            headers: { "Content-Type": mimeType || file.type || "application/octet-stream" },
-            body: file,
+            headers: { "Content-Type": mimeType },
+            body: request.body,
           });
           const text = await upstream.text();
           if (!upstream.ok) {

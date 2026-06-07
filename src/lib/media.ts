@@ -143,13 +143,10 @@ export async function uploadToDrive(uploadUrl: string, file: File, onProgress?: 
         return;
       }
 
-      const body = new FormData();
-      body.append("uploadUrl", uploadUrl);
-      body.append("mimeType", file.type || "application/octet-stream");
-      body.append("file", file, file.name || "upload");
-
       xhr.setRequestHeader("Authorization", `Bearer ${token}`);
-      xhr.send(body);
+      xhr.setRequestHeader("X-Drive-Upload-Url", uploadUrl);
+      xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
+      xhr.send(file);
     }).catch((e: any) => reject(new Error(`Drive upload could not read your session: ${e?.message ?? e}`)));
     // Surface timeouts and aborts as clear errors instead of silent network-error.
     xhr.timeout = 10 * 60 * 1000; // 10 minutes
