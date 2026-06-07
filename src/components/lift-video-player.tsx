@@ -13,11 +13,15 @@ export function LiftVideoPlayer({
   fallbackUrl,
   title = "Video",
   embedFallbackUrl,
+  thumbnailUrl,
+  initialOrientation,
 }: {
   src: string;
   fallbackUrl?: string | null;
   title?: string;
   embedFallbackUrl?: string | null;
+  thumbnailUrl?: string | null;
+  initialOrientation?: "portrait" | "landscape" | "unknown";
 }) {
   const ref = useRef<HTMLVideoElement | null>(null);
   const [speed, setSpeed] = useState(1);
@@ -25,13 +29,23 @@ export function LiftVideoPlayer({
   const [slow, setSlow] = useState(false);
   const [useEmbedFallback, setUseEmbedFallback] = useState(false);
   const [retryKey, setRetryKey] = useState(0);
+  const [orientation, setOrientation] = useState<"portrait" | "landscape" | "unknown">(
+    initialOrientation ?? "unknown"
+  );
 
   useEffect(() => {
     setStatus("loading");
     setSlow(false);
     setUseEmbedFallback(false);
+    // Show fallback prompt at 5s, hard-error at 10s so admin is never stuck.
     const slowTimer = window.setTimeout(() => setSlow(true), 5000);
-    return () => window.clearTimeout(slowTimer);
+    const errorTimer = window.setTimeout(() => {
+      setStatus((s) => (s === "loading" ? "error" : s));
+    }, 10000);
+    return () => {
+      window.clearTimeout(slowTimer);
+      window.clearTimeout(errorTimer);
+    };
   }, [src, retryKey]);
 
   const skip = (delta: number) => {
@@ -63,9 +77,29 @@ export function LiftVideoPlayer({
     }
   };
 
+  // Stable container aspect, capped height so it never dominates mobile.
+  const aspectClass =
+    orientation === "portrait"
+      ? "aspect-[9/16] max-h-[60vh] mx-auto w-auto"
+      : "aspect-video w-full";
+
   return (
     <div className="space-y-2">
-      <div className={cn("relative mx-auto aspect-video w-full overflow-hidden rounded-md border border-border bg-secondary/40")}>
+      <div
+        className={cn(
+          "relative mx-auto overflow-hidden rounded-md border border-border bg-black",
+          aspectClass
+        )}
+        style={
+          thumbnailUrl && status !== "ready"
+            ? {
+                backgroundImage: `url(${thumbnailUrl})`,
+                backgroundSize: "cover",
+                backgroundPosition: "center",
+              }
+            : undefined
+        }
+      >
         {useEmbedFallback && embedFallbackUrl ? (
           <iframe
             key={`${embedFallbackUrl}-${retryKey}`}
@@ -86,12 +120,18 @@ export function LiftVideoPlayer({
             playsInline
             controlsList="nodownload"
             preload="metadata"
+            poster={thumbnailUrl ?? undefined}
             aria-label={title}
             onLoadedData={() => setStatus("ready")}
             onCanPlay={() => setStatus("ready")}
             onLoadedMetadata={(e) => {
               const v = e.currentTarget;
               v.playbackRate = speed;
+              // Detect orientation from real video dimensions so the box
+              // doesn't visually "jump" — we reserved aspect-video first.
+              if (v.videoWidth && v.videoHeight) {
+                setOrientation(v.videoHeight > v.videoWidth ? "portrait" : "landscape");
+              }
             }}
             onError={() => {
               if (embedFallbackUrl) {
@@ -102,37 +142,37 @@ export function LiftVideoPlayer({
                 setStatus("error");
               }
             }}
-            className="h-full w-full object-contain"
+            className="h-full w-full bg-black object-contain"
           />
         )}
         {(status === "loading" || status === "error") && (
-          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 p-4 text-center">
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-black/50 p-4 text-center text-white">
             {status === "error" ? (
-              <AlertTriangle className="h-6 w-6 text-muted-foreground" />
+              <AlertTriangle className="h-6 w-6" />
             ) : (
-              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              <Loader2 className="h-5 w-5 animate-spin" />
             )}
             <div>
               <div className="text-sm font-medium">
-                {status === "error" ? "Video preview could not load." : "Loading video…"}
+                {status === "error" ? "Preview unavailable." : "Loading preview…"}
               </div>
               {(slow || status === "error") && (
-                <div className="mt-1 text-xs text-muted-foreground">
-                  {status === "error" ? "Video cannot be previewed. Open in Google Drive." : "Video is taking longer than expected."}
+                <div className="mt-1 text-xs text-white/70">
+                  {status === "error" ? "Watch the original in Google Drive." : "Taking longer than expected — you can watch in Drive."}
                 </div>
               )}
             </div>
             {(slow || status === "error") && (
               <div className="flex flex-wrap justify-center gap-2">
                 {fallbackUrl && (
-                  <Button size="sm" variant="outline" asChild>
+                  <Button size="sm" asChild>
                     <a href={fallbackUrl} target="_blank" rel="noreferrer">
-                      Open in Drive <ExternalLink className="ml-1 h-3 w-3" />
+                      Watch in Drive <ExternalLink className="ml-1 h-3 w-3" />
                     </a>
                   </Button>
                 )}
-                <Button size="sm" variant="ghost" onClick={retry}>
-                  <RefreshCw className="mr-1 h-3 w-3" /> Retry
+                <Button size="sm" variant="secondary" onClick={retry}>
+                  <RefreshCw className="mr-1 h-3 w-3" /> Retry Preview
                 </Button>
               </div>
             )}
@@ -164,9 +204,9 @@ export function LiftVideoPlayer({
           <Maximize2 className="mr-1 h-3 w-3" /> Fullscreen
         </Button>
         {fallbackUrl && (
-          <Button size="sm" variant="outline" asChild>
+          <Button size="sm" asChild>
             <a href={fallbackUrl} target="_blank" rel="noreferrer">
-              <ExternalLink className="mr-1 h-3 w-3" /> Drive
+              <ExternalLink className="mr-1 h-3 w-3" /> Watch in Drive
             </a>
           </Button>
         )}
