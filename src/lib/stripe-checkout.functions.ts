@@ -344,3 +344,65 @@ export const createCheckoutSessionForAssignment = createServerFn({ method: "POST
 
     return { url: session.url as string, sessionId: session.id as string };
   });
+
+// ─── Admin Preview Checkout Session ──────────────────────────────────────────
+
+const PreviewCheckoutInput = z.object({
+  productId: z.string().uuid(),
+  origin: z.string().url(),
+});
+
+/**
+ * Generates a throwaway Stripe Checkout Session for a coaching product so an
+ * admin/coach can preview the exact hosted page clients will see. No client
+ * is attached; metadata marks the session as a preview so the webhook ignores it.
+ */
+export const createPreviewCheckoutSession = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => PreviewCheckoutInput.parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context as any;
+
+    const { data: roleRows } = await supabase
+      .from("user_roles").select("role").eq("user_id", userId);
+    const roles = (roleRows ?? []).map((r: any) => r.role);
+    if (!roles.includes("admin") && !roles.includes("coach")) {
+      throw new Error("Only admins or coaches can preview checkout pages.");
+    }
+
+    const { data: product, error: pErr } = await supabase
+      .from("coaching_products")
+      .select("id, name, stripe_price_id, mode, payment_structure")
+      .eq("id", data.productId)
+      .single();
+    if (pErr || !product) throw new Error("Product not found");
+    if (!product.stripe_price_id) {
+      throw new Error(
+        `"${product.name}" has no Stripe Price ID. Add one before previewing checkout.`,
+      );
+    }
+
+    const isSubscription =
+      product.mode === "subscription" ||
+      ((product.mode === "auto" || !product.mode) &&
+        !!product.payment_structure &&
+        /monthly|weekly|bi-weekly|quarterly|annual|recurring/i.test(product.payment_structure));
+    const checkoutMode = isSubscription ? "subscription" : "payment";
+
+    const session = await stripeFetch("/checkout/sessions", {
+      method: "POST",
+      body: formEncode({
+        "line_items[0][price]": product.stripe_price_id,
+        "line_items[0][quantity]": "1",
+        mode: checkoutMode,
+        success_url: `${data.origin}/admin/payment-links?preview=success`,
+        cancel_url: `${data.origin}/admin/payment-links?preview=cancel`,
+        allow_promotion_codes: "true",
+        "metadata[preview]": "true",
+        "metadata[previewed_by]": userId,
+        "metadata[product_id]": data.productId,
+      }),
+    });
+
+    return { url: session.url as string, sessionId: session.id as string, mode: checkoutMode };
+  });
