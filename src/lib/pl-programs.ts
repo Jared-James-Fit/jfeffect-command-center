@@ -316,6 +316,160 @@ export async function moveRow(rowId: string, direction: "up" | "down") {
   await sb.from("pl_exercise_rows").update({ sort_order: row.sort_order }).eq("id", other.id);
 }
 
+// ---------- Sheet-style builder helpers ----------
+
+/** Append a new week to a block (and bump block.weeks). Seeds one empty day. */
+export async function addWeek(blockId: string) {
+  const { data: existing } = await sb
+    .from("pl_weeks")
+    .select("week_index")
+    .eq("block_id", blockId)
+    .order("week_index", { ascending: false })
+    .limit(1);
+  const nextIdx = (((existing ?? []) as any[])[0]?.week_index ?? 0) + 1;
+  const { data: w, error } = await sb
+    .from("pl_weeks")
+    .insert({ block_id: blockId, week_index: nextIdx })
+    .select("*")
+    .single();
+  if (error) throw error;
+  await sb.from("pl_blocks").update({ weeks: nextIdx }).eq("id", blockId);
+  await sb.from("pl_days").insert({ week_id: w.id, day_index: 1, title: "Day 1" });
+  return w;
+}
+
+/** Insert a new row from an exercise at a given position (defaults appended). */
+export async function addRowFromExercise(dayId: string, exerciseId: string, position?: number) {
+  const { data: existing } = await sb
+    .from("pl_exercise_rows")
+    .select("id, sort_order")
+    .eq("day_id", dayId)
+    .order("sort_order");
+  const list = (existing ?? []) as any[];
+  const pos = position ?? list.length;
+  for (const r of list) {
+    if ((r.sort_order ?? 0) >= pos) {
+      await sb.from("pl_exercise_rows").update({ sort_order: (r.sort_order ?? 0) + 1 }).eq("id", r.id);
+    }
+  }
+  const { data, error } = await sb
+    .from("pl_exercise_rows")
+    .insert({
+      day_id: dayId,
+      sort_order: pos,
+      exercise_id: exerciseId,
+      sets: 3,
+      reps_text: "8-12",
+      time_profile: "accessory_compound",
+    })
+    .select("*")
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+/** Move a row to a different day (or same day at a position). Shifts siblings. */
+export async function moveRowToDay(rowId: string, targetDayId: string, position?: number) {
+  const { data: existing } = await sb
+    .from("pl_exercise_rows")
+    .select("id, sort_order")
+    .eq("day_id", targetDayId)
+    .order("sort_order");
+  const list = (existing ?? []) as any[];
+  const pos = position ?? list.length;
+  for (const r of list) {
+    if (r.id === rowId) continue;
+    if ((r.sort_order ?? 0) >= pos) {
+      await sb.from("pl_exercise_rows").update({ sort_order: (r.sort_order ?? 0) + 1 }).eq("id", r.id);
+    }
+  }
+  const { error } = await sb
+    .from("pl_exercise_rows")
+    .update({ day_id: targetDayId, sort_order: pos })
+    .eq("id", rowId);
+  if (error) throw error;
+}
+
+/** Duplicate a row inside the same day, immediately after it. */
+export async function duplicateRow(rowId: string) {
+  const { data: src } = await sb.from("pl_exercise_rows").select("*").eq("id", rowId).maybeSingle();
+  if (!src) return;
+  const { id, created_at, updated_at, ...rest } = src as any;
+  const newPos = (src.sort_order ?? 0) + 1;
+  const { data: list } = await sb
+    .from("pl_exercise_rows")
+    .select("id, sort_order")
+    .eq("day_id", src.day_id)
+    .order("sort_order");
+  for (const r of (list ?? []) as any[]) {
+    if ((r.sort_order ?? 0) >= newPos) {
+      await sb.from("pl_exercise_rows").update({ sort_order: (r.sort_order ?? 0) + 1 }).eq("id", r.id);
+    }
+  }
+  await sb.from("pl_exercise_rows").insert({ ...rest, sort_order: newPos });
+}
+
+export interface CopyWeekOptions {
+  prescriptions: boolean;
+  notes: boolean;
+}
+
+/** Copy week structure (days + rows) into another week. Never touches client logs. */
+export async function copyWeek(srcWeekId: string, targetWeekId: string, opts: CopyWeekOptions) {
+  if (srcWeekId === targetWeekId) throw new Error("Source and target weeks must differ");
+  // Wipe existing days in target (cascades to rows + completions)
+  const { data: targetDays } = await sb.from("pl_days").select("id").eq("week_id", targetWeekId);
+  for (const d of (targetDays ?? []) as any[]) {
+    await sb.from("pl_days").delete().eq("id", d.id);
+  }
+  // Optionally copy week notes
+  if (opts.notes) {
+    const { data: src } = await sb.from("pl_weeks").select("notes").eq("id", srcWeekId).maybeSingle();
+    if (src) await sb.from("pl_weeks").update({ notes: (src as any).notes }).eq("id", targetWeekId);
+  }
+  const { data: srcDays } = await sb.from("pl_days").select("*").eq("week_id", srcWeekId).order("day_index");
+  for (const d of (srcDays ?? []) as any[]) {
+    const { data: newDay } = await sb
+      .from("pl_days")
+      .insert({
+        week_id: targetWeekId,
+        day_index: d.day_index,
+        title: d.title,
+        focus: d.focus,
+        notes: opts.notes ? d.notes : null,
+        duration_source: d.duration_source,
+        duration_override_min: d.duration_override_min,
+      })
+      .select("*")
+      .single();
+    const { data: rows } = await sb
+      .from("pl_exercise_rows")
+      .select("*")
+      .eq("day_id", d.id)
+      .order("sort_order");
+    for (const r of (rows ?? []) as any[]) {
+      await sb.from("pl_exercise_rows").insert({
+        day_id: newDay.id,
+        sort_order: r.sort_order,
+        exercise_id: r.exercise_id,
+        exercise_name_override: r.exercise_name_override,
+        sets: opts.prescriptions ? r.sets : null,
+        reps_text: opts.prescriptions ? r.reps_text : null,
+        rpe: opts.prescriptions ? r.rpe : null,
+        rir: opts.prescriptions ? r.rir : null,
+        percentage: opts.prescriptions ? r.percentage : null,
+        percentage_basis: opts.prescriptions ? r.percentage_basis : "manual",
+        load_kg: opts.prescriptions ? r.load_kg : null,
+        load_lb: opts.prescriptions ? r.load_lb : null,
+        rest_seconds: opts.prescriptions ? r.rest_seconds : null,
+        tempo: opts.prescriptions ? r.tempo : null,
+        time_profile: r.time_profile,
+        notes: opts.notes ? r.notes : null,
+      });
+    }
+  }
+}
+
 // ---------- Analytics / PRs ----------
 export function epley1RM(load: number, reps: number): number {
   if (!load || !reps || reps < 1) return 0;

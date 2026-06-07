@@ -17,6 +17,38 @@ import {
   getTemplate, updateTemplate, summarizeTemplatePayload, TIME_PROFILES,
   estimateDayMinutes, durationRange, PERCENTAGE_BASES, type TrainingStyle,
 } from "@/lib/pl-programs";
+import { ExerciseLibraryPanel, type ExerciseRef } from "@/components/program-builder";
+
+// Append a row into the first day reachable inside any template payload shape.
+function appendRowToFirstDay(payload: any, type: string, row: any) {
+  const stamp = { sort_order: 0, sets: 3, reps_text: "8-12", time_profile: "accessory_compound", ...row };
+  const pushIntoDay = (d: any) => {
+    d.rows = d.rows || [];
+    d.rows.push({ ...stamp, sort_order: d.rows.length });
+  };
+  if (type === "exercise_row") {
+    Object.assign(payload, stamp);
+    return;
+  }
+  if (type === "day") { pushIntoDay(payload); return; }
+  if (type === "week") {
+    const d = (payload.days || [])[0];
+    if (d) pushIntoDay(d);
+    return;
+  }
+  if (type === "block") {
+    const w = (payload.weeks_data || [])[0];
+    const d = (w?.days || [])[0];
+    if (d) pushIntoDay(d);
+    return;
+  }
+  if (type === "full_prep") {
+    const b = (payload.blocks_data || [])[0];
+    const w = (b?.weeks_data || [])[0];
+    const d = (w?.days || [])[0];
+    if (d) pushIntoDay(d);
+  }
+}
 
 export const Route = createFileRoute("/_authenticated/admin/program-library_/$templateId")({
   component: TemplateEditor,
@@ -34,7 +66,8 @@ function TemplateEditor() {
   });
   const { data: exercises = [] } = useQuery({
     queryKey: ["exercises-min"],
-    queryFn: async () => (await supabase.from("exercises").select("id, name").order("name")).data ?? [],
+    queryFn: async () =>
+      (await supabase.from("exercises").select("id, name, muscle_group, category, tags").order("name")).data ?? [],
   });
 
   // local working state
@@ -84,7 +117,7 @@ function TemplateEditor() {
   return (
     <>
       <PageHeader title={meta.name || "Template"} subtitle={`${type.replace("_", " ")} · ${summary.weeks}w · ${summary.days}d · ${summary.rows} rows`} />
-      <div className="p-4 md:p-8 space-y-4">
+      <div className="p-3 md:p-4 space-y-3">
         <div className="flex flex-wrap items-center gap-2">
           <Link to="/admin/program-library" className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground">
             <ArrowLeft className="mr-1 h-4 w-4" /> Back to library
@@ -126,7 +159,21 @@ function TemplateEditor() {
           </TabsContent>
 
           <TabsContent value="structure" className="mt-3">
-            <StructureEditor type={type} payload={payload} setPayload={setP} exercises={exercises as any[]} />
+            <div className="flex h-[calc(100vh-220px)] gap-2 overflow-hidden rounded-md border border-border">
+              <ExerciseLibraryPanel
+                exercises={exercises as ExerciseRef[]}
+                onPick={(exId) => {
+                  const ex = (exercises as any[]).find((e) => e.id === exId);
+                  // append to first day found
+                  appendRowToFirstDay(payload, type, { exercise_id: exId, exercise_name_override: ex?.name });
+                  setP({ ...payload });
+                  toast.success("Added to first day — drag onto a specific day for placement");
+                }}
+              />
+              <div className="flex-1 overflow-auto p-2">
+                <StructureEditor type={type} payload={payload} setPayload={setP} exercises={exercises as any[]} />
+              </div>
+            </div>
           </TabsContent>
         </Tabs>
       </div>
