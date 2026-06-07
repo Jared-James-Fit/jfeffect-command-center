@@ -323,6 +323,9 @@ function ClientDetail() {
         actions={
           <>
             <Link to="/admin/clients"><Button variant="ghost" size="sm"><ArrowLeft className="mr-2 h-4 w-4" />Back</Button></Link>
+            <Link to="/admin/client-programs/$clientId" params={{ clientId: id }}>
+              <Button variant="outline" size="sm"><Dumbbell className="mr-2 h-4 w-4" />Training Program</Button>
+            </Link>
             {form.drive_folder_link && (
               <a href={form.drive_folder_link} target="_blank" rel="noreferrer">
                 <Button variant="outline" size="sm"><FolderOpen className="mr-2 h-4 w-4" />Open Drive</Button>
