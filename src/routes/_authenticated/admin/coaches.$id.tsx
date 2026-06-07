@@ -47,7 +47,7 @@ function CoachDetailPage() {
     queryKey: ["clients-assignable"],
     queryFn: async () => {
       const { data } = await supabase.from("clients")
-        .select("id, full_name, email, status, assigned_coach_id")
+        .select("id, full_name, email, status, assigned_coach_id, profile_picture_url")
         .eq("archived", false)
         .order("full_name");
       return data ?? [];
