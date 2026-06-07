@@ -4,7 +4,7 @@ import {
   Settings, Briefcase, Apple, ClipboardCheck, UserCog, MessageCircle, Video,
   UserCheck, FileSignature, Film,
   ClipboardList, FileEdit,
-  Scale, BookOpen, Activity,
+  Scale, BookOpen, Activity, Archive,
 } from "lucide-react";
 import type { NavItem } from "@/components/app-shell";
 
@@ -31,6 +31,7 @@ export const adminNav: NavItem[] = [
   { to: "/admin/business-systems", label: "Business Systems", icon: Briefcase, group: "Business Tools" },
   { to: "/admin/account", label: "My Account", icon: UserCog, group: "Settings" },
   { to: "/admin/settings", label: "Settings", icon: Settings, group: "Settings" },
+  { to: "/admin/archives", label: "Archive Manager", icon: Archive, group: "Settings" },
 ];
 
 // Coach navigation: same client-coaching tools as admin, without business/admin sections.

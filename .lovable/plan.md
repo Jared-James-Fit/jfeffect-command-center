@@ -1,64 +1,78 @@
-## Goal
-Ship onboarding/access controls so every active client has a clear, verifiable: signed agreement, payment, account setup, and password-reset path — and admin can always copy a manual fallback link when email fails.
+# Archive Manager, Deactivation, and Google Drive Media Archiving
 
-## Scope (one pass, four systems)
+This is a very large build. To ship it safely without breaking existing data, I'll split it into 3 phases and ask you to confirm the order. Each phase is independently testable.
 
-### 1. Coaching Agreement — status + copy-link + signing flow
-- New `AgreementCard` in `clients.$id.tsx` showing: status badge (Signed & Active / Sent — Awaiting Signature / Not Signed / Expired / Needs Re-Sign), agreement name, version, sent date, signed date, "View Signed", "Send Agreement", **Copy Signing Link**, "Re-Send", "Request Re-Sign".
-- Status derives from existing `agreements` rows (latest per client). Signing stays on SignNow; "Copy Signing Link" copies the SignNow signing URL stored on the agreement row.
-- Add a missing-agreement banner on `/portal/index.tsx` and a "Sign now" CTA linking to `/portal/agreements`.
-- Add a `getClientAgreementStatus` server fn and surface "Agreement Missing" badge on `/admin/clients` list + a "Clients needing agreement" count on `/admin/index.tsx`.
+## Phase 1 — Archive Manager + Bulk + Safety (admin core)
 
-### 2. Stripe payment link sharing
-- In `/admin/offers.tsx` and `/admin/payment-links.tsx`, add per-offer: status badge (Active — Checkout Ready / Missing Payment Link / Inactive), **Copy Payment Link**, **Open Payment Link**, **Assign to Client**.
-- New server fn `getOrCreateOfferCheckoutUrl({ offerId, clientId? })` that returns a generic Stripe Payment Link (cached on offer) OR a client-prefilled Checkout Session URL when `clientId` is set. Webhook already creates `purchase_records`; we pass `client_id` in metadata so client-specific links auto-link.
-- Inside a client profile, add "Send Payment Link" picker that lists offers and emits a client-specific copy-able URL.
+**New admin page:** `/admin/archives` ("Archive Manager") in the sidebar under Admin.
 
-### 3. Client setup link sharing
-- New "Account & Access" section on `clients.$id.tsx` with: account status, last sign-in, setup status (derived from `clients.account_status` / `last_signed_in_at`), **Copy Setup Link**, **Send Setup Link**, **Generate New Setup Link**.
-- Server fn `generateClientSetupLink(clientId)` → `supabaseAdmin.auth.admin.generateLink({ type: 'invite' | 'magiclink', email, redirectTo: '/portal' })` (Supabase magic link). Logs to `client_activity_log` and updates `clients.setup_link_last_sent_at`.
+**Unified archive view** pulling `archived = true` (or status = 'Archived') rows from existing tables:
+- clients, programs, program_templates, training_blocks, products/offers, agreements, forms, check_ins, lift_videos, media_items, exercises, documents
 
-### 4. Password reset link sharing
-- Same Account & Access section: **Copy Password Reset Link**, **Send Password Reset Email**, **Generate New Reset Link**.
-- Server fn `generateClientPasswordResetLink(clientId)` → `supabaseAdmin.auth.admin.generateLink({ type: 'recovery', email, redirectTo: '/reset-password' })`. Shows the link + expiry from Supabase response. Logs to activity log.
+**Per-row data:** name/title, type, attached client, archived_at, archived_by, status, actions (View / Restore / Delete permanently).
 
-### 5. Dashboard + client list surfacing
-- `/admin/clients` row badges: Agreement Missing · Setup Pending · No Login Yet.
-- `/admin/index.tsx`: a small "Onboarding action needed" card listing counts (Missing Agreement, Setup Pending, No Login).
+**Filters:** type tabs (All / Clients / Programs / Templates / Products / Agreements / Forms / Check-ins / Lift Videos / Exercises / Documents), date archived, archived by, search.
 
-## Database (one migration)
-- `clients`: add `setup_link_last_sent_at timestamptz`, `setup_link_last_copied_at timestamptz`, `password_reset_last_sent_at timestamptz`, `password_reset_last_link_at timestamptz`.
-- `offers`: add `stripe_payment_link_url text`, `stripe_payment_link_id text` (cache generic Payment Link).
-- No new tables; reuse `agreements`, `agreement_templates`, `clients`, `offers`, `purchase_records`, `client_activity_log`.
+**Bulk:** select one / select all visible / clear / Restore selected / Delete selected.
 
-## Server functions (new files in `src/lib/`)
-- `client-access.functions.ts` — `generateClientSetupLink`, `generateClientPasswordResetLink`, `getClientAccessStatus`.
-- Extend `agreements.functions.ts` — `getClientAgreementSummary`, `requestAgreementResign`, `copySigningLink` reads existing `agreements.signing_url`.
-- Extend `payments.functions.ts` / `stripe-checkout.functions.ts` — `getOrCreateOfferPaymentLink`, `createClientCheckoutUrl({ offerId, clientId })`.
-- All use `requireSupabaseAuth` + `has_role('admin')` check; setup/reset generation uses `supabaseAdmin` inside the handler.
+**Safety:**
+- Single delete → confirm dialog.
+- Bulk delete → must type `DELETE` to enable button; shows count.
+- Restore returns row to its source list; show reason if blocked (e.g. linked client deleted).
 
-## UI files touched
-- `src/routes/_authenticated/admin/clients.$id.tsx` — add Agreement card + Account & Access card + Send Payment Link picker.
-- `src/routes/_authenticated/admin/clients.index.tsx` — onboarding badges.
-- `src/routes/_authenticated/admin/index.tsx` — onboarding action card.
-- `src/routes/_authenticated/admin/offers.tsx` + `payment-links.tsx` — copy/open/send link buttons + status badge.
-- `src/routes/_authenticated/portal/index.tsx` — "Sign your agreement" banner when missing.
+**DB migration:** add `archived_at` + `archived_by` columns where missing; standardize on existing `archived` boolean / status field per table (no rename of existing columns).
 
-## Security
-- Admin-only server fns gated by `has_role(auth.uid(),'admin')`; coach gated by `is_assigned_coach(client_id)`.
-- Reset/setup links generated server-side via `supabaseAdmin` — never exposed in client bundle.
-- Activity log row written on every generate/copy/send action.
+**Server fns** (`src/lib/archives.functions.ts`, admin-only via `has_role('admin')`): `listArchived`, `restoreItems`, `permanentlyDeleteItems`.
 
-## Out of scope (call out, do not build)
-- Native in-app signature pad (you chose to keep SignNow).
-- Custom token table for setup/reset (you chose Supabase magic links).
-- Notifications (Section 8) — small follow-up; only an activity log entry today.
+**Permissions:** Only admins can permanent-delete. Coaches can archive/restore their assigned clients only.
 
-## Order of implementation
-1. Migration (clients + offers columns).
-2. Server fns (`client-access`, agreement summary, payment link helpers).
-3. Client profile UI (Agreement card + Account & Access card + Send Payment Link).
-4. Offers / Payment Links page actions.
-5. Client list badges + admin dashboard onboarding card.
-6. Portal "sign your agreement" banner.
-7. Manual test pass on desktop + mobile viewport for each "copy link" button.
+## Phase 2 — Client Deactivation / Reactivation
+
+**Status model (no duplicates):** `Active`, `Deactivated`, `Archived`. Keep the existing `clients.status` column; map old values during migration.
+
+**Client profile additions:**
+- "Deactivate Client" button → dialog with optional reason (preset list + internal note) + "Disable portal access?" toggle (default: disable).
+- Deactivated banner on profile, with Reactivate / Archive / Delete Permanently buttons.
+- All history (notes, agreements, purchases, programs, check-ins, lift videos, messages, docs) stays visible.
+
+**Clients page additions:**
+- Status filter: Active (default) / Deactivated / Archived / All.
+- Bulk: Deactivate / Archive / Reactivate (when filtered) / Delete (typed `DELETE CLIENTS`).
+
+**Dashboard:** Active count excludes Deactivated + Archived; optional Deactivated/Archived counts.
+
+**DB migration:** add `deactivated_at`, `deactivated_by`, `deactivation_reason`, `deactivation_note`, `portal_access_disabled` to `clients`. Activity log entry on every state change.
+
+**Reactivate flow:** confirmation → restore status to Active → ask "Restore portal access?" if previously disabled.
+
+## Phase 3 — Google Drive Media Archiving
+
+**Folder structure per client:** `Client Name / Chat Media / YYYY / MMMM`, plus `Lift Videos`, `Check-In Media`, `Progress Photos`, `Documents`, `Agreements`, `Other`. Folder IDs cached on the client row.
+
+**Important caveat about the connector:** The current Google Drive connector authenticates **your** Google account (the workspace owner). All archived client media goes into folders inside your Drive — not into each client's personal Drive. Per the connector knowledge file, per-client Drive access would require per-user OAuth, which is a separate, larger build. Confirm this is what you want before Phase 3.
+
+**New table `media_archives`:** media_id, message_id, client_id, sender_id, original_file_name, file_type, file_size, original_sent_at, archived_at, archive_status (`not_archived | queued | archiving | archived | failed | restore_requested | restored`), google_drive_file_id, google_drive_url, google_drive_folder_id, thumbnail_url, visibility, archived_by, archive_error.
+
+**Settings page** (`/admin/settings/media-archive`): auto-archive on/off, window (30d/90d/6m/1y/never, default 6m), keep thumbnails (default yes), client visibility (follow original), include photos/videos/voice notes.
+
+**Manual controls** in chat / media areas: Archive to Drive (single + bulk), Open in Drive, Retry, Restore preview.
+
+**Chat rendering after archive:** message remains; media replaced by thumbnail + "Archived to Drive" badge + "Open in Drive" link + original metadata.
+
+**Background job:** TanStack server route at `/api/public/hooks/media-archive` invoked by pg_cron daily. Scans `messages` / `media_items` / `lift_videos` older than the window, uploads via Google Drive connector gateway, writes `media_archives`, then deletes storage object only after Drive upload is confirmed.
+
+**Media Archive Manager page**: queue, archived, failed; per-client filters; bulk archive / retry; Drive folder shortcuts.
+
+**Client profile Drive section:** quick links to client's Drive folders + archived count + recent files.
+
+**Safety order (never lose data):** upload → verify Drive file → write metadata row → mark `archived` → only then delete the heavy Storage object. Failed uploads keep originals.
+
+---
+
+## Questions before I start coding
+
+1. **Order:** Ship Phase 1 first (Archive Manager + safety) and then Phase 2 (Deactivation), then Phase 3 (Drive)? Or a different order?
+2. **Drive ownership:** OK that Phase 3 archives into **your** Google Drive (workspace-owned folders per client), not into each client's personal Drive? Per-user Drive would require a separate OAuth build.
+3. **Coach permissions on archive/delete:** Coaches archive/restore assigned clients only, and **never** permanent-delete — confirm?
+
+Once you confirm, I'll start with Phase 1 (migration → server fns → Archive Manager UI → bulk + safety), then move on.

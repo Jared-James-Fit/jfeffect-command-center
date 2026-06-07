@@ -15,6 +15,7 @@ import { ArrowLeft, ExternalLink, Save, Trash2, Mail, Archive, KeyRound, Copy, C
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import { inviteClient, deleteClient, getSetupLink, sendPasswordReset, markSetupComplete, setNeedsAdminHelp } from "@/lib/clients.functions";
+import { deactivateClient, reactivateClient, DEACTIVATION_REASONS } from "@/lib/client-deactivation.functions";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { TrainingPhasesPanel } from "@/components/training-phases-panel";
 import { ImportantDatesPanel } from "@/components/important-dates-panel";
@@ -75,7 +76,7 @@ export const Route = createFileRoute("/_authenticated/admin/clients/$id")({
   component: ClientDetail,
 });
 
-const STATUSES = ["Active", "New Client", "Needs Attention", "Check-In Overdue", "Payment Overdue", "Injured / Modified Plan", "Paused", "Cancelling", "Archived", "High Priority"];
+const STATUSES = ["Active", "New Client", "Needs Attention", "Check-In Overdue", "Payment Overdue", "Injured / Modified Plan", "Paused", "Cancelling", "Deactivated", "Archived", "High Priority"];
 const PAY_STATUSES = ["Not Sent", "Sent", "Paid", "Failed", "Overdue", "Cancelled", "Refunded"];
 const ACCOUNT_FIELDS = ["first_name", "last_name", "preferred_name", "email", "phone", "date_of_birth", "height_cm", "preferred_height_unit", "address", "city", "province", "postal_code", "country", "timezone", "emergency_contact_name", "emergency_contact_phone"] as const;
 
@@ -96,6 +97,14 @@ function ClientDetail() {
   const sendResetFn = useServerFn(sendPasswordReset);
   const markCompleteFn = useServerFn(markSetupComplete);
   const needsHelpFn = useServerFn(setNeedsAdminHelp);
+  const deactivateFn = useServerFn(deactivateClient);
+  const reactivateFn = useServerFn(reactivateClient);
+  const [deactivateOpen, setDeactivateOpen] = useState(false);
+  const [deactivateReason, setDeactivateReason] = useState<string>("Coaching ended");
+  const [deactivateNote, setDeactivateNote] = useState<string>("");
+  const [deactivateDisablePortal, setDeactivateDisablePortal] = useState<boolean>(true);
+  const [reactivateOpen, setReactivateOpen] = useState(false);
+  const [reactivateRestorePortal, setReactivateRestorePortal] = useState(true);
 
   const { data } = useQuery({
     queryKey: ["client", id],
@@ -349,6 +358,15 @@ function ClientDetail() {
             )}
             <Button variant="outline" size="sm" onClick={() => setPriceCardOpen(true)}><Tag className="mr-2 h-4 w-4" />Assign Offer / View Price Card</Button>
             <Button variant="outline" size="sm" onClick={sendSetup}><Mail className="mr-2 h-4 w-4" />Send setup link</Button>
+            {form.status === "Deactivated" ? (
+              <Button variant="outline" size="sm" onClick={() => setReactivateOpen(true)}>
+                <Eye className="mr-2 h-4 w-4" />Reactivate
+              </Button>
+            ) : (
+              <Button variant="outline" size="sm" onClick={() => setDeactivateOpen(true)}>
+                <Eye className="mr-2 h-4 w-4" />Deactivate
+              </Button>
+            )}
             <Button variant="outline" size="sm" onClick={archive}><Archive className="mr-2 h-4 w-4" />{form.archived ? "Restore" : "Archive"}</Button>
             <Button variant="outline" size="sm" className="text-destructive hover:text-destructive" onClick={() => setDeleteStep(1)}><Trash2 className="mr-2 h-4 w-4" />Delete</Button>
             <Button size="sm" className="bg-gradient-primary uppercase font-bold" onClick={save}><Save className="mr-2 h-4 w-4" />Save</Button>
@@ -356,6 +374,19 @@ function ClientDetail() {
         }
       />
       <div className="p-6 md:p-8">
+      {form.status === "Deactivated" && (
+        <div className="mb-4 rounded-md border border-warning/40 bg-warning/10 px-4 py-3 text-sm">
+          <div className="font-semibold text-warning">Account Deactivated</div>
+          <div className="text-muted-foreground">
+            {form.deactivated_at ? `Deactivated ${new Date(form.deactivated_at).toLocaleDateString()}` : "Deactivated"}
+            {form.deactivation_reason ? ` · ${form.deactivation_reason}` : ""}
+            {form.portal_access_disabled ? " · Portal access disabled" : " · Portal access still enabled"}
+          </div>
+          {form.deactivation_note && (
+            <div className="mt-1 text-xs text-muted-foreground italic">Note: {form.deactivation_note}</div>
+          )}
+        </div>
+      )}
       <Tabs
         value={tab ?? "summary"}
         onValueChange={(v) => navigate({ to: ".", params: { id }, search: { tab: v as TabValue }, replace: true })}
@@ -789,6 +820,93 @@ function ClientDetail() {
         </AlertDialogContent>
       </AlertDialog>
       <PriceCardPickerDialog open={priceCardOpen} onClose={() => setPriceCardOpen(false)} fixedClientId={id} />
+
+      <AlertDialog open={deactivateOpen} onOpenChange={setDeactivateOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Deactivate this client?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Their account and history will be preserved, but they will no longer appear as an active client.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label>Reason (optional)</Label>
+              <Select value={deactivateReason} onValueChange={setDeactivateReason}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {DEACTIVATION_REASONS.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Internal note (admin only)</Label>
+              <Textarea value={deactivateNote} onChange={(e) => setDeactivateNote(e.target.value)} rows={3} />
+            </div>
+            <div className="flex items-center justify-between rounded-md border p-3">
+              <div>
+                <div className="text-sm font-medium">Disable client portal access</div>
+                <div className="text-xs text-muted-foreground">Recommended for ended coaching.</div>
+              </div>
+              <Switch checked={deactivateDisablePortal} onCheckedChange={setDeactivateDisablePortal} />
+            </div>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={async () => {
+                const t = toast.loading("Deactivating…");
+                try {
+                  await deactivateFn({ data: {
+                    clientId: id,
+                    reason: deactivateReason || undefined,
+                    note: deactivateNote || undefined,
+                    disablePortalAccess: deactivateDisablePortal,
+                  }});
+                  toast.success("Client deactivated", { id: t });
+                  setDeactivateOpen(false);
+                  qc.invalidateQueries({ queryKey: ["client", id] });
+                  qc.invalidateQueries({ queryKey: ["clients"] });
+                } catch (e: any) {
+                  toast.error(e?.message ?? "Failed", { id: t });
+                }
+              }}
+            >Deactivate Client</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={reactivateOpen} onOpenChange={setReactivateOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reactivate this client?</AlertDialogTitle>
+            <AlertDialogDescription>They will return to your Active Clients list.</AlertDialogDescription>
+          </AlertDialogHeader>
+          {form.portal_access_disabled && (
+            <div className="flex items-center justify-between rounded-md border p-3">
+              <div className="text-sm font-medium">Restore client portal access</div>
+              <Switch checked={reactivateRestorePortal} onCheckedChange={setReactivateRestorePortal} />
+            </div>
+          )}
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={async () => {
+                const t = toast.loading("Reactivating…");
+                try {
+                  await reactivateFn({ data: { clientId: id, restorePortalAccess: reactivateRestorePortal } });
+                  toast.success("Client reactivated", { id: t });
+                  setReactivateOpen(false);
+                  qc.invalidateQueries({ queryKey: ["client", id] });
+                  qc.invalidateQueries({ queryKey: ["clients"] });
+                } catch (e: any) {
+                  toast.error(e?.message ?? "Failed", { id: t });
+                }
+              }}
+            >Reactivate</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

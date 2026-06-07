@@ -68,6 +68,8 @@ export type Database = {
         Row: {
           agreement_type: string | null
           archived: boolean
+          archived_at: string | null
+          archived_by: string | null
           created_at: string
           created_by: string | null
           description: string | null
@@ -86,6 +88,8 @@ export type Database = {
         Insert: {
           agreement_type?: string | null
           archived?: boolean
+          archived_at?: string | null
+          archived_by?: string | null
           created_at?: string
           created_by?: string | null
           description?: string | null
@@ -104,6 +108,8 @@ export type Database = {
         Update: {
           agreement_type?: string | null
           archived?: boolean
+          archived_at?: string | null
+          archived_by?: string | null
           created_at?: string
           created_by?: string | null
           description?: string | null
@@ -335,6 +341,8 @@ export type Database = {
       cardio_program_templates: {
         Row: {
           archived: boolean
+          archived_at: string | null
+          archived_by: string | null
           created_at: string
           created_by: string | null
           id: string
@@ -345,6 +353,8 @@ export type Database = {
         }
         Insert: {
           archived?: boolean
+          archived_at?: string | null
+          archived_by?: string | null
           created_at?: string
           created_by?: string | null
           id?: string
@@ -355,6 +365,8 @@ export type Database = {
         }
         Update: {
           archived?: boolean
+          archived_at?: string | null
+          archived_by?: string | null
           created_at?: string
           created_by?: string | null
           id?: string
@@ -474,6 +486,7 @@ export type Database = {
           active: boolean
           archived: boolean
           archived_at: string | null
+          archived_by: string | null
           check_in_type: string
           created_at: string
           created_by: string | null
@@ -495,6 +508,7 @@ export type Database = {
           active?: boolean
           archived?: boolean
           archived_at?: string | null
+          archived_by?: string | null
           check_in_type?: string
           created_at?: string
           created_by?: string | null
@@ -516,6 +530,7 @@ export type Database = {
           active?: boolean
           archived?: boolean
           archived_at?: string | null
+          archived_by?: string | null
           check_in_type?: string
           created_at?: string
           created_by?: string | null
@@ -664,6 +679,8 @@ export type Database = {
       client_quick_links: {
         Row: {
           archived: boolean
+          archived_at: string | null
+          archived_by: string | null
           client_id: string
           created_at: string
           created_by: string | null
@@ -679,6 +696,8 @@ export type Database = {
         }
         Insert: {
           archived?: boolean
+          archived_at?: string | null
+          archived_by?: string | null
           client_id: string
           created_at?: string
           created_by?: string | null
@@ -694,6 +713,8 @@ export type Database = {
         }
         Update: {
           archived?: boolean
+          archived_at?: string | null
+          archived_by?: string | null
           client_id?: string
           created_at?: string
           created_by?: string | null
@@ -729,6 +750,8 @@ export type Database = {
           agreement_status: string
           agreement_version: string | null
           archived: boolean
+          archived_at: string | null
+          archived_by: string | null
           assigned_check_in_link_id: string | null
           assigned_coach_id: string | null
           basic_info_completed_at: string | null
@@ -760,6 +783,10 @@ export type Database = {
           country: string | null
           created_at: string
           date_of_birth: string | null
+          deactivated_at: string | null
+          deactivated_by: string | null
+          deactivation_note: string | null
+          deactivation_reason: string | null
           default_session_location: string | null
           drive_folder_link: string | null
           email: string | null
@@ -803,6 +830,7 @@ export type Database = {
           password_reset_sent_at: string | null
           payment_status: string | null
           phone: string | null
+          portal_access_disabled: boolean
           postal_code: string | null
           powerlifter_badge_label: string
           powerlifting_visible_to_client: boolean
@@ -853,6 +881,8 @@ export type Database = {
           agreement_status?: string
           agreement_version?: string | null
           archived?: boolean
+          archived_at?: string | null
+          archived_by?: string | null
           assigned_check_in_link_id?: string | null
           assigned_coach_id?: string | null
           basic_info_completed_at?: string | null
@@ -884,6 +914,10 @@ export type Database = {
           country?: string | null
           created_at?: string
           date_of_birth?: string | null
+          deactivated_at?: string | null
+          deactivated_by?: string | null
+          deactivation_note?: string | null
+          deactivation_reason?: string | null
           default_session_location?: string | null
           drive_folder_link?: string | null
           email?: string | null
@@ -927,6 +961,7 @@ export type Database = {
           password_reset_sent_at?: string | null
           payment_status?: string | null
           phone?: string | null
+          portal_access_disabled?: boolean
           postal_code?: string | null
           powerlifter_badge_label?: string
           powerlifting_visible_to_client?: boolean
@@ -977,6 +1012,8 @@ export type Database = {
           agreement_status?: string
           agreement_version?: string | null
           archived?: boolean
+          archived_at?: string | null
+          archived_by?: string | null
           assigned_check_in_link_id?: string | null
           assigned_coach_id?: string | null
           basic_info_completed_at?: string | null
@@ -1008,6 +1045,10 @@ export type Database = {
           country?: string | null
           created_at?: string
           date_of_birth?: string | null
+          deactivated_at?: string | null
+          deactivated_by?: string | null
+          deactivation_note?: string | null
+          deactivation_reason?: string | null
           default_session_location?: string | null
           drive_folder_link?: string | null
           email?: string | null
@@ -1051,6 +1092,7 @@ export type Database = {
           password_reset_sent_at?: string | null
           payment_status?: string | null
           phone?: string | null
+          portal_access_disabled?: boolean
           postal_code?: string | null
           powerlifter_badge_label?: string
           powerlifting_visible_to_client?: boolean
@@ -1283,6 +1325,8 @@ export type Database = {
       coaches: {
         Row: {
           archived: boolean
+          archived_at: string | null
+          archived_by: string | null
           created_at: string
           email: string
           first_name: string | null
@@ -1300,6 +1344,8 @@ export type Database = {
         }
         Insert: {
           archived?: boolean
+          archived_at?: string | null
+          archived_by?: string | null
           created_at?: string
           email: string
           first_name?: string | null
@@ -1317,6 +1363,8 @@ export type Database = {
         }
         Update: {
           archived?: boolean
+          archived_at?: string | null
+          archived_by?: string | null
           created_at?: string
           email?: string
           first_name?: string | null
@@ -1341,6 +1389,8 @@ export type Database = {
           agreement_required: boolean
           agreement_template_id: string | null
           archived: boolean
+          archived_at: string | null
+          archived_by: string | null
           created_at: string
           created_by: string | null
           currency: string
@@ -1371,6 +1421,8 @@ export type Database = {
           agreement_required?: boolean
           agreement_template_id?: string | null
           archived?: boolean
+          archived_at?: string | null
+          archived_by?: string | null
           created_at?: string
           created_by?: string | null
           currency?: string
@@ -1401,6 +1453,8 @@ export type Database = {
           agreement_required?: boolean
           agreement_template_id?: string | null
           archived?: boolean
+          archived_at?: string | null
+          archived_by?: string | null
           created_at?: string
           created_by?: string | null
           currency?: string
@@ -1663,6 +1717,9 @@ export type Database = {
       }
       exercises: {
         Row: {
+          archived: boolean
+          archived_at: string | null
+          archived_by: string | null
           category: string | null
           common_mistakes: string | null
           created_at: string
@@ -1693,6 +1750,9 @@ export type Database = {
           youtube_url: string | null
         }
         Insert: {
+          archived?: boolean
+          archived_at?: string | null
+          archived_by?: string | null
           category?: string | null
           common_mistakes?: string | null
           created_at?: string
@@ -1723,6 +1783,9 @@ export type Database = {
           youtube_url?: string | null
         }
         Update: {
+          archived?: boolean
+          archived_at?: string | null
+          archived_by?: string | null
           category?: string | null
           common_mistakes?: string | null
           created_at?: string
@@ -1791,6 +1854,7 @@ export type Database = {
           active: boolean
           archived: boolean
           archived_at: string | null
+          archived_by: string | null
           created_at: string
           created_by: string | null
           custom_type: string | null
@@ -1807,6 +1871,7 @@ export type Database = {
           active?: boolean
           archived?: boolean
           archived_at?: string | null
+          archived_by?: string | null
           created_at?: string
           created_by?: string | null
           custom_type?: string | null
@@ -1823,6 +1888,7 @@ export type Database = {
           active?: boolean
           archived?: boolean
           archived_at?: string | null
+          archived_by?: string | null
           created_at?: string
           created_by?: string | null
           custom_type?: string | null
@@ -1939,6 +2005,9 @@ export type Database = {
       lift_videos: {
         Row: {
           admin_last_viewed_at: string | null
+          archived: boolean
+          archived_at: string | null
+          archived_by: string | null
           batch_id: string | null
           batch_index: number | null
           batch_note: string | null
@@ -1989,6 +2058,9 @@ export type Database = {
         }
         Insert: {
           admin_last_viewed_at?: string | null
+          archived?: boolean
+          archived_at?: string | null
+          archived_by?: string | null
           batch_id?: string | null
           batch_index?: number | null
           batch_note?: string | null
@@ -2039,6 +2111,9 @@ export type Database = {
         }
         Update: {
           admin_last_viewed_at?: string | null
+          archived?: boolean
+          archived_at?: string | null
+          archived_by?: string | null
           batch_id?: string | null
           batch_index?: number | null
           batch_note?: string | null
@@ -2179,6 +2254,9 @@ export type Database = {
       media_items: {
         Row: {
           admin_last_viewed_at: string | null
+          archived: boolean
+          archived_at: string | null
+          archived_by: string | null
           client_id: string
           client_last_viewed_at: string | null
           clip_note: string | null
@@ -2212,6 +2290,9 @@ export type Database = {
         }
         Insert: {
           admin_last_viewed_at?: string | null
+          archived?: boolean
+          archived_at?: string | null
+          archived_by?: string | null
           client_id: string
           client_last_viewed_at?: string | null
           clip_note?: string | null
@@ -2245,6 +2326,9 @@ export type Database = {
         }
         Update: {
           admin_last_viewed_at?: string | null
+          archived?: boolean
+          archived_at?: string | null
+          archived_by?: string | null
           client_id?: string
           client_last_viewed_at?: string | null
           clip_note?: string | null
@@ -2532,6 +2616,8 @@ export type Database = {
         Row: {
           active: boolean
           archived: boolean
+          archived_at: string | null
+          archived_by: string | null
           created_at: string
           created_by: string | null
           description: string | null
@@ -2546,6 +2632,8 @@ export type Database = {
         Insert: {
           active?: boolean
           archived?: boolean
+          archived_at?: string | null
+          archived_by?: string | null
           created_at?: string
           created_by?: string | null
           description?: string | null
@@ -2560,6 +2648,8 @@ export type Database = {
         Update: {
           active?: boolean
           archived?: boolean
+          archived_at?: string | null
+          archived_by?: string | null
           created_at?: string
           created_by?: string | null
           description?: string | null
@@ -2852,6 +2942,8 @@ export type Database = {
           agreement_required: boolean
           amount_due_today: number | null
           archived: boolean
+          archived_at: string | null
+          archived_by: string | null
           billing_day: number | null
           cancel_url: string | null
           cancellation_policy: string | null
@@ -2928,6 +3020,8 @@ export type Database = {
           agreement_required?: boolean
           amount_due_today?: number | null
           archived?: boolean
+          archived_at?: string | null
+          archived_by?: string | null
           billing_day?: number | null
           cancel_url?: string | null
           cancellation_policy?: string | null
@@ -3004,6 +3098,8 @@ export type Database = {
           agreement_required?: boolean
           amount_due_today?: number | null
           archived?: boolean
+          archived_at?: string | null
+          archived_by?: string | null
           billing_day?: number | null
           cancel_url?: string | null
           cancellation_policy?: string | null
@@ -3085,6 +3181,9 @@ export type Database = {
       }
       pl_blocks: {
         Row: {
+          archived: boolean
+          archived_at: string | null
+          archived_by: string | null
           client_id: string
           client_visible: boolean
           coach_notes: string | null
@@ -3104,6 +3203,9 @@ export type Database = {
           weeks: number
         }
         Insert: {
+          archived?: boolean
+          archived_at?: string | null
+          archived_by?: string | null
           client_id: string
           client_visible?: boolean
           coach_notes?: string | null
@@ -3123,6 +3225,9 @@ export type Database = {
           weeks?: number
         }
         Update: {
+          archived?: boolean
+          archived_at?: string | null
+          archived_by?: string | null
           client_id?: string
           client_visible?: boolean
           coach_notes?: string | null
@@ -3402,6 +3507,9 @@ export type Database = {
       }
       pl_preps: {
         Row: {
+          archived: boolean
+          archived_at: string | null
+          archived_by: string | null
           client_id: string
           client_visible: boolean
           coach_notes: string | null
@@ -3424,6 +3532,9 @@ export type Database = {
           weight_class: string | null
         }
         Insert: {
+          archived?: boolean
+          archived_at?: string | null
+          archived_by?: string | null
           client_id: string
           client_visible?: boolean
           coach_notes?: string | null
@@ -3446,6 +3557,9 @@ export type Database = {
           weight_class?: string | null
         }
         Update: {
+          archived?: boolean
+          archived_at?: string | null
+          archived_by?: string | null
           client_id?: string
           client_visible?: boolean
           coach_notes?: string | null
@@ -3531,6 +3645,8 @@ export type Database = {
       pl_templates: {
         Row: {
           archived: boolean
+          archived_at: string | null
+          archived_by: string | null
           created_at: string
           created_by: string | null
           days_per_week: number | null
@@ -3550,6 +3666,8 @@ export type Database = {
         }
         Insert: {
           archived?: boolean
+          archived_at?: string | null
+          archived_by?: string | null
           created_at?: string
           created_by?: string | null
           days_per_week?: number | null
@@ -3569,6 +3687,8 @@ export type Database = {
         }
         Update: {
           archived?: boolean
+          archived_at?: string | null
+          archived_by?: string | null
           created_at?: string
           created_by?: string | null
           days_per_week?: number | null
