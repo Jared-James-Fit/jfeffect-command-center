@@ -14,8 +14,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DoubleConfirmDeleteDialog } from "@/components/double-confirm-delete-dialog";
 import { AssignOfferDialog } from "@/components/assign-offer-dialog";
+import { OfferDetailDialog } from "@/components/offer-detail-dialog";
 import { toast } from "sonner";
-import { Copy, ExternalLink, Loader2, Plus, Trash2, ImagePlus, Pencil, Archive, ArchiveRestore, FileSignature, AlertTriangle, CheckCircle2, Search, X, ListChecks, Sparkles } from "lucide-react";
+import { Copy, ExternalLink, Loader2, Plus, Trash2, ImagePlus, Pencil, Archive, ArchiveRestore, FileSignature, AlertTriangle, CheckCircle2, Search, X, ListChecks, Sparkles, Eye } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
 import {
