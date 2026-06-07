@@ -418,6 +418,14 @@ function SubmissionRow({
           <div className="truncate text-xs text-muted-foreground">
             {sub.dayLabel && <>{sub.dayLabel} · </>}{exerciseLabel}
           </div>
+          {(() => {
+            const note = sub.latest.client_notes?.trim();
+            return (
+              <div className={cn("mt-0.5 line-clamp-1 text-xs", note ? "text-foreground/80" : "italic text-muted-foreground/70")}>
+                {note || "No notes added"}
+              </div>
+            );
+          })()}
           <div className="mt-1 flex flex-wrap items-center gap-1.5">
             <Badge variant="outline" className={cn("h-5 px-1.5 text-[10px]", statusTone(sub.status))}>
               {sub.status}
