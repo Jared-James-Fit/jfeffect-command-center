@@ -222,7 +222,7 @@ export function LiftVideoCard({ video, role, userId, onChanged, onEdit, clientNa
         <Button asChild className="w-full sm:w-auto">
           <a href={openUrl} target="_blank" rel="noreferrer">
             <ExternalLink className="mr-2 h-4 w-4" />
-            Watch in {isDrive(video.video_url ?? "") ? "Drive" : "new tab"} (original quality)
+            Watch in {driveFileId ? "Drive" : "new tab"} (original quality)
           </a>
         </Button>
       )}
