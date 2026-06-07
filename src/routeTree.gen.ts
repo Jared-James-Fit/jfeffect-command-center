@@ -69,6 +69,7 @@ import { Route as AuthenticatedAdminCoachesIndexRouteImport } from './routes/_au
 import { Route as AuthenticatedAdminClientsIndexRouteImport } from './routes/_authenticated/admin/clients.index'
 import { Route as AuthenticatedAdminAgreementsIndexRouteImport } from './routes/_authenticated/admin/agreements.index'
 import { Route as LovableEmailQueueProcessRouteImport } from './routes/lovable/email/queue/process'
+import { Route as AuthenticatedPortalWorkoutsDayIdRouteImport } from './routes/_authenticated/portal/workouts.$dayId'
 import { Route as AuthenticatedPortalPurchasesIdRouteImport } from './routes/_authenticated/portal/purchases.$id'
 import { Route as AuthenticatedPortalCheckInsFormIdRouteImport } from './routes/_authenticated/portal/check-ins.$formId'
 import { Route as AuthenticatedAdminPurchasesIdRouteImport } from './routes/_authenticated/admin/purchases.$id'
@@ -423,6 +424,12 @@ const LovableEmailQueueProcessRoute =
     path: '/lovable/email/queue/process',
     getParentRoute: () => rootRouteImport,
   } as any)
+const AuthenticatedPortalWorkoutsDayIdRoute =
+  AuthenticatedPortalWorkoutsDayIdRouteImport.update({
+    id: '/$dayId',
+    path: '/$dayId',
+    getParentRoute: () => AuthenticatedPortalWorkoutsRoute,
+  } as any)
 const AuthenticatedPortalPurchasesIdRoute =
   AuthenticatedPortalPurchasesIdRouteImport.update({
     id: '/$id',
@@ -522,7 +529,7 @@ export interface FileRoutesByFullPath {
   '/portal/progress-metrics': typeof AuthenticatedPortalProgressMetricsRoute
   '/portal/purchases': typeof AuthenticatedPortalPurchasesRouteWithChildren
   '/portal/resources': typeof AuthenticatedPortalResourcesRoute
-  '/portal/workouts': typeof AuthenticatedPortalWorkoutsRoute
+  '/portal/workouts': typeof AuthenticatedPortalWorkoutsRouteWithChildren
   '/api/public/signnow-webhook': typeof ApiPublicSignnowWebhookRoute
   '/api/public/stripe-webhook': typeof ApiPublicStripeWebhookRoute
   '/admin/': typeof AuthenticatedAdminIndexRoute
@@ -535,6 +542,7 @@ export interface FileRoutesByFullPath {
   '/admin/purchases/$id': typeof AuthenticatedAdminPurchasesIdRoute
   '/portal/check-ins/$formId': typeof AuthenticatedPortalCheckInsFormIdRoute
   '/portal/purchases/$id': typeof AuthenticatedPortalPurchasesIdRoute
+  '/portal/workouts/$dayId': typeof AuthenticatedPortalWorkoutsDayIdRoute
   '/lovable/email/queue/process': typeof LovableEmailQueueProcessRoute
   '/admin/agreements/': typeof AuthenticatedAdminAgreementsIndexRoute
   '/admin/clients/': typeof AuthenticatedAdminClientsIndexRoute
@@ -589,7 +597,7 @@ export interface FileRoutesByTo {
   '/portal/progress-metrics': typeof AuthenticatedPortalProgressMetricsRoute
   '/portal/purchases': typeof AuthenticatedPortalPurchasesRouteWithChildren
   '/portal/resources': typeof AuthenticatedPortalResourcesRoute
-  '/portal/workouts': typeof AuthenticatedPortalWorkoutsRoute
+  '/portal/workouts': typeof AuthenticatedPortalWorkoutsRouteWithChildren
   '/api/public/signnow-webhook': typeof ApiPublicSignnowWebhookRoute
   '/api/public/stripe-webhook': typeof ApiPublicStripeWebhookRoute
   '/admin': typeof AuthenticatedAdminIndexRoute
@@ -602,6 +610,7 @@ export interface FileRoutesByTo {
   '/admin/purchases/$id': typeof AuthenticatedAdminPurchasesIdRoute
   '/portal/check-ins/$formId': typeof AuthenticatedPortalCheckInsFormIdRoute
   '/portal/purchases/$id': typeof AuthenticatedPortalPurchasesIdRoute
+  '/portal/workouts/$dayId': typeof AuthenticatedPortalWorkoutsDayIdRoute
   '/lovable/email/queue/process': typeof LovableEmailQueueProcessRoute
   '/admin/agreements': typeof AuthenticatedAdminAgreementsIndexRoute
   '/admin/clients': typeof AuthenticatedAdminClientsIndexRoute
@@ -660,7 +669,7 @@ export interface FileRoutesById {
   '/_authenticated/portal/progress-metrics': typeof AuthenticatedPortalProgressMetricsRoute
   '/_authenticated/portal/purchases': typeof AuthenticatedPortalPurchasesRouteWithChildren
   '/_authenticated/portal/resources': typeof AuthenticatedPortalResourcesRoute
-  '/_authenticated/portal/workouts': typeof AuthenticatedPortalWorkoutsRoute
+  '/_authenticated/portal/workouts': typeof AuthenticatedPortalWorkoutsRouteWithChildren
   '/api/public/signnow-webhook': typeof ApiPublicSignnowWebhookRoute
   '/api/public/stripe-webhook': typeof ApiPublicStripeWebhookRoute
   '/_authenticated/admin/': typeof AuthenticatedAdminIndexRoute
@@ -673,6 +682,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/purchases/$id': typeof AuthenticatedAdminPurchasesIdRoute
   '/_authenticated/portal/check-ins/$formId': typeof AuthenticatedPortalCheckInsFormIdRoute
   '/_authenticated/portal/purchases/$id': typeof AuthenticatedPortalPurchasesIdRoute
+  '/_authenticated/portal/workouts/$dayId': typeof AuthenticatedPortalWorkoutsDayIdRoute
   '/lovable/email/queue/process': typeof LovableEmailQueueProcessRoute
   '/_authenticated/admin/agreements/': typeof AuthenticatedAdminAgreementsIndexRoute
   '/_authenticated/admin/clients/': typeof AuthenticatedAdminClientsIndexRoute
@@ -744,6 +754,7 @@ export interface FileRouteTypes {
     | '/admin/purchases/$id'
     | '/portal/check-ins/$formId'
     | '/portal/purchases/$id'
+    | '/portal/workouts/$dayId'
     | '/lovable/email/queue/process'
     | '/admin/agreements/'
     | '/admin/clients/'
@@ -811,6 +822,7 @@ export interface FileRouteTypes {
     | '/admin/purchases/$id'
     | '/portal/check-ins/$formId'
     | '/portal/purchases/$id'
+    | '/portal/workouts/$dayId'
     | '/lovable/email/queue/process'
     | '/admin/agreements'
     | '/admin/clients'
@@ -881,6 +893,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/purchases/$id'
     | '/_authenticated/portal/check-ins/$formId'
     | '/_authenticated/portal/purchases/$id'
+    | '/_authenticated/portal/workouts/$dayId'
     | '/lovable/email/queue/process'
     | '/_authenticated/admin/agreements/'
     | '/_authenticated/admin/clients/'
@@ -1323,6 +1336,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LovableEmailQueueProcessRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authenticated/portal/workouts/$dayId': {
+      id: '/_authenticated/portal/workouts/$dayId'
+      path: '/$dayId'
+      fullPath: '/portal/workouts/$dayId'
+      preLoaderRoute: typeof AuthenticatedPortalWorkoutsDayIdRouteImport
+      parentRoute: typeof AuthenticatedPortalWorkoutsRoute
+    }
     '/_authenticated/portal/purchases/$id': {
       id: '/_authenticated/portal/purchases/$id'
       path: '/$id'
@@ -1518,6 +1538,21 @@ const AuthenticatedPortalPurchasesRouteWithChildren =
     AuthenticatedPortalPurchasesRouteChildren,
   )
 
+interface AuthenticatedPortalWorkoutsRouteChildren {
+  AuthenticatedPortalWorkoutsDayIdRoute: typeof AuthenticatedPortalWorkoutsDayIdRoute
+}
+
+const AuthenticatedPortalWorkoutsRouteChildren: AuthenticatedPortalWorkoutsRouteChildren =
+  {
+    AuthenticatedPortalWorkoutsDayIdRoute:
+      AuthenticatedPortalWorkoutsDayIdRoute,
+  }
+
+const AuthenticatedPortalWorkoutsRouteWithChildren =
+  AuthenticatedPortalWorkoutsRoute._addFileChildren(
+    AuthenticatedPortalWorkoutsRouteChildren,
+  )
+
 interface AuthenticatedPortalRouteRouteChildren {
   AuthenticatedPortalAccountRoute: typeof AuthenticatedPortalAccountRoute
   AuthenticatedPortalCalendarRoute: typeof AuthenticatedPortalCalendarRoute
@@ -1533,7 +1568,7 @@ interface AuthenticatedPortalRouteRouteChildren {
   AuthenticatedPortalProgressMetricsRoute: typeof AuthenticatedPortalProgressMetricsRoute
   AuthenticatedPortalPurchasesRoute: typeof AuthenticatedPortalPurchasesRouteWithChildren
   AuthenticatedPortalResourcesRoute: typeof AuthenticatedPortalResourcesRoute
-  AuthenticatedPortalWorkoutsRoute: typeof AuthenticatedPortalWorkoutsRoute
+  AuthenticatedPortalWorkoutsRoute: typeof AuthenticatedPortalWorkoutsRouteWithChildren
   AuthenticatedPortalIndexRoute: typeof AuthenticatedPortalIndexRoute
   AuthenticatedPortalAgreementsIndexRoute: typeof AuthenticatedPortalAgreementsIndexRoute
 }
@@ -1558,7 +1593,8 @@ const AuthenticatedPortalRouteRouteChildren: AuthenticatedPortalRouteRouteChildr
     AuthenticatedPortalPurchasesRoute:
       AuthenticatedPortalPurchasesRouteWithChildren,
     AuthenticatedPortalResourcesRoute: AuthenticatedPortalResourcesRoute,
-    AuthenticatedPortalWorkoutsRoute: AuthenticatedPortalWorkoutsRoute,
+    AuthenticatedPortalWorkoutsRoute:
+      AuthenticatedPortalWorkoutsRouteWithChildren,
     AuthenticatedPortalIndexRoute: AuthenticatedPortalIndexRoute,
     AuthenticatedPortalAgreementsIndexRoute:
       AuthenticatedPortalAgreementsIndexRoute,
