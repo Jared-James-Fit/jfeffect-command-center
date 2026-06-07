@@ -302,7 +302,7 @@ export function ClientLiftVideoUploader({ clientId, clientName, userId, onSaved 
           </Button>
           <Button type="button" variant={showLinkInput ? "secondary" : "outline"} size="sm" className="h-10 rounded-xl gap-1.5" onClick={() => setShowLinkInput((v) => !v)}>
             <LinkIcon className="h-4 w-4" />
-            <span className="text-xs font-medium">Link</span>
+            <span className="text-xs font-medium">Paste Link</span>
           </Button>
         </div>
         <div className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
