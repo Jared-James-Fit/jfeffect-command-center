@@ -308,6 +308,12 @@ export function LiftVideoCard({ video, role, userId, onChanged, onEdit, clientNa
       {role === "admin" && (
         <details className="rounded-md border border-border bg-secondary/20 p-3 text-xs">
           <summary className="cursor-pointer font-medium text-muted-foreground">Video diagnostics</summary>
+          <div className="mt-3 flex justify-end">
+            <Button size="sm" variant="outline" onClick={runDiagnostics} disabled={diagnosing}>
+              {diagnosing ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <RefreshCw className="mr-1 h-3 w-3" />}
+              Verify Drive video
+            </Button>
+          </div>
           <div className="mt-3 grid gap-2 sm:grid-cols-2">
             <DebugLine label="Original Drive file ID" value={driveFileId ?? "Missing"} good={!!driveFileId} />
             <DebugLine label="Original Drive URL" value={openUrl ?? "Missing"} good={!!openUrl} />
