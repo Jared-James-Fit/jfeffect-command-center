@@ -519,6 +519,7 @@ function BlockEditor() {
 function WeekColumn({
   week, days, rows, exercises, density, onAction, onCopyWeek,
   selectedDayId, onSelectDay, dayLinkInfo, onRowPatch, onDayPatch, onCopyDayToFuture,
+  stacked = false, collapsed = false, onToggleCollapse, isCurrent = false, stats,
 }: {
   week: any;
   days: any[];
@@ -533,11 +534,80 @@ function WeekColumn({
   onRowPatch: (rowId: string, dayId: string, patch: Record<string, any>) => void | Promise<void>;
   onDayPatch: (dayId: string, patch: Record<string, any>) => void | Promise<void>;
   onCopyDayToFuture?: (dayId: string) => void | Promise<void>;
+  stacked?: boolean;
+  collapsed?: boolean;
+  onToggleCollapse?: () => void;
+  isCurrent?: boolean;
+  stats?: { days: number; rows: number; minutes: number; linked: number; custom: number };
 }) {
+  const fmtDur = (m: number) => {
+    if (!m || m <= 0) return "—";
+    const h = Math.floor(m / 60);
+    const mm = Math.round(m % 60);
+    return h > 0 ? `${h}h ${mm}m` : `${mm}m`;
+  };
+  const linkLabel: string | null =
+    stats && stats.linked > 0 && stats.custom === 0 ? "Linked"
+    : stats && stats.custom > 0 && stats.linked === 0 ? "Custom"
+    : stats && stats.linked > 0 && stats.custom > 0 ? "Mixed"
+    : null;
+
   return (
-    <div className="flex min-w-0 flex-col border-r border-border last:border-r-0">
-      <div className="sticky top-0 z-20 flex items-center gap-2 border-b border-border bg-card/95 px-3 py-2 backdrop-blur">
-        <h3 className="text-sm font-bold">Week {week.week_index}</h3>
+    <div
+      id={`pl-week-${week.id}`}
+      className={cn(
+        "flex min-w-0 flex-col overflow-hidden",
+        stacked
+          ? cn(
+              "rounded-lg border-2 bg-card shadow-sm",
+              isCurrent ? "border-primary/70 shadow-[0_0_0_1px_color-mix(in_oklab,var(--primary)_30%,transparent)]" : "border-border",
+            )
+          : "border-r border-border last:border-r-0",
+      )}
+      style={stacked ? { borderLeftWidth: 6, borderLeftColor: "var(--primary)" } : undefined}
+    >
+      <div
+        className={cn(
+          "sticky top-0 z-20 flex flex-wrap items-center gap-2 border-b backdrop-blur",
+          stacked
+            ? "border-primary/20 bg-[color-mix(in_oklab,var(--primary)_8%,var(--card))] px-3 py-2"
+            : "border-border bg-card/95 px-3 py-2",
+        )}
+      >
+        {stacked && onToggleCollapse && (
+          <button
+            onClick={onToggleCollapse}
+            className="grid h-6 w-6 place-items-center rounded text-muted-foreground hover:bg-primary/10 hover:text-foreground"
+            title={collapsed ? "Expand week" : "Collapse week"}
+          >
+            {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          </button>
+        )}
+        <div className="flex items-baseline gap-2">
+          <span
+            className={cn(
+              "inline-flex h-6 items-center rounded-md px-2 text-[11px] font-bold uppercase tracking-wide",
+              "bg-primary text-primary-foreground",
+            )}
+          >
+            Week {week.week_index}
+          </span>
+          {stats && (
+            <span className="text-[11px] text-muted-foreground">
+              {stats.days} day{stats.days === 1 ? "" : "s"} · {stats.rows} row{stats.rows === 1 ? "" : "s"} · Est {fmtDur(stats.minutes)}
+            </span>
+          )}
+        </div>
+        {isCurrent && (
+          <Badge className="h-5 border-primary/40 bg-primary/15 px-1.5 text-[10px] font-semibold text-primary hover:bg-primary/20">
+            <Crosshair className="mr-1 h-3 w-3" /> Current Week
+          </Badge>
+        )}
+        {linkLabel && (
+          <Badge variant="outline" className="h-5 border-primary/30 bg-primary/5 px-1.5 text-[10px] text-primary">
+            <Link2 className="mr-1 h-3 w-3" /> {linkLabel}
+          </Badge>
+        )}
         <Input
           defaultValue={week.notes ?? ""}
           placeholder="Week notes"
@@ -563,7 +633,10 @@ function WeekColumn({
           </Button>
         </div>
       </div>
-      <div className="flex flex-col gap-2 p-2">
+      {collapsed ? null : (
+      <div
+        className={cn("flex flex-col gap-2 p-2", stacked && "bg-[color-mix(in_oklab,var(--primary)_2%,transparent)]")}
+      >
         {days.map((d: any) => (
           <DayBlock
             key={d.id}
@@ -586,6 +659,7 @@ function WeekColumn({
           <Plus className="mr-1 h-3 w-3" /> Add day
         </Button>
       </div>
+      )}
     </div>
   );
 }
