@@ -263,54 +263,16 @@ export function LiftVideoCard({ video, role, userId, onChanged, onEdit, clientNa
             }}
           />
         ) : embedUrl ? (
-          <div className="space-y-2">
-            <div
-              className="relative aspect-video w-full overflow-hidden rounded-md bg-black"
-              style={
-                video.thumbnail_url && embedStatus !== "ready"
-                  ? { backgroundImage: `url(${video.thumbnail_url})`, backgroundSize: "cover", backgroundPosition: "center" }
-                  : undefined
-              }
-            >
-              {embedStatus !== "ready" && (
-                <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-black/50 p-4 text-center text-white">
-                  {embedStatus === "error" ? <AlertTriangle className="h-6 w-6" /> : <Loader2 className="h-5 w-5 animate-spin" />}
-                  <div>
-                    <div className="text-sm font-medium">
-                      {embedStatus === "error" ? (isDrive(video.video_url ?? "") ? "Preview unavailable (Drive permissions)." : "Preview unavailable.") : "Loading preview…"}
-                    </div>
-                    {(embedStatus === "slow" || embedStatus === "error") && (
-                      <div className="mt-1 text-xs text-white/70">
-                        {embedStatus === "slow" ? "Taking longer than expected — watch in Drive instead." : "Watch the original in Google Drive."}
-                      </div>
-                    )}
-                  </div>
-                  {(embedStatus === "slow" || embedStatus === "error") && (
-                    <div className="flex flex-wrap justify-center gap-2">
-                      {openUrl && (
-                        <Button size="sm" asChild>
-                          <a href={openUrl} target="_blank" rel="noreferrer">
-                            Watch in Drive <ExternalLink className="ml-1 h-3 w-3" />
-                          </a>
-                        </Button>
-                      )}
-                      <Button size="sm" variant="secondary" onClick={() => setEmbedRetry((r) => r + 1)}>
-                        <RefreshCw className="mr-1 h-3 w-3" /> Retry Preview
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              )}
+          <div className="relative aspect-video w-full overflow-hidden rounded-md bg-black">
             <iframe
-              key={`${embedUrl}-${embedRetry}`}
+              key={embedUrl}
               src={embedUrl}
-              className={cn("h-full w-full bg-secondary/40", embedStatus !== "ready" && "opacity-0")}
+              className="h-full w-full bg-black"
               allow="autoplay; encrypted-media; fullscreen"
               allowFullScreen
               loading="lazy"
-              onLoad={() => setEmbedStatus("ready")}
+              title={video.exercise || "Lift video"}
             />
-            </div>
           </div>
         ) : openUrl ? (
           <div className="flex min-h-40 flex-col items-center justify-center gap-3 bg-secondary/30 p-6 text-center text-sm">
