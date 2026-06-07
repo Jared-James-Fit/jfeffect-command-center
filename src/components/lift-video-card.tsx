@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -10,8 +11,8 @@ import {
   type LiftVideo, type LiftVideoComment,
   LIFT_VIDEO_STATUSES, statusTone, clientFacingStatus,
   listComments, addComment, markWatched, toggleLike, markReviewed, setStatus,
-  getSignedVideoUrl, deleteLiftVideo,
-  isYouTube, isDrive, youTubeEmbed, drivePreview, driveOpenUrl,
+  getSignedVideoUrl, deleteLiftVideo, setPlaybackError,
+  isYouTube, isDrive, youTubeEmbed, liftVideoOpenUrl, liftVideoDriveFileId,
   LIFT_VIDEO_QUICK_REPLIES,
 } from "@/lib/lift-videos";
 import { format, parseISO, formatDistanceToNow } from "date-fns";
@@ -27,6 +28,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { UserAvatar } from "@/components/user-avatar";
+import { copyLiftVideoStorageToDrive, refreshLiftVideoDriveDiagnostics } from "@/lib/lift-videos.functions";
 
 type Props = {
   video: LiftVideo;
@@ -48,6 +50,11 @@ export function LiftVideoCard({ video, role, userId, onChanged, onEdit, clientNa
   const [signedUrl, setSignedUrl] = useState<string | null>(null);
   const [embedStatus, setEmbedStatus] = useState<"idle" | "loading" | "ready" | "slow" | "error">("idle");
   const [embedRetry, setEmbedRetry] = useState(0);
+  const [lastPlaybackError, setLastPlaybackError] = useState<string | null>(null);
+  const [diagnosing, setDiagnosing] = useState(false);
+  const [copyingToDrive, setCopyingToDrive] = useState(false);
+  const refreshDiagnostics = useServerFn(refreshLiftVideoDriveDiagnostics);
+  const copyToDrive = useServerFn(copyLiftVideoStorageToDrive);
 
   const loadComments = async () => {
     const c = await listComments(video.id, { includeInternal: role === "admin" });
@@ -66,12 +73,6 @@ export function LiftVideoCard({ video, role, userId, onChanged, onEdit, clientNa
         if (!cancel) setSignedUrl(u);
       } else if (video.video_url) {
         if (isYouTube(video.video_url)) setEmbedUrl(youTubeEmbed(video.video_url));
-        else if (isDrive(video.video_url)) {
-          // Drive direct-stream URLs return the virus-scan interstitial for
-          // larger video files, which made the player hang. Use the iframe
-          // /preview embed instead — and always surface "Watch in Drive".
-          setEmbedUrl(drivePreview(video.video_url));
-        }
       }
     })();
     return () => { cancel = true; };
@@ -116,13 +117,45 @@ export function LiftVideoCard({ video, role, userId, onChanged, onEdit, clientNa
     catch (e: any) { toast.error(e.message ?? "Failed"); }
   };
 
+  const runDiagnostics = async () => {
+    setDiagnosing(true);
+    try {
+      const result = await refreshDiagnostics({ data: { videoId: video.id } });
+      if (result?.ok) toast.success("Drive video verified");
+      else toast.error(result?.reason ?? "Drive video check failed");
+      onChanged?.();
+    } catch (e: any) {
+      toast.error(e?.message ?? "Drive video check failed");
+    } finally {
+      setDiagnosing(false);
+    }
+  };
+
+  const repairDriveCopy = async () => {
+    setCopyingToDrive(true);
+    try {
+      const result = await copyToDrive({ data: { videoId: video.id } });
+      if (result?.ok) toast.success("Video copied to Drive");
+      onChanged?.();
+    } catch (e: any) {
+      toast.error(e?.message ?? "Could not copy video to Drive");
+    } finally {
+      setCopyingToDrive(false);
+    }
+  };
+
   const dayLabel = video.training_day === "Custom" ? video.custom_training_day : video.training_day;
   const tagLabel = video.tag === "Custom" ? video.custom_tag : video.tag;
   const displayStatus = role === "client" ? clientFacingStatus(video) : video.status;
   const isReviewed = !!video.reviewed_at;
   const clientCanDelete = role === "client" && video.uploaded_by === userId && !isReviewed;
   const clientCanEdit = role === "client" && video.uploaded_by === userId && !isReviewed;
-  const openUrl = video.video_url ? (isDrive(video.video_url) ? driveOpenUrl(video.video_url) : video.video_url) : null;
+  const driveFileId = liftVideoDriveFileId(video);
+  const openUrl = liftVideoOpenUrl(video);
+  const playablePreviewUrl = signedUrl ?? (video.preview_status === "ready" && video.preview_url && !isDrive(video.preview_url) ? video.preview_url : null);
+  const previewReason = playablePreviewUrl
+    ? null
+    : video.preview_error || video.playback_error || (driveFileId ? "Preview not ready yet." : openUrl ? "Preview URL missing." : "Original video link missing.");
 
   return (
     <Card className="border-border bg-card p-5 space-y-4">
@@ -189,7 +222,7 @@ export function LiftVideoCard({ video, role, userId, onChanged, onEdit, clientNa
         <Button asChild className="w-full sm:w-auto">
           <a href={openUrl} target="_blank" rel="noreferrer">
             <ExternalLink className="mr-2 h-4 w-4" />
-            Watch in {isDrive(video.video_url ?? "") ? "Drive" : "new tab"} (original quality)
+            Watch in {driveFileId ? "Drive" : "new tab"} (original quality)
           </a>
         </Button>
       )}
@@ -208,13 +241,17 @@ export function LiftVideoCard({ video, role, userId, onChanged, onEdit, clientNa
       )}
 
       <div className="overflow-hidden rounded-md border border-border bg-card">
-        {signedUrl ? (
+        {playablePreviewUrl ? (
           <LiftVideoPlayer
-            src={signedUrl}
+            src={playablePreviewUrl}
             fallbackUrl={openUrl}
-            embedFallbackUrl={embedUrl}
+            embedFallbackUrl={null}
             thumbnailUrl={video.thumbnail_url}
             title={video.exercise || "Lift video"}
+            onPlaybackError={(message) => {
+              setLastPlaybackError(message);
+              if (role === "admin") setPlaybackError(video.id, message).catch(() => {});
+            }}
           />
         ) : embedUrl ? (
           <div className="space-y-2">
@@ -267,13 +304,51 @@ export function LiftVideoCard({ video, role, userId, onChanged, onEdit, clientNa
             </div>
           </div>
         ) : openUrl ? (
-          <a href={openUrl} target="_blank" rel="noreferrer" className="flex min-h-48 items-center justify-center gap-2 bg-secondary/30 p-6 text-sm text-primary">
-            Watch in Drive <ExternalLink className="h-3 w-3" />
-          </a>
+          <div className="flex min-h-40 flex-col items-center justify-center gap-3 bg-secondary/30 p-6 text-center text-sm">
+            <div>
+              <div className="font-medium text-foreground">{previewReason}</div>
+              <div className="mt-1 text-xs text-muted-foreground">Use the original Drive video for review.</div>
+            </div>
+            <Button asChild>
+              <a href={openUrl} target="_blank" rel="noreferrer">
+                Watch in Drive <ExternalLink className="ml-2 h-3 w-3" />
+              </a>
+            </Button>
+          </div>
         ) : (
           <div className="min-h-48 p-6 text-center text-xs text-muted-foreground">Google Drive link missing for this video.</div>
         )}
       </div>
+
+      {role === "admin" && (
+        <details className="rounded-md border border-border bg-secondary/20 p-3 text-xs">
+          <summary className="cursor-pointer font-medium text-muted-foreground">Video diagnostics</summary>
+          <div className="mt-3 flex justify-end">
+            {!driveFileId && video.video_storage_path && (
+              <Button size="sm" variant="outline" onClick={repairDriveCopy} disabled={copyingToDrive} className="mr-2">
+                {copyingToDrive ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <ExternalLink className="mr-1 h-3 w-3" />}
+                Copy to Drive
+              </Button>
+            )}
+            <Button size="sm" variant="outline" onClick={runDiagnostics} disabled={diagnosing}>
+              {diagnosing ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <RefreshCw className="mr-1 h-3 w-3" />}
+              Verify Drive video
+            </Button>
+          </div>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            <DebugLine label="Original Drive file ID" value={driveFileId ?? "Missing"} good={!!driveFileId} />
+            <DebugLine label="Original Drive URL" value={openUrl ?? "Missing"} good={!!openUrl} />
+            <DebugLine label="Open in Drive" value={openUrl ? "Available" : "Missing"} good={!!openUrl} />
+            <DebugLine label="Preview URL" value={video.preview_url || "Missing"} good={!!video.preview_url} />
+            <DebugLine label="Preview status" value={video.preview_status || (playablePreviewUrl ? "ready" : "not_generated")} good={!!playablePreviewUrl || video.preview_status === "ready"} />
+            <DebugLine label="Thumbnail URL" value={video.thumbnail_url || "Missing"} good={!!video.thumbnail_url} />
+            <DebugLine label="File type" value={video.file_type || "Unknown"} good={!!video.file_type} />
+            <DebugLine label="File size" value={formatBytes(video.file_size_bytes)} good={!!video.file_size_bytes} />
+            <DebugLine label="Upload status" value={video.upload_status || "Unknown"} good={video.upload_status === "Drive uploaded" || video.upload_status === "App storage fallback"} />
+            <DebugLine label="Playback error" value={lastPlaybackError || video.playback_error || "None"} good={!(lastPlaybackError || video.playback_error)} />
+          </div>
+        </details>
+      )}
 
       {/* Watched / liked / reviewed indicators */}
       <div className="flex flex-wrap items-center gap-2 text-xs">
@@ -396,4 +471,21 @@ function Stat({ label, value }: { label: string; value: string }) {
       <div className="font-bold">{value}</div>
     </div>
   );
+}
+
+function DebugLine({ label, value, good }: { label: string; value: string; good?: boolean }) {
+  return (
+    <div className="min-w-0 rounded border border-border bg-card p-2">
+      <div className="mb-1 text-[10px] uppercase tracking-widest text-muted-foreground">{label}</div>
+      <div className={cn("break-all", good ? "text-foreground" : "text-destructive")}>{value}</div>
+    </div>
+  );
+}
+
+function formatBytes(value: number | null | undefined) {
+  if (!value) return "Unknown";
+  if (value < 1024) return `${value} B`;
+  const mb = value / 1024 / 1024;
+  if (mb < 1024) return `${mb.toFixed(1)} MB`;
+  return `${(mb / 1024).toFixed(2)} GB`;
 }

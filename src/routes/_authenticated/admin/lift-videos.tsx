@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   listLiftVideos, markAdminViewed, deleteLiftVideos, statusTone,
-  driveOpenUrl, type LiftVideo, type LiftVideoStatus,
+  liftVideoOpenUrl, type LiftVideo, type LiftVideoStatus,
 } from "@/lib/lift-videos";
 import { LiftVideoCard } from "@/components/lift-video-card";
 import { UserAvatar } from "@/components/user-avatar";
@@ -497,9 +497,9 @@ function ReviewDetail({
                   <User className="mr-2 h-4 w-4" /> Open Client Profile
                 </Link>
               </DropdownMenuItem>
-              {activeClip.video_url && (
+              {liftVideoOpenUrl(activeClip) && (
                 <DropdownMenuItem asChild>
-                  <a href={driveOpenUrl(activeClip.video_url)} target="_blank" rel="noreferrer">
+                  <a href={liftVideoOpenUrl(activeClip) ?? "#"} target="_blank" rel="noreferrer">
                     <ExternalLink className="mr-2 h-4 w-4" /> Open in Drive
                   </a>
                 </DropdownMenuItem>
