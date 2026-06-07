@@ -15,7 +15,7 @@ import { ArrowLeft, Plus, Trash2, Save, Clock, Copy } from "lucide-react";
 import { toast } from "sonner";
 import {
   getTemplate, updateTemplate, summarizeTemplatePayload, TIME_PROFILES,
-  estimateDayMinutes, durationRange, type TrainingStyle,
+  estimateDayMinutes, durationRange, PERCENTAGE_BASES, type TrainingStyle,
 } from "@/lib/pl-programs";
 
 export const Route = createFileRoute("/_authenticated/admin/program-library/$templateId")({
@@ -303,10 +303,10 @@ function DayEditor({ day, setDay, exercises }: { day: any; setDay: (d: any) => v
 }
 
 function RowEditor({ row, setRow, onDelete, exercises, compact }: { row: any; setRow: (r: any) => void; onDelete?: () => void; exercises: any[]; compact?: boolean }) {
-  const ex = (exercises as any[]).find((e) => e.id === row.exercise_id);
   return (
-    <div className={`grid items-center gap-1 rounded-md border border-border bg-secondary/20 p-2 ${compact ? "grid-cols-12" : "grid-cols-6"}`}>
-      <div className={compact ? "col-span-3" : "col-span-3"}>
+    <div className="rounded-md border border-border bg-secondary/20 p-2 space-y-1">
+      <div className="grid grid-cols-12 items-center gap-1">
+        <div className="col-span-4">
         <Select value={row.exercise_id ?? "__custom"} onValueChange={(v) => setRow({ ...row, exercise_id: v === "__custom" ? null : v })}>
           <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Exercise" /></SelectTrigger>
           <SelectContent>
@@ -318,19 +318,29 @@ function RowEditor({ row, setRow, onDelete, exercises, compact }: { row: any; se
           <Input className="mt-1 h-7 text-xs" placeholder="Custom name" value={row.exercise_name_override ?? ""} onChange={(e) => setRow({ ...row, exercise_name_override: e.target.value })} />
         )}
       </div>
-      <Input className="col-span-1 h-8 text-xs" inputMode="numeric" placeholder="Sets" value={row.sets ?? ""} onChange={(e) => setRow({ ...row, sets: parseInt(e.target.value) || null })} />
-      <Input className="col-span-2 h-8 text-xs" placeholder="Reps" value={row.reps_text ?? ""} onChange={(e) => setRow({ ...row, reps_text: e.target.value })} />
-      <Input className="col-span-1 h-8 text-xs" inputMode="decimal" placeholder="RPE" value={row.rpe ?? ""} onChange={(e) => setRow({ ...row, rpe: e.target.value })} />
-      <Input className="col-span-1 h-8 text-xs" inputMode="decimal" placeholder="%" value={row.percentage ?? ""} onChange={(e) => setRow({ ...row, percentage: parseFloat(e.target.value) || null })} />
-      <Input className="col-span-1 h-8 text-xs" inputMode="numeric" placeholder="Rest" value={row.rest_seconds ?? ""} onChange={(e) => setRow({ ...row, rest_seconds: parseInt(e.target.value) || null })} />
-      <Select value={row.time_profile ?? "accessory_compound"} onValueChange={(v) => setRow({ ...row, time_profile: v })}>
-        <SelectTrigger className="col-span-2 h-8 text-xs"><SelectValue /></SelectTrigger>
-        <SelectContent>{TIME_PROFILES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}</SelectContent>
-      </Select>
-      <div className="col-span-1 flex justify-end">
-        {onDelete && <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={onDelete}><Trash2 className="h-3.5 w-3.5" /></Button>}
+        <Input className="col-span-1 h-8 text-xs" inputMode="numeric" placeholder="Sets" value={row.sets ?? ""} onChange={(e) => setRow({ ...row, sets: parseInt(e.target.value) || null })} />
+        <Input className="col-span-2 h-8 text-xs" placeholder="Reps" value={row.reps_text ?? ""} onChange={(e) => setRow({ ...row, reps_text: e.target.value })} />
+        <Input className="col-span-1 h-8 text-xs" inputMode="decimal" placeholder="RPE" value={row.rpe ?? ""} onChange={(e) => setRow({ ...row, rpe: e.target.value })} />
+        <Input className="col-span-1 h-8 text-xs" inputMode="decimal" placeholder="RIR" value={row.rir ?? ""} onChange={(e) => setRow({ ...row, rir: e.target.value })} />
+        <Input className="col-span-1 h-8 text-xs" inputMode="numeric" placeholder="Rest s" value={row.rest_seconds ?? ""} onChange={(e) => setRow({ ...row, rest_seconds: parseInt(e.target.value) || null })} />
+        <div className="col-span-2 flex justify-end gap-1">
+          {onDelete && <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={onDelete}><Trash2 className="h-3.5 w-3.5" /></Button>}
+        </div>
       </div>
-      <Textarea className="col-span-12 h-12 text-xs" placeholder="Notes / tempo" value={row.notes ?? ""} onChange={(e) => setRow({ ...row, notes: e.target.value })} />
+      <div className="grid grid-cols-12 items-center gap-1">
+        <Select value={row.percentage_basis ?? "manual"} onValueChange={(v) => setRow({ ...row, percentage_basis: v })}>
+          <SelectTrigger className="col-span-3 h-8 text-xs"><SelectValue /></SelectTrigger>
+          <SelectContent>{PERCENTAGE_BASES.map((p) => <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>)}</SelectContent>
+        </Select>
+        <Input className="col-span-1 h-8 text-xs" inputMode="decimal" placeholder="%" value={row.percentage ?? ""} onChange={(e) => setRow({ ...row, percentage: parseFloat(e.target.value) || null })} />
+        <Input className="col-span-2 h-8 text-xs" inputMode="decimal" placeholder="Load kg" value={row.load_kg ?? ""} onChange={(e) => setRow({ ...row, load_kg: parseFloat(e.target.value) || null })} />
+        <Input className="col-span-2 h-8 text-xs" placeholder="Tempo 3-1-1" value={row.tempo ?? ""} onChange={(e) => setRow({ ...row, tempo: e.target.value })} />
+        <Select value={row.time_profile ?? "accessory_compound"} onValueChange={(v) => setRow({ ...row, time_profile: v })}>
+          <SelectTrigger className="col-span-4 h-8 text-xs"><SelectValue /></SelectTrigger>
+          <SelectContent>{TIME_PROFILES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}</SelectContent>
+        </Select>
+      </div>
+      <Textarea className="h-12 w-full text-xs" placeholder="Coaching notes" value={row.notes ?? ""} onChange={(e) => setRow({ ...row, notes: e.target.value })} />
     </div>
   );
 }

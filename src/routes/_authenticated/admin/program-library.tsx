@@ -412,13 +412,22 @@ function TemplateTreeView({ tpl }: { tpl: any }) {
   const type = tpl.template_type;
 
   const Row = ({ r }: { r: any }) => (
-    <div className="grid grid-cols-12 gap-2 border-t border-border py-1 text-[11px]">
-      <div className="col-span-4 truncate">{r.exercise_name_override || r.exercise_name || "Exercise"}</div>
-      <div className="col-span-1 text-center text-muted-foreground">{r.sets ?? "—"}×</div>
-      <div className="col-span-2 text-center">{r.reps_text || "—"}</div>
-      <div className="col-span-1 text-center text-muted-foreground">{r.rpe ?? r.rir ?? "—"}</div>
-      <div className="col-span-2 text-center text-muted-foreground">{r.percentage ? `${r.percentage}%` : r.load_kg ? `${r.load_kg}kg` : "—"}</div>
-      <div className="col-span-2 text-center text-muted-foreground">{r.rest_seconds ? `${r.rest_seconds}s` : "—"}</div>
+    <div className="border-t border-border py-1 text-[11px]">
+      <div className="grid grid-cols-12 gap-2">
+        <div className="col-span-4 truncate font-medium">{r.exercise_name_override || r.exercise_name || "Exercise"}</div>
+        <div className="col-span-1 text-center text-muted-foreground">{r.sets ?? "—"}×</div>
+        <div className="col-span-2 text-center">{r.reps_text || "—"}</div>
+        <div className="col-span-1 text-center text-muted-foreground">{r.rpe ? `@${r.rpe}` : r.rir ? `${r.rir} RIR` : "—"}</div>
+        <div className="col-span-2 text-center text-muted-foreground">{r.percentage ? `${r.percentage}%` : r.load_kg ? `${r.load_kg}kg` : "—"}</div>
+        <div className="col-span-2 text-center text-muted-foreground">{r.rest_seconds ? `${r.rest_seconds}s` : "—"}</div>
+      </div>
+      {(r.tempo || r.notes) && (
+        <div className="mt-0.5 pl-1 text-[10px] text-muted-foreground italic">
+          {r.tempo && <span>tempo {r.tempo}</span>}
+          {r.tempo && r.notes && <span> · </span>}
+          {r.notes && <span>{r.notes}</span>}
+        </div>
+      )}
     </div>
   );
 
