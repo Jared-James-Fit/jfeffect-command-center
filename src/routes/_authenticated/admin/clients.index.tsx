@@ -22,6 +22,8 @@ import { derivePhase, displayTitle, toneClasses, type TrainingPhase } from "@/li
 import { deriveTarget } from "@/lib/nutrition-cardio";
 import { PowerlifterBadge } from "@/components/powerlifter-badge";
 import { UserAvatar } from "@/components/user-avatar";
+import { format, parseISO, differenceInDays } from "date-fns";
+import type { ConversationState, Message } from "@/lib/messages";
 
 function summarizeCardio(list: any[]): string {
   if (!list || list.length === 0) return "";
@@ -35,8 +37,19 @@ function summarizeCardio(list: any[]): string {
   if (t.intensity) parts.push(t.intensity);
   return parts.join(" · ");
 }
-import { format, parseISO } from "date-fns";
-import type { ConversationState, Message } from "@/lib/messages";
+
+function daysSinceUpdated(dateStr: string | null | undefined): number | null {
+  if (!dateStr) return null;
+  return differenceInDays(new Date(), new Date(dateStr));
+}
+
+function nutritionUpdateTone(days: number | null): { tone: string; label: string } | null {
+  if (days === null) return null;
+  if (days >= 30) return { tone: "border-destructive/40 bg-destructive/10 text-destructive", label: `${days}d overdue` };
+  if (days >= 20) return { tone: "border-orange-400/40 bg-orange-400/10 text-orange-500", label: `${days}d due` };
+  if (days >= 14) return { tone: "border-warning/40 bg-warning/10 text-warning", label: `${days}d due` };
+  return null;
+}
 function AddCell({ id, tab, label }: { id: string; tab: "training" | "nutrition" | "cardio"; label: string }) {
   return (
     <Link to="/admin/clients/$id" params={{ id }} search={{ tab }} className="text-xs font-semibold text-primary hover:underline">
@@ -131,7 +144,7 @@ function ClientsPage() {
   const { data: nutTargets = [] } = useQuery({
     queryKey: ["nutrition-targets", "all-status"],
     queryFn: async () => {
-      const { data } = await supabase.from("nutrition_targets").select("id, client_id, start_date, end_date, status, ending_soon_days").neq("status", "Archived");
+      const { data } = await supabase.from("nutrition_targets").select("id, client_id, start_date, end_date, status, ending_soon_days, updated_at").neq("status", "Archived");
       return data ?? [];
     },
   });
@@ -339,7 +352,16 @@ function ClientsPage() {
                       <td className="px-4 py-3">
                         {dNut ? (
                           <Link to="/admin/clients/$id" params={{ id: c.id }} search={{ tab: "nutrition" }}>
-                            <Badge variant="outline" className={`${dNut.tone} cursor-pointer hover:opacity-80`}>{dNut.label}</Badge>
+                            <div className="space-y-1">
+                              <Badge variant="outline" className={`${dNut.tone} cursor-pointer hover:opacity-80`}>{dNut.label}</Badge>
+                              {(() => {
+                                const days = daysSinceUpdated(nut.updated_at);
+                                const freshness = nutritionUpdateTone(days);
+                                return freshness ? (
+                                  <Badge variant="outline" className={`${freshness.tone} text-[10px]`}>{freshness.label}</Badge>
+                                ) : null;
+                              })()}
+                            </div>
                           </Link>
                         ) : <AddCell id={c.id} tab="nutrition" label="Add Nutrition Targets" />}
                       </td>
