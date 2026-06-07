@@ -113,6 +113,7 @@ export function LiftVideoCard({ video, role, userId, onChanged, onEdit }: Props)
   const isReviewed = !!video.reviewed_at;
   const clientCanDelete = role === "client" && video.uploaded_by === userId && !isReviewed;
   const clientCanEdit = role === "client" && video.uploaded_by === userId && !isReviewed;
+  const openUrl = video.video_url ? (isDrive(video.video_url) ? driveOpenUrl(video.video_url) : video.video_url) : null;
 
   return (
     <Card className="border-border bg-card p-5 space-y-4">
@@ -174,19 +175,53 @@ export function LiftVideoCard({ video, role, userId, onChanged, onEdit }: Props)
         </div>
       )}
 
-      <div className="overflow-hidden rounded-md border border-border bg-black/40">
+      <div className="overflow-hidden rounded-md border border-border bg-card">
         {embedUrl ? (
           <div className="space-y-2">
+            <div className="relative aspect-video w-full overflow-hidden rounded-md bg-secondary/40">
+              {embedStatus !== "ready" && (
+                <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 p-4 text-center">
+                  {embedStatus === "error" ? <AlertTriangle className="h-6 w-6 text-muted-foreground" /> : <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />}
+                  <div>
+                    <div className="text-sm font-medium">
+                      {embedStatus === "error" ? (isDrive(video.video_url ?? "") ? "Google Drive permission issue." : "Video preview could not load.") : "Loading video…"}
+                    </div>
+                    {(embedStatus === "slow" || embedStatus === "error") && (
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        {embedStatus === "slow" ? "Video is taking longer than expected." : "Video cannot be previewed. Open in Google Drive."}
+                      </div>
+                    )}
+                  </div>
+                  {(embedStatus === "slow" || embedStatus === "error") && (
+                    <div className="flex flex-wrap justify-center gap-2">
+                      {openUrl && (
+                        <Button size="sm" variant="outline" asChild>
+                          <a href={openUrl} target="_blank" rel="noreferrer">
+                            Open in Drive <ExternalLink className="ml-1 h-3 w-3" />
+                          </a>
+                        </Button>
+                      )}
+                      <Button size="sm" variant="ghost" onClick={() => setEmbedRetry((r) => r + 1)}>
+                        <RefreshCw className="mr-1 h-3 w-3" /> Retry
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              )}
             <iframe
+              key={`${embedUrl}-${embedRetry}`}
               src={embedUrl}
-              className="h-[60vh] max-h-[640px] w-full bg-black"
+              className={cn("h-full w-full bg-secondary/40", embedStatus !== "ready" && "opacity-0")}
               allow="autoplay; encrypted-media; fullscreen"
               allowFullScreen
+              loading="lazy"
+              onLoad={() => setEmbedStatus("ready")}
             />
-            {video.video_url && (
+            </div>
+            {openUrl && (
               <div className="flex justify-end px-2 pb-2">
                 <Button size="sm" variant="ghost" asChild>
-                  <a href={video.video_url} target="_blank" rel="noreferrer">
+                  <a href={openUrl} target="_blank" rel="noreferrer">
                     <Maximize2 className="mr-1 h-3 w-3" /> Open in {isDrive(video.video_url) ? "Drive" : "new tab"}
                   </a>
                 </Button>
@@ -194,13 +229,13 @@ export function LiftVideoCard({ video, role, userId, onChanged, onEdit }: Props)
             )}
           </div>
         ) : signedUrl ? (
-          <LiftVideoPlayer src={signedUrl} fallbackUrl={video.video_url ?? null} />
-        ) : video.video_url ? (
-          <a href={video.video_url} target="_blank" rel="noreferrer" className="flex items-center justify-center gap-2 p-6 text-sm text-primary">
+          <LiftVideoPlayer src={signedUrl} fallbackUrl={openUrl} title={video.exercise || "Lift video"} />
+        ) : openUrl ? (
+          <a href={openUrl} target="_blank" rel="noreferrer" className="flex min-h-48 items-center justify-center gap-2 bg-secondary/30 p-6 text-sm text-primary">
             Open video link <ExternalLink className="h-3 w-3" />
           </a>
         ) : (
-          <div className="p-6 text-center text-xs text-muted-foreground">No video attached</div>
+          <div className="min-h-48 p-6 text-center text-xs text-muted-foreground">Video file not found.</div>
         )}
       </div>
 
