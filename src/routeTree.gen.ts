@@ -15,6 +15,7 @@ import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ApiDriveUploadRouteImport } from './routes/api/drive-upload'
 import { Route as AuthenticatedPortalRouteRouteImport } from './routes/_authenticated/portal/route'
 import { Route as AuthenticatedAdminRouteRouteImport } from './routes/_authenticated/admin/route'
 import { Route as AuthenticatedPortalIndexRouteImport } from './routes/_authenticated/portal/index'
@@ -96,6 +97,11 @@ const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiDriveUploadRoute = ApiDriveUploadRouteImport.update({
+  id: '/api/drive-upload',
+  path: '/api/drive-upload',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedPortalRouteRoute =
@@ -418,6 +424,7 @@ export interface FileRoutesByFullPath {
   '/sitemap': typeof SitemapRoute
   '/admin': typeof AuthenticatedAdminRouteRouteWithChildren
   '/portal': typeof AuthenticatedPortalRouteRouteWithChildren
+  '/api/drive-upload': typeof ApiDriveUploadRoute
   '/admin/account': typeof AuthenticatedAdminAccountRoute
   '/admin/apps': typeof AuthenticatedAdminAppsRoute
   '/admin/automations': typeof AuthenticatedAdminAutomationsRoute
@@ -476,6 +483,7 @@ export interface FileRoutesByTo {
   '/reset-password': typeof ResetPasswordRoute
   '/setup': typeof SetupRoute
   '/sitemap': typeof SitemapRoute
+  '/api/drive-upload': typeof ApiDriveUploadRoute
   '/admin/account': typeof AuthenticatedAdminAccountRoute
   '/admin/apps': typeof AuthenticatedAdminAppsRoute
   '/admin/automations': typeof AuthenticatedAdminAutomationsRoute
@@ -538,6 +546,7 @@ export interface FileRoutesById {
   '/sitemap': typeof SitemapRoute
   '/_authenticated/admin': typeof AuthenticatedAdminRouteRouteWithChildren
   '/_authenticated/portal': typeof AuthenticatedPortalRouteRouteWithChildren
+  '/api/drive-upload': typeof ApiDriveUploadRoute
   '/_authenticated/admin/account': typeof AuthenticatedAdminAccountRoute
   '/_authenticated/admin/apps': typeof AuthenticatedAdminAppsRoute
   '/_authenticated/admin/automations': typeof AuthenticatedAdminAutomationsRoute
@@ -600,6 +609,7 @@ export interface FileRouteTypes {
     | '/sitemap'
     | '/admin'
     | '/portal'
+    | '/api/drive-upload'
     | '/admin/account'
     | '/admin/apps'
     | '/admin/automations'
@@ -658,6 +668,7 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/setup'
     | '/sitemap'
+    | '/api/drive-upload'
     | '/admin/account'
     | '/admin/apps'
     | '/admin/automations'
@@ -719,6 +730,7 @@ export interface FileRouteTypes {
     | '/sitemap'
     | '/_authenticated/admin'
     | '/_authenticated/portal'
+    | '/api/drive-upload'
     | '/_authenticated/admin/account'
     | '/_authenticated/admin/apps'
     | '/_authenticated/admin/automations'
@@ -779,6 +791,7 @@ export interface RootRouteChildren {
   ResetPasswordRoute: typeof ResetPasswordRoute
   SetupRoute: typeof SetupRoute
   SitemapRoute: typeof SitemapRoute
+  ApiDriveUploadRoute: typeof ApiDriveUploadRoute
   ApiPublicSignnowWebhookRoute: typeof ApiPublicSignnowWebhookRoute
   ApiPublicStripeWebhookRoute: typeof ApiPublicStripeWebhookRoute
   LovableEmailQueueProcessRoute: typeof LovableEmailQueueProcessRoute
@@ -826,6 +839,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/drive-upload': {
+      id: '/api/drive-upload'
+      path: '/api/drive-upload'
+      fullPath: '/api/drive-upload'
+      preLoaderRoute: typeof ApiDriveUploadRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated/portal': {
@@ -1376,6 +1396,7 @@ const rootRouteChildren: RootRouteChildren = {
   ResetPasswordRoute: ResetPasswordRoute,
   SetupRoute: SetupRoute,
   SitemapRoute: SitemapRoute,
+  ApiDriveUploadRoute: ApiDriveUploadRoute,
   ApiPublicSignnowWebhookRoute: ApiPublicSignnowWebhookRoute,
   ApiPublicStripeWebhookRoute: ApiPublicStripeWebhookRoute,
   LovableEmailQueueProcessRoute: LovableEmailQueueProcessRoute,

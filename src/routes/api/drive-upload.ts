@@ -2,9 +2,11 @@ import { createFileRoute } from "@tanstack/react-router";
 import { createClient } from "@supabase/supabase-js";
 
 function json(body: unknown, init: ResponseInit = {}) {
+  const headers = new Headers(init.headers);
+  headers.set("content-type", "application/json");
   return new Response(JSON.stringify(body), {
     ...init,
-    headers: { "content-type": "application/json", ...(init.headers ?? {}) },
+    headers,
   });
 }
 
