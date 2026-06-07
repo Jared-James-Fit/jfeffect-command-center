@@ -169,7 +169,7 @@ export async function uploadToDrive(uploadUrl: string, file: File, onProgress?: 
         }
       } else {
         const detail = (xhr.responseText || "").slice(0, 300).replace(/\s+/g, " ").trim();
-        reject(new Error(`Drive PUT failed: HTTP ${xhr.status}${detail ? ` — ${detail}` : ""}`));
+        reject(new Error(`Drive upload failed: HTTP ${xhr.status}${detail ? ` — ${detail}` : ""}`));
       }
     };
     xhr.onerror = () => reject(new Error(`Network error while sending the video through the app upload route (status ${xhr.status || 0}).`));
