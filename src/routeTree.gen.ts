@@ -73,6 +73,7 @@ import { Route as AuthenticatedPortalWorkoutsDayIdRouteImport } from './routes/_
 import { Route as AuthenticatedPortalPurchasesIdRouteImport } from './routes/_authenticated/portal/purchases.$id'
 import { Route as AuthenticatedPortalCheckInsFormIdRouteImport } from './routes/_authenticated/portal/check-ins.$formId'
 import { Route as AuthenticatedAdminPurchasesIdRouteImport } from './routes/_authenticated/admin/purchases.$id'
+import { Route as AuthenticatedAdminProgramLibraryTemplateIdRouteImport } from './routes/_authenticated/admin/program-library.$templateId'
 import { Route as AuthenticatedAdminCoachesIdRouteImport } from './routes/_authenticated/admin/coaches.$id'
 import { Route as AuthenticatedAdminClientsIdRouteImport } from './routes/_authenticated/admin/clients.$id'
 import { Route as AuthenticatedAdminClientProgramsClientIdRouteImport } from './routes/_authenticated/admin/client-programs.$clientId'
@@ -450,6 +451,12 @@ const AuthenticatedAdminPurchasesIdRoute =
     path: '/$id',
     getParentRoute: () => AuthenticatedAdminPurchasesRoute,
   } as any)
+const AuthenticatedAdminProgramLibraryTemplateIdRoute =
+  AuthenticatedAdminProgramLibraryTemplateIdRouteImport.update({
+    id: '/$templateId',
+    path: '/$templateId',
+    getParentRoute: () => AuthenticatedAdminProgramLibraryRoute,
+  } as any)
 const AuthenticatedAdminCoachesIdRoute =
   AuthenticatedAdminCoachesIdRouteImport.update({
     id: '/coaches/$id',
@@ -521,7 +528,7 @@ export interface FileRoutesByFullPath {
   '/admin/offers': typeof AuthenticatedAdminOffersRoute
   '/admin/payment-links': typeof AuthenticatedAdminPaymentLinksRoute
   '/admin/payments': typeof AuthenticatedAdminPaymentsRoute
-  '/admin/program-library': typeof AuthenticatedAdminProgramLibraryRoute
+  '/admin/program-library': typeof AuthenticatedAdminProgramLibraryRouteWithChildren
   '/admin/programs': typeof AuthenticatedAdminProgramsRoute
   '/admin/purchases': typeof AuthenticatedAdminPurchasesRouteWithChildren
   '/admin/resources': typeof AuthenticatedAdminResourcesRoute
@@ -553,6 +560,7 @@ export interface FileRoutesByFullPath {
   '/admin/client-programs/$clientId': typeof AuthenticatedAdminClientProgramsClientIdRouteWithChildren
   '/admin/clients/$id': typeof AuthenticatedAdminClientsIdRoute
   '/admin/coaches/$id': typeof AuthenticatedAdminCoachesIdRoute
+  '/admin/program-library/$templateId': typeof AuthenticatedAdminProgramLibraryTemplateIdRoute
   '/admin/purchases/$id': typeof AuthenticatedAdminPurchasesIdRoute
   '/portal/check-ins/$formId': typeof AuthenticatedPortalCheckInsFormIdRoute
   '/portal/purchases/$id': typeof AuthenticatedPortalPurchasesIdRoute
@@ -591,7 +599,7 @@ export interface FileRoutesByTo {
   '/admin/offers': typeof AuthenticatedAdminOffersRoute
   '/admin/payment-links': typeof AuthenticatedAdminPaymentLinksRoute
   '/admin/payments': typeof AuthenticatedAdminPaymentsRoute
-  '/admin/program-library': typeof AuthenticatedAdminProgramLibraryRoute
+  '/admin/program-library': typeof AuthenticatedAdminProgramLibraryRouteWithChildren
   '/admin/programs': typeof AuthenticatedAdminProgramsRoute
   '/admin/purchases': typeof AuthenticatedAdminPurchasesRouteWithChildren
   '/admin/resources': typeof AuthenticatedAdminResourcesRoute
@@ -623,6 +631,7 @@ export interface FileRoutesByTo {
   '/admin/client-programs/$clientId': typeof AuthenticatedAdminClientProgramsClientIdRouteWithChildren
   '/admin/clients/$id': typeof AuthenticatedAdminClientsIdRoute
   '/admin/coaches/$id': typeof AuthenticatedAdminCoachesIdRoute
+  '/admin/program-library/$templateId': typeof AuthenticatedAdminProgramLibraryTemplateIdRoute
   '/admin/purchases/$id': typeof AuthenticatedAdminPurchasesIdRoute
   '/portal/check-ins/$formId': typeof AuthenticatedPortalCheckInsFormIdRoute
   '/portal/purchases/$id': typeof AuthenticatedPortalPurchasesIdRoute
@@ -665,7 +674,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/offers': typeof AuthenticatedAdminOffersRoute
   '/_authenticated/admin/payment-links': typeof AuthenticatedAdminPaymentLinksRoute
   '/_authenticated/admin/payments': typeof AuthenticatedAdminPaymentsRoute
-  '/_authenticated/admin/program-library': typeof AuthenticatedAdminProgramLibraryRoute
+  '/_authenticated/admin/program-library': typeof AuthenticatedAdminProgramLibraryRouteWithChildren
   '/_authenticated/admin/programs': typeof AuthenticatedAdminProgramsRoute
   '/_authenticated/admin/purchases': typeof AuthenticatedAdminPurchasesRouteWithChildren
   '/_authenticated/admin/resources': typeof AuthenticatedAdminResourcesRoute
@@ -697,6 +706,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/client-programs/$clientId': typeof AuthenticatedAdminClientProgramsClientIdRouteWithChildren
   '/_authenticated/admin/clients/$id': typeof AuthenticatedAdminClientsIdRoute
   '/_authenticated/admin/coaches/$id': typeof AuthenticatedAdminCoachesIdRoute
+  '/_authenticated/admin/program-library/$templateId': typeof AuthenticatedAdminProgramLibraryTemplateIdRoute
   '/_authenticated/admin/purchases/$id': typeof AuthenticatedAdminPurchasesIdRoute
   '/_authenticated/portal/check-ins/$formId': typeof AuthenticatedPortalCheckInsFormIdRoute
   '/_authenticated/portal/purchases/$id': typeof AuthenticatedPortalPurchasesIdRoute
@@ -771,6 +781,7 @@ export interface FileRouteTypes {
     | '/admin/client-programs/$clientId'
     | '/admin/clients/$id'
     | '/admin/coaches/$id'
+    | '/admin/program-library/$templateId'
     | '/admin/purchases/$id'
     | '/portal/check-ins/$formId'
     | '/portal/purchases/$id'
@@ -841,6 +852,7 @@ export interface FileRouteTypes {
     | '/admin/client-programs/$clientId'
     | '/admin/clients/$id'
     | '/admin/coaches/$id'
+    | '/admin/program-library/$templateId'
     | '/admin/purchases/$id'
     | '/portal/check-ins/$formId'
     | '/portal/purchases/$id'
@@ -914,6 +926,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/client-programs/$clientId'
     | '/_authenticated/admin/clients/$id'
     | '/_authenticated/admin/coaches/$id'
+    | '/_authenticated/admin/program-library/$templateId'
     | '/_authenticated/admin/purchases/$id'
     | '/_authenticated/portal/check-ins/$formId'
     | '/_authenticated/portal/purchases/$id'
@@ -1390,6 +1403,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminPurchasesIdRouteImport
       parentRoute: typeof AuthenticatedAdminPurchasesRoute
     }
+    '/_authenticated/admin/program-library/$templateId': {
+      id: '/_authenticated/admin/program-library/$templateId'
+      path: '/$templateId'
+      fullPath: '/admin/program-library/$templateId'
+      preLoaderRoute: typeof AuthenticatedAdminProgramLibraryTemplateIdRouteImport
+      parentRoute: typeof AuthenticatedAdminProgramLibraryRoute
+    }
     '/_authenticated/admin/coaches/$id': {
       id: '/_authenticated/admin/coaches/$id'
       path: '/coaches/$id'
@@ -1441,6 +1461,21 @@ declare module '@tanstack/react-router' {
     }
   }
 }
+
+interface AuthenticatedAdminProgramLibraryRouteChildren {
+  AuthenticatedAdminProgramLibraryTemplateIdRoute: typeof AuthenticatedAdminProgramLibraryTemplateIdRoute
+}
+
+const AuthenticatedAdminProgramLibraryRouteChildren: AuthenticatedAdminProgramLibraryRouteChildren =
+  {
+    AuthenticatedAdminProgramLibraryTemplateIdRoute:
+      AuthenticatedAdminProgramLibraryTemplateIdRoute,
+  }
+
+const AuthenticatedAdminProgramLibraryRouteWithChildren =
+  AuthenticatedAdminProgramLibraryRoute._addFileChildren(
+    AuthenticatedAdminProgramLibraryRouteChildren,
+  )
 
 interface AuthenticatedAdminPurchasesRouteChildren {
   AuthenticatedAdminPurchasesIdRoute: typeof AuthenticatedAdminPurchasesIdRoute
@@ -1494,7 +1529,7 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminOffersRoute: typeof AuthenticatedAdminOffersRoute
   AuthenticatedAdminPaymentLinksRoute: typeof AuthenticatedAdminPaymentLinksRoute
   AuthenticatedAdminPaymentsRoute: typeof AuthenticatedAdminPaymentsRoute
-  AuthenticatedAdminProgramLibraryRoute: typeof AuthenticatedAdminProgramLibraryRoute
+  AuthenticatedAdminProgramLibraryRoute: typeof AuthenticatedAdminProgramLibraryRouteWithChildren
   AuthenticatedAdminProgramsRoute: typeof AuthenticatedAdminProgramsRoute
   AuthenticatedAdminPurchasesRoute: typeof AuthenticatedAdminPurchasesRouteWithChildren
   AuthenticatedAdminResourcesRoute: typeof AuthenticatedAdminResourcesRoute
@@ -1538,7 +1573,7 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
     AuthenticatedAdminPaymentLinksRoute: AuthenticatedAdminPaymentLinksRoute,
     AuthenticatedAdminPaymentsRoute: AuthenticatedAdminPaymentsRoute,
     AuthenticatedAdminProgramLibraryRoute:
-      AuthenticatedAdminProgramLibraryRoute,
+      AuthenticatedAdminProgramLibraryRouteWithChildren,
     AuthenticatedAdminProgramsRoute: AuthenticatedAdminProgramsRoute,
     AuthenticatedAdminPurchasesRoute:
       AuthenticatedAdminPurchasesRouteWithChildren,
