@@ -700,3 +700,69 @@ function SaveAsTemplateDialog({ open, onOpenChange, blockId, defaultName }: any)
     </Dialog>
   );
 }
+
+function ProgressionDialog({
+  open, onOpenChange, onApply,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  onApply: (rule: { type: ProgressionRuleType; amount?: number; exerciseFilter?: string }) => Promise<void>;
+}) {
+  const [type, setType] = useState<ProgressionRuleType>("add_kg");
+  const [amount, setAmount] = useState<string>("2.5");
+  const [filter, setFilter] = useState<string>("");
+  const [busy, setBusy] = useState(false);
+
+  const needsAmount = type === "add_kg" || type === "add_lb" || type === "add_pct";
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader><DialogTitle>Apply progression across weeks</DialogTitle></DialogHeader>
+        <div className="space-y-3 text-sm">
+          <p className="text-xs text-muted-foreground">
+            Walks weeks in order. For each week ≥ 2, derives prescriptions from the previous week's matching row. Custom days are skipped.
+          </p>
+          <div>
+            <Label>Rule</Label>
+            <Select value={type} onValueChange={(v) => setType(v as ProgressionRuleType)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="add_kg">Add load (kg) each week</SelectItem>
+                <SelectItem value="add_lb">Add load (lb) each week</SelectItem>
+                <SelectItem value="add_pct">Add intensity (%) each week</SelectItem>
+                <SelectItem value="repeat">Repeat (same load every week)</SelectItem>
+                <SelectItem value="deload">Deload (−10% from previous week)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          {needsAmount && (
+            <div>
+              <Label>Amount</Label>
+              <Input type="number" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} />
+            </div>
+          )}
+          <div>
+            <Label>Exercise filter (optional)</Label>
+            <Input placeholder="e.g. squat, bench" value={filter} onChange={(e) => setFilter(e.target.value)} />
+            <p className="mt-1 text-[11px] text-muted-foreground">Leave empty to apply to every row.</p>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={busy}>Cancel</Button>
+          <Button disabled={busy} onClick={async () => {
+            setBusy(true);
+            try {
+              await onApply({
+                type,
+                amount: needsAmount ? (parseFloat(amount) || 0) : undefined,
+                exerciseFilter: filter.trim() || undefined,
+              });
+              onOpenChange(false);
+            } finally { setBusy(false); }
+          }}>{busy ? "Applying…" : "Apply"}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
