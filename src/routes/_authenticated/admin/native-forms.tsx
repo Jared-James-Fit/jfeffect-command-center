@@ -436,10 +436,11 @@ function QuestionRow({ q, formId, onMoveUp, onMoveDown }: { q: NfQuestion; formI
 
 function AssignmentsEditor({ formId, form, onFormChange }: { formId: string; form: NfForm; onFormChange: (f: NfForm) => void }) {
   const qc = useQueryClient();
+  const saveAssignmentsFn = useServerFn(replaceNativeFormAssignments);
   const [search, setSearch] = useState("");
   const [saving, setSaving] = useState(false);
+  const [dirty, setDirty] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [pendingClientIds, setPendingClientIds] = useState<Set<string>>(new Set());
 
   const { data: assignments = [] } = useQuery({ queryKey: ["nf-assignments", formId], queryFn: () => listAssignments(formId) });
   const { data: clients = [] } = useQuery({
@@ -455,84 +456,62 @@ function AssignmentsEditor({ formId, form, onFormChange }: { formId: string; for
   });
 
   useEffect(() => {
-    if (pendingClientIds.size > 0) return;
+    if (dirty || saving) return;
     setSelectedIds(new Set(assignments.map((a: any) => a.client_id)));
-  }, [assignments, pendingClientIds.size]);
+  }, [assignments, dirty, saving]);
 
-  const assigned = selectedIds;
+  const broadcastOn = form.visibility === "all_active_clients";
   const filtered = clients.filter((c: any) => {
     const q = search.trim().toLowerCase();
     if (!q) return true;
     return (c.full_name ?? "").toLowerCase().includes(q) || (c.email ?? "").toLowerCase().includes(q);
   });
+  const visibleIds = filtered.map((client: any) => client.id as string);
+  const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedIds.has(id));
 
-  async function toggle(clientId: string) {
-    if (broadcastOn || pendingClientIds.has(clientId)) return;
-    const wasAssigned = assigned.has(clientId);
+  function setClientSelected(clientId: string, checked: boolean) {
+    if (broadcastOn || saving) return;
     setSelectedIds((prev) => {
       const next = new Set(prev);
-      if (wasAssigned) next.delete(clientId);
-      else next.add(clientId);
+      if (checked) next.add(clientId);
+      else next.delete(clientId);
       return next;
     });
-    setPendingClientIds((prev) => new Set(prev).add(clientId));
-    try {
-      if (wasAssigned) {
-        await unassignForm(formId, clientId);
-      } else {
-        await assignFormToClient(formId, clientId);
-      }
-      await qc.invalidateQueries({ queryKey: ["nf-assignments", formId] });
-      await qc.invalidateQueries({ queryKey: ["nf-forms"] });
-    } catch (e: any) {
-      setSelectedIds((prev) => {
-        const next = new Set(prev);
-        if (wasAssigned) next.add(clientId);
-        else next.delete(clientId);
-        return next;
-      });
-      toast.error(e?.message ?? "Assignment failed");
-    } finally {
-      setPendingClientIds((prev) => {
-        const next = new Set(prev);
-        next.delete(clientId);
-        return next;
-      });
-    }
+    setDirty(true);
   }
 
-  async function selectAllVisible() {
-    const toAdd = filtered.filter((c: any) => !assigned.has(c.id)).map((c: any) => c.id);
-    if (toAdd.length === 0) return;
-    setSaving(true);
-    const previous = new Set(assigned);
-    setSelectedIds((prev) => new Set([...prev, ...toAdd]));
-    try {
-      await bulkAssignFormToClients(formId, toAdd);
-      await qc.invalidateQueries({ queryKey: ["nf-assignments", formId] });
-      await qc.invalidateQueries({ queryKey: ["nf-forms"] });
-      toast.success(`Assigned ${toAdd.length}`);
-    } catch (e: any) {
-      setSelectedIds(previous);
-      toast.error(e?.message ?? "Assignment failed");
-    } finally {
-      setSaving(false);
-    }
+  function toggle(clientId: string) {
+    setClientSelected(clientId, !selectedIds.has(clientId));
   }
 
-  async function clearAll() {
-    if (!confirm("Remove all individual assignments for this form?")) return;
-    setSaving(true);
-    const previous = new Set(assigned);
+  function selectAllVisible() {
+    if (broadcastOn || saving || visibleIds.length === 0) return;
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      for (const id of visibleIds) next.add(id);
+      return next;
+    });
+    setDirty(true);
+  }
+
+  function clearAll() {
+    if (broadcastOn || saving) return;
     setSelectedIds(new Set());
+    setDirty(true);
+  }
+
+  async function saveAssignmentChanges() {
+    setSaving(true);
     try {
-      await clearAllAssignments(formId);
+      const result = await saveAssignmentsFn({ data: { formId, clientIds: Array.from(selectedIds) } });
+      if (!result.ok) {
+        toast.error(result.error ?? "Assignments could not be saved");
+        return;
+      }
+      setDirty(false);
       await qc.invalidateQueries({ queryKey: ["nf-assignments", formId] });
       await qc.invalidateQueries({ queryKey: ["nf-forms"] });
-      toast.success("Cleared");
-    } catch (e: any) {
-      setSelectedIds(previous);
-      toast.error(e?.message ?? "Clear failed");
+      toast.success(`Saved ${result.count} assignment${result.count === 1 ? "" : "s"}`);
     } finally {
       setSaving(false);
     }
@@ -544,14 +523,8 @@ function AssignmentsEditor({ formId, form, onFormChange }: { formId: string; for
       const visibility = on ? "all_active_clients" : "selected";
       await upsertForm({ id: formId, visibility });
       onFormChange({ ...form, visibility });
-      if (on) {
-        // Materialize assignments for every active client now so submissions, due
-        // dates, and admin counts still work cleanly.
-        const ids = await listActiveCoachingClientIds();
-        await bulkAssignFormToClients(formId, ids);
-      }
-      qc.invalidateQueries({ queryKey: ["nf-forms"] });
-      qc.invalidateQueries({ queryKey: ["nf-assignments", formId] });
+      await qc.invalidateQueries({ queryKey: ["nf-forms"] });
+      await qc.invalidateQueries({ queryKey: ["nf-assignments", formId] });
       toast.success(on ? "Now visible to all active clients" : "Switched to selected clients");
     } catch (e: any) {
       toast.error(e?.message ?? "Failed");
@@ -572,8 +545,6 @@ function AssignmentsEditor({ formId, form, onFormChange }: { formId: string; for
       setSaving(false);
     }
   }
-
-  const broadcastOn = form.visibility === "all_active_clients";
 
   return (
     <div className="space-y-3">
