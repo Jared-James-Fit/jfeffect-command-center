@@ -38,7 +38,6 @@ import { PurchaseRecordsPanel } from "@/components/purchase-records-panel";
 import { PriceCardPickerDialog } from "@/components/price-card-picker-dialog";
 import { AgreementsPanel } from "@/components/agreements-panel";
 import { TrainingScheduleCard } from "@/components/training-schedule-card";
-import { listCheckInLinks } from "@/lib/check-ins";
 import { PowerlifterBadge, POWERLIFTER_BADGE_LABELS } from "@/components/powerlifter-badge";
 import { SocialHandlesEditor } from "@/components/social-handles-editor";
 import { SocialIcons } from "@/components/social-icons";
@@ -47,6 +46,9 @@ import { AppActivityCard } from "@/components/app-activity-card";
 import { FolderOpen, Eye } from "lucide-react";
 import { useClientImpersonation } from "@/lib/client-impersonation";
 import { useAuth } from "@/lib/auth";
+import { Checkbox } from "@/components/ui/checkbox";
+import { listAssignments, listForms as listNativeForms, type NfForm } from "@/lib/native-forms";
+import { replaceClientNativeFormAssignments } from "@/lib/native-forms.functions";
 
 function AssignedCoachSelect({ value, onChange }: { value: string | null; onChange: (v: string | null) => void }) {
   const { data: coaches = [] } = useQuery({
@@ -311,7 +313,6 @@ function ClientDetail() {
   const links = [
     ["Program Sheet", form.program_sheet_link],
     ["Drive Folder", form.drive_folder_link],
-    ["Check-In Form", form.checkin_form_link],
     ["Agreement", form.agreement_link],
     ["Calendar", form.calendar_link],
     ["Stripe", form.stripe_link],
@@ -562,29 +563,13 @@ function ClientDetail() {
           <Card className="border-border bg-card p-6 md:col-span-3 space-y-4">
             <div className="flex items-center justify-between gap-3 flex-wrap">
               <div>
-                <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Weekly Check-In</h3>
-                <p className="text-xs text-muted-foreground mt-1">Assign a reusable check-in link from your library, or paste a custom one below.</p>
+                <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Check-Ins & Forms</h3>
+                <p className="text-xs text-muted-foreground mt-1">Assign this client to forms from the unified form builder.</p>
               </div>
-              <Badge variant="outline" className={form.checkin_form_link ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300" : "border-warning/40 bg-warning/10 text-warning"}>
-                Weekly check-in link: {form.checkin_form_link ? "Added" : "Missing"}
-              </Badge>
+              <Link to="/admin/native-forms"><Button variant="outline" size="sm">Manage forms</Button></Link>
             </div>
-            <AssignCheckInLibrary
-              value={form.assigned_check_in_link_id ?? null}
-              onChange={(v: string | null) => set("assigned_check_in_link_id", v)}
-            />
+            <ClientNativeFormsAssignment clientId={id} />
             <div className="grid gap-3 md:grid-cols-2">
-              <div className="md:col-span-2">
-                <Label>Weekly Check-In Link</Label>
-                <Input
-                  value={form.checkin_form_link ?? ""}
-                  onChange={(e) => { set("checkin_form_link", e.target.value); set("checkin_link_updated_at", new Date().toISOString()); }}
-                  placeholder="https://forms.google.com/…"
-                />
-                {form.checkin_link_updated_at && (
-                  <div className="mt-1 text-[11px] text-muted-foreground">Last updated: {new Date(form.checkin_link_updated_at).toLocaleString()}</div>
-                )}
-              </div>
               <div>
                 <Label>Check-in due day</Label>
                 <Input value={form.checkin_due_day ?? ""} onChange={(e) => set("checkin_due_day", e.target.value)} placeholder="e.g. Every Sunday" />
@@ -621,7 +606,6 @@ function ClientDetail() {
             <div className="grid gap-3 md:grid-cols-2">
               <div><Label>Program sheet (Google Sheets)</Label><Input value={form.program_sheet_link ?? ""} onChange={(e) => set("program_sheet_link", e.target.value)} placeholder="https://sheets.google.com/…" /></div>
               <div><Label>Drive folder</Label><Input value={form.drive_folder_link ?? ""} onChange={(e) => set("drive_folder_link", e.target.value)} placeholder="https://drive.google.com/…" /></div>
-              <div><Label>Check-in form</Label><Input value={form.checkin_form_link ?? ""} onChange={(e) => set("checkin_form_link", e.target.value)} /></div>
               <div><Label>Agreement / contract</Label><Input value={form.agreement_link ?? ""} onChange={(e) => set("agreement_link", e.target.value)} /></div>
               <div><Label>Calendar / booking link</Label><Input value={form.calendar_link ?? ""} onChange={(e) => set("calendar_link", e.target.value)} /></div>
               <div><Label>Stripe payment link</Label><Input value={form.stripe_link ?? ""} onChange={(e) => set("stripe_link", e.target.value)} /></div>
@@ -935,26 +919,102 @@ function ClientMessagesTab({ clientId }: { clientId: string }) {
   return <MessageThread clientId={clientId} role="admin" conversationState={state ?? null} />;
 }
 
-function AssignCheckInLibrary({ value, onChange }: { value: string | null; onChange: (v: string | null) => void }) {
-  const { data: links = [] } = useQuery({
-    queryKey: ["check-in-links-active"],
-    queryFn: () => listCheckInLinks({ includeArchived: false }),
+function ClientNativeFormsAssignment({ clientId }: { clientId: string }) {
+  const qc = useQueryClient();
+  const saveClientAssignmentsFn = useServerFn(replaceClientNativeFormAssignments);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [dirty, setDirty] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const { data: forms = [] } = useQuery({ queryKey: ["nf-forms"], queryFn: () => listNativeForms({ includeArchived: false }) });
+  const { data: assignmentRows = [] } = useQuery({
+    queryKey: ["client-nf-assignments", clientId],
+    queryFn: async () => {
+      const results = await Promise.all(forms.map(async (form: NfForm) => ({ formId: form.id, rows: await listAssignments(form.id) })));
+      return results.flatMap((item) => item.rows.filter((row: any) => row.client_id === clientId).map(() => item.formId));
+    },
+    enabled: forms.length > 0,
   });
+
+  useEffect(() => {
+    if (dirty || saving) return;
+    setSelectedIds(new Set(assignmentRows));
+  }, [assignmentRows, dirty, saving]);
+
+  const visibleFormIds = forms.filter((form: NfForm) => form.visibility !== "all_active_clients").map((form: NfForm) => form.id);
+  const allVisibleSelected = visibleFormIds.length > 0 && visibleFormIds.every((id) => selectedIds.has(id));
+
+  function setFormSelected(formId: string, checked: boolean) {
+    if (saving) return;
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(formId);
+      else next.delete(formId);
+      return next;
+    });
+    setDirty(true);
+  }
+
+  async function saveAssignments() {
+    setSaving(true);
+    try {
+      const result = await saveClientAssignmentsFn({ data: { clientId, formIds: Array.from(selectedIds) } });
+      if (!result.ok) return toast.error(result.error ?? "Assignments could not be saved");
+      setDirty(false);
+      await qc.invalidateQueries({ queryKey: ["client-nf-assignments", clientId] });
+      await qc.invalidateQueries({ queryKey: ["nf-assignments"] });
+      toast.success(`Saved ${result.count} form assignment${result.count === 1 ? "" : "s"}`);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Assignments could not be saved");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
-    <div className="grid gap-2 md:grid-cols-[1fr_auto] items-end">
-      <div>
-        <Label>Assigned check-in link (from library)</Label>
-        <Select value={value ?? "none"} onValueChange={(v) => onChange(v === "none" ? null : v)}>
-          <SelectTrigger><SelectValue placeholder="— None —" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="none">— None (use custom link below) —</SelectItem>
-            {links.filter((l) => l.active).map((l) => (
-              <SelectItem key={l.id} value={l.id}>{l.title} {l.due_day ? `· ${l.due_day}` : ""}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+    <div className="space-y-3 rounded-md border border-border bg-secondary/20 p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="text-xs text-muted-foreground">
+          {selectedIds.size} selected{dirty ? " · unsaved" : ""}
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setSelectedIds(new Set(visibleFormIds));
+              setDirty(true);
+            }}
+            disabled={saving || visibleFormIds.length === 0 || allVisibleSelected}
+          >
+            Select all
+          </Button>
+          <Button type="button" variant="ghost" size="sm" onClick={() => { setSelectedIds(new Set()); setDirty(true); }} disabled={saving}>Clear all</Button>
+          <Button type="button" size="sm" onClick={saveAssignments} disabled={saving || !dirty}>{saving ? "Saving…" : "Save assignments"}</Button>
+        </div>
       </div>
-      <Link to="/admin/native-forms"><Button variant="outline" size="sm">Manage forms</Button></Link>
+      <div className="max-h-64 space-y-1 overflow-y-auto">
+        {forms.length === 0 ? (
+          <div className="rounded border border-dashed border-border p-3 text-xs text-muted-foreground">No forms yet.</div>
+        ) : forms.map((form: NfForm) => {
+          const broadcast = form.visibility === "all_active_clients";
+          const checked = broadcast || selectedIds.has(form.id);
+          return (
+            <button
+              key={form.id}
+              type="button"
+              onClick={() => !broadcast && setFormSelected(form.id, !checked)}
+              disabled={saving || broadcast}
+              className="flex min-h-[44px] w-full items-center gap-3 rounded p-2 text-left hover:bg-muted/40 disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              <Checkbox checked={checked} className="pointer-events-none" />
+              <span className="min-w-0 flex-1 text-sm font-semibold">{form.title}</span>
+              <Badge variant="outline" className="text-[10px]">{broadcast ? "All active" : form.kind === "external" ? "External" : "Native"}</Badge>
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }

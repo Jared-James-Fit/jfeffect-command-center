@@ -218,7 +218,21 @@ function FormEditorDialog({ form, open, onClose }: { form: NfForm; open: boolean
   });
 
   async function saveSettings() {
-    const { id: _ignore, created_at, updated_at, version, ...patch } = local as any;
+    const patch = {
+      title: local.title,
+      description: local.description,
+      form_type: local.form_type,
+      recurrence: local.recurrence,
+      recurrence_day: local.recurrence_day,
+      active: local.active,
+      archived: local.archived,
+      kind: local.kind,
+      external_url: local.external_url,
+      button_label: local.button_label,
+      open_style: local.open_style,
+      visibility: local.visibility,
+      auto_assign_new_clients: local.auto_assign_new_clients,
+    };
     try {
       await upsertForm({ id: form.id, ...patch });
       qc.invalidateQueries({ queryKey: ["nf-forms"] });
@@ -610,8 +624,7 @@ function AssignmentsEditor({ formId, form, onFormChange }: { formId: string; for
               checked={broadcastOn ? true : selectedIds.has(c.id)}
               disabled={broadcastOn || saving}
               tabIndex={-1}
-              onClick={(e) => e.stopPropagation()}
-              onCheckedChange={(checked) => setClientSelected(c.id, checked === true)}
+              className="pointer-events-none"
             />
             <span className="text-sm">{c.full_name}</span>
             <span className="ml-auto truncate text-xs text-muted-foreground">{c.email}</span>

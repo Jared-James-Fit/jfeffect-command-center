@@ -21,6 +21,7 @@ import { SocialIcons } from "@/components/social-icons";
 import { LogBodyweightCard } from "@/components/log-bodyweight-card";
 import type { WeightUnit } from "@/lib/progress-metrics";
 import { HomeScreenSetupCard } from "@/components/home-screen-setup-card";
+import { listFormsForClient } from "@/lib/native-forms";
 
 export const Route = createFileRoute("/_authenticated/portal/")({ component: PortalHome });
 
@@ -35,6 +36,12 @@ function PortalHome() {
       const { data } = await supabase.from("clients").select("*").eq("user_id", portalUserId!).maybeSingle();
       return data;
     },
+  });
+
+  const { data: assignedForms = [] } = useQuery({
+    queryKey: ["nf-forms-for-client", client?.id],
+    enabled: !!client?.id,
+    queryFn: () => listFormsForClient(client!.id),
   });
 
   const { data: outstandingAgreements = [] } = useQuery({
@@ -351,8 +358,8 @@ function PortalHome() {
               {!client.program_sheet_link && (
                 <div className="text-[11px] text-muted-foreground/80 pt-1">Program not added yet.</div>
               )}
-              {!client.checkin_form_link && (
-                <div className="text-[11px] text-muted-foreground/80">Check-in link missing.</div>
+              {assignedForms.length === 0 && (
+                <div className="text-[11px] text-muted-foreground/80">No check-ins assigned yet.</div>
               )}
             </Card>
 

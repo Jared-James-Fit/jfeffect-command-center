@@ -18,6 +18,11 @@ const ReplaceAssignmentsSchema = z.object({
   clientIds: z.array(z.string().uuid()).max(5000),
 });
 
+const ReplaceClientAssignmentsSchema = z.object({
+  clientId: z.string().uuid(),
+  formIds: z.array(z.string().uuid()).max(1000),
+});
+
 const FormSchema = z.object({ formId: z.string().uuid() });
 const DeleteFormsSchema = z.object({ formIds: z.array(z.string().uuid()).min(1).max(500) });
 
@@ -168,6 +173,34 @@ export const replaceNativeFormAssignments = createServerFn({ method: "POST" })
       return { ok: true, count: clientIds.length, error: null as string | null };
     } catch (error: any) {
       return { ok: false, count: 0, error: error?.message ?? "Assignments could not be saved." };
+    }
+  });
+
+export const replaceClientNativeFormAssignments = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => ReplaceClientAssignmentsSchema.parse(input))
+  .handler(async ({ data, context }) => {
+    try {
+      const formIds = Array.from(new Set(data.formIds));
+      const access = await getAssignmentAccess(context.userId, [data.clientId]);
+
+      const { error: deleteError } = await access.supabaseAdmin
+        .from("nf_assignments")
+        .delete()
+        .eq("client_id", data.clientId);
+      if (deleteError) throw new Error(deleteError.message);
+
+      if (formIds.length > 0) {
+        const rows = formIds.map((formId) => ({ form_id: formId, client_id: data.clientId }));
+        const { error: insertError } = await access.supabaseAdmin
+          .from("nf_assignments")
+          .upsert(rows, { onConflict: "form_id,client_id" });
+        if (insertError) throw new Error(insertError.message);
+      }
+
+      return { ok: true, count: formIds.length, error: null as string | null };
+    } catch (error: any) {
+      return { ok: false, count: 0, error: error?.message ?? "Client form assignments could not be saved." };
     }
   });
 
