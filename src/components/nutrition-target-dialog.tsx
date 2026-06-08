@@ -123,6 +123,7 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
       pdf_url: form.pdf_url || null,
       pdf_name: form.pdf_name || null,
       last_updated_at: new Date().toISOString(),
+      water: form.water || null,
     };
     let targetId = form.id;
     if (targetId) {
