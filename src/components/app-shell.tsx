@@ -154,6 +154,9 @@ export function AppShell({ items, title, children }: { items: NavItem[]; title: 
 
   const grouped = useMemo(() => groupNavItems(items), [items]);
   const bottomItems = items.slice(0, 5);
+  const accountHref =
+    items.find((i) => i.to.endsWith("/account") || i.to.endsWith("/account-settings"))?.to ??
+    "/admin/account";
 
   const isCollapsed = mode === "collapsed";
   const isCompact = mode === "compact";
@@ -288,8 +291,8 @@ export function AppShell({ items, title, children }: { items: NavItem[]; title: 
             <div className="flex flex-col items-center gap-1">
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Link to="/admin/account" className="rounded-full">
-                    <UserAvatar src={me?.pic ?? null} name={me?.name ?? user?.email ?? ""} size={28} ring />
+                  <Link to={accountHref} className="rounded-full">
+                    <UserAvatar src={me?.pic ?? null} name={me?.name ?? user?.email ?? ""} size={28} ring expandable={false} />
                   </Link>
                 </TooltipTrigger>
                 <TooltipContent side="right">{me?.name || user?.email}</TooltipContent>
@@ -321,8 +324,8 @@ export function AppShell({ items, title, children }: { items: NavItem[]; title: 
             </div>
           ) : (
             <div className="flex items-center gap-2">
-              <Link to="/admin/account" className="shrink-0">
-                <UserAvatar src={me?.pic ?? null} name={me?.name ?? user?.email ?? ""} size={28} ring />
+              <Link to={accountHref} className="shrink-0" aria-label="Account settings">
+                <UserAvatar src={me?.pic ?? null} name={me?.name ?? user?.email ?? ""} size={28} ring expandable={false} />
               </Link>
               <div className="min-w-0 flex-1">
                 <div className="truncate text-[11px] font-semibold leading-tight">{me?.name || user?.email}</div>
