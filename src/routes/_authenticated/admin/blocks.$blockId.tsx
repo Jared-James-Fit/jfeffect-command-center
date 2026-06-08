@@ -735,9 +735,10 @@ function FullBlockNav({
 }
 
 function DayBlock({
-  day, rows, exercises, density, onAction, selected, onSelect, link, onRowPatch, onDayPatch,
+  blockId, day, rows, exercises, density, onAction, selected, onSelect, link, onRowPatch, onDayPatch,
   weekIndex, onCopyDayToFuture,
 }: {
+  blockId: string;
   day: any;
   rows: any[];
   exercises: ExerciseRef[];
@@ -805,18 +806,26 @@ function DayBlock({
       onDrop={(e) => onDrop(e)}
     >
       <div className="flex flex-wrap items-center gap-1.5 pb-1" onClick={(e) => e.stopPropagation()}>
-        <Input
-          defaultValue={day.title ?? ""}
-          placeholder={`Day ${day.day_index}`}
-          className="h-6 max-w-[180px] border-0 bg-transparent px-1 text-xs font-bold focus-visible:ring-1"
-          onBlur={(e) => { if (e.target.value !== (day.title ?? "")) onDayPatch(day.id, { title: e.target.value }); }}
-        />
-        <Input
-          defaultValue={day.focus ?? ""}
-          placeholder="Focus"
-          className="h-6 max-w-[160px] border-0 bg-transparent px-1 text-[11px] text-muted-foreground focus-visible:ring-1"
-          onBlur={(e) => { if (e.target.value !== (day.focus ?? "")) onDayPatch(day.id, { focus: e.target.value }); }}
-        />
+        <div className="max-w-[180px]">
+          <CellInput
+            density={density}
+            value={day.title ?? ""}
+            placeholder={`Day ${day.day_index}`}
+            draftKey={`${blockId}::w${weekIndex ?? 0}::d${day.id}::title`}
+            className="h-6 border-0 bg-transparent px-1 text-xs font-bold focus-visible:ring-1"
+            onCommit={(v) => { if (v !== (day.title ?? "")) onDayPatch(day.id, { title: v }); }}
+          />
+        </div>
+        <div className="max-w-[160px]">
+          <CellInput
+            density={density}
+            value={day.focus ?? ""}
+            placeholder="Focus"
+            draftKey={`${blockId}::w${weekIndex ?? 0}::d${day.id}::focus`}
+            className="h-6 border-0 bg-transparent px-1 text-[11px] text-muted-foreground focus-visible:ring-1"
+            onCommit={(v) => { if (v !== (day.focus ?? "")) onDayPatch(day.id, { focus: v }); }}
+          />
+        </div>
         <LinkBadge
           isCustom={link.isCustom}
           sourceLabel={link.sourceLabel}
@@ -886,7 +895,7 @@ function DayBlock({
             {rows.map((r: any, idx: number) => (
               <Fragment key={r.id}>
                 {dragOver && dropIndex === idx && <InsertionRow />}
-                <CompactRow row={r} exercises={exercises} density={density} onAction={onAction} onRowPatch={onRowPatch} dayId={day.id} rowIdx={idx} />
+                <CompactRow blockId={blockId} weekIndex={weekIndex ?? 0} row={r} exercises={exercises} density={density} onAction={onAction} onRowPatch={onRowPatch} dayId={day.id} rowIdx={idx} />
               </Fragment>
             ))}
             {dragOver && dropIndex === rows.length && rows.length > 0 && <InsertionRow />}
@@ -895,11 +904,13 @@ function DayBlock({
       </div>
 
       <div className="mt-1 flex items-center gap-1 text-[10px] text-muted-foreground" onClick={(e) => e.stopPropagation()}>
-        <Input
-          defaultValue={day.notes ?? ""}
+        <CellInput
+          density={density}
+          value={day.notes ?? ""}
           placeholder={day.notes ? "" : "+ Note"}
+          draftKey={`${blockId}::w${weekIndex ?? 0}::d${day.id}::notes`}
           className="h-6 border-0 bg-transparent px-1 text-[11px] focus-visible:ring-1"
-          onBlur={(e) => { if (e.target.value !== (day.notes ?? "")) onAction(() => updateDay(day.id, { notes: e.target.value })); }}
+          onCommit={(v) => { if (v !== (day.notes ?? "")) onAction(() => updateDay(day.id, { notes: v })); }}
         />
       </div>
     </Card>
@@ -907,8 +918,10 @@ function DayBlock({
 }
 
 function CompactRow({
-  row, exercises, density, onAction, onRowPatch, dayId, rowIdx,
+  blockId, weekIndex, row, exercises, density, onAction, onRowPatch, dayId, rowIdx,
 }: {
+  blockId: string;
+  weekIndex: number;
   row: any;
   exercises: ExerciseRef[];
   density: "compact" | "comfortable";
@@ -923,6 +936,7 @@ function CompactRow({
   const cell = DENSITY_CLASSES[density].cell;
   const [expanded, setExpanded] = useState(false);
   const patch = (p: Record<string, any>) => onRowPatch(row.id, dayId, p);
+  const dk = (field: string) => `${blockId}::w${weekIndex}::d${dayId}::r${row.id}::${field}`;
 
   return (
     <>
@@ -954,25 +968,30 @@ function CompactRow({
           </Select>
         ) : (
           <CellInput density={density} value={row.exercise_name_override}
+            draftKey={dk("exercise_name_override")}
             placeholder="Custom name"
             onCommit={(v) => onAction(() => updateRow(row.id, { exercise_name_override: v || null }))} />
         )}
       </td>
       <td className={cell}>
         <CellInput density={density} type="number" inputMode="numeric" value={row.sets}
+          draftKey={dk("sets")}
           onCommit={(v) => patch({ sets: parseInt(v) || null })} />
       </td>
       <td className={cell}>
         <CellInput density={density} value={row.reps_text} placeholder="8-12"
+          draftKey={dk("reps_text")}
           onCommit={(v) => patch({ reps_text: v || null })} />
       </td>
       <td className={cell}>
         <CellInput density={density} inputMode="decimal" value={row.rpe} placeholder="8"
+          draftKey={dk("rpe")}
           onCommit={(v) => patch({ rpe: v || null })} />
       </td>
       <td className={cell}>
         <div className="flex gap-0.5">
           <CellInput density={density} className="w-12" inputMode="decimal" value={row.percentage} placeholder="%"
+            draftKey={dk("percentage")}
             onCommit={(v) => patch({ percentage: parseFloat(v) || null })} />
           <Select value={row.percentage_basis ?? "manual"} onValueChange={(v) => patch({ percentage_basis: v as PercentageBasis })}>
             <SelectTrigger className={cn("border-0 bg-transparent px-1", DENSITY_CLASSES[density].input)}>
@@ -984,10 +1003,12 @@ function CompactRow({
       </td>
       <td className={cell}>
         <CellInput density={density} inputMode="decimal" value={row.load_kg} placeholder="kg"
+          draftKey={dk("load_kg")}
           onCommit={(v) => patch({ load_kg: parseFloat(v) || null })} />
       </td>
       <td className={cell}>
         <CellInput density={density} inputMode="numeric" value={row.rest_seconds} placeholder="s"
+          draftKey={dk("rest_seconds")}
           onCommit={(v) => patch({ rest_seconds: parseInt(v) || null })} />
       </td>
       <td className={cell}>
@@ -1013,6 +1034,7 @@ function CompactRow({
             <label className="flex items-center gap-1 text-[10px] text-muted-foreground">
               <span className="w-12 uppercase">Tempo</span>
               <CellInput density={density} value={row.tempo} placeholder="3-1-1"
+                draftKey={dk("tempo")}
                 onCommit={(v) => patch({ tempo: v || null })} />
             </label>
             <label className="flex items-center gap-1 text-[10px] text-muted-foreground">
@@ -1029,11 +1051,13 @@ function CompactRow({
             <label className="flex items-center gap-1 text-[10px] text-muted-foreground">
               <span className="w-12 uppercase">RIR</span>
               <CellInput density={density} value={row.rir} placeholder="2"
+                draftKey={dk("rir")}
                 onCommit={(v) => patch({ rir: v || null })} />
             </label>
             <label className="col-span-1 flex items-start gap-1 text-[10px] text-muted-foreground md:col-span-3">
               <span className="mt-1 w-12 uppercase">Notes</span>
               <CellInput density={density} value={row.notes} placeholder="cue / note / form reminder"
+                draftKey={dk("notes")}
                 onCommit={(v) => onAction(() => updateRow(row.id, { notes: v || null }))} />
             </label>
           </div>
