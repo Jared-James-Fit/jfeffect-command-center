@@ -14,7 +14,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Loader2, Send, MessageCircle, Upload } from "lucide-react";
+import { Loader2, Send, MessageCircle, Upload, ArrowLeft, ExternalLink, Check } from "lucide-react";
 import {
   getForm,
   listQuestions,
@@ -59,6 +59,7 @@ function ClientFormRenderer() {
   const { data: questions = [] } = useQuery({
     queryKey: ["nf-questions", formId],
     queryFn: () => listQuestions(formId),
+    enabled: !!form && form.kind !== "external",
   });
 
   const { data: submission } = useQuery({
@@ -164,6 +165,22 @@ function ClientFormRenderer() {
       <div className="grid min-h-[60vh] place-items-center">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
       </div>
+    );
+  }
+
+  if (form.kind === "external") {
+    return (
+      <ExternalFormView
+        form={form}
+        submission={submission}
+        onMarkSubmitted={async () => {
+          await submitSubmission(submission.id);
+          toast.success("Marked as submitted");
+          qc.invalidateQueries({ queryKey: ["nf-current-submission", formId, client?.id] });
+          qc.invalidateQueries({ queryKey: ["nf-submissions-for-client", client?.id] });
+        }}
+        onBack={() => navigate({ to: "/portal/check-ins" })}
+      />
     );
   }
 
