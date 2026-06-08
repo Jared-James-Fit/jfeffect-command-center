@@ -15,6 +15,24 @@ import { toast } from "sonner";
 
 type Mode = "admin" | "client";
 
+/** Tone classes for a program/block status badge. */
+function statusTone(status?: string | null): string {
+  switch (status) {
+    case "Active":
+      return "border-emerald-500/40 bg-emerald-500/10 text-emerald-500";
+    case "Completed":
+      return "border-sky-500/40 bg-sky-500/10 text-sky-500";
+    case "Planned":
+      return "border-amber-500/40 bg-amber-500/10 text-amber-500";
+    case "Draft":
+      return "border-muted-foreground/30 bg-muted/30 text-muted-foreground";
+    case "Archived":
+      return "border-destructive/40 bg-destructive/10 text-destructive";
+    default:
+      return "";
+  }
+}
+
 /**
  * Surfaces the training programs (preps + blocks) currently assigned to a
  * client. Used on the admin client profile (Training tab) and on the client
