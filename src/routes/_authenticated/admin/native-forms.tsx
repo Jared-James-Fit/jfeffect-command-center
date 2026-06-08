@@ -14,14 +14,15 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
-import { Plus, Trash2, Copy, GripVertical, Users, FileEdit, ChevronUp, ChevronDown, Archive } from "lucide-react";
+import { Plus, Trash2, Copy, GripVertical, FileEdit, ChevronUp, ChevronDown, Archive, ExternalLink, Search, Eye } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import {
   listForms, upsertForm, duplicateForm, archiveForm, deleteForm,
   listQuestions, upsertQuestion, deleteQuestion, reorderQuestions,
   listAssignments, assignFormToClient, unassignForm,
+  bulkAssignFormToClients, clearAllAssignments, listActiveCoachingClientIds,
   NF_QUESTION_TYPES, NF_QUESTION_TYPE_LABEL,
-  type NfForm, type NfQuestion, type NfQuestionType, type NfRecurrence,
+  type NfForm, type NfQuestion, type NfQuestionType, type NfRecurrence, type NfKind, type NfOpenStyle,
 } from "@/lib/native-forms";
 
 export const Route = createFileRoute("/_authenticated/admin/native-forms")({
@@ -31,22 +32,37 @@ export const Route = createFileRoute("/_authenticated/admin/native-forms")({
 function AdminNativeForms() {
   const qc = useQueryClient();
   const [editing, setEditing] = useState<NfForm | null>(null);
+  const [creating, setCreating] = useState<NfKind | null>(null);
 
   const { data: forms = [] } = useQuery({ queryKey: ["nf-forms"], queryFn: () => listForms({ includeArchived: true }) });
 
-  async function handleCreate() {
-    const id = await upsertForm({ title: "Untitled Form", form_type: "custom", recurrence: "none", active: false });
+  async function handleCreate(kind: NfKind) {
+    const id = await upsertForm({
+      title: kind === "external" ? "Untitled External Form" : "Untitled Form",
+      form_type: "check_in",
+      recurrence: "none",
+      active: false,
+      kind,
+      open_style: "embed",
+      visibility: "selected",
+    });
     qc.invalidateQueries({ queryKey: ["nf-forms"] });
     const created = await listForms({ includeArchived: true });
     setEditing(created.find((f) => f.id === id) ?? null);
+    setCreating(null);
   }
 
   return (
     <>
-      <PageHeader title="Native Forms" subtitle="Build, edit, and assign your in-app forms." actions={
-        <Button onClick={handleCreate} className="bg-gradient-primary font-bold"><Plus className="mr-2 h-4 w-4" /> New Form</Button>
+      <PageHeader title="Form Builder" subtitle="Build native forms or embed external check-ins, then assign them to clients." actions={
+        <Button onClick={() => setCreating("native")} className="bg-gradient-primary font-bold"><Plus className="mr-2 h-4 w-4" /> New Form</Button>
       } />
       <div className="space-y-3 p-4 md:p-6">
+        {forms.length === 0 && (
+          <Card className="border-dashed bg-card p-8 text-center text-sm text-muted-foreground">
+            No forms yet. Create a Native form (built in-app) or an External form (Fillout, Typeform, Google Forms link).
+          </Card>
+        )}
         {forms.map((f) => {
           return <FormRow key={f.id} form={f} onEdit={() => setEditing(f)} />;
         })}
@@ -55,16 +71,48 @@ function AdminNativeForms() {
       {editing && (
         <FormEditorDialog form={editing} open onClose={() => setEditing(null)} />
       )}
+
+      <NewFormDialog open={!!creating} onPick={handleCreate} onClose={() => setCreating(null)} />
     </>
+  );
+}
+
+function NewFormDialog({ open, onPick, onClose }: { open: boolean; onPick: (k: NfKind) => void; onClose: () => void }) {
+  return (
+    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader><DialogTitle>Create a form</DialogTitle></DialogHeader>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <button onClick={() => onPick("native")} className="rounded-lg border border-border bg-card p-4 text-left hover:border-primary hover:bg-secondary/30">
+            <FileEdit className="mb-2 h-5 w-5 text-primary" />
+            <div className="font-bold">Native Form</div>
+            <div className="mt-1 text-xs text-muted-foreground">Build questions inside the app. Answers tracked in-app.</div>
+          </button>
+          <button onClick={() => onPick("external")} className="rounded-lg border border-border bg-card p-4 text-left hover:border-primary hover:bg-secondary/30">
+            <ExternalLink className="mb-2 h-5 w-5 text-primary" />
+            <div className="font-bold">External / Embedded</div>
+            <div className="mt-1 text-xs text-muted-foreground">Paste a Fillout, Typeform, Google Forms link. Opens inside the app.</div>
+          </button>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
 function FormRow({ form, onEdit }: { form: NfForm; onEdit: () => void }) {
   const qc = useQueryClient();
-  const { data: questions = [] } = useQuery({ queryKey: ["nf-questions", form.id], queryFn: () => listQuestions(form.id) });
+  const { data: questions = [] } = useQuery({
+    queryKey: ["nf-questions", form.id],
+    queryFn: () => listQuestions(form.id),
+    enabled: form.kind === "native",
+  });
   const { data: assignments = [] } = useQuery({ queryKey: ["nf-assignments", form.id], queryFn: () => listAssignments(form.id) });
 
-  const isActive = form.active && !form.archived && questions.length > 0 && assignments.length > 0;
+  const hasAudience = form.visibility === "all_active_clients" || assignments.length > 0;
+  const hasContent = form.kind === "external" ? !!form.external_url : questions.length > 0;
+  const isActive = form.active && !form.archived && hasContent && hasAudience;
+  const assignedCount = form.visibility === "all_active_clients" ? "All active" : `${assignments.length} assigned`;
+  const kindLabel = form.kind === "external" ? "External" : "Native";
 
   return (
     <Card className="border-border bg-card p-4">
@@ -72,6 +120,7 @@ function FormRow({ form, onEdit }: { form: NfForm; onEdit: () => void }) {
         <div>
           <div className="flex items-center gap-2">
             <div className="text-base font-black">{form.title}</div>
+            <Badge variant="outline" className="text-[10px]">{kindLabel}</Badge>
             {isActive ? (
               <Badge className="border-emerald-500/40 bg-emerald-500/10 text-emerald-600">● Active</Badge>
             ) : form.archived ? (
@@ -81,7 +130,8 @@ function FormRow({ form, onEdit }: { form: NfForm; onEdit: () => void }) {
             )}
           </div>
           <div className="mt-1 text-xs text-muted-foreground">
-            {questions.length} questions · {assignments.length} assigned · {form.recurrence}
+            {form.kind === "native" ? `${questions.length} questions` : (form.external_url ? "External link set" : "No URL yet")}
+            {" · "}{assignedCount}{" · "}{form.recurrence}
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -105,24 +155,37 @@ function FormEditorDialog({ form, open, onClose }: { form: NfForm; open: boolean
   const qc = useQueryClient();
   const [local, setLocal] = useState<NfForm>(form);
 
-  const { data: questions = [] } = useQuery({ queryKey: ["nf-questions", form.id], queryFn: () => listQuestions(form.id) });
+  const { data: questions = [] } = useQuery({
+    queryKey: ["nf-questions", form.id],
+    queryFn: () => listQuestions(form.id),
+    enabled: form.kind === "native",
+  });
 
   async function saveSettings() {
-    const { id: _ignore, ...patch } = local;
-    await upsertForm({ id: form.id, ...patch });
-    qc.invalidateQueries({ queryKey: ["nf-forms"] });
-    toast.success("Saved");
+    const { id: _ignore, created_at, updated_at, version, ...patch } = local as any;
+    try {
+      await upsertForm({ id: form.id, ...patch });
+      qc.invalidateQueries({ queryKey: ["nf-forms"] });
+      toast.success("Saved");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to save");
+    }
   }
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto">
-        <DialogHeader><DialogTitle>Edit Form</DialogTitle></DialogHeader>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            Edit Form
+            <Badge variant="outline" className="text-[10px]">{form.kind === "external" ? "External" : "Native"}</Badge>
+          </DialogTitle>
+        </DialogHeader>
 
         <Tabs defaultValue="settings">
           <TabsList>
             <TabsTrigger value="settings">Settings</TabsTrigger>
-            <TabsTrigger value="questions">Questions ({questions.length})</TabsTrigger>
+            {form.kind === "native" && <TabsTrigger value="questions">Questions ({questions.length})</TabsTrigger>}
             <TabsTrigger value="assign">Assign</TabsTrigger>
           </TabsList>
 
@@ -135,6 +198,49 @@ function FormEditorDialog({ form, open, onClose }: { form: NfForm; open: boolean
               <Label>Description</Label>
               <Textarea rows={2} value={local.description ?? ""} onChange={(e) => setLocal({ ...local, description: e.target.value })} />
             </div>
+
+            {local.kind === "external" && (
+              <div className="space-y-3 rounded-lg border border-border bg-secondary/10 p-3">
+                <div>
+                  <Label>Form URL</Label>
+                  <Input
+                    placeholder="https://forms.fillout.com/... or https://forms.gle/..."
+                    value={local.external_url ?? ""}
+                    onChange={(e) => setLocal({ ...local, external_url: e.target.value })}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label>Button label</Label>
+                    <Input
+                      placeholder="Submit Weekly Check-In"
+                      value={local.button_label ?? ""}
+                      onChange={(e) => setLocal({ ...local, button_label: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <Label>Open style</Label>
+                    <Select value={local.open_style} onValueChange={(v) => setLocal({ ...local, open_style: v as NfOpenStyle })}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="embed">Embed in app (iframe)</SelectItem>
+                        <SelectItem value="modal">Open in app browser modal</SelectItem>
+                        <SelectItem value="new_tab">Open in a new tab</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                {local.external_url && (
+                  <a href={local.external_url} target="_blank" rel="noreferrer" className="inline-flex items-center text-xs text-primary hover:underline">
+                    <Eye className="mr-1 h-3 w-3" /> Preview external form
+                  </a>
+                )}
+                <p className="text-[11px] text-muted-foreground">
+                  Note: some providers (Google Forms, certain Typeform/Fillout settings) block embedding. If embed fails the app will fall back to opening the link.
+                </p>
+              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label>Recurrence</Label>
@@ -169,12 +275,14 @@ function FormEditorDialog({ form, open, onClose }: { form: NfForm; open: boolean
             </div>
           </TabsContent>
 
-          <TabsContent value="questions">
-            <QuestionsEditor formId={form.id} questions={questions} />
-          </TabsContent>
+          {form.kind === "native" && (
+            <TabsContent value="questions">
+              <QuestionsEditor formId={form.id} questions={questions} />
+            </TabsContent>
+          )}
 
           <TabsContent value="assign">
-            <AssignmentsEditor formId={form.id} />
+            <AssignmentsEditor formId={form.id} form={local} onFormChange={setLocal} />
           </TabsContent>
         </Tabs>
       </DialogContent>
