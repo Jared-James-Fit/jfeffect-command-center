@@ -258,21 +258,21 @@ export function AssignedProgramsCard({ clientId, mode }: { clientId: string; mod
       {visibleBlocks.filter((b: any) => !b.prep_id).length > 0 && (
         <div className="space-y-2">
           <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Standalone Blocks</div>
-          <div className="grid gap-2">
+          <div className="grid gap-3">
             {visibleBlocks.filter((b: any) => !b.prep_id).map((b: any) => (
-              <BlockRow
+              <BlockSummaryCard
                 key={b.id}
-                block={b}
+                blockId={b.id}
                 mode={mode}
                 onRemove={() => setPending({ kind: "block", id: b.id, label: b.name })}
-                selected={selectedBlocks.has(b.id)}
-                onToggleSelect={() => toggleBlock(b.id)}
               />
             ))}
           </div>
         </div>
       )}
     </Card>
+
+    <WorkoutArchiveSection clientId={clientId} mode={mode} />
 
     <AlertDialog open={!!pending} onOpenChange={(o) => !o && !busy && setPending(null)}>
       <AlertDialogContent>
