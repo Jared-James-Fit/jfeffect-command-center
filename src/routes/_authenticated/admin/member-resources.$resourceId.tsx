@@ -18,7 +18,13 @@ function EditResource() {
   if (!data?.resource) return <div className="p-6 text-sm text-muted-foreground">Not found.</div>;
   return (
     <div className="space-y-5">
-      <PageHeader title={data.resource.title} subtitle="Edit resource" />
+      <PageHeader
+        backTo="/admin/member-resources"
+        backLabel="Back to Resources"
+        breadcrumbs={[{ label: "Member Resources", to: "/admin/member-resources" }, { label: data.resource.title }]}
+        title={data.resource.title}
+        subtitle="Edit resource"
+      />
       <MemberResourceForm initial={data.resource as any} />
     </div>
   );

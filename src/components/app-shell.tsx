@@ -3,7 +3,7 @@ import { Link, useRouterState, useNavigate } from "@tanstack/react-router";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import {
-  LogOut, ChevronLeft, ChevronRight, ChevronDown, Search, Settings as SettingsIcon,
+  LogOut, ChevronLeft, ChevronRight, ChevronDown, Search, Settings as SettingsIcon, ArrowLeft,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { NotificationBell } from "@/components/notification-bell";
@@ -464,11 +464,72 @@ export function AppShell({ items, title, children }: { items: NavItem[]; title: 
   );
 }
 
-export function PageHeader({ title, subtitle, actions }: { title: ReactNode; subtitle?: ReactNode; actions?: ReactNode }) {
+export interface Crumb {
+  label: ReactNode;
+  to?: string;
+}
+
+export function PageHeader({
+  title,
+  subtitle,
+  actions,
+  backTo,
+  backLabel,
+  breadcrumbs,
+}: {
+  title: ReactNode;
+  subtitle?: ReactNode;
+  actions?: ReactNode;
+  /** Parent route fallback if no in-app history is available. */
+  backTo?: string;
+  /** Label shown on the back button. Defaults to "Back". */
+  backLabel?: string;
+  /** Optional compact breadcrumb trail (hidden on mobile). */
+  breadcrumbs?: Crumb[];
+}) {
+  const navigate = useNavigate();
+  const handleBack = () => {
+    // Prefer in-app history when present, otherwise fall back to parent route.
+    if (typeof window !== "undefined" && window.history.length > 1) {
+      window.history.back();
+      return;
+    }
+    if (backTo) navigate({ to: backTo });
+  };
+  const showBack = !!backTo;
   return (
-    <div className="flex flex-wrap items-end justify-between gap-4 border-b border-border bg-gradient-to-b from-card to-background px-6 py-6 md:px-8">
-      <div>
-        <h1 className="flex flex-wrap items-center gap-3 text-2xl font-black tracking-tight md:text-3xl">{title}</h1>
+    <div className="flex flex-wrap items-end justify-between gap-4 border-b border-border bg-gradient-to-b from-card to-background px-4 py-4 md:px-8 md:py-6">
+      <div className="min-w-0 flex-1">
+        {showBack && (
+          <div className="mb-2 flex items-center gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="-ml-2 h-8 gap-1.5 px-2 text-muted-foreground hover:text-foreground"
+              onClick={handleBack}
+              aria-label={backLabel || "Back"}
+            >
+              <ArrowLeft className="h-4 w-4" />
+              <span className="text-xs font-medium">{backLabel || "Back"}</span>
+            </Button>
+            {breadcrumbs && breadcrumbs.length > 0 && (
+              <nav aria-label="Breadcrumb" className="hidden min-w-0 items-center gap-1 text-xs text-muted-foreground md:flex">
+                {breadcrumbs.map((c, i) => (
+                  <span key={i} className="flex min-w-0 items-center gap-1">
+                    {i > 0 && <span className="text-muted-foreground/60">/</span>}
+                    {c.to ? (
+                      <Link to={c.to} className="truncate hover:text-foreground">{c.label}</Link>
+                    ) : (
+                      <span className="truncate">{c.label}</span>
+                    )}
+                  </span>
+                ))}
+              </nav>
+            )}
+          </div>
+        )}
+        <h1 className="flex flex-wrap items-center gap-3 text-xl font-black tracking-tight md:text-3xl">{title}</h1>
         {subtitle ? <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p> : null}
       </div>
       <div className="flex flex-wrap items-center gap-2">

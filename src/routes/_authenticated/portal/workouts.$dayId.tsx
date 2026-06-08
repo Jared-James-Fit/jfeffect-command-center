@@ -108,7 +108,12 @@ function WorkoutDay() {
 
   return (
     <>
-      <PageHeader title={day.title || `Day ${day.day_index}`} subtitle={day.focus ?? ""} />
+      <PageHeader
+        backTo="/portal/program"
+        backLabel="Back to Program"
+        title={day.title || `Day ${day.day_index}`}
+        subtitle={day.focus ?? ""}
+      />
       <div className="p-4 md:p-8 space-y-4">
         <Link to="/portal/workouts" className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground">
           <ArrowLeft className="mr-1 h-4 w-4" /> All workouts

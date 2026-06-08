@@ -53,7 +53,17 @@ function ClientProgramsPage() {
 
   return (
     <>
-      <PageHeader title="Training Program" subtitle={client?.full_name ?? ""} />
+      <PageHeader
+        backTo="/admin/clients"
+        backLabel={client?.full_name ? `Back to ${client.full_name}` : "Back to Clients"}
+        breadcrumbs={[
+          { label: "Clients", to: "/admin/clients" },
+          ...(client?.full_name ? [{ label: client.full_name, to: `/admin/clients/${clientId}` }] : []),
+          { label: "Training Program" },
+        ]}
+        title="Training Program"
+        subtitle={client?.full_name ?? ""}
+      />
       <div className="p-6 md:p-8 space-y-6">
         <Link to="/admin/clients/$id" params={{ id: clientId }} className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground">
           <ArrowLeft className="mr-1 h-4 w-4" /> Back to client

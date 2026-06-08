@@ -166,7 +166,7 @@ function ClientFormRenderer() {
   if (client?.id && formsFetched && !form) {
     return (
       <>
-        <PageHeader title="Check-In unavailable" />
+        <PageHeader title="Check-In unavailable" backTo="/portal/check-ins" backLabel="Back to Check-Ins" />
         <div className="mx-auto max-w-2xl p-4 md:p-8">
           <Card className="border-border bg-card p-6 text-sm text-muted-foreground">
             This form is not currently assigned, active, or available in your portal.
@@ -208,6 +208,8 @@ function ClientFormRenderer() {
   return (
     <>
       <PageHeader
+        backTo="/portal/check-ins"
+        backLabel="Back to Check-Ins"
         title={form.title}
         subtitle={submission.period_start ? `Week of ${submission.period_start}` : undefined}
         actions={<Badge className={statusTone(submission.status) + " border"}>{statusLabel(submission.status)}</Badge>}
@@ -412,6 +414,8 @@ function ExternalFormView({
   return (
     <>
       <PageHeader
+        backTo="/portal/check-ins"
+        backLabel="Back to Check-Ins"
         title={form.title}
         subtitle={submission.period_start ? `Week of ${submission.period_start}` : undefined}
         actions={

@@ -53,6 +53,8 @@ function ClientPurchase() {
   return (
     <>
       <PageHeader
+        backTo="/portal/purchases"
+        backLabel="Back to Purchases"
         title={r.offer_name}
         subtitle={r.offer_type ?? "Purchase summary"}
         actions={<Link to="/portal/purchases"><Button variant="ghost" size="sm"><ArrowLeft className="mr-2 h-4 w-4" />Back</Button></Link>}

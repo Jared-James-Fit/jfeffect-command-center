@@ -83,6 +83,9 @@ function PurchaseDetail() {
   return (
     <>
       <PageHeader
+        backTo="/admin/purchases"
+        backLabel="Back to Purchases"
+        breadcrumbs={[{ label: "Purchases", to: "/admin/purchases" }, { label: form.offer_name }]}
         title={form.offer_name}
         subtitle={`Purchase by ${form.clients?.full_name ?? "—"} · ${new Date(form.purchased_at).toLocaleString()}`}
         actions={

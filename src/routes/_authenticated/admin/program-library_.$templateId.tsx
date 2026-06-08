@@ -154,7 +154,13 @@ function TemplateEditor() {
 
   return (
     <>
-      <PageHeader title={meta.name || "Template"} subtitle={`${type.replace("_", " ")} · ${summary.weeks}w · ${summary.days}d · ${summary.rows} rows`} />
+      <PageHeader
+        backTo="/admin/program-library"
+        backLabel="Back to Program Library"
+        breadcrumbs={[{ label: "Program Library", to: "/admin/program-library" }, { label: meta.name || "Template" }]}
+        title={meta.name || "Template"}
+        subtitle={`${type.replace("_", " ")} · ${summary.weeks}w · ${summary.days}d · ${summary.rows} rows`}
+      />
       <div className="p-3 md:p-4 space-y-3">
         <div className="flex flex-wrap items-center gap-2">
           <Link to="/admin/program-library" className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground">
