@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { CheckCircle2, Save } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { ActionButton } from "@/components/action-button";
 
 export const Route = createFileRoute("/_authenticated/m/workouts/$enrollmentId/$week/$day")({ component: WorkoutTracker });
 
@@ -78,21 +79,15 @@ function WorkoutTracker() {
   const saveLog = async (exerciseIndex: number, setIndex: number) => {
     const key = `${exerciseIndex}:${setIndex}`;
     const v = logs[key] ?? {};
-    try {
-      await logFn({ data: { enrollmentId, weekIndex, dayIndex, exerciseIndex, setIndex,
-        reps: v.reps ?? null, load_lb: v.load_lb ?? null, rpe: v.rpe ?? null, rir: v.rir ?? null, notes: v.notes ?? null } });
-      toast.success("Saved");
-    } catch (e: any) { toast.error(e?.message ?? "Save failed"); }
+    await logFn({ data: { enrollmentId, weekIndex, dayIndex, exerciseIndex, setIndex,
+      reps: v.reps ?? null, load_lb: v.load_lb ?? null, rpe: v.rpe ?? null, rir: v.rir ?? null, notes: v.notes ?? null } });
   };
 
   const handleComplete = async () => {
-    try {
-      await completeFn({ data: { enrollmentId, weekIndex, dayIndex, notes } });
-      toast.success("Workout complete");
-      qc.invalidateQueries({ queryKey: ["m-completion", enrollmentId, weekIndex, dayIndex] });
-      qc.invalidateQueries({ queryKey: ["m-completions", enrollmentId] });
-      qc.invalidateQueries({ queryKey: ["m-enrollment", enrollmentId] });
-    } catch (e: any) { toast.error(e?.message ?? "Failed"); }
+    await completeFn({ data: { enrollmentId, weekIndex, dayIndex, notes } });
+    qc.invalidateQueries({ queryKey: ["m-completion", enrollmentId, weekIndex, dayIndex] });
+    qc.invalidateQueries({ queryKey: ["m-completions", enrollmentId] });
+    qc.invalidateQueries({ queryKey: ["m-enrollment", enrollmentId] });
   };
 
   const handleUncomplete = async () => {
@@ -133,9 +128,16 @@ function WorkoutTracker() {
                       <Input className="col-span-2" placeholder="reps" type="number" value={v.reps ?? ""} onChange={(e) => updateLog(key, { reps: e.target.value === "" ? null : Number(e.target.value) })} />
                       <Input className="col-span-2" placeholder="RPE" type="number" step="0.5" value={v.rpe ?? ""} onChange={(e) => updateLog(key, { rpe: e.target.value === "" ? null : Number(e.target.value) })} />
                       <Input className="col-span-2" placeholder="RIR" type="number" value={v.rir ?? ""} onChange={(e) => updateLog(key, { rir: e.target.value === "" ? null : Number(e.target.value) })} />
-                      <Button size="icon" variant="ghost" className="col-span-2" onClick={() => saveLog(ei, si)} title="Save set">
+                      <ActionButton
+                        size="icon"
+                        variant="ghost"
+                        className="col-span-2"
+                        onAction={() => saveLog(ei, si)}
+                        title="Save set"
+                        successToast={false}
+                      >
                         <Save className="h-4 w-4" />
-                      </Button>
+                      </ActionButton>
                     </div>
                   );
                 })}
@@ -149,7 +151,7 @@ function WorkoutTracker() {
         <div className="mt-3 flex gap-2">
           {isComplete
             ? <Button variant="outline" onClick={handleUncomplete}>Mark incomplete</Button>
-            : <Button onClick={handleComplete}><CheckCircle2 className="mr-2 h-4 w-4" />Mark workout complete</Button>}
+            : <ActionButton onAction={handleComplete} loadingLabel="Saving…" successLabel="Complete" successToast="Workout complete" icon={<CheckCircle2 className="h-4 w-4" />}>Mark workout complete</ActionButton>}
           <Button variant="ghost" onClick={() => navigate({ to: "/m/my-plans/$enrollmentId", params: { enrollmentId } })}>Back to plan</Button>
         </div>
       </Card>
