@@ -1155,6 +1155,123 @@ function AccountStatusBadge({ status, needsHelp }: { status?: string; needsHelp?
   return <Badge variant="outline" className={tone}>{s}</Badge>;
 }
 
+function SetupStatusBanner({
+  form,
+  onSendSetup,
+  onCopySetup,
+  onSendReset,
+  onCopyReset,
+  onSetPassword,
+  onGoToAccountTab,
+}: {
+  form: any;
+  onSendSetup: () => void;
+  onCopySetup: () => void;
+  onSendReset: () => void;
+  onCopyReset: () => void;
+  onSetPassword: () => void;
+  onGoToAccountTab: () => void;
+}) {
+  const hasUser = !!form.user_id;
+  const hasAccount = !!form.account_created_at;
+  const lastSignIn: string | null = form.last_signed_in_at ?? null;
+  const inviteSent: string | null = form.invite_sent_at ?? null;
+  const expiresAt: string | null = form.invite_expires_at ?? null;
+  const inviteExpired = !hasAccount && !!expiresAt && new Date(expiresAt).getTime() <= Date.now();
+
+  type Stage = "no_account" | "invite_pending" | "invite_expired" | "account_no_signin" | "live";
+  let stage: Stage;
+  if (lastSignIn) stage = "live";
+  else if (hasAccount || hasUser) stage = "account_no_signin";
+  else if (inviteSent && inviteExpired) stage = "invite_expired";
+  else if (inviteSent) stage = "invite_pending";
+  else stage = "no_account";
+
+  const cfg = {
+    no_account: {
+      tone: "border-warning/40 bg-warning/10 text-warning",
+      label: "Account not set up",
+      pill: "Needs setup",
+      detail: "No setup link has been sent. Send or copy a setup link to start the 48-hour window.",
+    },
+    invite_pending: {
+      tone: "border-primary/40 bg-primary/10 text-primary",
+      label: "Setup link sent — waiting for client",
+      pill: "Pending",
+      detail: expiresAt
+        ? `Invite valid until ${new Date(expiresAt).toLocaleString()}. They must finish before it expires.`
+        : "Waiting for client to complete setup.",
+    },
+    invite_expired: {
+      tone: "border-destructive/40 bg-destructive/10 text-destructive",
+      label: "Setup link expired",
+      pill: "Expired",
+      detail: "The 48-hour window has passed. Send or copy a fresh setup link.",
+    },
+    account_no_signin: {
+      tone: "border-amber-500/40 bg-amber-500/10 text-amber-400",
+      label: "Account created — never signed in",
+      pill: "Not signed in yet",
+      detail: "Login exists but the client hasn't signed in yet. Send a reset link or set their password manually.",
+    },
+    live: {
+      tone: "border-success/40 bg-success/10 text-success",
+      label: "Account is live",
+      pill: "Live",
+      detail: `Last signed in ${new Date(lastSignIn!).toLocaleString()}.`,
+    },
+  }[stage];
+
+  return (
+    <div className={`mb-4 rounded-lg border p-4 ${cfg.tone}`}>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[10px] uppercase tracking-widest opacity-80">Account Setup</span>
+            <Badge variant="outline" className="border-current text-current bg-background/30">{cfg.pill}</Badge>
+            {form.needs_admin_help && (
+              <Badge variant="outline" className="border-warning/40 text-warning bg-warning/10">Needs admin help</Badge>
+            )}
+          </div>
+          <div className="mt-1 text-sm font-semibold text-foreground">{cfg.label}</div>
+          <div className="mt-0.5 text-xs text-muted-foreground">{cfg.detail}</div>
+          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
+            <span>Invite sent: {fmtDate(inviteSent)}</span>
+            <span>Account created: {fmtDate(form.account_created_at)}</span>
+            <span>Last sign-in: {fmtDate(lastSignIn)}</span>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {(stage === "no_account" || stage === "invite_pending" || stage === "invite_expired") && (
+            <>
+              <Button size="sm" variant="outline" onClick={onSendSetup}>
+                <Mail className="mr-2 h-4 w-4" />{stage === "no_account" ? "Send setup link" : "Resend setup link"}
+              </Button>
+              <Button size="sm" variant="outline" onClick={onCopySetup}>
+                <Copy className="mr-2 h-4 w-4" />Copy setup link
+              </Button>
+            </>
+          )}
+          {stage === "account_no_signin" && (
+            <>
+              <Button size="sm" variant="outline" onClick={onSendReset}>
+                <KeyRound className="mr-2 h-4 w-4" />Send reset link
+              </Button>
+              <Button size="sm" variant="outline" onClick={onCopyReset}>
+                <Copy className="mr-2 h-4 w-4" />Copy reset link
+              </Button>
+              <Button size="sm" variant="outline" onClick={onSetPassword}>
+                <KeyRound className="mr-2 h-4 w-4" />Set password
+              </Button>
+            </>
+          )}
+          <Button size="sm" variant="ghost" onClick={onGoToAccountTab}>Manage</Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function PowerlifterSection({ form, set }: { form: any; set: (k: string, v: any) => void }) {
   const url = (form.openpowerlifting_url ?? "").trim();
   const isOn = !!form.is_powerlifter;
