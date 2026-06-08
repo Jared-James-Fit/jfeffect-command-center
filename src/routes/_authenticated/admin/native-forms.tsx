@@ -487,12 +487,12 @@ function AssignmentsEditor({ formId, form, onFormChange }: { formId: string; for
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="text-xs text-muted-foreground">
           {broadcastOn
-            ? `Visible to all active clients · ${assignments.length} materialized`
+            ? `Visible to all active coaching clients`
             : `${assignments.length} client${assignments.length === 1 ? "" : "s"} assigned`}
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={selectAllVisible}>Select all visible</Button>
-          <Button variant="ghost" size="sm" onClick={clearAll}>Clear all</Button>
+          <Button variant="outline" size="sm" onClick={selectAllVisible} disabled={broadcastOn}>Select all visible</Button>
+          <Button variant="ghost" size="sm" onClick={clearAll} disabled={broadcastOn}>Clear all</Button>
         </div>
       </div>
 
@@ -505,11 +505,29 @@ function AssignmentsEditor({ formId, form, onFormChange }: { formId: string; for
         {filtered.length === 0 ? (
           <div className="p-3 text-xs text-muted-foreground">No matching clients.</div>
         ) : filtered.map((c: any) => (
-          <label key={c.id} className="flex items-center gap-2 rounded p-2 hover:bg-muted/30">
-            <Checkbox checked={assigned.has(c.id)} onCheckedChange={() => toggle(c.id)} />
+          <div
+            key={c.id}
+            role="button"
+            tabIndex={0}
+            aria-pressed={assigned.has(c.id)}
+            aria-disabled={broadcastOn}
+            onClick={() => { if (!broadcastOn) toggle(c.id); }}
+            onKeyDown={(e) => {
+              if (broadcastOn) return;
+              if (e.key === " " || e.key === "Enter") { e.preventDefault(); toggle(c.id); }
+            }}
+            className={`flex min-h-[44px] cursor-pointer select-none items-center gap-3 rounded p-2 hover:bg-muted/40 ${broadcastOn ? "opacity-60 cursor-not-allowed" : ""}`}
+          >
+            <Checkbox
+              checked={broadcastOn ? true : assigned.has(c.id)}
+              disabled={broadcastOn}
+              tabIndex={-1}
+              onClick={(e) => e.stopPropagation()}
+              onCheckedChange={() => { if (!broadcastOn) toggle(c.id); }}
+            />
             <span className="text-sm">{c.full_name}</span>
-            <span className="ml-auto text-xs text-muted-foreground">{c.email}</span>
-          </label>
+            <span className="ml-auto truncate text-xs text-muted-foreground">{c.email}</span>
+          </div>
         ))}
       </div>
     </div>
