@@ -94,6 +94,8 @@ const createSchema = z.object({
   billingInterval: z.enum(["month", "year", "week", "day"]).optional().nullable(),
   // Access level (0-5) for display purposes
   accessLevel: z.number().int().min(0).max(5).optional().nullable(),
+  isMemberFacing: z.boolean().optional(),
+  memberTierLabel: z.string().trim().max(60).optional().nullable(),
 });
 
 export const createCoachingProduct = createServerFn({ method: "POST" })
@@ -212,6 +214,8 @@ export const updateCoachingProduct = createServerFn({ method: "POST" })
     if (data.pastedPaymentLinkUrl !== undefined) patch.payment_link_url = data.pastedPaymentLinkUrl ?? null;
     if (data.stripePriceId !== undefined) patch.stripe_price_id = data.stripePriceId ?? null;
     if (data.checkoutMode !== undefined) patch.mode = data.checkoutMode;
+    if (data.isMemberFacing !== undefined) patch.is_member_facing = data.isMemberFacing;
+    if (data.memberTierLabel !== undefined) patch.member_tier_label = data.memberTierLabel ?? null;
 
     // ── Stripe currency sync ───────────────────────────────────────────
     // Stripe Prices are immutable, so when the admin changes currency (or

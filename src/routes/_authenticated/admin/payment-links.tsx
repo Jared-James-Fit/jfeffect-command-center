@@ -28,6 +28,8 @@ import {
   generatePaymentLinkForProduct,
 } from "@/lib/coaching-products.functions";
 import { createPreviewCheckoutSession } from "@/lib/stripe-checkout.functions";
+import { ProductAccessGrantDialog } from "@/components/product-access-grant-dialog";
+import { Lock as LockIcon } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/admin/payment-links")({
   component: PaymentLinksPage,
@@ -249,6 +251,7 @@ function PaymentLinksPage() {
   const [assigning, setAssigning] = useState<any | null>(null);
   const [previewing, setPreviewing] = useState<Product | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Product | null>(null);
+  const [grantFor, setGrantFor] = useState<Product | null>(null);
   const [manageMode, setManageMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
@@ -583,6 +586,9 @@ function PaymentLinksPage() {
                           <Button size="sm" variant="outline" onClick={() => setEditing({ open: true, product: p })} title="Edit product">
                             <Pencil className="h-3.5 w-3.5" />
                           </Button>
+                          <Button size="sm" variant="outline" onClick={() => setGrantFor(p)} title="Membership access granted by this product">
+                            <LockIcon className="h-3.5 w-3.5 mr-1" /> Access
+                          </Button>
                           <Button size="sm" variant="ghost" onClick={() => duplicateMutation.mutate(p.id)} title="Duplicate">
                             <Copy className="h-3.5 w-3.5" />
                           </Button>
@@ -612,6 +618,14 @@ function PaymentLinksPage() {
       />
 
       <AssignOfferDialog offer={assigning} onClose={() => setAssigning(null)} />
+
+      <ProductAccessGrantDialog
+        productId={grantFor?.id ?? null}
+        productName={grantFor?.name}
+        initialIsMemberFacing={(grantFor as any)?.is_member_facing ?? false}
+        initialMemberTierLabel={(grantFor as any)?.member_tier_label ?? null}
+        onClose={() => setGrantFor(null)}
+      />
 
       <OfferDetailDialog
         offer={previewing ? productToOfferLike(previewing) : null}

@@ -1,6 +1,8 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { createFileRoute, Link, useSearch } from "@tanstack/react-router";
+import { useEffect } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
+import { toast } from "sonner";
 import { getCurrentMember } from "@/lib/members.functions";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
@@ -10,11 +12,24 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { BookOpen, ClipboardCheck, FolderOpen, Wrench, PlayCircle } from "lucide-react";
 import { Star } from "lucide-react";
+import { UpgradeCTA } from "@/components/upgrade-cta";
 
-export const Route = createFileRoute("/_authenticated/m/")({ component: MemberHome });
+export const Route = createFileRoute("/_authenticated/m/")({
+  component: MemberHome,
+  validateSearch: (s: Record<string, unknown>) => ({ upgrade: (s.upgrade as string) ?? undefined }),
+});
 
 function MemberHome() {
   const fetchMe = useServerFn(getCurrentMember);
+  const search = useSearch({ from: "/_authenticated/m/" });
+  const qc = useQueryClient();
+  useEffect(() => {
+    if (search.upgrade === "success") {
+      toast.success("Payment received — your new access will appear in a few seconds.");
+      const t = setTimeout(() => qc.invalidateQueries({ queryKey: ["m-me"] }), 2000);
+      return () => clearTimeout(t);
+    }
+  }, [search.upgrade, qc]);
   const { data: me } = useQuery({ queryKey: ["m-me"], queryFn: () => fetchMe() });
 
   const { data: activeEnrollment } = useQuery({
@@ -32,6 +47,8 @@ function MemberHome() {
   });
 
   const accessKeys = new Set((me?.access ?? []).map((a: any) => a.access_level_key));
+  const hasAnyAccess = accessKeys.size > 0;
+  const showUpgrade = !hasAnyAccess || me?.member?.account_type === "program_only";
 
   const { data: featured = [] } = useQuery({
     queryKey: ["m-featured"],
@@ -57,6 +74,15 @@ function MemberHome() {
         subtitle="Your training, plans, and resources."
         actions={<Badge variant="outline">{subscriptionStatus}</Badge>}
       />
+      {showUpgrade && (
+        <UpgradeCTA
+          title={hasAnyAccess ? "Unlock the full App Member experience" : "Activate your membership"}
+          subtitle={hasAnyAccess
+            ? "You currently have program-only access. Upgrade for the full library, resources, and tools."
+            : "Choose a plan to unlock workouts, resources, and tools."}
+          perks={["Full Plan Library", "Resource Library access", "All in-app tools"]}
+        />
+      )}
       {activeEnrollment ? (
         <Card className="p-6">
           <div className="flex items-center justify-between gap-4">

@@ -1483,6 +1483,8 @@ export type Database = {
           id: string
           image_url: string | null
           included_features: string[]
+          is_member_facing: boolean
+          member_tier_label: string | null
           mode: string
           name: string
           notes: string | null
@@ -1515,6 +1517,8 @@ export type Database = {
           id?: string
           image_url?: string | null
           included_features?: string[]
+          is_member_facing?: boolean
+          member_tier_label?: string | null
           mode?: string
           name: string
           notes?: string | null
@@ -1547,6 +1551,8 @@ export type Database = {
           id?: string
           image_url?: string | null
           included_features?: string[]
+          is_member_facing?: boolean
+          member_tier_label?: string | null
           mode?: string
           name?: string
           notes?: string | null
@@ -1910,6 +1916,7 @@ export type Database = {
           note: string | null
           plan_id: string | null
           position: number
+          resource_id: string | null
           updated_at: string
         }
         Insert: {
@@ -1920,6 +1927,7 @@ export type Database = {
           note?: string | null
           plan_id?: string | null
           position?: number
+          resource_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -1930,6 +1938,7 @@ export type Database = {
           note?: string | null
           plan_id?: string | null
           position?: number
+          resource_id?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -1938,6 +1947,13 @@ export type Database = {
             columns: ["plan_id"]
             isOneToOne: true
             referencedRelation: "member_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "featured_member_items_resource_id_fkey"
+            columns: ["resource_id"]
+            isOneToOne: false
+            referencedRelation: "member_resources"
             referencedColumns: ["id"]
           },
         ]
@@ -2902,6 +2918,74 @@ export type Database = {
           },
         ]
       }
+      member_resources: {
+        Row: {
+          body_md: string | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          featured: boolean
+          format: string
+          id: string
+          kind: string
+          required_access_level: string
+          slug: string
+          sort_order: number
+          status: string
+          storage_path: string | null
+          thumbnail_url: string | null
+          title: string
+          updated_at: string
+          url: string | null
+        }
+        Insert: {
+          body_md?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          featured?: boolean
+          format?: string
+          id?: string
+          kind?: string
+          required_access_level?: string
+          slug: string
+          sort_order?: number
+          status?: string
+          storage_path?: string | null
+          thumbnail_url?: string | null
+          title: string
+          updated_at?: string
+          url?: string | null
+        }
+        Update: {
+          body_md?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          featured?: boolean
+          format?: string
+          id?: string
+          kind?: string
+          required_access_level?: string
+          slug?: string
+          sort_order?: number
+          status?: string
+          storage_path?: string | null
+          thumbnail_url?: string | null
+          title?: string
+          updated_at?: string
+          url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "member_resources_required_access_level_fkey"
+            columns: ["required_access_level"]
+            isOneToOne: false
+            referencedRelation: "access_levels"
+            referencedColumns: ["key"]
+          },
+        ]
+      }
       member_set_logs: {
         Row: {
           created_at: string
@@ -3562,12 +3646,14 @@ export type Database = {
           installment_due_day: number | null
           installment_frequency: string | null
           is_fixed_term_commitment: boolean | null
+          is_member_facing: boolean
           is_recurring: boolean | null
           is_template: boolean
           last_edited_at: string | null
           late_arrival_policy: string | null
           late_failed_policy: string | null
           location: string | null
+          member_tier_label: string | null
           minimum_commitment_length: string | null
           name: string
           no_show_policy: string | null
@@ -3640,12 +3726,14 @@ export type Database = {
           installment_due_day?: number | null
           installment_frequency?: string | null
           is_fixed_term_commitment?: boolean | null
+          is_member_facing?: boolean
           is_recurring?: boolean | null
           is_template?: boolean
           last_edited_at?: string | null
           late_arrival_policy?: string | null
           late_failed_policy?: string | null
           location?: string | null
+          member_tier_label?: string | null
           minimum_commitment_length?: string | null
           name: string
           no_show_policy?: string | null
@@ -3718,12 +3806,14 @@ export type Database = {
           installment_due_day?: number | null
           installment_frequency?: string | null
           is_fixed_term_commitment?: boolean | null
+          is_member_facing?: boolean
           is_recurring?: boolean | null
           is_template?: boolean
           last_edited_at?: string | null
           late_arrival_policy?: string | null
           late_failed_policy?: string | null
           location?: string | null
+          member_tier_label?: string | null
           minimum_commitment_length?: string | null
           name?: string
           no_show_policy?: string | null
