@@ -14,6 +14,7 @@ import { dayTypeLabel, dayTypeTone, formatDays } from "@/lib/training-schedule";
 import { formatCalorieTarget } from "@/lib/nutrition-cardio";
 import { format, parseISO } from "date-fns";
 import { getActivePrep, countdownLabel } from "@/lib/pl-programs";
+import { AssignedProgramsCard } from "@/components/assigned-programs-card";
 
 export const Route = createFileRoute("/_authenticated/portal/program")({ component: MyProgram });
 
