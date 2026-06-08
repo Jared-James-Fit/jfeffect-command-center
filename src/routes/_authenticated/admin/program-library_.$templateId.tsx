@@ -166,34 +166,11 @@ function TemplateEditor() {
   const type = tpl.template_type;
 
   return (
-    <>
-      <PageHeader
-        backTo="/admin/program-library"
-        backLabel="Back to Program Library"
-        breadcrumbs={[{ label: "Program Library", to: "/admin/program-library" }, { label: meta.name || "Template" }]}
-        title={meta.name || "Template"}
-        subtitle={`${type.replace("_", " ")} · ${summary.weeks}w · ${summary.days}d · ${summary.rows} rows`}
-      />
-      <div className="p-3 md:p-4 space-y-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <Link to="/admin/program-library" className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground">
-            <ArrowLeft className="mr-1 h-4 w-4" /> Back to library
-          </Link>
-          <div className="ml-auto flex items-center gap-3">
-            <SaveStatus state={autosave.state} savedAt={autosave.savedAt} />
-            <ActionButton
-              onAction={save}
-              loadingLabel="Saving…"
-              successLabel="Saved"
-              successToast="Template saved"
-              icon={<Save className="h-4 w-4" />}
-            >
-              {dirty ? "Save now" : "Saved"}
-            </ActionButton>
-          </div>
-        </div>
-
-        {conflictWatch.conflict && (
+    <EditorChrome
+      meta={meta} summary={summary} typeLabel={type.replace("_", " ")}
+      autosave={autosave} save={save} dirty={dirty}
+    >
+      {conflictWatch.conflict && (
           <Card className="flex flex-wrap items-start gap-3 border-amber-500/60 bg-amber-500/5 p-3 text-sm">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
             <div className="min-w-0 flex-1">
@@ -213,15 +190,14 @@ function TemplateEditor() {
             </div>
           </Card>
         )}
+      <Tabs defaultValue="structure">
+        <TabsList className="h-8">
+          <TabsTrigger value="structure" className="h-7 text-xs px-2"><Rows3 className="mr-1 h-3 w-3" />Structure</TabsTrigger>
+          <TabsTrigger value="meta" className="h-7 text-xs px-2"><Settings2 className="mr-1 h-3 w-3" />Settings</TabsTrigger>
+        </TabsList>
 
-        <Tabs defaultValue="structure">
-          <TabsList>
-            <TabsTrigger value="structure">Structure</TabsTrigger>
-            <TabsTrigger value="meta">Settings</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="meta" className="mt-3">
-            <Card className="p-4 space-y-3 max-w-2xl">
+        <TabsContent value="meta" className="mt-2">
+          <Card className="p-4 space-y-3 max-w-2xl">
               <div><Label>Name</Label><Input value={meta.name} onChange={(e) => setM({ name: e.target.value })} /></div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -240,35 +216,146 @@ function TemplateEditor() {
               </div>
               <div><Label>Tags (comma-separated)</Label><Input value={meta.tags} onChange={(e) => setM({ tags: e.target.value })} /></div>
               <div><Label>Notes</Label><Textarea value={meta.notes} onChange={(e) => setM({ notes: e.target.value })} rows={3} /></div>
-            </Card>
-          </TabsContent>
+          </Card>
+        </TabsContent>
 
-          <TabsContent value="structure" className="mt-3">
-            <div className="flex h-[calc(100vh-220px)] gap-2 overflow-hidden rounded-md border border-border">
-              <ExerciseLibraryPanel
-                exercises={exercises as ExerciseRef[]}
-                onQuickAdd={(exId) => {
-                  const ex = (exercises as any[]).find((e) => e.id === exId);
-                  appendRowToFirstDay(payload, type, { exercise_id: exId, exercise_name_override: ex?.name });
-                  setP({ ...payload });
-                  toast.success("Added to first day");
-                }}
-                onPick={(exId) => {
-                  const ex = (exercises as any[]).find((e) => e.id === exId);
-                  // append to first day found
-                  appendRowToFirstDay(payload, type, { exercise_id: exId, exercise_name_override: ex?.name });
-                  setP({ ...payload });
-                  toast.success("Added to first day — drag onto a specific day for placement");
-                }}
-              />
-              <div className="flex-1 overflow-auto p-2">
-                <StructureEditor type={type} payload={payload} setPayload={setP} exercises={exercises as any[]} />
-              </div>
-            </div>
-          </TabsContent>
-        </Tabs>
+        <TabsContent value="structure" className="mt-2">
+          <StructureCanvas
+            type={type}
+            payload={payload}
+            setP={setP}
+            exercises={exercises as any[]}
+            appendRowToFirstDay={appendRowToFirstDay}
+          />
+        </TabsContent>
+      </Tabs>
+    </EditorChrome>
+  );
+}
+
+function EditorChrome({ meta, summary, typeLabel, autosave, save, dirty, children }: {
+  meta: any; summary: any; typeLabel: string;
+  autosave: any; save: () => Promise<void>; dirty: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-2 p-2 md:p-3">
+      <div className="sticky top-0 z-30 -mx-2 flex flex-wrap items-center gap-2 border-b border-border bg-background/95 px-2 py-1.5 backdrop-blur md:-mx-3 md:px-3">
+        <Link to="/admin/program-library" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
+          <ArrowLeft className="h-3.5 w-3.5" /> Library
+        </Link>
+        <div className="min-w-0 flex items-baseline gap-2">
+          <span className="truncate text-sm font-bold">{meta.name || "Template"}</span>
+          <span className="hidden md:inline text-[11px] text-muted-foreground whitespace-nowrap">
+            {typeLabel} · {summary.weeks}w · {summary.days}d · {summary.rows} rows
+          </span>
+        </div>
+        <div className="ml-auto flex items-center gap-2">
+          <SaveStatus state={autosave.state} savedAt={autosave.savedAt} />
+          <ActionButton
+            onAction={save}
+            loadingLabel="Saving…"
+            successLabel="Saved"
+            successToast="Template saved"
+            icon={<Save className="h-3.5 w-3.5" />}
+            size="sm"
+            className="h-7 text-xs"
+          >
+            {dirty ? "Save now" : "Saved"}
+          </ActionButton>
+        </div>
       </div>
-    </>
+      {children}
+    </div>
+  );
+}
+
+function StructureCanvas({ type, payload, setP, exercises, appendRowToFirstDay }: {
+  type: string; payload: any; setP: (p: any) => void; exercises: any[];
+  appendRowToFirstDay: (payload: any, type: string, row: any) => void;
+}) {
+  const [prefs, setPrefsState] = useState<EditorPrefs>(() => readPrefs());
+  const setPrefs = (patch: Partial<EditorPrefs>) => {
+    const next = { ...prefs, ...patch };
+    setPrefsState(next);
+    writePrefs(next);
+  };
+  const { compact, zoom, sidebarCollapsed } = prefs;
+  const setZoom = (z: number) => setPrefs({ zoom: Math.max(0.5, Math.min(1.3, +z.toFixed(2))) });
+  const fitToScreen = () => {
+    // Rough fit heuristic based on viewport width
+    if (typeof window === "undefined") return;
+    const w = window.innerWidth;
+    setZoom(w < 900 ? 0.7 : w < 1280 ? 0.8 : w < 1600 ? 0.9 : 1.0);
+  };
+  const canvasRef = useRef<HTMLDivElement | null>(null);
+
+  return (
+    <div className="rounded-md border border-border bg-background">
+      {/* Sticky compact toolbar */}
+      <div className="sticky top-[42px] z-20 flex flex-wrap items-center gap-1.5 border-b border-border bg-background/95 px-2 py-1.5 backdrop-blur">
+        <Button size="icon" variant="ghost" className="h-7 w-7" title={sidebarCollapsed ? "Show library" : "Hide library"} onClick={() => setPrefs({ sidebarCollapsed: !sidebarCollapsed })}>
+          {sidebarCollapsed ? <PanelLeftOpen className="h-3.5 w-3.5" /> : <PanelLeftClose className="h-3.5 w-3.5" />}
+        </Button>
+        <div className="h-5 w-px bg-border" />
+        <button
+          onClick={() => setPrefs({ compact: !compact })}
+          className={cn("inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-semibold transition", compact ? "border-primary bg-primary text-primary-foreground" : "border-border text-muted-foreground hover:text-foreground")}
+          title="Toggle compact mode"
+        >
+          <Rows3 className="h-3 w-3" /> Compact
+        </button>
+        <div className="h-5 w-px bg-border" />
+        <div className="inline-flex items-center gap-0.5 rounded-md border border-border p-0.5">
+          <Button size="icon" variant="ghost" className="h-6 w-6" title="Zoom out" onClick={() => setZoom(zoom - 0.05)}>
+            <ZoomOut className="h-3 w-3" />
+          </Button>
+          <span className="min-w-[34px] text-center text-[10px] tabular-nums text-muted-foreground">{Math.round(zoom * 100)}%</span>
+          <Button size="icon" variant="ghost" className="h-6 w-6" title="Zoom in" onClick={() => setZoom(zoom + 0.05)}>
+            <ZoomIn className="h-3 w-3" />
+          </Button>
+          <Button size="icon" variant="ghost" className="h-6 w-6" title="Reset to 100%" onClick={() => setZoom(1)}>
+            <span className="text-[9px] font-bold">1:1</span>
+          </Button>
+          <Button size="icon" variant="ghost" className="h-6 w-6" title="Fit to screen" onClick={fitToScreen}>
+            <Maximize2 className="h-3 w-3" />
+          </Button>
+        </div>
+      </div>
+
+      <div className="flex h-[calc(100vh-150px)] gap-0 overflow-hidden">
+        <ExerciseLibraryPanel
+          exercises={exercises as ExerciseRef[]}
+          collapsed={sidebarCollapsed}
+          onToggleCollapse={() => setPrefs({ sidebarCollapsed: !sidebarCollapsed })}
+          onQuickAdd={(exId) => {
+            const ex = (exercises as any[]).find((e) => e.id === exId);
+            appendRowToFirstDay(payload, type, { exercise_id: exId, exercise_name_override: ex?.name });
+            setP({ ...payload });
+            toast.success("Added to first day");
+          }}
+          onPick={(exId) => {
+            const ex = (exercises as any[]).find((e) => e.id === exId);
+            appendRowToFirstDay(payload, type, { exercise_id: exId, exercise_name_override: ex?.name });
+            setP({ ...payload });
+            toast.success("Added — drag onto a day for placement");
+          }}
+        />
+        <div className="flex-1 overflow-auto" ref={canvasRef}>
+          <div
+            style={{
+              transform: `scale(${zoom})`,
+              transformOrigin: "top left",
+              width: `${100 / zoom}%`,
+              minHeight: `${100 / zoom}%`,
+            }}
+            className="p-2"
+          >
+            <StructureEditor type={type} payload={payload} setPayload={setP} exercises={exercises as any[]} compact={compact} />
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
