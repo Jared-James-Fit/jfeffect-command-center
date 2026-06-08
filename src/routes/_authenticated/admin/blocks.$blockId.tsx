@@ -1059,12 +1059,6 @@ function CompactRow({
                 draftKey={dk("rir")}
                 onCommit={(v) => patch({ rir: v || null })} />
             </label>
-            <label className="col-span-1 flex items-start gap-1 text-[10px] text-muted-foreground md:col-span-3">
-              <span className="mt-1 w-12 uppercase">Notes</span>
-              <CellInput density={density} value={row.notes} placeholder="cue / note / form reminder"
-                draftKey={dk("notes")}
-                onCommit={(v) => onAction(() => updateRow(row.id, { notes: v || null }))} />
-            </label>
           </div>
         </td>
       </tr>
