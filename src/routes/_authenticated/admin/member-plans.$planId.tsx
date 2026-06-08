@@ -12,8 +12,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { Copy, Trash2 } from "lucide-react";
+import { useAutosave } from "@/hooks/use-autosave";
+import { SaveStatus } from "@/components/save-status";
 
 export const Route = createFileRoute("/_authenticated/admin/member-plans/$planId")({ component: MemberPlanEditor });
 
@@ -62,9 +64,18 @@ function MemberPlanEditor() {
     setFeatured(!!plan.featured);
     setEquip((plan.equipment_needed ?? []).join(", "));
     setTags((plan.tags ?? []).join(", "));
+    hydratedRef.current = true;
   }, [plan]);
 
   if (!plan) return <div className="p-6 text-sm text-muted-foreground">Loading…</div>;
+
+  return <Editor />;
+
+  // ---- inner component so we can use hooks AFTER plan is loaded
+  function Editor() {
+    return null; // placeholder, replaced below
+  }
+}
 
   const refresh = () => qc.invalidateQueries({ queryKey: ["admin-member-plan", planId] });
 
