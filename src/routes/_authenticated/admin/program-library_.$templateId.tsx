@@ -454,7 +454,7 @@ function BlockPayloadEditor({ weeksData, setWeeksData, exercises }: { weeksData:
                   <Card
                     key={wi}
                     id={`tpl-week-${wi}`}
-                    className="w-[82vw] max-w-[440px] shrink-0 overflow-hidden border-2 border-border p-0 sm:w-[400px] xl:w-[430px]"
+                    className="w-[94vw] max-w-[720px] shrink-0 overflow-hidden border-2 border-border p-0 sm:w-[600px] lg:w-[640px] xl:w-[700px]"
                     style={{ borderLeftWidth: 6, borderLeftColor: "var(--primary)" }}
                   >
                     <div className="flex flex-wrap items-center gap-2 border-b border-primary/20 bg-[color-mix(in_oklab,var(--primary)_8%,var(--card))] px-3 py-2">
@@ -490,6 +490,15 @@ function BlockPayloadEditor({ weeksData, setWeeksData, exercises }: { weeksData:
                   </Card>
                 );
               })}
+              {/* Trailing add-week tile */}
+              <button
+                type="button"
+                onClick={addWeek}
+                className="flex h-[200px] w-[260px] shrink-0 flex-col items-center justify-center gap-2 rounded-md border-2 border-dashed border-primary/40 bg-primary/5 text-primary hover:bg-primary/10"
+              >
+                <Plus className="h-6 w-6" />
+                <span className="text-sm font-bold uppercase tracking-wide">Add Week</span>
+              </button>
             </div>
           </div>
         </div>
