@@ -248,6 +248,19 @@ export async function updatePrep(prepId: string, patch: Record<string, any>) {
   if (error) throw error;
 }
 
+export async function deletePrep(prepId: string) {
+  // Detach blocks first so we don't hit FK constraints; coach can re-link them later.
+  await sb.from("pl_blocks").update({ prep_id: null }).eq("prep_id", prepId);
+  const { error } = await sb.from("pl_preps").delete().eq("id", prepId);
+  if (error) throw error;
+}
+
+export async function deleteBlock(blockId: string) {
+  // pl_weeks/pl_days/pl_exercise_rows cascade via FK; if not, this still removes the block row.
+  const { error } = await sb.from("pl_blocks").delete().eq("id", blockId);
+  if (error) throw error;
+}
+
 export async function deleteDay(dayId: string) {
   const { error } = await sb.from("pl_days").delete().eq("id", dayId);
   if (error) throw error;
