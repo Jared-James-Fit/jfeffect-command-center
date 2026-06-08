@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Apple, Beef, Wheat, Droplets, Footprints, Flame, Cookie, FileText, Download, ExternalLink } from "lucide-react";
+import { Apple, Beef, Wheat, Droplets, Flame, Cookie, FileText, Download, ExternalLink } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { MealPlanDisplay } from "@/components/meal-plan-display";
 
