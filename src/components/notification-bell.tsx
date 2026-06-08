@@ -14,10 +14,11 @@ import { formatDistanceToNow, parseISO } from "date-fns";
 import type { ConversationState, Message, MessageAttachment } from "@/lib/messages";
 
 type BellItem = {
-  kind: "message" | "lift_video" | "agreement";
+  kind: "message" | "lift_video" | "agreement" | "exercise_note";
   clientId: string;
   videoId?: string;
   agreementId?: string;
+  noteId?: string;
   name: string;
   title: string;
   body: string;
@@ -48,6 +49,9 @@ export function NotificationBell() {
       .on("postgres_changes", { event: "*", schema: "public", table: "agreements" }, () => {
         qc.invalidateQueries({ queryKey: ["unread-counts"] });
       })
+      .on("postgres_changes", { event: "*", schema: "public", table: "pl_exercise_notes" }, () => {
+        qc.invalidateQueries({ queryKey: ["unread-counts"] });
+      })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [user, qc]);
@@ -57,7 +61,7 @@ export function NotificationBell() {
     enabled: !!user && !!role,
     queryFn: async () => {
       if (role === "admin") {
-        const [{ data: msgs }, { data: states }, { data: vids }, { data: agreements }] = await Promise.all([
+        const [{ data: msgs }, { data: states }, { data: vids }, { data: agreements }, { data: exNotes }] = await Promise.all([
           (supabase.from("messages") as any).select("client_id, body, attachments, created_at, sender_role, is_internal_note").eq("sender_role", "client").eq("is_internal_note", false).order("created_at", { ascending: false }).limit(200),
           (supabase.from("conversation_state") as any).select("client_id, admin_last_read_at"),
           (supabase.from("lift_videos") as any)
@@ -69,6 +73,11 @@ export function NotificationBell() {
             .or("signer_mismatch.eq.true,status.in.(Error,Manual Action Needed,Needs Resend,Needs Manual Verification,Expired)")
             .order("updated_at", { ascending: false })
             .limit(20),
+          (supabase.from("pl_exercise_notes") as any)
+            .select("id, client_id, day_id, exercise_name, content, status, created_at, updated_at, coach_seen_at")
+            .is("coach_seen_at", null)
+            .order("updated_at", { ascending: false })
+            .limit(30),
         ]);
         const stateMap = new Map<string, ConversationState>((states ?? []).map((s: any) => [s.client_id, s]));
         const { data: clients } = await supabase.from("clients").select("id, full_name");
@@ -121,6 +130,19 @@ export function NotificationBell() {
             title: `${label} — ${name}`,
             body: a.agreement_type ?? a.template_name ?? "Agreement",
             created_at: a.updated_at,
+          });
+        }
+        for (const n of (exNotes ?? []) as any[]) {
+          const name = cMap.get(n.client_id) ?? "Client";
+          const verb = n.status === "edited" ? "edited a note on" : "added a note on";
+          items.push({
+            kind: "exercise_note",
+            clientId: n.client_id,
+            noteId: n.id,
+            name,
+            title: `${name} ${verb} ${n.exercise_name}`,
+            body: n.content,
+            created_at: n.updated_at,
           });
         }
         items.sort((a, b) => +new Date(b.created_at) - +new Date(a.created_at));
@@ -221,14 +243,22 @@ export function NotificationBell() {
                   ? (role === "admin" ? "/admin/lift-videos" : "/portal/lift-videos")
                   : it.kind === "agreement"
                   ? (role === "admin" ? "/admin/clients/$id" : "/portal")
+                  : it.kind === "exercise_note"
+                  ? (role === "admin" ? "/admin/clients/$id" : "/portal")
                   : (role === "admin" ? "/admin/messages" : "/portal/messages")
               }
-              params={it.kind === "agreement" && role === "admin" ? { id: it.clientId } : undefined as any}
+              params={
+                role === "admin" && (it.kind === "agreement" || it.kind === "exercise_note")
+                  ? { id: it.clientId }
+                  : undefined as any
+              }
               search={
                 role === "admin" && it.kind === "message"
                   ? { client: it.clientId }
                   : role === "admin" && it.kind === "agreement"
                   ? { tab: "agreements" as any }
+                  : role === "admin" && it.kind === "exercise_note"
+                  ? { tab: "training" as any }
                   : undefined
               }
               className="block"
@@ -237,6 +267,8 @@ export function NotificationBell() {
                   markRead(it.clientId, role === "admin" ? "admin" : "client").catch(() => {});
                 } else if (it.kind === "lift_video" && it.videoId) {
                   (role === "admin" ? markAdminViewed(it.videoId) : markClientViewed(it.videoId)).catch(() => {});
+                } else if (it.kind === "exercise_note" && it.noteId && role === "admin") {
+                  (supabase.from("pl_exercise_notes") as any).update({ coach_seen_at: new Date().toISOString() }).eq("id", it.noteId).then(() => {});
                 }
                 qc.invalidateQueries({ queryKey: ["unread-counts"] });
               }}
