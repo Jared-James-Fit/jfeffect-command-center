@@ -13,12 +13,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   Plus, BookOpen, UserPlus, Eye, Pencil, Copy, Archive as ArchiveIcon,
-  ArchiveRestore, Trash2, Clock, Calendar, Layers, MoreVertical, Search,
+  ArchiveRestore, Trash2, Clock, Calendar, Layers, MoreVertical, Search, Users,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
   listTemplates, createTemplate, applyTemplateToClient, duplicateTemplate,
   setTemplateArchived, deleteTemplate, summarizeTemplatePayload,
+  listTemplateAssignments,
   type TemplateType, type TrainingStyle, type TemplatePlacement,
 } from "@/lib/pl-programs";
 import { supabase } from "@/integrations/supabase/client";
@@ -173,6 +174,12 @@ function FilterChips({ chip, setChip }: { chip: FilterChip; setChip: (c: FilterC
 function TemplateCard({ tpl, onPreview, onAssign, onChanged }: { tpl: any; onPreview: () => void; onAssign: () => void; onChanged: () => void }) {
   const summary = useMemo(() => summarizeTemplatePayload(tpl), [tpl]);
   const updated = tpl.updated_at ? new Date(tpl.updated_at).toLocaleDateString() : "—";
+  const { data: assignments = [] } = useQuery({
+    queryKey: ["pl-template-assignments", tpl.id],
+    queryFn: () => listTemplateAssignments(tpl.id),
+  });
+  const activeAssignments = (assignments as any[]).filter((a) => !a.archived);
+  const uniqueClients = Array.from(new Map(activeAssignments.map((a: any) => [a.clientId, a])).values()) as any[];
   return (
     <Card className="flex flex-col gap-3 p-4">
       <div className="flex items-start justify-between gap-2">
@@ -203,6 +210,8 @@ function TemplateCard({ tpl, onPreview, onAssign, onChanged }: { tpl: any; onPre
 
       {tpl.notes && <p className="line-clamp-2 text-xs text-muted-foreground">{tpl.notes}</p>}
 
+      <AssignedToPanel templateId={tpl.id} clients={uniqueClients} />
+
       <div className="mt-auto flex flex-wrap gap-2 pt-1">
         <Button size="sm" variant="outline" className="flex-1" onClick={onPreview}>
           <Eye className="mr-1 h-3 w-3" /> Preview
@@ -217,6 +226,44 @@ function TemplateCard({ tpl, onPreview, onAssign, onChanged }: { tpl: any; onPre
         </Button>
       </div>
     </Card>
+  );
+}
+
+function AssignedToPanel({ templateId: _templateId, clients }: { templateId: string; clients: any[] }) {
+  const [open, setOpen] = useState(false);
+  if (clients.length === 0) {
+    return (
+      <div className="flex items-center gap-1.5 rounded-md border border-dashed border-border px-2 py-1.5 text-[11px] text-muted-foreground">
+        <Users className="h-3 w-3" /> Not assigned to anyone yet
+      </div>
+    );
+  }
+  const shown = open ? clients : clients.slice(0, 3);
+  return (
+    <div className="rounded-md border border-border bg-secondary/20 px-2 py-1.5">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="flex w-full items-center justify-between text-[11px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground"
+      >
+        <span className="flex items-center gap-1.5"><Users className="h-3 w-3" /> Assigned to {clients.length}</span>
+        <span className="text-[10px]">{open ? "Hide" : clients.length > 3 ? "Show all" : "Show"}</span>
+      </button>
+      <ul className="mt-1 space-y-0.5">
+        {shown.map((c) => (
+          <li key={c.clientId}>
+            <Link
+              to="/admin/client-programs/$clientId"
+              params={{ clientId: c.clientId }}
+              className="flex items-center justify-between rounded px-1 py-0.5 text-[11px] hover:bg-secondary/60"
+            >
+              <span className="truncate font-medium">{c.clientName ?? "Unknown client"}</span>
+              <span className="ml-2 shrink-0 text-[10px] text-muted-foreground">{c.kind === "prep" ? "Prep" : "Block"}</span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
