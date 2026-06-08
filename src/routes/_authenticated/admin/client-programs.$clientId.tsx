@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { ArrowLeft, Plus, Calendar, Target, Layers, History, BarChart3 } from "lucide-react";
+import { ArrowLeft, Plus, Calendar, Target, Layers, History, BarChart3, BookOpen } from "lucide-react";
 import { toast } from "sonner";
 import { listClientPreps, listClientBlocks, createPrep, createBlock, countdownLabel, updatePrep, updateBlock, GOAL_TYPES, TRAINING_FOCUSES, PREP_STATUSES, BLOCK_STATUSES, type PrepStatus, type BlockStatus } from "@/lib/pl-programs";
 import { ClientTrainingIntelCard } from "@/components/client-training-intel-card";
@@ -30,6 +30,21 @@ function ClientProgramsPage() {
   });
   const { data: preps = [] } = useQuery({ queryKey: ["pl-preps", clientId], queryFn: () => listClientPreps(clientId) });
   const { data: blocks = [] } = useQuery({ queryKey: ["pl-blocks", clientId], queryFn: () => listClientBlocks(clientId) });
+
+  const templateIds = Array.from(new Set([
+    ...(preps as any[]).map((p) => p.source_template_id).filter(Boolean),
+    ...(blocks as any[]).map((b) => b.source_template_id).filter(Boolean),
+  ])) as string[];
+  const { data: templateLookup = {} } = useQuery({
+    queryKey: ["pl-templates-by-id", templateIds.sort().join(",")],
+    enabled: templateIds.length > 0,
+    queryFn: async () => {
+      const { data } = await (supabase as any).from("pl_templates").select("id, name").in("id", templateIds);
+      const map: Record<string, { id: string; name: string }> = {};
+      for (const t of (data ?? []) as any[]) map[t.id] = t;
+      return map;
+    },
+  });
 
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["pl-preps", clientId] });
