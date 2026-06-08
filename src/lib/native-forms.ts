@@ -255,6 +255,14 @@ export async function unassignForm(formId: string, clientId: string) {
 }
 
 export async function listFormsForClient(clientId: string) {
+  const { data: client, error: clientErr } = await db
+    .from("clients")
+    .select("id, status, archived")
+    .eq("id", clientId)
+    .maybeSingle();
+  if (clientErr) throw clientErr;
+  if (!client || client.archived) return [];
+
   // Forms assigned directly to this client
   const { data: assignedRows, error: aErr } = await db
     .from("nf_assignments")
@@ -263,15 +271,19 @@ export async function listFormsForClient(clientId: string) {
   if (aErr) throw aErr;
   const assigned = ((assignedRows ?? []).map((r: any) => r.form).filter(Boolean) as NfForm[]);
 
-  // Forms broadcast to all active coaching clients (no individual assignment needed)
-  const { data: broadcastRows, error: bErr } = await db
-    .from("nf_forms")
-    .select("*")
-    .eq("visibility", "all_active_clients")
-    .eq("active", true)
-    .eq("archived", false);
-  if (bErr) throw bErr;
-  const broadcast = (broadcastRows ?? []) as NfForm[];
+  const activeForBroadcast = ["Active", "New Client"].includes(client.status ?? "Active");
+  let broadcast: NfForm[] = [];
+  if (activeForBroadcast) {
+    // Forms broadcast to all active coaching clients (no individual assignment needed)
+    const { data: broadcastRows, error: bErr } = await db
+      .from("nf_forms")
+      .select("*")
+      .eq("visibility", "all_active_clients")
+      .eq("active", true)
+      .eq("archived", false);
+    if (bErr) throw bErr;
+    broadcast = (broadcastRows ?? []) as NfForm[];
+  }
 
   const map = new Map<string, NfForm>();
   for (const f of [...assigned, ...broadcast]) {

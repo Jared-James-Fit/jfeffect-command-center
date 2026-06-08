@@ -47,7 +47,7 @@ import { FolderOpen, Eye } from "lucide-react";
 import { useClientImpersonation } from "@/lib/client-impersonation";
 import { useAuth } from "@/lib/auth";
 import { Checkbox } from "@/components/ui/checkbox";
-import { listAssignments, listForms as listNativeForms, type NfForm } from "@/lib/native-forms";
+import { listForms as listNativeForms, type NfForm } from "@/lib/native-forms";
 import { replaceClientNativeFormAssignments } from "@/lib/native-forms.functions";
 
 function AssignedCoachSelect({ value, onChange }: { value: string | null; onChange: (v: string | null) => void }) {
@@ -930,10 +930,14 @@ function ClientNativeFormsAssignment({ clientId }: { clientId: string }) {
   const { data: assignmentRows = [] } = useQuery({
     queryKey: ["client-nf-assignments", clientId],
     queryFn: async () => {
-      const results = await Promise.all(forms.map(async (form: NfForm) => ({ formId: form.id, rows: await listAssignments(form.id) })));
-      return results.flatMap((item) => item.rows.filter((row: any) => row.client_id === clientId).map(() => item.formId));
+      const { data, error } = await (supabase as any)
+        .from("nf_assignments")
+        .select("form_id")
+        .eq("client_id", clientId);
+      if (error) throw error;
+      return (data ?? []).map((row: any) => row.form_id as string);
     },
-    enabled: forms.length > 0,
+    enabled: !!clientId,
   });
 
   useEffect(() => {
@@ -959,13 +963,13 @@ function ClientNativeFormsAssignment({ clientId }: { clientId: string }) {
     setSaving(true);
     try {
       const result = await saveClientAssignmentsFn({ data: { clientId, formIds: Array.from(selectedIds) } });
-      if (!result.ok) return toast.error(result.error ?? "Assignments could not be saved");
+      if (!result.ok) return toast.error("Assignment save failed", { description: result.error ?? "Assignments could not be saved" });
       setDirty(false);
       await qc.invalidateQueries({ queryKey: ["client-nf-assignments", clientId] });
       await qc.invalidateQueries({ queryKey: ["nf-assignments"] });
       toast.success(`Saved ${result.count} form assignment${result.count === 1 ? "" : "s"}`);
     } catch (e: any) {
-      toast.error(e?.message ?? "Assignments could not be saved");
+      toast.error("Assignment save failed", { description: e?.message ?? "Assignments could not be saved" });
     } finally {
       setSaving(false);
     }

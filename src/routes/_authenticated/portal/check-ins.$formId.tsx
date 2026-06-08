@@ -16,7 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import { Loader2, Send, MessageCircle, Upload, ArrowLeft, ExternalLink, Check } from "lucide-react";
 import {
-  getForm,
+  listFormsForClient,
   listQuestions,
   getOrCreateCurrentSubmission,
   listAnswers,
@@ -28,6 +28,7 @@ import {
   shouldShowQuestion,
   statusLabel,
   statusTone,
+  type NfForm,
   type NfAnswer,
   type NfQuestion,
 } from "@/lib/native-forms";
@@ -51,10 +52,12 @@ function ClientFormRenderer() {
     },
   });
 
-  const { data: form } = useQuery({
-    queryKey: ["nf-form", formId],
-    queryFn: () => getForm(formId),
+  const { data: accessibleForms = [], isFetched: formsFetched } = useQuery({
+    queryKey: ["nf-forms-for-client", client?.id],
+    enabled: !!client?.id,
+    queryFn: () => listFormsForClient(client!.id),
   });
+  const form = useMemo<NfForm | undefined>(() => accessibleForms.find((item) => item.id === formId), [accessibleForms, formId]);
 
   const { data: questions = [] } = useQuery({
     queryKey: ["nf-questions", formId],
@@ -158,6 +161,24 @@ function ClientFormRenderer() {
     } catch (e: any) {
       toast.error(e.message);
     }
+  }
+
+  if (client?.id && formsFetched && !form) {
+    return (
+      <>
+        <PageHeader title="Check-In unavailable" />
+        <div className="mx-auto max-w-2xl p-4 md:p-8">
+          <Card className="border-border bg-card p-6 text-sm text-muted-foreground">
+            This form is not currently assigned, active, or available in your portal.
+            <div className="mt-4">
+              <Button variant="outline" onClick={() => navigate({ to: "/portal/check-ins" })}>
+                <ArrowLeft className="mr-2 h-4 w-4" /> Back to Check-Ins
+              </Button>
+            </div>
+          </Card>
+        </div>
+      </>
+    );
   }
 
   if (!form || !submission) {
