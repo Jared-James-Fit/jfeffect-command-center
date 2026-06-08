@@ -4,7 +4,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { usePortalUserId } from "@/lib/client-impersonation";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Clock, CheckCircle2, Activity, FileText, Dumbbell, ChevronRight } from "lucide-react";
 import { getClientWorkouts, durationRange } from "@/lib/pl-programs";
