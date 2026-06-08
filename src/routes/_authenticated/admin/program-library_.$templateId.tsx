@@ -23,6 +23,23 @@ import { SaveStatus } from "@/components/save-status";
 import { useConflictWatch } from "@/hooks/use-conflict-watch";
 import { ActionButton } from "@/components/action-button";
 
+// ---- Editor preferences (compact mode, zoom, sidebar) ----
+const PREFS_KEY = "pl-tpl-editor-prefs:v1";
+type EditorPrefs = { compact: boolean; zoom: number; sidebarCollapsed: boolean };
+const DEFAULT_PREFS: EditorPrefs = { compact: false, zoom: 0.9, sidebarCollapsed: false };
+function readPrefs(): EditorPrefs {
+  if (typeof window === "undefined") return DEFAULT_PREFS;
+  try {
+    const raw = window.localStorage.getItem(PREFS_KEY);
+    if (!raw) return DEFAULT_PREFS;
+    return { ...DEFAULT_PREFS, ...JSON.parse(raw) };
+  } catch { return DEFAULT_PREFS; }
+}
+function writePrefs(p: EditorPrefs) {
+  if (typeof window === "undefined") return;
+  try { window.localStorage.setItem(PREFS_KEY, JSON.stringify(p)); } catch {}
+}
+
 // Append a row into the first day reachable inside any template payload shape.
 function appendRowToFirstDay(payload: any, type: string, row: any) {
   const stamp = { sort_order: 0, sets: 3, reps_text: "8-12", time_profile: "accessory_compound", ...row };
