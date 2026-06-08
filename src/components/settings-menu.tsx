@@ -70,25 +70,20 @@ export function SettingsMenu({
         supabase.from("clients").select("id").eq("user_id", user.id).maybeSingle(),
         supabase.from("coaches").select("id").eq("user_id", user.id).maybeSingle(),
       ]);
-      const tasks: Promise<any>[] = [
-        supabase.from("profiles").update({ avatar_url: path } as any).eq("id", user.id),
-      ];
-      if (cli?.id) {
-        tasks.push(
-          supabase.from("clients").update({
-            profile_picture_url: path,
-            profile_picture_updated_at: stamp,
-          } as any).eq("id", cli.id),
-        );
-      }
-      if (co?.id) {
-        tasks.push(
-          supabase.from("coaches").update({
-            profile_picture_url: path,
-          } as any).eq("id", co.id),
-        );
-      }
-      await Promise.all(tasks);
+      await Promise.all([
+        Promise.resolve(supabase.from("profiles").update({ avatar_url: path } as any).eq("id", user.id)),
+        cli?.id
+          ? Promise.resolve(supabase.from("clients").update({
+              profile_picture_url: path,
+              profile_picture_updated_at: stamp,
+            } as any).eq("id", cli.id))
+          : Promise.resolve(),
+        co?.id
+          ? Promise.resolve(supabase.from("coaches").update({
+              profile_picture_url: path,
+            } as any).eq("id", co.id))
+          : Promise.resolve(),
+      ]);
       await qc.invalidateQueries({ queryKey: ["app-shell-me"] });
       await qc.invalidateQueries({ queryKey: ["my-client-account"] });
       setPicOpen(false);
