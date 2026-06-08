@@ -115,21 +115,42 @@ function ClientCheckInsList() {
                 </div>
 
                 <div className="mt-4 flex flex-wrap items-center gap-2">
-                  <Button
-                    onClick={() =>
-                      navigate({ to: "/portal/check-ins/$formId", params: { formId: f.id } })
-                    }
-                    className="bg-gradient-primary font-bold"
-                  >
-                    {f.kind === "external"
-                      ? (f.button_label || "Open Check-In Form")
-                      : status === "in_progress"
+                  {f.kind === "external" ? (
+                    f.external_url ? (
+                      <Button asChild className="bg-gradient-primary font-bold">
+                        <a
+                          href={f.external_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          onClick={() => {
+                            // navigate in-app too so client can mark as submitted
+                            navigate({ to: "/portal/check-ins/$formId", params: { formId: f.id } });
+                          }}
+                        >
+                          {f.button_label || "Open Check-In Form"}
+                          <ExternalLink className="ml-1 h-4 w-4" />
+                        </a>
+                      </Button>
+                    ) : (
+                      <Button disabled className="font-bold">
+                        No link set — contact your coach
+                      </Button>
+                    )
+                  ) : (
+                    <Button
+                      onClick={() =>
+                        navigate({ to: "/portal/check-ins/$formId", params: { formId: f.id } })
+                      }
+                      className="bg-gradient-primary font-bold"
+                    >
+                      {status === "in_progress"
                         ? "Continue"
                         : status === "not_started"
                           ? "Start Check-In"
                           : "Open"}
-                    {f.kind === "external" ? <ExternalLink className="ml-1 h-4 w-4" /> : <ChevronRight className="ml-1 h-4 w-4" />}
-                  </Button>
+                      <ChevronRight className="ml-1 h-4 w-4" />
+                    </Button>
+                  )}
                 </div>
 
                 {subs.length > 0 && (
