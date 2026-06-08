@@ -341,6 +341,7 @@ export type Database = {
           email: string
           full_name: string | null
           id: string
+          is_admin_sandbox: boolean
           last_active_at: string | null
           last_signed_in_at: string | null
           messaging_permission: string
@@ -359,6 +360,7 @@ export type Database = {
           email: string
           full_name?: string | null
           id?: string
+          is_admin_sandbox?: boolean
           last_active_at?: string | null
           last_signed_in_at?: string | null
           messaging_permission?: string
@@ -377,6 +379,7 @@ export type Database = {
           email?: string
           full_name?: string | null
           id?: string
+          is_admin_sandbox?: boolean
           last_active_at?: string | null
           last_signed_in_at?: string | null
           messaging_permission?: string
@@ -1897,6 +1900,47 @@ export type Database = {
           youtube_url?: string | null
         }
         Relationships: []
+      }
+      featured_member_items: {
+        Row: {
+          active: boolean
+          created_at: string
+          id: string
+          item_type: string
+          note: string | null
+          plan_id: string | null
+          position: number
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          id?: string
+          item_type: string
+          note?: string | null
+          plan_id?: string | null
+          position?: number
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          id?: string
+          item_type?: string
+          note?: string | null
+          plan_id?: string | null
+          position?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "featured_member_items_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: true
+            referencedRelation: "member_plans"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       form_client_assignments: {
         Row: {
