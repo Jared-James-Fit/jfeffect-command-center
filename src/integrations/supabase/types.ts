@@ -3537,9 +3537,7 @@ export type Database = {
           notes: string | null
           protein: number | null
           sort_order: number
-          steps: number | null
           target_id: string
-          water: number | null
         }
         Insert: {
           calories?: number | null
@@ -3552,9 +3550,7 @@ export type Database = {
           notes?: string | null
           protein?: number | null
           sort_order?: number
-          steps?: number | null
           target_id: string
-          water?: number | null
         }
         Update: {
           calories?: number | null
@@ -3567,9 +3563,7 @@ export type Database = {
           notes?: string | null
           protein?: number | null
           sort_order?: number
-          steps?: number | null
           target_id?: string
-          water?: number | null
         }
         Relationships: [
           {
@@ -3602,6 +3596,7 @@ export type Database = {
           structure: string
           updated_at: string
           visible_to_client: boolean
+          water: string | null
         }
         Insert: {
           admin_notes?: string | null
@@ -3623,6 +3618,7 @@ export type Database = {
           structure?: string
           updated_at?: string
           visible_to_client?: boolean
+          water?: string | null
         }
         Update: {
           admin_notes?: string | null
@@ -3644,6 +3640,7 @@ export type Database = {
           structure?: string
           updated_at?: string
           visible_to_client?: boolean
+          water?: string | null
         }
         Relationships: [
           {

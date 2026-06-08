@@ -20,8 +20,6 @@ type Day = {
   carbs?: number | null;
   fats?: number | null;
   fibre?: number | null;
-  water?: number | null;
-  steps?: number | null;
   notes?: string | null;
   sort_order: number;
 };
@@ -65,6 +63,7 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
         visible_to_client: true,
         pdf_url: "",
         pdf_name: "",
+        water: "",
       };
       setForm(f);
       setDays(dayLabelsForStructure(f.structure).map((label, i) => ({ day_label: label, sort_order: i })));
@@ -124,6 +123,7 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
       pdf_url: form.pdf_url || null,
       pdf_name: form.pdf_name || null,
       last_updated_at: new Date().toISOString(),
+      water: form.water || null,
     };
     let targetId = form.id;
     if (targetId) {
@@ -199,7 +199,8 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
           <div><Label>Start date</Label><Input type="date" value={form.start_date} onChange={(e) => set("start_date", e.target.value)} /></div>
           <div><Label>End date</Label><Input type="date" value={form.end_date} onChange={(e) => set("end_date", e.target.value)} /></div>
           <div><Label>Ending soon (days)</Label><Input type="number" value={form.ending_soon_days} onChange={(e) => set("ending_soon_days", e.target.value)} /></div>
-          <div className="flex items-center justify-between rounded-md border border-border bg-secondary/30 px-3 py-2">
+          <div><Label>Water target</Label><Input placeholder="e.g. 2000 ml or 2 litres" value={form.water ?? ""} onChange={(e) => set("water", e.target.value)} /></div>
+          <div className="flex items-center justify-between rounded-md border border-border bg-secondary/30 px-3 py-2 md:col-span-2">
             <Label className="text-xs">Visible to client</Label>
             <Switch checked={form.visible_to_client} onCheckedChange={(v) => set("visible_to_client", v)} />
           </div>
@@ -216,8 +217,8 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
                 <Input value={d.day_label} onChange={(e) => updateDay(i, "day_label", e.target.value)} className="max-w-xs font-semibold" />
                 {days.length > 1 && <Button size="sm" variant="ghost" className="text-destructive" onClick={() => removeDay(i)}>Remove</Button>}
               </div>
-              <div className="grid grid-cols-2 gap-2 md:grid-cols-7">
-                {(["calories","protein","carbs","fats","fibre","water","steps"] as const).map((k) => (
+              <div className="grid grid-cols-2 gap-2 md:grid-cols-5">
+                {(["calories","protein","carbs","fats","fibre"] as const).map((k) => (
                   <div key={k}><Label className="text-[10px] uppercase">{k}</Label><Input type="number" value={d[k] ?? ""} onChange={(e) => updateDay(i, k, e.target.value)} /></div>
                 ))}
               </div>

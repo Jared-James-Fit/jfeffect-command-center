@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Apple, Beef, Wheat, Droplets, Footprints, Flame, Cookie, FileText, Download, ExternalLink } from "lucide-react";
+import { Apple, Beef, Wheat, Droplets, Flame, Cookie, FileText, Download, ExternalLink } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { MealPlanDisplay } from "@/components/meal-plan-display";
 
@@ -81,6 +81,13 @@ function NutritionView({ current }: { current: any }) {
         {current.client_notes && (
           <div className="mt-3 rounded-md border border-primary/30 bg-primary/5 p-3 text-sm">{current.client_notes}</div>
         )}
+        {current.water && (
+          <div className="mt-3 flex items-center gap-2 rounded-md border border-border bg-secondary/30 px-3 py-2 text-sm">
+            <Droplets className="h-4 w-4 text-primary" />
+            <span className="text-muted-foreground">Water target:</span>
+            <span className="font-bold">{current.water}</span>
+          </div>
+        )}
       </Card>
 
       {days.length > 1 && (
@@ -104,14 +111,14 @@ function NutritionView({ current }: { current: any }) {
         </div>
       )}
 
-      {activeDay && <DayPanel day={activeDay} />}
+      {activeDay && <DayPanel day={activeDay} water={current.water} />}
 
       {current.pdf_url && <PdfCard path={current.pdf_url} name={current.pdf_name} />}
     </>
   );
 }
 
-function DayPanel({ day }: { day: any }) {
+function DayPanel({ day, water }: { day: any; water?: string | null }) {
   return (
     <Card className="border-border bg-card p-5 space-y-4">
       {/* Compact macro summary row */}
@@ -126,13 +133,12 @@ function DayPanel({ day }: { day: any }) {
       </div>
 
       {/* Detailed macro cards */}
-      <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
+      <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
         <Macro icon={Flame} label="Cal" value={day.calories} unit="" />
         <Macro icon={Beef} label="Protein" value={day.protein} unit="g" />
         <Macro icon={Wheat} label="Carbs" value={day.carbs} unit="g" />
         <Macro icon={Cookie} label="Fats" value={day.fats} unit="g" />
-        <Macro icon={Droplets} label="Water" value={day.water} unit="oz" />
-        <Macro icon={Footprints} label="Steps" value={day.steps} unit="" />
+        <Macro icon={Droplets} label="Water" value={water} unit="" />
       </div>
       {day.fibre != null && (
         <div className="text-xs"><span className="text-muted-foreground">Fibre:</span> <span className="font-semibold">{day.fibre}g</span></div>
@@ -188,30 +194,6 @@ function PdfCard({ path, name }: { path: string; name?: string | null }) {
   );
 }
 
-function DayCard({ day }: { day: any }) {
-  return (
-    <Card className="border-border bg-card p-6">
-      <h3 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">{day.day_label}</h3>
-      <div className="mt-4 grid grid-cols-2 gap-3">
-        <Macro icon={Flame} label="Calories" value={day.calories} unit="kcal" />
-        <Macro icon={Beef} label="Protein" value={day.protein} unit="g" />
-        <Macro icon={Wheat} label="Carbs" value={day.carbs} unit="g" />
-        <Macro icon={Cookie} label="Fats" value={day.fats} unit="g" />
-        <Macro icon={Droplets} label="Water" value={day.water} unit="oz" />
-        <Macro icon={Footprints} label="Steps" value={day.steps} unit="" />
-      </div>
-      {day.fibre != null && (
-        <div className="mt-3 text-xs"><span className="text-muted-foreground">Fibre:</span> <span className="font-semibold">{day.fibre}g</span></div>
-      )}
-      {day.notes && (
-        <div className="mt-4">
-          <div className="mb-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Meal Plan</div>
-          <MealPlanDisplay text={day.notes} />
-        </div>
-      )}
-    </Card>
-  );
-}
 
 function Macro({ icon: Icon, label, value, unit }: { icon: any; label: string; value: any; unit: string }) {
   return (
