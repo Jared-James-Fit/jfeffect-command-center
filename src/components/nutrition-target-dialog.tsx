@@ -216,8 +216,8 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
                 <Input value={d.day_label} onChange={(e) => updateDay(i, "day_label", e.target.value)} className="max-w-xs font-semibold" />
                 {days.length > 1 && <Button size="sm" variant="ghost" className="text-destructive" onClick={() => removeDay(i)}>Remove</Button>}
               </div>
-              <div className="grid grid-cols-2 gap-2 md:grid-cols-7">
-                {(["calories","protein","carbs","fats","fibre","water","steps"] as const).map((k) => (
+              <div className="grid grid-cols-2 gap-2 md:grid-cols-5">
+                {(["calories","protein","carbs","fats","fibre"] as const).map((k) => (
                   <div key={k}><Label className="text-[10px] uppercase">{k}</Label><Input type="number" value={d[k] ?? ""} onChange={(e) => updateDay(i, k, e.target.value)} /></div>
                 ))}
               </div>
