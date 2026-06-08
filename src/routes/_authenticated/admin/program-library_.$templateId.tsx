@@ -746,13 +746,16 @@ function DayEditor({ day, setDay, exercises, compact }: { day: any; setDay: (d: 
 function RowEditor({ row, setRow, onDelete, exercises, compact }: { row: any; setRow: (r: any) => void; onDelete?: () => void; exercises: any[]; compact?: boolean }) {
   const exName = (exercises as any[]).find((e) => e.id === row.exercise_id)?.name ?? row.exercise_name_override ?? "";
   const accent = movementAccent(exName);
+  const [expanded, setExpanded] = useState(!compact);
+  useEffect(() => { if (!compact) setExpanded(true); }, [compact]);
+  const h = compact ? "h-7" : "h-8";
   return (
-    <div className="relative overflow-hidden rounded-md border border-border bg-secondary/20 p-2 pl-3 space-y-1">
+    <div className={cn("relative overflow-hidden rounded-md border border-border bg-secondary/20 pl-3", compact ? "p-1.5 space-y-1" : "p-2 space-y-1")}>
       <div className={`absolute left-0 top-0 h-full w-1.5 ${accent}`} aria-hidden />
       <div className="grid grid-cols-12 items-center gap-1">
         <div className="col-span-4">
         <Select value={row.exercise_id ?? "__custom"} onValueChange={(v) => setRow({ ...row, exercise_id: v === "__custom" ? null : v })}>
-          <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Exercise" /></SelectTrigger>
+          <SelectTrigger className={cn(h, "text-xs")}><SelectValue placeholder="Exercise" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="__custom">— Custom name —</SelectItem>
             {(exercises as any[]).map((e) => <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>)}
@@ -762,28 +765,35 @@ function RowEditor({ row, setRow, onDelete, exercises, compact }: { row: any; se
           <Input className="mt-1 h-7 text-xs" placeholder="Custom name" value={row.exercise_name_override ?? ""} onChange={(e) => setRow({ ...row, exercise_name_override: e.target.value })} />
         )}
       </div>
-        <Input className="col-span-1 h-8 text-xs" inputMode="numeric" placeholder="Sets" value={row.sets ?? ""} onChange={(e) => setRow({ ...row, sets: parseInt(e.target.value) || null })} />
-        <Input className="col-span-2 h-8 text-xs" placeholder="Reps" value={row.reps_text ?? ""} onChange={(e) => setRow({ ...row, reps_text: e.target.value })} />
-        <Input className="col-span-1 h-8 text-xs" inputMode="decimal" placeholder="RPE" value={row.rpe ?? ""} onChange={(e) => setRow({ ...row, rpe: e.target.value })} />
-        <Input className="col-span-1 h-8 text-xs" inputMode="decimal" placeholder="RIR" value={row.rir ?? ""} onChange={(e) => setRow({ ...row, rir: e.target.value })} />
-        <Input className="col-span-1 h-8 text-xs" inputMode="numeric" placeholder="Rest s" value={row.rest_seconds ?? ""} onChange={(e) => setRow({ ...row, rest_seconds: parseInt(e.target.value) || null })} />
-        <div className="col-span-2 flex justify-end gap-1">
+        <Input className={cn("col-span-1 text-xs", h)} inputMode="numeric" placeholder="Sets" value={row.sets ?? ""} onChange={(e) => setRow({ ...row, sets: parseInt(e.target.value) || null })} />
+        <Input className={cn("col-span-2 text-xs", h)} placeholder="Reps" value={row.reps_text ?? ""} onChange={(e) => setRow({ ...row, reps_text: e.target.value })} />
+        <Input className={cn("col-span-1 text-xs", h)} inputMode="decimal" placeholder="RPE" value={row.rpe ?? ""} onChange={(e) => setRow({ ...row, rpe: e.target.value })} />
+        <Input className={cn("col-span-1 text-xs", h)} inputMode="decimal" placeholder="RIR" value={row.rir ?? ""} onChange={(e) => setRow({ ...row, rir: e.target.value })} />
+        <Input className={cn("col-span-1 text-xs", h)} inputMode="numeric" placeholder="Rest s" value={row.rest_seconds ?? ""} onChange={(e) => setRow({ ...row, rest_seconds: parseInt(e.target.value) || null })} />
+        <div className="col-span-2 flex justify-end gap-0.5">
+          {compact && (
+            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setExpanded((v) => !v)} title={expanded ? "Hide advanced" : "Show advanced"}>
+              {expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+            </Button>
+          )}
           {onDelete && <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={onDelete}><Trash2 className="h-3.5 w-3.5" /></Button>}
         </div>
       </div>
+      {expanded && (
       <div className="grid grid-cols-12 items-center gap-1">
         <Select value={row.percentage_basis ?? "manual"} onValueChange={(v) => setRow({ ...row, percentage_basis: v })}>
-          <SelectTrigger className="col-span-3 h-8 text-xs"><SelectValue /></SelectTrigger>
+          <SelectTrigger className={cn("col-span-3 text-xs", h)}><SelectValue /></SelectTrigger>
           <SelectContent>{PERCENTAGE_BASES.map((p) => <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>)}</SelectContent>
         </Select>
-        <Input className="col-span-1 h-8 text-xs" inputMode="decimal" placeholder="%" value={row.percentage ?? ""} onChange={(e) => setRow({ ...row, percentage: parseFloat(e.target.value) || null })} />
-        <Input className="col-span-2 h-8 text-xs" inputMode="decimal" placeholder="Load kg" value={row.load_kg ?? ""} onChange={(e) => setRow({ ...row, load_kg: parseFloat(e.target.value) || null })} />
-        <Input className="col-span-2 h-8 text-xs" placeholder="Tempo 3-1-1" value={row.tempo ?? ""} onChange={(e) => setRow({ ...row, tempo: e.target.value })} />
+        <Input className={cn("col-span-1 text-xs", h)} inputMode="decimal" placeholder="%" value={row.percentage ?? ""} onChange={(e) => setRow({ ...row, percentage: parseFloat(e.target.value) || null })} />
+        <Input className={cn("col-span-2 text-xs", h)} inputMode="decimal" placeholder="Load kg" value={row.load_kg ?? ""} onChange={(e) => setRow({ ...row, load_kg: parseFloat(e.target.value) || null })} />
+        <Input className={cn("col-span-2 text-xs", h)} placeholder="Tempo 3-1-1" value={row.tempo ?? ""} onChange={(e) => setRow({ ...row, tempo: e.target.value })} />
         <Select value={row.time_profile ?? "accessory_compound"} onValueChange={(v) => setRow({ ...row, time_profile: v })}>
-          <SelectTrigger className="col-span-4 h-8 text-xs"><SelectValue /></SelectTrigger>
+          <SelectTrigger className={cn("col-span-4 text-xs", h)}><SelectValue /></SelectTrigger>
           <SelectContent>{TIME_PROFILES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}</SelectContent>
         </Select>
       </div>
+      )}
     </div>
   );
 }
