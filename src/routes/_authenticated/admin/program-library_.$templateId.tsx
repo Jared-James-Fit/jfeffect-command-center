@@ -855,6 +855,9 @@ function RowEditor({ row, setRow, onDelete, exercises, compact }: { row: any; se
         <Input className={cn("col-span-1 text-xs", h)} inputMode="decimal" placeholder="RIR" value={row.rir ?? ""} onChange={(e) => setRow({ ...row, rir: e.target.value })} />
         <Input className={cn("col-span-1 text-xs", h)} inputMode="numeric" placeholder="Rest s" value={row.rest_seconds ?? ""} onChange={(e) => setRow({ ...row, rest_seconds: parseInt(e.target.value) || null })} />
         <div className="col-span-2 flex justify-end gap-0.5">
+          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => { copyRows([row]); toast.success("Exercise copied"); }} title="Copy exercise">
+            <ClipboardCopy className="h-3.5 w-3.5" />
+          </Button>
           {compact && (
             <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setExpanded((v) => !v)} title={expanded ? "Hide advanced" : "Show advanced"}>
               {expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
