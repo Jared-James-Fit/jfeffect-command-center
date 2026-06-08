@@ -198,7 +198,7 @@ export async function createPrep(input: { client_id: string; title: string; goal
   return data;
 }
 
-export async function createBlock(input: { client_id: string; prep_id?: string | null; name: string; weeks: number; training_focus?: string | null; week_start_index?: number | null; source_template_id?: string | null }) {
+export async function createBlock(input: { client_id: string; prep_id?: string | null; name: string; weeks: number; training_focus?: string | null; week_start_index?: number | null; source_template_id?: string | null; status?: BlockStatus }) {
   const { data: block, error } = await sb.from("pl_blocks").insert(input as any).select("*").single();
   if (error) throw error;
   // Seed weeks + 1 day each
