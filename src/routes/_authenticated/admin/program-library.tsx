@@ -526,6 +526,7 @@ function TemplateTreeView({ tpl }: { tpl: any }) {
 
 // ------- Assign dialog with placement -------
 function AssignDialog({ template, onClose }: { template: any; onClose: () => void }) {
+  const qc = useQueryClient();
   const [clientId, setClientId] = useState<string>("");
   const [mode, setMode] = useState<string>("");
   const [prepId, setPrepId] = useState<string>("");
@@ -603,6 +604,9 @@ function AssignDialog({ template, onClose }: { template: any; onClose: () => voi
       }
       await applyTemplateToClient({ templateId: template.id, clientId, placement, name: name || undefined, clientVisible: visible });
       toast.success("Template assigned");
+      qc.invalidateQueries({ queryKey: ["pl-template-assignments", template.id] });
+      qc.invalidateQueries({ queryKey: ["pl-preps", clientId] });
+      qc.invalidateQueries({ queryKey: ["pl-blocks", clientId] });
       onClose();
     } catch (e: any) {
       toast.error(e.message);
