@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, Star, GripVertical, Check, Loader2, AlertCircle, Circle, Plus, Link as LinkIcon, Unlink } from "lucide-react";
+import { Search, Star, GripVertical, Check, Loader2, AlertCircle, Circle, Plus, Link as LinkIcon, Unlink, CloudOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // ---------------- Drag & drop payload helpers ----------------
@@ -62,28 +62,69 @@ export const DENSITY_CLASSES: Record<Density, { row: string; cell: string; input
 
 // ---------------- Save state pill ----------------
 
-export type SaveState = "idle" | "saving" | "saved" | "error";
+export type SaveState = "idle" | "saving" | "saved" | "error" | "offline" | "pending";
+
+// Global event so a "Save now" button or other components can flush pending
+// debounced CellInput timers without re-plumbing every input.
+export const PB_FLUSH_EVENT = "pb:flush-cells";
+export function flushPendingCells() {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent(PB_FLUSH_EVENT));
+}
 
 export function useSaveState() {
   const [state, setState] = useState<SaveState>("idle");
+  const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
+  const [online, setOnline] = useState(typeof navigator === "undefined" ? true : navigator.onLine);
+  const inflight = useRef(0);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const up = () => setOnline(true);
+    const down = () => { setOnline(false); setState((s) => (s === "saving" || s === "pending" ? "offline" : s)); };
+    window.addEventListener("online", up);
+    window.addEventListener("offline", down);
+    return () => { window.removeEventListener("online", up); window.removeEventListener("offline", down); };
+  }, []);
+
   const wrap = async <T,>(fn: () => Promise<T>): Promise<T | undefined> => {
+    inflight.current++;
     setState("saving");
     try {
       const r = await fn();
-      setState("saved");
-      if (timer.current) clearTimeout(timer.current);
-      timer.current = setTimeout(() => setState("idle"), 1500);
+      inflight.current = Math.max(0, inflight.current - 1);
+      if (inflight.current === 0) {
+        setState("saved");
+        setLastSavedAt(Date.now());
+        if (timer.current) clearTimeout(timer.current);
+        timer.current = setTimeout(() => setState("idle"), 2500);
+      }
       return r;
     } catch (e) {
+      inflight.current = Math.max(0, inflight.current - 1);
       setState("error");
       throw e;
     }
   };
-  return { state, wrap, setState };
+
+  // Allow CellInput / external typing to mark the builder dirty so the pill flips
+  // from "Saved" to "Unsaved" without waiting for the network round-trip.
+  const markPending = () => setState((s) => (s === "saving" ? s : "pending"));
+
+  return { state, wrap, setState, lastSavedAt, online, markPending };
 }
 
-export function SaveStatePill({ state }: { state: SaveState }) {
+function timeAgo(ts: number) {
+  const s = Math.floor((Date.now() - ts) / 1000);
+  if (s < 5) return "just now";
+  if (s < 60) return `${s}s ago`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ago`;
+  return `${Math.floor(m / 60)}h ago`;
+}
+
+export function SaveStatePill({ state, lastSavedAt }: { state: SaveState; lastSavedAt?: number | null }) {
   if (state === "saving")
     return (
       <Badge variant="outline" className="gap-1 text-[10px] font-normal">
@@ -93,13 +134,25 @@ export function SaveStatePill({ state }: { state: SaveState }) {
   if (state === "saved")
     return (
       <Badge variant="outline" className="gap-1 border-emerald-500/40 text-emerald-500 text-[10px] font-normal">
-        <Check className="h-3 w-3" /> Saved
+        <Check className="h-3 w-3" /> {lastSavedAt ? `Saved ${timeAgo(lastSavedAt)}` : "Saved"}
       </Badge>
     );
   if (state === "error")
     return (
       <Badge variant="outline" className="gap-1 border-destructive/40 text-destructive text-[10px] font-normal">
-        <AlertCircle className="h-3 w-3" /> Error
+        <AlertCircle className="h-3 w-3" /> Save failed
+      </Badge>
+    );
+  if (state === "offline")
+    return (
+      <Badge variant="outline" className="gap-1 border-amber-500/40 text-amber-500 text-[10px] font-normal">
+        <CloudOff className="h-3 w-3" /> Offline — queued
+      </Badge>
+    );
+  if (state === "pending")
+    return (
+      <Badge variant="outline" className="gap-1 text-[10px] font-normal text-muted-foreground">
+        <Circle className="h-2 w-2 fill-current animate-pulse" /> Unsaved changes
       </Badge>
     );
   return (
@@ -119,6 +172,9 @@ export function CellInput({
   density = "compact",
   type = "text",
   inputMode,
+  draftKey,
+  autosaveDelay = 1200,
+  onDirty,
 }: {
   value: string | number | null | undefined;
   onCommit: (v: string) => void;
@@ -127,11 +183,108 @@ export function CellInput({
   density?: Density;
   type?: string;
   inputMode?: any;
+  /** Optional stable key for localStorage draft mirror. Skip to disable drafts. */
+  draftKey?: string;
+  /** Debounce in ms before background commit fires while typing. Default 1200ms. */
+  autosaveDelay?: number;
+  /** Notified the first time local diverges from the server value (for "unsaved" pill). */
+  onDirty?: () => void;
 }) {
-  const [local, setLocal] = useState(value == null ? "" : String(value));
+  const stringify = (v: string | number | null | undefined) => (v == null ? "" : String(v));
+  const initial = stringify(value);
+  const [local, setLocal] = useState(initial);
+  const focusedRef = useRef(false);
+  const lastSyncedRef = useRef(initial);
+  const lastCommittedRef = useRef(initial);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ---- Local draft hydration (only on first mount, only if input was actually
+  // edited last session AND the server value still matches the baseline at the
+  // time we stored the draft — so we never blow away another coach's update).
   useEffect(() => {
-    setLocal(value == null ? "" : String(value));
+    if (!draftKey || typeof window === "undefined") return;
+    try {
+      const raw = window.localStorage.getItem(`lov:pb:cell:${draftKey}`);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as { local: string; baseline: string };
+      if (parsed.baseline === initial && parsed.local !== initial) {
+        setLocal(parsed.local);
+        onDirty?.();
+      } else {
+        // Stale draft — server has moved on. Drop it silently.
+        window.localStorage.removeItem(`lov:pb:cell:${draftKey}`);
+      }
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ---- Sync from prop without disrupting typing.
+  useEffect(() => {
+    const next = stringify(value);
+    if (next === lastSyncedRef.current) return;
+    lastSyncedRef.current = next;
+    // Don't overwrite live typing. Only sync if the input isn't focused AND
+    // local matches what we last committed (i.e. user has no unsaved diff).
+    if (!focusedRef.current && local === lastCommittedRef.current) {
+      setLocal(next);
+      lastCommittedRef.current = next;
+      if (draftKey && typeof window !== "undefined") {
+        try { window.localStorage.removeItem(`lov:pb:cell:${draftKey}`); } catch {}
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value]);
+
+  const writeDraft = (v: string) => {
+    if (!draftKey || typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(
+        `lov:pb:cell:${draftKey}`,
+        JSON.stringify({ local: v, baseline: lastSyncedRef.current }),
+      );
+    } catch {}
+  };
+  const clearDraft = () => {
+    if (!draftKey || typeof window === "undefined") return;
+    try { window.localStorage.removeItem(`lov:pb:cell:${draftKey}`); } catch {}
+  };
+
+  const commit = (v: string) => {
+    if (v === lastCommittedRef.current) return;
+    if (v === stringify(value)) {
+      // Value already matches server — nothing to send. Still clear draft.
+      lastCommittedRef.current = v;
+      clearDraft();
+      return;
+    }
+    lastCommittedRef.current = v;
+    clearDraft();
+    onCommit(v);
+  };
+
+  // Debounced autosave: fire commit after the user pauses typing.
+  useEffect(() => {
+    if (local === lastCommittedRef.current) return;
+    onDirty?.();
+    writeDraft(local);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => commit(local), autosaveDelay);
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [local]);
+
+  // Listen for global flush ("Save now" button or manual flush).
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const handler = () => {
+      if (debounceRef.current) { clearTimeout(debounceRef.current); debounceRef.current = null; }
+      commit(local);
+    };
+    window.addEventListener(PB_FLUSH_EVENT, handler);
+    return () => window.removeEventListener(PB_FLUSH_EVENT, handler);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [local]);
+
   return (
     <Input
       type={type}
@@ -139,8 +292,11 @@ export function CellInput({
       placeholder={placeholder}
       value={local}
       onChange={(e) => setLocal(e.target.value)}
+      onFocus={(e) => { focusedRef.current = true; e.currentTarget.select(); }}
       onBlur={() => {
-        if (local !== (value == null ? "" : String(value))) onCommit(local);
+        focusedRef.current = false;
+        if (debounceRef.current) { clearTimeout(debounceRef.current); debounceRef.current = null; }
+        commit(local);
       }}
       onKeyDown={(e) => {
         if (e.key === "Enter") {
@@ -157,11 +313,11 @@ export function CellInput({
           next?.focus();
           next?.select();
         } else if (e.key === "Escape") {
-          setLocal(value == null ? "" : String(value));
+          setLocal(lastCommittedRef.current);
+          clearDraft();
           (e.target as HTMLInputElement).blur();
         }
       }}
-      onFocus={(e) => e.currentTarget.select()}
       className={cn("pb-cell-input", DENSITY_CLASSES[density].input, className)}
     />
   );

@@ -12,8 +12,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { Copy, Trash2 } from "lucide-react";
+import { useAutosave } from "@/hooks/use-autosave";
+import { SaveStatus } from "@/components/save-status";
 
 export const Route = createFileRoute("/_authenticated/admin/member-plans/$planId")({ component: MemberPlanEditor });
 
@@ -62,21 +64,51 @@ function MemberPlanEditor() {
     setFeatured(!!plan.featured);
     setEquip((plan.equipment_needed ?? []).join(", "));
     setTags((plan.tags ?? []).join(", "));
+    hydratedRef.current = true;
   }, [plan]);
 
-  if (!plan) return <div className="p-6 text-sm text-muted-foreground">Loading…</div>;
+  // Track hydration so autosave never fires until after we've loaded the server values.
+  const hydratedRef = useRef(false);
 
   const refresh = () => qc.invalidateQueries({ queryKey: ["admin-member-plan", planId] });
 
+  // Snapshot of all editable meta fields used by the manual save AND autosave.
+  const metaSnapshot = useMemo(() => ({
+    name, description, access, diff, style, goal, estMin, tracking, logging, featured, equip, tags,
+  }), [name, description, access, diff, style, goal, estMin, tracking, logging, featured, equip, tags]);
+
+  const buildPatch = (s: typeof metaSnapshot) => ({
+    name: s.name,
+    description: s.description,
+    required_access_level: s.access,
+    difficulty: s.diff,
+    training_style: s.style,
+    goal: s.goal,
+    est_minutes_per_workout: s.estMin === "" ? null : Number(s.estMin),
+    tracking_enabled: s.tracking,
+    logging_enabled: s.logging,
+    featured: s.featured,
+    equipment_needed: s.equip.split(",").map((x: string) => x.trim()).filter(Boolean),
+    tags: s.tags.split(",").map((x: string) => x.trim()).filter(Boolean),
+  });
+
+  const autosave = useAutosave({
+    key: plan ? `member-plan:${planId}:meta` : null,
+    value: metaSnapshot,
+    delay: 1200,
+    enabled: !!plan && hydratedRef.current,
+    onSave: async (s) => {
+      await update({ data: { planId, patch: buildPatch(s) } });
+      refresh();
+    },
+  });
+
+  if (!plan) return <div className="p-6 text-sm text-muted-foreground">Loading…</div>;
+
   const save = async () => {
     try {
-      await update({ data: { planId, patch: {
-        name, description, required_access_level: access, difficulty: diff, training_style: style, goal,
-        est_minutes_per_workout: estMin === "" ? null : Number(estMin),
-        tracking_enabled: tracking, logging_enabled: logging, featured,
-        equipment_needed: equip.split(",").map((s) => s.trim()).filter(Boolean),
-        tags: tags.split(",").map((s) => s.trim()).filter(Boolean),
-      } } });
+      await autosave.flush();
+      await update({ data: { planId, patch: buildPatch(metaSnapshot) } });
       toast.success("Saved"); refresh();
     } catch (e: any) { toast.error(e?.message ?? "Save failed"); }
   };
@@ -94,6 +126,7 @@ function MemberPlanEditor() {
         subtitle={`${plan.weeks} weeks · ${plan.days_per_week}/wk · ${plan.workouts_total ?? 0} workouts`}
         actions={
           <div className="flex flex-wrap gap-2">
+            <span className="self-center"><SaveStatus state={autosave.state} savedAt={autosave.savedAt} /></span>
             <Badge variant={plan.status === "Published" ? "default" : "secondary"}>{plan.status}</Badge>
             {plan.status === "Published"
               ? <Button size="sm" variant="outline" onClick={onUnpublish}>Move to Draft</Button>
