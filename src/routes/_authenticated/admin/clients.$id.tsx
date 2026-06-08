@@ -398,6 +398,15 @@ function ClientDetail() {
           )}
         </div>
       )}
+      <SetupStatusBanner
+        form={form}
+        onSendSetup={sendSetup}
+        onCopySetup={copySetupLink}
+        onSendReset={sendReset}
+        onCopyReset={copyResetLink}
+        onSetPassword={() => { setPwValue(""); setPwOpen(true); }}
+        onGoToAccountTab={() => navigate({ to: ".", params: { id }, search: { tab: "account" }, replace: true })}
+      />
       <Tabs
         value={tab ?? "summary"}
         onValueChange={(v) => navigate({ to: ".", params: { id }, search: { tab: v as TabValue }, replace: true })}
