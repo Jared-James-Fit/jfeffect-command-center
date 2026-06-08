@@ -194,30 +194,6 @@ function PdfCard({ path, name }: { path: string; name?: string | null }) {
   );
 }
 
-function DayCard({ day }: { day: any }) {
-  return (
-    <Card className="border-border bg-card p-6">
-      <h3 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">{day.day_label}</h3>
-      <div className="mt-4 grid grid-cols-2 gap-3">
-        <Macro icon={Flame} label="Calories" value={day.calories} unit="kcal" />
-        <Macro icon={Beef} label="Protein" value={day.protein} unit="g" />
-        <Macro icon={Wheat} label="Carbs" value={day.carbs} unit="g" />
-        <Macro icon={Cookie} label="Fats" value={day.fats} unit="g" />
-        <Macro icon={Droplets} label="Water" value={day.water} unit="oz" />
-        <Macro icon={Footprints} label="Steps" value={day.steps} unit="" />
-      </div>
-      {day.fibre != null && (
-        <div className="mt-3 text-xs"><span className="text-muted-foreground">Fibre:</span> <span className="font-semibold">{day.fibre}g</span></div>
-      )}
-      {day.notes && (
-        <div className="mt-4">
-          <div className="mb-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Meal Plan</div>
-          <MealPlanDisplay text={day.notes} />
-        </div>
-      )}
-    </Card>
-  );
-}
 
 function Macro({ icon: Icon, label, value, unit }: { icon: any; label: string; value: any; unit: string }) {
   return (
