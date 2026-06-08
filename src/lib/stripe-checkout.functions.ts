@@ -46,6 +46,24 @@ async function stripeFetch(path: string, init: { method?: string; body?: string 
   return json;
 }
 
+/**
+ * Verify a Stripe Price ID exists in the connected Stripe account/mode.
+ * Throws a clear, user-facing error if not.
+ */
+async function assertPriceBelongsToAccount(priceId: string): Promise<void> {
+  const res = await fetch(`${STRIPE_API}/prices/${encodeURIComponent(priceId)}`, {
+    headers: { Authorization: `Bearer ${getStripeKey()}` },
+  });
+  if (res.ok) return;
+  if (res.status === 404) {
+    throw new Error(
+      "This Stripe Price ID does not exist in the connected Stripe account. Check that the API keys and Price ID are from the same Stripe account and same mode: test or live.",
+    );
+  }
+  const json: any = await res.json().catch(() => ({}));
+  throw new Error(json?.error?.message || `Stripe error verifying price (${res.status})`);
+}
+
 // ─── Create Checkout Session ──────────────────────────────────────────────────
 
 const CreateCheckoutInput = z.object({
