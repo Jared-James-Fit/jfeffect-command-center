@@ -77,6 +77,7 @@ import { Route as AuthenticatedAdminAppsRouteImport } from './routes/_authentica
 import { Route as AuthenticatedAdminAccountRouteImport } from './routes/_authenticated/admin/account'
 import { Route as AuthenticatedPortalAgreementsIndexRouteImport } from './routes/_authenticated/portal/agreements.index'
 import { Route as AuthenticatedAdminMembersIndexRouteImport } from './routes/_authenticated/admin/members.index'
+import { Route as AuthenticatedAdminMemberResourcesIndexRouteImport } from './routes/_authenticated/admin/member-resources.index'
 import { Route as AuthenticatedAdminMemberPlansIndexRouteImport } from './routes/_authenticated/admin/member-plans.index'
 import { Route as AuthenticatedAdminCoachesIndexRouteImport } from './routes/_authenticated/admin/coaches.index'
 import { Route as AuthenticatedAdminClientsIndexRouteImport } from './routes/_authenticated/admin/clients.index'
@@ -488,6 +489,12 @@ const AuthenticatedAdminMembersIndexRoute =
     path: '/members/',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
+const AuthenticatedAdminMemberResourcesIndexRoute =
+  AuthenticatedAdminMemberResourcesIndexRouteImport.update({
+    id: '/member-resources/',
+    path: '/member-resources/',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
 const AuthenticatedAdminMemberPlansIndexRoute =
   AuthenticatedAdminMemberPlansIndexRouteImport.update({
     id: '/member-plans/',
@@ -727,6 +734,7 @@ export interface FileRoutesByFullPath {
   '/admin/clients/': typeof AuthenticatedAdminClientsIndexRoute
   '/admin/coaches/': typeof AuthenticatedAdminCoachesIndexRoute
   '/admin/member-plans/': typeof AuthenticatedAdminMemberPlansIndexRoute
+  '/admin/member-resources/': typeof AuthenticatedAdminMemberResourcesIndexRoute
   '/admin/members/': typeof AuthenticatedAdminMembersIndexRoute
   '/portal/agreements/': typeof AuthenticatedPortalAgreementsIndexRoute
   '/admin/client-programs/$clientId/analytics': typeof AuthenticatedAdminClientProgramsClientIdAnalyticsRoute
@@ -818,6 +826,7 @@ export interface FileRoutesByTo {
   '/admin/clients': typeof AuthenticatedAdminClientsIndexRoute
   '/admin/coaches': typeof AuthenticatedAdminCoachesIndexRoute
   '/admin/member-plans': typeof AuthenticatedAdminMemberPlansIndexRoute
+  '/admin/member-resources': typeof AuthenticatedAdminMemberResourcesIndexRoute
   '/admin/members': typeof AuthenticatedAdminMembersIndexRoute
   '/portal/agreements': typeof AuthenticatedPortalAgreementsIndexRoute
   '/admin/client-programs/$clientId/analytics': typeof AuthenticatedAdminClientProgramsClientIdAnalyticsRoute
@@ -914,6 +923,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/clients/': typeof AuthenticatedAdminClientsIndexRoute
   '/_authenticated/admin/coaches/': typeof AuthenticatedAdminCoachesIndexRoute
   '/_authenticated/admin/member-plans/': typeof AuthenticatedAdminMemberPlansIndexRoute
+  '/_authenticated/admin/member-resources/': typeof AuthenticatedAdminMemberResourcesIndexRoute
   '/_authenticated/admin/members/': typeof AuthenticatedAdminMembersIndexRoute
   '/_authenticated/portal/agreements/': typeof AuthenticatedPortalAgreementsIndexRoute
   '/_authenticated/admin/client-programs/$clientId/analytics': typeof AuthenticatedAdminClientProgramsClientIdAnalyticsRoute
@@ -1010,6 +1020,7 @@ export interface FileRouteTypes {
     | '/admin/clients/'
     | '/admin/coaches/'
     | '/admin/member-plans/'
+    | '/admin/member-resources/'
     | '/admin/members/'
     | '/portal/agreements/'
     | '/admin/client-programs/$clientId/analytics'
@@ -1101,6 +1112,7 @@ export interface FileRouteTypes {
     | '/admin/clients'
     | '/admin/coaches'
     | '/admin/member-plans'
+    | '/admin/member-resources'
     | '/admin/members'
     | '/portal/agreements'
     | '/admin/client-programs/$clientId/analytics'
@@ -1196,6 +1208,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/clients/'
     | '/_authenticated/admin/coaches/'
     | '/_authenticated/admin/member-plans/'
+    | '/_authenticated/admin/member-resources/'
     | '/_authenticated/admin/members/'
     | '/_authenticated/portal/agreements/'
     | '/_authenticated/admin/client-programs/$clientId/analytics'
@@ -1696,6 +1709,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminMembersIndexRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
+    '/_authenticated/admin/member-resources/': {
+      id: '/_authenticated/admin/member-resources/'
+      path: '/member-resources'
+      fullPath: '/admin/member-resources/'
+      preLoaderRoute: typeof AuthenticatedAdminMemberResourcesIndexRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
     '/_authenticated/admin/member-plans/': {
       id: '/_authenticated/admin/member-plans/'
       path: '/member-plans'
@@ -1952,6 +1972,7 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminClientsIndexRoute: typeof AuthenticatedAdminClientsIndexRoute
   AuthenticatedAdminCoachesIndexRoute: typeof AuthenticatedAdminCoachesIndexRoute
   AuthenticatedAdminMemberPlansIndexRoute: typeof AuthenticatedAdminMemberPlansIndexRoute
+  AuthenticatedAdminMemberResourcesIndexRoute: typeof AuthenticatedAdminMemberResourcesIndexRoute
   AuthenticatedAdminMembersIndexRoute: typeof AuthenticatedAdminMembersIndexRoute
 }
 
@@ -2017,6 +2038,8 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
     AuthenticatedAdminCoachesIndexRoute: AuthenticatedAdminCoachesIndexRoute,
     AuthenticatedAdminMemberPlansIndexRoute:
       AuthenticatedAdminMemberPlansIndexRoute,
+    AuthenticatedAdminMemberResourcesIndexRoute:
+      AuthenticatedAdminMemberResourcesIndexRoute,
     AuthenticatedAdminMembersIndexRoute: AuthenticatedAdminMembersIndexRoute,
   }
 
