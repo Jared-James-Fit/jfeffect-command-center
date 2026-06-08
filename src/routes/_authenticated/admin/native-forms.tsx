@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -20,12 +21,11 @@ import {
   listForms, upsertForm, duplicateForm, archiveForm, deleteForm,
   listQuestions, upsertQuestion, deleteQuestion, reorderQuestions,
   listAssignments,
-  listActiveCoachingClientIds,
-  assignFormToClient, unassignForm,
-  bulkAssignFormToClients, clearAllAssignments,
   NF_QUESTION_TYPES, NF_QUESTION_TYPE_LABEL,
   type NfForm, type NfQuestion, type NfQuestionType, type NfRecurrence, type NfKind, type NfOpenStyle,
 } from "@/lib/native-forms";
+import { deleteNativeForms, replaceNativeFormAssignments } from "@/lib/native-forms.functions";
+import { useBulkSelection } from "@/hooks/use-bulk-selection";
 
 export const Route = createFileRoute("/_authenticated/admin/native-forms")({
   component: AdminNativeForms,
@@ -35,8 +35,23 @@ function AdminNativeForms() {
   const qc = useQueryClient();
   const [editing, setEditing] = useState<NfForm | null>(null);
   const [creating, setCreating] = useState<NfKind | null>(null);
+  const deleteFormsFn = useServerFn(deleteNativeForms);
 
   const { data: forms = [] } = useQuery({ queryKey: ["nf-forms"], queryFn: () => listForms({ includeArchived: true }) });
+  const formSelection = useBulkSelection(useMemo(() => forms.map((form) => form.id), [forms]));
+
+  async function deleteSelectedForms() {
+    if (formSelection.count === 0) return;
+    if (!confirm(`Delete ${formSelection.count} selected form${formSelection.count === 1 ? "" : "s"}? This cannot be undone.`)) return;
+    const result = await deleteFormsFn({ data: { formIds: formSelection.selectedIds } });
+    if (!result.ok) {
+      toast.error(result.error ?? "Forms could not be deleted");
+      return;
+    }
+    formSelection.clear();
+    await qc.invalidateQueries({ queryKey: ["nf-forms"] });
+    toast.success(`Deleted ${result.count} form${result.count === 1 ? "" : "s"}`);
+  }
 
   async function handleCreate(kind: NfKind) {
     const id = await upsertForm({
@@ -56,17 +71,39 @@ function AdminNativeForms() {
 
   return (
     <>
-      <PageHeader title="Form Builder" subtitle="Build native forms or embed external check-ins, then assign them to clients." actions={
+      <PageHeader title="Check-Ins & Form Builder" subtitle="Build native forms or embed external check-ins, then assign them to clients." actions={
         <Button onClick={() => setCreating("native")} className="bg-gradient-primary font-bold"><Plus className="mr-2 h-4 w-4" /> New Form</Button>
       } />
       <div className="space-y-3 p-4 md:p-6">
+        {forms.length > 0 && (
+          <Card className="border-border bg-card p-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <label className="flex cursor-pointer items-center gap-2 text-sm font-semibold">
+                <Checkbox
+                  checked={formSelection.allSelected || (formSelection.someSelected ? "indeterminate" : false)}
+                  onCheckedChange={formSelection.toggleAll}
+                />
+                {formSelection.count > 0 ? `${formSelection.count} selected` : "Select forms"}
+              </label>
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" size="sm" onClick={formSelection.toggleAll}>
+                  {formSelection.allSelected ? "Unselect all" : "Select all"}
+                </Button>
+                <Button variant="ghost" size="sm" onClick={formSelection.clear} disabled={formSelection.count === 0}>Clear</Button>
+                <Button variant="destructive" size="sm" onClick={deleteSelectedForms} disabled={formSelection.count === 0}>
+                  <Trash2 className="mr-1 h-4 w-4" /> Delete selected
+                </Button>
+              </div>
+            </div>
+          </Card>
+        )}
         {forms.length === 0 && (
           <Card className="border-dashed bg-card p-8 text-center text-sm text-muted-foreground">
             No forms yet. Create a Native form (built in-app) or an External form (Fillout, Typeform, Google Forms link).
           </Card>
         )}
         {forms.map((f) => {
-          return <FormRow key={f.id} form={f} onEdit={() => setEditing(f)} />;
+          return <FormRow key={f.id} form={f} selected={formSelection.isSelected(f.id)} onSelect={(checked) => formSelection.setOne(f.id, checked)} onEdit={() => setEditing(f)} />;
         })}
       </div>
 
