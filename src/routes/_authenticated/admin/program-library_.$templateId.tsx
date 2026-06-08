@@ -623,8 +623,8 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
             </p>
           )}
           <div className={cn(
-            "-mx-2 snap-x snap-mandatory overflow-x-auto pb-3 scroll-smooth",
-            compact ? "px-[max(0.5rem,calc((100vw-520px)/2))]" : "px-[max(1rem,calc((100vw-720px)/2))]",
+            "snap-x snap-mandatory overflow-x-auto pb-3 scroll-smooth",
+            compact ? "px-2" : "px-3",
           )}>
             <div className={cn("flex w-max items-start", compact ? "gap-2" : "gap-3")}>
               {weeksData.map((w: any, wi: number) => {
@@ -634,7 +634,7 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
                     key={wi}
                     id={`tpl-week-${wi}`}
                     className={cn(
-                      "shrink-0 snap-center overflow-hidden border-2 border-border p-0",
+                      "shrink-0 snap-start overflow-hidden border-2 border-border p-0",
                       compact
                         ? "w-[88vw] max-w-[520px] sm:w-[440px] lg:w-[480px] xl:w-[520px]"
                         : "w-[94vw] max-w-[720px] sm:w-[600px] lg:w-[640px] xl:w-[700px]",
@@ -683,7 +683,7 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
                 type="button"
                 onClick={addWeek}
                 className={cn(
-                  "flex shrink-0 snap-center flex-col items-center justify-center gap-2 rounded-md border-2 border-dashed border-primary/40 bg-primary/5 text-primary hover:bg-primary/10",
+                  "flex shrink-0 snap-start flex-col items-center justify-center gap-2 rounded-md border-2 border-dashed border-primary/40 bg-primary/5 text-primary hover:bg-primary/10",
                   compact ? "h-[140px] w-[200px]" : "h-[200px] w-[260px]",
                 )}
               >

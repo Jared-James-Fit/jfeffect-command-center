@@ -533,10 +533,10 @@ export function PageHeader({
   };
   const showBack = !!backTo;
   return (
-    <div className="flex flex-wrap items-end justify-between gap-4 border-b border-border bg-gradient-to-b from-card to-background px-4 py-4 md:px-8 md:py-6">
+    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-gradient-to-b from-card to-background px-4 py-2.5 md:px-6 md:py-3">
       <div className="min-w-0 flex-1">
         {showBack && (
-          <div className="mb-2 flex items-center gap-2">
+          <div className="mb-1 flex items-center gap-2">
             <Button
               type="button"
               variant="ghost"
@@ -564,8 +564,8 @@ export function PageHeader({
             )}
           </div>
         )}
-        <h1 className="flex flex-wrap items-center gap-3 text-xl font-black tracking-tight md:text-3xl">{title}</h1>
-        {subtitle ? <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p> : null}
+        <h1 className="flex flex-wrap items-center gap-3 text-lg font-black tracking-tight md:text-2xl">{title}</h1>
+        {subtitle ? <p className="mt-0.5 text-xs text-muted-foreground md:text-sm">{subtitle}</p> : null}
       </div>
       <div className="flex flex-wrap items-center gap-2">
         {actions}
