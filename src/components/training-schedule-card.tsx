@@ -35,11 +35,12 @@ type Props = {
   client: Client;
   editable?: boolean;
   compact?: boolean;
+  defaultEditing?: boolean;
 };
 
-export function TrainingScheduleCard({ client, editable = true, compact = false }: Props) {
+export function TrainingScheduleCard({ client, editable = true, compact = false, defaultEditing = false }: Props) {
   const qc = useQueryClient();
-  const [editing, setEditing] = useState(false);
+  const [editing, setEditing] = useState(defaultEditing);
   const [saving, setSaving] = useState(false);
   const [training, setTraining] = useState<string[]>(client.preferred_training_days ?? []);
   const [rest, setRest] = useState<string[]>(client.preferred_rest_days ?? []);
