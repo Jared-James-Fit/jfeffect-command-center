@@ -829,6 +829,53 @@ function ClientDetail() {
       </AlertDialog>
       <PriceCardPickerDialog open={priceCardOpen} onClose={() => setPriceCardOpen(false)} fixedClientId={id} />
 
+      <AlertDialog open={pwOpen} onOpenChange={(o) => !pwSaving && setPwOpen(o)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Set password for {form.full_name}</AlertDialogTitle>
+            <AlertDialogDescription>
+              This sets the client's login password directly. Share it with them securely — they can change it later from their account settings.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="admin-set-pw">New password</Label>
+            <Input
+              id="admin-set-pw"
+              type="text"
+              autoComplete="new-password"
+              value={pwValue}
+              onChange={(e) => setPwValue(e.target.value)}
+              placeholder="At least 8 characters"
+            />
+            <p className="text-xs text-muted-foreground">Minimum 8 characters.</p>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={pwSaving}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={pwSaving || pwValue.length < 8}
+              onClick={async (e) => {
+                e.preventDefault();
+                setPwSaving(true);
+                const t = toast.loading("Setting password…");
+                try {
+                  await setPasswordFn({ data: { clientId: id, password: pwValue } });
+                  toast.success("Password updated", { id: t });
+                  setPwOpen(false);
+                  setPwValue("");
+                  qc.invalidateQueries({ queryKey: ["client", id] });
+                } catch (err: any) {
+                  toast.error(err?.message ?? "Failed to set password", { id: t });
+                } finally {
+                  setPwSaving(false);
+                }
+              }}
+            >
+              {pwSaving ? "Saving…" : "Set password"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <AlertDialog open={deactivateOpen} onOpenChange={setDeactivateOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
