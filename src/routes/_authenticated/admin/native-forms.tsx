@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
@@ -19,11 +20,12 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   listForms, upsertForm, duplicateForm, archiveForm, deleteForm,
   listQuestions, upsertQuestion, deleteQuestion, reorderQuestions,
-  listAssignments, assignFormToClient, unassignForm,
-  bulkAssignFormToClients, clearAllAssignments, listActiveCoachingClientIds,
+  listAssignments,
+  listActiveCoachingClientIds,
   NF_QUESTION_TYPES, NF_QUESTION_TYPE_LABEL,
   type NfForm, type NfQuestion, type NfQuestionType, type NfRecurrence, type NfKind, type NfOpenStyle,
 } from "@/lib/native-forms";
+import { bulkAssignNativeFormToClients, clearNativeFormAssignments, setNativeFormAssignment } from "@/lib/native-forms.functions";
 
 export const Route = createFileRoute("/_authenticated/admin/native-forms")({
   component: AdminNativeForms,
@@ -384,8 +386,13 @@ function QuestionRow({ q, formId, onMoveUp, onMoveDown }: { q: NfQuestion; formI
 
 function AssignmentsEditor({ formId, form, onFormChange }: { formId: string; form: NfForm; onFormChange: (f: NfForm) => void }) {
   const qc = useQueryClient();
+  const setAssignment = useServerFn(setNativeFormAssignment);
+  const bulkAssign = useServerFn(bulkAssignNativeFormToClients);
+  const clearAssignments = useServerFn(clearNativeFormAssignments);
   const [search, setSearch] = useState("");
   const [saving, setSaving] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [pendingClientIds, setPendingClientIds] = useState<Set<string>>(new Set());
 
   const { data: assignments = [] } = useQuery({ queryKey: ["nf-assignments", formId], queryFn: () => listAssignments(formId) });
   const { data: clients = [] } = useQuery({
@@ -400,7 +407,12 @@ function AssignmentsEditor({ formId, form, onFormChange }: { formId: string; for
     },
   });
 
-  const assigned = new Set(assignments.map((a: any) => a.client_id));
+  useEffect(() => {
+    if (pendingClientIds.size > 0) return;
+    setSelectedIds(new Set(assignments.map((a: any) => a.client_id)));
+  }, [assignments, pendingClientIds.size]);
+
+  const assigned = selectedIds;
   const filtered = clients.filter((c: any) => {
     const q = search.trim().toLowerCase();
     if (!q) return true;
@@ -408,24 +420,71 @@ function AssignmentsEditor({ formId, form, onFormChange }: { formId: string; for
   });
 
   async function toggle(clientId: string) {
-    if (assigned.has(clientId)) await unassignForm(formId, clientId);
-    else await assignFormToClient(formId, clientId);
-    qc.invalidateQueries({ queryKey: ["nf-assignments", formId] });
+    if (broadcastOn || pendingClientIds.has(clientId)) return;
+    const wasAssigned = assigned.has(clientId);
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (wasAssigned) next.delete(clientId);
+      else next.add(clientId);
+      return next;
+    });
+    setPendingClientIds((prev) => new Set(prev).add(clientId));
+    try {
+      await setAssignment({ data: { formId, clientId, assigned: !wasAssigned } });
+      await qc.invalidateQueries({ queryKey: ["nf-assignments", formId] });
+      await qc.invalidateQueries({ queryKey: ["nf-forms"] });
+    } catch (e: any) {
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        if (wasAssigned) next.add(clientId);
+        else next.delete(clientId);
+        return next;
+      });
+      toast.error(e?.message ?? "Assignment failed");
+    } finally {
+      setPendingClientIds((prev) => {
+        const next = new Set(prev);
+        next.delete(clientId);
+        return next;
+      });
+    }
   }
 
   async function selectAllVisible() {
     const toAdd = filtered.filter((c: any) => !assigned.has(c.id)).map((c: any) => c.id);
     if (toAdd.length === 0) return;
-    await bulkAssignFormToClients(formId, toAdd);
-    qc.invalidateQueries({ queryKey: ["nf-assignments", formId] });
-    toast.success(`Assigned ${toAdd.length}`);
+    setSaving(true);
+    const previous = new Set(assigned);
+    setSelectedIds((prev) => new Set([...prev, ...toAdd]));
+    try {
+      await bulkAssign({ data: { formId, clientIds: toAdd } });
+      await qc.invalidateQueries({ queryKey: ["nf-assignments", formId] });
+      await qc.invalidateQueries({ queryKey: ["nf-forms"] });
+      toast.success(`Assigned ${toAdd.length}`);
+    } catch (e: any) {
+      setSelectedIds(previous);
+      toast.error(e?.message ?? "Assignment failed");
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function clearAll() {
     if (!confirm("Remove all individual assignments for this form?")) return;
-    await clearAllAssignments(formId);
-    qc.invalidateQueries({ queryKey: ["nf-assignments", formId] });
-    toast.success("Cleared");
+    setSaving(true);
+    const previous = new Set(assigned);
+    setSelectedIds(new Set());
+    try {
+      await clearAssignments({ data: { formId } });
+      await qc.invalidateQueries({ queryKey: ["nf-assignments", formId] });
+      await qc.invalidateQueries({ queryKey: ["nf-forms"] });
+      toast.success("Cleared");
+    } catch (e: any) {
+      setSelectedIds(previous);
+      toast.error(e?.message ?? "Clear failed");
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function setBroadcast(on: boolean) {
@@ -438,7 +497,7 @@ function AssignmentsEditor({ formId, form, onFormChange }: { formId: string; for
         // Materialize assignments for every active client now so submissions, due
         // dates, and admin counts still work cleanly.
         const ids = await listActiveCoachingClientIds();
-        await bulkAssignFormToClients(formId, ids);
+        await bulkAssign({ data: { formId, clientIds: ids } });
       }
       qc.invalidateQueries({ queryKey: ["nf-forms"] });
       qc.invalidateQueries({ queryKey: ["nf-assignments", formId] });
@@ -488,11 +547,11 @@ function AssignmentsEditor({ formId, form, onFormChange }: { formId: string; for
         <div className="text-xs text-muted-foreground">
           {broadcastOn
             ? `Visible to all active coaching clients`
-            : `${assignments.length} client${assignments.length === 1 ? "" : "s"} assigned`}
+            : `${assigned.size} client${assigned.size === 1 ? "" : "s"} assigned`}
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={selectAllVisible} disabled={broadcastOn}>Select all visible</Button>
-          <Button variant="ghost" size="sm" onClick={clearAll} disabled={broadcastOn}>Clear all</Button>
+          <Button variant="outline" size="sm" onClick={selectAllVisible} disabled={broadcastOn || saving}>Select all visible</Button>
+          <Button variant="ghost" size="sm" onClick={clearAll} disabled={broadcastOn || saving}>Clear all</Button>
         </div>
       </div>
 
@@ -510,17 +569,17 @@ function AssignmentsEditor({ formId, form, onFormChange }: { formId: string; for
             role="button"
             tabIndex={0}
             aria-pressed={assigned.has(c.id)}
-            aria-disabled={broadcastOn}
-            onClick={() => { if (!broadcastOn) toggle(c.id); }}
+            aria-disabled={broadcastOn || pendingClientIds.has(c.id)}
+            onClick={() => { if (!broadcastOn && !pendingClientIds.has(c.id)) toggle(c.id); }}
             onKeyDown={(e) => {
-              if (broadcastOn) return;
+              if (broadcastOn || pendingClientIds.has(c.id)) return;
               if (e.key === " " || e.key === "Enter") { e.preventDefault(); toggle(c.id); }
             }}
-            className={`flex min-h-[44px] cursor-pointer select-none items-center gap-3 rounded p-2 hover:bg-muted/40 ${broadcastOn ? "opacity-60 cursor-not-allowed" : ""}`}
+            className={`flex min-h-[44px] cursor-pointer select-none items-center gap-3 rounded p-2 hover:bg-muted/40 ${(broadcastOn || pendingClientIds.has(c.id)) ? "cursor-not-allowed opacity-60" : ""}`}
           >
             <Checkbox
               checked={broadcastOn ? true : assigned.has(c.id)}
-              disabled={broadcastOn}
+              disabled={broadcastOn || pendingClientIds.has(c.id)}
               tabIndex={-1}
               onClick={(e) => e.stopPropagation()}
               onCheckedChange={() => { if (!broadcastOn) toggle(c.id); }}
