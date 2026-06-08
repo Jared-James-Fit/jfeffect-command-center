@@ -16,7 +16,7 @@ export function ChangePasswordCard({ className }: { className?: string }) {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user?.email) return toast.error("No signed-in user");
-    if (pwd.next.length < 8) return toast.error("Password must be at least 8 characters");
+    if (!pwd.next) return toast.error("Please enter a new password");
     if (pwd.next !== pwd.confirm) return toast.error("Passwords don't match");
     if (pwd.next === pwd.current) return toast.error("New password must differ from current");
     setBusy(true);
@@ -51,7 +51,7 @@ export function ChangePasswordCard({ className }: { className?: string }) {
         <div>
           <Label>New password</Label>
           <div className="relative">
-            <Input type={pwd.showNext ? "text" : "password"} value={pwd.next} onChange={(e) => setPwd({ ...pwd, next: e.target.value })} required minLength={8} autoComplete="new-password" />
+            <Input type={pwd.showNext ? "text" : "password"} value={pwd.next} onChange={(e) => setPwd({ ...pwd, next: e.target.value })} required autoComplete="new-password" />
             <button type="button" onClick={() => setPwd({ ...pwd, showNext: !pwd.showNext })} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground">
               {pwd.showNext ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
             </button>
@@ -59,7 +59,7 @@ export function ChangePasswordCard({ className }: { className?: string }) {
         </div>
         <div>
           <Label>Confirm new password</Label>
-          <Input type={pwd.showNext ? "text" : "password"} value={pwd.confirm} onChange={(e) => setPwd({ ...pwd, confirm: e.target.value })} required minLength={8} autoComplete="new-password" />
+          <Input type={pwd.showNext ? "text" : "password"} value={pwd.confirm} onChange={(e) => setPwd({ ...pwd, confirm: e.target.value })} required autoComplete="new-password" />
         </div>
         <div className="md:col-span-3 flex flex-wrap items-center justify-between gap-3">
           <p className="text-[11px] text-muted-foreground">Minimum 8 characters. Use a mix of letters and numbers. You'll stay signed in after the change.</p>

@@ -845,14 +845,14 @@ function ClientDetail() {
               autoComplete="new-password"
               value={pwValue}
               onChange={(e) => setPwValue(e.target.value)}
-              placeholder="At least 8 characters"
+              placeholder="Pick any password"
             />
-            <p className="text-xs text-muted-foreground">Minimum 8 characters.</p>
+            <p className="text-xs text-muted-foreground">No minimum — keep it simple.</p>
           </div>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={pwSaving}>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              disabled={pwSaving || pwValue.length < 8}
+              disabled={pwSaving || pwValue.length < 1}
               onClick={async (e) => {
                 e.preventDefault();
                 setPwSaving(true);

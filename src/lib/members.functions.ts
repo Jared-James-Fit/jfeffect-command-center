@@ -209,7 +209,7 @@ export const getCurrentMember = createServerFn({ method: "GET" })
 
 const RedeemInput = z.object({
   token: z.string().min(20).max(128),
-  password: z.string().min(8).max(72),
+  password: z.string().min(1).max(72),
 });
 
 export const redeemSetupToken = createServerFn({ method: "POST" })

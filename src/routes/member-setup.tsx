@@ -38,7 +38,7 @@ function MemberSetupPage() {
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (password.length < 8) return toast.error("Password must be at least 8 characters");
+    if (!password) return toast.error("Please enter a password");
     if (password !== confirm) return toast.error("Passwords don't match");
     setBusy(true);
     try {
@@ -68,11 +68,11 @@ function MemberSetupPage() {
         <form onSubmit={onSubmit} className="mt-6 space-y-4">
           <div>
             <Label htmlFor="pw">New password</Label>
-            <PasswordInput id="pw" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} />
+            <PasswordInput id="pw" value={password} onChange={(e) => setPassword(e.target.value)} required />
           </div>
           <div>
             <Label htmlFor="pw2">Confirm password</Label>
-            <PasswordInput id="pw2" value={confirm} onChange={(e) => setConfirm(e.target.value)} required minLength={8} />
+            <PasswordInput id="pw2" value={confirm} onChange={(e) => setConfirm(e.target.value)} required />
           </div>
           <Button type="submit" disabled={busy} className="w-full">
             {busy ? "Setting up…" : "Create account & sign in"}

@@ -33,7 +33,7 @@ function ResetPage() {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (password.length < 8) return toast.error("Password must be at least 8 characters");
+    if (!password) return toast.error("Please enter a password");
     if (password !== confirm) return toast.error("Passwords don't match");
     setBusy(true);
     const { error } = await supabase.auth.updateUser({ password });
@@ -75,7 +75,7 @@ function ResetPage() {
                 <form onSubmit={submit} className="mt-6 w-full space-y-4">
                   <div>
                     <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">New password</Label>
-                    <PasswordInput required value={password} onChange={(e) => setPassword(e.target.value)} className="mt-1.5" placeholder="Min 8 characters" />
+                    <PasswordInput required value={password} onChange={(e) => setPassword(e.target.value)} className="mt-1.5" placeholder="Pick any password" />
                   </div>
                   <div>
                     <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Confirm new password</Label>
