@@ -41,6 +41,12 @@ function WorkoutDay() {
     queryFn: async () => (await sb.from("pl_exercise_rows").select("*, exercises(id,name,video_url,vimeo_embed_url,thumbnail_url,cues)").eq("day_id", dayId).order("sort_order")).data ?? [],
   });
 
+  useEffect(() => {
+    if (rows.length === 0) {
+      toast.info("This workout is empty — no exercises have been added yet.");
+    }
+  }, [rows.length]);
+
   const { data: results = [] } = useQuery({
     queryKey: ["pl-day-results", dayId, client?.id],
     enabled: !!client?.id && (rows as any[]).length > 0,
