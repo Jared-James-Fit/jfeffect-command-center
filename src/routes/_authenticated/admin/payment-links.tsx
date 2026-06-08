@@ -28,6 +28,8 @@ import {
   generatePaymentLinkForProduct,
 } from "@/lib/coaching-products.functions";
 import { createPreviewCheckoutSession } from "@/lib/stripe-checkout.functions";
+import { ProductAccessGrantDialog } from "@/components/product-access-grant-dialog";
+import { Lock as LockIcon } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/admin/payment-links")({
   component: PaymentLinksPage,
