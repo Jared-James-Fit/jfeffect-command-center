@@ -118,7 +118,7 @@ function NutritionView({ current }: { current: any }) {
   );
 }
 
-function DayPanel({ day }: { day: any }) {
+function DayPanel({ day, water }: { day: any; water?: string | null }) {
   return (
     <Card className="border-border bg-card p-5 space-y-4">
       {/* Compact macro summary row */}
@@ -138,7 +138,7 @@ function DayPanel({ day }: { day: any }) {
         <Macro icon={Beef} label="Protein" value={day.protein} unit="g" />
         <Macro icon={Wheat} label="Carbs" value={day.carbs} unit="g" />
         <Macro icon={Cookie} label="Fats" value={day.fats} unit="g" />
-        <Macro icon={Droplets} label="Water" value={current.water} unit="" />
+        <Macro icon={Droplets} label="Water" value={water} unit="" />
       </div>
       {day.fibre != null && (
         <div className="text-xs"><span className="text-muted-foreground">Fibre:</span> <span className="font-semibold">{day.fibre}g</span></div>
