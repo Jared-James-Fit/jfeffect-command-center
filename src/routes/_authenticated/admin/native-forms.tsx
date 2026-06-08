@@ -543,11 +543,11 @@ function AssignmentsEditor({ formId, form, onFormChange }: { formId: string; for
         <div className="text-xs text-muted-foreground">
           {broadcastOn
             ? `Visible to all active coaching clients`
-            : `${assignments.length} client${assignments.length === 1 ? "" : "s"} assigned`}
+            : `${assigned.size} client${assigned.size === 1 ? "" : "s"} assigned`}
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={selectAllVisible} disabled={broadcastOn}>Select all visible</Button>
-          <Button variant="ghost" size="sm" onClick={clearAll} disabled={broadcastOn}>Clear all</Button>
+          <Button variant="outline" size="sm" onClick={selectAllVisible} disabled={broadcastOn || saving}>Select all visible</Button>
+          <Button variant="ghost" size="sm" onClick={clearAll} disabled={broadcastOn || saving}>Clear all</Button>
         </div>
       </div>
 
@@ -565,17 +565,17 @@ function AssignmentsEditor({ formId, form, onFormChange }: { formId: string; for
             role="button"
             tabIndex={0}
             aria-pressed={assigned.has(c.id)}
-            aria-disabled={broadcastOn}
-            onClick={() => { if (!broadcastOn) toggle(c.id); }}
+            aria-disabled={broadcastOn || pendingClientIds.has(c.id)}
+            onClick={() => { if (!broadcastOn && !pendingClientIds.has(c.id)) toggle(c.id); }}
             onKeyDown={(e) => {
-              if (broadcastOn) return;
+              if (broadcastOn || pendingClientIds.has(c.id)) return;
               if (e.key === " " || e.key === "Enter") { e.preventDefault(); toggle(c.id); }
             }}
-            className={`flex min-h-[44px] cursor-pointer select-none items-center gap-3 rounded p-2 hover:bg-muted/40 ${broadcastOn ? "opacity-60 cursor-not-allowed" : ""}`}
+            className={`flex min-h-[44px] cursor-pointer select-none items-center gap-3 rounded p-2 hover:bg-muted/40 ${(broadcastOn || pendingClientIds.has(c.id)) ? "cursor-not-allowed opacity-60" : ""}`}
           >
             <Checkbox
               checked={broadcastOn ? true : assigned.has(c.id)}
-              disabled={broadcastOn}
+              disabled={broadcastOn || pendingClientIds.has(c.id)}
               tabIndex={-1}
               onClick={(e) => e.stopPropagation()}
               onCheckedChange={() => { if (!broadcastOn) toggle(c.id); }}
