@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { BookOpen, ClipboardCheck, FolderOpen, Wrench, PlayCircle } from "lucide-react";
+import { Star } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/m/")({ component: MemberHome });
 
@@ -31,6 +32,19 @@ function MemberHome() {
   });
 
   const accessKeys = new Set((me?.access ?? []).map((a: any) => a.access_level_key));
+
+  const { data: featured = [] } = useQuery({
+    queryKey: ["m-featured"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("featured_member_items")
+        .select("id,position,note,member_plans(id,name,cover_image_url,required_access_level,difficulty,weeks,days_per_week,status)")
+        .eq("item_type", "plan")
+        .eq("active", true)
+        .order("position", { ascending: true });
+      return (data ?? []).filter((r: any) => r.member_plans && r.member_plans.status === "Published");
+    },
+  });
   const subscriptionStatus = me?.member?.status ?? "—";
   const progress = activeEnrollment
     ? Math.round(((activeEnrollment.workouts_completed ?? 0) / Math.max(activeEnrollment.workouts_total ?? 1, 1)) * 100)
@@ -73,6 +87,33 @@ function MemberHome() {
         <QuickCard to="/m/resources" icon={FolderOpen} label="Resources" />
         <QuickCard to="/m/tools" icon={Wrench} label="Tools" />
       </div>
+      {featured.length > 0 && (
+        <Card className="p-6">
+          <div className="mb-3 flex items-center gap-2">
+            <Star className="h-4 w-4 text-amber-500" />
+            <div className="text-xs uppercase tracking-wider text-muted-foreground">Featured plans</div>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {featured.map((f: any) => {
+              const p = f.member_plans;
+              const locked = !accessKeys.has(p.required_access_level);
+              return (
+                <Link key={f.id} to="/m/plans/$planId" params={{ planId: p.id }}>
+                  <Card className="p-4 transition hover:bg-muted/40">
+                    <div className="flex items-center justify-between">
+                      <div className="text-sm font-semibold">{p.name}</div>
+                      {locked && <Badge variant="outline">Locked</Badge>}
+                    </div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      {p.difficulty} · {p.weeks}w / {p.days_per_week}d
+                    </div>
+                  </Card>
+                </Link>
+              );
+            })}
+          </div>
+        </Card>
+      )}
       <Card className="p-6">
         <div className="text-xs uppercase tracking-wider text-muted-foreground">Your access</div>
         <div className="mt-2 flex flex-wrap gap-2">

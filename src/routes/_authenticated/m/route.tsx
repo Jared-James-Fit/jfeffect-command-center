@@ -3,20 +3,26 @@ import { useEffect } from "react";
 import { useAuth } from "@/lib/auth";
 import { AppShell } from "@/components/app-shell";
 import { memberNav } from "@/lib/admin-nav";
+import { PovBanner, getPovFlag } from "@/components/admin-pov";
 
 function MemberLayout() {
   const { role, loading } = useAuth();
   const navigate = useNavigate();
+  const pov = getPovFlag();
   useEffect(() => {
     if (loading) return;
     if (role === "client") navigate({ to: "/portal", replace: true });
-    else if (role === "admin" || role === "coach") navigate({ to: "/admin", replace: true });
-  }, [role, loading, navigate]);
+    // Admins are allowed into /m only while POV mode is active; otherwise send back to /admin.
+    else if ((role === "admin" || role === "coach") && !pov.active) {
+      navigate({ to: "/admin", replace: true });
+    }
+  }, [role, loading, navigate, pov.active]);
   if (loading || !role) {
     return <div className="grid min-h-screen place-items-center text-muted-foreground">Loading…</div>;
   }
   return (
     <AppShell items={memberNav} title="Member">
+      <PovBanner />
       <Outlet />
     </AppShell>
   );
