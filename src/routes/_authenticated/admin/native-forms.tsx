@@ -11,14 +11,14 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { Plus, Trash2, Copy, GripVertical, FileEdit, ChevronUp, ChevronDown, Archive, ExternalLink, Search, Eye } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  listForms, upsertForm, duplicateForm, archiveForm, deleteForm,
+  listForms, upsertForm, duplicateForm, archiveForm,
   listQuestions, upsertQuestion, deleteQuestion, reorderQuestions,
   listAssignments,
   NF_QUESTION_TYPES, NF_QUESTION_TYPE_LABEL,
@@ -43,14 +43,18 @@ function AdminNativeForms() {
   async function deleteSelectedForms() {
     if (formSelection.count === 0) return;
     if (!confirm(`Delete ${formSelection.count} selected form${formSelection.count === 1 ? "" : "s"}? This cannot be undone.`)) return;
-    const result = await deleteFormsFn({ data: { formIds: formSelection.selectedIds } });
-    if (!result.ok) {
-      toast.error(result.error ?? "Forms could not be deleted");
-      return;
+    try {
+      const result = await deleteFormsFn({ data: { formIds: formSelection.selectedIds } });
+      if (!result.ok) {
+        toast.error(result.error ?? "Forms could not be deleted");
+        return;
+      }
+      formSelection.clear();
+      await qc.invalidateQueries({ queryKey: ["nf-forms"] });
+      toast.success(`Deleted ${result.count} form${result.count === 1 ? "" : "s"}`);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Forms could not be deleted");
     }
-    formSelection.clear();
-    await qc.invalidateQueries({ queryKey: ["nf-forms"] });
-    toast.success(`Deleted ${result.count} form${result.count === 1 ? "" : "s"}`);
   }
 
   async function handleCreate(kind: NfKind) {
