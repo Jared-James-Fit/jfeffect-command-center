@@ -175,14 +175,14 @@ export function useClientNavBadges(): Record<string, NavBadge> {
   }
   if (liftDot) result["/portal/lift-videos"] = { dot: true };
 
-  // My Program: dot if program or training phases updated since last viewed
-  const programSeen = getLastSeen(user?.id, "/portal/program");
+  // Program/phase updates now surface on the Workouts tab
+  const programSeen = getLastSeen(user?.id, "/portal/workouts");
   const programTimes = [
     data.client.last_program_update ? new Date(data.client.last_program_update).getTime() : 0,
     ...((data.phases ?? []) as any[]).map((p) => new Date(p.updated_at).getTime()),
   ];
   const programLatest = Math.max(0, ...programTimes);
-  if (programLatest > 0 && programLatest > programSeen) result["/portal/program"] = { dot: true };
+  if (programLatest > 0 && programLatest > programSeen) result["/portal/workouts"] = { dot: true };
 
   // Nutrition targets: dot if targets updated since last viewed
   const nutSeen = getLastSeen(user?.id, "/portal/nutrition-targets");

@@ -161,7 +161,6 @@ function formatRelative(ts: string | null | undefined): string {
 function prettyRoute(path: string): string {
   const map: Record<string, string> = {
     "/portal": "Home",
-    "/portal/program": "Program",
     "/portal/lift-videos": "Lift Videos",
     "/portal/messages": "Messages",
     "/portal/check-in": "Check-In",
