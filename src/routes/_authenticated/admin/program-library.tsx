@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import {
-  listTemplates, createTemplate, applyTemplateToClient, duplicateTemplate,
+  listTemplates, createTemplate, applyTemplateToClient, duplicateTemplate, updateTemplate,
   setTemplateArchived, deleteTemplate, summarizeTemplatePayload,
   listTemplateAssignments,
   type TemplateType, type TrainingStyle, type TemplatePlacement,
