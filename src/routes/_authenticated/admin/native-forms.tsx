@@ -12,7 +12,6 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { Plus, Trash2, Copy, GripVertical, FileEdit, ChevronUp, ChevronDown, Archive, ExternalLink, Search, Eye } from "lucide-react";
@@ -24,7 +23,7 @@ import {
   NF_QUESTION_TYPES, NF_QUESTION_TYPE_LABEL,
   type NfForm, type NfQuestion, type NfQuestionType, type NfRecurrence, type NfKind, type NfOpenStyle,
 } from "@/lib/native-forms";
-import { deleteNativeForms, replaceNativeFormAssignments } from "@/lib/native-forms.functions";
+import { deleteNativeForms, replaceNativeFormAssignments, updateNativeFormAccess } from "@/lib/native-forms.functions";
 import { useBulkSelection } from "@/hooks/use-bulk-selection";
 
 export const Route = createFileRoute("/_authenticated/admin/native-forms")({
@@ -210,6 +209,7 @@ function FormRow({
 function FormEditorDialog({ form, open, onClose }: { form: NfForm; open: boolean; onClose: () => void }) {
   const qc = useQueryClient();
   const [local, setLocal] = useState<NfForm>(form);
+  const [activeTab, setActiveTab] = useState<"settings" | "questions" | "assign">("settings");
 
   const { data: questions = [] } = useQuery({
     queryKey: ["nf-questions", form.id],
@@ -252,14 +252,15 @@ function FormEditorDialog({ form, open, onClose }: { form: NfForm; open: boolean
           </DialogTitle>
         </DialogHeader>
 
-        <Tabs defaultValue="settings">
-          <TabsList>
-            <TabsTrigger value="settings">Settings</TabsTrigger>
-            {form.kind === "native" && <TabsTrigger value="questions">Questions ({questions.length})</TabsTrigger>}
-            <TabsTrigger value="assign">Assign</TabsTrigger>
-          </TabsList>
+        <div className="flex flex-wrap gap-2 rounded-lg bg-muted p-1">
+          <Button type="button" size="sm" variant={activeTab === "settings" ? "default" : "ghost"} onClick={() => setActiveTab("settings")}>Settings</Button>
+          {form.kind === "native" && (
+            <Button type="button" size="sm" variant={activeTab === "questions" ? "default" : "ghost"} onClick={() => setActiveTab("questions")}>Questions ({questions.length})</Button>
+          )}
+          <Button type="button" size="sm" variant={activeTab === "assign" ? "default" : "ghost"} onClick={() => setActiveTab("assign")}>Assign</Button>
+        </div>
 
-          <TabsContent value="settings" className="space-y-3">
+          {activeTab === "settings" && <div className="space-y-3">
             <div>
               <Label>Title</Label>
               <Input value={local.title} onChange={(e) => setLocal({ ...local, title: e.target.value })} />
@@ -343,18 +344,17 @@ function FormEditorDialog({ form, open, onClose }: { form: NfForm; open: boolean
             <div className="flex justify-end">
               <Button onClick={saveSettings}>Save</Button>
             </div>
-          </TabsContent>
+          </div>}
 
-          {form.kind === "native" && (
-            <TabsContent value="questions">
+          {activeTab === "questions" && form.kind === "native" && (
+            <div>
               <QuestionsEditor formId={form.id} questions={questions} />
-            </TabsContent>
+            </div>
           )}
 
-          <TabsContent value="assign">
+          {activeTab === "assign" && <div>
             <AssignmentsEditor formId={form.id} form={local} onFormChange={setLocal} />
-          </TabsContent>
-        </Tabs>
+          </div>}
       </DialogContent>
     </Dialog>
   );
@@ -455,6 +455,7 @@ function QuestionRow({ q, formId, onMoveUp, onMoveDown }: { q: NfQuestion; formI
 function AssignmentsEditor({ formId, form, onFormChange }: { formId: string; form: NfForm; onFormChange: (f: NfForm) => void }) {
   const qc = useQueryClient();
   const saveAssignmentsFn = useServerFn(replaceNativeFormAssignments);
+  const updateAccessFn = useServerFn(updateNativeFormAccess);
   const [search, setSearch] = useState("");
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
@@ -538,11 +539,17 @@ function AssignmentsEditor({ formId, form, onFormChange }: { formId: string; for
   }
 
   async function setBroadcast(on: boolean) {
+    const previousVisibility = form.visibility;
+    const visibility = on ? "all_active_clients" : "selected";
+    onFormChange({ ...form, visibility });
     setSaving(true);
     try {
-      const visibility = on ? "all_active_clients" : "selected";
-      await upsertForm({ id: formId, visibility });
-      onFormChange({ ...form, visibility });
+      const result = await updateAccessFn({ data: { formId, visibility } });
+      if (!result.ok) {
+        onFormChange({ ...form, visibility: previousVisibility });
+        toast.error(result.error ?? "Failed");
+        return;
+      }
       await qc.invalidateQueries({ queryKey: ["nf-forms"] });
       await qc.invalidateQueries({ queryKey: ["nf-assignments", formId] });
       toast.success(on ? "Now visible to all active clients" : "Switched to selected clients");
@@ -554,10 +561,16 @@ function AssignmentsEditor({ formId, form, onFormChange }: { formId: string; for
   }
 
   async function setAutoAssign(on: boolean) {
+    const previousAutoAssign = form.auto_assign_new_clients;
+    onFormChange({ ...form, auto_assign_new_clients: on });
     setSaving(true);
     try {
-      await upsertForm({ id: formId, auto_assign_new_clients: on });
-      onFormChange({ ...form, auto_assign_new_clients: on });
+      const result = await updateAccessFn({ data: { formId, autoAssignNewClients: on } });
+      if (!result.ok) {
+        onFormChange({ ...form, auto_assign_new_clients: previousAutoAssign });
+        toast.error(result.error ?? "Failed");
+        return;
+      }
       qc.invalidateQueries({ queryKey: ["nf-forms"] });
     } catch (e: any) {
       toast.error(e?.message ?? "Failed");

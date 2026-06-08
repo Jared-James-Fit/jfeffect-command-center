@@ -8,7 +8,7 @@ import { usePortalUserId } from "@/lib/client-impersonation";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ClipboardCheck, CheckCircle2, ShieldAlert, MessageCircle, Video, Mail, CheckCheck, CreditCard, AlertTriangle, Receipt, Dumbbell, Apple, Settings } from "lucide-react";
+import { ClipboardCheck, CheckCircle2, ShieldAlert, MessageCircle, Mail, CheckCheck, CreditCard, AlertTriangle, Receipt, Dumbbell, Settings, ChevronRight } from "lucide-react";
 import { createCustomerPortalSession } from "@/lib/stripe-checkout.functions";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -99,14 +99,6 @@ function PortalHome() {
   };
 
   const firstName = (client?.full_name ?? user?.email?.split("@")[0] ?? "").split(" ")[0];
-
-  const quickActions = [
-    { to: "/portal/check-ins", label: "Submit Check-In", icon: ClipboardCheck },
-    { to: "/portal/lift-videos", label: "Send Lift Video", icon: Video },
-    { to: "/portal/nutrition-targets", label: "Nutrition Targets", icon: Apple },
-    { to: "/portal/exercises", label: "Exercise Library", icon: Dumbbell },
-    { to: "/portal/messages", label: "Message Coach", icon: MessageCircle },
-  ];
 
   // Primary billing record — most recent non-cancelled
   const primaryPurchase = (purchases as any[]).find(
@@ -328,23 +320,37 @@ function PortalHome() {
           </Card>
         )}
 
-        {/* Quick Actions — compact row */}
-        <section aria-label="Quick Actions">
-          <h3 className="mb-2 px-1 text-xs uppercase tracking-widest text-muted-foreground">Quick Actions</h3>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
-            {quickActions.map((a) => (
-              <Link key={a.to} to={a.to}>
-                <Card className="flex h-full flex-col items-center justify-center gap-1.5 border-border bg-card p-3 text-center transition hover:border-primary">
-                  <a.icon className="h-4 w-4 text-primary" />
-                  <div className="text-[11px] font-semibold leading-tight">{a.label}</div>
-                </Card>
-              </Link>
-            ))}
-          </div>
-        </section>
-
         {client && (
           <div className="grid gap-4 md:grid-cols-2">
+            <Card className="border-primary/30 bg-primary/5 p-6 space-y-4 md:col-span-2">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <ClipboardCheck className="h-5 w-5 text-primary" />
+                  <h2 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">Check-Ins & Forms</h2>
+                </div>
+                <Link to="/portal/check-ins">
+                  <Button size="sm" variant="outline">View All</Button>
+                </Link>
+              </div>
+              {assignedForms.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No check-ins assigned yet.</p>
+              ) : (
+                <div className="grid gap-2 md:grid-cols-2">
+                  {assignedForms.slice(0, 4).map((form) => (
+                    <Link key={form.id} to="/portal/check-ins/$formId" params={{ formId: form.id }}>
+                      <div className="flex min-h-[54px] items-center justify-between gap-3 rounded-md border border-border bg-card px-3 py-2 transition hover:border-primary">
+                        <div className="min-w-0">
+                          <div className="truncate text-sm font-bold">{form.title}</div>
+                          <div className="text-[11px] text-muted-foreground">{form.kind === "external" ? "External form" : "Native form"}</div>
+                        </div>
+                        <ChevronRight className="h-4 w-4 shrink-0 text-primary" />
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </Card>
+
             {/* Bodyweight quick entry */}
             <LogBodyweightCard clientId={client.id} defaultUnit={(client.preferred_weight_unit as WeightUnit) ?? "lb"} />
 
