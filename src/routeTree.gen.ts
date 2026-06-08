@@ -25,7 +25,6 @@ import { Route as AuthenticatedMIndexRouteImport } from './routes/_authenticated
 import { Route as AuthenticatedAdminIndexRouteImport } from './routes/_authenticated/admin/index'
 import { Route as ApiPublicStripeWebhookRouteImport } from './routes/api/public/stripe-webhook'
 import { Route as ApiPublicSignnowWebhookRouteImport } from './routes/api/public/signnow-webhook'
-import { Route as AuthenticatedPortalWorkoutsRouteImport } from './routes/_authenticated/portal/workouts'
 import { Route as AuthenticatedPortalResourcesRouteImport } from './routes/_authenticated/portal/resources'
 import { Route as AuthenticatedPortalPurchasesRouteImport } from './routes/_authenticated/portal/purchases'
 import { Route as AuthenticatedPortalProgressMetricsRouteImport } from './routes/_authenticated/portal/progress-metrics'
@@ -76,6 +75,7 @@ import { Route as AuthenticatedAdminAutomationsRouteImport } from './routes/_aut
 import { Route as AuthenticatedAdminArchivesRouteImport } from './routes/_authenticated/admin/archives'
 import { Route as AuthenticatedAdminAppsRouteImport } from './routes/_authenticated/admin/apps'
 import { Route as AuthenticatedAdminAccountRouteImport } from './routes/_authenticated/admin/account'
+import { Route as AuthenticatedPortalWorkoutsIndexRouteImport } from './routes/_authenticated/portal/workouts.index'
 import { Route as AuthenticatedPortalAgreementsIndexRouteImport } from './routes/_authenticated/portal/agreements.index'
 import { Route as AuthenticatedAdminMembersIndexRouteImport } from './routes/_authenticated/admin/members.index'
 import { Route as AuthenticatedAdminMemberResourcesIndexRouteImport } from './routes/_authenticated/admin/member-resources.index'
@@ -191,12 +191,6 @@ const ApiPublicSignnowWebhookRoute = ApiPublicSignnowWebhookRouteImport.update({
   path: '/api/public/signnow-webhook',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AuthenticatedPortalWorkoutsRoute =
-  AuthenticatedPortalWorkoutsRouteImport.update({
-    id: '/workouts',
-    path: '/workouts',
-    getParentRoute: () => AuthenticatedPortalRouteRoute,
-  } as any)
 const AuthenticatedPortalResourcesRoute =
   AuthenticatedPortalResourcesRouteImport.update({
     id: '/resources',
@@ -488,6 +482,12 @@ const AuthenticatedAdminAccountRoute =
     path: '/account',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
+const AuthenticatedPortalWorkoutsIndexRoute =
+  AuthenticatedPortalWorkoutsIndexRouteImport.update({
+    id: '/workouts/',
+    path: '/workouts/',
+    getParentRoute: () => AuthenticatedPortalRouteRoute,
+  } as any)
 const AuthenticatedPortalAgreementsIndexRoute =
   AuthenticatedPortalAgreementsIndexRouteImport.update({
     id: '/agreements/',
@@ -554,9 +554,9 @@ const ApiPublicHooksMediaArchiveRoute =
   } as any)
 const AuthenticatedPortalWorkoutsDayIdRoute =
   AuthenticatedPortalWorkoutsDayIdRouteImport.update({
-    id: '/$dayId',
-    path: '/$dayId',
-    getParentRoute: () => AuthenticatedPortalWorkoutsRoute,
+    id: '/workouts/$dayId',
+    path: '/workouts/$dayId',
+    getParentRoute: () => AuthenticatedPortalRouteRoute,
   } as any)
 const AuthenticatedPortalPurchasesIdRoute =
   AuthenticatedPortalPurchasesIdRouteImport.update({
@@ -746,7 +746,6 @@ export interface FileRoutesByFullPath {
   '/portal/progress-metrics': typeof AuthenticatedPortalProgressMetricsRoute
   '/portal/purchases': typeof AuthenticatedPortalPurchasesRouteWithChildren
   '/portal/resources': typeof AuthenticatedPortalResourcesRoute
-  '/portal/workouts': typeof AuthenticatedPortalWorkoutsRouteWithChildren
   '/api/public/signnow-webhook': typeof ApiPublicSignnowWebhookRoute
   '/api/public/stripe-webhook': typeof ApiPublicStripeWebhookRoute
   '/admin/': typeof AuthenticatedAdminIndexRoute
@@ -782,6 +781,7 @@ export interface FileRoutesByFullPath {
   '/admin/member-resources/': typeof AuthenticatedAdminMemberResourcesIndexRoute
   '/admin/members/': typeof AuthenticatedAdminMembersIndexRoute
   '/portal/agreements/': typeof AuthenticatedPortalAgreementsIndexRoute
+  '/portal/workouts/': typeof AuthenticatedPortalWorkoutsIndexRoute
   '/admin/client-programs/$clientId/analytics': typeof AuthenticatedAdminClientProgramsClientIdAnalyticsRoute
   '/admin/client-programs/$clientId/history': typeof AuthenticatedAdminClientProgramsClientIdHistoryRoute
   '/m/workouts/$enrollmentId/$week/$day': typeof AuthenticatedMWorkoutsEnrollmentIdWeekDayRoute
@@ -844,7 +844,6 @@ export interface FileRoutesByTo {
   '/portal/progress-metrics': typeof AuthenticatedPortalProgressMetricsRoute
   '/portal/purchases': typeof AuthenticatedPortalPurchasesRouteWithChildren
   '/portal/resources': typeof AuthenticatedPortalResourcesRoute
-  '/portal/workouts': typeof AuthenticatedPortalWorkoutsRouteWithChildren
   '/api/public/signnow-webhook': typeof ApiPublicSignnowWebhookRoute
   '/api/public/stripe-webhook': typeof ApiPublicStripeWebhookRoute
   '/admin': typeof AuthenticatedAdminIndexRoute
@@ -880,6 +879,7 @@ export interface FileRoutesByTo {
   '/admin/member-resources': typeof AuthenticatedAdminMemberResourcesIndexRoute
   '/admin/members': typeof AuthenticatedAdminMembersIndexRoute
   '/portal/agreements': typeof AuthenticatedPortalAgreementsIndexRoute
+  '/portal/workouts': typeof AuthenticatedPortalWorkoutsIndexRoute
   '/admin/client-programs/$clientId/analytics': typeof AuthenticatedAdminClientProgramsClientIdAnalyticsRoute
   '/admin/client-programs/$clientId/history': typeof AuthenticatedAdminClientProgramsClientIdHistoryRoute
   '/m/workouts/$enrollmentId/$week/$day': typeof AuthenticatedMWorkoutsEnrollmentIdWeekDayRoute
@@ -947,7 +947,6 @@ export interface FileRoutesById {
   '/_authenticated/portal/progress-metrics': typeof AuthenticatedPortalProgressMetricsRoute
   '/_authenticated/portal/purchases': typeof AuthenticatedPortalPurchasesRouteWithChildren
   '/_authenticated/portal/resources': typeof AuthenticatedPortalResourcesRoute
-  '/_authenticated/portal/workouts': typeof AuthenticatedPortalWorkoutsRouteWithChildren
   '/api/public/signnow-webhook': typeof ApiPublicSignnowWebhookRoute
   '/api/public/stripe-webhook': typeof ApiPublicStripeWebhookRoute
   '/_authenticated/admin/': typeof AuthenticatedAdminIndexRoute
@@ -983,6 +982,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/member-resources/': typeof AuthenticatedAdminMemberResourcesIndexRoute
   '/_authenticated/admin/members/': typeof AuthenticatedAdminMembersIndexRoute
   '/_authenticated/portal/agreements/': typeof AuthenticatedPortalAgreementsIndexRoute
+  '/_authenticated/portal/workouts/': typeof AuthenticatedPortalWorkoutsIndexRoute
   '/_authenticated/admin/client-programs/$clientId/analytics': typeof AuthenticatedAdminClientProgramsClientIdAnalyticsRoute
   '/_authenticated/admin/client-programs/$clientId/history': typeof AuthenticatedAdminClientProgramsClientIdHistoryRoute
   '/_authenticated/m/workouts/$enrollmentId/$week/$day': typeof AuthenticatedMWorkoutsEnrollmentIdWeekDayRoute
@@ -1050,7 +1050,6 @@ export interface FileRouteTypes {
     | '/portal/progress-metrics'
     | '/portal/purchases'
     | '/portal/resources'
-    | '/portal/workouts'
     | '/api/public/signnow-webhook'
     | '/api/public/stripe-webhook'
     | '/admin/'
@@ -1086,6 +1085,7 @@ export interface FileRouteTypes {
     | '/admin/member-resources/'
     | '/admin/members/'
     | '/portal/agreements/'
+    | '/portal/workouts/'
     | '/admin/client-programs/$clientId/analytics'
     | '/admin/client-programs/$clientId/history'
     | '/m/workouts/$enrollmentId/$week/$day'
@@ -1148,7 +1148,6 @@ export interface FileRouteTypes {
     | '/portal/progress-metrics'
     | '/portal/purchases'
     | '/portal/resources'
-    | '/portal/workouts'
     | '/api/public/signnow-webhook'
     | '/api/public/stripe-webhook'
     | '/admin'
@@ -1184,6 +1183,7 @@ export interface FileRouteTypes {
     | '/admin/member-resources'
     | '/admin/members'
     | '/portal/agreements'
+    | '/portal/workouts'
     | '/admin/client-programs/$clientId/analytics'
     | '/admin/client-programs/$clientId/history'
     | '/m/workouts/$enrollmentId/$week/$day'
@@ -1250,7 +1250,6 @@ export interface FileRouteTypes {
     | '/_authenticated/portal/progress-metrics'
     | '/_authenticated/portal/purchases'
     | '/_authenticated/portal/resources'
-    | '/_authenticated/portal/workouts'
     | '/api/public/signnow-webhook'
     | '/api/public/stripe-webhook'
     | '/_authenticated/admin/'
@@ -1286,6 +1285,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/member-resources/'
     | '/_authenticated/admin/members/'
     | '/_authenticated/portal/agreements/'
+    | '/_authenticated/portal/workouts/'
     | '/_authenticated/admin/client-programs/$clientId/analytics'
     | '/_authenticated/admin/client-programs/$clientId/history'
     | '/_authenticated/m/workouts/$enrollmentId/$week/$day'
@@ -1421,13 +1421,6 @@ declare module '@tanstack/react-router' {
       fullPath: '/api/public/signnow-webhook'
       preLoaderRoute: typeof ApiPublicSignnowWebhookRouteImport
       parentRoute: typeof rootRouteImport
-    }
-    '/_authenticated/portal/workouts': {
-      id: '/_authenticated/portal/workouts'
-      path: '/workouts'
-      fullPath: '/portal/workouts'
-      preLoaderRoute: typeof AuthenticatedPortalWorkoutsRouteImport
-      parentRoute: typeof AuthenticatedPortalRouteRoute
     }
     '/_authenticated/portal/resources': {
       id: '/_authenticated/portal/resources'
@@ -1779,6 +1772,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminAccountRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
+    '/_authenticated/portal/workouts/': {
+      id: '/_authenticated/portal/workouts/'
+      path: '/workouts'
+      fullPath: '/portal/workouts/'
+      preLoaderRoute: typeof AuthenticatedPortalWorkoutsIndexRouteImport
+      parentRoute: typeof AuthenticatedPortalRouteRoute
+    }
     '/_authenticated/portal/agreements/': {
       id: '/_authenticated/portal/agreements/'
       path: '/agreements'
@@ -1858,10 +1858,10 @@ declare module '@tanstack/react-router' {
     }
     '/_authenticated/portal/workouts/$dayId': {
       id: '/_authenticated/portal/workouts/$dayId'
-      path: '/$dayId'
+      path: '/workouts/$dayId'
       fullPath: '/portal/workouts/$dayId'
       preLoaderRoute: typeof AuthenticatedPortalWorkoutsDayIdRouteImport
-      parentRoute: typeof AuthenticatedPortalWorkoutsRoute
+      parentRoute: typeof AuthenticatedPortalRouteRoute
     }
     '/_authenticated/portal/purchases/$id': {
       id: '/_authenticated/portal/purchases/$id'
@@ -2267,21 +2267,6 @@ const AuthenticatedPortalPurchasesRouteWithChildren =
     AuthenticatedPortalPurchasesRouteChildren,
   )
 
-interface AuthenticatedPortalWorkoutsRouteChildren {
-  AuthenticatedPortalWorkoutsDayIdRoute: typeof AuthenticatedPortalWorkoutsDayIdRoute
-}
-
-const AuthenticatedPortalWorkoutsRouteChildren: AuthenticatedPortalWorkoutsRouteChildren =
-  {
-    AuthenticatedPortalWorkoutsDayIdRoute:
-      AuthenticatedPortalWorkoutsDayIdRoute,
-  }
-
-const AuthenticatedPortalWorkoutsRouteWithChildren =
-  AuthenticatedPortalWorkoutsRoute._addFileChildren(
-    AuthenticatedPortalWorkoutsRouteChildren,
-  )
-
 interface AuthenticatedPortalRouteRouteChildren {
   AuthenticatedPortalAccountRoute: typeof AuthenticatedPortalAccountRoute
   AuthenticatedPortalCalendarRoute: typeof AuthenticatedPortalCalendarRoute
@@ -2297,9 +2282,10 @@ interface AuthenticatedPortalRouteRouteChildren {
   AuthenticatedPortalProgressMetricsRoute: typeof AuthenticatedPortalProgressMetricsRoute
   AuthenticatedPortalPurchasesRoute: typeof AuthenticatedPortalPurchasesRouteWithChildren
   AuthenticatedPortalResourcesRoute: typeof AuthenticatedPortalResourcesRoute
-  AuthenticatedPortalWorkoutsRoute: typeof AuthenticatedPortalWorkoutsRouteWithChildren
   AuthenticatedPortalIndexRoute: typeof AuthenticatedPortalIndexRoute
+  AuthenticatedPortalWorkoutsDayIdRoute: typeof AuthenticatedPortalWorkoutsDayIdRoute
   AuthenticatedPortalAgreementsIndexRoute: typeof AuthenticatedPortalAgreementsIndexRoute
+  AuthenticatedPortalWorkoutsIndexRoute: typeof AuthenticatedPortalWorkoutsIndexRoute
 }
 
 const AuthenticatedPortalRouteRouteChildren: AuthenticatedPortalRouteRouteChildren =
@@ -2322,11 +2308,13 @@ const AuthenticatedPortalRouteRouteChildren: AuthenticatedPortalRouteRouteChildr
     AuthenticatedPortalPurchasesRoute:
       AuthenticatedPortalPurchasesRouteWithChildren,
     AuthenticatedPortalResourcesRoute: AuthenticatedPortalResourcesRoute,
-    AuthenticatedPortalWorkoutsRoute:
-      AuthenticatedPortalWorkoutsRouteWithChildren,
     AuthenticatedPortalIndexRoute: AuthenticatedPortalIndexRoute,
+    AuthenticatedPortalWorkoutsDayIdRoute:
+      AuthenticatedPortalWorkoutsDayIdRoute,
     AuthenticatedPortalAgreementsIndexRoute:
       AuthenticatedPortalAgreementsIndexRoute,
+    AuthenticatedPortalWorkoutsIndexRoute:
+      AuthenticatedPortalWorkoutsIndexRoute,
   }
 
 const AuthenticatedPortalRouteRouteWithChildren =
@@ -2368,3 +2356,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
