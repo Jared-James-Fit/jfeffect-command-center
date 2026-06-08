@@ -27,6 +27,8 @@ import { deleteNativeForms, replaceNativeFormAssignments, updateNativeFormAccess
 import { useBulkSelection } from "@/hooks/use-bulk-selection";
 import { useClientImpersonation } from "@/lib/client-impersonation";
 
+const EMPTY_ARRAY: any[] = [];
+
 export const Route = createFileRoute("/_authenticated/admin/native-forms")({
   component: AdminNativeForms,
 });
@@ -471,8 +473,9 @@ function AssignmentsEditor({ formId, form, onFormChange }: { formId: string; for
   const [dirty, setDirty] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
-  const { data: assignments = [] } = useQuery({ queryKey: ["nf-assignments", formId], queryFn: () => listAssignments(formId) });
-  const { data: clients = [] } = useQuery({
+  const { data: assignmentsData } = useQuery({ queryKey: ["nf-assignments", formId], queryFn: () => listAssignments(formId) });
+  const assignments = assignmentsData ?? EMPTY_ARRAY;
+  const { data: clientsData } = useQuery({
     queryKey: ["all-clients-min"],
     queryFn: async () => {
       const { data } = await supabase
@@ -484,6 +487,7 @@ function AssignmentsEditor({ formId, form, onFormChange }: { formId: string; for
       return data ?? [];
     },
   });
+  const clients = clientsData ?? EMPTY_ARRAY;
 
   useEffect(() => {
     if (dirty || saving) return;
@@ -497,7 +501,7 @@ function AssignmentsEditor({ formId, form, onFormChange }: { formId: string; for
     return (c.full_name ?? "").toLowerCase().includes(q) || (c.email ?? "").toLowerCase().includes(q);
   });
   const visibleIds = filtered.map((client: any) => client.id as string);
-  const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedIds.has(id));
+  const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id: string) => selectedIds.has(id));
 
   function setClientSelected(clientId: string, checked: boolean) {
     if (broadcastOn || saving) return;
