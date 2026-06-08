@@ -317,9 +317,10 @@ function EditorChrome({ meta, summary, typeLabel, autosave, save, dirty, childre
   );
 }
 
-function StructureCanvas({ type, payload, setP, exercises, appendRowToFirstDay }: {
-  type: string; payload: any; setP: (p: any) => void; exercises: any[];
+function StructureCanvas({ type, payload, setP, exercises, appendRowToFirstDay, undo, redo, canUndo, canRedo }: {
+  type: string; payload: any; setP: (p: any, opts?: { skipHistory?: boolean }) => void; exercises: any[];
   appendRowToFirstDay: (payload: any, type: string, row: any) => void;
+  undo: () => void; redo: () => void; canUndo: boolean; canRedo: boolean;
 }) {
   const [prefs, setPrefsState] = useState<EditorPrefs>(() => readPrefs());
   const setPrefs = (patch: Partial<EditorPrefs>) => {
@@ -337,6 +338,19 @@ function StructureCanvas({ type, payload, setP, exercises, appendRowToFirstDay }
   };
   const canvasRef = useRef<HTMLDivElement | null>(null);
 
+  // Keyboard: Cmd/Ctrl+Z = undo, Cmd/Ctrl+Shift+Z or Ctrl+Y = redo
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const meta = e.metaKey || e.ctrlKey;
+      if (!meta) return;
+      const k = e.key.toLowerCase();
+      if (k === "z" && !e.shiftKey) { e.preventDefault(); undo(); }
+      else if ((k === "z" && e.shiftKey) || k === "y") { e.preventDefault(); redo(); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [undo, redo]);
+
   return (
     <div className="rounded-md border border-border bg-background">
       {/* Sticky compact toolbar */}
@@ -344,6 +358,15 @@ function StructureCanvas({ type, payload, setP, exercises, appendRowToFirstDay }
         <Button size="icon" variant="ghost" className="h-7 w-7" title={sidebarCollapsed ? "Show library" : "Hide library"} onClick={() => setPrefs({ sidebarCollapsed: !sidebarCollapsed })}>
           {sidebarCollapsed ? <PanelLeftOpen className="h-3.5 w-3.5" /> : <PanelLeftClose className="h-3.5 w-3.5" />}
         </Button>
+        <div className="h-5 w-px bg-border" />
+        <div className="inline-flex items-center gap-0.5">
+          <Button size="icon" variant="ghost" className="h-7 w-7" disabled={!canUndo} title="Undo (Cmd/Ctrl+Z)" onClick={undo}>
+            <Undo2 className="h-3.5 w-3.5" />
+          </Button>
+          <Button size="icon" variant="ghost" className="h-7 w-7" disabled={!canRedo} title="Redo (Cmd/Ctrl+Shift+Z)" onClick={redo}>
+            <Redo2 className="h-3.5 w-3.5" />
+          </Button>
+        </div>
         <div className="h-5 w-px bg-border" />
         <button
           onClick={() => setPrefs({ compact: !compact })}
