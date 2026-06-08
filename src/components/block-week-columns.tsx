@@ -15,14 +15,7 @@ type WeekEntry = { week: any; entries: { day: any; week: any; block: any; comple
 /**
  * Always-open horizontal week columns. No accordion, no manual completion toggle.
  * Today's workout is auto-highlighted; future weeks render as Locked for the client.
- */
-/**
- * Horizontal week timeline + day list for the selected week.
- *
- * - Weeks render as compact, equal-sized tiles in a single horizontal row.
- *   Desktop fits up to ~8 across; mobile scrolls horizontally.
- * - Selecting a tile updates the day list shown beneath the row.
- * - No accordion / no vertical stacking of weeks.
+ * The full block stays visible as side-by-side week columns with horizontal scroll.
  */
 export function BlockWeekColumns({
   block, weeks, mode,
@@ -44,18 +37,10 @@ export function BlockWeekColumns({
     return { week, entries, range, now, locked, doneCount, status };
   }), [weeks, block, mode]);
 
-  // Default selection: current week → first incomplete → first.
-  const defaultId = useMemo(() => {
-    const cur = computed.find((w) => w.now)?.week?.id;
-    if (cur) return cur;
-    const incomplete = computed.find((w) => w.doneCount < w.entries.length && !w.locked)?.week?.id;
-    return incomplete ?? computed[0]?.week?.id ?? null;
-  }, [computed]);
-
   const weekRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const scrollToWeek = (id: string) => {
     const el = weekRefs.current[id];
-    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "start" });
   };
 
   return (
@@ -118,17 +103,18 @@ export function BlockWeekColumns({
       </div>
 
       {/* Full block: every week + its days */}
-      <div className="space-y-5">
-        {computed.map((sel) => (
-          <div
-            key={sel.week?.id ?? Math.random()}
-            ref={(el) => { if (sel.week?.id) weekRefs.current[sel.week.id] = el; }}
-            className={cn(
-              "space-y-2 rounded-md border p-3",
-              sel.now ? "border-primary/50 bg-primary/5" : "border-border bg-card/40",
-              sel.status === "Locked" && "opacity-80",
-            )}
-          >
+      <div className="-mx-3 overflow-x-auto px-3 pb-3">
+        <div className="flex w-max items-start gap-3">
+          {computed.map((sel) => (
+            <div
+              key={sel.week?.id ?? Math.random()}
+              ref={(el) => { if (sel.week?.id) weekRefs.current[sel.week.id] = el; }}
+              className={cn(
+                "w-[82vw] max-w-[400px] shrink-0 scroll-mt-24 space-y-2 rounded-md border p-3 sm:w-[360px] lg:w-[390px]",
+                sel.now ? "border-primary/50 bg-primary/5" : "border-border bg-card/40",
+                sel.status === "Locked" && "opacity-80",
+              )}
+            >
             <div className="flex flex-wrap items-baseline justify-between gap-2">
               <div className="flex items-center gap-2">
                 <div className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
@@ -229,8 +215,9 @@ export function BlockWeekColumns({
                 <p className="text-[11px] text-muted-foreground italic">No workouts in this week.</p>
               )}
             </div>
-          </div>
-        ))}
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );

@@ -1322,11 +1322,20 @@ export async function getClientWorkouts(clientId: string) {
   const { data: completions } = dayIds.length ? await sb.from("pl_day_completions").select("*").in("day_id", dayIds) : { data: [] };
   const blockOrder = new Map<string, number>();
   (blocks ?? []).forEach((b: any, i: number) => blockOrder.set(b.id, i));
-  const items = (days ?? []).map((d: any) => {
-    const w = (weeks ?? []).find((x: any) => x.id === d.week_id);
+  const daysByWeek = new Map<string, any[]>();
+  for (const d of days ?? []) {
+    const list = daysByWeek.get(d.week_id) ?? [];
+    list.push(d);
+    daysByWeek.set(d.week_id, list);
+  }
+  const items = (weeks ?? []).flatMap((w: any) => {
     const b = (blocks ?? []).find((x: any) => x.id === w?.block_id);
-    const c = (completions ?? []).find((x: any) => x.day_id === d.id);
-    return { day: d, week: w, block: b, completion: c };
+    const weekDays = daysByWeek.get(w.id) ?? [];
+    if (weekDays.length === 0) return [{ day: null, week: w, block: b, completion: null }];
+    return weekDays.map((d: any) => {
+      const c = (completions ?? []).find((x: any) => x.day_id === d.id);
+      return { day: d, week: w, block: b, completion: c };
+    });
   });
   // Sort: block (created order) → week_index → day_index
   items.sort((a: any, b: any) => {
