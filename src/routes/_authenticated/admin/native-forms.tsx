@@ -27,6 +27,8 @@ import { deleteNativeForms, replaceNativeFormAssignments, updateNativeFormAccess
 import { useBulkSelection } from "@/hooks/use-bulk-selection";
 import { useClientImpersonation } from "@/lib/client-impersonation";
 
+const EMPTY_ARRAY: any[] = [];
+
 export const Route = createFileRoute("/_authenticated/admin/native-forms")({
   component: AdminNativeForms,
 });
