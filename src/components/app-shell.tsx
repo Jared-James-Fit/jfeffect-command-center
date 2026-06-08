@@ -372,14 +372,20 @@ export function AppShell({ items, title, children }: { items: NavItem[]; title: 
             <Button variant="ghost" size="sm" onClick={() => setPaletteOpen(true)} aria-label="Search">
               <Search className="h-4 w-4" />
             </Button>
-            {pathname.startsWith("/portal") && (
-              <Link to="/portal/account">
-                <Button variant="ghost" size="sm" aria-label="Account settings">
-                  <SettingsIcon className="h-4 w-4" />
-                </Button>
-              </Link>
-            )}
-            <UserAvatar src={me?.pic ?? null} name={me?.name ?? user?.email ?? ""} size={28} ring />
+            {(() => {
+              const accountItem = items.find(
+                (i) => i.to.endsWith("/account") || i.to.endsWith("/account-settings"),
+              );
+              if (!accountItem) return null;
+              return (
+                <Link to={accountItem.to}>
+                  <Button variant="ghost" size="sm" aria-label="Account settings">
+                    <SettingsIcon className="h-4 w-4" />
+                  </Button>
+                </Link>
+              );
+            })()}
+            <UserAvatar src={me?.pic ?? null} name={me?.name ?? user?.email ?? ""} size={28} ring expandable={false} />
             <Button variant="ghost" size="sm" onClick={handleSignOut}>
               <LogOut className="h-4 w-4" />
             </Button>
