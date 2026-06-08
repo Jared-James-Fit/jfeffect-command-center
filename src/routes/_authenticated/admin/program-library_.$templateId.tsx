@@ -20,6 +20,8 @@ import {
 } from "@/lib/pl-programs";
 import { ExerciseLibraryPanel, type ExerciseRef, DND_EXERCISE, readDrop } from "@/components/program-builder";
 import { cn } from "@/lib/utils";
+import { useAutosave } from "@/hooks/use-autosave";
+import { SaveStatus } from "@/components/save-status";
 
 // Append a row into the first day reachable inside any template payload shape.
 function appendRowToFirstDay(payload: any, type: string, row: any) {
@@ -77,6 +79,7 @@ function TemplateEditor() {
   const [payload, setPayload] = useState<any>(null);
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
+  const hydratedRef = useRef(false);
 
   useEffect(() => {
     if (tpl && !meta) {
@@ -86,6 +89,7 @@ function TemplateEditor() {
         est_duration_min: tpl.est_duration_min ?? 0, tags: (tpl.tags ?? []).join(", "), status: tpl.status,
       });
       setPayload(JSON.parse(JSON.stringify(tpl.payload || {})));
+      hydratedRef.current = true;
     }
   }, [tpl]);
 
@@ -97,21 +101,39 @@ function TemplateEditor() {
   const setM = (patch: any) => { setMeta({ ...meta, ...patch }); setDirty(true); };
   const setP = (next: any) => { setPayload(next); setDirty(true); };
 
+  const persist = async (m: any, p: any) => {
+    await updateTemplate(templateId, {
+      ...m,
+      tags: m.tags.split(",").map((s: string) => s.trim()).filter(Boolean),
+      weeks: m.weeks || null, days_per_week: m.days_per_week || null,
+      est_duration_min: m.est_duration_min || null,
+      training_focus: m.training_focus || null, notes: m.notes || null,
+      payload: p,
+    });
+    qc.invalidateQueries({ queryKey: ["pl-template", templateId] });
+    qc.invalidateQueries({ queryKey: ["pl-templates"] });
+    setDirty(false);
+  };
+
+  const autosaveValue = useMemo(() => ({ meta, payload }), [meta, payload]);
+  const autosave = useAutosave({
+    key: `template:${templateId}:editor`,
+    value: autosaveValue,
+    delay: 1500,
+    enabled: !!meta && !!payload && hydratedRef.current && dirty,
+    onSave: async ({ meta: m, payload: p }) => {
+      if (!m || !p) return;
+      await persist(m, p);
+    },
+  });
+
   const save = async () => {
+    if (!meta || !payload) return;
     setSaving(true);
     try {
-      await updateTemplate(templateId, {
-        ...meta,
-        tags: meta.tags.split(",").map((s: string) => s.trim()).filter(Boolean),
-        weeks: meta.weeks || null, days_per_week: meta.days_per_week || null,
-        est_duration_min: meta.est_duration_min || null,
-        training_focus: meta.training_focus || null, notes: meta.notes || null,
-        payload,
-      });
+      await autosave.flush();
+      await persist(meta, payload);
       toast.success("Saved");
-      setDirty(false);
-      qc.invalidateQueries({ queryKey: ["pl-template", templateId] });
-      qc.invalidateQueries({ queryKey: ["pl-templates"] });
     } catch (e: any) { toast.error(e.message); }
     finally { setSaving(false); }
   };
@@ -124,9 +146,10 @@ function TemplateEditor() {
           <Link to="/admin/program-library" className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground">
             <ArrowLeft className="mr-1 h-4 w-4" /> Back to library
           </Link>
-          <div className="ml-auto">
-            <Button onClick={save} disabled={!dirty || saving}>
-              <Save className="mr-2 h-4 w-4" /> {saving ? "Saving…" : dirty ? "Save changes" : "Saved"}
+          <div className="ml-auto flex items-center gap-3">
+            <SaveStatus state={autosave.state} savedAt={autosave.savedAt} />
+            <Button onClick={save} disabled={saving}>
+              <Save className="mr-2 h-4 w-4" /> {saving ? "Saving…" : dirty ? "Save now" : "Saved"}
             </Button>
           </div>
         </div>
