@@ -24,7 +24,7 @@ import {
   NF_QUESTION_TYPES, NF_QUESTION_TYPE_LABEL,
   type NfForm, type NfQuestion, type NfQuestionType, type NfRecurrence, type NfKind, type NfOpenStyle,
 } from "@/lib/native-forms";
-import { deleteNativeForms, replaceNativeFormAssignments } from "@/lib/native-forms.functions";
+import { deleteNativeForms, replaceNativeFormAssignments, updateNativeFormAccess } from "@/lib/native-forms.functions";
 import { useBulkSelection } from "@/hooks/use-bulk-selection";
 
 export const Route = createFileRoute("/_authenticated/admin/native-forms")({
@@ -455,6 +455,7 @@ function QuestionRow({ q, formId, onMoveUp, onMoveDown }: { q: NfQuestion; formI
 function AssignmentsEditor({ formId, form, onFormChange }: { formId: string; form: NfForm; onFormChange: (f: NfForm) => void }) {
   const qc = useQueryClient();
   const saveAssignmentsFn = useServerFn(replaceNativeFormAssignments);
+  const updateAccessFn = useServerFn(updateNativeFormAccess);
   const [search, setSearch] = useState("");
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
@@ -541,7 +542,11 @@ function AssignmentsEditor({ formId, form, onFormChange }: { formId: string; for
     setSaving(true);
     try {
       const visibility = on ? "all_active_clients" : "selected";
-      await upsertForm({ id: formId, visibility });
+      const result = await updateAccessFn({ data: { formId, visibility } });
+      if (!result.ok) {
+        toast.error(result.error ?? "Failed");
+        return;
+      }
       onFormChange({ ...form, visibility });
       await qc.invalidateQueries({ queryKey: ["nf-forms"] });
       await qc.invalidateQueries({ queryKey: ["nf-assignments", formId] });
@@ -556,7 +561,11 @@ function AssignmentsEditor({ formId, form, onFormChange }: { formId: string; for
   async function setAutoAssign(on: boolean) {
     setSaving(true);
     try {
-      await upsertForm({ id: formId, auto_assign_new_clients: on });
+      const result = await updateAccessFn({ data: { formId, autoAssignNewClients: on } });
+      if (!result.ok) {
+        toast.error(result.error ?? "Failed");
+        return;
+      }
       onFormChange({ ...form, auto_assign_new_clients: on });
       qc.invalidateQueries({ queryKey: ["nf-forms"] });
     } catch (e: any) {
