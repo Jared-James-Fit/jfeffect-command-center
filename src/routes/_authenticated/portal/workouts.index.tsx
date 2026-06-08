@@ -54,8 +54,9 @@ function WorkoutsPage() {
     const wk = it.week?.id ?? "none";
     const bg = blockGroups.get(bk)!;
     if (!bg.weeks.has(wk)) bg.weeks.set(wk, { week: it.week, entries: [] });
-    bg.weeks.get(wk)!.entries.push(it);
+    if (it.day?.id) bg.weeks.get(wk)!.entries.push(it);
   }
+  const workoutItems = (items as any[]).filter((it) => it.day?.id);
 
   return (
     <>
@@ -64,8 +65,8 @@ function WorkoutsPage() {
         {client && <TrainingScheduleCard client={client as any} editable />}
 
         {/* PRIORITY #1 — Smart Today Card */}
-        {client?.id && !isLoading && (items as any[]).length > 0 && (
-          <SmartTodayCard items={items as any[]} clientId={client.id} />
+        {client?.id && !isLoading && workoutItems.length > 0 && (
+          <SmartTodayCard items={workoutItems} clientId={client.id} />
         )}
 
         <Card className="border-border bg-card p-6 md:p-8">
