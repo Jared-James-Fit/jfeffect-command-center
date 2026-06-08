@@ -243,6 +243,8 @@ export function AssignedProgramsCard({ clientId, mode }: { clientId: string; mod
                             blockId={b.id}
                             mode={mode}
                             onRemove={() => setPending({ kind: "block", id: b.id, label: b.name })}
+                            selected={selectedBlocks.has(b.id)}
+                            onToggleSelect={mode === "admin" ? () => toggleBlock(b.id) : undefined}
                           />
                           {mode === "admin" && <BlockProgressSection blockId={b.id} mode={mode} />}
                         </div>
@@ -266,6 +268,8 @@ export function AssignedProgramsCard({ clientId, mode }: { clientId: string; mod
                   blockId={b.id}
                   mode={mode}
                   onRemove={() => setPending({ kind: "block", id: b.id, label: b.name })}
+                  selected={selectedBlocks.has(b.id)}
+                  onToggleSelect={mode === "admin" ? () => toggleBlock(b.id) : undefined}
                 />
                 {mode === "admin" && <BlockProgressSection blockId={b.id} mode={mode} />}
               </div>

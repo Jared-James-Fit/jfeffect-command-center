@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
+import { Checkbox } from "@/components/ui/checkbox";
 import { CheckCircle2, ChevronRight, Archive, Pencil, MoreVertical, Trash2 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { format, parseISO } from "date-fns";
@@ -36,10 +37,14 @@ export function BlockSummaryCard({
   blockId,
   mode,
   onRemove,
+  selected,
+  onToggleSelect,
 }: {
   blockId: string;
   mode: Mode;
   onRemove?: () => void;
+  selected?: boolean;
+  onToggleSelect?: () => void;
 }) {
   const qc = useQueryClient();
   const { user } = useAuth();
@@ -85,7 +90,16 @@ export function BlockSummaryCard({
     <Card className="p-4 space-y-3">
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-2">
-        <div className="min-w-0">
+        <div className="min-w-0 flex items-start gap-2">
+          {mode === "admin" && onToggleSelect && (
+            <Checkbox
+              checked={!!selected}
+              onCheckedChange={onToggleSelect}
+              className="mt-1"
+              aria-label="Select block"
+            />
+          )}
+          <div className="min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <Link {...toBlock} className="font-bold text-base hover:underline truncate">{block.name}</Link>
             <Badge variant="outline" className={cn("text-[10px]", statusTone(block.status))}>{displayStatus}</Badge>
@@ -94,6 +108,7 @@ export function BlockSummaryCard({
             {totalWeeks} Weeks
             {block.training_focus ? ` · ${block.training_focus}` : ""}
             {startStr && endStr ? ` · ${startStr} – ${endStr}` : ""}
+          </div>
           </div>
         </div>
         <div className="flex items-center gap-1">

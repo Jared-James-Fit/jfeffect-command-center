@@ -1209,9 +1209,10 @@ export async function applyTemplateToClient(opts: { templateId: string; clientId
       source_template_id: tpl.id,
     });
     for (const b of (payload.blocks_data || [])) {
+      const wdLen = Array.isArray(b.weeks_data) ? b.weeks_data.length : (b.weeks || 4);
       const blk = await createBlock({
         client_id: opts.clientId, prep_id: prep.id, name: b.name || "Block",
-        weeks: (b.weeks_data?.length || b.weeks || 4), training_focus: b.training_focus ?? null,
+        weeks: wdLen, training_focus: b.training_focus ?? null,
         source_template_id: tpl.id,
         status: "Active",
       });
@@ -1219,6 +1220,7 @@ export async function applyTemplateToClient(opts: { templateId: string; clientId
         await sb.from("pl_weeks").delete().eq("block_id", blk.id);
         let idx = 1;
         for (const w of b.weeks_data) await insertWeekTree(blk.id, w.week_index ?? idx++, w);
+        await sb.from("pl_blocks").update({ weeks: b.weeks_data.length }).eq("id", blk.id);
       }
     }
     return { prepId: prep.id };
@@ -1273,7 +1275,7 @@ export async function applyTemplateToClient(opts: { templateId: string; clientId
     client_id: opts.clientId,
     prep_id: targetPrepId,
     name: opts.name ?? tpl.name,
-    weeks: tpl.weeks ?? payload.weeks ?? 4,
+    weeks: Array.isArray(payload.weeks_data) ? payload.weeks_data.length : (tpl.weeks ?? payload.weeks ?? 4),
     training_focus: tpl.training_focus ?? null,
     source_template_id: tpl.id,
     status: "Active",
@@ -1284,6 +1286,7 @@ export async function applyTemplateToClient(opts: { templateId: string; clientId
     await sb.from("pl_weeks").delete().eq("block_id", block.id);
     let idx = 1;
     for (const w of payload.weeks_data) await insertWeekTree(block.id, w.week_index ?? idx++, w);
+    await sb.from("pl_blocks").update({ weeks: payload.weeks_data.length }).eq("id", block.id);
   }
   return { blockId: block.id, prepId: targetPrepId };
 }
