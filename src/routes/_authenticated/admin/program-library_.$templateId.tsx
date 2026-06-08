@@ -95,11 +95,6 @@ function TemplateEditor() {
     }
   }, [tpl]);
 
-  if (isLoading || !tpl || !meta || !payload) return <div className="p-8 text-sm text-muted-foreground">Loading template…</div>;
-
-  const summary = summarizeTemplatePayload({ ...tpl, payload });
-  const type = tpl.template_type;
-
   const setM = (patch: any) => { setMeta({ ...meta, ...patch }); setDirty(true); };
   const setP = (next: any) => { setPayload(next); setDirty(true); };
 
@@ -151,6 +146,11 @@ function TemplateEditor() {
     } catch (e: any) { toast.error(e.message); }
     finally { setSaving(false); }
   };
+
+  if (isLoading || !tpl || !meta || !payload) return <div className="p-8 text-sm text-muted-foreground">Loading template…</div>;
+
+  const summary = summarizeTemplatePayload({ ...tpl, payload });
+  const type = tpl.template_type;
 
   return (
     <>
