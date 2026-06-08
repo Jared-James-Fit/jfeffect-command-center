@@ -9,7 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { getProductGrant, upsertProductGrant, deleteProductGrant, listAccessLevels } from "@/lib/product-access.functions";
-import { updateCoachingProduct, listCoachingProducts } from "@/lib/coaching-products.functions";
+import { updateCoachingProduct } from "@/lib/coaching-products.functions";
 import { Input } from "@/components/ui/input";
 
 type Props = {
