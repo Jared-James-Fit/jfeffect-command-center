@@ -457,6 +457,7 @@ function BlockEditor() {
                     <WeekColumn
                       key={w.id}
                       blockId={blockId}
+                      block={block}
                       week={w}
                       days={(days as any[]).filter((d: any) => d.week_id === w.id)}
                       rows={rows}
@@ -489,6 +490,7 @@ function BlockEditor() {
                   <WeekColumn
                     key={w.id}
                     blockId={blockId}
+                    block={block}
                     week={w}
                     days={(days as any[]).filter((d: any) => d.week_id === w.id)}
                     rows={rows}
