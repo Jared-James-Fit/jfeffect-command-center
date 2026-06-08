@@ -251,6 +251,7 @@ function PaymentLinksPage() {
   const [assigning, setAssigning] = useState<any | null>(null);
   const [previewing, setPreviewing] = useState<Product | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Product | null>(null);
+  const [grantFor, setGrantFor] = useState<Product | null>(null);
   const [manageMode, setManageMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
