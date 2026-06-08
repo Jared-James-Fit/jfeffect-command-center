@@ -14,7 +14,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Loader2, Send, MessageCircle, Upload } from "lucide-react";
+import { Loader2, Send, MessageCircle, Upload, ArrowLeft, ExternalLink, Check } from "lucide-react";
 import {
   getForm,
   listQuestions,
@@ -59,6 +59,7 @@ function ClientFormRenderer() {
   const { data: questions = [] } = useQuery({
     queryKey: ["nf-questions", formId],
     queryFn: () => listQuestions(formId),
+    enabled: !!form && form.kind !== "external",
   });
 
   const { data: submission } = useQuery({
@@ -164,6 +165,22 @@ function ClientFormRenderer() {
       <div className="grid min-h-[60vh] place-items-center">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
       </div>
+    );
+  }
+
+  if (form.kind === "external") {
+    return (
+      <ExternalFormView
+        form={form}
+        submission={submission}
+        onMarkSubmitted={async () => {
+          await submitSubmission(submission.id);
+          toast.success("Marked as submitted");
+          qc.invalidateQueries({ queryKey: ["nf-current-submission", formId, client?.id] });
+          qc.invalidateQueries({ queryKey: ["nf-submissions-for-client", client?.id] });
+        }}
+        onBack={() => navigate({ to: "/portal/check-ins" })}
+      />
     );
   }
 
@@ -352,4 +369,102 @@ function QuestionInput({
     );
   }
   return null;
+}
+
+function ExternalFormView({
+  form,
+  submission,
+  onMarkSubmitted,
+  onBack,
+}: {
+  form: any;
+  submission: any;
+  onMarkSubmitted: () => Promise<void> | void;
+  onBack: () => void;
+}) {
+  const [iframeFailed, setIframeFailed] = useState(false);
+  const url = form.external_url as string | null;
+  const openStyle = (form.open_style ?? "embed") as "embed" | "modal" | "new_tab";
+  const submitted = submission.status !== "in_progress";
+  const canEmbed = !!url && openStyle !== "new_tab" && !iframeFailed;
+
+  return (
+    <>
+      <PageHeader
+        title={form.title}
+        subtitle={submission.period_start ? `Week of ${submission.period_start}` : undefined}
+        actions={
+          <div className="flex items-center gap-2">
+            <Badge className={statusTone(submission.status) + " border"}>{statusLabel(submission.status)}</Badge>
+          </div>
+        }
+      />
+      <div className="mx-auto max-w-4xl space-y-4 p-4 md:p-6">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <Button variant="ghost" size="sm" onClick={onBack}>
+            <ArrowLeft className="mr-1 h-4 w-4" /> Back to Check-Ins
+          </Button>
+          {url && (
+            <a href={url} target="_blank" rel="noreferrer">
+              <Button variant="outline" size="sm">
+                <ExternalLink className="mr-1 h-4 w-4" /> Open in new tab
+              </Button>
+            </a>
+          )}
+        </div>
+
+        {form.description && (
+          <Card className="border-border bg-card p-4 text-sm text-muted-foreground">{form.description}</Card>
+        )}
+
+        {!url ? (
+          <Card className="border-border bg-card p-6 text-sm text-muted-foreground">
+            This form doesn't have a link yet. Please contact your coach.
+          </Card>
+        ) : canEmbed ? (
+          <Card className="overflow-hidden border-border bg-card">
+            <iframe
+              src={url}
+              title={form.title}
+              className="h-[75vh] w-full"
+              onError={() => setIframeFailed(true)}
+              allow="camera; microphone; clipboard-write; encrypted-media"
+            />
+          </Card>
+        ) : (
+          <Card className="border-dashed border-border bg-card p-6 text-center text-sm">
+            <p className="text-muted-foreground">
+              {iframeFailed
+                ? "This form provider blocked embedding. Use the button below to open it."
+                : "This form opens in a new tab."}
+            </p>
+            <a href={url} target="_blank" rel="noreferrer">
+              <Button className="mt-3 bg-gradient-primary font-bold">
+                <ExternalLink className="mr-2 h-4 w-4" />
+                {form.button_label || "Open Check-In Form"}
+              </Button>
+            </a>
+          </Card>
+        )}
+
+        <Card className="border-primary/30 bg-card p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="text-sm">
+              {submitted
+                ? "Marked as submitted. Your coach will follow up in messenger."
+                : "Finished the form? Tap below so your coach knows to review it."}
+            </div>
+            <Button
+              onClick={onMarkSubmitted}
+              disabled={submitted}
+              className="bg-gradient-primary font-bold"
+            >
+              <Check className="mr-2 h-4 w-4" />
+              {submitted ? "Submitted" : "I submitted my check-in"}
+            </Button>
+          </div>
+        </Card>
+      </div>
+    </>
+  );
 }

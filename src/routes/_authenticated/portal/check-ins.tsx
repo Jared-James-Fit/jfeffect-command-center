@@ -7,7 +7,7 @@ import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ClipboardCheck, MessageCircle, ChevronRight } from "lucide-react";
+import { ClipboardCheck, MessageCircle, ChevronRight, ExternalLink } from "lucide-react";
 import {
   listFormsForClient,
   listSubmissionsForClient,
@@ -121,8 +121,14 @@ function ClientCheckInsList() {
                     }
                     className="bg-gradient-primary font-bold"
                   >
-                    {status === "in_progress" ? "Continue" : status === "not_started" ? "Start Check-In" : "Open"}
-                    <ChevronRight className="ml-1 h-4 w-4" />
+                    {f.kind === "external"
+                      ? (f.button_label || "Open Check-In Form")
+                      : status === "in_progress"
+                        ? "Continue"
+                        : status === "not_started"
+                          ? "Start Check-In"
+                          : "Open"}
+                    {f.kind === "external" ? <ExternalLink className="ml-1 h-4 w-4" /> : <ChevronRight className="ml-1 h-4 w-4" />}
                   </Button>
                 </div>
 

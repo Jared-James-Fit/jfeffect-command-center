@@ -3294,48 +3294,66 @@ export type Database = {
           archived: boolean
           archived_at: string | null
           archived_by: string | null
+          auto_assign_new_clients: boolean
+          button_label: string | null
           created_at: string
           created_by: string | null
           description: string | null
+          external_url: string | null
           form_type: string
           id: string
+          kind: string
+          open_style: string
           recurrence: string
           recurrence_day: string | null
           title: string
           updated_at: string
           version: number
+          visibility: string
         }
         Insert: {
           active?: boolean
           archived?: boolean
           archived_at?: string | null
           archived_by?: string | null
+          auto_assign_new_clients?: boolean
+          button_label?: string | null
           created_at?: string
           created_by?: string | null
           description?: string | null
+          external_url?: string | null
           form_type?: string
           id?: string
+          kind?: string
+          open_style?: string
           recurrence?: string
           recurrence_day?: string | null
           title: string
           updated_at?: string
           version?: number
+          visibility?: string
         }
         Update: {
           active?: boolean
           archived?: boolean
           archived_at?: string | null
           archived_by?: string | null
+          auto_assign_new_clients?: boolean
+          button_label?: string | null
           created_at?: string
           created_by?: string | null
           description?: string | null
+          external_url?: string | null
           form_type?: string
           id?: string
+          kind?: string
+          open_style?: string
           recurrence?: string
           recurrence_day?: string | null
           title?: string
           updated_at?: string
           version?: number
+          visibility?: string
         }
         Relationships: []
       }
