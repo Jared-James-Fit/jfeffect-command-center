@@ -539,15 +539,17 @@ function AssignmentsEditor({ formId, form, onFormChange }: { formId: string; for
   }
 
   async function setBroadcast(on: boolean) {
+    const previousVisibility = form.visibility;
+    const visibility = on ? "all_active_clients" : "selected";
+    onFormChange({ ...form, visibility });
     setSaving(true);
     try {
-      const visibility = on ? "all_active_clients" : "selected";
       const result = await updateAccessFn({ data: { formId, visibility } });
       if (!result.ok) {
+        onFormChange({ ...form, visibility: previousVisibility });
         toast.error(result.error ?? "Failed");
         return;
       }
-      onFormChange({ ...form, visibility });
       await qc.invalidateQueries({ queryKey: ["nf-forms"] });
       await qc.invalidateQueries({ queryKey: ["nf-assignments", formId] });
       toast.success(on ? "Now visible to all active clients" : "Switched to selected clients");
@@ -559,14 +561,16 @@ function AssignmentsEditor({ formId, form, onFormChange }: { formId: string; for
   }
 
   async function setAutoAssign(on: boolean) {
+    const previousAutoAssign = form.auto_assign_new_clients;
+    onFormChange({ ...form, auto_assign_new_clients: on });
     setSaving(true);
     try {
       const result = await updateAccessFn({ data: { formId, autoAssignNewClients: on } });
       if (!result.ok) {
+        onFormChange({ ...form, auto_assign_new_clients: previousAutoAssign });
         toast.error(result.error ?? "Failed");
         return;
       }
-      onFormChange({ ...form, auto_assign_new_clients: on });
       qc.invalidateQueries({ queryKey: ["nf-forms"] });
     } catch (e: any) {
       toast.error(e?.message ?? "Failed");
