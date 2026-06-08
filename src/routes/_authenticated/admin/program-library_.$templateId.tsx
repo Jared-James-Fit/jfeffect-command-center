@@ -551,26 +551,37 @@ function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact }: { w
               No weeks yet. Click <em>Add week</em> to start.
             </p>
           )}
-          <div className="-mx-2 snap-x snap-mandatory overflow-x-auto px-[max(1rem,calc((100vw-720px)/2))] pb-3 scroll-smooth">
-            <div className="flex w-max items-start gap-3">
+          <div className={cn(
+            "-mx-2 snap-x snap-mandatory overflow-x-auto pb-3 scroll-smooth",
+            compact ? "px-[max(0.5rem,calc((100vw-520px)/2))]" : "px-[max(1rem,calc((100vw-720px)/2))]",
+          )}>
+            <div className={cn("flex w-max items-start", compact ? "gap-2" : "gap-3")}>
               {weeksData.map((w: any, wi: number) => {
                 const s = weekStats[wi] ?? { days: 0, rows: 0, minutes: 0 };
                 return (
                   <Card
                     key={wi}
                     id={`tpl-week-${wi}`}
-                    className="w-[94vw] max-w-[720px] shrink-0 snap-center overflow-hidden border-2 border-border p-0 sm:w-[600px] lg:w-[640px] xl:w-[700px]"
+                    className={cn(
+                      "shrink-0 snap-center overflow-hidden border-2 border-border p-0",
+                      compact
+                        ? "w-[88vw] max-w-[520px] sm:w-[440px] lg:w-[480px] xl:w-[520px]"
+                        : "w-[94vw] max-w-[720px] sm:w-[600px] lg:w-[640px] xl:w-[700px]",
+                    )}
                     style={{ borderLeftWidth: 6, borderLeftColor: "var(--primary)" }}
                   >
-                    <div className="flex flex-wrap items-center gap-2 border-b border-primary/20 bg-[color-mix(in_oklab,var(--primary)_8%,var(--card))] px-3 py-2">
-                      <span className="inline-flex h-6 items-center rounded-md bg-primary px-2 text-[11px] font-bold uppercase tracking-wide text-primary-foreground">
+                    <div className={cn(
+                      "flex flex-wrap items-center gap-1.5 border-b border-primary/20 bg-[color-mix(in_oklab,var(--primary)_8%,var(--card))]",
+                      compact ? "px-2 py-1" : "px-3 py-2",
+                    )}>
+                      <span className={cn("inline-flex items-center rounded-md bg-primary px-2 text-[10px] font-bold uppercase tracking-wide text-primary-foreground", compact ? "h-5" : "h-6 text-[11px]")}>
                         Week {w.week_index}
                       </span>
-                      <span className="text-[11px] text-muted-foreground">
+                      <span className={cn("text-muted-foreground", compact ? "text-[10px]" : "text-[11px]")}>
                         {s.days} day{s.days === 1 ? "" : "s"} · {s.rows} row{s.rows === 1 ? "" : "s"} · Est {fmtDur(s.minutes)}
                       </span>
                       <Input
-                        className="h-7 min-w-[140px] flex-1 border-0 bg-transparent text-xs focus-visible:ring-1"
+                        className={cn("min-w-[120px] flex-1 border-0 bg-transparent text-xs focus-visible:ring-1", compact ? "h-6" : "h-7")}
                         placeholder="Week notes"
                         value={w.notes ?? ""}
                         onChange={(e) => { const c = [...weeksData]; c[wi] = { ...w, notes: e.target.value }; setWeeksData(c); }}
@@ -583,12 +594,13 @@ function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact }: { w
                         <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => delWeek(wi)}><Trash2 className="h-4 w-4" /></Button>
                       </div>
                     </div>
-                    <div className="bg-[color-mix(in_oklab,var(--primary)_2%,transparent)] p-3">
+                    <div className={cn("bg-[color-mix(in_oklab,var(--primary)_2%,transparent)]", compact ? "p-2" : "p-3")}>
                       <WeekEditor
                         week={w}
                         setWeek={(nw) => { const c = [...weeksData]; c[wi] = nw; setWeeksData(c); }}
                         exercises={exercises}
                         onCopyDayToFuture={(di) => copyDayToFuture(wi, di)}
+                        compact={compact}
                         hideHeader
                       />
                     </div>
@@ -599,7 +611,10 @@ function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact }: { w
               <button
                 type="button"
                 onClick={addWeek}
-                className="flex h-[200px] w-[260px] shrink-0 snap-center flex-col items-center justify-center gap-2 rounded-md border-2 border-dashed border-primary/40 bg-primary/5 text-primary hover:bg-primary/10"
+                className={cn(
+                  "flex shrink-0 snap-center flex-col items-center justify-center gap-2 rounded-md border-2 border-dashed border-primary/40 bg-primary/5 text-primary hover:bg-primary/10",
+                  compact ? "h-[140px] w-[200px]" : "h-[200px] w-[260px]",
+                )}
               >
                 <Plus className="h-6 w-6" />
                 <span className="text-sm font-bold uppercase tracking-wide">Add Week</span>
