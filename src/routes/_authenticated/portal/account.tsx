@@ -8,7 +8,7 @@ import { useAuth } from "@/lib/auth";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Save, ShieldAlert, CreditCard, Settings } from "lucide-react";
+import { ShieldAlert, CreditCard, Settings } from "lucide-react";
 import { toast } from "sonner";
 import { createCustomerPortalSession } from "@/lib/stripe-checkout.functions";
 import { ProfilePictureCapture } from "@/components/profile-picture-capture";
@@ -17,6 +17,8 @@ import { SOCIAL_FIELDS } from "@/lib/social-handles";
 import { BasicInfoForm } from "@/components/basic-info-form";
 import { ChangePasswordCard } from "@/components/change-password-card";
 import { TrainingScheduleCard } from "@/components/training-schedule-card";
+import { useAutosave } from "@/hooks/use-autosave";
+import { SavedIndicator } from "@/components/saved-indicator";
 
 export const Route = createFileRoute("/_authenticated/portal/account")({
   component: AccountPage,
@@ -55,45 +57,79 @@ function AccountPage() {
 
   const set = (k: string, v: any) => setForm({ ...form, [k]: v });
 
-  const save = async () => {
-    const updatedFields = PROFILE_FIELDS.filter((f) => form[f] !== client?.[f]);
+  const buildPatch = (current: any) => {
+    const updatedFields = PROFILE_FIELDS.filter((f) => current[f] !== client?.[f]);
     const patch: any = {
-      first_name: form.first_name?.trim() || null,
-      last_name: form.last_name?.trim() || null,
-      full_name: [form.first_name, form.last_name].filter(Boolean).join(" ").trim() || form.full_name,
-      preferred_name: form.preferred_name?.trim() || null,
-      phone: form.phone || null,
-      date_of_birth: form.date_of_birth || null,
-      height_cm: form.height_cm ?? null,
-      preferred_height_unit: form.preferred_height_unit ?? "imperial",
-      emergency_contact_name: form.emergency_contact_name || null,
-      emergency_contact_phone: form.emergency_contact_phone || null,
-      address: form.address || null,
-      city: form.city || null,
-      province: form.province || null,
-      postal_code: form.postal_code || null,
-      country: form.country || null,
-      timezone: form.timezone || "America/Winnipeg",
-      instagram: form.instagram || null,
-      tiktok: form.tiktok || null,
-      youtube: form.youtube || null,
-      facebook: form.facebook || null,
-      twitter_x: form.twitter_x || null,
-      linkedin: form.linkedin || null,
-      website: form.website || null,
-      other_social_label: form.other_social_label || null,
-      other_social_handle: form.other_social_handle || null,
+      first_name: current.first_name?.trim() || null,
+      last_name: current.last_name?.trim() || null,
+      full_name: [current.first_name, current.last_name].filter(Boolean).join(" ").trim() || current.full_name,
+      preferred_name: current.preferred_name?.trim() || null,
+      phone: current.phone || null,
+      date_of_birth: current.date_of_birth || null,
+      height_cm: current.height_cm ?? null,
+      preferred_height_unit: current.preferred_height_unit ?? "imperial",
+      emergency_contact_name: current.emergency_contact_name || null,
+      emergency_contact_phone: current.emergency_contact_phone || null,
+      address: current.address || null,
+      city: current.city || null,
+      province: current.province || null,
+      postal_code: current.postal_code || null,
+      country: current.country || null,
+      timezone: current.timezone || "America/Winnipeg",
+      instagram: current.instagram || null,
+      tiktok: current.tiktok || null,
+      youtube: current.youtube || null,
+      facebook: current.facebook || null,
+      twitter_x: current.twitter_x || null,
+      linkedin: current.linkedin || null,
+      website: current.website || null,
+      other_social_label: current.other_social_label || null,
+      other_social_handle: current.other_social_handle || null,
       info_last_updated_at: new Date().toISOString(),
       info_last_updated_by: "client",
       info_last_updated_fields: updatedFields,
       info_update_requested: false,
-      timezone_confirmed_at: form.timezone !== client?.timezone ? new Date().toISOString() : client?.timezone_confirmed_at,
+      timezone_confirmed_at:
+        current.timezone !== client?.timezone ? new Date().toISOString() : client?.timezone_confirmed_at,
     };
-    const { error } = await supabase.from("clients").update(patch).eq("id", form.id);
-    if (error) return toast.error(error.message);
-    toast.success("Account information updated");
+    return patch;
+  };
+
+  // Autosave the entire form (debounced) — no Save button needed.
+  const autosaveValue = useMemo(() => {
+    if (!form) return null;
+    const pick: any = {};
+    for (const f of PROFILE_FIELDS) pick[f] = form[f] ?? null;
+    return pick;
+  }, [form]);
+
+  const { state: saveState } = useAutosave({
+    key: form?.id ? `client-account-${form.id}` : null,
+    value: autosaveValue,
+    enabled: !!form && !!form.id,
+    onSave: async () => {
+      if (!form?.id) return;
+      const patch = buildPatch(form);
+      const { error } = await supabase.from("clients").update(patch).eq("id", form.id);
+      if (error) throw new Error(error.message);
+      qc.invalidateQueries({ queryKey: ["my-client-account"] });
+      qc.invalidateQueries({ queryKey: ["my-client"] });
+    },
+  });
+
+  // Manual save button (rare — used if you change everything and want immediate confirmation).
+  const flushNow = async () => {
+    if (!form?.id) return;
+    try {
+      const patch = buildPatch(form);
+      const { error } = await supabase.from("clients").update(patch).eq("id", form.id);
+      if (error) throw error;
+      toast.success("Saved");
     qc.invalidateQueries({ queryKey: ["my-client-account"] });
     qc.invalidateQueries({ queryKey: ["my-client"] });
+    } catch (e: any) {
+      toast.error(e?.message ?? "Could not save");
+    }
   };
 
   const updatePicture = async (path: string) => {
@@ -121,7 +157,7 @@ function AccountPage() {
       <PageHeader
         title="Account Settings"
         subtitle="Manage your contact info, profile picture, and password."
-        actions={<Button size="sm" className="bg-gradient-primary uppercase font-bold" onClick={save}><Save className="mr-2 h-4 w-4" />Save changes</Button>}
+        actions={<SavedIndicator state={saveState} />}
       />
       <div className="grid gap-6 p-6 md:p-8 md:grid-cols-3">
         {form.info_update_requested && (
@@ -137,13 +173,20 @@ function AccountPage() {
         )}
 
         <Card className="border-border bg-card p-6 md:col-span-2 space-y-4">
-          <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Basic Information</h3>
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Basic Information</h3>
+            <SavedIndicator state={saveState} />
+          </div>
           <BasicInfoForm
             values={form}
             onChange={(p) => setForm({ ...form, ...p })}
             emailReadOnly={form.email ?? user.email ?? ""}
           />
-          <p className="text-[11px] text-muted-foreground">Last updated: {form.info_last_updated_at ? new Date(form.info_last_updated_at).toLocaleString() : "—"} {form.info_last_updated_by ? `by ${form.info_last_updated_by}` : ""}</p>
+          <p className="text-[11px] text-muted-foreground">
+            Saves automatically. Last updated:{" "}
+            {form.info_last_updated_at ? new Date(form.info_last_updated_at).toLocaleString() : "—"}{" "}
+            {form.info_last_updated_by ? `by ${form.info_last_updated_by}` : ""}
+          </p>
         </Card>
 
         <Card className="border-border bg-card p-6 space-y-3">
