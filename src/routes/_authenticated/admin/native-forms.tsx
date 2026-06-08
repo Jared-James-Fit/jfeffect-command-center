@@ -601,7 +601,7 @@ function AssignmentsEditor({ formId, form, onFormChange }: { formId: string; for
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="text-xs text-muted-foreground">
           {broadcastOn
-            ? `Visible to all active coaching clients`
+            ? `Assigned to all active coaching clients (individual ticks are inherited)`
             : `${selectedIds.size} client${selectedIds.size === 1 ? "" : "s"} selected${dirty ? " · unsaved" : ""}`}
         </div>
         <div className="flex gap-2">
