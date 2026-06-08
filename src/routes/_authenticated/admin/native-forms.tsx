@@ -471,8 +471,9 @@ function AssignmentsEditor({ formId, form, onFormChange }: { formId: string; for
   const [dirty, setDirty] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
-  const { data: assignments = [] } = useQuery({ queryKey: ["nf-assignments", formId], queryFn: () => listAssignments(formId) });
-  const { data: clients = [] } = useQuery({
+  const { data: assignmentsData } = useQuery({ queryKey: ["nf-assignments", formId], queryFn: () => listAssignments(formId) });
+  const assignments = assignmentsData ?? EMPTY_ARRAY;
+  const { data: clientsData } = useQuery({
     queryKey: ["all-clients-min"],
     queryFn: async () => {
       const { data } = await supabase
@@ -484,6 +485,7 @@ function AssignmentsEditor({ formId, form, onFormChange }: { formId: string; for
       return data ?? [];
     },
   });
+  const clients = clientsData ?? EMPTY_ARRAY;
 
   useEffect(() => {
     if (dirty || saving) return;
