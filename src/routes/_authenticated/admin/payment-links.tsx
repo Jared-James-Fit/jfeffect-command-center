@@ -622,6 +622,8 @@ function PaymentLinksPage() {
       <ProductAccessGrantDialog
         productId={grantFor?.id ?? null}
         productName={grantFor?.name}
+        initialIsMemberFacing={(grantFor as any)?.is_member_facing ?? false}
+        initialMemberTierLabel={(grantFor as any)?.member_tier_label ?? null}
         onClose={() => setGrantFor(null)}
       />
 
