@@ -9,10 +9,14 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { getProductGrant, upsertProductGrant, deleteProductGrant, listAccessLevels } from "@/lib/product-access.functions";
+import { updateCoachingProduct, listCoachingProducts } from "@/lib/coaching-products.functions";
+import { Input } from "@/components/ui/input";
 
 type Props = {
   productId: string | null;
   productName?: string;
+  initialIsMemberFacing?: boolean;
+  initialMemberTierLabel?: string | null;
   onClose: () => void;
 };
 
@@ -22,13 +26,14 @@ const ACCOUNT_TYPES = [
   { v: "coaching_client", l: "Coaching Client (1-on-1)" },
 ] as const;
 
-export function ProductAccessGrantDialog({ productId, productName, onClose }: Props) {
+export function ProductAccessGrantDialog({ productId, productName, initialIsMemberFacing, initialMemberTierLabel, onClose }: Props) {
   const open = !!productId;
   const qc = useQueryClient();
   const fetchGrant = useServerFn(getProductGrant);
   const fetchLevels = useServerFn(listAccessLevels);
   const upsertFn = useServerFn(upsertProductGrant);
   const deleteFn = useServerFn(deleteProductGrant);
+  const updateProductFn = useServerFn(updateCoachingProduct);
 
   const { data: grantData } = useQuery({
     queryKey: ["product-grant", productId],
@@ -41,6 +46,8 @@ export function ProductAccessGrantDialog({ productId, productName, onClose }: Pr
   const [accountType, setAccountType] = useState<"app_member"|"program_only"|"coaching_client">("app_member");
   const [keys, setKeys] = useState<string[]>([]);
   const [isSub, setIsSub] = useState(false);
+  const [memberFacing, setMemberFacing] = useState(!!initialIsMemberFacing);
+  const [tierLabel, setTierLabel] = useState(initialMemberTierLabel ?? "");
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -51,7 +58,11 @@ export function ProductAccessGrantDialog({ productId, productName, onClose }: Pr
     } else if (open) {
       setAccountType("app_member"); setKeys(["app_membership"]); setIsSub(false);
     }
-  }, [grantData, open]);
+    if (open) {
+      setMemberFacing(!!initialIsMemberFacing);
+      setTierLabel(initialMemberTierLabel ?? "");
+    }
+  }, [grantData, open, initialIsMemberFacing, initialMemberTierLabel]);
 
   const toggle = (k: string) => setKeys((cur) => cur.includes(k) ? cur.filter((x) => x !== k) : [...cur, k]);
 
@@ -60,8 +71,10 @@ export function ProductAccessGrantDialog({ productId, productName, onClose }: Pr
     setBusy(true);
     try {
       await upsertFn({ data: { productId, account_type_granted: accountType, access_level_keys: keys, is_subscription: isSub } });
+      await updateProductFn({ data: { id: productId, isMemberFacing: memberFacing, memberTierLabel: tierLabel || null } });
       toast.success("Access grant saved");
       qc.invalidateQueries({ queryKey: ["product-grant", productId] });
+      qc.invalidateQueries({ queryKey: ["coaching-products"] });
       onClose();
     } catch (e: any) { toast.error(e?.message ?? "Failed"); }
     finally { setBusy(false); }
@@ -121,6 +134,18 @@ export function ProductAccessGrantDialog({ productId, productName, onClose }: Pr
           <div className="flex items-center gap-3">
             <Switch checked={isSub} onCheckedChange={setIsSub} />
             <Label>Subscription product (recurring)</Label>
+          </div>
+          <div className="rounded-md border bg-muted/40 p-3">
+            <div className="flex items-center gap-3">
+              <Switch checked={memberFacing} onCheckedChange={setMemberFacing} />
+              <Label>Show on member Upgrade page</Label>
+            </div>
+            {memberFacing && (
+              <div className="mt-3">
+                <Label className="text-xs">Tier label (optional)</Label>
+                <Input value={tierLabel} onChange={(e) => setTierLabel(e.target.value)} placeholder="e.g. Premium, App Member" maxLength={60} />
+              </div>
+            )}
           </div>
         </div>
         <div className="mt-4 flex justify-between gap-2">
