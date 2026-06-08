@@ -1166,10 +1166,10 @@ function SetupStatusBanner({
   onGoToAccountTab,
 }: {
   form: any;
-  onSendSetup: () => void | Promise<void>;
-  onCopySetup: () => void | Promise<void>;
-  onSendReset: () => void | Promise<void>;
-  onCopyReset: () => void | Promise<void>;
+  onSendSetup: () => unknown | Promise<unknown>;
+  onCopySetup: () => unknown | Promise<unknown>;
+  onSendReset: () => unknown | Promise<unknown>;
+  onCopyReset: () => unknown | Promise<unknown>;
   onSetPassword: () => void;
   onGoToAccountTab: () => void;
 }) {
