@@ -20,21 +20,52 @@ function ResetPage() {
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [busy, setBusy] = useState(false);
+  const [recoveryEmail, setRecoveryEmail] = useState<string>("");
 
   useEffect(() => {
-    const sub = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user) setPhase("ready");
-    });
-    const params = new URLSearchParams(window.location.search);
-    if (params.get("token_hash")) {
-      setPhase("confirm");
-    } else {
-      supabase.auth.getSession().then(({ data }) => {
-        if (data.session?.user) setPhase("ready");
-        else setTimeout(() => setPhase((p) => (p === "loading" ? "expired" : p)), 1500);
+    // SECURITY: Never trust a pre-existing session on this page. If an admin
+    // (or anyone else) is already signed in, falling through to that session
+    // would let the page change THEIR password via updateUser(). Require a
+    // fresh recovery token from the URL, and sign out any other session first.
+    let cancelled = false;
+    (async () => {
+      const params = new URLSearchParams(window.location.search);
+      const hasQueryToken = !!params.get("token_hash");
+      const hash = window.location.hash || "";
+      const hashParams = new URLSearchParams(hash.startsWith("#") ? hash.slice(1) : hash);
+      const isRecoveryHash = hashParams.get("type") === "recovery" && !!hashParams.get("access_token");
+
+      if (!hasQueryToken && !isRecoveryHash) {
+        // No valid recovery token in the URL — do not allow password change.
+        await supabase.auth.signOut({ scope: "local" }).catch(() => {});
+        if (!cancelled) setPhase("expired");
+        return;
+      }
+
+      // Clear any existing session so verifyOtp / hash exchange installs the
+      // correct user, never the previously-signed-in one.
+      await supabase.auth.signOut({ scope: "local" }).catch(() => {});
+
+      if (hasQueryToken) {
+        if (!cancelled) setPhase("confirm");
+        return;
+      }
+
+      // Hash-based emailed-link flow: Supabase consumes the fragment and
+      // sets a session for the correct (recovery) user. Wait for it.
+      const sub = supabase.auth.onAuthStateChange((event, session) => {
+        if (cancelled) return;
+        if (event === "PASSWORD_RECOVERY" || (event === "SIGNED_IN" && session?.user)) {
+          setRecoveryEmail(session?.user?.email ?? "");
+          setPhase("ready");
+        }
       });
-    }
-    return () => sub.data.subscription.unsubscribe();
+      setTimeout(() => {
+        if (!cancelled && phase === "loading") setPhase("expired");
+      }, 4000);
+      return () => sub.data.subscription.unsubscribe();
+    })();
+    return () => { cancelled = true; };
   }, []);
 
   const verifyTokenHash = async () => {
@@ -43,9 +74,13 @@ function ResetPage() {
     const tokenHash = params.get("token_hash");
     const type = (params.get("type") || "recovery") as any;
     if (!tokenHash) { setVerifying(false); setPhase("expired"); return; }
-    const { error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type });
+    // Belt and braces: clear session immediately before exchange.
+    await supabase.auth.signOut({ scope: "local" }).catch(() => {});
+    const { data, error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type });
     setVerifying(false);
     if (error) { setPhase("expired"); return; }
+    setRecoveryEmail(data.user?.email ?? "");
+    setPhase("ready");
     window.history.replaceState({}, "", window.location.pathname);
   };
 
@@ -53,6 +88,13 @@ function ResetPage() {
     e.preventDefault();
     if (!password) return toast.error("Please enter a password");
     if (password !== confirm) return toast.error("Passwords don't match");
+    // SECURITY: Make sure the current session is the recovery session we just
+    // installed. Refuse if no user, or if the email unexpectedly changed.
+    const { data: u } = await supabase.auth.getUser();
+    if (!u.user) return toast.error("Your reset link is no longer valid. Please request a new one.");
+    if (recoveryEmail && u.user.email && recoveryEmail.toLowerCase() !== u.user.email.toLowerCase()) {
+      return toast.error("Session mismatch. Please open the reset link again.");
+    }
     setBusy(true);
     const { error } = await supabase.auth.updateUser({ password });
     setBusy(false);
