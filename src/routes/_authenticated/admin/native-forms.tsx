@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
@@ -22,10 +21,11 @@ import {
   listQuestions, upsertQuestion, deleteQuestion, reorderQuestions,
   listAssignments,
   listActiveCoachingClientIds,
+  assignFormToClient, unassignForm,
+  bulkAssignFormToClients, clearAllAssignments,
   NF_QUESTION_TYPES, NF_QUESTION_TYPE_LABEL,
   type NfForm, type NfQuestion, type NfQuestionType, type NfRecurrence, type NfKind, type NfOpenStyle,
 } from "@/lib/native-forms";
-import { bulkAssignNativeFormToClients, clearNativeFormAssignments, setNativeFormAssignment } from "@/lib/native-forms.functions";
 
 export const Route = createFileRoute("/_authenticated/admin/native-forms")({
   component: AdminNativeForms,
@@ -386,9 +386,6 @@ function QuestionRow({ q, formId, onMoveUp, onMoveDown }: { q: NfQuestion; formI
 
 function AssignmentsEditor({ formId, form, onFormChange }: { formId: string; form: NfForm; onFormChange: (f: NfForm) => void }) {
   const qc = useQueryClient();
-  const setAssignment = useServerFn(setNativeFormAssignment);
-  const bulkAssign = useServerFn(bulkAssignNativeFormToClients);
-  const clearAssignments = useServerFn(clearNativeFormAssignments);
   const [search, setSearch] = useState("");
   const [saving, setSaving] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -430,7 +427,11 @@ function AssignmentsEditor({ formId, form, onFormChange }: { formId: string; for
     });
     setPendingClientIds((prev) => new Set(prev).add(clientId));
     try {
-      await setAssignment({ data: { formId, clientId, assigned: !wasAssigned } });
+      if (wasAssigned) {
+        await unassignForm(formId, clientId);
+      } else {
+        await assignFormToClient(formId, clientId);
+      }
       await qc.invalidateQueries({ queryKey: ["nf-assignments", formId] });
       await qc.invalidateQueries({ queryKey: ["nf-forms"] });
     } catch (e: any) {
@@ -457,7 +458,7 @@ function AssignmentsEditor({ formId, form, onFormChange }: { formId: string; for
     const previous = new Set(assigned);
     setSelectedIds((prev) => new Set([...prev, ...toAdd]));
     try {
-      await bulkAssign({ data: { formId, clientIds: toAdd } });
+      await bulkAssignFormToClients(formId, toAdd);
       await qc.invalidateQueries({ queryKey: ["nf-assignments", formId] });
       await qc.invalidateQueries({ queryKey: ["nf-forms"] });
       toast.success(`Assigned ${toAdd.length}`);
@@ -475,7 +476,7 @@ function AssignmentsEditor({ formId, form, onFormChange }: { formId: string; for
     const previous = new Set(assigned);
     setSelectedIds(new Set());
     try {
-      await clearAssignments({ data: { formId } });
+      await clearAllAssignments(formId);
       await qc.invalidateQueries({ queryKey: ["nf-assignments", formId] });
       await qc.invalidateQueries({ queryKey: ["nf-forms"] });
       toast.success("Cleared");
@@ -497,7 +498,7 @@ function AssignmentsEditor({ formId, form, onFormChange }: { formId: string; for
         // Materialize assignments for every active client now so submissions, due
         // dates, and admin counts still work cleanly.
         const ids = await listActiveCoachingClientIds();
-        await bulkAssign({ data: { formId, clientIds: ids } });
+        await bulkAssignFormToClients(formId, ids);
       }
       qc.invalidateQueries({ queryKey: ["nf-forms"] });
       qc.invalidateQueries({ queryKey: ["nf-assignments", formId] });
