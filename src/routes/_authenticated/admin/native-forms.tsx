@@ -501,7 +501,7 @@ function AssignmentsEditor({ formId, form, onFormChange }: { formId: string; for
     return (c.full_name ?? "").toLowerCase().includes(q) || (c.email ?? "").toLowerCase().includes(q);
   });
   const visibleIds = filtered.map((client: any) => client.id as string);
-  const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedIds.has(id));
+  const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id: string) => selectedIds.has(id));
 
   function setClientSelected(clientId: string, checked: boolean) {
     if (broadcastOn || saving) return;
