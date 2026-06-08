@@ -106,12 +106,8 @@ export function BlockWeekColumns({
               {/* Workouts (always open) */}
               <div className="space-y-1.5 pb-2">
                 {entries.map((it) => {
-                  const to = mode === "admin"
-                    ? { to: "/admin/clients/$id" as const, params: { id: block?.client_id } }
-                    : { to: "/portal/workouts/$dayId" as const, params: { dayId: it.day.id } };
-                  return (
-                    <Link key={it.day.id} {...to as any} className="block">
-                      <Card className="p-2 flex items-center justify-between gap-2 cursor-pointer hover:bg-secondary/40 active:bg-secondary/60 transition">
+                  const inner = (
+                    <Card className="p-2 flex items-center justify-between gap-2 cursor-pointer hover:bg-secondary/40 active:bg-secondary/60 transition">
                         <div className="min-w-0 flex-1">
                           <div className="font-semibold text-xs truncate">
                             {it.day.title || `Day ${it.day.day_index}`}
@@ -136,8 +132,15 @@ export function BlockWeekColumns({
                           )}
                           <ChevronRight className="h-3 w-3 text-muted-foreground" />
                         </div>
-                      </Card>
-                    </Link>
+                    </Card>
+                  );
+                  if (mode === "client") {
+                    return (
+                      <Link key={it.day.id} to="/portal/workouts/$dayId" params={{ dayId: it.day.id }} className="block">{inner}</Link>
+                    );
+                  }
+                  return (
+                    <Link key={it.day.id} to="/admin/blocks/$blockId" params={{ blockId: block?.id }} className="block">{inner}</Link>
                   );
                 })}
                 {entries.length === 0 && (
