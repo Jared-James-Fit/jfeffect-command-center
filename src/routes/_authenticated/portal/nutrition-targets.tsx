@@ -81,6 +81,13 @@ function NutritionView({ current }: { current: any }) {
         {current.client_notes && (
           <div className="mt-3 rounded-md border border-primary/30 bg-primary/5 p-3 text-sm">{current.client_notes}</div>
         )}
+        {current.water && (
+          <div className="mt-3 flex items-center gap-2 rounded-md border border-border bg-secondary/30 px-3 py-2 text-sm">
+            <Droplets className="h-4 w-4 text-primary" />
+            <span className="text-muted-foreground">Water target:</span>
+            <span className="font-bold">{current.water}</span>
+          </div>
+        )}
       </Card>
 
       {days.length > 1 && (
