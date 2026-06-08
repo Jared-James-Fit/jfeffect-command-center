@@ -23,6 +23,12 @@ const ReplaceClientAssignmentsSchema = z.object({
   formIds: z.array(z.string().uuid()).max(1000),
 });
 
+const FormAccessSchema = z.object({
+  formId: z.string().uuid(),
+  visibility: z.enum(["selected", "all_active_clients"]).optional(),
+  autoAssignNewClients: z.boolean().optional(),
+});
+
 const FormSchema = z.object({ formId: z.string().uuid() });
 const DeleteFormsSchema = z.object({ formIds: z.array(z.string().uuid()).min(1).max(500) });
 
@@ -201,6 +207,36 @@ export const replaceClientNativeFormAssignments = createServerFn({ method: "POST
       return { ok: true, count: formIds.length, error: null as string | null };
     } catch (error: any) {
       return { ok: false, count: 0, error: error?.message ?? "Client form assignments could not be saved." };
+    }
+  });
+
+export const updateNativeFormAccess = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => FormAccessSchema.parse(input))
+  .handler(async ({ data, context }) => {
+    try {
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      const { data: adminRole, error: roleError } = await supabaseAdmin
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", context.userId)
+        .eq("role", "admin")
+        .maybeSingle();
+      if (roleError) throw new Error(roleError.message);
+      if (!adminRole) throw new Error("Only admins can change form access settings.");
+
+      const patch: Record<string, unknown> = {};
+      if (data.visibility) patch.visibility = data.visibility;
+      if (typeof data.autoAssignNewClients === "boolean") {
+        patch.auto_assign_new_clients = data.autoAssignNewClients;
+      }
+      if (Object.keys(patch).length === 0) return { ok: true, error: null as string | null };
+
+      const { error } = await supabaseAdmin.from("nf_forms").update(patch).eq("id", data.formId);
+      if (error) throw new Error(error.message);
+      return { ok: true, error: null as string | null };
+    } catch (error: any) {
+      return { ok: false, error: error?.message ?? "Form access settings could not be saved." };
     }
   });
 
