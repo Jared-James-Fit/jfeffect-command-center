@@ -9,6 +9,8 @@ import { useAuth } from "@/lib/auth";
 import { UserAvatar } from "@/components/user-avatar";
 import { ProfilePictureCapture } from "@/components/profile-picture-capture";
 import { Camera, Trash2, X } from "lucide-react";
+import { useAutosave } from "@/hooks/use-autosave";
+import { SavedIndicator } from "@/components/saved-indicator";
 
 /**
  * Self-serve profile card for admin and coach accounts.
@@ -30,7 +32,6 @@ export function AccountProfileSettings({
   const [originalName, setOriginalName] = useState("");
   const [coachId, setCoachId] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
-  const [savingName, setSavingName] = useState(false);
   const [removing, setRemoving] = useState(false);
 
   const refresh = async () => {
@@ -91,24 +92,21 @@ export function AccountProfileSettings({
     }
   };
 
-  const saveName = async () => {
-    if (!user) return;
-    const trimmed = fullName.trim();
-    if (!trimmed) return toast.error("Name cannot be empty");
-    setSavingName(true);
-    try {
+  const { state: nameSaveState } = useAutosave({
+    key: user ? `acct-name-${user.id}` : null,
+    value: fullName,
+    enabled: !!user && fullName.trim().length > 0 && fullName.trim() !== originalName.trim(),
+    onSave: async (next) => {
+      if (!user) return;
+      const trimmed = next.trim();
+      if (!trimmed) return;
       await supabase.from("profiles").update({ full_name: trimmed }).eq("id", user.id);
       if (coachId) {
         await supabase.from("coaches").update({ full_name: trimmed }).eq("id", coachId);
       }
       setOriginalName(trimmed);
-      toast.success("Name updated");
-    } catch (e: any) {
-      toast.error(e?.message ?? "Could not save name");
-    } finally {
-      setSavingName(false);
-    }
-  };
+    },
+  });
 
   if (!user) return null;
 
@@ -161,23 +159,18 @@ export function AccountProfileSettings({
       )}
 
       <div className="space-y-2">
-        <Label htmlFor="acct-name">Display name</Label>
-        <div className="flex gap-2">
-          <Input
-            id="acct-name"
-            value={fullName}
-            onChange={(e) => setFullName(e.target.value)}
-            placeholder="Your name"
-          />
-          <Button
-            onClick={saveName}
-            disabled={savingName || fullName.trim() === originalName.trim()}
-          >
-            Save
-          </Button>
+        <div className="flex items-center justify-between">
+          <Label htmlFor="acct-name">Display name</Label>
+          <SavedIndicator state={nameSaveState} />
         </div>
+        <Input
+          id="acct-name"
+          value={fullName}
+          onChange={(e) => setFullName(e.target.value)}
+          placeholder="Your name"
+        />
         <p className="text-[11px] text-muted-foreground">
-          Shown in messages, feedback, reviews and account areas.
+          Saves automatically. Shown in messages, feedback, reviews and account areas.
         </p>
       </div>
     </Card>
