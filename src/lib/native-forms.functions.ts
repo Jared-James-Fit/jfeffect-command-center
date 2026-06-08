@@ -232,7 +232,7 @@ export const updateNativeFormAccess = createServerFn({ method: "POST" })
       }
       if (Object.keys(patch).length === 0) return { ok: true, error: null as string | null };
 
-      const { error } = await supabaseAdmin.from("nf_forms").update(patch).eq("id", data.formId);
+      const { error } = await (supabaseAdmin as any).from("nf_forms").update(patch).eq("id", data.formId);
       if (error) throw new Error(error.message);
       return { ok: true, error: null as string | null };
     } catch (error: any) {
