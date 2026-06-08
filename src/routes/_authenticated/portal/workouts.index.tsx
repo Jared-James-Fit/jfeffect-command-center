@@ -5,10 +5,13 @@ import { usePortalUserId } from "@/lib/client-impersonation";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Clock, CheckCircle2, Activity, FileText, Dumbbell, ChevronRight, Play, ChevronDown } from "lucide-react";
+import { Clock, CheckCircle2, Activity, FileText, Dumbbell, ChevronRight, Play, ChevronDown, CalendarRange, Crosshair, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getClientWorkouts, durationRange } from "@/lib/pl-programs";
 import { useState } from "react";
+import { weekDisplayRange, formatWeekRange, isCurrentWeek } from "@/lib/block-dates";
+import { format, parseISO } from "date-fns";
+import { TrainingScheduleCard } from "@/components/training-schedule-card";
 
 export const Route = createFileRoute("/_authenticated/portal/workouts/")({ component: WorkoutsPage });
 
@@ -17,7 +20,7 @@ function WorkoutsPage() {
   const { data: client } = useQuery({
     queryKey: ["my-client", portalUserId],
     enabled: !!portalUserId,
-    queryFn: async () => (await supabase.from("clients").select("id, full_name").eq("user_id", portalUserId!).maybeSingle()).data,
+    queryFn: async () => (await supabase.from("clients").select("*").eq("user_id", portalUserId!).maybeSingle()).data,
   });
   const { data: items = [], isLoading } = useQuery({
     queryKey: ["my-workouts", client?.id],
@@ -40,6 +43,9 @@ function WorkoutsPage() {
     <>
       <PageHeader title="Workouts" subtitle="Your assigned training" />
       <div className="p-6 md:p-8 space-y-6 pb-32">
+        {client && (
+          <TrainingScheduleCard client={client as any} editable />
+        )}
         <div className="grid gap-2 sm:grid-cols-2">
           <Link to="/portal/program">
             <Card className="flex items-center justify-between p-3 hover:bg-secondary/30">
