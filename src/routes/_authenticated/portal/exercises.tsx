@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
@@ -9,11 +9,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Search, Play } from "lucide-react";
 import { getExerciseVideoSource } from "@/lib/exercise-video";
 
-export const Route = createFileRoute("/_authenticated/portal/exercises")({ component: ExerciseLibrary });
+export const Route = createFileRoute("/_authenticated/portal/exercises")({
+  component: ExerciseLibrary,
+  validateSearch: (search: Record<string, unknown>) => ({
+    id: typeof search.id === "string" ? search.id : undefined,
+  }),
+});
 
 const CATEGORIES = ["Squat", "Bench", "Deadlift", "Upper Body", "Lower Body", "Back", "Chest", "Shoulders", "Arms", "Glutes", "Core", "Mobility", "Warm-Ups", "Powerlifting", "Bodybuilding", "Cardio"];
 
 function ExerciseLibrary() {
+  const { id: focusId } = Route.useSearch();
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("all");
   const [selected, setSelected] = useState<any>(null);
@@ -25,6 +31,15 @@ function ExerciseLibrary() {
       return data ?? [];
     },
   });
+
+  useEffect(() => {
+    if (!focusId || !exercises.length) return;
+    const match = exercises.find((e: any) => e.id === focusId);
+    if (match) {
+      setSelected(match);
+      if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  }, [focusId, exercises]);
 
   const filtered = exercises.filter((e) =>
     (category === "all" || e.category === category) &&

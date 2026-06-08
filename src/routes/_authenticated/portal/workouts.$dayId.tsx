@@ -190,7 +190,9 @@ function WorkoutDay() {
 
 function ExerciseBlock({ row, clientId, existingResults, onChange }: { row: any; clientId: string | undefined; existingResults: any[]; onChange: () => void }) {
   const name = row.exercises?.name ?? row.exercise_name_override ?? "Exercise";
+  const exerciseId = row.exercises?.id ?? null;
   const video = row.exercises?.video_url ?? row.exercises?.vimeo_embed_url ?? null;
+  const hasDemo = Boolean(exerciseId || video);
   const cues = row.exercises?.cues ?? null;
   const setCount = Math.max(1, row.sets ?? 1);
   const accent = movementAccent(name);
@@ -212,7 +214,17 @@ function ExerciseBlock({ row, clientId, existingResults, onChange }: { row: any;
           </div>
           {row.notes && <p className="mt-1 text-xs text-muted-foreground italic">{row.notes}</p>}
         </div>
-        {video && <a href={video} target="_blank" rel="noreferrer"><Button size="sm" variant="outline">Demo <ExternalLink className="ml-1 h-3 w-3" /></Button></a>}
+        {hasDemo && (
+          exerciseId ? (
+            <Link to="/portal/exercises" search={{ id: exerciseId }}>
+              <Button size="sm" variant="outline">Demo <ExternalLink className="ml-1 h-3 w-3" /></Button>
+            </Link>
+          ) : (
+            <a href={video!} target="_blank" rel="noreferrer">
+              <Button size="sm" variant="outline">Demo <ExternalLink className="ml-1 h-3 w-3" /></Button>
+            </a>
+          )
+        )}
       </div>
 
       {cues && (
