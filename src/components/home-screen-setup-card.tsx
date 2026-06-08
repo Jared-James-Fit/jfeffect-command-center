@@ -58,7 +58,10 @@ export function HomeScreenSetupCard({ clientId, status, remindAfter }: Props) {
   // Auto-mark complete if running in standalone (already installed).
   useEffect(() => {
     if (standalone && status !== "complete") {
-      void update({ status: "complete", completed_at: new Date().toISOString() });
+      void update({
+        home_screen_setup_status: "complete",
+        home_screen_setup_completed_at: new Date().toISOString(),
+      });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [standalone]);
