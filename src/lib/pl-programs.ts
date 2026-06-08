@@ -966,11 +966,13 @@ export async function applyTemplateToClient(opts: { templateId: string; clientId
       total_weeks: payload.prep?.total_weeks ?? null,
       status: "Planned",
       client_visible: opts.clientVisible ?? true,
+      source_template_id: tpl.id,
     });
     for (const b of (payload.blocks_data || [])) {
       const blk = await createBlock({
         client_id: opts.clientId, prep_id: prep.id, name: b.name || "Block",
         weeks: (b.weeks_data?.length || b.weeks || 4), training_focus: b.training_focus ?? null,
+        source_template_id: tpl.id,
       });
       if (Array.isArray(b.weeks_data) && b.weeks_data.length) {
         await sb.from("pl_weeks").delete().eq("block_id", blk.id);
@@ -1022,6 +1024,7 @@ export async function applyTemplateToClient(opts: { templateId: string; clientId
       event_date: prepInfo.event_date ?? null,
       status: "Planned",
       client_visible: opts.clientVisible ?? true,
+      source_template_id: tpl.id,
     });
     targetPrepId = prep.id;
   }
@@ -1031,6 +1034,7 @@ export async function applyTemplateToClient(opts: { templateId: string; clientId
     name: opts.name ?? tpl.name,
     weeks: tpl.weeks ?? payload.weeks ?? 4,
     training_focus: tpl.training_focus ?? null,
+    source_template_id: tpl.id,
   });
   // If payload has a structured tree, copy it. For MVP: empty seeded block + library can be enhanced later.
   if (Array.isArray(payload.weeks_data)) {
