@@ -128,6 +128,9 @@ function CoachDetailPage() {
   return (
     <>
       <PageHeader
+        backTo="/admin/coaches"
+        backLabel="Back to Coaches"
+        breadcrumbs={[{ label: "Coaches", to: "/admin/coaches" }, { label: coach.full_name }]}
         title={
           <span className="flex items-center gap-3">
             <UserAvatar src={coach.profile_picture_url} name={coach.full_name} size={44} ring />

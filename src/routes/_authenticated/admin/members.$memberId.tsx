@@ -54,6 +54,9 @@ function MemberProfile() {
   return (
     <div className="space-y-5">
       <PageHeader
+        backTo="/admin/members"
+        backLabel="Back to Members"
+        breadcrumbs={[{ label: "Members", to: "/admin/members" }, { label: member.full_name || member.email }]}
         title={member.full_name || member.email}
         subtitle={member.email}
         actions={<div className="flex flex-wrap items-center gap-2">

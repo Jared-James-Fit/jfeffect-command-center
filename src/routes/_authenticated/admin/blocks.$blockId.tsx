@@ -274,7 +274,12 @@ function BlockEditor() {
 
   return (
     <>
-      <PageHeader title={block.name} subtitle={`${block.weeks} week block · ${block.training_focus ?? "—"}`} />
+      <PageHeader
+        backTo="/admin/program-library"
+        backLabel="Back"
+        title={block.name}
+        subtitle={`${block.weeks} week block · ${block.training_focus ?? "—"}`}
+      />
       <div className="flex flex-col gap-2 p-3 md:p-4">
         <div className="flex flex-wrap items-center gap-2">
           <Link to="/admin/client-programs/$clientId" params={{ clientId: block.client_id }} className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground">

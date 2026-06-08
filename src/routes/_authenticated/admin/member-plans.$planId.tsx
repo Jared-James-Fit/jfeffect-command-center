@@ -156,6 +156,9 @@ function MemberPlanEditor() {
   return (
     <div className="space-y-5">
       <PageHeader
+        backTo="/admin/member-plans"
+        backLabel="Back to Member Plans"
+        breadcrumbs={[{ label: "Member Plans", to: "/admin/member-plans" }, { label: plan.name }]}
         title={plan.name}
         subtitle={`${plan.weeks} weeks · ${plan.days_per_week}/wk · ${plan.workouts_total ?? 0} workouts`}
         actions={

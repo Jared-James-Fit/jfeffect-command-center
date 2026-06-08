@@ -321,6 +321,9 @@ function ClientDetail() {
   return (
     <>
       <PageHeader
+        backTo="/admin/clients"
+        backLabel="Back to Clients"
+        breadcrumbs={[{ label: "Clients", to: "/admin/clients" }, { label: form.full_name }]}
         title={
           <>
             <span>{form.full_name}</span>
