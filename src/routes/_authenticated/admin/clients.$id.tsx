@@ -38,6 +38,7 @@ import { PurchaseRecordsPanel } from "@/components/purchase-records-panel";
 import { PriceCardPickerDialog } from "@/components/price-card-picker-dialog";
 import { AgreementsPanel } from "@/components/agreements-panel";
 import { TrainingScheduleCard } from "@/components/training-schedule-card";
+import { AssignedProgramsCard } from "@/components/assigned-programs-card";
 import { PowerlifterBadge, POWERLIFTER_BADGE_LABELS } from "@/components/powerlifter-badge";
 import { SocialHandlesEditor } from "@/components/social-handles-editor";
 import { SocialIcons } from "@/components/social-icons";
@@ -525,6 +526,7 @@ function ClientDetail() {
 
         <TabsContent value="training" className="grid gap-6 md:grid-cols-3">
           <div className="md:col-span-3"><TrainingScheduleCard client={form} /></div>
+          <AssignedProgramsCard clientId={id} mode="admin" />
           <TrainingPhasesPanel clientId={id} />
           <ImportantDatesPanel clientId={id} />
         </TabsContent>

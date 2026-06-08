@@ -14,6 +14,7 @@ import { dayTypeLabel, dayTypeTone, formatDays } from "@/lib/training-schedule";
 import { formatCalorieTarget } from "@/lib/nutrition-cardio";
 import { format, parseISO } from "date-fns";
 import { getActivePrep, countdownLabel } from "@/lib/pl-programs";
+import { AssignedProgramsCard } from "@/components/assigned-programs-card";
 
 export const Route = createFileRoute("/_authenticated/portal/program")({ component: MyProgram });
 
@@ -111,6 +112,8 @@ function MyProgram() {
     <>
       <PageHeader title="My Program" subtitle={activePhase ? displayTitle(activePhase) : (client?.program_phase ?? "Current training phase")} />
       <div className="p-6 md:p-8 space-y-6">
+        {client?.id && <AssignedProgramsCard clientId={client.id} mode="client" />}
+
         {activePrep && (activePrep as any).client_visible !== false && (
           <Card className="border-primary/30 bg-primary/5 p-6">
             <div className="flex flex-wrap items-start justify-between gap-4">
