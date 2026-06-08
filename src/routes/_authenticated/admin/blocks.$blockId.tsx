@@ -32,7 +32,8 @@ import {
 import { cn } from "@/lib/utils";
 import { setBlockStartDate, setWeekDates, resetWeekToAuto, countManualWeeks, weekDisplayRange, formatWeekRange, computeBlockEnd } from "@/lib/block-dates";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { format } from "date-fns";
+import { Calendar } from "@/components/ui/calendar";
+import { format, parseISO } from "date-fns";
 
 export const Route = createFileRoute("/_authenticated/admin/blocks/$blockId")({ component: BlockEditor });
 
@@ -1299,7 +1300,13 @@ function BlockStartDateControl({
       </PopoverTrigger>
       <PopoverContent className="w-72 space-y-2 p-3">
         <Label className="text-xs">Block start date</Label>
-        <Input type="date" value={value} onChange={(e) => setValue(e.target.value)} />
+        <Calendar
+          mode="single"
+          selected={value ? parseISO(value) : undefined}
+          onSelect={(d) => setValue(d ? format(d, "yyyy-MM-dd") : "")}
+          initialFocus
+          className={cn("p-0 pointer-events-auto")}
+        />
         {endDate && value && (
           <div className="text-[11px] text-muted-foreground">
             Ends {format(endDate, "MMM d, yyyy")} · {block?.weeks ?? 0} weeks
@@ -1354,11 +1361,26 @@ function WeekDateBadge({
           <Badge variant="outline" className="ml-1 h-4 px-1 text-[9px]">{source === "manual" ? "Custom" : "Auto"}</Badge>
         </button>
       </PopoverTrigger>
-      <PopoverContent className="w-64 space-y-2 p-3">
+      <PopoverContent className="w-auto space-y-2 p-3">
         <Label className="text-xs">Week dates</Label>
-        <div className="grid grid-cols-2 gap-2">
-          <Input type="date" value={start} onChange={(e) => setStart(e.target.value)} />
-          <Input type="date" value={end} onChange={(e) => setEnd(e.target.value)} />
+        <Calendar
+          mode="range"
+          selected={{
+            from: start ? parseISO(start) : undefined,
+            to: end ? parseISO(end) : undefined,
+          }}
+          onSelect={(r: any) => {
+            setStart(r?.from ? format(r.from, "yyyy-MM-dd") : "");
+            setEnd(r?.to ? format(r.to, "yyyy-MM-dd") : "");
+          }}
+          numberOfMonths={1}
+          initialFocus
+          className={cn("p-0 pointer-events-auto")}
+        />
+        <div className="text-[11px] text-muted-foreground">
+          {start && end
+            ? `${format(parseISO(start), "MMM d")} – ${format(parseISO(end), "MMM d, yyyy")}`
+            : "Select a start and end date"}
         </div>
         <div className="flex justify-between gap-2">
           <Button size="sm" variant="ghost" onClick={async () => { setOpen(false); await onReset(); }}>
