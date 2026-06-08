@@ -61,6 +61,8 @@ function WorkoutsPage() {
     <>
       <PageHeader title="Workouts" subtitle="Your assigned training" />
       <div className="p-6 md:p-8 space-y-6 pb-32">
+        {client && <TrainingScheduleCard client={client as any} editable />}
+
         {/* PRIORITY #1 — Smart Today Card */}
         {client?.id && !isLoading && (items as any[]).length > 0 && (
           <SmartTodayCard items={items as any[]} clientId={client.id} />
@@ -112,7 +114,6 @@ function WorkoutsPage() {
           ))
         )}
 
-        {client && <TrainingScheduleCard client={client as any} editable />}
         {client?.id && <WorkoutArchiveSection clientId={client.id} mode="client" />}
       </div>
     </>
