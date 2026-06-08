@@ -12,6 +12,8 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
+import { BlockSummaryCard } from "@/components/block-summary-card";
+import { WorkoutArchiveSection } from "@/components/workout-archive-section";
 
 type Mode = "admin" | "client";
 
@@ -143,6 +145,7 @@ export function AssignedProgramsCard({ clientId, mode }: { clientId: string; mod
             </div>
           )}
         </div>
+        <WorkoutArchiveSection clientId={clientId} mode={mode} />
       </Card>
     );
   }
