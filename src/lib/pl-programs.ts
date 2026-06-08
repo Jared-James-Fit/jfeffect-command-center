@@ -1133,7 +1133,7 @@ export async function saveBlockAsTemplate(blockId: string, name: string, style: 
 
 export async function getClientWorkouts(clientId: string) {
   // Visible blocks → weeks → days, plus completion status
-  const { data: blocks } = await sb.from("pl_blocks").select("*").eq("client_id", clientId).eq("client_visible", true).neq("status", "Archived").order("created_at", { ascending: false });
+  const { data: blocks } = await sb.from("pl_blocks").select("*").eq("client_id", clientId).eq("client_visible", true).neq("status", "Archived").order("created_at", { ascending: true });
   const blockIds = (blocks ?? []).map((b: any) => b.id);
   if (!blockIds.length) return [];
   const { data: weeks } = await sb.from("pl_weeks").select("*").in("block_id", blockIds).order("week_index");
@@ -1141,10 +1141,23 @@ export async function getClientWorkouts(clientId: string) {
   const { data: days } = weekIds.length ? await sb.from("pl_days").select("*").in("week_id", weekIds).order("day_index") : { data: [] };
   const dayIds = (days ?? []).map((d: any) => d.id);
   const { data: completions } = dayIds.length ? await sb.from("pl_day_completions").select("*").in("day_id", dayIds) : { data: [] };
-  return (days ?? []).map((d: any) => {
+  const blockOrder = new Map<string, number>();
+  (blocks ?? []).forEach((b: any, i: number) => blockOrder.set(b.id, i));
+  const items = (days ?? []).map((d: any) => {
     const w = (weeks ?? []).find((x: any) => x.id === d.week_id);
     const b = (blocks ?? []).find((x: any) => x.id === w?.block_id);
     const c = (completions ?? []).find((x: any) => x.day_id === d.id);
     return { day: d, week: w, block: b, completion: c };
   });
+  // Sort: block (created order) → week_index → day_index
+  items.sort((a: any, b: any) => {
+    const ao = blockOrder.get(a.block?.id) ?? 999;
+    const bo = blockOrder.get(b.block?.id) ?? 999;
+    if (ao !== bo) return ao - bo;
+    const aw = a.week?.week_index ?? 0;
+    const bw = b.week?.week_index ?? 0;
+    if (aw !== bw) return aw - bw;
+    return (a.day?.day_index ?? 0) - (b.day?.day_index ?? 0);
+  });
+  return items;
 }
