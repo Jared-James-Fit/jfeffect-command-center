@@ -405,11 +405,11 @@ function ExternalFormView({
             <ArrowLeft className="mr-1 h-4 w-4" /> Back to Check-Ins
           </Button>
           {url && (
-            <a href={url} target="_blank" rel="noreferrer">
-              <Button variant="outline" size="sm">
+            <Button asChild variant="outline" size="sm">
+              <a href={url} target="_blank" rel="noreferrer">
                 <ExternalLink className="mr-1 h-4 w-4" /> Open in new tab
-              </Button>
-            </a>
+              </a>
+            </Button>
           )}
         </div>
 
@@ -438,12 +438,12 @@ function ExternalFormView({
                 ? "This form provider blocked embedding. Use the button below to open it."
                 : "This form opens in a new tab."}
             </p>
-            <a href={url} target="_blank" rel="noreferrer">
-              <Button className="mt-3 bg-gradient-primary font-bold">
+            <Button asChild className="mt-3 bg-gradient-primary font-bold">
+              <a href={url} target="_blank" rel="noreferrer">
                 <ExternalLink className="mr-2 h-4 w-4" />
                 {form.button_label || "Open Check-In Form"}
-              </Button>
-            </a>
+              </a>
+            </Button>
           </Card>
         )}
 
