@@ -14,7 +14,7 @@ export const adminNav: NavItem[] = [
   { to: "/admin", label: "Dashboard", icon: LayoutDashboard, group: "Core" },
   { to: "/admin/clients", label: "Coaching Clients", icon: Users, group: "Core" },
   { to: "/admin/messages", label: "Messages", icon: MessageCircle, group: "Core" },
-  { to: "/admin/check-in-reviews", label: "Check-Ins", icon: ClipboardList, group: "Core" },
+  { to: "/admin/check-in-reviews", label: "Check-In Reviews", icon: ClipboardList, group: "Core" },
   { to: "/admin/lift-videos", label: "Lift Reviews", icon: Video, group: "Core" },
   { to: "/admin/training-intelligence", label: "Training Intel", icon: Activity, group: "Core" },
   // MEMBERSHIP
@@ -24,7 +24,7 @@ export const adminNav: NavItem[] = [
   // PROGRAMMING
   { to: "/admin/program-library", label: "Program Library", icon: BookOpen, group: "Programming" },
   { to: "/admin/exercises", label: "Exercise Library", icon: Dumbbell, group: "Programming" },
-  { to: "/admin/native-forms", label: "Form Builder", icon: FileEdit, group: "Programming" },
+  { to: "/admin/native-forms", label: "Check-Ins & Forms", icon: FileEdit, group: "Programming" },
   // BUSINESS
   { to: "/admin/payment-links", label: "Products", icon: CreditCard, group: "Business" },
   { to: "/admin/payments", label: "Payments", icon: DollarSign, group: "Business" },
