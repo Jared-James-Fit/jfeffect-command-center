@@ -315,17 +315,6 @@ function FullPrepEditor({ payload, setPayload, exercises }: any) {
 function BlockPayloadEditor({ weeksData, setWeeksData, exercises }: { weeksData: any[]; setWeeksData: (wd: any[]) => void; exercises: any[] }) {
   const [activeIdx, setActiveIdx] = useState(0);
   const [view, setView] = useState<"block" | "week">("block");
-  const [collapsed, setCollapsed] = useState<Set<number>>(new Set());
-  const toggleCollapse = (i: number) => setCollapsed((p) => { const n = new Set(p); if (n.has(i)) n.delete(i); else n.add(i); return n; });
-  const collapseAll = () => setCollapsed(new Set(weeksData.map((_, i) => i)));
-  const expandAll = () => setCollapsed(new Set());
-  const jumpToWeek = (i: number) => {
-    setCollapsed((p) => { const n = new Set(p); n.delete(i); return n; });
-    requestAnimationFrame(() => {
-      const el = document.getElementById(`tpl-week-${i}`);
-      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-    });
-  };
   const weekStats = useMemo(() => weeksData.map((w: any) => {
     const days = w.days || [];
     let rowCount = 0;
@@ -408,19 +397,21 @@ function BlockPayloadEditor({ weeksData, setWeeksData, exercises }: { weeksData:
 
       {view === "week" ? (
         <>
-          <div className="flex flex-wrap items-center gap-1">
-            {weeksData.map((w: any, i: number) => (
-              <button key={i} onClick={() => setActiveIdx(i)} className={`rounded-md border px-2 py-1 text-xs ${activeIdx === i ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground"}`}>
-                Week {w.week_index}
-              </button>
-            ))}
-            {weeksData[activeIdx] && (
-              <>
-                <Button size="sm" variant="ghost" onClick={() => dupWeek(activeIdx)} title="Duplicate week"><Copy className="h-3 w-3" /></Button>
-                <Button size="sm" variant="ghost" onClick={() => copyWeekToFuture(activeIdx)} title="Copy week → future weeks"><ArrowRight className="h-3 w-3" /></Button>
-                <Button size="sm" variant="ghost" className="text-destructive" onClick={() => delWeek(activeIdx)} title="Delete week"><Trash2 className="h-3 w-3" /></Button>
-              </>
-            )}
+          <div className="-mx-2 overflow-x-auto px-2 pb-2">
+            <div className="flex w-max items-center gap-1">
+              {weeksData.map((w: any, i: number) => (
+                <button key={i} onClick={() => setActiveIdx(i)} className={`h-8 w-[112px] shrink-0 rounded-md border px-2 py-1 text-xs ${activeIdx === i ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground"}`}>
+                  Week {w.week_index}
+                </button>
+              ))}
+              {weeksData[activeIdx] && (
+                <div className="ml-1 flex shrink-0 items-center gap-1">
+                  <Button size="sm" variant="ghost" onClick={() => dupWeek(activeIdx)} title="Duplicate week"><Copy className="h-3 w-3" /></Button>
+                  <Button size="sm" variant="ghost" onClick={() => copyWeekToFuture(activeIdx)} title="Copy week → future weeks"><ArrowRight className="h-3 w-3" /></Button>
+                  <Button size="sm" variant="ghost" className="text-destructive" onClick={() => delWeek(activeIdx)} title="Delete week"><Trash2 className="h-3 w-3" /></Button>
+                </div>
+              )}
+            </div>
           </div>
           {weeksData[activeIdx] && (
             <WeekEditor
