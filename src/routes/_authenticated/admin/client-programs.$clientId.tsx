@@ -87,6 +87,15 @@ function ClientProgramsPage() {
                       <div>
                         <div className="font-bold text-lg">{p.title}</div>
                         <div className="text-xs text-muted-foreground">{p.goal_type}</div>
+                        {p.source_template_id && (templateLookup as any)[p.source_template_id] && (
+                          <Link
+                            to="/admin/program-library/$templateId"
+                            params={{ templateId: p.source_template_id }}
+                            className="mt-1 inline-flex items-center gap-1 rounded border border-primary/30 bg-primary/5 px-1.5 py-0.5 text-[10px] text-primary hover:bg-primary/10"
+                          >
+                            <BookOpen className="h-2.5 w-2.5" /> From template: {(templateLookup as any)[p.source_template_id].name}
+                          </Link>
+                        )}
                       </div>
                       <Select value={p.status} onValueChange={async (v) => { await updatePrep(p.id, { status: v as PrepStatus }); refresh(); toast.success(`Status: ${v}`); }}>
                         <SelectTrigger className="h-7 w-28 text-xs"><SelectValue /></SelectTrigger>
@@ -131,6 +140,11 @@ function ClientProgramsPage() {
                     <div>
                       <div className="font-bold">{b.name}</div>
                       <div className="text-xs text-muted-foreground">{b.weeks} weeks · {b.training_focus ?? "—"}</div>
+                      {b.source_template_id && (templateLookup as any)[b.source_template_id] && (
+                        <div className="mt-1 inline-flex items-center gap-1 rounded border border-primary/30 bg-primary/5 px-1.5 py-0.5 text-[10px] text-primary">
+                          <BookOpen className="h-2.5 w-2.5" /> From template: {(templateLookup as any)[b.source_template_id].name}
+                        </div>
+                      )}
                     </div>
                   </Link>
                   <Select value={b.status} onValueChange={async (v) => { await updateBlock(b.id, { status: v as BlockStatus }); refresh(); toast.success(`Status: ${v}`); }}>
