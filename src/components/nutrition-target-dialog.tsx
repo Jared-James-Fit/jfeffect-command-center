@@ -20,8 +20,6 @@ type Day = {
   carbs?: number | null;
   fats?: number | null;
   fibre?: number | null;
-  water?: number | null;
-  steps?: number | null;
   notes?: string | null;
   sort_order: number;
 };
