@@ -9,7 +9,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, ExternalLink, Clock, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, Clock, CheckCircle2, Play } from "lucide-react";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import { getExerciseVideoSource } from "@/lib/exercise-video";
 import { toast } from "sonner";
 import { durationRange } from "@/lib/pl-programs";
 import { movementAccent } from "@/components/program-builder";
@@ -38,7 +40,7 @@ function WorkoutDay() {
 
   const { data: rows = [] } = useQuery({
     queryKey: ["pl-day-rows", dayId],
-    queryFn: async () => (await sb.from("pl_exercise_rows").select("*, exercises(id,name,video_url,vimeo_embed_url,thumbnail_url,cues)").eq("day_id", dayId).order("sort_order")).data ?? [],
+    queryFn: async () => (await sb.from("pl_exercise_rows").select("*, exercises(id,name,video_url,vimeo_embed_url,thumbnail_url,cues,common_mistakes,muscle_group,category)").eq("day_id", dayId).order("sort_order")).data ?? [],
   });
 
   useEffect(() => {
@@ -190,12 +192,14 @@ function WorkoutDay() {
 
 function ExerciseBlock({ row, clientId, existingResults, onChange }: { row: any; clientId: string | undefined; existingResults: any[]; onChange: () => void }) {
   const name = row.exercises?.name ?? row.exercise_name_override ?? "Exercise";
-  const exerciseId = row.exercises?.id ?? null;
-  const video = row.exercises?.video_url ?? row.exercises?.vimeo_embed_url ?? null;
-  const hasDemo = Boolean(exerciseId || video);
-  const cues = row.exercises?.cues ?? null;
+  const exercise = row.exercises ?? null;
+  const exerciseId = exercise?.id ?? null;
+  const video = exercise?.video_url ?? exercise?.vimeo_embed_url ?? null;
+  const hasGuide = Boolean(exerciseId || video);
+  const cues = exercise?.cues ?? null;
   const setCount = Math.max(1, row.sets ?? 1);
   const accent = movementAccent(name);
+  const [howToOpen, setHowToOpen] = useState(false);
 
   return (
     <Card className="relative overflow-hidden p-4 pl-5">
@@ -214,16 +218,10 @@ function ExerciseBlock({ row, clientId, existingResults, onChange }: { row: any;
           </div>
           {row.notes && <p className="mt-1 text-xs text-muted-foreground italic">{row.notes}</p>}
         </div>
-        {hasDemo && (
-          exerciseId ? (
-            <Link to="/portal/exercises" search={{ id: exerciseId }}>
-              <Button size="sm" variant="outline">Demo <ExternalLink className="ml-1 h-3 w-3" /></Button>
-            </Link>
-          ) : (
-            <a href={video!} target="_blank" rel="noreferrer">
-              <Button size="sm" variant="outline">Demo <ExternalLink className="ml-1 h-3 w-3" /></Button>
-            </a>
-          )
+        {hasGuide && (
+          <Button size="sm" variant="outline" onClick={() => setHowToOpen(true)} className="shrink-0">
+            <Play className="mr-1 h-3 w-3 fill-current" /> How To
+          </Button>
         )}
       </div>
 
@@ -239,7 +237,86 @@ function ExerciseBlock({ row, clientId, existingResults, onChange }: { row: any;
           return <SetRow key={i} rowId={row.id} clientId={clientId} setIndex={i + 1} existing={existing} targetReps={row.reps_text} targetRpe={row.rpe} onChange={onChange} />;
         })}
       </div>
+      <HowToSheet open={howToOpen} onOpenChange={setHowToOpen} exercise={exercise} fallbackName={name} fallbackVideo={video} />
     </Card>
+  );
+}
+
+function HowToSheet({ open, onOpenChange, exercise, fallbackName, fallbackVideo }: { open: boolean; onOpenChange: (v: boolean) => void; exercise: any; fallbackName: string; fallbackVideo: string | null }) {
+  const name = exercise?.name ?? fallbackName;
+  const cues = exercise?.cues ?? null;
+  const mistakes = exercise?.common_mistakes ?? null;
+  const muscles = exercise?.muscle_group ?? null;
+  const category = exercise?.category ?? null;
+  const videoSrc = exercise ? getExerciseVideoSource(exercise) : null;
+  const directVideo = !videoSrc && fallbackVideo ? fallbackVideo : null;
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="bottom" className="h-[92vh] overflow-y-auto p-0 sm:max-w-xl sm:mx-auto sm:rounded-t-2xl">
+        <SheetHeader className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b border-border px-5 py-3 text-left">
+          <SheetTitle className="text-base font-black">{name}</SheetTitle>
+          {(category || muscles) && (
+            <SheetDescription className="text-xs">
+              {[category, muscles].filter(Boolean).join(" · ")}
+            </SheetDescription>
+          )}
+        </SheetHeader>
+        <div className="px-5 py-4 space-y-4 pb-32">
+          {videoSrc && videoSrc.status !== "coming_soon" && videoSrc.url ? (
+            <iframe
+              src={videoSrc.url}
+              title={`${name} video`}
+              allow="autoplay; fullscreen; picture-in-picture"
+              allowFullScreen
+              className="w-full aspect-video rounded-xl border border-border bg-black"
+            />
+          ) : directVideo ? (
+            <iframe
+              src={directVideo}
+              title={`${name} video`}
+              allow="autoplay; fullscreen; picture-in-picture"
+              allowFullScreen
+              className="w-full aspect-video rounded-xl border border-border bg-black"
+            />
+          ) : (
+            <div className="grid aspect-video w-full place-items-center rounded-xl border border-dashed border-border bg-black/40 text-sm text-muted-foreground">
+              Video coming soon.
+            </div>
+          )}
+
+          {cues && (
+            <section>
+              <h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Coaching cues</h3>
+              <p className="mt-1 text-sm whitespace-pre-wrap">
+                {typeof cues === "string" ? cues : Array.isArray(cues) ? cues.join("\n• ") : null}
+              </p>
+            </section>
+          )}
+
+          {mistakes && (
+            <section>
+              <h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Common mistakes</h3>
+              <p className="mt-1 text-sm whitespace-pre-wrap">
+                {typeof mistakes === "string" ? mistakes : Array.isArray(mistakes) ? mistakes.join("\n• ") : null}
+              </p>
+            </section>
+          )}
+
+          {muscles && (
+            <section>
+              <h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Muscles worked</h3>
+              <p className="mt-1 text-sm">{muscles}</p>
+            </section>
+          )}
+        </div>
+        <div className="sticky bottom-0 left-0 right-0 border-t border-border bg-background/95 backdrop-blur px-5 py-3">
+          <Button className="w-full" size="lg" onClick={() => onOpenChange(false)}>
+            <ArrowLeft className="mr-2 h-4 w-4" /> Back to Workout
+          </Button>
+        </div>
+      </SheetContent>
+    </Sheet>
   );
 }
 
