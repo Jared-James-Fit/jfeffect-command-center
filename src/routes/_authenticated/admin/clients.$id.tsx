@@ -14,7 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, ExternalLink, Save, Trash2, Mail, Archive, KeyRound, Copy, CheckCircle2, AlertCircle, BellRing, Tag, Dumbbell } from "lucide-react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
-import { inviteClient, deleteClient, getSetupLink, sendPasswordReset, markSetupComplete, setNeedsAdminHelp } from "@/lib/clients.functions";
+import { inviteClient, deleteClient, getSetupLink, getPasswordResetLink, sendPasswordReset, markSetupComplete, setNeedsAdminHelp } from "@/lib/clients.functions";
 import { deactivateClient, reactivateClient, DEACTIVATION_REASONS } from "@/lib/client-deactivation.functions";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { TrainingPhasesPanel } from "@/components/training-phases-panel";
@@ -99,6 +99,7 @@ function ClientDetail() {
   const deleteFn = useServerFn(deleteClient);
   const getSetupLinkFn = useServerFn(getSetupLink);
   const sendResetFn = useServerFn(sendPasswordReset);
+  const getResetLinkFn = useServerFn(getPasswordResetLink);
   const markCompleteFn = useServerFn(markSetupComplete);
   const needsHelpFn = useServerFn(setNeedsAdminHelp);
   const deactivateFn = useServerFn(deactivateClient);
@@ -178,11 +179,11 @@ function ClientDetail() {
 
   const copyResetLink = async () => {
     if (!form.email) return toast.error("Add an email first");
-    const t = toast.loading("Sending reset link…");
+    const t = toast.loading("Generating reset link…");
     try {
-      await sendResetFn({ data: { clientId: id, redirectTo: `${window.location.origin}/reset-password` } });
-      toast.success("Reset email sent to client", { id: t });
-      qc.invalidateQueries({ queryKey: ["client", id] });
+      const { url } = await getResetLinkFn({ data: { clientId: id, redirectTo: `${window.location.origin}/reset-password` } });
+      await navigator.clipboard.writeText(url);
+      toast.success("Reset link copied", { id: t });
     } catch (e: any) {
       toast.error(e?.message ?? "Failed", { id: t });
     }
