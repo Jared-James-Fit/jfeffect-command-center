@@ -830,9 +830,16 @@ function ClientDetail() {
             {deleteStep === 1 ? (
               <AlertDialogAction onClick={(e) => { e.preventDefault(); setDeleteStep(2); }}>Continue</AlertDialogAction>
             ) : (
-              <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={(e) => { e.preventDefault(); confirmDelete(); }}>
+              <ActionButton
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                loadingLabel="Deleting…"
+                successLabel="Deleted"
+                successToast={false}
+                errorToast
+                onAction={async () => { await confirmDelete(); }}
+              >
                 Yes, delete permanently
-              </AlertDialogAction>
+              </ActionButton>
             )}
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -918,25 +925,22 @@ function ClientDetail() {
           </div>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={async () => {
-                const t = toast.loading("Deactivating…");
-                try {
-                  await deactivateFn({ data: {
-                    clientId: id,
-                    reason: deactivateReason || undefined,
-                    note: deactivateNote || undefined,
-                    disablePortalAccess: deactivateDisablePortal,
-                  }});
-                  toast.success("Client deactivated", { id: t });
-                  setDeactivateOpen(false);
-                  qc.invalidateQueries({ queryKey: ["client", id] });
-                  qc.invalidateQueries({ queryKey: ["clients"] });
-                } catch (e: any) {
-                  toast.error(e?.message ?? "Failed", { id: t });
-                }
+            <ActionButton
+              loadingLabel="Deactivating…"
+              successLabel="Deactivated"
+              successToast="Client deactivated"
+              onAction={async () => {
+                await deactivateFn({ data: {
+                  clientId: id,
+                  reason: deactivateReason || undefined,
+                  note: deactivateNote || undefined,
+                  disablePortalAccess: deactivateDisablePortal,
+                }});
+                setDeactivateOpen(false);
+                qc.invalidateQueries({ queryKey: ["client", id] });
+                qc.invalidateQueries({ queryKey: ["clients"] });
               }}
-            >Deactivate Client</AlertDialogAction>
+            >Deactivate Client</ActionButton>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -955,20 +959,17 @@ function ClientDetail() {
           )}
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={async () => {
-                const t = toast.loading("Reactivating…");
-                try {
-                  await reactivateFn({ data: { clientId: id, restorePortalAccess: reactivateRestorePortal } });
-                  toast.success("Client reactivated", { id: t });
-                  setReactivateOpen(false);
-                  qc.invalidateQueries({ queryKey: ["client", id] });
-                  qc.invalidateQueries({ queryKey: ["clients"] });
-                } catch (e: any) {
-                  toast.error(e?.message ?? "Failed", { id: t });
-                }
+            <ActionButton
+              loadingLabel="Reactivating…"
+              successLabel="Reactivated"
+              successToast="Client reactivated"
+              onAction={async () => {
+                await reactivateFn({ data: { clientId: id, restorePortalAccess: reactivateRestorePortal } });
+                setReactivateOpen(false);
+                qc.invalidateQueries({ queryKey: ["client", id] });
+                qc.invalidateQueries({ queryKey: ["clients"] });
               }}
-            >Reactivate</AlertDialogAction>
+            >Reactivate</ActionButton>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
