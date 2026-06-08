@@ -427,7 +427,11 @@ function AssignmentsEditor({ formId, form, onFormChange }: { formId: string; for
     });
     setPendingClientIds((prev) => new Set(prev).add(clientId));
     try {
-      await setAssignment({ data: { formId, clientId, assigned: !wasAssigned } });
+      if (wasAssigned) {
+        await unassignForm(formId, clientId);
+      } else {
+        await assignFormToClient(formId, clientId);
+      }
       await qc.invalidateQueries({ queryKey: ["nf-assignments", formId] });
       await qc.invalidateQueries({ queryKey: ["nf-forms"] });
     } catch (e: any) {
@@ -454,7 +458,7 @@ function AssignmentsEditor({ formId, form, onFormChange }: { formId: string; for
     const previous = new Set(assigned);
     setSelectedIds((prev) => new Set([...prev, ...toAdd]));
     try {
-      await bulkAssign({ data: { formId, clientIds: toAdd } });
+      await bulkAssignFormToClients(formId, toAdd);
       await qc.invalidateQueries({ queryKey: ["nf-assignments", formId] });
       await qc.invalidateQueries({ queryKey: ["nf-forms"] });
       toast.success(`Assigned ${toAdd.length}`);
@@ -472,7 +476,7 @@ function AssignmentsEditor({ formId, form, onFormChange }: { formId: string; for
     const previous = new Set(assigned);
     setSelectedIds(new Set());
     try {
-      await clearAssignments({ data: { formId } });
+      await clearAllAssignments(formId);
       await qc.invalidateQueries({ queryKey: ["nf-assignments", formId] });
       await qc.invalidateQueries({ queryKey: ["nf-forms"] });
       toast.success("Cleared");
@@ -494,7 +498,7 @@ function AssignmentsEditor({ formId, form, onFormChange }: { formId: string; for
         // Materialize assignments for every active client now so submissions, due
         // dates, and admin counts still work cleanly.
         const ids = await listActiveCoachingClientIds();
-        await bulkAssign({ data: { formId, clientIds: ids } });
+        await bulkAssignFormToClients(formId, ids);
       }
       qc.invalidateQueries({ queryKey: ["nf-forms"] });
       qc.invalidateQueries({ queryKey: ["nf-assignments", formId] });
