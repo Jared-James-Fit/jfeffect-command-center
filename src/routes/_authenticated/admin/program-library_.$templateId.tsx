@@ -522,6 +522,7 @@ function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact }: { w
               setWeek={(w) => { const copy = [...weeksData]; copy[activeIdx] = w; setWeeksData(copy); }}
               exercises={exercises}
               onCopyDayToFuture={(di) => copyDayToFuture(activeIdx, di)}
+              compact={compact}
             />
           )}
         </>
