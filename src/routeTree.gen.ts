@@ -75,7 +75,6 @@ import { Route as AuthenticatedAdminAutomationsRouteImport } from './routes/_aut
 import { Route as AuthenticatedAdminArchivesRouteImport } from './routes/_authenticated/admin/archives'
 import { Route as AuthenticatedAdminAppsRouteImport } from './routes/_authenticated/admin/apps'
 import { Route as AuthenticatedAdminAccountRouteImport } from './routes/_authenticated/admin/account'
-import { Route as AuthenticatedPortalWorkoutsIndexRouteImport } from './routes/_authenticated/portal/workouts.index'
 import { Route as AuthenticatedPortalAgreementsIndexRouteImport } from './routes/_authenticated/portal/agreements.index'
 import { Route as AuthenticatedAdminMembersIndexRouteImport } from './routes/_authenticated/admin/members.index'
 import { Route as AuthenticatedAdminMemberResourcesIndexRouteImport } from './routes/_authenticated/admin/member-resources.index'
@@ -482,12 +481,6 @@ const AuthenticatedAdminAccountRoute =
     path: '/account',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
-const AuthenticatedPortalWorkoutsIndexRoute =
-  AuthenticatedPortalWorkoutsIndexRouteImport.update({
-    id: '/workouts/',
-    path: '/workouts/',
-    getParentRoute: () => AuthenticatedPortalRouteRoute,
-  } as any)
 const AuthenticatedPortalAgreementsIndexRoute =
   AuthenticatedPortalAgreementsIndexRouteImport.update({
     id: '/agreements/',
@@ -781,7 +774,6 @@ export interface FileRoutesByFullPath {
   '/admin/member-resources/': typeof AuthenticatedAdminMemberResourcesIndexRoute
   '/admin/members/': typeof AuthenticatedAdminMembersIndexRoute
   '/portal/agreements/': typeof AuthenticatedPortalAgreementsIndexRoute
-  '/portal/workouts/': typeof AuthenticatedPortalWorkoutsIndexRoute
   '/admin/client-programs/$clientId/analytics': typeof AuthenticatedAdminClientProgramsClientIdAnalyticsRoute
   '/admin/client-programs/$clientId/history': typeof AuthenticatedAdminClientProgramsClientIdHistoryRoute
   '/m/workouts/$enrollmentId/$week/$day': typeof AuthenticatedMWorkoutsEnrollmentIdWeekDayRoute
@@ -879,7 +871,6 @@ export interface FileRoutesByTo {
   '/admin/member-resources': typeof AuthenticatedAdminMemberResourcesIndexRoute
   '/admin/members': typeof AuthenticatedAdminMembersIndexRoute
   '/portal/agreements': typeof AuthenticatedPortalAgreementsIndexRoute
-  '/portal/workouts': typeof AuthenticatedPortalWorkoutsIndexRoute
   '/admin/client-programs/$clientId/analytics': typeof AuthenticatedAdminClientProgramsClientIdAnalyticsRoute
   '/admin/client-programs/$clientId/history': typeof AuthenticatedAdminClientProgramsClientIdHistoryRoute
   '/m/workouts/$enrollmentId/$week/$day': typeof AuthenticatedMWorkoutsEnrollmentIdWeekDayRoute
@@ -982,7 +973,6 @@ export interface FileRoutesById {
   '/_authenticated/admin/member-resources/': typeof AuthenticatedAdminMemberResourcesIndexRoute
   '/_authenticated/admin/members/': typeof AuthenticatedAdminMembersIndexRoute
   '/_authenticated/portal/agreements/': typeof AuthenticatedPortalAgreementsIndexRoute
-  '/_authenticated/portal/workouts/': typeof AuthenticatedPortalWorkoutsIndexRoute
   '/_authenticated/admin/client-programs/$clientId/analytics': typeof AuthenticatedAdminClientProgramsClientIdAnalyticsRoute
   '/_authenticated/admin/client-programs/$clientId/history': typeof AuthenticatedAdminClientProgramsClientIdHistoryRoute
   '/_authenticated/m/workouts/$enrollmentId/$week/$day': typeof AuthenticatedMWorkoutsEnrollmentIdWeekDayRoute
@@ -1085,7 +1075,6 @@ export interface FileRouteTypes {
     | '/admin/member-resources/'
     | '/admin/members/'
     | '/portal/agreements/'
-    | '/portal/workouts/'
     | '/admin/client-programs/$clientId/analytics'
     | '/admin/client-programs/$clientId/history'
     | '/m/workouts/$enrollmentId/$week/$day'
@@ -1183,7 +1172,6 @@ export interface FileRouteTypes {
     | '/admin/member-resources'
     | '/admin/members'
     | '/portal/agreements'
-    | '/portal/workouts'
     | '/admin/client-programs/$clientId/analytics'
     | '/admin/client-programs/$clientId/history'
     | '/m/workouts/$enrollmentId/$week/$day'
@@ -1285,7 +1273,6 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/member-resources/'
     | '/_authenticated/admin/members/'
     | '/_authenticated/portal/agreements/'
-    | '/_authenticated/portal/workouts/'
     | '/_authenticated/admin/client-programs/$clientId/analytics'
     | '/_authenticated/admin/client-programs/$clientId/history'
     | '/_authenticated/m/workouts/$enrollmentId/$week/$day'
@@ -1771,13 +1758,6 @@ declare module '@tanstack/react-router' {
       fullPath: '/admin/account'
       preLoaderRoute: typeof AuthenticatedAdminAccountRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
-    }
-    '/_authenticated/portal/workouts/': {
-      id: '/_authenticated/portal/workouts/'
-      path: '/workouts'
-      fullPath: '/portal/workouts/'
-      preLoaderRoute: typeof AuthenticatedPortalWorkoutsIndexRouteImport
-      parentRoute: typeof AuthenticatedPortalRouteRoute
     }
     '/_authenticated/portal/agreements/': {
       id: '/_authenticated/portal/agreements/'
@@ -2285,7 +2265,6 @@ interface AuthenticatedPortalRouteRouteChildren {
   AuthenticatedPortalIndexRoute: typeof AuthenticatedPortalIndexRoute
   AuthenticatedPortalWorkoutsDayIdRoute: typeof AuthenticatedPortalWorkoutsDayIdRoute
   AuthenticatedPortalAgreementsIndexRoute: typeof AuthenticatedPortalAgreementsIndexRoute
-  AuthenticatedPortalWorkoutsIndexRoute: typeof AuthenticatedPortalWorkoutsIndexRoute
 }
 
 const AuthenticatedPortalRouteRouteChildren: AuthenticatedPortalRouteRouteChildren =
@@ -2313,8 +2292,6 @@ const AuthenticatedPortalRouteRouteChildren: AuthenticatedPortalRouteRouteChildr
       AuthenticatedPortalWorkoutsDayIdRoute,
     AuthenticatedPortalAgreementsIndexRoute:
       AuthenticatedPortalAgreementsIndexRoute,
-    AuthenticatedPortalWorkoutsIndexRoute:
-      AuthenticatedPortalWorkoutsIndexRoute,
   }
 
 const AuthenticatedPortalRouteRouteWithChildren =
@@ -2356,3 +2333,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
