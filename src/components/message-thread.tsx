@@ -679,33 +679,8 @@ export function MessageThread({
         ? "h-full min-h-0 flex-1 bg-background"
         : "h-[min(80vh,640px)] rounded-md border border-border bg-card",
     )}>
-      {role === "admin" && !hideControls && (
-        <div className="flex flex-wrap items-center gap-2 border-b border-border px-3 py-2 text-xs">
-          <span className="text-muted-foreground">Status:</span>
-          <Select
-            value={conversationState?.status ?? "open"}
-            onValueChange={(v) => setConversationStatus(clientId, v as any).then(() => qc.invalidateQueries({ queryKey: ["conversation-states"] }))}
-          >
-            <SelectTrigger className="h-7 w-36"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="open">Open</SelectItem>
-              <SelectItem value="needs_response">Needs Response</SelectItem>
-              <SelectItem value="resolved">Resolved</SelectItem>
-              <SelectItem value="archived">Archived</SelectItem>
-            </SelectContent>
-          </Select>
-          <span className="ml-3 text-muted-foreground">Priority:</span>
-          <Select
-            value={conversationState?.priority ?? "Normal"}
-            onValueChange={(v) => setConversationPriority(clientId, v).then(() => qc.invalidateQueries({ queryKey: ["conversation-states"] }))}
-          >
-            <SelectTrigger className="h-7 w-36"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {PRIORITIES.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
-      )}
+      {/* Admin status/priority controls intentionally removed — kept simple like the client thread.
+          Status/priority are managed from the inbox list. */}
 
       <div
         ref={scrollerRef}
@@ -782,15 +757,7 @@ export function MessageThread({
             : "bg-card p-2 sm:p-3",
         )}
       >
-        {role === "admin" && (
-          <div className="flex flex-wrap gap-1 px-1">
-            {QUICK_REPLIES.map((q) => (
-              <Button key={q} type="button" variant="outline" size="sm" className="h-6 text-[11px]" onClick={() => setBody((b) => b ? `${b}\n${q}` : q)}>
-                {q}
-              </Button>
-            ))}
-          </div>
-        )}
+        {/* Quick replies removed — keeping the composer minimal. */}
 
         {attachments.length > 0 && (
           <div className="flex flex-wrap gap-1.5 px-1">
@@ -877,23 +844,7 @@ export function MessageThread({
               </DropdownMenuContent>
             </DropdownMenu>
 
-            {/* Priority selector (admin only) */}
-            {role === "admin" && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button type="button" variant="ghost" size="icon" className={cn("h-10 w-10 shrink-0 rounded-full", priorityIconTone)} title={`Priority: ${priority}`}>
-                    {priority === "High Priority" ? <AlertCircle className="h-5 w-5" />
-                      : priority === "Important" ? <AlertTriangle className="h-5 w-5" />
-                      : <Flag className="h-5 w-5" />}
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent>
-                  {PRIORITIES.map((p) => (
-                    <DropdownMenuItem key={p} onClick={() => setPriority(p)}>{p}{p === priority ? " ✓" : ""}</DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
+            {/* Priority selector removed for simplicity. */}
 
             {/* Textarea */}
             <Textarea
@@ -927,20 +878,7 @@ export function MessageThread({
           </div>
         )}
 
-        {role === "admin" && (
-          <div className="flex flex-wrap items-center gap-2 px-1 text-xs">
-            <Select value={messageType} onValueChange={setMessageType}>
-              <SelectTrigger className="h-7 w-40"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {MESSAGE_TYPES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <div className="ml-auto flex items-center gap-2">
-              <Switch id="internal" checked={internalNote} onCheckedChange={setInternalNote} />
-              <Label htmlFor="internal" className="cursor-pointer text-xs">Internal note</Label>
-            </div>
-          </div>
-        )}
+        {/* Message-type + internal-note row removed for simplicity. */}
       </div>
     </div>
   );
