@@ -72,6 +72,12 @@ export function BlockSummaryCard({
   const startStr = block.start_date ? format(parseISO(block.start_date), "MMM d, yyyy") : "—";
   const endStr = block.end_date ? format(parseISO(block.end_date), "MMM d, yyyy") : "—";
 
+  const endPassed =
+    !!block.end_date &&
+    block.status !== "Archived" &&
+    block.status !== "Completed" &&
+    parseISO(block.end_date).getTime() < Date.now();
+
   const toBlock =
     mode === "admin"
       ? { to: "/admin/blocks/$blockId" as const, params: { blockId } }
@@ -128,6 +134,22 @@ export function BlockSummaryCard({
           )}
         </div>
       </div>
+
+      {mode === "admin" && endPassed && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-600">
+          <span>End date has passed. Archive this block?</span>
+          <div className="flex gap-1">
+            <Button size="sm" variant="outline" onClick={async () => {
+              try { await markBlockComplete(blockId); refresh(); toast.success("Marked complete"); }
+              catch (e: any) { toast.error(e.message); }
+            }}>Mark complete</Button>
+            <Button size="sm" onClick={async () => {
+              try { await archiveBlock(blockId, user?.id ?? null); refresh(); toast.success("Block archived"); }
+              catch (e: any) { toast.error(e.message); }
+            }}><Archive className="mr-1 h-3 w-3" /> Archive now</Button>
+          </div>
+        </div>
+      )}
 
       {/* Stats row */}
       <div className="grid grid-cols-2 gap-2 md:grid-cols-4 text-xs">
