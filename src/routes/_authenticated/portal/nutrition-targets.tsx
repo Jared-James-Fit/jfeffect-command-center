@@ -133,13 +133,12 @@ function DayPanel({ day }: { day: any }) {
       </div>
 
       {/* Detailed macro cards */}
-      <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
+      <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
         <Macro icon={Flame} label="Cal" value={day.calories} unit="" />
         <Macro icon={Beef} label="Protein" value={day.protein} unit="g" />
         <Macro icon={Wheat} label="Carbs" value={day.carbs} unit="g" />
         <Macro icon={Cookie} label="Fats" value={day.fats} unit="g" />
-        <Macro icon={Droplets} label="Water" value={day.water} unit="oz" />
-        <Macro icon={Footprints} label="Steps" value={day.steps} unit="" />
+        <Macro icon={Droplets} label="Water" value={current.water} unit="" />
       </div>
       {day.fibre != null && (
         <div className="text-xs"><span className="text-muted-foreground">Fibre:</span> <span className="font-semibold">{day.fibre}g</span></div>
