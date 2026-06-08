@@ -4047,30 +4047,39 @@ export type Database = {
           actual_duration_min: number | null
           client_id: string
           client_notes: string | null
-          completed_at: string
+          completed_at: string | null
+          completion_method: string | null
           created_at: string
           day_id: string
           id: string
+          in_progress_at: string | null
+          started_at: string | null
           updated_at: string
         }
         Insert: {
           actual_duration_min?: number | null
           client_id: string
           client_notes?: string | null
-          completed_at?: string
+          completed_at?: string | null
+          completion_method?: string | null
           created_at?: string
           day_id: string
           id?: string
+          in_progress_at?: string | null
+          started_at?: string | null
           updated_at?: string
         }
         Update: {
           actual_duration_min?: number | null
           client_id?: string
           client_notes?: string | null
-          completed_at?: string
+          completed_at?: string | null
+          completion_method?: string | null
           created_at?: string
           day_id?: string
           id?: string
+          in_progress_at?: string | null
+          started_at?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -4145,6 +4154,77 @@ export type Database = {
             columns: ["week_id"]
             isOneToOne: false
             referencedRelation: "pl_weeks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pl_exercise_notes: {
+        Row: {
+          client_id: string
+          coach_seen_at: string | null
+          content: string
+          created_at: string
+          day_id: string
+          exercise_id: string | null
+          exercise_name: string
+          id: string
+          row_id: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          client_id: string
+          coach_seen_at?: string | null
+          content: string
+          created_at?: string
+          day_id: string
+          exercise_id?: string | null
+          exercise_name: string
+          id?: string
+          row_id?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string
+          coach_seen_at?: string | null
+          content?: string
+          created_at?: string
+          day_id?: string
+          exercise_id?: string | null
+          exercise_name?: string
+          id?: string
+          row_id?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pl_exercise_notes_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pl_exercise_notes_day_id_fkey"
+            columns: ["day_id"]
+            isOneToOne: false
+            referencedRelation: "pl_days"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pl_exercise_notes_exercise_id_fkey"
+            columns: ["exercise_id"]
+            isOneToOne: false
+            referencedRelation: "exercises"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pl_exercise_notes_row_id_fkey"
+            columns: ["row_id"]
+            isOneToOne: false
+            referencedRelation: "pl_exercise_rows"
             referencedColumns: ["id"]
           },
         ]
