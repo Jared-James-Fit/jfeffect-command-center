@@ -12,10 +12,10 @@ import {
   Scripts,
 } from "@tanstack/react-router";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { supabase } from "../integrations/supabase/client";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
-import { useAuth } from "../lib/auth";
 
 function NotFoundComponent() {
   return (
@@ -42,8 +42,38 @@ function NotFoundComponent() {
 function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   console.error(error);
   const router = useRouter();
-  const auth = useAuth();
-  const isStaff = auth.role === "admin" || auth.role === "coach";
+  const [role, setRole] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (cancelled) return;
+        const uid = session?.user?.id ?? null;
+        setUserId(uid);
+        if (!uid) return;
+        const { data: roleRows } = await supabase
+          .from("user_roles")
+          .select("role")
+          .eq("user_id", uid);
+        if (cancelled) return;
+        const roles = (roleRows ?? []).map((r: any) => r.role as string);
+        setRole(
+          roles.includes("admin") ? "admin"
+          : roles.includes("coach") ? "coach"
+          : roles.includes("client") ? "client"
+          : null,
+        );
+      } catch {
+        // ignore — diagnostic role is best-effort
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const isStaff = role === "admin" || role === "coach";
   const errorId = useMemo(
     () => `err_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
     [error],
@@ -57,26 +87,26 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
       boundary: "tanstack_root_error_component",
       errorId,
       route: pathname + search,
-      role: auth.role,
-      userId: auth.user?.id,
+      role,
+      userId,
     });
     // eslint-disable-next-line no-console
     console.error("[ErrorBoundary]", {
       errorId,
       route: pathname + search,
-      role: auth.role,
-      userId: auth.user?.id,
+      role,
+      userId,
       message: error?.message,
       stack: error?.stack,
     });
-  }, [error, errorId, pathname, search, auth.role, auth.user?.id]);
+  }, [error, errorId, pathname, search, role, userId]);
 
   const diagnostics = [
     `Error ID: ${errorId}`,
     `When: ${new Date().toISOString()}`,
     `Route: ${pathname}${search}`,
-    `Role: ${auth.role ?? "anonymous"}`,
-    `User: ${auth.user?.id ?? "—"}`,
+    `Role: ${role ?? "anonymous"}`,
+    `User: ${userId ?? "—"}`,
     `Message: ${error?.message ?? String(error)}`,
     `UserAgent: ${typeof navigator !== "undefined" ? navigator.userAgent : "—"}`,
     "",
