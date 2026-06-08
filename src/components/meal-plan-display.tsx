@@ -14,7 +14,7 @@ const MACRO_TOKEN = /^~?\s*\d+(?:\.\d+)?\s*[pcfPCF]\s*$/;
 const MACRO_COMBINED = /^\s*~?\s*\d+\s*[pP]\s*[\/,]\s*~?\s*\d+\s*[cC]\s*[\/,]\s*~?\s*\d+\s*[fF]\b/;
 
 type Section =
-  | { kind: "meal"; title: string; items: string[]; approx?: string }
+  | { kind: "meal"; title: string; subtitle?: string; items: string[]; approx?: string }
   | { kind: "total"; title: string; macros?: string }
   | { kind: "highday"; title: string; items: string[] }
   | { kind: "other"; items: string[] };
@@ -49,7 +49,11 @@ function parse(text: string): Section[] {
   for (const line of lines) {
     if (MEAL_HEADING.test(line)) {
       flushApprox();
-      cur = { kind: "meal", title: line, items: [] };
+      // Split parenthesized subtitle: "Meal 3 (Pre/Post Workout Meal)" → title="Meal 3", subtitle="Pre/Post Workout Meal"
+      const m = line.match(/^(.*?)\s*\(([^)]+)\)\s*$/);
+      cur = m
+        ? { kind: "meal", title: m[1].trim(), subtitle: m[2].trim(), items: [] }
+        : { kind: "meal", title: line, items: [] };
       sections.push(cur);
       continue;
     }
@@ -67,7 +71,8 @@ function parse(text: string): Section[] {
     }
     if (APPROX_LABEL.test(line)) {
       flushApprox();
-      collectingApprox = true;
+      // Only start collecting if we have a meal/total to attach to — prevents stray Approx cards
+      if (cur?.kind === "meal" || cur?.kind === "total") collectingApprox = true;
       continue;
     }
     const inline = line.match(APPROX_INLINE);
@@ -126,7 +131,12 @@ export function MealPlanDisplay({ text, className }: Props) {
         if (s.kind === "meal") {
           return (
             <div key={i} className="rounded-md border border-border bg-secondary/20 px-3 py-2.5">
-              <div className="text-[11px] font-black uppercase tracking-widest text-primary">{titleCase(s.title)}</div>
+              <div className="flex flex-wrap items-baseline gap-x-2">
+                <div className="text-[11px] font-black uppercase tracking-widest text-primary">{titleCase(s.title)}</div>
+                {s.subtitle && (
+                  <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">— {s.subtitle}</div>
+                )}
+              </div>
               {s.items.length > 0 && (
                 <ul className="mt-1.5 space-y-0.5">
                   {s.items.map((it, j) => (
@@ -135,8 +145,8 @@ export function MealPlanDisplay({ text, className }: Props) {
                 </ul>
               )}
               {s.approx && (
-                <div className="mt-2 inline-flex items-center rounded bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
-                  Approx: {s.approx}
+                <div className="mt-2 inline-flex items-center rounded bg-primary/10 px-2 py-0.5 text-[11px] font-bold tracking-wider text-primary">
+                  APPROX · {s.approx.replace(/\s*\/\s*/g, " · ")}
                 </div>
               )}
             </div>
