@@ -65,6 +65,7 @@ import { Route as AuthenticatedAdminLiftVideosRouteImport } from './routes/_auth
 import { Route as AuthenticatedAdminFormsRouteImport } from './routes/_authenticated/admin/forms'
 import { Route as AuthenticatedAdminExercisesRouteImport } from './routes/_authenticated/admin/exercises'
 import { Route as AuthenticatedAdminContentIdeasRouteImport } from './routes/_authenticated/admin/content-ideas'
+import { Route as AuthenticatedAdminClientPovRouteImport } from './routes/_authenticated/admin/client-pov'
 import { Route as AuthenticatedAdminCheckInsRouteImport } from './routes/_authenticated/admin/check-ins'
 import { Route as AuthenticatedAdminCheckInReviewsRouteImport } from './routes/_authenticated/admin/check-in-reviews'
 import { Route as AuthenticatedAdminCardioTargetsRouteImport } from './routes/_authenticated/admin/cardio-targets'
@@ -422,6 +423,12 @@ const AuthenticatedAdminContentIdeasRoute =
     path: '/content-ideas',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
+const AuthenticatedAdminClientPovRoute =
+  AuthenticatedAdminClientPovRouteImport.update({
+    id: '/client-pov',
+    path: '/client-pov',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
 const AuthenticatedAdminCheckInsRoute =
   AuthenticatedAdminCheckInsRouteImport.update({
     id: '/check-ins',
@@ -698,6 +705,7 @@ export interface FileRoutesByFullPath {
   '/admin/cardio-targets': typeof AuthenticatedAdminCardioTargetsRoute
   '/admin/check-in-reviews': typeof AuthenticatedAdminCheckInReviewsRoute
   '/admin/check-ins': typeof AuthenticatedAdminCheckInsRoute
+  '/admin/client-pov': typeof AuthenticatedAdminClientPovRoute
   '/admin/content-ideas': typeof AuthenticatedAdminContentIdeasRoute
   '/admin/exercises': typeof AuthenticatedAdminExercisesRoute
   '/admin/forms': typeof AuthenticatedAdminFormsRoute
@@ -795,6 +803,7 @@ export interface FileRoutesByTo {
   '/admin/cardio-targets': typeof AuthenticatedAdminCardioTargetsRoute
   '/admin/check-in-reviews': typeof AuthenticatedAdminCheckInReviewsRoute
   '/admin/check-ins': typeof AuthenticatedAdminCheckInsRoute
+  '/admin/client-pov': typeof AuthenticatedAdminClientPovRoute
   '/admin/content-ideas': typeof AuthenticatedAdminContentIdeasRoute
   '/admin/exercises': typeof AuthenticatedAdminExercisesRoute
   '/admin/forms': typeof AuthenticatedAdminFormsRoute
@@ -897,6 +906,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/cardio-targets': typeof AuthenticatedAdminCardioTargetsRoute
   '/_authenticated/admin/check-in-reviews': typeof AuthenticatedAdminCheckInReviewsRoute
   '/_authenticated/admin/check-ins': typeof AuthenticatedAdminCheckInsRoute
+  '/_authenticated/admin/client-pov': typeof AuthenticatedAdminClientPovRoute
   '/_authenticated/admin/content-ideas': typeof AuthenticatedAdminContentIdeasRoute
   '/_authenticated/admin/exercises': typeof AuthenticatedAdminExercisesRoute
   '/_authenticated/admin/forms': typeof AuthenticatedAdminFormsRoute
@@ -999,6 +1009,7 @@ export interface FileRouteTypes {
     | '/admin/cardio-targets'
     | '/admin/check-in-reviews'
     | '/admin/check-ins'
+    | '/admin/client-pov'
     | '/admin/content-ideas'
     | '/admin/exercises'
     | '/admin/forms'
@@ -1096,6 +1107,7 @@ export interface FileRouteTypes {
     | '/admin/cardio-targets'
     | '/admin/check-in-reviews'
     | '/admin/check-ins'
+    | '/admin/client-pov'
     | '/admin/content-ideas'
     | '/admin/exercises'
     | '/admin/forms'
@@ -1197,6 +1209,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/cardio-targets'
     | '/_authenticated/admin/check-in-reviews'
     | '/_authenticated/admin/check-ins'
+    | '/_authenticated/admin/client-pov'
     | '/_authenticated/admin/content-ideas'
     | '/_authenticated/admin/exercises'
     | '/_authenticated/admin/forms'
@@ -1689,6 +1702,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminContentIdeasRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
+    '/_authenticated/admin/client-pov': {
+      id: '/_authenticated/admin/client-pov'
+      path: '/client-pov'
+      fullPath: '/admin/client-pov'
+      preLoaderRoute: typeof AuthenticatedAdminClientPovRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
     '/_authenticated/admin/check-ins': {
       id: '/_authenticated/admin/check-ins'
       path: '/check-ins'
@@ -2035,6 +2055,7 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminCardioTargetsRoute: typeof AuthenticatedAdminCardioTargetsRoute
   AuthenticatedAdminCheckInReviewsRoute: typeof AuthenticatedAdminCheckInReviewsRoute
   AuthenticatedAdminCheckInsRoute: typeof AuthenticatedAdminCheckInsRoute
+  AuthenticatedAdminClientPovRoute: typeof AuthenticatedAdminClientPovRoute
   AuthenticatedAdminContentIdeasRoute: typeof AuthenticatedAdminContentIdeasRoute
   AuthenticatedAdminExercisesRoute: typeof AuthenticatedAdminExercisesRoute
   AuthenticatedAdminFormsRoute: typeof AuthenticatedAdminFormsRoute
@@ -2090,6 +2111,7 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
     AuthenticatedAdminCheckInReviewsRoute:
       AuthenticatedAdminCheckInReviewsRoute,
     AuthenticatedAdminCheckInsRoute: AuthenticatedAdminCheckInsRoute,
+    AuthenticatedAdminClientPovRoute: AuthenticatedAdminClientPovRoute,
     AuthenticatedAdminContentIdeasRoute: AuthenticatedAdminContentIdeasRoute,
     AuthenticatedAdminExercisesRoute: AuthenticatedAdminExercisesRoute,
     AuthenticatedAdminFormsRoute: AuthenticatedAdminFormsRoute,
