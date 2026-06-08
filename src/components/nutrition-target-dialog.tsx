@@ -221,7 +221,18 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
                   <div key={k}><Label className="text-[10px] uppercase">{k}</Label><Input type="number" value={d[k] ?? ""} onChange={(e) => updateDay(i, k, e.target.value)} /></div>
                 ))}
               </div>
-              <Textarea rows={2} placeholder="Notes for this day" value={d.notes ?? ""} onChange={(e) => updateDay(i, "notes", e.target.value)} />
+              <div className="space-y-1">
+                <Label className="text-[10px] uppercase tracking-widest text-muted-foreground">Meal Plan</Label>
+                <Textarea
+                  rows={10}
+                  placeholder={`Meal 1\n120g oats\n300ml egg whites\n3 whole eggs\n\nApprox:\n50P / 115C / 22F\n\nDaily Total\n~190P / 390C / 80F`}
+                  value={d.notes ?? ""}
+                  onChange={(e) => updateDay(i, "notes", e.target.value)}
+                  className="font-mono text-xs leading-relaxed whitespace-pre"
+                  spellCheck={false}
+                />
+                <p className="text-[10px] text-muted-foreground">Paste meals as plain text — line breaks, “Meal N”, “Approx”, and “Daily Total” are auto-styled for the client view.</p>
+              </div>
             </div>
           ))}
         </div>
