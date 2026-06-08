@@ -569,11 +569,12 @@ function AssignmentsEditor({ formId, form, onFormChange }: { formId: string; for
         <div className="text-xs text-muted-foreground">
           {broadcastOn
             ? `Visible to all active coaching clients`
-            : `${assigned.size} client${assigned.size === 1 ? "" : "s"} assigned`}
+            : `${selectedIds.size} client${selectedIds.size === 1 ? "" : "s"} selected${dirty ? " · unsaved" : ""}`}
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={selectAllVisible} disabled={broadcastOn || saving}>Select all visible</Button>
+          <Button variant="outline" size="sm" onClick={selectAllVisible} disabled={broadcastOn || saving}>{allVisibleSelected ? "All visible selected" : "Select all visible"}</Button>
           <Button variant="ghost" size="sm" onClick={clearAll} disabled={broadcastOn || saving}>Clear all</Button>
+          <Button size="sm" onClick={saveAssignmentChanges} disabled={broadcastOn || saving || !dirty}>{saving ? "Saving…" : "Save assignments"}</Button>
         </div>
       </div>
 
@@ -590,21 +591,21 @@ function AssignmentsEditor({ formId, form, onFormChange }: { formId: string; for
             key={c.id}
             role="button"
             tabIndex={0}
-            aria-pressed={assigned.has(c.id)}
-            aria-disabled={broadcastOn || pendingClientIds.has(c.id)}
-            onClick={() => { if (!broadcastOn && !pendingClientIds.has(c.id)) toggle(c.id); }}
+            aria-pressed={selectedIds.has(c.id)}
+            aria-disabled={broadcastOn || saving}
+            onClick={() => { if (!broadcastOn && !saving) toggle(c.id); }}
             onKeyDown={(e) => {
-              if (broadcastOn || pendingClientIds.has(c.id)) return;
+              if (broadcastOn || saving) return;
               if (e.key === " " || e.key === "Enter") { e.preventDefault(); toggle(c.id); }
             }}
-            className={`flex min-h-[44px] cursor-pointer select-none items-center gap-3 rounded p-2 hover:bg-muted/40 ${(broadcastOn || pendingClientIds.has(c.id)) ? "cursor-not-allowed opacity-60" : ""}`}
+            className={`flex min-h-[44px] cursor-pointer select-none items-center gap-3 rounded p-2 hover:bg-muted/40 ${(broadcastOn || saving) ? "cursor-not-allowed opacity-60" : ""}`}
           >
             <Checkbox
-              checked={broadcastOn ? true : assigned.has(c.id)}
-              disabled={broadcastOn || pendingClientIds.has(c.id)}
+              checked={broadcastOn ? true : selectedIds.has(c.id)}
+              disabled={broadcastOn || saving}
               tabIndex={-1}
               onClick={(e) => e.stopPropagation()}
-              onCheckedChange={() => { if (!broadcastOn) toggle(c.id); }}
+              onCheckedChange={(checked) => setClientSelected(c.id, checked === true)}
             />
             <span className="text-sm">{c.full_name}</span>
             <span className="ml-auto truncate text-xs text-muted-foreground">{c.email}</span>
