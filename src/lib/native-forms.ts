@@ -255,12 +255,62 @@ export async function unassignForm(formId: string, clientId: string) {
 }
 
 export async function listFormsForClient(clientId: string) {
-  const { data, error } = await db
+  // Forms assigned directly to this client
+  const { data: assignedRows, error: aErr } = await db
     .from("nf_assignments")
     .select("form:form_id(*)")
     .eq("client_id", clientId);
+  if (aErr) throw aErr;
+  const assigned = ((assignedRows ?? []).map((r: any) => r.form).filter(Boolean) as NfForm[]);
+
+  // Forms broadcast to all active coaching clients (no individual assignment needed)
+  const { data: broadcastRows, error: bErr } = await db
+    .from("nf_forms")
+    .select("*")
+    .eq("visibility", "all_active_clients")
+    .eq("active", true)
+    .eq("archived", false);
+  if (bErr) throw bErr;
+  const broadcast = (broadcastRows ?? []) as NfForm[];
+
+  const map = new Map<string, NfForm>();
+  for (const f of [...assigned, ...broadcast]) {
+    if (f.active && !f.archived) map.set(f.id, f);
+  }
+  return Array.from(map.values()).sort((a, b) => a.title.localeCompare(b.title));
+}
+
+/* -------------------------- Bulk assignment helpers -------------------------- */
+
+export async function listActiveCoachingClientIds(): Promise<string[]> {
+  const { data, error } = await db
+    .from("clients")
+    .select("id")
+    .eq("archived", false)
+    .in("status", ["Active", "New Client"]);
   if (error) throw error;
-  return ((data ?? []).map((r: any) => r.form).filter(Boolean) as NfForm[]).filter((f) => f.active && !f.archived);
+  return (data ?? []).map((c: any) => c.id);
+}
+
+export async function bulkAssignFormToClients(formId: string, clientIds: string[]) {
+  if (clientIds.length === 0) return;
+  const rows = clientIds.map((cid) => ({ form_id: formId, client_id: cid }));
+  const { error } = await db
+    .from("nf_assignments")
+    .upsert(rows, { onConflict: "form_id,client_id" });
+  if (error) throw error;
+}
+
+export async function clearAllAssignments(formId: string) {
+  const { error } = await db.from("nf_assignments").delete().eq("form_id", formId);
+  if (error) throw error;
+}
+
+/* -------------------------- External form opens -------------------------- */
+
+export async function recordExternalOpen(form: NfForm, clientId: string) {
+  // Create / reuse a submission row so we can track opens + submitted flag.
+  return getOrCreateCurrentSubmission(form, clientId);
 }
 
 /* -------------------------- Submissions -------------------------- */
