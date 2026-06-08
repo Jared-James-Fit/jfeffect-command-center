@@ -612,7 +612,7 @@ function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact }: { w
   );
 }
 
-function WeekEditor({ week, setWeek, exercises, onCopyDayToFuture, hideHeader }: { week: any; setWeek: (w: any) => void; exercises: any[]; onCopyDayToFuture?: (dayIdx: number) => void; hideHeader?: boolean }) {
+function WeekEditor({ week, setWeek, exercises, onCopyDayToFuture, hideHeader, compact }: { week: any; setWeek: (w: any) => void; exercises: any[]; onCopyDayToFuture?: (dayIdx: number) => void; hideHeader?: boolean; compact?: boolean }) {
   const days = week.days || [];
   const addDay = () => {
     const nextIdx = (days[days.length - 1]?.day_index ?? 0) + 1;
@@ -637,21 +637,21 @@ function WeekEditor({ week, setWeek, exercises, onCopyDayToFuture, hideHeader }:
         <Button size="sm" variant="outline" onClick={addDay}><Plus className="mr-1 h-3 w-3" /> Day</Button>
       )}
       {days.map((d: any, i: number) => (
-        <Card key={i} className="p-3 border-l-[3px] border-l-primary/40">
-          <div className="mb-2 flex items-center gap-2">
-            <Input className="max-w-xs font-bold" value={d.title ?? ""} onChange={(e) => { const copy = [...days]; copy[i] = { ...d, title: e.target.value }; setWeek({ ...week, days: copy }); }} />
-            <Input className="max-w-xs" placeholder="Focus" value={d.focus ?? ""} onChange={(e) => { const copy = [...days]; copy[i] = { ...d, focus: e.target.value }; setWeek({ ...week, days: copy }); }} />
-            <div className="ml-auto flex gap-1">
+        <Card key={i} className={cn("border-l-[3px] border-l-primary/40", compact ? "p-2" : "p-3")}>
+          <div className={cn("flex items-center gap-2", compact ? "mb-1" : "mb-2")}>
+            <Input className={cn("max-w-xs font-bold", compact && "h-7 text-xs")} value={d.title ?? ""} onChange={(e) => { const copy = [...days]; copy[i] = { ...d, title: e.target.value }; setWeek({ ...week, days: copy }); }} />
+            <Input className={cn("max-w-xs", compact && "h-7 text-xs")} placeholder="Focus" value={d.focus ?? ""} onChange={(e) => { const copy = [...days]; copy[i] = { ...d, focus: e.target.value }; setWeek({ ...week, days: copy }); }} />
+            <div className="ml-auto flex gap-0.5">
               {onCopyDayToFuture && (
-                <Button size="sm" variant="ghost" onClick={() => onCopyDayToFuture(i)} title="Copy this day → same day in future weeks">
+                <Button size="sm" variant="ghost" className="h-7 px-2 text-[10px]" onClick={() => onCopyDayToFuture(i)} title="Copy this day → same day in future weeks">
                   <ArrowRight className="mr-1 h-3 w-3" /> → future
                 </Button>
               )}
-              <Button size="icon" variant="ghost" onClick={() => dupDay(i)} title="Duplicate"><Copy className="h-4 w-4" /></Button>
-              <Button size="icon" variant="ghost" className="text-destructive" onClick={() => delDay(i)}><Trash2 className="h-4 w-4" /></Button>
+              <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => dupDay(i)} title="Duplicate"><Copy className="h-3.5 w-3.5" /></Button>
+              <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => delDay(i)}><Trash2 className="h-3.5 w-3.5" /></Button>
             </div>
           </div>
-          <DayEditor day={d} setDay={(nd) => { const copy = [...days]; copy[i] = nd; setWeek({ ...week, days: copy }); }} exercises={exercises} />
+          <DayEditor day={d} setDay={(nd) => { const copy = [...days]; copy[i] = nd; setWeek({ ...week, days: copy }); }} exercises={exercises} compact={compact} />
         </Card>
       ))}
       {hideHeader && days.length > 0 && (
@@ -661,7 +661,7 @@ function WeekEditor({ week, setWeek, exercises, onCopyDayToFuture, hideHeader }:
   );
 }
 
-function DayEditor({ day, setDay, exercises }: { day: any; setDay: (d: any) => void; exercises: any[] }) {
+function DayEditor({ day, setDay, exercises, compact }: { day: any; setDay: (d: any) => void; exercises: any[]; compact?: boolean }) {
   const rows = day.rows || [];
   const [dragOver, setDragOver] = useState(false);
   const addRow = () => setDay({ ...day, rows: [...rows, { sort_order: rows.length, sets: 3, reps_text: "8-12", time_profile: "accessory_compound" }] });
@@ -717,12 +717,12 @@ function DayEditor({ day, setDay, exercises }: { day: any; setDay: (d: any) => v
               setRow={(nr) => { const copy = [...rows]; copy[i] = nr; setDay({ ...day, rows: copy }); }}
               onDelete={() => setDay({ ...day, rows: rows.filter((_: any, j: number) => j !== i) })}
               exercises={exercises}
-              compact
+              compact={compact !== false}
             />
           ))}
         </div>
       )}
-      <Textarea className="mt-2" placeholder="Day notes" value={day.notes ?? ""} onChange={(e) => setDay({ ...day, notes: e.target.value })} rows={2} />
+      <Textarea className={cn("mt-2", compact && "text-xs")} placeholder="Day notes" value={day.notes ?? ""} onChange={(e) => setDay({ ...day, notes: e.target.value })} rows={compact ? 1 : 2} />
     </div>
   );
 }
