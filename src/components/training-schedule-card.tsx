@@ -87,6 +87,7 @@ export function TrainingScheduleCard({ client, editable = true, compact = false,
     toast.success("Schedule saved");
     qc.invalidateQueries({ queryKey: ["client", client.id] });
     qc.invalidateQueries({ queryKey: ["my-client"] });
+    qc.invalidateQueries({ queryKey: ["my-client-schedule-gate"] });
     setEditing(false);
   };
 
