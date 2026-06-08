@@ -14,6 +14,30 @@ export type Database = {
   }
   public: {
     Tables: {
+      access_levels: {
+        Row: {
+          created_at: string
+          description: string | null
+          key: string
+          label: string
+          sort_order: number
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          key: string
+          label: string
+          sort_order?: number
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          key?: string
+          label?: string
+          sort_order?: number
+        }
+        Relationships: []
+      }
       agreement_audit_log: {
         Row: {
           actor_role: string
@@ -307,6 +331,63 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      app_members: {
+        Row: {
+          account_type: string
+          admin_notes: string | null
+          avatar_url: string | null
+          created_at: string
+          email: string
+          full_name: string | null
+          id: string
+          last_active_at: string | null
+          last_signed_in_at: string | null
+          messaging_permission: string
+          setup_token: string | null
+          setup_token_expires_at: string | null
+          status: string
+          stripe_customer_id: string | null
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          account_type?: string
+          admin_notes?: string | null
+          avatar_url?: string | null
+          created_at?: string
+          email: string
+          full_name?: string | null
+          id?: string
+          last_active_at?: string | null
+          last_signed_in_at?: string | null
+          messaging_permission?: string
+          setup_token?: string | null
+          setup_token_expires_at?: string | null
+          status?: string
+          stripe_customer_id?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          account_type?: string
+          admin_notes?: string | null
+          avatar_url?: string | null
+          created_at?: string
+          email?: string
+          full_name?: string | null
+          id?: string
+          last_active_at?: string | null
+          last_signed_in_at?: string | null
+          messaging_permission?: string
+          setup_token?: string | null
+          setup_token_expires_at?: string | null
+          status?: string
+          stripe_customer_id?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: []
       }
       app_shortcuts: {
         Row: {
@@ -2550,6 +2631,333 @@ export type Database = {
         }
         Relationships: []
       }
+      member_access: {
+        Row: {
+          access_level_key: string
+          active: boolean
+          created_at: string
+          expires_at: string | null
+          granted_at: string
+          id: string
+          member_id: string
+          notes: string | null
+          offer_id: string | null
+          source: string
+          updated_at: string
+        }
+        Insert: {
+          access_level_key: string
+          active?: boolean
+          created_at?: string
+          expires_at?: string | null
+          granted_at?: string
+          id?: string
+          member_id: string
+          notes?: string | null
+          offer_id?: string | null
+          source?: string
+          updated_at?: string
+        }
+        Update: {
+          access_level_key?: string
+          active?: boolean
+          created_at?: string
+          expires_at?: string | null
+          granted_at?: string
+          id?: string
+          member_id?: string
+          notes?: string | null
+          offer_id?: string | null
+          source?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "member_access_access_level_key_fkey"
+            columns: ["access_level_key"]
+            isOneToOne: false
+            referencedRelation: "access_levels"
+            referencedColumns: ["key"]
+          },
+          {
+            foreignKeyName: "member_access_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "app_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "member_access_offer_id_fkey"
+            columns: ["offer_id"]
+            isOneToOne: false
+            referencedRelation: "offers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      member_plan_enrollments: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          current_week: number
+          id: string
+          member_id: string
+          notes: string | null
+          plan_id: string
+          started_at: string
+          status: string
+          updated_at: string
+          workouts_completed: number
+          workouts_total: number
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          current_week?: number
+          id?: string
+          member_id: string
+          notes?: string | null
+          plan_id: string
+          started_at?: string
+          status?: string
+          updated_at?: string
+          workouts_completed?: number
+          workouts_total?: number
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          current_week?: number
+          id?: string
+          member_id?: string
+          notes?: string | null
+          plan_id?: string
+          started_at?: string
+          status?: string
+          updated_at?: string
+          workouts_completed?: number
+          workouts_total?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "member_plan_enrollments_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "app_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "member_plan_enrollments_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "member_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      member_plans: {
+        Row: {
+          cover_image_url: string | null
+          created_at: string
+          created_by: string | null
+          days_per_week: number
+          description: string | null
+          difficulty: string
+          equipment_needed: string[]
+          est_minutes_per_workout: number | null
+          featured: boolean
+          goal: string | null
+          id: string
+          logging_enabled: boolean
+          name: string
+          published_payload: Json
+          required_access_level: string
+          source_block_id: string | null
+          source_template_id: string | null
+          status: string
+          tags: string[]
+          tracking_enabled: boolean
+          training_style: string
+          updated_at: string
+          weeks: number
+          workouts_total: number
+        }
+        Insert: {
+          cover_image_url?: string | null
+          created_at?: string
+          created_by?: string | null
+          days_per_week?: number
+          description?: string | null
+          difficulty?: string
+          equipment_needed?: string[]
+          est_minutes_per_workout?: number | null
+          featured?: boolean
+          goal?: string | null
+          id?: string
+          logging_enabled?: boolean
+          name: string
+          published_payload?: Json
+          required_access_level?: string
+          source_block_id?: string | null
+          source_template_id?: string | null
+          status?: string
+          tags?: string[]
+          tracking_enabled?: boolean
+          training_style?: string
+          updated_at?: string
+          weeks?: number
+          workouts_total?: number
+        }
+        Update: {
+          cover_image_url?: string | null
+          created_at?: string
+          created_by?: string | null
+          days_per_week?: number
+          description?: string | null
+          difficulty?: string
+          equipment_needed?: string[]
+          est_minutes_per_workout?: number | null
+          featured?: boolean
+          goal?: string | null
+          id?: string
+          logging_enabled?: boolean
+          name?: string
+          published_payload?: Json
+          required_access_level?: string
+          source_block_id?: string | null
+          source_template_id?: string | null
+          status?: string
+          tags?: string[]
+          tracking_enabled?: boolean
+          training_style?: string
+          updated_at?: string
+          weeks?: number
+          workouts_total?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "member_plans_required_access_level_fkey"
+            columns: ["required_access_level"]
+            isOneToOne: false
+            referencedRelation: "access_levels"
+            referencedColumns: ["key"]
+          },
+          {
+            foreignKeyName: "member_plans_source_block_id_fkey"
+            columns: ["source_block_id"]
+            isOneToOne: false
+            referencedRelation: "pl_blocks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "member_plans_source_template_id_fkey"
+            columns: ["source_template_id"]
+            isOneToOne: false
+            referencedRelation: "pl_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      member_set_logs: {
+        Row: {
+          created_at: string
+          day_index: number
+          enrollment_id: string
+          exercise_index: number
+          id: string
+          load_kg: number | null
+          load_lb: number | null
+          logged_at: string
+          notes: string | null
+          reps: number | null
+          rir: number | null
+          rpe: number | null
+          set_index: number
+          updated_at: string
+          week_index: number
+        }
+        Insert: {
+          created_at?: string
+          day_index: number
+          enrollment_id: string
+          exercise_index: number
+          id?: string
+          load_kg?: number | null
+          load_lb?: number | null
+          logged_at?: string
+          notes?: string | null
+          reps?: number | null
+          rir?: number | null
+          rpe?: number | null
+          set_index: number
+          updated_at?: string
+          week_index: number
+        }
+        Update: {
+          created_at?: string
+          day_index?: number
+          enrollment_id?: string
+          exercise_index?: number
+          id?: string
+          load_kg?: number | null
+          load_lb?: number | null
+          logged_at?: string
+          notes?: string | null
+          reps?: number | null
+          rir?: number | null
+          rpe?: number | null
+          set_index?: number
+          updated_at?: string
+          week_index?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "member_set_logs_enrollment_id_fkey"
+            columns: ["enrollment_id"]
+            isOneToOne: false
+            referencedRelation: "member_plan_enrollments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      member_workout_completions: {
+        Row: {
+          completed_at: string
+          created_at: string
+          day_index: number
+          enrollment_id: string
+          id: string
+          notes: string | null
+          week_index: number
+        }
+        Insert: {
+          completed_at?: string
+          created_at?: string
+          day_index: number
+          enrollment_id: string
+          id?: string
+          notes?: string | null
+          week_index: number
+        }
+        Update: {
+          completed_at?: string
+          created_at?: string
+          day_index?: number
+          enrollment_id?: string
+          id?: string
+          notes?: string | null
+          week_index?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "member_workout_completions_enrollment_id_fkey"
+            columns: ["enrollment_id"]
+            isOneToOne: false
+            referencedRelation: "member_plan_enrollments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       messages: {
         Row: {
           attachments: Json
@@ -3904,6 +4312,47 @@ export type Database = {
         }
         Relationships: []
       }
+      product_access_grants: {
+        Row: {
+          access_level_keys: string[]
+          account_type_granted: string
+          created_at: string
+          id: string
+          included_plan_ids: string[]
+          is_subscription: boolean
+          offer_id: string
+          updated_at: string
+        }
+        Insert: {
+          access_level_keys?: string[]
+          account_type_granted?: string
+          created_at?: string
+          id?: string
+          included_plan_ids?: string[]
+          is_subscription?: boolean
+          offer_id: string
+          updated_at?: string
+        }
+        Update: {
+          access_level_keys?: string[]
+          account_type_granted?: string
+          created_at?: string
+          id?: string
+          included_plan_ids?: string[]
+          is_subscription?: boolean
+          offer_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_access_grants_offer_id_fkey"
+            columns: ["offer_id"]
+            isOneToOne: true
+            referencedRelation: "offers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -4496,6 +4945,7 @@ export type Database = {
     }
     Functions: {
       current_coach_id: { Args: never; Returns: string }
+      current_member_id: { Args: never; Returns: string }
       delete_email: {
         Args: { message_id: number; queue_name: string }
         Returns: boolean
@@ -4513,6 +4963,10 @@ export type Database = {
       }
       is_assigned_coach: { Args: { _client_id: string }; Returns: boolean }
       mark_client_signed_in: { Args: never; Returns: undefined }
+      member_has_access: {
+        Args: { _key: string; _member_id: string }
+        Returns: boolean
+      }
       move_to_dlq: {
         Args: {
           dlq_name: string

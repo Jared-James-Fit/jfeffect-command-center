@@ -5,7 +5,7 @@ import { useRouter } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { markClientSignedIn } from "@/lib/activity";
 
-export type AppRole = "admin" | "coach" | "client";
+export type AppRole = "admin" | "coach" | "client" | "member";
 
 interface AuthState {
   user: User | null;
@@ -55,20 +55,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!user) return;
     let cancelled = false;
-    supabase
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", user.id)
-      .then(({ data }) => {
-        if (cancelled) return;
-        const roles = (data ?? []).map((r) => r.role as AppRole);
-        setRole(
-          roles.includes("admin") ? "admin"
-          : roles.includes("coach") ? "coach"
-          : roles.includes("client") ? "client"
-          : null,
-        );
-      });
+    (async () => {
+      const [{ data: roleRows }, { data: memberRow }] = await Promise.all([
+        supabase.from("user_roles").select("role").eq("user_id", user.id),
+        supabase.from("app_members").select("id").eq("user_id", user.id).maybeSingle(),
+      ]);
+      if (cancelled) return;
+      const roles = (roleRows ?? []).map((r: any) => r.role as AppRole);
+      // Admin/coach take priority. Otherwise: if the user has an app_members
+      // row, they're a member; else fall back to client.
+      setRole(
+        roles.includes("admin") ? "admin"
+        : roles.includes("coach") ? "coach"
+        : memberRow ? "member"
+        : roles.includes("client") ? "client"
+        : null,
+      );
+    })();
     return () => {
       cancelled = true;
     };

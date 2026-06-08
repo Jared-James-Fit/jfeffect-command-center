@@ -39,7 +39,8 @@ function AuthPage() {
 
   useEffect(() => {
     if (!loading && user && role) {
-      navigate({ to: role === "client" ? "/portal" : "/admin", replace: true });
+      const to = role === "member" ? "/m" : role === "client" ? "/portal" : "/admin";
+      navigate({ to, replace: true });
     }
   }, [user, role, loading, navigate]);
 
