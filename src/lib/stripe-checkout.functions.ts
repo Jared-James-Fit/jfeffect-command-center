@@ -162,6 +162,9 @@ export const createCheckoutSession = createServerFn({ method: "POST" })
     sessionParams["metadata[user_id]"] = userId;
     sessionParams["metadata[product_id]"] = data.productId;
 
+    // Validate price belongs to the connected Stripe account/mode
+    await assertPriceBelongsToAccount(product.stripe_price_id);
+
     // 6. Create the Checkout Session
     const session = await stripeFetch("/checkout/sessions", {
       method: "POST",
@@ -343,6 +346,8 @@ export const createCheckoutSessionForAssignment = createServerFn({ method: "POST
       sessionParams["customer_email"] = client.email;
     }
 
+    await assertPriceBelongsToAccount(priceId);
+
     const session = await stripeFetch("/checkout/sessions", {
       method: "POST",
       body: formEncode(sessionParams),
@@ -406,6 +411,8 @@ export const createPreviewCheckoutSession = createServerFn({ method: "POST" })
         !!product.payment_structure &&
         /monthly|weekly|bi-weekly|quarterly|annual|recurring/i.test(product.payment_structure));
     const checkoutMode = isSubscription ? "subscription" : "payment";
+
+    await assertPriceBelongsToAccount(product.stripe_price_id);
 
     const session = await stripeFetch("/checkout/sessions", {
       method: "POST",
