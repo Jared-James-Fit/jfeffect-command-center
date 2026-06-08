@@ -94,6 +94,8 @@ const createSchema = z.object({
   billingInterval: z.enum(["month", "year", "week", "day"]).optional().nullable(),
   // Access level (0-5) for display purposes
   accessLevel: z.number().int().min(0).max(5).optional().nullable(),
+  isMemberFacing: z.boolean().optional(),
+  memberTierLabel: z.string().trim().max(60).optional().nullable(),
 });
 
 export const createCoachingProduct = createServerFn({ method: "POST" })
