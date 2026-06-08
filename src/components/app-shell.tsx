@@ -498,7 +498,7 @@ export function PageHeader({
   };
   const showBack = !!backTo;
   return (
-    <div className="sticky top-0 z-30 flex flex-wrap items-end justify-between gap-4 border-b border-border bg-gradient-to-b from-card to-background px-4 py-4 md:static md:px-8 md:py-6">
+    <div className="flex flex-wrap items-end justify-between gap-4 border-b border-border bg-gradient-to-b from-card to-background px-4 py-4 md:px-8 md:py-6">
       <div className="min-w-0 flex-1">
         {showBack && (
           <div className="mb-2 flex items-center gap-2">
