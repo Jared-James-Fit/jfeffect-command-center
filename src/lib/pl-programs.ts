@@ -884,6 +884,54 @@ export async function setTemplateArchived(id: string, archived: boolean) {
   await updateTemplate(id, { archived });
 }
 
+/** Clients (and the prep/block rows) that were created from a given template. */
+export async function listTemplateAssignments(templateId: string) {
+  const [preps, blocks] = await Promise.all([
+    (sb as any).from("pl_preps")
+      .select("id, title, client_id, created_at, status, archived, clients:clients(id, full_name)")
+      .eq("source_template_id", templateId)
+      .order("created_at", { ascending: false }),
+    (sb as any).from("pl_blocks")
+      .select("id, name, client_id, prep_id, created_at, status, archived, clients:clients(id, full_name)")
+      .eq("source_template_id", templateId)
+      .order("created_at", { ascending: false }),
+  ]);
+  const rows: Array<{
+    kind: "prep" | "block";
+    id: string;
+    label: string;
+    clientId: string;
+    clientName: string | null;
+    prepId?: string | null;
+    createdAt: string;
+    status?: string | null;
+    archived?: boolean;
+  }> = [];
+  for (const p of (preps.data ?? []) as any[]) {
+    rows.push({ kind: "prep", id: p.id, label: p.title, clientId: p.client_id, clientName: p.clients?.full_name ?? null, createdAt: p.created_at, status: p.status, archived: !!p.archived });
+  }
+  for (const b of (blocks.data ?? []) as any[]) {
+    // Skip blocks that belong to a prep already listed above to avoid double-counting full-prep assignments.
+    rows.push({ kind: "block", id: b.id, label: b.name, clientId: b.client_id, clientName: b.clients?.full_name ?? null, prepId: b.prep_id, createdAt: b.created_at, status: b.status, archived: !!b.archived });
+  }
+  return rows;
+}
+
+/** Lookup the source template (if any) for a given prep id or block id. */
+export async function getSourceTemplate(opts: { prepId?: string | null; blockId?: string | null }) {
+  let templateId: string | null = null;
+  if (opts.prepId) {
+    const { data } = await (sb as any).from("pl_preps").select("source_template_id").eq("id", opts.prepId).maybeSingle();
+    templateId = data?.source_template_id ?? null;
+  } else if (opts.blockId) {
+    const { data } = await (sb as any).from("pl_blocks").select("source_template_id").eq("id", opts.blockId).maybeSingle();
+    templateId = data?.source_template_id ?? null;
+  }
+  if (!templateId) return null;
+  const { data: tpl } = await (sb as any).from("pl_templates").select("id, name, template_type").eq("id", templateId).maybeSingle();
+  return tpl ?? null;
+}
+
 export async function deleteTemplate(id: string) {
   const { error } = await sb.from("pl_templates").delete().eq("id", id);
   if (error) throw error;
