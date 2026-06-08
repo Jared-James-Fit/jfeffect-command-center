@@ -303,13 +303,25 @@ function AdminDashboard() {
       <PageHeader
         title="Command Center"
         subtitle="Your coaching business at a glance."
-        actions={quickActions.map((a) => (
-          <Link key={a.label} to={a.to}>
-            <Button variant="outline" size="sm" className="font-semibold">
-              <a.icon className="mr-2 h-4 w-4" />{a.label}
-            </Button>
-          </Link>
-        ))}
+        actions={
+          <>
+            <Link to="/admin/client-pov">
+              <Button
+                size="sm"
+                className="bg-warning/15 text-warning border border-warning/40 hover:bg-warning/25 font-semibold"
+              >
+                <Eye className="mr-2 h-4 w-4" /> Client POV
+              </Button>
+            </Link>
+            {quickActions.map((a) => (
+              <Link key={a.label} to={a.to}>
+                <Button variant="outline" size="sm" className="font-semibold">
+                  <a.icon className="mr-2 h-4 w-4" />{a.label}
+                </Button>
+              </Link>
+            ))}
+          </>
+        }
       />
       <div className="space-y-6 p-6 md:p-8">
         <DriveSetupBanner />
