@@ -94,7 +94,7 @@ function PortalHome() {
   const firstName = (client?.full_name ?? user?.email?.split("@")[0] ?? "").split(" ")[0];
 
   const quickActions = [
-    { to: "/portal/check-in", label: "Submit Check-In", icon: ClipboardCheck },
+    { to: "/portal/check-ins", label: "Submit Check-In", icon: ClipboardCheck },
     { to: "/portal/lift-videos", label: "Send Lift Video", icon: Video },
     { to: "/portal/nutrition-targets", label: "Nutrition Targets", icon: Apple },
     { to: "/portal/exercises", label: "Exercise Library", icon: Dumbbell },

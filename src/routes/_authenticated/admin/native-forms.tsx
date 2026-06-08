@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,22 +11,21 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { Plus, Trash2, Copy, GripVertical, FileEdit, ChevronUp, ChevronDown, Archive, ExternalLink, Search, Eye } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  listForms, upsertForm, duplicateForm, archiveForm, deleteForm,
+  listForms, upsertForm, duplicateForm, archiveForm,
   listQuestions, upsertQuestion, deleteQuestion, reorderQuestions,
   listAssignments,
-  listActiveCoachingClientIds,
-  assignFormToClient, unassignForm,
-  bulkAssignFormToClients, clearAllAssignments,
   NF_QUESTION_TYPES, NF_QUESTION_TYPE_LABEL,
   type NfForm, type NfQuestion, type NfQuestionType, type NfRecurrence, type NfKind, type NfOpenStyle,
 } from "@/lib/native-forms";
+import { deleteNativeForms, replaceNativeFormAssignments } from "@/lib/native-forms.functions";
+import { useBulkSelection } from "@/hooks/use-bulk-selection";
 
 export const Route = createFileRoute("/_authenticated/admin/native-forms")({
   component: AdminNativeForms,
@@ -35,8 +35,27 @@ function AdminNativeForms() {
   const qc = useQueryClient();
   const [editing, setEditing] = useState<NfForm | null>(null);
   const [creating, setCreating] = useState<NfKind | null>(null);
+  const deleteFormsFn = useServerFn(deleteNativeForms);
 
   const { data: forms = [] } = useQuery({ queryKey: ["nf-forms"], queryFn: () => listForms({ includeArchived: true }) });
+  const formSelection = useBulkSelection(useMemo(() => forms.map((form) => form.id), [forms]));
+
+  async function deleteSelectedForms() {
+    if (formSelection.count === 0) return;
+    if (!confirm(`Delete ${formSelection.count} selected form${formSelection.count === 1 ? "" : "s"}? This cannot be undone.`)) return;
+    try {
+      const result = await deleteFormsFn({ data: { formIds: formSelection.selectedIds } });
+      if (!result.ok) {
+        toast.error(result.error ?? "Forms could not be deleted");
+        return;
+      }
+      formSelection.clear();
+      await qc.invalidateQueries({ queryKey: ["nf-forms"] });
+      toast.success(`Deleted ${result.count} form${result.count === 1 ? "" : "s"}`);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Forms could not be deleted");
+    }
+  }
 
   async function handleCreate(kind: NfKind) {
     const id = await upsertForm({
@@ -56,17 +75,39 @@ function AdminNativeForms() {
 
   return (
     <>
-      <PageHeader title="Form Builder" subtitle="Build native forms or embed external check-ins, then assign them to clients." actions={
+      <PageHeader title="Check-Ins & Form Builder" subtitle="Build native forms or embed external check-ins, then assign them to clients." actions={
         <Button onClick={() => setCreating("native")} className="bg-gradient-primary font-bold"><Plus className="mr-2 h-4 w-4" /> New Form</Button>
       } />
       <div className="space-y-3 p-4 md:p-6">
+        {forms.length > 0 && (
+          <Card className="border-border bg-card p-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <label className="flex cursor-pointer items-center gap-2 text-sm font-semibold">
+                <Checkbox
+                  checked={formSelection.allSelected || (formSelection.someSelected ? "indeterminate" : false)}
+                  onCheckedChange={formSelection.toggleAll}
+                />
+                {formSelection.count > 0 ? `${formSelection.count} selected` : "Select forms"}
+              </label>
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" size="sm" onClick={formSelection.toggleAll}>
+                  {formSelection.allSelected ? "Unselect all" : "Select all"}
+                </Button>
+                <Button variant="ghost" size="sm" onClick={formSelection.clear} disabled={formSelection.count === 0}>Clear</Button>
+                <Button variant="destructive" size="sm" onClick={deleteSelectedForms} disabled={formSelection.count === 0}>
+                  <Trash2 className="mr-1 h-4 w-4" /> Delete selected
+                </Button>
+              </div>
+            </div>
+          </Card>
+        )}
         {forms.length === 0 && (
           <Card className="border-dashed bg-card p-8 text-center text-sm text-muted-foreground">
             No forms yet. Create a Native form (built in-app) or an External form (Fillout, Typeform, Google Forms link).
           </Card>
         )}
         {forms.map((f) => {
-          return <FormRow key={f.id} form={f} onEdit={() => setEditing(f)} />;
+          return <FormRow key={f.id} form={f} selected={formSelection.isSelected(f.id)} onSelect={(checked) => formSelection.setOne(f.id, checked)} onEdit={() => setEditing(f)} />;
         })}
       </div>
 
@@ -101,7 +142,17 @@ function NewFormDialog({ open, onPick, onClose }: { open: boolean; onPick: (k: N
   );
 }
 
-function FormRow({ form, onEdit }: { form: NfForm; onEdit: () => void }) {
+function FormRow({
+  form,
+  selected,
+  onSelect,
+  onEdit,
+}: {
+  form: NfForm;
+  selected: boolean;
+  onSelect: (checked: boolean) => void;
+  onEdit: () => void;
+}) {
   const qc = useQueryClient();
   const { data: questions = [] } = useQuery({
     queryKey: ["nf-questions", form.id],
@@ -119,7 +170,9 @@ function FormRow({ form, onEdit }: { form: NfForm; onEdit: () => void }) {
   return (
     <Card className="border-border bg-card p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
+        <div className="flex min-w-0 items-start gap-3">
+          <Checkbox checked={selected} onCheckedChange={(checked) => onSelect(checked === true)} aria-label={`Select ${form.title}`} />
+          <div className="min-w-0">
           <div className="flex items-center gap-2">
             <div className="text-base font-black">{form.title}</div>
             <Badge variant="outline" className="text-[10px]">{kindLabel}</Badge>
@@ -134,6 +187,7 @@ function FormRow({ form, onEdit }: { form: NfForm; onEdit: () => void }) {
           <div className="mt-1 text-xs text-muted-foreground">
             {form.kind === "native" ? `${questions.length} questions` : (form.external_url ? "External link set" : "No URL yet")}
             {" · "}{assignedCount}{" · "}{form.recurrence}
+          </div>
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -386,10 +440,11 @@ function QuestionRow({ q, formId, onMoveUp, onMoveDown }: { q: NfQuestion; formI
 
 function AssignmentsEditor({ formId, form, onFormChange }: { formId: string; form: NfForm; onFormChange: (f: NfForm) => void }) {
   const qc = useQueryClient();
+  const saveAssignmentsFn = useServerFn(replaceNativeFormAssignments);
   const [search, setSearch] = useState("");
   const [saving, setSaving] = useState(false);
+  const [dirty, setDirty] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [pendingClientIds, setPendingClientIds] = useState<Set<string>>(new Set());
 
   const { data: assignments = [] } = useQuery({ queryKey: ["nf-assignments", formId], queryFn: () => listAssignments(formId) });
   const { data: clients = [] } = useQuery({
@@ -405,84 +460,64 @@ function AssignmentsEditor({ formId, form, onFormChange }: { formId: string; for
   });
 
   useEffect(() => {
-    if (pendingClientIds.size > 0) return;
+    if (dirty || saving) return;
     setSelectedIds(new Set(assignments.map((a: any) => a.client_id)));
-  }, [assignments, pendingClientIds.size]);
+  }, [assignments, dirty, saving]);
 
-  const assigned = selectedIds;
+  const broadcastOn = form.visibility === "all_active_clients";
   const filtered = clients.filter((c: any) => {
     const q = search.trim().toLowerCase();
     if (!q) return true;
     return (c.full_name ?? "").toLowerCase().includes(q) || (c.email ?? "").toLowerCase().includes(q);
   });
+  const visibleIds = filtered.map((client: any) => client.id as string);
+  const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedIds.has(id));
 
-  async function toggle(clientId: string) {
-    if (broadcastOn || pendingClientIds.has(clientId)) return;
-    const wasAssigned = assigned.has(clientId);
+  function setClientSelected(clientId: string, checked: boolean) {
+    if (broadcastOn || saving) return;
     setSelectedIds((prev) => {
       const next = new Set(prev);
-      if (wasAssigned) next.delete(clientId);
-      else next.add(clientId);
+      if (checked) next.add(clientId);
+      else next.delete(clientId);
       return next;
     });
-    setPendingClientIds((prev) => new Set(prev).add(clientId));
-    try {
-      if (wasAssigned) {
-        await unassignForm(formId, clientId);
-      } else {
-        await assignFormToClient(formId, clientId);
-      }
-      await qc.invalidateQueries({ queryKey: ["nf-assignments", formId] });
-      await qc.invalidateQueries({ queryKey: ["nf-forms"] });
-    } catch (e: any) {
-      setSelectedIds((prev) => {
-        const next = new Set(prev);
-        if (wasAssigned) next.add(clientId);
-        else next.delete(clientId);
-        return next;
-      });
-      toast.error(e?.message ?? "Assignment failed");
-    } finally {
-      setPendingClientIds((prev) => {
-        const next = new Set(prev);
-        next.delete(clientId);
-        return next;
-      });
-    }
+    setDirty(true);
   }
 
-  async function selectAllVisible() {
-    const toAdd = filtered.filter((c: any) => !assigned.has(c.id)).map((c: any) => c.id);
-    if (toAdd.length === 0) return;
-    setSaving(true);
-    const previous = new Set(assigned);
-    setSelectedIds((prev) => new Set([...prev, ...toAdd]));
-    try {
-      await bulkAssignFormToClients(formId, toAdd);
-      await qc.invalidateQueries({ queryKey: ["nf-assignments", formId] });
-      await qc.invalidateQueries({ queryKey: ["nf-forms"] });
-      toast.success(`Assigned ${toAdd.length}`);
-    } catch (e: any) {
-      setSelectedIds(previous);
-      toast.error(e?.message ?? "Assignment failed");
-    } finally {
-      setSaving(false);
-    }
+  function toggle(clientId: string) {
+    setClientSelected(clientId, !selectedIds.has(clientId));
   }
 
-  async function clearAll() {
-    if (!confirm("Remove all individual assignments for this form?")) return;
-    setSaving(true);
-    const previous = new Set(assigned);
+  function selectAllVisible() {
+    if (broadcastOn || saving || visibleIds.length === 0) return;
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      for (const id of visibleIds) next.add(id);
+      return next;
+    });
+    setDirty(true);
+  }
+
+  function clearAll() {
+    if (broadcastOn || saving) return;
     setSelectedIds(new Set());
+    setDirty(true);
+  }
+
+  async function saveAssignmentChanges() {
+    setSaving(true);
     try {
-      await clearAllAssignments(formId);
+      const result = await saveAssignmentsFn({ data: { formId, clientIds: Array.from(selectedIds) } });
+      if (!result.ok) {
+        toast.error(result.error ?? "Assignments could not be saved");
+        return;
+      }
+      setDirty(false);
       await qc.invalidateQueries({ queryKey: ["nf-assignments", formId] });
       await qc.invalidateQueries({ queryKey: ["nf-forms"] });
-      toast.success("Cleared");
+      toast.success(`Saved ${result.count} assignment${result.count === 1 ? "" : "s"}`);
     } catch (e: any) {
-      setSelectedIds(previous);
-      toast.error(e?.message ?? "Clear failed");
+      toast.error(e?.message ?? "Assignments could not be saved");
     } finally {
       setSaving(false);
     }
@@ -494,14 +529,8 @@ function AssignmentsEditor({ formId, form, onFormChange }: { formId: string; for
       const visibility = on ? "all_active_clients" : "selected";
       await upsertForm({ id: formId, visibility });
       onFormChange({ ...form, visibility });
-      if (on) {
-        // Materialize assignments for every active client now so submissions, due
-        // dates, and admin counts still work cleanly.
-        const ids = await listActiveCoachingClientIds();
-        await bulkAssignFormToClients(formId, ids);
-      }
-      qc.invalidateQueries({ queryKey: ["nf-forms"] });
-      qc.invalidateQueries({ queryKey: ["nf-assignments", formId] });
+      await qc.invalidateQueries({ queryKey: ["nf-forms"] });
+      await qc.invalidateQueries({ queryKey: ["nf-assignments", formId] });
       toast.success(on ? "Now visible to all active clients" : "Switched to selected clients");
     } catch (e: any) {
       toast.error(e?.message ?? "Failed");
@@ -522,8 +551,6 @@ function AssignmentsEditor({ formId, form, onFormChange }: { formId: string; for
       setSaving(false);
     }
   }
-
-  const broadcastOn = form.visibility === "all_active_clients";
 
   return (
     <div className="space-y-3">
@@ -548,11 +575,12 @@ function AssignmentsEditor({ formId, form, onFormChange }: { formId: string; for
         <div className="text-xs text-muted-foreground">
           {broadcastOn
             ? `Visible to all active coaching clients`
-            : `${assigned.size} client${assigned.size === 1 ? "" : "s"} assigned`}
+            : `${selectedIds.size} client${selectedIds.size === 1 ? "" : "s"} selected${dirty ? " · unsaved" : ""}`}
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={selectAllVisible} disabled={broadcastOn || saving}>Select all visible</Button>
+          <Button variant="outline" size="sm" onClick={selectAllVisible} disabled={broadcastOn || saving}>{allVisibleSelected ? "All visible selected" : "Select all visible"}</Button>
           <Button variant="ghost" size="sm" onClick={clearAll} disabled={broadcastOn || saving}>Clear all</Button>
+          <Button size="sm" onClick={saveAssignmentChanges} disabled={broadcastOn || saving || !dirty}>{saving ? "Saving…" : "Save assignments"}</Button>
         </div>
       </div>
 
@@ -569,21 +597,21 @@ function AssignmentsEditor({ formId, form, onFormChange }: { formId: string; for
             key={c.id}
             role="button"
             tabIndex={0}
-            aria-pressed={assigned.has(c.id)}
-            aria-disabled={broadcastOn || pendingClientIds.has(c.id)}
-            onClick={() => { if (!broadcastOn && !pendingClientIds.has(c.id)) toggle(c.id); }}
+            aria-pressed={selectedIds.has(c.id)}
+            aria-disabled={broadcastOn || saving}
+            onClick={() => { if (!broadcastOn && !saving) toggle(c.id); }}
             onKeyDown={(e) => {
-              if (broadcastOn || pendingClientIds.has(c.id)) return;
+              if (broadcastOn || saving) return;
               if (e.key === " " || e.key === "Enter") { e.preventDefault(); toggle(c.id); }
             }}
-            className={`flex min-h-[44px] cursor-pointer select-none items-center gap-3 rounded p-2 hover:bg-muted/40 ${(broadcastOn || pendingClientIds.has(c.id)) ? "cursor-not-allowed opacity-60" : ""}`}
+            className={`flex min-h-[44px] cursor-pointer select-none items-center gap-3 rounded p-2 hover:bg-muted/40 ${(broadcastOn || saving) ? "cursor-not-allowed opacity-60" : ""}`}
           >
             <Checkbox
-              checked={broadcastOn ? true : assigned.has(c.id)}
-              disabled={broadcastOn || pendingClientIds.has(c.id)}
+              checked={broadcastOn ? true : selectedIds.has(c.id)}
+              disabled={broadcastOn || saving}
               tabIndex={-1}
               onClick={(e) => e.stopPropagation()}
-              onCheckedChange={() => { if (!broadcastOn) toggle(c.id); }}
+              onCheckedChange={(checked) => setClientSelected(c.id, checked === true)}
             />
             <span className="text-sm">{c.full_name}</span>
             <span className="ml-auto truncate text-xs text-muted-foreground">{c.email}</span>

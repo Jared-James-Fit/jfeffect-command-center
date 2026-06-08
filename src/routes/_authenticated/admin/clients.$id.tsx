@@ -954,7 +954,7 @@ function AssignCheckInLibrary({ value, onChange }: { value: string | null; onCha
           </SelectContent>
         </Select>
       </div>
-      <Link to="/admin/check-ins"><Button variant="outline" size="sm">Manage library</Button></Link>
+      <Link to="/admin/native-forms"><Button variant="outline" size="sm">Manage forms</Button></Link>
     </div>
   );
 }
