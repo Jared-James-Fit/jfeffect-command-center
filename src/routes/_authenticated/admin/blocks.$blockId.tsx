@@ -400,6 +400,7 @@ function BlockEditor() {
               <div className="p-3">
                 <DayBlock
                   key={focusedDay.id}
+                  blockId={blockId}
                   day={focusedDay}
                   rows={(rows as any[]).filter((r: any) => r.day_id === focusedDay.id)}
                   exercises={exercises as ExerciseRef[]}
@@ -437,6 +438,7 @@ function BlockEditor() {
                   {(weeks as any[]).map((w: any) => (
                     <WeekColumn
                       key={w.id}
+                      blockId={blockId}
                       week={w}
                       days={(days as any[]).filter((d: any) => d.week_id === w.id)}
                       rows={rows}
@@ -468,6 +470,7 @@ function BlockEditor() {
                 {visibleWeeks.map((w: any) => (
                   <WeekColumn
                     key={w.id}
+                    blockId={blockId}
                     week={w}
                     days={(days as any[]).filter((d: any) => d.week_id === w.id)}
                     rows={rows}
