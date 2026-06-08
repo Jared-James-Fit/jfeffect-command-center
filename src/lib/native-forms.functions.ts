@@ -225,7 +225,7 @@ export const updateNativeFormAccess = createServerFn({ method: "POST" })
       if (roleError) throw new Error(roleError.message);
       if (!adminRole) throw new Error("Only admins can change form access settings.");
 
-      const patch: Record<string, unknown> = {};
+      const patch: Record<string, any> = {};
       if (data.visibility) patch.visibility = data.visibility;
       if (typeof data.autoAssignNewClients === "boolean") {
         patch.auto_assign_new_clients = data.autoAssignNewClients;
