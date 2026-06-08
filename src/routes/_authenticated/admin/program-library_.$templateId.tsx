@@ -750,7 +750,14 @@ function WeekEditor({ week, setWeek, exercises, onCopyDayToFuture, hideHeader, c
 function DayEditor({ day, setDay, exercises, compact }: { day: any; setDay: (d: any) => void; exercises: any[]; compact?: boolean }) {
   const rows = day.rows || [];
   const [dragOver, setDragOver] = useState(false);
+  const clip = useClip();
   const addRow = () => setDay({ ...day, rows: [...rows, { sort_order: rows.length, sets: 3, reps_text: "8-12", time_profile: "accessory_compound" }] });
+  const pasteFromClip = () => {
+    if (!clip || clip.kind !== "rows") return;
+    const cloned = JSON.parse(JSON.stringify(clip.rows));
+    const next = [...rows, ...cloned];
+    setDay({ ...day, rows: next.map((r: any, i: number) => ({ ...r, sort_order: i })) });
+  };
   const insertExercise = (exId: string, atIndex?: number) => {
     const ex = (exercises as any[]).find((x) => x.id === exId);
     const newRow = { sort_order: 0, sets: 3, reps_text: "8-12", time_profile: "accessory_compound", exercise_id: exId, exercise_name_override: ex?.name };
@@ -788,7 +795,14 @@ function DayEditor({ day, setDay, exercises, compact }: { day: any; setDay: (d: 
     >
       <div className="flex items-center justify-between text-[11px] text-muted-foreground">
         <span className="inline-flex items-center gap-1"><Clock className="h-3 w-3" /> Est {durationRange(dayMin)}</span>
-        <Button size="sm" variant="outline" onClick={addRow}><Plus className="mr-1 h-3 w-3" /> Row</Button>
+        <div className="flex items-center gap-1">
+          {clip && clip.kind === "rows" && clip.rows.length > 0 && (
+            <Button size="sm" variant="outline" className="h-7 text-[11px]" onClick={pasteFromClip} title={`Paste ${clip.rows.length} exercise${clip.rows.length === 1 ? "" : "s"}`}>
+              <ClipboardPaste className="mr-1 h-3 w-3" /> Paste ({clip.rows.length})
+            </Button>
+          )}
+          <Button size="sm" variant="outline" className="h-7 text-[11px]" onClick={addRow}><Plus className="mr-1 h-3 w-3" /> Row</Button>
+        </div>
       </div>
       {rows.length === 0 ? (
         <p className="rounded-md border border-dashed border-border p-3 text-center text-xs text-muted-foreground">
