@@ -159,7 +159,12 @@ export const getPasswordResetLink = createServerFn({ method: "POST" })
       options: { redirectTo: data.redirectTo },
     });
     if (lErr) throw new Error(lErr.message);
-    return { url: (link as any)?.properties?.action_link as string };
+    const hashedToken = (link as any)?.properties?.hashed_token as string | undefined;
+    if (!hashedToken) throw new Error("Could not generate reset link token");
+    const url = new URL(data.redirectTo);
+    url.searchParams.set("token_hash", hashedToken);
+    url.searchParams.set("type", "recovery");
+    return { url: url.toString() };
   });
 
 // Admin sets a client's password directly.
