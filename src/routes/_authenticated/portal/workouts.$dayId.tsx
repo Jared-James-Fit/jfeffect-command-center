@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -9,7 +9,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, ExternalLink, Clock, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, Clock, CheckCircle2, Play, X } from "lucide-react";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import { getExerciseVideoSource } from "@/lib/exercise-video";
 import { toast } from "sonner";
 import { durationRange } from "@/lib/pl-programs";
 import { movementAccent } from "@/components/program-builder";
@@ -38,7 +40,7 @@ function WorkoutDay() {
 
   const { data: rows = [] } = useQuery({
     queryKey: ["pl-day-rows", dayId],
-    queryFn: async () => (await sb.from("pl_exercise_rows").select("*, exercises(id,name,video_url,vimeo_embed_url,thumbnail_url,cues)").eq("day_id", dayId).order("sort_order")).data ?? [],
+    queryFn: async () => (await sb.from("pl_exercise_rows").select("*, exercises(id,name,video_url,vimeo_embed_url,thumbnail_url,cues,common_mistakes,muscle_group,category)").eq("day_id", dayId).order("sort_order")).data ?? [],
   });
 
   useEffect(() => {
