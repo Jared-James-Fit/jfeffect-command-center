@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { AlertTriangle, ArrowLeft, Plus, Trash2, Save, Clock, Copy, LayoutGrid, CalendarRange, ArrowRight, ZoomIn, ZoomOut, Maximize2, PanelLeftClose, PanelLeftOpen, Rows3, ChevronDown, ChevronUp, Settings2 } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Plus, Trash2, Save, Clock, Copy, LayoutGrid, CalendarRange, ArrowRight, ZoomIn, ZoomOut, Maximize2, PanelLeftClose, PanelLeftOpen, Rows3, ChevronDown, ChevronUp, Settings2, Undo2, Redo2, ClipboardCopy, ClipboardPaste } from "lucide-react";
 import { toast } from "sonner";
 import {
   getTemplate, updateTemplate, summarizeTemplatePayload, TIME_PROFILES,
@@ -21,6 +21,7 @@ import { useAutosave } from "@/hooks/use-autosave";
 import { SaveStatus } from "@/components/save-status";
 import { useConflictWatch } from "@/hooks/use-conflict-watch";
 import { ActionButton } from "@/components/action-button";
+import { copyRows, useClip } from "@/lib/program-builder-clipboard";
 
 // ---- Editor preferences (compact mode, zoom, sidebar) ----
 const PREFS_KEY = "pl-tpl-editor-prefs:v1";
@@ -97,6 +98,14 @@ function TemplateEditor() {
   const [saving, setSaving] = useState(false);
   const hydratedRef = useRef(false);
 
+  // ---- Undo / Redo history for payload ----
+  const histRef = useRef<string[]>([]);
+  const futureRef = useRef<string[]>([]);
+  const lastPushTs = useRef(0);
+  const [, bumpHist] = useState(0);
+  const canUndo = histRef.current.length > 0;
+  const canRedo = futureRef.current.length > 0;
+
   useEffect(() => {
     if (tpl && !meta) {
       setMeta({
@@ -106,11 +115,46 @@ function TemplateEditor() {
       });
       setPayload(JSON.parse(JSON.stringify(tpl.payload || {})));
       hydratedRef.current = true;
+      histRef.current = [];
+      futureRef.current = [];
+      bumpHist((n) => n + 1);
     }
   }, [tpl]);
 
   const setM = (patch: any) => { setMeta({ ...meta, ...patch }); setDirty(true); };
-  const setP = (next: any) => { setPayload(next); setDirty(true); };
+  const setP = (next: any, opts?: { skipHistory?: boolean }) => {
+    if (!opts?.skipHistory && payload != null) {
+      const now = Date.now();
+      // Coalesce rapid edits (e.g. typing) within 600ms into a single history step.
+      if (now - lastPushTs.current > 600) {
+        histRef.current.push(JSON.stringify(payload));
+        if (histRef.current.length > 100) histRef.current.shift();
+      }
+      lastPushTs.current = now;
+      futureRef.current = [];
+      bumpHist((n) => n + 1);
+    }
+    setPayload(next);
+    setDirty(true);
+  };
+  const undo = () => {
+    const prev = histRef.current.pop();
+    if (!prev) return;
+    futureRef.current.push(JSON.stringify(payload));
+    setPayload(JSON.parse(prev));
+    setDirty(true);
+    lastPushTs.current = 0;
+    bumpHist((n) => n + 1);
+  };
+  const redo = () => {
+    const next = futureRef.current.pop();
+    if (!next) return;
+    histRef.current.push(JSON.stringify(payload));
+    setPayload(JSON.parse(next));
+    setDirty(true);
+    lastPushTs.current = 0;
+    bumpHist((n) => n + 1);
+  };
 
   const persist = async (m: any, p: any) => {
     await updateTemplate(templateId, {
@@ -225,6 +269,10 @@ function TemplateEditor() {
             setP={setP}
             exercises={exercises as any[]}
             appendRowToFirstDay={appendRowToFirstDay}
+            undo={undo}
+            redo={redo}
+            canUndo={canUndo}
+            canRedo={canRedo}
           />
         </TabsContent>
       </Tabs>
