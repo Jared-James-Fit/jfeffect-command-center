@@ -235,15 +235,13 @@ export function AssignedProgramsCard({ clientId, mode }: { clientId: string; mod
                     </div>
                   </div>
                   {prepBlocks.length > 0 && (
-                    <div className="mt-2 space-y-1">
+                    <div className="mt-2 space-y-2">
                       {prepBlocks.map((b: any) => (
-                        <BlockRow
+                        <BlockSummaryCard
                           key={b.id}
-                          block={b}
+                          blockId={b.id}
                           mode={mode}
                           onRemove={() => setPending({ kind: "block", id: b.id, label: b.name })}
-                          selected={selectedBlocks.has(b.id)}
-                          onToggleSelect={() => toggleBlock(b.id)}
                         />
                       ))}
                     </div>
