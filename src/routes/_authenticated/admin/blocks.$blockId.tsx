@@ -1317,3 +1317,58 @@ function BlockStartDateControl({
     </Popover>
   );
 }
+
+function WeekDateBadge({
+  block,
+  week,
+  onSave,
+  onReset,
+}: {
+  block: any;
+  week: any;
+  onSave: (start: string | null, end: string | null) => Promise<void> | void;
+  onReset: () => Promise<void> | void;
+}) {
+  const [open, setOpen] = useState(false);
+  const range = weekDisplayRange(block, week);
+  const [start, setStart] = useState<string>(range ? format(range.start, "yyyy-MM-dd") : "");
+  const [end, setEnd] = useState<string>(range ? format(range.end, "yyyy-MM-dd") : "");
+  const source = range?.source ?? "auto";
+  if (!range) {
+    return (
+      <span className="text-[10px] uppercase tracking-wide text-muted-foreground">No dates</span>
+    );
+  }
+  return (
+    <Popover open={open} onOpenChange={(v) => {
+      setOpen(v);
+      if (v) {
+        setStart(format(range.start, "yyyy-MM-dd"));
+        setEnd(format(range.end, "yyyy-MM-dd"));
+      }
+    }}>
+      <PopoverTrigger asChild>
+        <button className="inline-flex items-center gap-1 rounded-md border border-border bg-card px-1.5 py-0.5 text-[10px] text-muted-foreground hover:text-foreground">
+          <CalendarDays className="h-3 w-3" />
+          {formatWeekRange(range.start, range.end)}
+          <Badge variant="outline" className="ml-1 h-4 px-1 text-[9px]">{source === "manual" ? "Custom" : "Auto"}</Badge>
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-64 space-y-2 p-3">
+        <Label className="text-xs">Week dates</Label>
+        <div className="grid grid-cols-2 gap-2">
+          <Input type="date" value={start} onChange={(e) => setStart(e.target.value)} />
+          <Input type="date" value={end} onChange={(e) => setEnd(e.target.value)} />
+        </div>
+        <div className="flex justify-between gap-2">
+          <Button size="sm" variant="ghost" onClick={async () => { setOpen(false); await onReset(); }}>
+            Reset to auto
+          </Button>
+          <Button size="sm" onClick={async () => { setOpen(false); await onSave(start || null, end || null); }}>
+            Save
+          </Button>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
