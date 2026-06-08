@@ -586,6 +586,9 @@ function PaymentLinksPage() {
                           <Button size="sm" variant="outline" onClick={() => setEditing({ open: true, product: p })} title="Edit product">
                             <Pencil className="h-3.5 w-3.5" />
                           </Button>
+                          <Button size="sm" variant="outline" onClick={() => setGrantFor(p)} title="Membership access granted by this product">
+                            <LockIcon className="h-3.5 w-3.5 mr-1" /> Access
+                          </Button>
                           <Button size="sm" variant="ghost" onClick={() => duplicateMutation.mutate(p.id)} title="Duplicate">
                             <Copy className="h-3.5 w-3.5" />
                           </Button>
