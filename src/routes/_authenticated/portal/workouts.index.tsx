@@ -1,21 +1,18 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { usePortalUserId } from "@/lib/client-impersonation";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Clock, CheckCircle2, Activity, FileText, Dumbbell, ChevronRight, Play, ChevronDown, CalendarRange, Crosshair } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
-import { getClientWorkouts, durationRange, setWeekManualComplete } from "@/lib/pl-programs";
-import { useAuth } from "@/lib/auth";
-import { toast } from "sonner";
+import { Activity, FileText, Dumbbell, ChevronRight } from "lucide-react";
+import { getClientWorkouts } from "@/lib/pl-programs";
 import { WorkoutArchiveSection } from "@/components/workout-archive-section";
-import { useState } from "react";
-import { weekDisplayRange, formatWeekRange, isCurrentWeek } from "@/lib/block-dates";
 import { format, parseISO } from "date-fns";
 import { TrainingScheduleCard } from "@/components/training-schedule-card";
+import { BlockSummaryCard } from "@/components/block-summary-card";
+import { BlockWeekColumns } from "@/components/block-week-columns";
+import { BlockProgressSection } from "@/components/block-progress-section";
 
 export const Route = createFileRoute("/_authenticated/portal/workouts/")({ component: WorkoutsPage });
 
@@ -32,7 +29,6 @@ function WorkoutsPage() {
     queryFn: () => getClientWorkouts(client!.id),
   });
 
-  // Group: block → week → days (ordered)
   const blockGroups = new Map<string, { block: any; weeks: Map<string, { week: any; entries: any[] }> }>();
   for (const it of items as any[]) {
     const bk = it.block?.id ?? "none";
@@ -47,9 +43,7 @@ function WorkoutsPage() {
     <>
       <PageHeader title="Workouts" subtitle="Your assigned training" />
       <div className="p-6 md:p-8 space-y-6 pb-32">
-        {client && (
-          <TrainingScheduleCard client={client as any} editable />
-        )}
+        {client && <TrainingScheduleCard client={client as any} editable />}
         <div className="grid gap-2 sm:grid-cols-2">
           <Link to="/portal/program">
             <Card className="flex items-center justify-between p-3 hover:bg-secondary/30">
@@ -109,132 +103,14 @@ function BlockSection({ block, weeks }: { block: any; weeks: { week: any; entrie
     }
   }
   return (
-    <section>
-      <div className="mb-3 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-        <h2 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">
-          {block?.name ?? "Workouts"}
-        </h2>
-        {blockStart && blockEnd && (
-          <span className="text-[11px] text-muted-foreground">
-            {format(parseISO(blockStart), "MMM d")} – {format(parseISO(blockEnd), "MMM d, yyyy")}
-          </span>
-        )}
-        {bannerText && (
-          <Badge variant="outline" className="text-[10px]">{bannerText}</Badge>
-        )}
-      </div>
-      <div className="space-y-3">
-        {weeks.map((w, i) => (
-          <WeekSection key={w.week?.id ?? `w-${i}`} block={block} week={w.week} entries={w.entries} defaultOpen={i === 0} />
-        ))}
-      </div>
+    <section className="space-y-3">
+      {bannerText && <Badge variant="outline" className="text-[10px]">{bannerText}</Badge>}
+      {block?.id && <BlockSummaryCard blockId={block.id} mode="client" />}
+      <Card className="p-3">
+        <div className="mb-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">Weeks</div>
+        <BlockWeekColumns block={block} weeks={weeks} mode="client" />
+      </Card>
+      {block?.id && <BlockProgressSection blockId={block.id} mode="client" />}
     </section>
-  );
-}
-
-function WeekSection({ block, week, entries, defaultOpen }: { block: any; week: any; entries: any[]; defaultOpen: boolean }) {
-  const qc = useQueryClient();
-  const { user } = useAuth();
-  const range = week ? weekDisplayRange(block, week) : null;
-  const isNow = isCurrentWeek(range);
-  const [open, setOpen] = useState(defaultOpen || isNow);
-  const totalMin = entries.reduce((s, it) => s + (it.day.duration_override_min ?? it.day.duration_estimate_min ?? 60), 0);
-  const doneCount = entries.filter((it) => it.completion?.completed_at).length;
-  const status: string = week?.status ?? "Not Started";
-  const manual = !!week?.manually_completed;
-  const statusTone =
-    status === "Completed" ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-500"
-    : status === "Manually Completed" ? "border-sky-500/40 bg-sky-500/10 text-sky-500"
-    : status === "In Progress" ? "border-amber-500/40 bg-amber-500/10 text-amber-500"
-    : "border-muted-foreground/30 bg-muted/30 text-muted-foreground";
-  return (
-    <Card className="overflow-hidden">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center justify-between gap-3 p-3 text-left hover:bg-secondary/30"
-      >
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="font-bold">Week {week?.week_index ?? "—"}</span>
-            {range && (
-              <span className="text-[11px] text-muted-foreground inline-flex items-center gap-1">
-                <CalendarRange className="h-3 w-3" />
-                {formatWeekRange(range.start, range.end)}
-              </span>
-            )}
-            {isNow && (
-              <Badge className="h-5 border-primary/40 bg-primary/15 px-1.5 text-[10px] font-semibold text-primary hover:bg-primary/20">
-                <Crosshair className="mr-1 h-3 w-3" /> Current Week
-              </Badge>
-            )}
-            {week && <Badge variant="outline" className={`text-[10px] ${statusTone}`}>{status}</Badge>}
-          </div>
-          <div className="text-[11px] text-muted-foreground">
-            {entries.length} workout{entries.length === 1 ? "" : "s"}
-            {doneCount > 0 ? ` · ${doneCount} done` : ""}
-            {totalMin ? ` · ~${totalMin} min total` : ""}
-          </div>
-        </div>
-        <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`} />
-      </button>
-      {open && (
-        <div className="grid gap-2 border-t border-border p-2">
-          {week && (
-            <label className="flex items-center justify-between gap-2 rounded-md border border-border bg-secondary/30 p-2 text-xs cursor-pointer">
-              <span className="font-semibold">Mark Week Complete</span>
-              <Switch
-                checked={manual}
-                onCheckedChange={async (v) => {
-                  try {
-                    await setWeekManualComplete(week.id, v, user?.id ?? null);
-                    qc.invalidateQueries({ queryKey: ["my-workouts"] });
-                    qc.invalidateQueries({ queryKey: ["block-summary"] });
-                    toast.success(v ? "Week marked complete" : "Manual flag removed");
-                  } catch (e: any) { toast.error(e.message); }
-                }}
-              />
-            </label>
-          )}
-          {entries.map((it) => (
-            <Link
-              key={it.day.id}
-              to="/portal/workouts/$dayId"
-              params={{ dayId: it.day.id }}
-              className="block"
-            >
-              <Card className="p-3 flex items-center justify-between gap-3 cursor-pointer hover:bg-secondary/40 active:bg-secondary/60 transition">
-                <div className="min-w-0 flex-1">
-                  <div className="font-bold truncate">
-                    {it.day.title || `Day ${it.day.day_index}`}
-                    {it.day.focus ? <span className="text-muted-foreground font-normal"> — {it.day.focus}</span> : null}
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    Week {it.week?.week_index} · <Clock className="inline h-3 w-3 -mt-0.5" />{" "}
-                    {durationRange(it.day.duration_override_min ?? it.day.duration_estimate_min ?? 60)}
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  {it.completion?.completed_at ? (
-                    <Badge variant="outline" className="text-green-500 border-green-500/30 bg-green-500/10">
-                      <CheckCircle2 className="mr-1 h-3 w-3" /> Done
-                    </Badge>
-                  ) : it.completion ? (
-                    <Badge variant="outline" className="text-amber-500 border-amber-500/30 bg-amber-500/10">
-                      In progress
-                    </Badge>
-                  ) : (
-                    <Button size="sm" className="h-8" tabIndex={-1}>
-                      <Play className="mr-1 h-3.5 w-3.5" /> Open
-                    </Button>
-                  )}
-                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                </div>
-              </Card>
-            </Link>
-          ))}
-        </div>
-      )}
-    </Card>
   );
 }
