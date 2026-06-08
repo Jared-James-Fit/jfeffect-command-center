@@ -619,6 +619,12 @@ function PaymentLinksPage() {
 
       <AssignOfferDialog offer={assigning} onClose={() => setAssigning(null)} />
 
+      <ProductAccessGrantDialog
+        productId={grantFor?.id ?? null}
+        productName={grantFor?.name}
+        onClose={() => setGrantFor(null)}
+      />
+
       <OfferDetailDialog
         offer={previewing ? productToOfferLike(previewing) : null}
         onClose={() => setPreviewing(null)}
