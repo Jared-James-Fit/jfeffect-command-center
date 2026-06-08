@@ -4,8 +4,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { usePortalUserId } from "@/lib/client-impersonation";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Clock, CheckCircle2, Activity } from "lucide-react";
+import { Clock, CheckCircle2, Activity, FileText, Dumbbell, ChevronRight } from "lucide-react";
 import { getClientWorkouts, durationRange } from "@/lib/pl-programs";
 
 export const Route = createFileRoute("/_authenticated/portal/workouts")({ component: WorkoutsPage });
@@ -34,6 +35,33 @@ function WorkoutsPage() {
     <>
       <PageHeader title="Workouts" subtitle="Your assigned training" />
       <div className="p-6 md:p-8 space-y-6">
+        <div className="grid gap-2 sm:grid-cols-2">
+          <Link to="/portal/program">
+            <Card className="flex items-center justify-between p-3 hover:bg-secondary/30">
+              <div className="flex items-center gap-3">
+                <FileText className="h-5 w-5 text-primary" />
+                <div>
+                  <div className="text-sm font-bold">My Program</div>
+                  <div className="text-[11px] text-muted-foreground">Current phase, prep & program sheet</div>
+                </div>
+              </div>
+              <ChevronRight className="h-4 w-4 text-muted-foreground" />
+            </Card>
+          </Link>
+          <Link to="/portal/exercises">
+            <Card className="flex items-center justify-between p-3 hover:bg-secondary/30">
+              <div className="flex items-center gap-3">
+                <Dumbbell className="h-5 w-5 text-primary" />
+                <div>
+                  <div className="text-sm font-bold">Exercise Library</div>
+                  <div className="text-[11px] text-muted-foreground">Demos & technique videos</div>
+                </div>
+              </div>
+              <ChevronRight className="h-4 w-4 text-muted-foreground" />
+            </Card>
+          </Link>
+        </div>
+
         {isLoading ? (
           <p className="text-sm text-muted-foreground">Loading…</p>
         ) : groups.size === 0 ? (
