@@ -45,7 +45,7 @@ export function ProductAccessGrantDialog({ productId, productName, onClose }: Pr
 
   useEffect(() => {
     if (grantData?.grant) {
-      setAccountType(grantData.grant.account_type_granted);
+      setAccountType(grantData.grant.account_type_granted as any);
       setKeys(grantData.grant.access_level_keys ?? []);
       setIsSub(grantData.grant.is_subscription);
     } else if (open) {
