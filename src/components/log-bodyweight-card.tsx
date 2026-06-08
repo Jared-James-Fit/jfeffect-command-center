@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { ActionButton } from "@/components/action-button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -74,8 +75,7 @@ export function LogBodyweightCard({ clientId, defaultUnit = "lb" }: Props) {
   const save = async () => {
     const v = Number(weight);
     if (!weight || Number.isNaN(v) || v <= 0) {
-      toast.error("Enter a valid bodyweight.");
-      return;
+      throw new Error("Enter a valid bodyweight.");
     }
     setSaving(true);
     const { error } = await supabase.from("progress_metrics").insert({
@@ -87,7 +87,7 @@ export function LogBodyweightCard({ clientId, defaultUnit = "lb" }: Props) {
       created_by: user?.id ?? null,
     } as never);
     setSaving(false);
-    if (error) { toast.error(error.message); return; }
+    if (error) throw new Error(error.message);
 
     toast.success(acknowledgementForLog({
       prior: latest?.value ?? null,
@@ -149,9 +149,9 @@ export function LogBodyweightCard({ clientId, defaultUnit = "lb" }: Props) {
         </div>
       </div>
 
-      <Button onClick={save} disabled={saving} className="w-full bg-gradient-primary font-bold uppercase btn-press">
-        {saving ? "Saving…" : "Save Bodyweight"}
-      </Button>
+      <ActionButton onAction={save} disabled={saving} loadingLabel="Saving…" successLabel="Saved" successToast={false} className="w-full bg-gradient-primary font-bold uppercase btn-press">
+        Save Bodyweight
+      </ActionButton>
 
       {/* Mini sparkline + range toggle */}
       <div className="space-y-2 border-t border-border pt-3">
