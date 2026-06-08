@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useRef } from "react";
 import { Link } from "@tanstack/react-router";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -52,19 +52,19 @@ export function BlockWeekColumns({
     return incomplete ?? computed[0]?.week?.id ?? null;
   }, [computed]);
 
-  const [selectedId, setSelectedId] = useState<string | null>(defaultId);
-  useEffect(() => { setSelectedId(defaultId); }, [defaultId]);
-
-  const selected = computed.find((w) => w.week?.id === selectedId) ?? computed[0];
+  const weekRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const scrollToWeek = (id: string) => {
+    const el = weekRefs.current[id];
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
 
   return (
     <div className="space-y-4">
-      {/* Horizontal week timeline */}
+      {/* Horizontal week timeline (quick nav) */}
       <div className="-mx-1 overflow-x-auto pb-2">
         <div className="flex min-w-min items-stretch gap-2 px-1">
           {computed.map(({ week, entries, range, now, status, doneCount }) => {
             const tone = weekStatusTone(status);
-            const isSelected = week?.id === selected?.week?.id;
             const total = entries.length;
             const progressLine =
               status === "Locked"
@@ -76,16 +76,15 @@ export function BlockWeekColumns({
               <button
                 key={week?.id ?? Math.random()}
                 type="button"
-                onClick={() => week?.id && setSelectedId(week.id)}
+                onClick={() => week?.id && scrollToWeek(week.id)}
                 className={cn(
                   "group relative flex w-[140px] sm:w-[160px] shrink-0 flex-col items-start gap-1 rounded-md border bg-card p-2.5 text-left transition",
                   "hover:bg-secondary/40",
-                  isSelected
+                  now
                     ? "border-primary ring-2 ring-primary/40 bg-primary/5"
                     : "border-border",
                   status === "Locked" && "opacity-70",
                 )}
-                aria-pressed={isSelected}
               >
                 <div className="flex w-full items-center justify-between gap-1">
                   <span className="text-[11px] font-black uppercase tracking-wider">
@@ -118,33 +117,53 @@ export function BlockWeekColumns({
         </div>
       </div>
 
-      {/* Day list for the selected week */}
-      {selected && (
-        <div className="space-y-2">
-          <div className="flex flex-wrap items-baseline justify-between gap-2 px-1">
-            <div className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
-              Week {selected.week?.week_index ?? "—"} Workouts
-            </div>
-            {selected.range && (
-              <div className="text-[11px] text-muted-foreground inline-flex items-center gap-1">
-                <CalendarRange className="h-3 w-3" />
-                {formatWeekRange(selected.range.start, selected.range.end)}
-              </div>
+      {/* Full block: every week + its days */}
+      <div className="space-y-5">
+        {computed.map((sel) => (
+          <div
+            key={sel.week?.id ?? Math.random()}
+            ref={(el) => { if (sel.week?.id) weekRefs.current[sel.week.id] = el; }}
+            className={cn(
+              "space-y-2 rounded-md border p-3",
+              sel.now ? "border-primary/50 bg-primary/5" : "border-border bg-card/40",
+              sel.status === "Locked" && "opacity-80",
             )}
-          </div>
-          {selected.week?.notes && (
-            <p className="px-1 text-[11px] text-muted-foreground">{selected.week.notes}</p>
-          )}
-          <div className="space-y-1.5">
-            {selected.entries.map((it) => {
+          >
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <div className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                  Week {sel.week?.week_index ?? "—"}
+                </div>
+                <Badge variant="outline" className={cn("h-4 px-1 text-[9px]", weekStatusTone(sel.status))}>
+                  {sel.status === "Locked" && <Lock className="mr-0.5 h-2.5 w-2.5" />}
+                  {sel.status}
+                </Badge>
+                {sel.now && (
+                  <Badge className="h-4 border-primary/40 bg-primary/15 px-1 text-[9px] font-bold text-primary hover:bg-primary/20">
+                    <Crosshair className="mr-0.5 h-2.5 w-2.5" />Now
+                  </Badge>
+                )}
+              </div>
+              {sel.range && (
+                <div className="text-[11px] text-muted-foreground inline-flex items-center gap-1">
+                  <CalendarRange className="h-3 w-3" />
+                  {formatWeekRange(sel.range.start, sel.range.end)}
+                </div>
+              )}
+            </div>
+            {sel.week?.notes && (
+              <p className="text-[11px] text-muted-foreground">{sel.week.notes}</p>
+            )}
+            <div className="space-y-1.5">
+              {sel.entries.map((it) => {
               const done = !!it.completion?.completed_at;
               const started = !!it.completion && !done;
               let dayDate: Date | null = null;
               if (it.day?.scheduled_date) {
                 dayDate = startOfDay(new Date(it.day.scheduled_date + "T00:00:00"));
-              } else if (selected.range) {
+              } else if (sel.range) {
                 const idx = Math.max(0, (it.day?.day_index ?? 1) - 1);
-                const d = new Date(selected.range.start);
+                const d = new Date(sel.range.start);
                 d.setDate(d.getDate() + Math.min(6, idx));
                 dayDate = startOfDay(d);
               }
@@ -206,12 +225,13 @@ export function BlockWeekColumns({
                 </Link>
               );
             })}
-            {selected.entries.length === 0 && (
-              <p className="px-1 text-[11px] text-muted-foreground italic">No workouts in this week.</p>
-            )}
+              {sel.entries.length === 0 && (
+                <p className="text-[11px] text-muted-foreground italic">No workouts in this week.</p>
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        ))}
+      </div>
     </div>
   );
 }
