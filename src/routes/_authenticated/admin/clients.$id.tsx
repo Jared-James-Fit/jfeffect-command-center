@@ -362,7 +362,10 @@ function ClientDetail() {
                     toast.error("Client has no account yet — send a setup link first.");
                     return;
                   }
-                  impersonation.start({ id, user_id: form.user_id, full_name: form.full_name });
+                  impersonation.start(
+                    { id, user_id: form.user_id, full_name: form.full_name },
+                    typeof window !== "undefined" ? window.location.pathname + window.location.search : `/admin/clients/${id}`,
+                  );
                   navigate({ to: "/portal" });
                 }}
               >
