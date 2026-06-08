@@ -63,6 +63,7 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
         visible_to_client: true,
         pdf_url: "",
         pdf_name: "",
+        water: "",
       };
       setForm(f);
       setDays(dayLabelsForStructure(f.structure).map((label, i) => ({ day_label: label, sort_order: i })));
