@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { PageHeader } from "@/components/app-shell";
@@ -25,6 +25,7 @@ import {
 } from "@/lib/native-forms";
 import { deleteNativeForms, replaceNativeFormAssignments, updateNativeFormAccess } from "@/lib/native-forms.functions";
 import { useBulkSelection } from "@/hooks/use-bulk-selection";
+import { useClientImpersonation } from "@/lib/client-impersonation";
 
 export const Route = createFileRoute("/_authenticated/admin/native-forms")({
   component: AdminNativeForms,
@@ -50,6 +51,7 @@ function AdminNativeForms() {
       }
       formSelection.clear();
       await qc.invalidateQueries({ queryKey: ["nf-forms"] });
+      await qc.invalidateQueries({ queryKey: ["nf-forms-for-client"] });
       toast.success(`Deleted ${result.count} form${result.count === 1 ? "" : "s"}`);
     } catch (e: any) {
       toast.error(e?.message ?? "Forms could not be deleted");
@@ -187,6 +189,11 @@ function FormRow({
             {form.kind === "native" ? `${questions.length} questions` : (form.external_url ? "External link set" : "No URL yet")}
             {" · "}{assignedCount}{" · "}{form.recurrence}
           </div>
+          {hasAudience && (form.archived || !form.active) && (
+            <div className="mt-2 text-xs font-medium text-warning">
+              Assigned, but not visible because this form is {form.archived ? "archived" : "still Draft"}.
+            </div>
+          )}
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -236,6 +243,7 @@ function FormEditorDialog({ form, open, onClose }: { form: NfForm; open: boolean
     try {
       await upsertForm({ id: form.id, ...patch });
       qc.invalidateQueries({ queryKey: ["nf-forms"] });
+      qc.invalidateQueries({ queryKey: ["nf-forms-for-client"] });
       toast.success("Saved");
     } catch (e: any) {
       toast.error(e?.message ?? "Failed to save");
@@ -454,6 +462,8 @@ function QuestionRow({ q, formId, onMoveUp, onMoveDown }: { q: NfQuestion; formI
 
 function AssignmentsEditor({ formId, form, onFormChange }: { formId: string; form: NfForm; onFormChange: (f: NfForm) => void }) {
   const qc = useQueryClient();
+  const navigate = useNavigate();
+  const impersonation = useClientImpersonation();
   const saveAssignmentsFn = useServerFn(replaceNativeFormAssignments);
   const updateAccessFn = useServerFn(updateNativeFormAccess);
   const [search, setSearch] = useState("");
@@ -467,8 +477,9 @@ function AssignmentsEditor({ formId, form, onFormChange }: { formId: string; for
     queryFn: async () => {
       const { data } = await supabase
         .from("clients")
-        .select("id, full_name, email, status, archived")
+        .select("id, user_id, full_name, email, status, archived")
         .eq("archived", false)
+        .in("status", ["Active", "New Client"])
         .order("full_name");
       return data ?? [];
     },
@@ -519,20 +530,30 @@ function AssignmentsEditor({ formId, form, onFormChange }: { formId: string; for
     setDirty(true);
   }
 
+  function previewAsClient(client: any) {
+    if (!client.user_id) {
+      toast.error("Client has no account yet — send a setup link first.");
+      return;
+    }
+    impersonation.start({ id: client.id, user_id: client.user_id, full_name: client.full_name });
+    navigate({ to: "/portal/check-ins" });
+  }
+
   async function saveAssignmentChanges() {
     setSaving(true);
     try {
       const result = await saveAssignmentsFn({ data: { formId, clientIds: Array.from(selectedIds) } });
       if (!result.ok) {
-        toast.error(result.error ?? "Assignments could not be saved");
+        toast.error("Assignment save failed", { description: result.error ?? "Assignments could not be saved" });
         return;
       }
       setDirty(false);
       await qc.invalidateQueries({ queryKey: ["nf-assignments", formId] });
       await qc.invalidateQueries({ queryKey: ["nf-forms"] });
+      await qc.invalidateQueries({ queryKey: ["nf-forms-for-client"] });
       toast.success(`Saved ${result.count} assignment${result.count === 1 ? "" : "s"}`);
     } catch (e: any) {
-      toast.error(e?.message ?? "Assignments could not be saved");
+      toast.error("Assignment save failed", { description: e?.message ?? "Assignments could not be saved" });
     } finally {
       setSaving(false);
     }
@@ -552,6 +573,7 @@ function AssignmentsEditor({ formId, form, onFormChange }: { formId: string; for
       }
       await qc.invalidateQueries({ queryKey: ["nf-forms"] });
       await qc.invalidateQueries({ queryKey: ["nf-assignments", formId] });
+      await qc.invalidateQueries({ queryKey: ["nf-forms-for-client"] });
       toast.success(on ? "Now visible to all active clients" : "Switched to selected clients");
     } catch (e: any) {
       toast.error(e?.message ?? "Failed");
@@ -572,6 +594,7 @@ function AssignmentsEditor({ formId, form, onFormChange }: { formId: string; for
         return;
       }
       qc.invalidateQueries({ queryKey: ["nf-forms"] });
+      qc.invalidateQueries({ queryKey: ["nf-forms-for-client"] });
     } catch (e: any) {
       toast.error(e?.message ?? "Failed");
     } finally {
@@ -611,6 +634,16 @@ function AssignmentsEditor({ formId, form, onFormChange }: { formId: string; for
         </div>
       </div>
 
+      {form.archived ? (
+        <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+          Assigned, but not visible because this form is archived.
+        </div>
+      ) : !form.active ? (
+        <div className="rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning">
+          Assigned, but not visible because this form is still Draft.
+        </div>
+      ) : null}
+
       <div className="relative">
         <Search className="pointer-events-none absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input className="pl-8" placeholder="Search clients…" value={search} onChange={(e) => setSearch(e.target.value)} />
@@ -645,6 +678,19 @@ function AssignmentsEditor({ formId, form, onFormChange }: { formId: string; for
               </span>
               <span className="text-sm">{c.full_name}</span>
               <span className="ml-auto truncate text-xs text-muted-foreground">{c.email}</span>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                disabled={!c.user_id || dirty || (!broadcastOn && !selectedIds.has(c.id))}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  previewAsClient(c);
+                }}
+                title={dirty ? "Save assignments before previewing" : undefined}
+              >
+                <Eye className="mr-1 h-3.5 w-3.5" /> Preview
+              </Button>
               {broadcastOn && (
                 <span className="ml-2 rounded bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-600">
                   inherited

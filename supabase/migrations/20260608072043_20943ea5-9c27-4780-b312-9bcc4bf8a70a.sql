@@ -1,0 +1,1 @@
+DROP TRIGGER IF EXISTS nf_autoassign_after_client_insert ON public.clients;
