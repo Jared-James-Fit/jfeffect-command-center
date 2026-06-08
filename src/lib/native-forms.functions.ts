@@ -99,10 +99,12 @@ export const clearNativeFormAssignments = createServerFn({ method: "POST" })
     let query = access.supabaseAdmin.from("nf_assignments").delete().eq("form_id", data.formId);
 
     if (!access.isAdmin) {
+      const coachId = access.coachId;
+      if (!coachId) throw new Error("You do not have permission to clear assignments.");
       const { data: coachClients, error: clientsError } = await access.supabaseAdmin
         .from("clients")
         .select("id")
-        .eq("assigned_coach_id", access.coachId)
+        .eq("assigned_coach_id", coachId)
         .eq("archived", false);
       if (clientsError) throw new Error(clientsError.message);
       const clientIds = (coachClients ?? []).map((client: any) => client.id);
