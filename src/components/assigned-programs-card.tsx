@@ -238,12 +238,14 @@ export function AssignedProgramsCard({ clientId, mode }: { clientId: string; mod
                   {prepBlocks.length > 0 && (
                     <div className="mt-2 space-y-2">
                       {prepBlocks.map((b: any) => (
-                        <BlockSummaryCard
-                          key={b.id}
-                          blockId={b.id}
-                          mode={mode}
-                          onRemove={() => setPending({ kind: "block", id: b.id, label: b.name })}
-                        />
+                        <div key={b.id} className="space-y-2">
+                          <BlockSummaryCard
+                            blockId={b.id}
+                            mode={mode}
+                            onRemove={() => setPending({ kind: "block", id: b.id, label: b.name })}
+                          />
+                          <BlockProgressSection blockId={b.id} mode={mode} />
+                        </div>
                       ))}
                     </div>
                   )}
