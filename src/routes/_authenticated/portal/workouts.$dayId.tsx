@@ -263,7 +263,7 @@ function HowToSheet({ open, onOpenChange, exercise, fallbackName, fallbackVideo 
           )}
         </SheetHeader>
         <div className="px-5 py-4 space-y-4 pb-32">
-          {videoSrc?.status === "ok" ? (
+          {videoSrc && videoSrc.status !== "coming_soon" && videoSrc.url ? (
             <iframe
               src={videoSrc.url}
               title={`${name} video`}
