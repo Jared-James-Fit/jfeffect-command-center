@@ -34,6 +34,7 @@ import { setBlockStartDate, setWeekDates, resetWeekToAuto, countManualWeeks, wee
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { format, parseISO } from "date-fns";
+import { ActionButton } from "@/components/action-button";
 
 export const Route = createFileRoute("/_authenticated/admin/blocks/$blockId")({ component: BlockEditor });
 
@@ -291,17 +292,20 @@ function BlockEditor() {
           </Link>
           <div className="ml-auto flex flex-wrap items-center gap-2">
             <SaveStatePill state={save.state} lastSavedAt={save.lastSavedAt} />
-            <Button
+            <ActionButton
               size="sm"
               variant="outline"
               title="Flush any pending edits and save now"
-              onClick={() => {
-                flushPendingCells();
-                toast.success("Saving any pending edits…");
+              loadingLabel="Saving…"
+              successLabel="Saved"
+              successToast="Pending edits saved"
+              icon={<Save className="h-4 w-4" />}
+              onAction={async () => {
+                await Promise.resolve(flushPendingCells());
               }}
             >
-              <Save className="mr-1 h-4 w-4" /> Save now
-            </Button>
+              Save now
+            </ActionButton>
             <div className="flex items-center gap-1 rounded-md border border-border bg-card p-0.5 text-[11px]">
               <button onClick={() => setDensity("compact")} className={cn("rounded px-2 py-0.5", density === "compact" && "bg-secondary")} title="Compact"><Rows3 className="h-3 w-3" /></button>
               <button onClick={() => setDensity("comfortable")} className={cn("rounded px-2 py-0.5", density === "comfortable" && "bg-secondary")} title="Comfortable"><Columns2 className="h-3 w-3" /></button>

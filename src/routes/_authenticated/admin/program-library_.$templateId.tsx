@@ -24,6 +24,7 @@ import { useAutosave } from "@/hooks/use-autosave";
 import { SaveStatus } from "@/components/save-status";
 import { useConflictWatch } from "@/hooks/use-conflict-watch";
 import { AlertTriangle } from "lucide-react";
+import { ActionButton } from "@/components/action-button";
 
 // Append a row into the first day reachable inside any template payload shape.
 function appendRowToFirstDay(payload: any, type: string, row: any) {
@@ -142,9 +143,7 @@ function TemplateEditor() {
     try {
       await autosave.flush();
       await persist(meta, payload);
-      toast.success("Saved");
-    } catch (e: any) { toast.error(e.message); }
-    finally { setSaving(false); }
+    } finally { setSaving(false); }
   };
 
   if (isLoading || !tpl || !meta || !payload) return <div className="p-8 text-sm text-muted-foreground">Loading template…</div>;
@@ -168,9 +167,15 @@ function TemplateEditor() {
           </Link>
           <div className="ml-auto flex items-center gap-3">
             <SaveStatus state={autosave.state} savedAt={autosave.savedAt} />
-            <Button onClick={save} disabled={saving}>
-              <Save className="mr-2 h-4 w-4" /> {saving ? "Saving…" : dirty ? "Save now" : "Saved"}
-            </Button>
+            <ActionButton
+              onAction={save}
+              loadingLabel="Saving…"
+              successLabel="Saved"
+              successToast="Template saved"
+              icon={<Save className="h-4 w-4" />}
+            >
+              {dirty ? "Save now" : "Saved"}
+            </ActionButton>
           </div>
         </div>
 

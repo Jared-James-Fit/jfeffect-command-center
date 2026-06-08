@@ -1113,7 +1113,9 @@ function ClientNativeFormsAssignment({ clientId }: { clientId: string }) {
             Select all
           </Button>
           <Button type="button" variant="ghost" size="sm" onClick={() => { setSelectedIds(new Set()); setDirty(true); }} disabled={saving}>Clear all</Button>
-          <Button type="button" size="sm" onClick={saveAssignments} disabled={saving || !dirty}>{saving ? "Saving…" : "Save assignments"}</Button>
+          <ActionButton type="button" size="sm" onAction={saveAssignments} disabled={saving || !dirty} loadingLabel="Saving…" successLabel="Saved">
+            Save assignments
+          </ActionButton>
         </div>
       </div>
       <div className="max-h-64 space-y-1 overflow-y-auto">

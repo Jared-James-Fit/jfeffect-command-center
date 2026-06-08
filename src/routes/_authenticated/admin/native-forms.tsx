@@ -26,6 +26,7 @@ import {
 import { deleteNativeForms, replaceNativeFormAssignments, updateNativeFormAccess } from "@/lib/native-forms.functions";
 import { useBulkSelection } from "@/hooks/use-bulk-selection";
 import { useClientImpersonation } from "@/lib/client-impersonation";
+import { ActionButton } from "@/components/action-button";
 
 const EMPTY_ARRAY: any[] = [];
 
@@ -242,14 +243,9 @@ function FormEditorDialog({ form, open, onClose }: { form: NfForm; open: boolean
       visibility: local.visibility,
       auto_assign_new_clients: local.auto_assign_new_clients,
     };
-    try {
-      await upsertForm({ id: form.id, ...patch });
-      qc.invalidateQueries({ queryKey: ["nf-forms"] });
-      qc.invalidateQueries({ queryKey: ["nf-forms-for-client"] });
-      toast.success("Saved");
-    } catch (e: any) {
-      toast.error(e?.message ?? "Failed to save");
-    }
+    await upsertForm({ id: form.id, ...patch });
+    qc.invalidateQueries({ queryKey: ["nf-forms"] });
+    qc.invalidateQueries({ queryKey: ["nf-forms-for-client"] });
   }
 
   return (
@@ -352,7 +348,9 @@ function FormEditorDialog({ form, open, onClose }: { form: NfForm; open: boolean
               <Label>Active (clients can submit)</Label>
             </div>
             <div className="flex justify-end">
-              <Button onClick={saveSettings}>Save</Button>
+              <ActionButton onAction={saveSettings} loadingLabel="Saving…" successLabel="Saved" successToast="Form saved">
+                Save
+              </ActionButton>
             </div>
           </div>}
 
@@ -634,7 +632,15 @@ function AssignmentsEditor({ formId, form, onFormChange }: { formId: string; for
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={selectAllVisible} disabled={broadcastOn || saving}>{allVisibleSelected ? "All visible selected" : "Select all visible"}</Button>
           <Button variant="ghost" size="sm" onClick={clearAll} disabled={broadcastOn || saving}>Clear all</Button>
-          <Button size="sm" onClick={saveAssignmentChanges} disabled={broadcastOn || saving || !dirty}>{saving ? "Saving…" : "Save assignments"}</Button>
+          <ActionButton
+            size="sm"
+            disabled={broadcastOn || saving || !dirty}
+            loadingLabel="Saving…"
+            successLabel="Saved"
+            onAction={saveAssignmentChanges}
+          >
+            Save assignments
+          </ActionButton>
         </div>
       </div>
 

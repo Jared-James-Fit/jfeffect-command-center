@@ -14,6 +14,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { FormLinkDialog } from "@/components/form-link-dialog";
 import { DoubleConfirmDeleteDialog } from "@/components/double-confirm-delete-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ActionButton } from "@/components/action-button";
 
 export const Route = createFileRoute("/_authenticated/admin/forms")({ component: FormsPage });
 
@@ -138,12 +139,9 @@ function AssignFormDialog({ form, onClose }: { form: FormLink | null; onClose: (
 
   async function add() {
     if (!selected || !form) return;
-    try {
-      await assignFormToClient(form.id, selected);
-      qc.invalidateQueries({ queryKey: ["form-assignments", form.id] });
-      setSelected("");
-      toast.success("Assigned");
-    } catch (e: any) { toast.error(e?.message ?? "Failed"); }
+    await assignFormToClient(form.id, selected);
+    qc.invalidateQueries({ queryKey: ["form-assignments", form.id] });
+    setSelected("");
   }
 
   async function remove(clientId: string) {
@@ -164,7 +162,9 @@ function AssignFormDialog({ form, onClose }: { form: FormLink | null; onClose: (
                 {clients.map((c: any) => <SelectItem key={c.id} value={c.id}>{c.full_name}</SelectItem>)}
               </SelectContent>
             </Select>
-            <Button onClick={add} disabled={!selected}>Assign</Button>
+            <ActionButton onAction={add} disabled={!selected} loadingLabel="Assigning…" successLabel="Assigned" successToast="Client assigned">
+              Assign
+            </ActionButton>
           </div>
           <div className="space-y-1">
             {assignments.length === 0 ? (
