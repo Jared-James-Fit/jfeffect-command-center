@@ -192,14 +192,14 @@ export async function getBlockTree(blockId: string) {
   return { block, weeks: weeks ?? [], days: days ?? [], rows: rows ?? [] };
 }
 
-export async function createPrep(input: { client_id: string; title: string; goal_type?: string; event_name?: string | null; event_date?: string | null; total_weeks?: number | null; status?: PrepStatus; client_visible?: boolean }) {
-  const { data, error } = await sb.from("pl_preps").insert(input).select("*").single();
+export async function createPrep(input: { client_id: string; title: string; goal_type?: string; event_name?: string | null; event_date?: string | null; total_weeks?: number | null; status?: PrepStatus; client_visible?: boolean; source_template_id?: string | null }) {
+  const { data, error } = await sb.from("pl_preps").insert(input as any).select("*").single();
   if (error) throw error;
   return data;
 }
 
-export async function createBlock(input: { client_id: string; prep_id?: string | null; name: string; weeks: number; training_focus?: string | null; week_start_index?: number | null }) {
-  const { data: block, error } = await sb.from("pl_blocks").insert(input).select("*").single();
+export async function createBlock(input: { client_id: string; prep_id?: string | null; name: string; weeks: number; training_focus?: string | null; week_start_index?: number | null; source_template_id?: string | null }) {
+  const { data: block, error } = await sb.from("pl_blocks").insert(input as any).select("*").single();
   if (error) throw error;
   // Seed weeks + 1 day each
   for (let i = 1; i <= input.weeks; i++) {
@@ -884,6 +884,54 @@ export async function setTemplateArchived(id: string, archived: boolean) {
   await updateTemplate(id, { archived });
 }
 
+/** Clients (and the prep/block rows) that were created from a given template. */
+export async function listTemplateAssignments(templateId: string) {
+  const [preps, blocks] = await Promise.all([
+    (sb as any).from("pl_preps")
+      .select("id, title, client_id, created_at, status, archived, clients:clients(id, full_name)")
+      .eq("source_template_id", templateId)
+      .order("created_at", { ascending: false }),
+    (sb as any).from("pl_blocks")
+      .select("id, name, client_id, prep_id, created_at, status, archived, clients:clients(id, full_name)")
+      .eq("source_template_id", templateId)
+      .order("created_at", { ascending: false }),
+  ]);
+  const rows: Array<{
+    kind: "prep" | "block";
+    id: string;
+    label: string;
+    clientId: string;
+    clientName: string | null;
+    prepId?: string | null;
+    createdAt: string;
+    status?: string | null;
+    archived?: boolean;
+  }> = [];
+  for (const p of (preps.data ?? []) as any[]) {
+    rows.push({ kind: "prep", id: p.id, label: p.title, clientId: p.client_id, clientName: p.clients?.full_name ?? null, createdAt: p.created_at, status: p.status, archived: !!p.archived });
+  }
+  for (const b of (blocks.data ?? []) as any[]) {
+    // Skip blocks that belong to a prep already listed above to avoid double-counting full-prep assignments.
+    rows.push({ kind: "block", id: b.id, label: b.name, clientId: b.client_id, clientName: b.clients?.full_name ?? null, prepId: b.prep_id, createdAt: b.created_at, status: b.status, archived: !!b.archived });
+  }
+  return rows;
+}
+
+/** Lookup the source template (if any) for a given prep id or block id. */
+export async function getSourceTemplate(opts: { prepId?: string | null; blockId?: string | null }) {
+  let templateId: string | null = null;
+  if (opts.prepId) {
+    const { data } = await (sb as any).from("pl_preps").select("source_template_id").eq("id", opts.prepId).maybeSingle();
+    templateId = data?.source_template_id ?? null;
+  } else if (opts.blockId) {
+    const { data } = await (sb as any).from("pl_blocks").select("source_template_id").eq("id", opts.blockId).maybeSingle();
+    templateId = data?.source_template_id ?? null;
+  }
+  if (!templateId) return null;
+  const { data: tpl } = await (sb as any).from("pl_templates").select("id, name, template_type").eq("id", templateId).maybeSingle();
+  return tpl ?? null;
+}
+
 export async function deleteTemplate(id: string) {
   const { error } = await sb.from("pl_templates").delete().eq("id", id);
   if (error) throw error;
@@ -966,11 +1014,13 @@ export async function applyTemplateToClient(opts: { templateId: string; clientId
       total_weeks: payload.prep?.total_weeks ?? null,
       status: "Planned",
       client_visible: opts.clientVisible ?? true,
+      source_template_id: tpl.id,
     });
     for (const b of (payload.blocks_data || [])) {
       const blk = await createBlock({
         client_id: opts.clientId, prep_id: prep.id, name: b.name || "Block",
         weeks: (b.weeks_data?.length || b.weeks || 4), training_focus: b.training_focus ?? null,
+        source_template_id: tpl.id,
       });
       if (Array.isArray(b.weeks_data) && b.weeks_data.length) {
         await sb.from("pl_weeks").delete().eq("block_id", blk.id);
@@ -1022,6 +1072,7 @@ export async function applyTemplateToClient(opts: { templateId: string; clientId
       event_date: prepInfo.event_date ?? null,
       status: "Planned",
       client_visible: opts.clientVisible ?? true,
+      source_template_id: tpl.id,
     });
     targetPrepId = prep.id;
   }
@@ -1031,6 +1082,7 @@ export async function applyTemplateToClient(opts: { templateId: string; clientId
     name: opts.name ?? tpl.name,
     weeks: tpl.weeks ?? payload.weeks ?? 4,
     training_focus: tpl.training_focus ?? null,
+    source_template_id: tpl.id,
   });
   // If payload has a structured tree, copy it. For MVP: empty seeded block + library can be enhanced later.
   if (Array.isArray(payload.weeks_data)) {

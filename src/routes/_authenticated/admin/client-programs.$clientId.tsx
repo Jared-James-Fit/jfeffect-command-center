@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { ArrowLeft, Plus, Calendar, Target, Layers, History, BarChart3 } from "lucide-react";
+import { ArrowLeft, Plus, Calendar, Target, Layers, History, BarChart3, BookOpen } from "lucide-react";
 import { toast } from "sonner";
 import { listClientPreps, listClientBlocks, createPrep, createBlock, countdownLabel, updatePrep, updateBlock, GOAL_TYPES, TRAINING_FOCUSES, PREP_STATUSES, BLOCK_STATUSES, type PrepStatus, type BlockStatus } from "@/lib/pl-programs";
 import { ClientTrainingIntelCard } from "@/components/client-training-intel-card";
@@ -30,6 +30,21 @@ function ClientProgramsPage() {
   });
   const { data: preps = [] } = useQuery({ queryKey: ["pl-preps", clientId], queryFn: () => listClientPreps(clientId) });
   const { data: blocks = [] } = useQuery({ queryKey: ["pl-blocks", clientId], queryFn: () => listClientBlocks(clientId) });
+
+  const templateIds = Array.from(new Set([
+    ...(preps as any[]).map((p) => p.source_template_id).filter(Boolean),
+    ...(blocks as any[]).map((b) => b.source_template_id).filter(Boolean),
+  ])) as string[];
+  const { data: templateLookup = {} } = useQuery({
+    queryKey: ["pl-templates-by-id", templateIds.sort().join(",")],
+    enabled: templateIds.length > 0,
+    queryFn: async () => {
+      const { data } = await (supabase as any).from("pl_templates").select("id, name").in("id", templateIds);
+      const map: Record<string, { id: string; name: string }> = {};
+      for (const t of (data ?? []) as any[]) map[t.id] = t;
+      return map;
+    },
+  });
 
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["pl-preps", clientId] });
@@ -72,6 +87,15 @@ function ClientProgramsPage() {
                       <div>
                         <div className="font-bold text-lg">{p.title}</div>
                         <div className="text-xs text-muted-foreground">{p.goal_type}</div>
+                        {p.source_template_id && (templateLookup as any)[p.source_template_id] && (
+                          <Link
+                            to="/admin/program-library/$templateId"
+                            params={{ templateId: p.source_template_id }}
+                            className="mt-1 inline-flex items-center gap-1 rounded border border-primary/30 bg-primary/5 px-1.5 py-0.5 text-[10px] text-primary hover:bg-primary/10"
+                          >
+                            <BookOpen className="h-2.5 w-2.5" /> From template: {(templateLookup as any)[p.source_template_id].name}
+                          </Link>
+                        )}
                       </div>
                       <Select value={p.status} onValueChange={async (v) => { await updatePrep(p.id, { status: v as PrepStatus }); refresh(); toast.success(`Status: ${v}`); }}>
                         <SelectTrigger className="h-7 w-28 text-xs"><SelectValue /></SelectTrigger>
@@ -116,6 +140,11 @@ function ClientProgramsPage() {
                     <div>
                       <div className="font-bold">{b.name}</div>
                       <div className="text-xs text-muted-foreground">{b.weeks} weeks · {b.training_focus ?? "—"}</div>
+                      {b.source_template_id && (templateLookup as any)[b.source_template_id] && (
+                        <div className="mt-1 inline-flex items-center gap-1 rounded border border-primary/30 bg-primary/5 px-1.5 py-0.5 text-[10px] text-primary">
+                          <BookOpen className="h-2.5 w-2.5" /> From template: {(templateLookup as any)[b.source_template_id].name}
+                        </div>
+                      )}
                     </div>
                   </Link>
                   <Select value={b.status} onValueChange={async (v) => { await updateBlock(b.id, { status: v as BlockStatus }); refresh(); toast.success(`Status: ${v}`); }}>
