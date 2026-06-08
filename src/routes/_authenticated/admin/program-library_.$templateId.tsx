@@ -41,7 +41,7 @@ function writePrefs(p: EditorPrefs) {
 }
 
 // Append a row into the first day reachable inside any template payload shape.
-function appendRowToFirstDay(payload: any, type: string, row: any) {
+export function appendRowToFirstDay(payload: any, type: string, row: any) {
   const stamp = { sort_order: 0, sets: 3, reps_text: "8-12", time_profile: "accessory_compound", ...row };
   const pushIntoDay = (d: any) => {
     d.rows = d.rows || [];
@@ -317,7 +317,7 @@ function EditorChrome({ meta, summary, typeLabel, autosave, save, dirty, childre
   );
 }
 
-function StructureCanvas({ type, payload, setP, exercises, appendRowToFirstDay, undo, redo, canUndo, canRedo }: {
+export function StructureCanvas({ type, payload, setP, exercises, appendRowToFirstDay, undo, redo, canUndo, canRedo }: {
   type: string; payload: any; setP: (p: any, opts?: { skipHistory?: boolean }) => void; exercises: any[];
   appendRowToFirstDay: (payload: any, type: string, row: any) => void;
   undo: () => void; redo: () => void; canUndo: boolean; canRedo: boolean;
@@ -485,7 +485,7 @@ function FullPrepEditor({ payload, setPayload, exercises, compact }: any) {
   );
 }
 
-function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact }: { weeksData: any[]; setWeeksData: (wd: any[]) => void; exercises: any[]; compact?: boolean }) {
+export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact }: { weeksData: any[]; setWeeksData: (wd: any[]) => void; exercises: any[]; compact?: boolean }) {
   const [activeIdx, setActiveIdx] = useState(0);
   const [view, setView] = useState<"block" | "week">("block");
   const weekStats = useMemo(() => weeksData.map((w: any) => {
