@@ -5,8 +5,10 @@ import { usePortalUserId } from "@/lib/client-impersonation";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Activity, FileText, Dumbbell, ChevronRight, Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Activity, FileText, Dumbbell, Loader2, ExternalLink, Video } from "lucide-react";
 import { getClientWorkouts } from "@/lib/pl-programs";
+import { derivePhase, type TrainingPhase } from "@/lib/training-phases";
 import { WorkoutArchiveSection } from "@/components/workout-archive-section";
 import { format, parseISO } from "date-fns";
 import { TrainingScheduleCard } from "@/components/training-schedule-card";
@@ -29,6 +31,22 @@ function WorkoutsPage() {
     queryFn: () => getClientWorkouts(client!.id),
   });
 
+  const { data: phases = [] } = useQuery({
+    queryKey: ["my-phases", client?.id],
+    enabled: !!client?.id,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("training_phases").select("*").eq("client_id", client!.id)
+        .order("start_date", { ascending: false });
+      return (data ?? []) as TrainingPhase[];
+    },
+  });
+  const activePhase = phases.find((p) => {
+    const s = derivePhase(p).state;
+    return s === "active" || s === "ending-soon" || s === "due-today";
+  }) ?? phases.find((p) => derivePhase(p).state === "upcoming") ?? null;
+  const phaseLink = activePhase?.program_link ?? client?.program_sheet_link ?? null;
+
   const blockGroups = new Map<string, { block: any; weeks: Map<string, { week: any; entries: any[] }> }>();
   for (const it of items as any[]) {
     const bk = it.block?.id ?? "none";
@@ -48,32 +66,36 @@ function WorkoutsPage() {
           <SmartTodayCard items={items as any[]} clientId={client.id} />
         )}
 
-        <div className="grid gap-2 sm:grid-cols-2">
-          <Link to="/portal/program">
-            <Card className="flex items-center justify-between p-3 hover:bg-secondary/30">
-              <div className="flex items-center gap-3">
-                <FileText className="h-5 w-5 text-primary" />
-                <div>
-                  <div className="text-sm font-bold">My Program</div>
-                  <div className="text-[11px] text-muted-foreground">Current phase, prep & program sheet</div>
-                </div>
+        <Card className="border-border bg-card p-6 md:p-8">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <FileText className="h-8 w-8 text-primary" />
+              <div>
+                <h2 className="text-xl font-black">Your Training Program</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {phaseLink
+                    ? "Opens your program sheet or file — bookmark it on your phone."
+                    : "Your coach hasn't linked your program yet. Check back soon."}
+                </p>
               </div>
-              <ChevronRight className="h-4 w-4 text-muted-foreground" />
-            </Card>
-          </Link>
-          <Link to="/portal/exercises">
-            <Card className="flex items-center justify-between p-3 hover:bg-secondary/30">
-              <div className="flex items-center gap-3">
-                <Dumbbell className="h-5 w-5 text-primary" />
-                <div>
-                  <div className="text-sm font-bold">Exercise Library</div>
-                  <div className="text-[11px] text-muted-foreground">Demos & technique videos</div>
-                </div>
-              </div>
-              <ChevronRight className="h-4 w-4 text-muted-foreground" />
-            </Card>
-          </Link>
-        </div>
+            </div>
+            {phaseLink && (
+              <a href={phaseLink} target="_blank" rel="noreferrer">
+                <Button size="lg" className="bg-gradient-primary font-bold uppercase">
+                  Open My Program <ExternalLink className="ml-2 h-4 w-4" />
+                </Button>
+              </a>
+            )}
+          </div>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Link to="/portal/lift-videos">
+              <Button variant="outline" size="sm"><Video className="mr-1 h-4 w-4" /> Upload Lift Video</Button>
+            </Link>
+            <Link to="/portal/exercises">
+              <Button variant="outline" size="sm"><Dumbbell className="mr-1 h-4 w-4" /> Exercise Library</Button>
+            </Link>
+          </div>
+        </Card>
 
         {isLoading ? (
           <Card className="flex items-center gap-2 p-6 text-sm text-muted-foreground">

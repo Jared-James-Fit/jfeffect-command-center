@@ -175,8 +175,8 @@ function WorkoutDay() {
   return (
     <>
       <PageHeader
-        backTo="/portal/program"
-        backLabel="Back to Program"
+        backTo="/portal/workouts"
+        backLabel="Back to Workouts"
         title={day.title || `Day ${day.day_index}`}
         subtitle={day.focus ?? ""}
       />

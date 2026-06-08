@@ -200,7 +200,7 @@ function render(state: TodayState): View {
         borderClass: "border-emerald-500/60",
         bgClass: "bg-emerald-500",
         primary: (
-          <Link to="/portal/program">
+          <Link to="/portal/workouts">
             <Button size="lg" variant="outline" className="font-bold uppercase">
               View Program <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
