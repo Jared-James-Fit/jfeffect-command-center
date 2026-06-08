@@ -152,6 +152,60 @@ export const getPasswordResetLink = createServerFn({ method: "POST" })
     return { url: (link as any)?.properties?.action_link as string };
   });
 
+// Admin sets a client's password directly.
+export const setClientPassword = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) =>
+    z.object({
+      clientId: z.string().uuid(),
+      password: z.string().min(8).max(72),
+    }).parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    await assertAdmin(supabase, userId);
+    const { data: client, error } = await supabase
+      .from("clients").select("id, email, user_id").eq("id", data.clientId).single();
+    if (error) throw new Error(error.message);
+    if (!client?.email) throw new Error("Client has no email address");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    let authUserId = client.user_id as string | null;
+    if (!authUserId) {
+      const { data: list } = await supabaseAdmin.auth.admin.listUsers();
+      const existing = list.users.find(
+        (u: any) => (u.email || "").toLowerCase() === client.email!.toLowerCase(),
+      );
+      if (existing) {
+        authUserId = existing.id;
+        const { error: uErr } = await supabaseAdmin.auth.admin.updateUserById(existing.id, {
+          password: data.password,
+          email_confirm: true,
+        });
+        if (uErr) throw new Error(uErr.message);
+      } else {
+        const { data: created, error: cErr } = await supabaseAdmin.auth.admin.createUser({
+          email: client.email,
+          password: data.password,
+          email_confirm: true,
+        });
+        if (cErr) throw new Error(cErr.message);
+        authUserId = created.user.id;
+      }
+      await supabaseAdmin.from("clients").update({
+        user_id: authUserId,
+        account_status: "Account Created",
+        account_created_at: new Date().toISOString(),
+      }).eq("id", client.id);
+    } else {
+      const { error: uErr } = await supabaseAdmin.auth.admin.updateUserById(authUserId, {
+        password: data.password,
+      });
+      if (uErr) throw new Error(uErr.message);
+    }
+    return { ok: true };
+  });
+
 // Admin manual toggles
 export const markSetupComplete = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
