@@ -1,92 +1,98 @@
-## What's done already (this turn)
+# Plan: Block Date Ranges + Committed Training Schedule
 
-The Meal Plan upgrade is shipped — no plan needed:
-- Admin nutrition dialog: "Notes for this day" → **Meal Plan** label, taller monospace textarea (10 rows), helper text, paste placeholder showing expected format. Data column unchanged (`nutrition_target_days.notes`), so no migration.
-- New `<MealPlanDisplay />` component (`src/components/meal-plan-display.tsx`) — light parser that groups by blank-line blocks and styles **Meal N**, **Daily Total**, **Approx / macro** lines, and ingredient bullets. Mobile-first spacing.
-- Client portal nutrition page now renders each day's meal plan via `<MealPlanDisplay />` instead of a muted paragraph.
+Two related features. I'll split into phases so each ships testable.
 
-High Day "changes only" paste works — the parser doesn't require full meals.
+---
 
-## What needs your approval — autosave
+## Phase 1 — Block Date Ranges
 
-Autosave is large enough that I want to lock the approach before touching all the builders. Here's the plan.
+### Data model
+Add columns to `pl_blocks`:
+- `start_date date`
+- `end_date date` (auto-computed display only; stored for convenience)
+- `week_duration_days int default 7`
 
-### 1. Shared autosave primitives (new — one place, reused everywhere)
+Add columns to `pl_weeks`:
+- `start_date date`
+- `end_date date`
+- `date_source text default 'auto'` — `'auto'` | `'manual'`
 
-`src/hooks/use-autosave.ts`
-- `useAutosave({ value, onSave, delay = 800, key })` — debounces, tracks `idle | saving | saved | error | offline`, deduplicates if value unchanged, retries on failure with exponential backoff (1s → 5s → 15s cap).
-- Listens to `navigator.onLine`; queues while offline and flushes on reconnect.
-- Mirrors latest value into `localStorage` under `lov:draft:<key>` until server confirms; clears on success.
-- `flush()` for blur/unmount, `discard()` for "discard draft".
+When `pl_blocks.start_date` changes: auto-recompute `pl_weeks.start_date/end_date` for all weeks where `date_source = 'auto'`. Rows with `date_source = 'manual'` are preserved. Admin gets a confirm dialog before recompute if any manual rows exist.
 
-`src/hooks/use-local-draft.ts`
-- On mount, reads `lov:draft:<key>`; if present and differs from server value + server `updated_at` is newer than local → exposes `{ hasConflict, localValue, serverValue }` so the page can render the **"Unsaved draft found — Restore / Discard"** banner.
+### Admin UI (Program Builder / Block editor)
+In `src/routes/_authenticated/admin/blocks.$blockId.tsx`:
+- "Block Start Date" date picker at top of block header
+- Auto-shown End Date + duration (weeks × 7)
+- Under each week card: date range line (e.g., `Jun 8 – Jun 14`) + small badge `Auto` or `Custom`
+- Per-week "Edit dates" popover to override → sets `date_source='manual'`
+- "Reset to automatic" button per week and at block level
 
-`src/components/save-status.tsx`
-- Tiny inline pill: "Saved · 2s ago", "Saving…", "Unsaved changes", "Offline — will sync", "Save failed · Retry". No modals.
+### Client UI
+In `src/routes/_authenticated/portal/workouts.index.tsx`:
+- Under each week heading show `Jun 8 – Jun 14` when dates exist
+- "Current Week" badge when today falls in range
+- "Starts <date>" / "Ended <date>" states for pre/post block
+- Day labels also include date when `committed_training_days` (Phase 2) maps cleanly; otherwise just `Day 1`, `Day 2`
 
-### 2. Client workout autosave
+---
 
-Targets: `src/routes/_authenticated/portal/workouts.$dayId.tsx` (and any set-row component it uses).
+## Phase 2 — Mandatory Committed Training Schedule
 
-- Each set row keeps **local input state** (load / reps / RPE / RIR / notes). Local state is the source of truth while focused — never overwritten by refetch.
-- `useAutosave` per row keyed by `set_id` → calls a new `saveWorkoutSet` server fn that updates only changed fields.
-- Workout-level fields (workout notes, duration, pain notes) — single autosave instance keyed by `workout_log_id`.
-- **"Mark Complete" stays an explicit button.** Autosave only writes draft fields, never `completed_at`.
-- React Query: `setQueryData` to merge saved row instead of full refetch; no `invalidateQueries` on autosave success.
+### Data model
+Add columns to `clients`:
+- `committed_training_frequency int` (1–7)
+- `committed_training_days text[]` (Mon..Sun)
+- `available_training_days text[]`
+- `unavailable_training_days text[]`
+- `preferred_training_time text` (Morning/Midday/Afternoon/Evening/Late night/Varies)
+- `schedule_changes_weekly boolean`
+- `schedule_notes text`
+- `training_schedule_completed boolean default false`
+- `training_schedule_last_updated timestamptz`
+- `training_schedule_updated_by uuid` (user id)
 
-### 3. Admin program builder autosave
+(Existing `training_schedule_card` shows weekly training days but is separate — keep, but mark these new fields as the source of truth and migrate display.)
 
-Targets:
-- `src/routes/_authenticated/admin/blocks.$blockId.tsx` (Full Block Builder, weeks/days/rows, block notes)
-- `src/routes/_authenticated/admin/program-library_.$templateId.tsx` (template editor)
-- Plan Library editor (`src/lib/member-plans.functions.ts` consumers under `/admin/member-plans.*`)
-- Exercise row fields: sets, reps, RPE, RIR, %, %-basis, load, rest, tempo, notes
-- Block / week / day metadata: names, prep/phase notes, plan description, settings
+### Client intake/edit
+New component `TrainingScheduleDialog` with the exact question wording:
+- "How many days per week are you committed to training?" (1–7)
+- "What days are you committed to training?" (multi-select Mon–Sun)
+- "What days are you available to train if adjustments are needed?" (multi)
+- "Preferred training time" (single select)
+- "Days you cannot train" (multi + None)
+- "Does your schedule change week to week?" (Yes/No)
+- "Schedule notes" (textarea)
 
-Approach:
-- Same `useAutosave` per row keyed by `row_id`. Row component is `React.memo`'d on `row_id` so a sibling save doesn't re-render the focused row.
-- New focused server fns that accept partial diffs: `updateProgramRow`, `updateProgramDay`, `updateProgramWeek`, `updateBlockMeta`. Each takes `{ id, patch, expected_updated_at }` and returns the new `updated_at`. If `expected_updated_at` mismatches the DB row → returns `{ conflict: true, server }`; the UI surfaces "Keep mine / Use server" inline (no destructive overwrite).
-- **Linked weeks safety:** autosave path writes to the current row only — it never propagates. If the user makes a change that the existing edit-scope modal currently catches ("this week / future weeks / entire block / break link"), the autosave is deferred until the scope is picked. Concretely: the row component knows whether it's linked; for linked rows we delay the autosave timer and surface "Pending scope choice" instead of saving.
-- **Publish / visibility / archive stay explicit.** Autosave writes drafts only; toggling `published`, `visible_to_*`, archive, delete, deactivate require the existing confirmation flow.
+Save → set `training_schedule_completed=true`, stamp updated fields, log activity row (admin notification surface).
 
-### 4. Status indicator placement
+### Where it appears
+- Top of Workouts tab: schedule summary card + "Update Training Schedule" button. If incomplete: red "Training Schedule Required → Set Training Schedule" prompt.
+- Account/Profile settings: same dialog entry point.
+- Admin client profile (`admin/clients.$clientId`): summary card near status/goals showing all fields + Last Updated / Updated By, with admin "Edit" button using the same dialog (admin-mode flag).
 
-- Workout page: pinned at top-right of the workout card.
-- Block builder & template editors: in the page header next to the manual Save button (kept for confidence).
-- Per-row inline status only appears on error/conflict; the success state is summarized at the page level to avoid noise.
+### Admin notification
+On client-side save, write to `client_activity_log` with action `training_schedule_updated` containing before/after. (Admin notification bell already reads activity.)
 
-### 5. Performance rules baked into `useAutosave`
+### Frequency mismatch warning
+On admin block view, if `committed_training_frequency` and the block's days/week (count of `pl_days` per week) differ, show a yellow banner: "Client committed to N days/week; this program has M workouts/week."
 
-- 800ms debounce default; 1200ms for builder rows; 500ms for short fields like names.
-- Patch only changed fields (`useRef` of last-saved snapshot).
-- No `invalidateQueries` on autosave success — `setQueryData` only.
-- Save queue is per-key; concurrent saves to the same key collapse to the latest value.
+---
 
-### 6. Tests (manual, in the testing checklist you wrote)
+## Technical notes
+- Use existing `training-schedule.ts` `WEEK_DAYS` for day enums.
+- Date math via `date-fns` (already in project) — `addDays`, `format`, `isWithinInterval`.
+- `date_source='manual'` blocks recompute; show confirm dialog listing affected weeks.
+- All new columns get appropriate defaults; RLS unchanged (existing `pl_blocks`/`pl_weeks`/`clients` policies cover the new columns).
+- No silent program rewrites when schedule changes — only the warning banner.
 
-I'll run through the full Client Workout, Typing Experience, Program Builder, Network Failure, Offline, and Destructive Action checklists in the preview before declaring done.
+---
 
-### What I will NOT do
+## Build order
+1. Migration: `pl_blocks` + `pl_weeks` date columns; `clients` schedule columns.
+2. Block date logic + admin block editor UI.
+3. Client workouts tab week date ranges + Current Week badge.
+4. `TrainingScheduleDialog` component.
+5. Wire dialog into client Workouts tab + Account; wire admin profile display + edit.
+6. Activity log entry + frequency mismatch banner.
 
-- Won't add a real-time multi-user CRDT layer (out of scope; basic `updated_at` conflict guard is enough).
-- Won't change any current DB schema except adding `updated_at` triggers to any program-builder tables that don't already have one (I'll audit first; if all present, zero migrations).
-- Won't touch the meal-plan field, FAQ, or coach-notes structure.
-
-### Files I expect to add / edit
-
-Add:
-- `src/hooks/use-autosave.ts`
-- `src/hooks/use-local-draft.ts`
-- `src/components/save-status.tsx`
-- `src/lib/program-builder.functions.ts` (focused diff serverFns + conflict response)
-- `src/lib/workout-log.functions.ts` (per-set diff serverFn)
-- One migration **only if** any target table lacks `updated_at` + `tg_set_updated_at` trigger.
-
-Edit:
-- `src/routes/_authenticated/portal/workouts.$dayId.tsx` + its set-row component
-- `src/routes/_authenticated/admin/blocks.$blockId.tsx`
-- `src/routes/_authenticated/admin/program-library_.$templateId.tsx`
-- Plan-library editors under `src/routes/_authenticated/admin/member-plans.*` (notes/description fields)
-
-Approve and I'll build it. If you want me to start with just **client workout autosave** first and ship admin builder autosave in a second pass, say so and I'll scope this PR down.
+Ready to proceed?

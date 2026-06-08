@@ -838,6 +838,7 @@ export type Database = {
           archived_by: string | null
           assigned_check_in_link_id: string | null
           assigned_coach_id: string | null
+          available_training_days: string[] | null
           basic_info_completed_at: string | null
           basic_info_update_reason: string | null
           basic_info_update_requested: boolean
@@ -860,6 +861,8 @@ export type Database = {
           coach_notes: string | null
           coaching_package: string | null
           coaching_type: string | null
+          committed_training_days: string[] | null
+          committed_training_frequency: number | null
           compliance_status: string
           compliance_status_reasons: Json
           compliance_status_updated_at: string | null
@@ -923,6 +926,7 @@ export type Database = {
           preferred_name: string | null
           preferred_rest_days: string[]
           preferred_training_days: string[]
+          preferred_training_time: string | null
           preferred_weight_unit: string
           profile_picture_needs_update: boolean
           profile_picture_needs_update_at: string | null
@@ -935,6 +939,7 @@ export type Database = {
           program_sheet_link: string | null
           province: string | null
           renewal_date: string | null
+          schedule_changes_weekly: boolean | null
           schedule_notes: string | null
           schedule_updated_at: string | null
           sessions_purchased: number
@@ -948,7 +953,11 @@ export type Database = {
           timezone: string
           timezone_confirmed_at: string | null
           training_notes: string | null
+          training_schedule_completed: boolean
+          training_schedule_last_updated: string | null
+          training_schedule_updated_by: string | null
           twitter_x: string | null
+          unavailable_training_days: string[] | null
           updated_at: string
           user_id: string | null
           website: string | null
@@ -969,6 +978,7 @@ export type Database = {
           archived_by?: string | null
           assigned_check_in_link_id?: string | null
           assigned_coach_id?: string | null
+          available_training_days?: string[] | null
           basic_info_completed_at?: string | null
           basic_info_update_reason?: string | null
           basic_info_update_requested?: boolean
@@ -991,6 +1001,8 @@ export type Database = {
           coach_notes?: string | null
           coaching_package?: string | null
           coaching_type?: string | null
+          committed_training_days?: string[] | null
+          committed_training_frequency?: number | null
           compliance_status?: string
           compliance_status_reasons?: Json
           compliance_status_updated_at?: string | null
@@ -1054,6 +1066,7 @@ export type Database = {
           preferred_name?: string | null
           preferred_rest_days?: string[]
           preferred_training_days?: string[]
+          preferred_training_time?: string | null
           preferred_weight_unit?: string
           profile_picture_needs_update?: boolean
           profile_picture_needs_update_at?: string | null
@@ -1066,6 +1079,7 @@ export type Database = {
           program_sheet_link?: string | null
           province?: string | null
           renewal_date?: string | null
+          schedule_changes_weekly?: boolean | null
           schedule_notes?: string | null
           schedule_updated_at?: string | null
           sessions_purchased?: number
@@ -1079,7 +1093,11 @@ export type Database = {
           timezone?: string
           timezone_confirmed_at?: string | null
           training_notes?: string | null
+          training_schedule_completed?: boolean
+          training_schedule_last_updated?: string | null
+          training_schedule_updated_by?: string | null
           twitter_x?: string | null
+          unavailable_training_days?: string[] | null
           updated_at?: string
           user_id?: string | null
           website?: string | null
@@ -1100,6 +1118,7 @@ export type Database = {
           archived_by?: string | null
           assigned_check_in_link_id?: string | null
           assigned_coach_id?: string | null
+          available_training_days?: string[] | null
           basic_info_completed_at?: string | null
           basic_info_update_reason?: string | null
           basic_info_update_requested?: boolean
@@ -1122,6 +1141,8 @@ export type Database = {
           coach_notes?: string | null
           coaching_package?: string | null
           coaching_type?: string | null
+          committed_training_days?: string[] | null
+          committed_training_frequency?: number | null
           compliance_status?: string
           compliance_status_reasons?: Json
           compliance_status_updated_at?: string | null
@@ -1185,6 +1206,7 @@ export type Database = {
           preferred_name?: string | null
           preferred_rest_days?: string[]
           preferred_training_days?: string[]
+          preferred_training_time?: string | null
           preferred_weight_unit?: string
           profile_picture_needs_update?: boolean
           profile_picture_needs_update_at?: string | null
@@ -1197,6 +1219,7 @@ export type Database = {
           program_sheet_link?: string | null
           province?: string | null
           renewal_date?: string | null
+          schedule_changes_weekly?: boolean | null
           schedule_notes?: string | null
           schedule_updated_at?: string | null
           sessions_purchased?: number
@@ -1210,7 +1233,11 @@ export type Database = {
           timezone?: string
           timezone_confirmed_at?: string | null
           training_notes?: string | null
+          training_schedule_completed?: boolean
+          training_schedule_last_updated?: string | null
+          training_schedule_updated_by?: string | null
           twitter_x?: string | null
+          unavailable_training_days?: string[] | null
           updated_at?: string
           user_id?: string | null
           website?: string | null
@@ -3900,6 +3927,7 @@ export type Database = {
           status: string
           training_focus: string | null
           updated_at: string
+          week_duration_days: number
           week_start_index: number | null
           weeks: number
         }
@@ -3923,6 +3951,7 @@ export type Database = {
           status?: string
           training_focus?: string | null
           updated_at?: string
+          week_duration_days?: number
           week_start_index?: number | null
           weeks?: number
         }
@@ -3946,6 +3975,7 @@ export type Database = {
           status?: string
           training_focus?: string | null
           updated_at?: string
+          week_duration_days?: number
           week_start_index?: number | null
           weeks?: number
         }
@@ -4447,24 +4477,33 @@ export type Database = {
         Row: {
           block_id: string
           created_at: string
+          date_source: string
+          end_date: string | null
           id: string
           notes: string | null
+          start_date: string | null
           updated_at: string
           week_index: number
         }
         Insert: {
           block_id: string
           created_at?: string
+          date_source?: string
+          end_date?: string | null
           id?: string
           notes?: string | null
+          start_date?: string | null
           updated_at?: string
           week_index: number
         }
         Update: {
           block_id?: string
           created_at?: string
+          date_source?: string
+          end_date?: string | null
           id?: string
           notes?: string | null
+          start_date?: string | null
           updated_at?: string
           week_index?: number
         }
