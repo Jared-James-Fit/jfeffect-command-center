@@ -446,7 +446,7 @@ function BlockPayloadEditor({ weeksData, setWeeksData, exercises }: { weeksData:
               No weeks yet. Click <em>Add week</em> to start.
             </p>
           )}
-          <div className="-mx-2 overflow-x-auto px-2 pb-3">
+          <div className="-mx-2 snap-x snap-mandatory overflow-x-auto px-[max(1rem,calc((100vw-720px)/2))] pb-3 scroll-smooth">
             <div className="flex w-max items-start gap-3">
               {weeksData.map((w: any, wi: number) => {
                 const s = weekStats[wi] ?? { days: 0, rows: 0, minutes: 0 };
@@ -454,7 +454,7 @@ function BlockPayloadEditor({ weeksData, setWeeksData, exercises }: { weeksData:
                   <Card
                     key={wi}
                     id={`tpl-week-${wi}`}
-                    className="w-[94vw] max-w-[720px] shrink-0 overflow-hidden border-2 border-border p-0 sm:w-[600px] lg:w-[640px] xl:w-[700px]"
+                    className="w-[94vw] max-w-[720px] shrink-0 snap-center overflow-hidden border-2 border-border p-0 sm:w-[600px] lg:w-[640px] xl:w-[700px]"
                     style={{ borderLeftWidth: 6, borderLeftColor: "var(--primary)" }}
                   >
                     <div className="flex flex-wrap items-center gap-2 border-b border-primary/20 bg-[color-mix(in_oklab,var(--primary)_8%,var(--card))] px-3 py-2">
@@ -494,7 +494,7 @@ function BlockPayloadEditor({ weeksData, setWeeksData, exercises }: { weeksData:
               <button
                 type="button"
                 onClick={addWeek}
-                className="flex h-[200px] w-[260px] shrink-0 flex-col items-center justify-center gap-2 rounded-md border-2 border-dashed border-primary/40 bg-primary/5 text-primary hover:bg-primary/10"
+                className="flex h-[200px] w-[260px] shrink-0 snap-center flex-col items-center justify-center gap-2 rounded-md border-2 border-dashed border-primary/40 bg-primary/5 text-primary hover:bg-primary/10"
               >
                 <Plus className="h-6 w-6" />
                 <span className="text-sm font-bold uppercase tracking-wide">Add Week</span>
