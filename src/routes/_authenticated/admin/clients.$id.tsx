@@ -1245,22 +1245,22 @@ function SetupStatusBanner({
         <div className="flex flex-wrap items-center gap-2">
           {(stage === "no_account" || stage === "invite_pending" || stage === "invite_expired") && (
             <>
-              <Button size="sm" variant="outline" onClick={onSendSetup}>
-                <Mail className="mr-2 h-4 w-4" />{stage === "no_account" ? "Send setup link" : "Resend setup link"}
-              </Button>
-              <Button size="sm" variant="outline" onClick={onCopySetup}>
-                <Copy className="mr-2 h-4 w-4" />Copy setup link
-              </Button>
+              <ActionButton size="sm" variant="outline" onAction={onSendSetup} loadingLabel="Sending…" successLabel="Sent" successToast={false} errorToast={false} icon={<Mail className="h-4 w-4" />}>
+                {stage === "no_account" ? "Send setup link" : "Resend setup link"}
+              </ActionButton>
+              <ActionButton size="sm" variant="outline" onAction={onCopySetup} loadingLabel="Copying…" successLabel="Copied" successToast={false} errorToast={false} icon={<Copy className="h-4 w-4" />}>
+                Copy setup link
+              </ActionButton>
             </>
           )}
           {stage === "account_no_signin" && (
             <>
-              <Button size="sm" variant="outline" onClick={onSendReset}>
-                <KeyRound className="mr-2 h-4 w-4" />Send reset link
-              </Button>
-              <Button size="sm" variant="outline" onClick={onCopyReset}>
-                <Copy className="mr-2 h-4 w-4" />Copy reset link
-              </Button>
+              <ActionButton size="sm" variant="outline" onAction={onSendReset} loadingLabel="Sending…" successLabel="Sent" successToast={false} errorToast={false} icon={<KeyRound className="h-4 w-4" />}>
+                Send reset link
+              </ActionButton>
+              <ActionButton size="sm" variant="outline" onAction={onCopyReset} loadingLabel="Copying…" successLabel="Copied" successToast={false} errorToast={false} icon={<Copy className="h-4 w-4" />}>
+                Copy reset link
+              </ActionButton>
               <Button size="sm" variant="outline" onClick={onSetPassword}>
                 <KeyRound className="mr-2 h-4 w-4" />Set password
               </Button>
