@@ -4,6 +4,7 @@ import { clientNav } from "@/lib/admin-nav";
 import { ClientProfilePictureGate } from "@/components/client-profile-picture-gate";
 import { ClientPovBanner } from "@/components/client-pov-banner";
 import { ClientBasicInfoGate } from "@/components/client-basic-info-gate";
+import { ClientTrainingScheduleGate } from "@/components/client-training-schedule-gate";
 import { useActivityHeartbeat } from "@/hooks/use-activity-heartbeat";
 
 function PortalLayout() {
@@ -14,7 +15,9 @@ function PortalLayout() {
       <AppShell items={clientNav} title="Client Portal">
         <ClientProfilePictureGate>
           <ClientBasicInfoGate>
-            <Outlet />
+            <ClientTrainingScheduleGate>
+              <Outlet />
+            </ClientTrainingScheduleGate>
           </ClientBasicInfoGate>
         </ClientProfilePictureGate>
       </AppShell>
