@@ -14,7 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, ExternalLink, Save, Trash2, Mail, Archive, KeyRound, Copy, CheckCircle2, AlertCircle, BellRing, Tag, Dumbbell } from "lucide-react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
-import { inviteClient, deleteClient, getSetupLink, sendPasswordReset, markSetupComplete, setNeedsAdminHelp } from "@/lib/clients.functions";
+import { inviteClient, deleteClient, getSetupLink, getPasswordResetLink, sendPasswordReset, markSetupComplete, setNeedsAdminHelp } from "@/lib/clients.functions";
 import { deactivateClient, reactivateClient, DEACTIVATION_REASONS } from "@/lib/client-deactivation.functions";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { TrainingPhasesPanel } from "@/components/training-phases-panel";
@@ -99,6 +99,7 @@ function ClientDetail() {
   const deleteFn = useServerFn(deleteClient);
   const getSetupLinkFn = useServerFn(getSetupLink);
   const sendResetFn = useServerFn(sendPasswordReset);
+  const getResetLinkFn = useServerFn(getPasswordResetLink);
   const markCompleteFn = useServerFn(markSetupComplete);
   const needsHelpFn = useServerFn(setNeedsAdminHelp);
   const deactivateFn = useServerFn(deactivateClient);
@@ -178,11 +179,11 @@ function ClientDetail() {
 
   const copyResetLink = async () => {
     if (!form.email) return toast.error("Add an email first");
-    const t = toast.loading("Sending reset link…");
+    const t = toast.loading("Generating reset link…");
     try {
-      await sendResetFn({ data: { clientId: id, redirectTo: `${window.location.origin}/reset-password` } });
-      toast.success("Reset email sent to client", { id: t });
-      qc.invalidateQueries({ queryKey: ["client", id] });
+      const { url } = await getResetLinkFn({ data: { clientId: id, redirectTo: `${window.location.origin}/reset-password` } });
+      await navigator.clipboard.writeText(url);
+      toast.success("Reset link copied", { id: t });
     } catch (e: any) {
       toast.error(e?.message ?? "Failed", { id: t });
     }
@@ -764,26 +765,33 @@ function ClientDetail() {
             <AccountStatusBadge status={form.account_status} needsHelp={form.needs_admin_help} />
           </div>
 
-          <div className="grid gap-3 text-sm md:grid-cols-2 lg:grid-cols-4">
-            <Field label="Email" value={form.email ?? "—"} />
-            <Field label="Invite sent" value={fmtDate(form.invite_sent_at)} />
-            <Field label="Last resent" value={fmtDate(form.invite_last_resent_at)} />
-            <Field label="Account created" value={fmtDate(form.account_created_at)} />
-            <Field label="Invite expires" value={fmtDate(form.invite_expires_at)} />
-            <Field label="Password reset sent" value={fmtDate(form.password_reset_sent_at)} />
-            <Field label="Linked auth user" value={form.user_id ? "Yes" : "No"} />
-            <Field label="Needs admin help" value={form.needs_admin_help ? "Yes" : "No"} />
-          </div>
+          <div className="grid gap-4 md:grid-cols-3">
+            <div className="space-y-4 md:col-span-2">
+              <div className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-3">
+                <Field label="Email" value={form.email ?? "—"} />
+                <Field label="Invite sent" value={fmtDate(form.invite_sent_at)} />
+                <Field label="Last resent" value={fmtDate(form.invite_last_resent_at)} />
+                <Field label="Account created" value={fmtDate(form.account_created_at)} />
+                <Field label="Password reset sent" value={fmtDate(form.password_reset_sent_at)} />
+                <Field label="Linked auth user" value={form.user_id ? "Yes" : "No"} />
+              </div>
 
-          <div className="flex flex-wrap gap-2 pt-2">
-            <Button size="sm" variant="outline" onClick={sendSetup}><Mail className="mr-2 h-4 w-4" />{form.invite_sent_at ? "Resend setup email" : "Send setup email"}</Button>
-            <Button size="sm" variant="outline" onClick={copySetupLink}><Copy className="mr-2 h-4 w-4" />Copy setup link</Button>
-            <Button size="sm" variant="outline" onClick={sendReset}><KeyRound className="mr-2 h-4 w-4" />Send password reset</Button>
-            <Button size="sm" variant="outline" onClick={copyResetLink}><Copy className="mr-2 h-4 w-4" />Copy reset link</Button>
-            <Button size="sm" variant="outline" onClick={markComplete}><CheckCircle2 className="mr-2 h-4 w-4" />Mark setup complete</Button>
-            <Button size="sm" variant={form.needs_admin_help ? "default" : "outline"} onClick={toggleNeedsHelp}>
-              <AlertCircle className="mr-2 h-4 w-4" />{form.needs_admin_help ? "Clear admin help flag" : "Mark needs admin help"}
-            </Button>
+              <div className="flex flex-wrap gap-2 pt-2">
+                <Button size="sm" variant="outline" onClick={sendSetup}><Mail className="mr-2 h-4 w-4" />{form.invite_sent_at ? "Resend setup email" : "Send setup email"}</Button>
+                <Button size="sm" variant="outline" onClick={copySetupLink}><Copy className="mr-2 h-4 w-4" />Copy setup link</Button>
+                <Button size="sm" variant="outline" onClick={sendReset}><KeyRound className="mr-2 h-4 w-4" />Send password reset</Button>
+                <Button size="sm" variant="outline" onClick={copyResetLink}><Copy className="mr-2 h-4 w-4" />Copy reset link</Button>
+                <Button size="sm" variant="outline" onClick={markComplete}><CheckCircle2 className="mr-2 h-4 w-4" />Mark setup complete</Button>
+                <Button size="sm" variant={form.needs_admin_help ? "default" : "outline"} onClick={toggleNeedsHelp}>
+                  <AlertCircle className="mr-2 h-4 w-4" />{form.needs_admin_help ? "Clear admin help flag" : "Mark needs admin help"}
+                </Button>
+              </div>
+            </div>
+
+            <InviteExpiryPanel
+              expiresAt={form.invite_expires_at}
+              accountCreatedAt={form.account_created_at}
+            />
           </div>
         </Card>
         </TabsContent>
@@ -909,6 +917,47 @@ function Field({ label, value }: { label: string; value: React.ReactNode }) {
     <div>
       <div className="text-[10px] uppercase tracking-widest text-muted-foreground">{label}</div>
       <div className="mt-0.5 font-semibold">{value}</div>
+    </div>
+  );
+}
+
+function InviteExpiryPanel({ expiresAt, accountCreatedAt }: { expiresAt: string | null; accountCreatedAt: string | null }) {
+  if (accountCreatedAt) {
+    return (
+      <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-4">
+        <div className="text-[10px] uppercase tracking-widest text-emerald-400">Invite Status</div>
+        <div className="mt-1 text-sm font-semibold text-emerald-300">Account created</div>
+        <div className="mt-0.5 text-xs text-muted-foreground">{fmtDate(accountCreatedAt)}</div>
+      </div>
+    );
+  }
+  if (!expiresAt) {
+    return (
+      <div className="rounded-lg border border-border bg-muted/30 p-4">
+        <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Invite Expiry</div>
+        <div className="mt-1 text-sm font-semibold">No invite sent yet</div>
+        <div className="mt-0.5 text-xs text-muted-foreground">Send a setup link to start the 48-hour window.</div>
+      </div>
+    );
+  }
+  const ms = new Date(expiresAt).getTime() - Date.now();
+  const expired = ms <= 0;
+  const hours = Math.floor(Math.abs(ms) / 3_600_000);
+  const mins = Math.floor((Math.abs(ms) % 3_600_000) / 60_000);
+  const display = hours >= 1 ? `${hours}h ${mins}m` : `${mins}m`;
+  const tone = expired
+    ? "border-destructive/40 bg-destructive/10 text-destructive"
+    : ms < 6 * 3_600_000
+      ? "border-amber-500/40 bg-amber-500/10 text-amber-400"
+      : "border-primary/30 bg-primary/10 text-primary";
+  return (
+    <div className={`rounded-lg border p-4 ${tone}`}>
+      <div className="text-[10px] uppercase tracking-widest opacity-80">Invite Expiry</div>
+      <div className="mt-1 text-lg font-bold">{expired ? "Expired" : `${display} left`}</div>
+      <div className="mt-1 text-xs text-muted-foreground">
+        {expired ? "Expired on " : "Expires "} {fmtDate(expiresAt)}
+      </div>
+      <div className="mt-2 text-[11px] text-muted-foreground">Invites are valid for 48 hours.</div>
     </div>
   );
 }
