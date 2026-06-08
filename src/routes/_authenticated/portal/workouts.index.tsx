@@ -5,14 +5,14 @@ import { usePortalUserId } from "@/lib/client-impersonation";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Activity, FileText, Dumbbell, ChevronRight } from "lucide-react";
+import { Activity, FileText, Dumbbell, ChevronRight, Loader2 } from "lucide-react";
 import { getClientWorkouts } from "@/lib/pl-programs";
 import { WorkoutArchiveSection } from "@/components/workout-archive-section";
 import { format, parseISO } from "date-fns";
 import { TrainingScheduleCard } from "@/components/training-schedule-card";
 import { BlockSummaryCard } from "@/components/block-summary-card";
 import { BlockWeekColumns } from "@/components/block-week-columns";
-import { BlockProgressSection } from "@/components/block-progress-section";
+import { SmartTodayCard } from "@/components/smart-today-card";
 
 export const Route = createFileRoute("/_authenticated/portal/workouts/")({ component: WorkoutsPage });
 
@@ -43,7 +43,11 @@ function WorkoutsPage() {
     <>
       <PageHeader title="Workouts" subtitle="Your assigned training" />
       <div className="p-6 md:p-8 space-y-6 pb-32">
-        {client && <TrainingScheduleCard client={client as any} editable />}
+        {/* PRIORITY #1 — Smart Today Card */}
+        {client?.id && !isLoading && (items as any[]).length > 0 && (
+          <SmartTodayCard items={items as any[]} clientId={client.id} />
+        )}
+
         <div className="grid gap-2 sm:grid-cols-2">
           <Link to="/portal/program">
             <Card className="flex items-center justify-between p-3 hover:bg-secondary/30">
@@ -72,7 +76,9 @@ function WorkoutsPage() {
         </div>
 
         {isLoading ? (
-          <p className="text-sm text-muted-foreground">Loading…</p>
+          <Card className="flex items-center gap-2 p-6 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" /> Loading program…
+          </Card>
         ) : blockGroups.size === 0 ? (
           <Card className="p-10 text-center">
             <Activity className="mx-auto h-10 w-10 text-muted-foreground" />
@@ -83,6 +89,8 @@ function WorkoutsPage() {
             <BlockSection key={block?.id ?? "none"} block={block} weeks={[...weeks.values()]} />
           ))
         )}
+
+        {client && <TrainingScheduleCard client={client as any} editable />}
         {client?.id && <WorkoutArchiveSection clientId={client.id} mode="client" />}
       </div>
     </>
@@ -110,7 +118,6 @@ function BlockSection({ block, weeks }: { block: any; weeks: { week: any; entrie
         <div className="mb-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">Weeks</div>
         <BlockWeekColumns block={block} weeks={weeks} mode="client" />
       </Card>
-      {block?.id && <BlockProgressSection blockId={block.id} mode="client" />}
     </section>
   );
 }

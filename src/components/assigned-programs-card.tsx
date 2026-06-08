@@ -244,7 +244,7 @@ export function AssignedProgramsCard({ clientId, mode }: { clientId: string; mod
                             mode={mode}
                             onRemove={() => setPending({ kind: "block", id: b.id, label: b.name })}
                           />
-                          <BlockProgressSection blockId={b.id} mode={mode} />
+                          {mode === "admin" && <BlockProgressSection blockId={b.id} mode={mode} />}
                         </div>
                       ))}
                     </div>
@@ -267,7 +267,7 @@ export function AssignedProgramsCard({ clientId, mode }: { clientId: string; mod
                   mode={mode}
                   onRemove={() => setPending({ kind: "block", id: b.id, label: b.name })}
                 />
-                <BlockProgressSection blockId={b.id} mode={mode} />
+                {mode === "admin" && <BlockProgressSection blockId={b.id} mode={mode} />}
               </div>
             ))}
           </div>
