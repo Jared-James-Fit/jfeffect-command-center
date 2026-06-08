@@ -1,71 +1,92 @@
-# Membership Platform — Phase 2: Resources, Access Mapping, Upgrade Flow
+## What's done already (this turn)
 
-Wraps up the deferred items from Phase 1. All three ship together so the member experience and admin control surface are complete.
+The Meal Plan upgrade is shipped — no plan needed:
+- Admin nutrition dialog: "Notes for this day" → **Meal Plan** label, taller monospace textarea (10 rows), helper text, paste placeholder showing expected format. Data column unchanged (`nutrition_target_days.notes`), so no migration.
+- New `<MealPlanDisplay />` component (`src/components/meal-plan-display.tsx`) — light parser that groups by blank-line blocks and styles **Meal N**, **Daily Total**, **Approx / macro** lines, and ingredient bullets. Mobile-first spacing.
+- Client portal nutrition page now renders each day's meal plan via `<MealPlanDisplay />` instead of a muted paragraph.
 
-## 1. Resources & Tools Library
+High Day "changes only" paste works — the parser doesn't require full meals.
 
-A single `member_resources` table powers both the **Resources** tab (guides, PDFs, videos, links) and the **Tools** tab (calculators, trackers, external tools). One model, filtered by `kind`.
+## What needs your approval — autosave
 
-### Schema
-- `member_resources`: `title`, `slug`, `description`, `kind` ('resource' | 'tool'), `format` ('pdf' | 'video' | 'link' | 'article' | 'calculator' | 'embed'), `url` (external link or storage path), `thumbnail_url`, `body_md` (long-form), `required_access_level` (text, default `app_membership`), `status` ('Draft' | 'Published' | 'Archived'), `featured` (bool), `sort_order` (int), `created_by`.
-- Storage bucket `member-resources` (private) for uploaded PDFs/files. Signed URLs only.
-- RLS: published rows readable to authenticated; admin/coach full CRUD; member reads gated server-side by `member_has_access`.
-- Reuse `featured_member_items` (already supports `item_type='resource'`) for the curated resources strip on the dashboard.
+Autosave is large enough that I want to lock the approach before touching all the builders. Here's the plan.
 
-### Admin UI
-- `/admin/resources-library` — list with tabs (All / Resources / Tools / Drafts), New button, inline status/featured toggles. (Repurpose the existing `/admin/resources.tsx` coaching page only if member-facing; otherwise new route `member-resources.index.tsx` + `.$id.tsx` + `.new.tsx` mirroring the member-plans pattern.)
-- New/edit form: title, kind, format, URL or file upload, access level dropdown, description, body markdown, thumbnail, featured + sort_order.
-- Add "Featured Resources" manager card on the same page (mirrors Featured Plans).
+### 1. Shared autosave primitives (new — one place, reused everywhere)
 
-### Member UI
-- Rewrite `/m/resources.tsx` and `/m/tools.tsx` to list real rows from `member_resources` filtered by `kind` and access. Locked items show a lock badge + "Upgrade" CTA.
-- Add `/m/resources/$slug` detail page rendering body, embedded video, or signed-URL download.
+`src/hooks/use-autosave.ts`
+- `useAutosave({ value, onSave, delay = 800, key })` — debounces, tracks `idle | saving | saved | error | offline`, deduplicates if value unchanged, retries on failure with exponential backoff (1s → 5s → 15s cap).
+- Listens to `navigator.onLine`; queues while offline and flushes on reconnect.
+- Mirrors latest value into `localStorage` under `lov:draft:<key>` until server confirms; clears on success.
+- `flush()` for blur/unmount, `discard()` for "discard draft".
 
-## 2. Product → Access Mapping UI
+`src/hooks/use-local-draft.ts`
+- On mount, reads `lov:draft:<key>`; if present and differs from server value + server `updated_at` is newer than local → exposes `{ hasConflict, localValue, serverValue }` so the page can render the **"Unsaved draft found — Restore / Discard"** banner.
 
-Today `product_access_grants` is only editable via SQL. Add an admin UI so each Stripe product/offer can be wired to the access keys it grants.
+`src/components/save-status.tsx`
+- Tiny inline pill: "Saved · 2s ago", "Saving…", "Unsaved changes", "Offline — will sync", "Save failed · Retry". No modals.
 
-### Where
-- New section on existing `/admin/payment-links` and `/admin/offers` detail pages: **"Membership Access Granted"**.
+### 2. Client workout autosave
 
-### What it does
-- Lists current `product_access_grants` rows for the offer/product.
-- "Add grant" picker: choose `account_type_granted` (App Member / Program-Only / Coaching Client) and one or more `access_level_keys` (app_membership, premium_membership, program_only, custom).
-- Optional: link a specific `member_plan_id` for program-only purchases (auto-enroll on purchase).
-- Edit/remove existing grants.
-- Server fns in `src/lib/product-access.functions.ts`: `listGrants`, `upsertGrant`, `deleteGrant` — admin-gated.
+Targets: `src/routes/_authenticated/portal/workouts.$dayId.tsx` (and any set-row component it uses).
 
-### Webhook compatibility
-- No webhook changes — `stripe-webhook.ts` already reads `product_access_grants` and applies. UI just makes the table editable.
+- Each set row keeps **local input state** (load / reps / RPE / RIR / notes). Local state is the source of truth while focused — never overwritten by refetch.
+- `useAutosave` per row keyed by `set_id` → calls a new `saveWorkoutSet` server fn that updates only changed fields.
+- Workout-level fields (workout notes, duration, pain notes) — single autosave instance keyed by `workout_log_id`.
+- **"Mark Complete" stays an explicit button.** Autosave only writes draft fields, never `completed_at`.
+- React Query: `setQueryData` to merge saved row instead of full refetch; no `invalidateQueries` on autosave success.
 
-## 3. Upgrade / CTA Flow
+### 3. Admin program builder autosave
 
-Members hit locked content → clear path to purchase.
+Targets:
+- `src/routes/_authenticated/admin/blocks.$blockId.tsx` (Full Block Builder, weeks/days/rows, block notes)
+- `src/routes/_authenticated/admin/program-library_.$templateId.tsx` (template editor)
+- Plan Library editor (`src/lib/member-plans.functions.ts` consumers under `/admin/member-plans.*`)
+- Exercise row fields: sets, reps, RPE, RIR, %, %-basis, load, rest, tempo, notes
+- Block / week / day metadata: names, prep/phase notes, plan description, settings
 
-### Components
-- `<UpgradeCTA />` shared component: title, subtitle, list of unlocked perks, primary "Upgrade" button → opens `/m/upgrade`.
-- `/m/upgrade` route: lists all `offers` flagged `is_member_facing=true` (new boolean on `offers`), grouped by tier. Each card: name, price, features, "Get access" → Stripe Checkout via existing `createCheckoutSession` flow with `success_url=/m?upgrade=success`.
-- Dashboard banner on `/m/index.tsx` for `account_type='program_only'` or no active access: "Unlock the full app — upgrade to App Member."
-- Locked plan/resource cards swap the disabled state for an `<UpgradeCTA inline />`.
-- Post-checkout: `/m?upgrade=success` shows a toast + refetches `m-me` so access updates as soon as the webhook lands.
+Approach:
+- Same `useAutosave` per row keyed by `row_id`. Row component is `React.memo`'d on `row_id` so a sibling save doesn't re-render the focused row.
+- New focused server fns that accept partial diffs: `updateProgramRow`, `updateProgramDay`, `updateProgramWeek`, `updateBlockMeta`. Each takes `{ id, patch, expected_updated_at }` and returns the new `updated_at`. If `expected_updated_at` mismatches the DB row → returns `{ conflict: true, server }`; the UI surfaces "Keep mine / Use server" inline (no destructive overwrite).
+- **Linked weeks safety:** autosave path writes to the current row only — it never propagates. If the user makes a change that the existing edit-scope modal currently catches ("this week / future weeks / entire block / break link"), the autosave is deferred until the scope is picked. Concretely: the row component knows whether it's linked; for linked rows we delay the autosave timer and surface "Pending scope choice" instead of saving.
+- **Publish / visibility / archive stay explicit.** Autosave writes drafts only; toggling `published`, `visible_to_*`, archive, delete, deactivate require the existing confirmation flow.
 
-### Schema
-- Add `offers.is_member_facing boolean default false` and `offers.member_tier_label text` (e.g. "App Member", "Premium").
-- Admin offers form gets two new fields.
+### 4. Status indicator placement
 
-## Technical Notes
+- Workout page: pinned at top-right of the workout card.
+- Block builder & template editors: in the page header next to the manual Save button (kept for confidence).
+- Per-row inline status only appears on error/conflict; the success state is summarized at the page level to avoid noise.
 
-- All new server fns under `src/lib/*.functions.ts` use `requireSupabaseAuth` + admin role check for writes; read fns for `/m/*` use `current_member_id()` and respect POV sandbox.
-- Storage uploads via `supabase.storage.from('member-resources').upload(...)` from admin client, then store the path; serve to members via signed URLs created in a server fn.
-- Migrations: one for `member_resources` + bucket policies, one for `offers.is_member_facing` + `offers.member_tier_label`.
-- Routes added:
-  - `/_authenticated/admin/member-resources.index.tsx`, `.new.tsx`, `.$resourceId.tsx`
-  - `/_authenticated/m/resources.$slug.tsx`
-  - `/_authenticated/m/upgrade.tsx`
-- Routes edited: `/m/resources.tsx`, `/m/tools.tsx`, `/m/index.tsx`, `/admin/payment-links.tsx`, `/admin/offers.tsx`, member-plan & resource cards.
+### 5. Performance rules baked into `useAutosave`
 
-## Out of scope (defer)
-- Email notifications on upgrade
-- Coupon/promo codes
-- Trial periods
-- Per-resource analytics
+- 800ms debounce default; 1200ms for builder rows; 500ms for short fields like names.
+- Patch only changed fields (`useRef` of last-saved snapshot).
+- No `invalidateQueries` on autosave success — `setQueryData` only.
+- Save queue is per-key; concurrent saves to the same key collapse to the latest value.
+
+### 6. Tests (manual, in the testing checklist you wrote)
+
+I'll run through the full Client Workout, Typing Experience, Program Builder, Network Failure, Offline, and Destructive Action checklists in the preview before declaring done.
+
+### What I will NOT do
+
+- Won't add a real-time multi-user CRDT layer (out of scope; basic `updated_at` conflict guard is enough).
+- Won't change any current DB schema except adding `updated_at` triggers to any program-builder tables that don't already have one (I'll audit first; if all present, zero migrations).
+- Won't touch the meal-plan field, FAQ, or coach-notes structure.
+
+### Files I expect to add / edit
+
+Add:
+- `src/hooks/use-autosave.ts`
+- `src/hooks/use-local-draft.ts`
+- `src/components/save-status.tsx`
+- `src/lib/program-builder.functions.ts` (focused diff serverFns + conflict response)
+- `src/lib/workout-log.functions.ts` (per-set diff serverFn)
+- One migration **only if** any target table lacks `updated_at` + `tg_set_updated_at` trigger.
+
+Edit:
+- `src/routes/_authenticated/portal/workouts.$dayId.tsx` + its set-row component
+- `src/routes/_authenticated/admin/blocks.$blockId.tsx`
+- `src/routes/_authenticated/admin/program-library_.$templateId.tsx`
+- Plan-library editors under `src/routes/_authenticated/admin/member-plans.*` (notes/description fields)
+
+Approve and I'll build it. If you want me to start with just **client workout autosave** first and ship admin builder autosave in a second pass, say so and I'll scope this PR down.
