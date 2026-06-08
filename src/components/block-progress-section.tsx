@@ -217,9 +217,9 @@ export function BlockProgressSection({ blockId, mode }: { blockId: string; mode:
           <div className="h-56 w-full">
             <ResponsiveContainer>
               {exMetric === "volume" || exMetric === "reps" || exMetric === "sets" || exMetric === "frequency" ? (
-                <BarChart data={exMetric === "frequency"
-                  ? Object.values(exSeries.reduce((acc: any, p) => { const k = `W${p.week_index}`; acc[k] = acc[k] ?? { label: k, frequency: 0 }; acc[k].frequency += 1; return acc; }, {}))
-                  : exSeries.map((p) => ({ label: p.date ? format(parseISO(p.date), "MMM d") : `W${p.week_index}`, ...p }))}>
+                <BarChart data={(exMetric === "frequency"
+                  ? Object.values(exSeries.reduce<Record<string, { label: string; frequency: number }>>((acc, p) => { const k = `W${p.week_index}`; acc[k] = acc[k] ?? { label: k, frequency: 0 }; acc[k].frequency += 1; return acc; }, {}))
+                  : exSeries.map((p) => ({ label: p.date ? format(parseISO(p.date), "MMM d") : `W${p.week_index}`, ...p }))) as any[]}>
                   <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
                   <XAxis dataKey="label" fontSize={11} />
                   <YAxis fontSize={11} />
