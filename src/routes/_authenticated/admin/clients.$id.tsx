@@ -38,7 +38,6 @@ import { PurchaseRecordsPanel } from "@/components/purchase-records-panel";
 import { PriceCardPickerDialog } from "@/components/price-card-picker-dialog";
 import { AgreementsPanel } from "@/components/agreements-panel";
 import { TrainingScheduleCard } from "@/components/training-schedule-card";
-import { listCheckInLinks } from "@/lib/check-ins";
 import { PowerlifterBadge, POWERLIFTER_BADGE_LABELS } from "@/components/powerlifter-badge";
 import { SocialHandlesEditor } from "@/components/social-handles-editor";
 import { SocialIcons } from "@/components/social-icons";
@@ -47,6 +46,9 @@ import { AppActivityCard } from "@/components/app-activity-card";
 import { FolderOpen, Eye } from "lucide-react";
 import { useClientImpersonation } from "@/lib/client-impersonation";
 import { useAuth } from "@/lib/auth";
+import { Checkbox } from "@/components/ui/checkbox";
+import { listAssignments, listForms as listNativeForms, type NfForm } from "@/lib/native-forms";
+import { replaceClientNativeFormAssignments } from "@/lib/native-forms.functions";
 
 function AssignedCoachSelect({ value, onChange }: { value: string | null; onChange: (v: string | null) => void }) {
   const { data: coaches = [] } = useQuery({
