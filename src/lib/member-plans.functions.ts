@@ -86,7 +86,7 @@ export const publishFromTemplate = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: t, error } = await supabaseAdmin.from("pl_templates").select("*").eq("id", data.templateId).maybeSingle();
     if (error || !t) throw new Error("Template not found");
-    const payload = t.payload || { weeks_data: [] };
+    const payload: any = t.payload || { weeks_data: [] };
     const weeks = t.weeks ?? (payload?.weeks_data?.length ?? 4);
     const days = t.days_per_week ?? (payload?.weeks_data?.[0]?.days?.length ?? 3);
     const workouts_total = countWorkouts(payload);
@@ -119,7 +119,7 @@ export const updateMemberPlan = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { error } = await supabaseAdmin.from("member_plans").update(data.patch).eq("id", data.planId);
+    const { error } = await supabaseAdmin.from("member_plans").update(data.patch as any).eq("id", data.planId);
     if (error) throw new Error(error.message);
     return { ok: true };
   });
