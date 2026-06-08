@@ -10,6 +10,7 @@ import { NotificationBell } from "@/components/notification-bell";
 import { useClientNavBadges, markNavSeen } from "@/hooks/use-client-nav-badges";
 import { useKeyboardOpen } from "@/hooks/use-keyboard-open";
 import { UserAvatar } from "@/components/user-avatar";
+import { SettingsMenu } from "@/components/settings-menu";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -289,14 +290,18 @@ export function AppShell({ items, title, children }: { items: NavItem[]; title: 
         <div className={cn("border-t border-sidebar-border", isCollapsed ? "p-1.5" : "p-2")}>
           {isCollapsed ? (
             <div className="flex flex-col items-center gap-1">
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Link to={accountHref} className="rounded-full">
+              <SettingsMenu
+                items={items}
+                meName={me?.name ?? user?.email ?? ""}
+                mePic={me?.pic ?? null}
+                onSignOut={handleSignOut}
+                align="start"
+                trigger={
+                  <button type="button" className="rounded-full" aria-label="Account menu">
                     <UserAvatar src={me?.pic ?? null} name={me?.name ?? user?.email ?? ""} size={28} ring expandable={false} />
-                  </Link>
-                </TooltipTrigger>
-                <TooltipContent side="right">{me?.name || user?.email}</TooltipContent>
-              </Tooltip>
+                  </button>
+                }
+              />
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
@@ -324,9 +329,18 @@ export function AppShell({ items, title, children }: { items: NavItem[]; title: 
             </div>
           ) : (
             <div className="flex items-center gap-2">
-              <Link to={accountHref} className="shrink-0" aria-label="Account settings">
-                <UserAvatar src={me?.pic ?? null} name={me?.name ?? user?.email ?? ""} size={28} ring expandable={false} />
-              </Link>
+              <SettingsMenu
+                items={items}
+                meName={me?.name ?? user?.email ?? ""}
+                mePic={me?.pic ?? null}
+                onSignOut={handleSignOut}
+                align="start"
+                trigger={
+                  <button type="button" className="shrink-0 rounded-full" aria-label="Account menu">
+                    <UserAvatar src={me?.pic ?? null} name={me?.name ?? user?.email ?? ""} size={28} ring expandable={false} />
+                  </button>
+                }
+              />
               <div className="min-w-0 flex-1">
                 <div className="truncate text-[11px] font-semibold leading-tight">{me?.name || user?.email}</div>
                 {!isCompact && (
@@ -375,23 +389,28 @@ export function AppShell({ items, title, children }: { items: NavItem[]; title: 
             <Button variant="ghost" size="sm" onClick={() => setPaletteOpen(true)} aria-label="Search">
               <Search className="h-4 w-4" />
             </Button>
-            {(() => {
-              const accountItem = items.find(
-                (i) => i.to.endsWith("/account") || i.to.endsWith("/account-settings"),
-              );
-              if (!accountItem) return null;
-              return (
-                <Link to={accountItem.to}>
-                  <Button variant="ghost" size="sm" aria-label="Account settings">
-                    <SettingsIcon className="h-4 w-4" />
-                  </Button>
-                </Link>
-              );
-            })()}
-            <UserAvatar src={me?.pic ?? null} name={me?.name ?? user?.email ?? ""} size={28} ring expandable={false} />
-            <Button variant="ghost" size="sm" onClick={handleSignOut}>
-              <LogOut className="h-4 w-4" />
-            </Button>
+            <SettingsMenu
+              items={items}
+              meName={me?.name ?? user?.email ?? ""}
+              mePic={me?.pic ?? null}
+              onSignOut={handleSignOut}
+              trigger={
+                <Button variant="ghost" size="sm" aria-label="Settings">
+                  <SettingsIcon className="h-4 w-4" />
+                </Button>
+              }
+            />
+            <SettingsMenu
+              items={items}
+              meName={me?.name ?? user?.email ?? ""}
+              mePic={me?.pic ?? null}
+              onSignOut={handleSignOut}
+              trigger={
+                <button type="button" aria-label="Account menu" className="rounded-full">
+                  <UserAvatar src={me?.pic ?? null} name={me?.name ?? user?.email ?? ""} size={28} ring expandable={false} />
+                </button>
+              }
+            />
           </div>
         </header>
 
