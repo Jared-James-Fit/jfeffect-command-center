@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Apple, Beef, Wheat, Droplets, Footprints, Flame, Cookie, FileText, Download, ExternalLink } from "lucide-react";
 import { useEffect, useState } from "react";
+import { MealPlanDisplay } from "@/components/meal-plan-display";
 
 export const Route = createFileRoute("/_authenticated/portal/nutrition-targets")({ component: NutritionTargets });
 
@@ -133,7 +134,12 @@ function DayCard({ day }: { day: any }) {
       {day.fibre != null && (
         <div className="mt-3 text-xs"><span className="text-muted-foreground">Fibre:</span> <span className="font-semibold">{day.fibre}g</span></div>
       )}
-      {day.notes && <p className="mt-3 text-xs text-muted-foreground">{day.notes}</p>}
+      {day.notes && (
+        <div className="mt-4">
+          <div className="mb-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Meal Plan</div>
+          <MealPlanDisplay text={day.notes} />
+        </div>
+      )}
     </Card>
   );
 }
