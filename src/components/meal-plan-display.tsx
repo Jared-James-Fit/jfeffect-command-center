@@ -99,9 +99,9 @@ function parse(text: string): Section[] {
     flushApprox();
     if (!cur) { cur = { kind: "other", items: [] }; sections.push(cur); }
     if (cur.kind === "total") {
-      // total followed by an item line — convert section into a labeled item bucket
-      const t = cur;
-      cur = { kind: "other", items: [t.title, ...(t.macros ? [t.macros] : []), line] };
+      const prev = cur as Extract<Section, { kind: "total" }>;
+      const replaced: Section = { kind: "other", items: [prev.title, ...(prev.macros ? [prev.macros] : []), line] };
+      cur = replaced;
       sections[sections.length - 1] = cur;
     } else if (cur.kind === "meal" || cur.kind === "highday" || cur.kind === "other") {
       cur.items.push(line);
