@@ -68,6 +68,8 @@ export const inviteClient = createServerFn({ method: "POST" })
     if (cErr) throw new Error(cErr.message);
     if (!client?.email) throw new Error("Client has no email address");
 
+    await assertNotPrivilegedTarget({ email: client.email, userId: client.user_id });
+
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
     const { data: invited, error: inviteErr } =
@@ -121,6 +123,7 @@ export const getSetupLink = createServerFn({ method: "POST" })
       .from("clients").select("id, email, user_id").eq("id", data.clientId).single();
     if (error) throw new Error(error.message);
     if (!client?.email) throw new Error("Client has no email address");
+    await assertNotPrivilegedTarget({ email: client.email, userId: client.user_id });
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const linkType = client.user_id ? "magiclink" : "invite";
     const { data: link, error: lErr } = await supabaseAdmin.auth.admin.generateLink({
@@ -155,6 +158,7 @@ export const sendPasswordReset = createServerFn({ method: "POST" })
       .from("clients").select("id, email").eq("id", data.clientId).single();
     if (error) throw new Error(error.message);
     if (!client?.email) throw new Error("Client has no email address");
+    await assertNotPrivilegedTarget({ email: client.email });
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     // resetPasswordForEmail SENDS the email; admin.generateLink only generates a URL.
     const { error: lErr } = await supabaseAdmin.auth.resetPasswordForEmail(
@@ -182,6 +186,7 @@ export const getPasswordResetLink = createServerFn({ method: "POST" })
       .from("clients").select("id, email").eq("id", data.clientId).single();
     if (error) throw new Error(error.message);
     if (!client?.email) throw new Error("Client has no email address");
+    await assertNotPrivilegedTarget({ email: client.email });
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: link, error: lErr } = await supabaseAdmin.auth.admin.generateLink({
       type: "recovery",
@@ -213,6 +218,7 @@ export const setClientPassword = createServerFn({ method: "POST" })
       .from("clients").select("id, email, user_id").eq("id", data.clientId).single();
     if (error) throw new Error(error.message);
     if (!client?.email) throw new Error("Client has no email address");
+    await assertNotPrivilegedTarget({ email: client.email, userId: client.user_id });
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
     let authUserId = client.user_id as string | null;
