@@ -1,64 +1,60 @@
-# Training Block Overhaul — Implementation Plan
+## Goal
 
-This builds on the existing `pl_blocks` / `pl_weeks` / `pl_days` / `pl_exercise_rows` / `pl_row_results` / `pl_day_completions` system. No disconnected pages — everything attaches to existing screens.
+The client's assigned block (`/admin/blocks/$blockId`) should edit with the **same layout, toolbar, compact mode, zoom, undo/redo, copy/paste, single-line rows, and collapsible library** as the Program Library template editor.
 
-## Phase 1 — Horizontal Week Layout (everywhere)
+## Approach
 
-Replace stacked/collapsible weeks with horizontal columns, always open, vertical divider between weeks.
+### 1. Extract shared editor into its own component file
+Move these pieces out of `src/routes/_authenticated/admin/program-library_.$templateId.tsx` into `src/components/payload-block-editor.tsx`:
+- `EditorChrome` (top sticky header + Save / SaveStatus)
+- `StructureCanvas` (compact-mode toolbar, zoom controls, undo/redo, sidebar)
+- `BlockPayloadEditor`, `WeekEditor`, `DayEditor`, `RowEditor`
+- Prefs (`PREFS_KEY` / `readPrefs` / `writePrefs`)
 
-Files:
-- `src/routes/_authenticated/portal/workouts.index.tsx` — replace `WeekSection` collapsibles with a horizontally scrollable strip of week columns.
-- `src/routes/_authenticated/admin/blocks.$blockId.tsx` (library editor) — same horizontal column layout.
-- `src/components/assigned-programs-card.tsx` — admin client view, same layout.
-- New shared `src/components/block-week-columns.tsx` — renders an array of weeks as horizontal columns. Each column shows: Week #, date range, training days, est time, notes, status badge, list of workouts (always expanded). Mobile = horizontal scroll snap, dividers between columns.
+Re-import them in the template editor route — behavior stays identical.
 
-## Phase 2 — Block Progress Analytics
+### 2. Rewrite the client block editor
+`src/routes/_authenticated/admin/blocks.$blockId.tsx` (1402 lines → ~250). The new file:
+1. Loads the block tree (`getBlockTree`).
+2. Converts to a JSON payload `{ weeks_data: [{ week_index, notes, days: [{ day_index, title, focus, notes, rows: [...] }] }] }`. Each entity keeps its DB `id` in a hidden `_dbId` field so the diff can match.
+3. Renders the shared `StructureCanvas` / `BlockPayloadEditor` with `compact` / `zoom` / undo / redo / copy / paste.
+4. On save (autosave + Save Now), runs a non-destructive diff:
+   - Match weeks / days / rows by `_dbId` first, then by index.
+   - Update fields in place via existing `updateBlock`, `updateDay`, `updateRow`.
+   - Create new entities via `addWeek`, `addDay`, `addRow` / `addRowFromExercise`.
+   - Delete only entities the user explicitly removed.
+   - Reordering: update `sort_order` via `updateRow`.
 
-New section embedded **inside** each block view (active + archived), below the week columns, above the Workout Archive list.
+### 3. What changes for the user
+- Same look/feel as the library editor: compact mode, zoom (saved per browser), undo/redo (Cmd/Ctrl+Z, Cmd/Ctrl+Shift+Z), copy/paste exercise rows, collapsible exercise library, side-by-side week cards with snap, dense single-line row inputs.
+- Block name, week notes, day title/focus/notes, all row fields (sets / reps / RPE / RIR / % / basis / load / rest / tempo / time_profile / exercise / custom name) editable.
+- Add / delete / duplicate weeks and days, drag exercises onto days, paste rows.
 
-New files:
-- `src/lib/block-analytics.ts` — pure calc helpers (volume, e1RM via Epley, top set, avg RPE, completion %, PRs, trends). Only uses completed sets from `pl_row_results` filtered to that block. Respects client unit (kg/lb) — read from `clients.weight_unit` or default.
-- `src/lib/block-analytics.functions.ts` — `getBlockAnalytics(blockId)` server fn returning summary + per-week aggregates + per-exercise series. Single round trip.
-- `src/components/block-progress-section.tsx` — main UI:
-  - Summary cards (workouts done/total/%, sets done/total, total volume, avg RPE, missed workouts, manual weeks, total training time).
-  - Block graph with metric toggle (Weekly Volume default, Workouts Completed, Avg RPE, Top Set, e1RM, Completion %). Use existing `recharts` (already a shadcn dep).
-  - Exercise selector (only exercises present in this block). Exercise graph with metric toggle (Top Set default, e1RM, Volume, Avg RPE, Reps, Sets, Frequency).
-  - PRs list (Highest Load, Highest e1RM, Highest Volume Session, Highest Rep PR) with "New Block PR" badge.
-  - Block Insights (Most Improved, Most Stalled, Largest e1RM gain, Highest/Lowest compliance exercise, Avg RPE trend, Volume trend, Most consistent week) — derived rules, no AI.
-  - Compliance block (completion %, missed workouts/weeks, manual completions, "Low Compliance" flag when <70% — configurable in `clients` settings later).
-  - Flags strip (Missed Workout, Missed Week, Manual Completion, New PR, Volume Drop/Increase >20%, Load Drop, RPE Spike, Deload Week).
-  - Filters: Week, Exercise, Workout Day, Movement Category (squat/bench/deadlift/upper/lower/accessories — derived from `exercises.category` already on the table).
-  - Empty state: "No training data logged yet…"
-  - Drilldown: graph point click opens existing workout day route (`/portal/workouts/$dayId`).
+### 4. Features that will be REMOVED from the client block editor
 
-## Phase 3 — Block Card Polish (already mostly done)
+You picked "Full replacement with JSON editor", so these admin-only block features will no longer be in this screen:
 
-`src/components/block-summary-card.tsx` already shows name/status/duration/dates/current week/progress %/week strip + admin Edit Dates + end-passed banner. Confirm both admin and client mount it; add to client `portal/program.tsx` if missing.
+| Removed | Impact |
+|---|---|
+| Linked-day editing + scope dialog ("this day / future weeks / entire block") | Edits affect only the single day; future weeks no longer auto-update |
+| `relinkDay` / `breakDayLink` / `breakAllLinks` controls | Existing links remain in the DB but UI to manage them is gone |
+| Per-week date controls (start date / week dates) | Block start date stays editable elsewhere (block summary card); per-week date overrides removed from this screen |
+| `applyProgression` (auto weekly progression rules) | No progression UI |
+| `copyDayToFutureWeeks` / `copyWeekToAll` with scope options | Replaced by the simpler "copy week → future weeks" button from the library editor |
+| Day-level archive / completion toggles | Completions still tracked by client, but no admin override here |
 
-## Phase 4 — Export
+Existing `pl_row_results` and `pl_day_completions` rows are **preserved** as long as the underlying row/day isn't deleted. The diff-based save keeps DB IDs whenever it can. Rows you delete in the UI **will** cascade-delete their completion history.
 
-Admin-only buttons in Block Progress:
-- CSV export — client-side, builds CSV string from analytics payload.
-- PDF Summary — use existing `jspdf` if present; else add `jspdf` + `jspdf-autotable`. Server fn not required.
+### 5. Files touched
+- New: `src/components/payload-block-editor.tsx`
+- Edited: `src/routes/_authenticated/admin/program-library_.$templateId.tsx` (imports from new module instead of defining inline)
+- Rewritten: `src/routes/_authenticated/admin/blocks.$blockId.tsx`
 
-## Phase 5 — Wire Into Pages
+### 6. Not touched
+- `src/lib/pl-programs.ts` (uses existing functions only)
+- Client-facing workout / portal screens
+- Database schema / migrations
 
-- `src/routes/_authenticated/portal/workouts.index.tsx` (client): for each block, render BlockSummaryCard → horizontal week columns → `<BlockProgressSection clientView blockId />` → existing archive section stays below.
-- `src/components/assigned-programs-card.tsx` (admin client detail page): same structure, admin variant (export buttons, edit-archived toggle when block is Archived).
-- Archive: clicking an archived block opens a read-only block detail with the same BlockProgressSection.
+## Confirm before I build
 
-## Out of scope (explicit)
-
-- No new analytics route, no separate dashboard.
-- No data backfill / migrations beyond what's needed for movement categories — `exercises.category` already exists.
-- No unit conversion. Use client's `weight_unit` as-is.
-- No "Planned vs Completed" weight tracking beyond what's already stored (we use prescribed vs logged from existing rows).
-
-## Open Questions
-
-1. **Mobile horizontal weeks** — swipe-snap one week per screen, or free horizontal scroll showing partial next week? (default: free scroll with snap on column edges)
-2. **Low Compliance threshold** — global 70% default, or per-client setting? (default: global 70%, hardcoded for now)
-3. **PDF export** — full styled report or simple table-only summary? (default: table-only summary to avoid heavy deps)
-4. **Movement category source** — use `exercises.category` text as-is, or add a normalized enum mapping? (default: lowercase string match on existing `category` field)
-
-Reply with answers or "go with defaults" and I'll ship Phases 1–5 in one batch.
+Reply **"go"** to proceed, or tell me which removed feature you want kept.
