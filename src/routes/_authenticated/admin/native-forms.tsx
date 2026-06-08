@@ -601,7 +601,7 @@ function AssignmentsEditor({ formId, form, onFormChange }: { formId: string; for
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="text-xs text-muted-foreground">
           {broadcastOn
-            ? `Visible to all active coaching clients`
+            ? `Assigned to all active coaching clients (individual ticks are inherited)`
             : `${selectedIds.size} client${selectedIds.size === 1 ? "" : "s"} selected${dirty ? " · unsaved" : ""}`}
         </div>
         <div className="flex gap-2">
@@ -619,30 +619,40 @@ function AssignmentsEditor({ formId, form, onFormChange }: { formId: string; for
       <div className="max-h-[40vh] space-y-1 overflow-y-auto rounded border border-border p-2">
         {filtered.length === 0 ? (
           <div className="p-3 text-xs text-muted-foreground">No matching clients.</div>
-        ) : filtered.map((c: any) => (
-          <div
-            key={c.id}
-            role="button"
-            tabIndex={0}
-            aria-pressed={selectedIds.has(c.id)}
-            aria-disabled={broadcastOn || saving}
-            onClick={() => { if (!broadcastOn && !saving) toggle(c.id); }}
-            onKeyDown={(e) => {
-              if (broadcastOn || saving) return;
-              if (e.key === " " || e.key === "Enter") { e.preventDefault(); toggle(c.id); }
-            }}
-            className={`flex min-h-[44px] cursor-pointer select-none items-center gap-3 rounded p-2 hover:bg-muted/40 ${(broadcastOn || saving) ? "cursor-not-allowed opacity-60" : ""}`}
-          >
-            <Checkbox
-              checked={broadcastOn ? true : selectedIds.has(c.id)}
-              disabled={broadcastOn || saving}
-              tabIndex={-1}
-              className="pointer-events-none"
-            />
-            <span className="text-sm">{c.full_name}</span>
-            <span className="ml-auto truncate text-xs text-muted-foreground">{c.email}</span>
-          </div>
-        ))}
+        ) : filtered.map((c: any) => {
+          const isChecked = broadcastOn ? true : selectedIds.has(c.id);
+          const disabled = broadcastOn || saving;
+          return (
+            <div
+              key={c.id}
+              onClick={(e) => {
+                if (disabled) return;
+                // Ignore clicks that originated from the checkbox itself —
+                // it has its own onCheckedChange and we don't want to double-toggle.
+                const target = e.target as HTMLElement;
+                if (target.closest('[data-nf-checkbox="true"]')) return;
+                toggle(c.id);
+              }}
+              className={`flex min-h-[44px] items-center gap-3 rounded p-2 hover:bg-muted/40 ${disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer"}`}
+            >
+              <span data-nf-checkbox="true" className="inline-flex">
+                <Checkbox
+                  checked={isChecked}
+                  disabled={disabled}
+                  onCheckedChange={(checked) => setClientSelected(c.id, checked === true)}
+                  aria-label={`Assign ${c.full_name}`}
+                />
+              </span>
+              <span className="text-sm">{c.full_name}</span>
+              <span className="ml-auto truncate text-xs text-muted-foreground">{c.email}</span>
+              {broadcastOn && (
+                <span className="ml-2 rounded bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-600">
+                  inherited
+                </span>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
