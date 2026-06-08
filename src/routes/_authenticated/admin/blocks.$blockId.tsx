@@ -30,6 +30,9 @@ import {
   EditScopeDialog, LinkBadge, flushPendingCells, type EditScopeChoice, type ExerciseRef,
 } from "@/components/program-builder";
 import { cn } from "@/lib/utils";
+import { setBlockStartDate, setWeekDates, resetWeekToAuto, countManualWeeks, weekDisplayRange, formatWeekRange, computeBlockEnd } from "@/lib/block-dates";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { format } from "date-fns";
 
 export const Route = createFileRoute("/_authenticated/admin/blocks/$blockId")({ component: BlockEditor });
 
@@ -315,6 +318,16 @@ function BlockEditor() {
             <Button size="sm" variant="outline" onClick={() => run(() => updateBlock(blockId, { client_visible: !block.client_visible }))}>
               {block.client_visible ? <><Eye className="mr-1 h-4 w-4" /> Visible</> : <><EyeOff className="mr-1 h-4 w-4" /> Hidden</>}
             </Button>
+            <BlockStartDateControl block={block} onChange={async (date) => {
+              const manual = await countManualWeeks(blockId);
+              if (manual > 0) {
+                const ok = confirm(`Recalculate all automatic week dates? ${manual} manually-overridden week(s) will be preserved unless you choose "Yes & override".`);
+                if (!ok) return;
+              }
+              await save.wrap(() => setBlockStartDate({ blockId, startDate: date }));
+              refresh();
+              toast.success(date ? "Block dates updated" : "Block start date cleared");
+            }} />
             <Button size="sm" variant="outline" onClick={() => run(() => addWeek(blockId))}><Plus className="mr-1 h-4 w-4" /> Week</Button>
             <Button size="sm" variant="outline" onClick={() => { setCopyDefault(undefined); setCopyOpen(true); }}><Copy className="mr-1 h-4 w-4" /> Copy week…</Button>
             {weeks.length > 1 && (
@@ -444,6 +457,7 @@ function BlockEditor() {
                     <WeekColumn
                       key={w.id}
                       blockId={blockId}
+                      block={block}
                       week={w}
                       days={(days as any[]).filter((d: any) => d.week_id === w.id)}
                       rows={rows}
@@ -476,6 +490,7 @@ function BlockEditor() {
                   <WeekColumn
                     key={w.id}
                     blockId={blockId}
+                    block={block}
                     week={w}
                     days={(days as any[]).filter((d: any) => d.week_id === w.id)}
                     rows={rows}
@@ -536,11 +551,12 @@ function BlockEditor() {
 }
 
 function WeekColumn({
-  blockId, week, days, rows, exercises, density, onAction, onCopyWeek,
+  blockId, block, week, days, rows, exercises, density, onAction, onCopyWeek,
   selectedDayId, onSelectDay, dayLinkInfo, onRowPatch, onDayPatch, onCopyDayToFuture,
   stacked = false, collapsed = false, onToggleCollapse, isCurrent = false, stats,
 }: {
   blockId: string;
+  block: any;
   week: any;
   days: any[];
   rows: any[];
@@ -623,6 +639,16 @@ function WeekColumn({
             <Crosshair className="mr-1 h-3 w-3" /> Current Week
           </Badge>
         )}
+        <WeekDateBadge
+          block={block}
+          week={week}
+          onSave={async (start: string | null, end: string | null) => {
+            await onAction(() => setWeekDates(week.id, start, end));
+          }}
+          onReset={async () => {
+            await onAction(() => resetWeekToAuto(week.id));
+          }}
+        />
         {linkLabel && (
           <Badge variant="outline" className="h-5 border-primary/30 bg-primary/5 px-1.5 text-[10px] text-primary">
             <Link2 className="mr-1 h-3 w-3" /> {linkLabel}
@@ -1250,5 +1276,99 @@ function ClientPreview({ weeks, days, rows }: { weeks: any[]; days: any[]; rows:
         </div>
       ))}
     </div>
+  );
+}
+
+function BlockStartDateControl({
+  block,
+  onChange,
+}: {
+  block: any;
+  onChange: (date: string | null) => Promise<void> | void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [value, setValue] = useState<string>(block?.start_date ?? "");
+  const endDate = computeBlockEnd(block?.start_date ?? null, block?.weeks ?? 0, block?.week_duration_days ?? 7);
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button size="sm" variant="outline" className="text-xs">
+          <CalendarDays className="mr-1 h-4 w-4" />
+          {block?.start_date ? `Starts ${format(new Date(block.start_date + "T00:00:00"), "MMM d, yyyy")}` : "Set start date"}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-72 space-y-2 p-3">
+        <Label className="text-xs">Block start date</Label>
+        <Input type="date" value={value} onChange={(e) => setValue(e.target.value)} />
+        {endDate && value && (
+          <div className="text-[11px] text-muted-foreground">
+            Ends {format(endDate, "MMM d, yyyy")} · {block?.weeks ?? 0} weeks
+          </div>
+        )}
+        <div className="flex justify-between gap-2">
+          <Button size="sm" variant="ghost" onClick={async () => { setOpen(false); setValue(""); await onChange(null); }}>
+            Clear
+          </Button>
+          <Button size="sm" onClick={async () => { setOpen(false); await onChange(value || null); }}>
+            Save
+          </Button>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function WeekDateBadge({
+  block,
+  week,
+  onSave,
+  onReset,
+}: {
+  block: any;
+  week: any;
+  onSave: (start: string | null, end: string | null) => Promise<void> | void;
+  onReset: () => Promise<void> | void;
+}) {
+  const [open, setOpen] = useState(false);
+  const range = weekDisplayRange(block, week);
+  const [start, setStart] = useState<string>(range ? format(range.start, "yyyy-MM-dd") : "");
+  const [end, setEnd] = useState<string>(range ? format(range.end, "yyyy-MM-dd") : "");
+  const source = range?.source ?? "auto";
+  if (!range) {
+    return (
+      <span className="text-[10px] uppercase tracking-wide text-muted-foreground">No dates</span>
+    );
+  }
+  return (
+    <Popover open={open} onOpenChange={(v) => {
+      setOpen(v);
+      if (v) {
+        setStart(format(range.start, "yyyy-MM-dd"));
+        setEnd(format(range.end, "yyyy-MM-dd"));
+      }
+    }}>
+      <PopoverTrigger asChild>
+        <button className="inline-flex items-center gap-1 rounded-md border border-border bg-card px-1.5 py-0.5 text-[10px] text-muted-foreground hover:text-foreground">
+          <CalendarDays className="h-3 w-3" />
+          {formatWeekRange(range.start, range.end)}
+          <Badge variant="outline" className="ml-1 h-4 px-1 text-[9px]">{source === "manual" ? "Custom" : "Auto"}</Badge>
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-64 space-y-2 p-3">
+        <Label className="text-xs">Week dates</Label>
+        <div className="grid grid-cols-2 gap-2">
+          <Input type="date" value={start} onChange={(e) => setStart(e.target.value)} />
+          <Input type="date" value={end} onChange={(e) => setEnd(e.target.value)} />
+        </div>
+        <div className="flex justify-between gap-2">
+          <Button size="sm" variant="ghost" onClick={async () => { setOpen(false); await onReset(); }}>
+            Reset to auto
+          </Button>
+          <Button size="sm" onClick={async () => { setOpen(false); await onSave(start || null, end || null); }}>
+            Save
+          </Button>
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }
