@@ -60,7 +60,6 @@ export function MemberResourceForm({ initial }: { initial?: Initial }) {
       toast.success("Uploaded");
     } catch (e: any) { toast.error(e?.message ?? "Upload failed"); }
     finally { setUploading(false); }
-    void signedUrl;
   };
 
   const save = async () => {
