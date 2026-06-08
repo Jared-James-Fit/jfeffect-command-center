@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "@/components/app-shell";
@@ -386,6 +386,8 @@ function AssignmentsEditor({ formId, form, onFormChange }: { formId: string; for
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const [saving, setSaving] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [pendingClientIds, setPendingClientIds] = useState<Set<string>>(new Set());
 
   const { data: assignments = [] } = useQuery({ queryKey: ["nf-assignments", formId], queryFn: () => listAssignments(formId) });
   const { data: clients = [] } = useQuery({
@@ -400,7 +402,12 @@ function AssignmentsEditor({ formId, form, onFormChange }: { formId: string; for
     },
   });
 
-  const assigned = new Set(assignments.map((a: any) => a.client_id));
+  useEffect(() => {
+    if (pendingClientIds.size > 0) return;
+    setSelectedIds(new Set(assignments.map((a: any) => a.client_id)));
+  }, [assignments, pendingClientIds.size]);
+
+  const assigned = selectedIds;
   const filtered = clients.filter((c: any) => {
     const q = search.trim().toLowerCase();
     if (!q) return true;
@@ -408,24 +415,72 @@ function AssignmentsEditor({ formId, form, onFormChange }: { formId: string; for
   });
 
   async function toggle(clientId: string) {
-    if (assigned.has(clientId)) await unassignForm(formId, clientId);
-    else await assignFormToClient(formId, clientId);
-    qc.invalidateQueries({ queryKey: ["nf-assignments", formId] });
+    if (broadcastOn || pendingClientIds.has(clientId)) return;
+    const wasAssigned = assigned.has(clientId);
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (wasAssigned) next.delete(clientId);
+      else next.add(clientId);
+      return next;
+    });
+    setPendingClientIds((prev) => new Set(prev).add(clientId));
+    try {
+      if (wasAssigned) await unassignForm(formId, clientId);
+      else await assignFormToClient(formId, clientId);
+      await qc.invalidateQueries({ queryKey: ["nf-assignments", formId] });
+      await qc.invalidateQueries({ queryKey: ["nf-forms"] });
+    } catch (e: any) {
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        if (wasAssigned) next.add(clientId);
+        else next.delete(clientId);
+        return next;
+      });
+      toast.error(e?.message ?? "Assignment failed");
+    } finally {
+      setPendingClientIds((prev) => {
+        const next = new Set(prev);
+        next.delete(clientId);
+        return next;
+      });
+    }
   }
 
   async function selectAllVisible() {
     const toAdd = filtered.filter((c: any) => !assigned.has(c.id)).map((c: any) => c.id);
     if (toAdd.length === 0) return;
-    await bulkAssignFormToClients(formId, toAdd);
-    qc.invalidateQueries({ queryKey: ["nf-assignments", formId] });
-    toast.success(`Assigned ${toAdd.length}`);
+    setSaving(true);
+    const previous = new Set(assigned);
+    setSelectedIds((prev) => new Set([...prev, ...toAdd]));
+    try {
+      await bulkAssignFormToClients(formId, toAdd);
+      await qc.invalidateQueries({ queryKey: ["nf-assignments", formId] });
+      await qc.invalidateQueries({ queryKey: ["nf-forms"] });
+      toast.success(`Assigned ${toAdd.length}`);
+    } catch (e: any) {
+      setSelectedIds(previous);
+      toast.error(e?.message ?? "Assignment failed");
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function clearAll() {
     if (!confirm("Remove all individual assignments for this form?")) return;
-    await clearAllAssignments(formId);
-    qc.invalidateQueries({ queryKey: ["nf-assignments", formId] });
-    toast.success("Cleared");
+    setSaving(true);
+    const previous = new Set(assigned);
+    setSelectedIds(new Set());
+    try {
+      await clearAllAssignments(formId);
+      await qc.invalidateQueries({ queryKey: ["nf-assignments", formId] });
+      await qc.invalidateQueries({ queryKey: ["nf-forms"] });
+      toast.success("Cleared");
+    } catch (e: any) {
+      setSelectedIds(previous);
+      toast.error(e?.message ?? "Clear failed");
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function setBroadcast(on: boolean) {
