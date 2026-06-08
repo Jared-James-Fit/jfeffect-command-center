@@ -2,7 +2,6 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { AlertTriangle, ArrowLeft, Plus, Trash2, Save, Clock, Copy, LayoutGrid, CalendarRange, ArrowRight } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Plus, Trash2, Save, Clock, Copy, LayoutGrid, CalendarRange, ArrowRight, ZoomIn, ZoomOut, Maximize2, PanelLeftClose, PanelLeftOpen, Rows3, ChevronDown, ChevronUp, Settings2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   getTemplate, updateTemplate, summarizeTemplatePayload, TIME_PROFILES,
@@ -22,6 +21,23 @@ import { useAutosave } from "@/hooks/use-autosave";
 import { SaveStatus } from "@/components/save-status";
 import { useConflictWatch } from "@/hooks/use-conflict-watch";
 import { ActionButton } from "@/components/action-button";
+
+// ---- Editor preferences (compact mode, zoom, sidebar) ----
+const PREFS_KEY = "pl-tpl-editor-prefs:v1";
+type EditorPrefs = { compact: boolean; zoom: number; sidebarCollapsed: boolean };
+const DEFAULT_PREFS: EditorPrefs = { compact: false, zoom: 0.9, sidebarCollapsed: false };
+function readPrefs(): EditorPrefs {
+  if (typeof window === "undefined") return DEFAULT_PREFS;
+  try {
+    const raw = window.localStorage.getItem(PREFS_KEY);
+    if (!raw) return DEFAULT_PREFS;
+    return { ...DEFAULT_PREFS, ...JSON.parse(raw) };
+  } catch { return DEFAULT_PREFS; }
+}
+function writePrefs(p: EditorPrefs) {
+  if (typeof window === "undefined") return;
+  try { window.localStorage.setItem(PREFS_KEY, JSON.stringify(p)); } catch {}
+}
 
 // Append a row into the first day reachable inside any template payload shape.
 function appendRowToFirstDay(payload: any, type: string, row: any) {
@@ -149,34 +165,11 @@ function TemplateEditor() {
   const type = tpl.template_type;
 
   return (
-    <>
-      <PageHeader
-        backTo="/admin/program-library"
-        backLabel="Back to Program Library"
-        breadcrumbs={[{ label: "Program Library", to: "/admin/program-library" }, { label: meta.name || "Template" }]}
-        title={meta.name || "Template"}
-        subtitle={`${type.replace("_", " ")} · ${summary.weeks}w · ${summary.days}d · ${summary.rows} rows`}
-      />
-      <div className="p-3 md:p-4 space-y-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <Link to="/admin/program-library" className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground">
-            <ArrowLeft className="mr-1 h-4 w-4" /> Back to library
-          </Link>
-          <div className="ml-auto flex items-center gap-3">
-            <SaveStatus state={autosave.state} savedAt={autosave.savedAt} />
-            <ActionButton
-              onAction={save}
-              loadingLabel="Saving…"
-              successLabel="Saved"
-              successToast="Template saved"
-              icon={<Save className="h-4 w-4" />}
-            >
-              {dirty ? "Save now" : "Saved"}
-            </ActionButton>
-          </div>
-        </div>
-
-        {conflictWatch.conflict && (
+    <EditorChrome
+      meta={meta} summary={summary} typeLabel={type.replace("_", " ")}
+      autosave={autosave} save={save} dirty={dirty}
+    >
+      {conflictWatch.conflict && (
           <Card className="flex flex-wrap items-start gap-3 border-amber-500/60 bg-amber-500/5 p-3 text-sm">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
             <div className="min-w-0 flex-1">
@@ -196,15 +189,14 @@ function TemplateEditor() {
             </div>
           </Card>
         )}
+      <Tabs defaultValue="structure">
+        <TabsList className="h-8">
+          <TabsTrigger value="structure" className="h-7 text-xs px-2"><Rows3 className="mr-1 h-3 w-3" />Structure</TabsTrigger>
+          <TabsTrigger value="meta" className="h-7 text-xs px-2"><Settings2 className="mr-1 h-3 w-3" />Settings</TabsTrigger>
+        </TabsList>
 
-        <Tabs defaultValue="structure">
-          <TabsList>
-            <TabsTrigger value="structure">Structure</TabsTrigger>
-            <TabsTrigger value="meta">Settings</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="meta" className="mt-3">
-            <Card className="p-4 space-y-3 max-w-2xl">
+        <TabsContent value="meta" className="mt-2">
+          <Card className="p-4 space-y-3 max-w-2xl">
               <div><Label>Name</Label><Input value={meta.name} onChange={(e) => setM({ name: e.target.value })} /></div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -223,53 +215,164 @@ function TemplateEditor() {
               </div>
               <div><Label>Tags (comma-separated)</Label><Input value={meta.tags} onChange={(e) => setM({ tags: e.target.value })} /></div>
               <div><Label>Notes</Label><Textarea value={meta.notes} onChange={(e) => setM({ notes: e.target.value })} rows={3} /></div>
-            </Card>
-          </TabsContent>
+          </Card>
+        </TabsContent>
 
-          <TabsContent value="structure" className="mt-3">
-            <div className="flex h-[calc(100vh-220px)] gap-2 overflow-hidden rounded-md border border-border">
-              <ExerciseLibraryPanel
-                exercises={exercises as ExerciseRef[]}
-                onQuickAdd={(exId) => {
-                  const ex = (exercises as any[]).find((e) => e.id === exId);
-                  appendRowToFirstDay(payload, type, { exercise_id: exId, exercise_name_override: ex?.name });
-                  setP({ ...payload });
-                  toast.success("Added to first day");
-                }}
-                onPick={(exId) => {
-                  const ex = (exercises as any[]).find((e) => e.id === exId);
-                  // append to first day found
-                  appendRowToFirstDay(payload, type, { exercise_id: exId, exercise_name_override: ex?.name });
-                  setP({ ...payload });
-                  toast.success("Added to first day — drag onto a specific day for placement");
-                }}
-              />
-              <div className="flex-1 overflow-auto p-2">
-                <StructureEditor type={type} payload={payload} setPayload={setP} exercises={exercises as any[]} />
-              </div>
-            </div>
-          </TabsContent>
-        </Tabs>
+        <TabsContent value="structure" className="mt-2">
+          <StructureCanvas
+            type={type}
+            payload={payload}
+            setP={setP}
+            exercises={exercises as any[]}
+            appendRowToFirstDay={appendRowToFirstDay}
+          />
+        </TabsContent>
+      </Tabs>
+    </EditorChrome>
+  );
+}
+
+function EditorChrome({ meta, summary, typeLabel, autosave, save, dirty, children }: {
+  meta: any; summary: any; typeLabel: string;
+  autosave: any; save: () => Promise<void>; dirty: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-2 p-2 md:p-3">
+      <div className="sticky top-0 z-30 -mx-2 flex flex-wrap items-center gap-2 border-b border-border bg-background/95 px-2 py-1.5 backdrop-blur md:-mx-3 md:px-3">
+        <Link to="/admin/program-library" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
+          <ArrowLeft className="h-3.5 w-3.5" /> Library
+        </Link>
+        <div className="min-w-0 flex items-baseline gap-2">
+          <span className="truncate text-sm font-bold">{meta.name || "Template"}</span>
+          <span className="hidden md:inline text-[11px] text-muted-foreground whitespace-nowrap">
+            {typeLabel} · {summary.weeks}w · {summary.days}d · {summary.rows} rows
+          </span>
+        </div>
+        <div className="ml-auto flex items-center gap-2">
+          <SaveStatus state={autosave.state} savedAt={autosave.savedAt} />
+          <ActionButton
+            onAction={save}
+            loadingLabel="Saving…"
+            successLabel="Saved"
+            successToast="Template saved"
+            icon={<Save className="h-3.5 w-3.5" />}
+            size="sm"
+            className="h-7 text-xs"
+          >
+            {dirty ? "Save now" : "Saved"}
+          </ActionButton>
+        </div>
       </div>
-    </>
+      {children}
+    </div>
+  );
+}
+
+function StructureCanvas({ type, payload, setP, exercises, appendRowToFirstDay }: {
+  type: string; payload: any; setP: (p: any) => void; exercises: any[];
+  appendRowToFirstDay: (payload: any, type: string, row: any) => void;
+}) {
+  const [prefs, setPrefsState] = useState<EditorPrefs>(() => readPrefs());
+  const setPrefs = (patch: Partial<EditorPrefs>) => {
+    const next = { ...prefs, ...patch };
+    setPrefsState(next);
+    writePrefs(next);
+  };
+  const { compact, zoom, sidebarCollapsed } = prefs;
+  const setZoom = (z: number) => setPrefs({ zoom: Math.max(0.5, Math.min(1.3, +z.toFixed(2))) });
+  const fitToScreen = () => {
+    // Rough fit heuristic based on viewport width
+    if (typeof window === "undefined") return;
+    const w = window.innerWidth;
+    setZoom(w < 900 ? 0.7 : w < 1280 ? 0.8 : w < 1600 ? 0.9 : 1.0);
+  };
+  const canvasRef = useRef<HTMLDivElement | null>(null);
+
+  return (
+    <div className="rounded-md border border-border bg-background">
+      {/* Sticky compact toolbar */}
+      <div className="sticky top-[42px] z-20 flex flex-wrap items-center gap-1.5 border-b border-border bg-background/95 px-2 py-1.5 backdrop-blur">
+        <Button size="icon" variant="ghost" className="h-7 w-7" title={sidebarCollapsed ? "Show library" : "Hide library"} onClick={() => setPrefs({ sidebarCollapsed: !sidebarCollapsed })}>
+          {sidebarCollapsed ? <PanelLeftOpen className="h-3.5 w-3.5" /> : <PanelLeftClose className="h-3.5 w-3.5" />}
+        </Button>
+        <div className="h-5 w-px bg-border" />
+        <button
+          onClick={() => setPrefs({ compact: !compact })}
+          className={cn("inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-semibold transition", compact ? "border-primary bg-primary text-primary-foreground" : "border-border text-muted-foreground hover:text-foreground")}
+          title="Toggle compact mode"
+        >
+          <Rows3 className="h-3 w-3" /> Compact
+        </button>
+        <div className="h-5 w-px bg-border" />
+        <div className="inline-flex items-center gap-0.5 rounded-md border border-border p-0.5">
+          <Button size="icon" variant="ghost" className="h-6 w-6" title="Zoom out" onClick={() => setZoom(zoom - 0.05)}>
+            <ZoomOut className="h-3 w-3" />
+          </Button>
+          <span className="min-w-[34px] text-center text-[10px] tabular-nums text-muted-foreground">{Math.round(zoom * 100)}%</span>
+          <Button size="icon" variant="ghost" className="h-6 w-6" title="Zoom in" onClick={() => setZoom(zoom + 0.05)}>
+            <ZoomIn className="h-3 w-3" />
+          </Button>
+          <Button size="icon" variant="ghost" className="h-6 w-6" title="Reset to 100%" onClick={() => setZoom(1)}>
+            <span className="text-[9px] font-bold">1:1</span>
+          </Button>
+          <Button size="icon" variant="ghost" className="h-6 w-6" title="Fit to screen" onClick={fitToScreen}>
+            <Maximize2 className="h-3 w-3" />
+          </Button>
+        </div>
+      </div>
+
+      <div className="flex h-[calc(100vh-150px)] gap-0 overflow-hidden">
+        <ExerciseLibraryPanel
+          exercises={exercises as ExerciseRef[]}
+          collapsed={sidebarCollapsed}
+          onToggleCollapse={() => setPrefs({ sidebarCollapsed: !sidebarCollapsed })}
+          onQuickAdd={(exId) => {
+            const ex = (exercises as any[]).find((e) => e.id === exId);
+            appendRowToFirstDay(payload, type, { exercise_id: exId, exercise_name_override: ex?.name });
+            setP({ ...payload });
+            toast.success("Added to first day");
+          }}
+          onPick={(exId) => {
+            const ex = (exercises as any[]).find((e) => e.id === exId);
+            appendRowToFirstDay(payload, type, { exercise_id: exId, exercise_name_override: ex?.name });
+            setP({ ...payload });
+            toast.success("Added — drag onto a day for placement");
+          }}
+        />
+        <div className="flex-1 overflow-auto" ref={canvasRef}>
+          <div
+            style={{
+              transform: `scale(${zoom})`,
+              transformOrigin: "top left",
+              width: `${100 / zoom}%`,
+              minHeight: `${100 / zoom}%`,
+            }}
+            className="p-2"
+          >
+            <StructureEditor type={type} payload={payload} setPayload={setP} exercises={exercises as any[]} compact={compact} />
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
 // ---------- Structure editing for the JSON payload ----------
 
-function StructureEditor({ type, payload, setPayload, exercises }: { type: string; payload: any; setPayload: (p: any) => void; exercises: any[] }) {
-  if (type === "full_prep") return <FullPrepEditor payload={payload} setPayload={setPayload} exercises={exercises} />;
-  if (type === "block") return <BlockPayloadEditor weeksData={payload.weeks_data || []} setWeeksData={(wd) => setPayload({ ...payload, weeks_data: wd })} exercises={exercises} />;
-  if (type === "week") return <WeekEditor week={payload} setWeek={setPayload} exercises={exercises} />;
-  if (type === "day") return <DayEditor day={payload} setDay={setPayload} exercises={exercises} />;
+function StructureEditor({ type, payload, setPayload, exercises, compact }: { type: string; payload: any; setPayload: (p: any) => void; exercises: any[]; compact?: boolean }) {
+  if (type === "full_prep") return <FullPrepEditor payload={payload} setPayload={setPayload} exercises={exercises} compact={compact} />;
+  if (type === "block") return <BlockPayloadEditor weeksData={payload.weeks_data || []} setWeeksData={(wd) => setPayload({ ...payload, weeks_data: wd })} exercises={exercises} compact={compact} />;
+  if (type === "week") return <WeekEditor week={payload} setWeek={setPayload} exercises={exercises} compact={compact} />;
+  if (type === "day") return <DayEditor day={payload} setDay={setPayload} exercises={exercises} compact={compact} />;
   return (
     <Card className="p-4 max-w-3xl">
-      <RowEditor row={payload} setRow={setPayload} exercises={exercises} />
+      <RowEditor row={payload} setRow={setPayload} exercises={exercises} compact={compact} />
     </Card>
   );
 }
 
-function FullPrepEditor({ payload, setPayload, exercises }: any) {
+function FullPrepEditor({ payload, setPayload, exercises, compact }: any) {
   const prep = payload.prep || {};
   const blocks = payload.blocks_data || [];
   const setPrep = (patch: any) => setPayload({ ...payload, prep: { ...prep, ...patch } });
@@ -303,6 +406,7 @@ function FullPrepEditor({ payload, setPayload, exercises }: any) {
             weeksData={b.weeks_data || []}
             setWeeksData={(wd) => { const copy = [...blocks]; copy[i] = { ...b, weeks_data: wd }; setBlocks(copy); }}
             exercises={exercises}
+            compact={compact}
           />
         </Card>
       ))}
@@ -310,7 +414,7 @@ function FullPrepEditor({ payload, setPayload, exercises }: any) {
   );
 }
 
-function BlockPayloadEditor({ weeksData, setWeeksData, exercises }: { weeksData: any[]; setWeeksData: (wd: any[]) => void; exercises: any[] }) {
+function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact }: { weeksData: any[]; setWeeksData: (wd: any[]) => void; exercises: any[]; compact?: boolean }) {
   const [activeIdx, setActiveIdx] = useState(0);
   const [view, setView] = useState<"block" | "week">("block");
   const weekStats = useMemo(() => weeksData.map((w: any) => {
@@ -417,6 +521,7 @@ function BlockPayloadEditor({ weeksData, setWeeksData, exercises }: { weeksData:
               setWeek={(w) => { const copy = [...weeksData]; copy[activeIdx] = w; setWeeksData(copy); }}
               exercises={exercises}
               onCopyDayToFuture={(di) => copyDayToFuture(activeIdx, di)}
+              compact={compact}
             />
           )}
         </>
@@ -446,26 +551,37 @@ function BlockPayloadEditor({ weeksData, setWeeksData, exercises }: { weeksData:
               No weeks yet. Click <em>Add week</em> to start.
             </p>
           )}
-          <div className="-mx-2 snap-x snap-mandatory overflow-x-auto px-[max(1rem,calc((100vw-720px)/2))] pb-3 scroll-smooth">
-            <div className="flex w-max items-start gap-3">
+          <div className={cn(
+            "-mx-2 snap-x snap-mandatory overflow-x-auto pb-3 scroll-smooth",
+            compact ? "px-[max(0.5rem,calc((100vw-520px)/2))]" : "px-[max(1rem,calc((100vw-720px)/2))]",
+          )}>
+            <div className={cn("flex w-max items-start", compact ? "gap-2" : "gap-3")}>
               {weeksData.map((w: any, wi: number) => {
                 const s = weekStats[wi] ?? { days: 0, rows: 0, minutes: 0 };
                 return (
                   <Card
                     key={wi}
                     id={`tpl-week-${wi}`}
-                    className="w-[94vw] max-w-[720px] shrink-0 snap-center overflow-hidden border-2 border-border p-0 sm:w-[600px] lg:w-[640px] xl:w-[700px]"
+                    className={cn(
+                      "shrink-0 snap-center overflow-hidden border-2 border-border p-0",
+                      compact
+                        ? "w-[88vw] max-w-[520px] sm:w-[440px] lg:w-[480px] xl:w-[520px]"
+                        : "w-[94vw] max-w-[720px] sm:w-[600px] lg:w-[640px] xl:w-[700px]",
+                    )}
                     style={{ borderLeftWidth: 6, borderLeftColor: "var(--primary)" }}
                   >
-                    <div className="flex flex-wrap items-center gap-2 border-b border-primary/20 bg-[color-mix(in_oklab,var(--primary)_8%,var(--card))] px-3 py-2">
-                      <span className="inline-flex h-6 items-center rounded-md bg-primary px-2 text-[11px] font-bold uppercase tracking-wide text-primary-foreground">
+                    <div className={cn(
+                      "flex flex-wrap items-center gap-1.5 border-b border-primary/20 bg-[color-mix(in_oklab,var(--primary)_8%,var(--card))]",
+                      compact ? "px-2 py-1" : "px-3 py-2",
+                    )}>
+                      <span className={cn("inline-flex items-center rounded-md bg-primary px-2 text-[10px] font-bold uppercase tracking-wide text-primary-foreground", compact ? "h-5" : "h-6 text-[11px]")}>
                         Week {w.week_index}
                       </span>
-                      <span className="text-[11px] text-muted-foreground">
+                      <span className={cn("text-muted-foreground", compact ? "text-[10px]" : "text-[11px]")}>
                         {s.days} day{s.days === 1 ? "" : "s"} · {s.rows} row{s.rows === 1 ? "" : "s"} · Est {fmtDur(s.minutes)}
                       </span>
                       <Input
-                        className="h-7 min-w-[140px] flex-1 border-0 bg-transparent text-xs focus-visible:ring-1"
+                        className={cn("min-w-[120px] flex-1 border-0 bg-transparent text-xs focus-visible:ring-1", compact ? "h-6" : "h-7")}
                         placeholder="Week notes"
                         value={w.notes ?? ""}
                         onChange={(e) => { const c = [...weeksData]; c[wi] = { ...w, notes: e.target.value }; setWeeksData(c); }}
@@ -478,12 +594,13 @@ function BlockPayloadEditor({ weeksData, setWeeksData, exercises }: { weeksData:
                         <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => delWeek(wi)}><Trash2 className="h-4 w-4" /></Button>
                       </div>
                     </div>
-                    <div className="bg-[color-mix(in_oklab,var(--primary)_2%,transparent)] p-3">
+                    <div className={cn("bg-[color-mix(in_oklab,var(--primary)_2%,transparent)]", compact ? "p-2" : "p-3")}>
                       <WeekEditor
                         week={w}
                         setWeek={(nw) => { const c = [...weeksData]; c[wi] = nw; setWeeksData(c); }}
                         exercises={exercises}
                         onCopyDayToFuture={(di) => copyDayToFuture(wi, di)}
+                        compact={compact}
                         hideHeader
                       />
                     </div>
@@ -494,7 +611,10 @@ function BlockPayloadEditor({ weeksData, setWeeksData, exercises }: { weeksData:
               <button
                 type="button"
                 onClick={addWeek}
-                className="flex h-[200px] w-[260px] shrink-0 snap-center flex-col items-center justify-center gap-2 rounded-md border-2 border-dashed border-primary/40 bg-primary/5 text-primary hover:bg-primary/10"
+                className={cn(
+                  "flex shrink-0 snap-center flex-col items-center justify-center gap-2 rounded-md border-2 border-dashed border-primary/40 bg-primary/5 text-primary hover:bg-primary/10",
+                  compact ? "h-[140px] w-[200px]" : "h-[200px] w-[260px]",
+                )}
               >
                 <Plus className="h-6 w-6" />
                 <span className="text-sm font-bold uppercase tracking-wide">Add Week</span>
@@ -507,7 +627,7 @@ function BlockPayloadEditor({ weeksData, setWeeksData, exercises }: { weeksData:
   );
 }
 
-function WeekEditor({ week, setWeek, exercises, onCopyDayToFuture, hideHeader }: { week: any; setWeek: (w: any) => void; exercises: any[]; onCopyDayToFuture?: (dayIdx: number) => void; hideHeader?: boolean }) {
+function WeekEditor({ week, setWeek, exercises, onCopyDayToFuture, hideHeader, compact }: { week: any; setWeek: (w: any) => void; exercises: any[]; onCopyDayToFuture?: (dayIdx: number) => void; hideHeader?: boolean; compact?: boolean }) {
   const days = week.days || [];
   const addDay = () => {
     const nextIdx = (days[days.length - 1]?.day_index ?? 0) + 1;
@@ -532,21 +652,21 @@ function WeekEditor({ week, setWeek, exercises, onCopyDayToFuture, hideHeader }:
         <Button size="sm" variant="outline" onClick={addDay}><Plus className="mr-1 h-3 w-3" /> Day</Button>
       )}
       {days.map((d: any, i: number) => (
-        <Card key={i} className="p-3 border-l-[3px] border-l-primary/40">
-          <div className="mb-2 flex items-center gap-2">
-            <Input className="max-w-xs font-bold" value={d.title ?? ""} onChange={(e) => { const copy = [...days]; copy[i] = { ...d, title: e.target.value }; setWeek({ ...week, days: copy }); }} />
-            <Input className="max-w-xs" placeholder="Focus" value={d.focus ?? ""} onChange={(e) => { const copy = [...days]; copy[i] = { ...d, focus: e.target.value }; setWeek({ ...week, days: copy }); }} />
-            <div className="ml-auto flex gap-1">
+        <Card key={i} className={cn("border-l-[3px] border-l-primary/40", compact ? "p-2" : "p-3")}>
+          <div className={cn("flex items-center gap-2", compact ? "mb-1" : "mb-2")}>
+            <Input className={cn("max-w-xs font-bold", compact && "h-7 text-xs")} value={d.title ?? ""} onChange={(e) => { const copy = [...days]; copy[i] = { ...d, title: e.target.value }; setWeek({ ...week, days: copy }); }} />
+            <Input className={cn("max-w-xs", compact && "h-7 text-xs")} placeholder="Focus" value={d.focus ?? ""} onChange={(e) => { const copy = [...days]; copy[i] = { ...d, focus: e.target.value }; setWeek({ ...week, days: copy }); }} />
+            <div className="ml-auto flex gap-0.5">
               {onCopyDayToFuture && (
-                <Button size="sm" variant="ghost" onClick={() => onCopyDayToFuture(i)} title="Copy this day → same day in future weeks">
+                <Button size="sm" variant="ghost" className="h-7 px-2 text-[10px]" onClick={() => onCopyDayToFuture(i)} title="Copy this day → same day in future weeks">
                   <ArrowRight className="mr-1 h-3 w-3" /> → future
                 </Button>
               )}
-              <Button size="icon" variant="ghost" onClick={() => dupDay(i)} title="Duplicate"><Copy className="h-4 w-4" /></Button>
-              <Button size="icon" variant="ghost" className="text-destructive" onClick={() => delDay(i)}><Trash2 className="h-4 w-4" /></Button>
+              <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => dupDay(i)} title="Duplicate"><Copy className="h-3.5 w-3.5" /></Button>
+              <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => delDay(i)}><Trash2 className="h-3.5 w-3.5" /></Button>
             </div>
           </div>
-          <DayEditor day={d} setDay={(nd) => { const copy = [...days]; copy[i] = nd; setWeek({ ...week, days: copy }); }} exercises={exercises} />
+          <DayEditor day={d} setDay={(nd) => { const copy = [...days]; copy[i] = nd; setWeek({ ...week, days: copy }); }} exercises={exercises} compact={compact} />
         </Card>
       ))}
       {hideHeader && days.length > 0 && (
@@ -556,7 +676,7 @@ function WeekEditor({ week, setWeek, exercises, onCopyDayToFuture, hideHeader }:
   );
 }
 
-function DayEditor({ day, setDay, exercises }: { day: any; setDay: (d: any) => void; exercises: any[] }) {
+function DayEditor({ day, setDay, exercises, compact }: { day: any; setDay: (d: any) => void; exercises: any[]; compact?: boolean }) {
   const rows = day.rows || [];
   const [dragOver, setDragOver] = useState(false);
   const addRow = () => setDay({ ...day, rows: [...rows, { sort_order: rows.length, sets: 3, reps_text: "8-12", time_profile: "accessory_compound" }] });
@@ -612,12 +732,12 @@ function DayEditor({ day, setDay, exercises }: { day: any; setDay: (d: any) => v
               setRow={(nr) => { const copy = [...rows]; copy[i] = nr; setDay({ ...day, rows: copy }); }}
               onDelete={() => setDay({ ...day, rows: rows.filter((_: any, j: number) => j !== i) })}
               exercises={exercises}
-              compact
+              compact={compact !== false}
             />
           ))}
         </div>
       )}
-      <Textarea className="mt-2" placeholder="Day notes" value={day.notes ?? ""} onChange={(e) => setDay({ ...day, notes: e.target.value })} rows={2} />
+      <Textarea className={cn("mt-2", compact && "text-xs")} placeholder="Day notes" value={day.notes ?? ""} onChange={(e) => setDay({ ...day, notes: e.target.value })} rows={compact ? 1 : 2} />
     </div>
   );
 }
@@ -625,13 +745,16 @@ function DayEditor({ day, setDay, exercises }: { day: any; setDay: (d: any) => v
 function RowEditor({ row, setRow, onDelete, exercises, compact }: { row: any; setRow: (r: any) => void; onDelete?: () => void; exercises: any[]; compact?: boolean }) {
   const exName = (exercises as any[]).find((e) => e.id === row.exercise_id)?.name ?? row.exercise_name_override ?? "";
   const accent = movementAccent(exName);
+  const [expanded, setExpanded] = useState(!compact);
+  useEffect(() => { if (!compact) setExpanded(true); }, [compact]);
+  const h = compact ? "h-7" : "h-8";
   return (
-    <div className="relative overflow-hidden rounded-md border border-border bg-secondary/20 p-2 pl-3 space-y-1">
+    <div className={cn("relative overflow-hidden rounded-md border border-border bg-secondary/20 pl-3", compact ? "p-1.5 space-y-1" : "p-2 space-y-1")}>
       <div className={`absolute left-0 top-0 h-full w-1.5 ${accent}`} aria-hidden />
       <div className="grid grid-cols-12 items-center gap-1">
         <div className="col-span-4">
         <Select value={row.exercise_id ?? "__custom"} onValueChange={(v) => setRow({ ...row, exercise_id: v === "__custom" ? null : v })}>
-          <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Exercise" /></SelectTrigger>
+          <SelectTrigger className={cn(h, "text-xs")}><SelectValue placeholder="Exercise" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="__custom">— Custom name —</SelectItem>
             {(exercises as any[]).map((e) => <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>)}
@@ -641,28 +764,35 @@ function RowEditor({ row, setRow, onDelete, exercises, compact }: { row: any; se
           <Input className="mt-1 h-7 text-xs" placeholder="Custom name" value={row.exercise_name_override ?? ""} onChange={(e) => setRow({ ...row, exercise_name_override: e.target.value })} />
         )}
       </div>
-        <Input className="col-span-1 h-8 text-xs" inputMode="numeric" placeholder="Sets" value={row.sets ?? ""} onChange={(e) => setRow({ ...row, sets: parseInt(e.target.value) || null })} />
-        <Input className="col-span-2 h-8 text-xs" placeholder="Reps" value={row.reps_text ?? ""} onChange={(e) => setRow({ ...row, reps_text: e.target.value })} />
-        <Input className="col-span-1 h-8 text-xs" inputMode="decimal" placeholder="RPE" value={row.rpe ?? ""} onChange={(e) => setRow({ ...row, rpe: e.target.value })} />
-        <Input className="col-span-1 h-8 text-xs" inputMode="decimal" placeholder="RIR" value={row.rir ?? ""} onChange={(e) => setRow({ ...row, rir: e.target.value })} />
-        <Input className="col-span-1 h-8 text-xs" inputMode="numeric" placeholder="Rest s" value={row.rest_seconds ?? ""} onChange={(e) => setRow({ ...row, rest_seconds: parseInt(e.target.value) || null })} />
-        <div className="col-span-2 flex justify-end gap-1">
+        <Input className={cn("col-span-1 text-xs", h)} inputMode="numeric" placeholder="Sets" value={row.sets ?? ""} onChange={(e) => setRow({ ...row, sets: parseInt(e.target.value) || null })} />
+        <Input className={cn("col-span-2 text-xs", h)} placeholder="Reps" value={row.reps_text ?? ""} onChange={(e) => setRow({ ...row, reps_text: e.target.value })} />
+        <Input className={cn("col-span-1 text-xs", h)} inputMode="decimal" placeholder="RPE" value={row.rpe ?? ""} onChange={(e) => setRow({ ...row, rpe: e.target.value })} />
+        <Input className={cn("col-span-1 text-xs", h)} inputMode="decimal" placeholder="RIR" value={row.rir ?? ""} onChange={(e) => setRow({ ...row, rir: e.target.value })} />
+        <Input className={cn("col-span-1 text-xs", h)} inputMode="numeric" placeholder="Rest s" value={row.rest_seconds ?? ""} onChange={(e) => setRow({ ...row, rest_seconds: parseInt(e.target.value) || null })} />
+        <div className="col-span-2 flex justify-end gap-0.5">
+          {compact && (
+            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setExpanded((v) => !v)} title={expanded ? "Hide advanced" : "Show advanced"}>
+              {expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+            </Button>
+          )}
           {onDelete && <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={onDelete}><Trash2 className="h-3.5 w-3.5" /></Button>}
         </div>
       </div>
+      {expanded && (
       <div className="grid grid-cols-12 items-center gap-1">
         <Select value={row.percentage_basis ?? "manual"} onValueChange={(v) => setRow({ ...row, percentage_basis: v })}>
-          <SelectTrigger className="col-span-3 h-8 text-xs"><SelectValue /></SelectTrigger>
+          <SelectTrigger className={cn("col-span-3 text-xs", h)}><SelectValue /></SelectTrigger>
           <SelectContent>{PERCENTAGE_BASES.map((p) => <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>)}</SelectContent>
         </Select>
-        <Input className="col-span-1 h-8 text-xs" inputMode="decimal" placeholder="%" value={row.percentage ?? ""} onChange={(e) => setRow({ ...row, percentage: parseFloat(e.target.value) || null })} />
-        <Input className="col-span-2 h-8 text-xs" inputMode="decimal" placeholder="Load kg" value={row.load_kg ?? ""} onChange={(e) => setRow({ ...row, load_kg: parseFloat(e.target.value) || null })} />
-        <Input className="col-span-2 h-8 text-xs" placeholder="Tempo 3-1-1" value={row.tempo ?? ""} onChange={(e) => setRow({ ...row, tempo: e.target.value })} />
+        <Input className={cn("col-span-1 text-xs", h)} inputMode="decimal" placeholder="%" value={row.percentage ?? ""} onChange={(e) => setRow({ ...row, percentage: parseFloat(e.target.value) || null })} />
+        <Input className={cn("col-span-2 text-xs", h)} inputMode="decimal" placeholder="Load kg" value={row.load_kg ?? ""} onChange={(e) => setRow({ ...row, load_kg: parseFloat(e.target.value) || null })} />
+        <Input className={cn("col-span-2 text-xs", h)} placeholder="Tempo 3-1-1" value={row.tempo ?? ""} onChange={(e) => setRow({ ...row, tempo: e.target.value })} />
         <Select value={row.time_profile ?? "accessory_compound"} onValueChange={(v) => setRow({ ...row, time_profile: v })}>
-          <SelectTrigger className="col-span-4 h-8 text-xs"><SelectValue /></SelectTrigger>
+          <SelectTrigger className={cn("col-span-4 text-xs", h)}><SelectValue /></SelectTrigger>
           <SelectContent>{TIME_PROFILES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}</SelectContent>
         </Select>
       </div>
+      )}
     </div>
   );
 }
