@@ -214,6 +214,8 @@ export const updateCoachingProduct = createServerFn({ method: "POST" })
     if (data.pastedPaymentLinkUrl !== undefined) patch.payment_link_url = data.pastedPaymentLinkUrl ?? null;
     if (data.stripePriceId !== undefined) patch.stripe_price_id = data.stripePriceId ?? null;
     if (data.checkoutMode !== undefined) patch.mode = data.checkoutMode;
+    if (data.isMemberFacing !== undefined) patch.is_member_facing = data.isMemberFacing;
+    if (data.memberTierLabel !== undefined) patch.member_tier_label = data.memberTierLabel ?? null;
 
     // ── Stripe currency sync ───────────────────────────────────────────
     // Stripe Prices are immutable, so when the admin changes currency (or
