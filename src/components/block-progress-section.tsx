@@ -17,6 +17,7 @@ import {
   getBlockAnalytics, buildExerciseSeries, movementCategory, analyticsToCSV,
   type BlockAnalytics,
 } from "@/lib/block-analytics";
+import { exportBlockPDF } from "@/lib/block-pdf";
 
 type Mode = "admin" | "client";
 type BlockMetric = "volume" | "workouts_completed" | "avg_rpe" | "top_set" | "est_1rm" | "completion_pct";
@@ -96,9 +97,14 @@ export function BlockProgressSection({ blockId, mode }: { blockId: string; mode:
           <p className="text-sm font-bold">{a.block.name}</p>
         </div>
         {mode === "admin" && (
-          <Button size="sm" variant="outline" onClick={handleExportCsv}>
-            <Download className="mr-1 h-3.5 w-3.5" /> Export CSV
-          </Button>
+          <div className="flex gap-2">
+            <Button size="sm" variant="outline" onClick={handleExportCsv}>
+              <Download className="mr-1 h-3.5 w-3.5" /> Export CSV
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => exportBlockPDF(a)}>
+              <Download className="mr-1 h-3.5 w-3.5" /> Export PDF
+            </Button>
+          </div>
         )}
       </div>
 
