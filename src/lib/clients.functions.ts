@@ -158,7 +158,7 @@ export const setClientPassword = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) =>
     z.object({
       clientId: z.string().uuid(),
-      password: z.string().min(8).max(72),
+      password: z.string().min(1).max(72),
     }).parse(input),
   )
   .handler(async ({ data, context }) => {
