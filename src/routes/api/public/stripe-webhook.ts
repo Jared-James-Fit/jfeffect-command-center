@@ -95,6 +95,98 @@ async function syncClientStripeCustomerId(supabase: any, stripeCustomerId: strin
     .is("stripe_customer_id", null); // only update if not already set
 }
 
+/**
+ * Provision App Member / Program-Only access from a purchase_records row.
+ * Only runs if the offer has a product_access_grants entry mapping to a
+ * non-coaching account type.
+ */
+async function provisionMemberFromPurchase(supabase: any, purchase: any) {
+  if (!purchase?.offer_id) return;
+  const { data: grant } = await supabase
+    .from("product_access_grants").select("*").eq("offer_id", purchase.offer_id).maybeSingle();
+  if (!grant) return;
+  if (grant.account_type_granted === "coaching_client") return; // coaching path unchanged
+
+  // Need an email to identify/create the member
+  const email: string | null =
+    purchase.client_email
+    || purchase.email
+    || null;
+  if (!email) return;
+
+  // Upsert app_members row by email
+  const { data: existing } = await supabase
+    .from("app_members").select("*").ilike("email", email).maybeSingle();
+
+  let memberId: string;
+  if (existing) {
+    memberId = existing.id;
+    const patch: any = {
+      status: "Active",
+      account_type: existing.account_type === "app_member" ? "app_member" : grant.account_type_granted,
+      stripe_customer_id: purchase.stripe_customer_id ?? existing.stripe_customer_id,
+    };
+    if (!existing.setup_token && !existing.user_id) {
+      patch.setup_token = crypto.randomUUID().replace(/-/g, "") + crypto.randomUUID().replace(/-/g, "");
+      patch.setup_token_expires_at = new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString();
+    }
+    await supabase.from("app_members").update(patch).eq("id", memberId);
+  } else {
+    const { data: created } = await supabase.from("app_members").insert({
+      email,
+      full_name: purchase.client_name ?? null,
+      account_type: grant.account_type_granted,
+      status: "Active",
+      stripe_customer_id: purchase.stripe_customer_id ?? null,
+      setup_token: crypto.randomUUID().replace(/-/g, "") + crypto.randomUUID().replace(/-/g, ""),
+      setup_token_expires_at: new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString(),
+    }).select("id").single();
+    memberId = created!.id;
+  }
+
+  // Grant each access_level_key (idempotent — skip ones already active for this offer)
+  const keys: string[] = grant.access_level_keys ?? [];
+  for (const key of keys) {
+    const { data: ex } = await supabase
+      .from("member_access").select("id")
+      .eq("member_id", memberId).eq("access_level_key", key)
+      .eq("offer_id", purchase.offer_id).maybeSingle();
+    if (ex) {
+      await supabase.from("member_access").update({ active: true, expires_at: null }).eq("id", ex.id);
+    } else {
+      await supabase.from("member_access").insert({
+        member_id: memberId,
+        access_level_key: key,
+        source: grant.is_subscription ? "subscription" : "one_time",
+        offer_id: purchase.offer_id,
+        active: true,
+      });
+    }
+  }
+}
+
+async function revokeMemberFromPurchase(supabase: any, purchase: any) {
+  if (!purchase?.offer_id) return;
+  const { data: grant } = await supabase
+    .from("product_access_grants").select("*").eq("offer_id", purchase.offer_id).maybeSingle();
+  if (!grant || grant.account_type_granted === "coaching_client") return;
+  const email = purchase.client_email || purchase.email;
+  if (!email) return;
+  const { data: member } = await supabase.from("app_members").select("id").ilike("email", email).maybeSingle();
+  if (!member) return;
+  await supabase
+    .from("member_access")
+    .update({ active: false })
+    .eq("member_id", member.id)
+    .eq("offer_id", purchase.offer_id);
+  // Optional: mark member Cancelled if no remaining active access
+  const { data: remaining } = await supabase
+    .from("member_access").select("id").eq("member_id", member.id).eq("active", true).limit(1);
+  if (!remaining || remaining.length === 0) {
+    await supabase.from("app_members").update({ status: "Cancelled" }).eq("id", member.id);
+  }
+}
+
 export const Route = createFileRoute("/api/public/stripe-webhook")({
   server: {
     handlers: {
