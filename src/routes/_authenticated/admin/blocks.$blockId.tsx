@@ -549,11 +549,12 @@ function BlockEditor() {
 }
 
 function WeekColumn({
-  blockId, week, days, rows, exercises, density, onAction, onCopyWeek,
+  blockId, block, week, days, rows, exercises, density, onAction, onCopyWeek,
   selectedDayId, onSelectDay, dayLinkInfo, onRowPatch, onDayPatch, onCopyDayToFuture,
   stacked = false, collapsed = false, onToggleCollapse, isCurrent = false, stats,
 }: {
   blockId: string;
+  block: any;
   week: any;
   days: any[];
   rows: any[];
@@ -637,9 +638,9 @@ function WeekColumn({
           </Badge>
         )}
         <WeekDateBadge
-          block={block as any}
+          block={block}
           week={week}
-          onSave={async (start, end) => {
+          onSave={async (start: string | null, end: string | null) => {
             await onAction(() => setWeekDates(week.id, start, end));
           }}
           onReset={async () => {
