@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { AlertTriangle, ArrowLeft, Plus, Trash2, Save, Clock, Copy, LayoutGrid, CalendarRange, ArrowRight, ZoomIn, ZoomOut, Maximize2, PanelLeftClose, PanelLeftOpen, Rows3, ChevronDown, ChevronUp, Settings2 } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Plus, Trash2, Save, Clock, Copy, LayoutGrid, CalendarRange, ArrowRight, ZoomIn, ZoomOut, Maximize2, PanelLeftClose, PanelLeftOpen, Rows3, ChevronDown, ChevronUp, Settings2, Undo2, Redo2, ClipboardCopy, ClipboardPaste } from "lucide-react";
 import { toast } from "sonner";
 import {
   getTemplate, updateTemplate, summarizeTemplatePayload, TIME_PROFILES,
@@ -21,6 +21,7 @@ import { useAutosave } from "@/hooks/use-autosave";
 import { SaveStatus } from "@/components/save-status";
 import { useConflictWatch } from "@/hooks/use-conflict-watch";
 import { ActionButton } from "@/components/action-button";
+import { copyRows, useClip } from "@/lib/program-builder-clipboard";
 
 // ---- Editor preferences (compact mode, zoom, sidebar) ----
 const PREFS_KEY = "pl-tpl-editor-prefs:v1";
@@ -97,6 +98,14 @@ function TemplateEditor() {
   const [saving, setSaving] = useState(false);
   const hydratedRef = useRef(false);
 
+  // ---- Undo / Redo history for payload ----
+  const histRef = useRef<string[]>([]);
+  const futureRef = useRef<string[]>([]);
+  const lastPushTs = useRef(0);
+  const [, bumpHist] = useState(0);
+  const canUndo = histRef.current.length > 0;
+  const canRedo = futureRef.current.length > 0;
+
   useEffect(() => {
     if (tpl && !meta) {
       setMeta({
@@ -106,11 +115,46 @@ function TemplateEditor() {
       });
       setPayload(JSON.parse(JSON.stringify(tpl.payload || {})));
       hydratedRef.current = true;
+      histRef.current = [];
+      futureRef.current = [];
+      bumpHist((n) => n + 1);
     }
   }, [tpl]);
 
   const setM = (patch: any) => { setMeta({ ...meta, ...patch }); setDirty(true); };
-  const setP = (next: any) => { setPayload(next); setDirty(true); };
+  const setP = (next: any, opts?: { skipHistory?: boolean }) => {
+    if (!opts?.skipHistory && payload != null) {
+      const now = Date.now();
+      // Coalesce rapid edits (e.g. typing) within 600ms into a single history step.
+      if (now - lastPushTs.current > 600) {
+        histRef.current.push(JSON.stringify(payload));
+        if (histRef.current.length > 100) histRef.current.shift();
+      }
+      lastPushTs.current = now;
+      futureRef.current = [];
+      bumpHist((n) => n + 1);
+    }
+    setPayload(next);
+    setDirty(true);
+  };
+  const undo = () => {
+    const prev = histRef.current.pop();
+    if (!prev) return;
+    futureRef.current.push(JSON.stringify(payload));
+    setPayload(JSON.parse(prev));
+    setDirty(true);
+    lastPushTs.current = 0;
+    bumpHist((n) => n + 1);
+  };
+  const redo = () => {
+    const next = futureRef.current.pop();
+    if (!next) return;
+    histRef.current.push(JSON.stringify(payload));
+    setPayload(JSON.parse(next));
+    setDirty(true);
+    lastPushTs.current = 0;
+    bumpHist((n) => n + 1);
+  };
 
   const persist = async (m: any, p: any) => {
     await updateTemplate(templateId, {
@@ -225,6 +269,10 @@ function TemplateEditor() {
             setP={setP}
             exercises={exercises as any[]}
             appendRowToFirstDay={appendRowToFirstDay}
+            undo={undo}
+            redo={redo}
+            canUndo={canUndo}
+            canRedo={canRedo}
           />
         </TabsContent>
       </Tabs>
@@ -269,9 +317,10 @@ function EditorChrome({ meta, summary, typeLabel, autosave, save, dirty, childre
   );
 }
 
-function StructureCanvas({ type, payload, setP, exercises, appendRowToFirstDay }: {
-  type: string; payload: any; setP: (p: any) => void; exercises: any[];
+function StructureCanvas({ type, payload, setP, exercises, appendRowToFirstDay, undo, redo, canUndo, canRedo }: {
+  type: string; payload: any; setP: (p: any, opts?: { skipHistory?: boolean }) => void; exercises: any[];
   appendRowToFirstDay: (payload: any, type: string, row: any) => void;
+  undo: () => void; redo: () => void; canUndo: boolean; canRedo: boolean;
 }) {
   const [prefs, setPrefsState] = useState<EditorPrefs>(() => readPrefs());
   const setPrefs = (patch: Partial<EditorPrefs>) => {
@@ -289,6 +338,19 @@ function StructureCanvas({ type, payload, setP, exercises, appendRowToFirstDay }
   };
   const canvasRef = useRef<HTMLDivElement | null>(null);
 
+  // Keyboard: Cmd/Ctrl+Z = undo, Cmd/Ctrl+Shift+Z or Ctrl+Y = redo
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const meta = e.metaKey || e.ctrlKey;
+      if (!meta) return;
+      const k = e.key.toLowerCase();
+      if (k === "z" && !e.shiftKey) { e.preventDefault(); undo(); }
+      else if ((k === "z" && e.shiftKey) || k === "y") { e.preventDefault(); redo(); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [undo, redo]);
+
   return (
     <div className="rounded-md border border-border bg-background">
       {/* Sticky compact toolbar */}
@@ -296,6 +358,15 @@ function StructureCanvas({ type, payload, setP, exercises, appendRowToFirstDay }
         <Button size="icon" variant="ghost" className="h-7 w-7" title={sidebarCollapsed ? "Show library" : "Hide library"} onClick={() => setPrefs({ sidebarCollapsed: !sidebarCollapsed })}>
           {sidebarCollapsed ? <PanelLeftOpen className="h-3.5 w-3.5" /> : <PanelLeftClose className="h-3.5 w-3.5" />}
         </Button>
+        <div className="h-5 w-px bg-border" />
+        <div className="inline-flex items-center gap-0.5">
+          <Button size="icon" variant="ghost" className="h-7 w-7" disabled={!canUndo} title="Undo (Cmd/Ctrl+Z)" onClick={undo}>
+            <Undo2 className="h-3.5 w-3.5" />
+          </Button>
+          <Button size="icon" variant="ghost" className="h-7 w-7" disabled={!canRedo} title="Redo (Cmd/Ctrl+Shift+Z)" onClick={redo}>
+            <Redo2 className="h-3.5 w-3.5" />
+          </Button>
+        </div>
         <div className="h-5 w-px bg-border" />
         <button
           onClick={() => setPrefs({ compact: !compact })}
@@ -679,7 +750,14 @@ function WeekEditor({ week, setWeek, exercises, onCopyDayToFuture, hideHeader, c
 function DayEditor({ day, setDay, exercises, compact }: { day: any; setDay: (d: any) => void; exercises: any[]; compact?: boolean }) {
   const rows = day.rows || [];
   const [dragOver, setDragOver] = useState(false);
+  const clip = useClip();
   const addRow = () => setDay({ ...day, rows: [...rows, { sort_order: rows.length, sets: 3, reps_text: "8-12", time_profile: "accessory_compound" }] });
+  const pasteFromClip = () => {
+    if (!clip || clip.kind !== "rows") return;
+    const cloned = JSON.parse(JSON.stringify(clip.rows));
+    const next = [...rows, ...cloned];
+    setDay({ ...day, rows: next.map((r: any, i: number) => ({ ...r, sort_order: i })) });
+  };
   const insertExercise = (exId: string, atIndex?: number) => {
     const ex = (exercises as any[]).find((x) => x.id === exId);
     const newRow = { sort_order: 0, sets: 3, reps_text: "8-12", time_profile: "accessory_compound", exercise_id: exId, exercise_name_override: ex?.name };
@@ -717,7 +795,14 @@ function DayEditor({ day, setDay, exercises, compact }: { day: any; setDay: (d: 
     >
       <div className="flex items-center justify-between text-[11px] text-muted-foreground">
         <span className="inline-flex items-center gap-1"><Clock className="h-3 w-3" /> Est {durationRange(dayMin)}</span>
-        <Button size="sm" variant="outline" onClick={addRow}><Plus className="mr-1 h-3 w-3" /> Row</Button>
+        <div className="flex items-center gap-1">
+          {clip && clip.kind === "rows" && clip.rows.length > 0 && (
+            <Button size="sm" variant="outline" className="h-7 text-[11px]" onClick={pasteFromClip} title={`Paste ${clip.rows.length} exercise${clip.rows.length === 1 ? "" : "s"}`}>
+              <ClipboardPaste className="mr-1 h-3 w-3" /> Paste ({clip.rows.length})
+            </Button>
+          )}
+          <Button size="sm" variant="outline" className="h-7 text-[11px]" onClick={addRow}><Plus className="mr-1 h-3 w-3" /> Row</Button>
+        </div>
       </div>
       {rows.length === 0 ? (
         <p className="rounded-md border border-dashed border-border p-3 text-center text-xs text-muted-foreground">
@@ -770,6 +855,9 @@ function RowEditor({ row, setRow, onDelete, exercises, compact }: { row: any; se
         <Input className={cn("col-span-1 text-xs", h)} inputMode="decimal" placeholder="RIR" value={row.rir ?? ""} onChange={(e) => setRow({ ...row, rir: e.target.value })} />
         <Input className={cn("col-span-1 text-xs", h)} inputMode="numeric" placeholder="Rest s" value={row.rest_seconds ?? ""} onChange={(e) => setRow({ ...row, rest_seconds: parseInt(e.target.value) || null })} />
         <div className="col-span-2 flex justify-end gap-0.5">
+          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => { copyRows([row]); toast.success("Exercise copied"); }} title="Copy exercise">
+            <ClipboardCopy className="h-3.5 w-3.5" />
+          </Button>
           {compact && (
             <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setExpanded((v) => !v)} title={expanded ? "Hide advanced" : "Show advanced"}>
               {expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
