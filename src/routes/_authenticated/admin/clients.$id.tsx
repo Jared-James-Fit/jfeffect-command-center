@@ -544,6 +544,7 @@ function ClientDetail() {
           <AssignedProgramsCard clientId={id} mode="admin" />
           <TrainingPhasesPanel clientId={id} />
           <ImportantDatesPanel clientId={id} />
+          <ClientExerciseNotesCard clientId={id} />
         </TabsContent>
 
         <TabsContent value="nutrition" className="grid gap-6 md:grid-cols-3">
