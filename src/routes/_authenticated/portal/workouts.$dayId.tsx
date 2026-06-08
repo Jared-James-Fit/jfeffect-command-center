@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, ExternalLink, Clock, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { durationRange } from "@/lib/pl-programs";
+import { movementAccent } from "@/components/program-builder";
 import { useAutosave, readLocalDraft, clearLocalDraft } from "@/hooks/use-autosave";
 import { SaveStatus } from "@/components/save-status";
 
@@ -186,9 +187,11 @@ function ExerciseBlock({ row, clientId, existingResults, onChange }: { row: any;
   const video = row.exercises?.video_url ?? row.exercises?.vimeo_embed_url ?? null;
   const cues = row.exercises?.cues ?? null;
   const setCount = Math.max(1, row.sets ?? 1);
+  const accent = movementAccent(name);
 
   return (
-    <Card className="p-4">
+    <Card className="relative overflow-hidden p-4 pl-5">
+      <div className={`absolute left-0 top-0 h-full w-1.5 ${accent}`} aria-hidden />
       <div className="flex items-start justify-between gap-2">
         <div>
           <div className="font-bold">{name}</div>
