@@ -21,7 +21,7 @@ import {
   listForms, upsertForm, duplicateForm, archiveForm, deleteForm,
   listQuestions, upsertQuestion, deleteQuestion, reorderQuestions,
   listAssignments,
-  bulkAssignFormToClients, clearAllAssignments, listActiveCoachingClientIds,
+  listActiveCoachingClientIds,
   NF_QUESTION_TYPES, NF_QUESTION_TYPE_LABEL,
   type NfForm, type NfQuestion, type NfQuestionType, type NfRecurrence, type NfKind, type NfOpenStyle,
 } from "@/lib/native-forms";
@@ -497,7 +497,7 @@ function AssignmentsEditor({ formId, form, onFormChange }: { formId: string; for
         // Materialize assignments for every active client now so submissions, due
         // dates, and admin counts still work cleanly.
         const ids = await listActiveCoachingClientIds();
-        await bulkAssignFormToClients(formId, ids);
+        await bulkAssign({ data: { formId, clientIds: ids } });
       }
       qc.invalidateQueries({ queryKey: ["nf-forms"] });
       qc.invalidateQueries({ queryKey: ["nf-assignments", formId] });
