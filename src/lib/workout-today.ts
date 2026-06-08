@@ -153,7 +153,7 @@ export function weekStatusTone(s: "Not Started" | "In Progress" | "Completed" | 
 
 /** A week is "locked" (from the client's POV) when its date range is fully in the future. */
 export function isWeekLocked(block: any, week: any): boolean {
-  const range = weekDisplayRange(block, week);
-  if (!range) return false;
-  return startOfDay(new Date()) < startOfDay(range.start);
+  // Locking disabled — clients can view and open any week/day.
+  void block; void week;
+  return false;
 }
