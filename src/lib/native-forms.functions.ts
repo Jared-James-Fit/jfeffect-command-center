@@ -13,7 +13,13 @@ const BulkAssignmentSchema = z.object({
   clientIds: z.array(z.string().uuid()).max(1000),
 });
 
+const ReplaceAssignmentsSchema = z.object({
+  formId: z.string().uuid(),
+  clientIds: z.array(z.string().uuid()).max(5000),
+});
+
 const FormSchema = z.object({ formId: z.string().uuid() });
+const DeleteFormsSchema = z.object({ formIds: z.array(z.string().uuid()).min(1).max(500) });
 
 async function getAssignmentAccess(userId: string, clientIds: string[]) {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -115,4 +121,76 @@ export const clearNativeFormAssignments = createServerFn({ method: "POST" })
     const { error } = await query;
     if (error) throw new Error(error.message);
     return { ok: true };
+  });
+
+export const replaceNativeFormAssignments = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => ReplaceAssignmentsSchema.parse(input))
+  .handler(async ({ data, context }) => {
+    try {
+      const clientIds = Array.from(new Set(data.clientIds));
+      const access = await getAssignmentAccess(context.userId, clientIds);
+
+      if (access.isAdmin) {
+        const { error: deleteError } = await access.supabaseAdmin
+          .from("nf_assignments")
+          .delete()
+          .eq("form_id", data.formId);
+        if (deleteError) throw new Error(deleteError.message);
+      } else {
+        const coachId = access.coachId;
+        if (!coachId) throw new Error("You do not have permission to save assignments.");
+        const { data: coachClients, error: clientsError } = await access.supabaseAdmin
+          .from("clients")
+          .select("id")
+          .eq("assigned_coach_id", coachId)
+          .eq("archived", false);
+        if (clientsError) throw new Error(clientsError.message);
+        const coachClientIds = (coachClients ?? []).map((client: any) => client.id);
+        if (coachClientIds.length > 0) {
+          const { error: deleteError } = await access.supabaseAdmin
+            .from("nf_assignments")
+            .delete()
+            .eq("form_id", data.formId)
+            .in("client_id", coachClientIds);
+          if (deleteError) throw new Error(deleteError.message);
+        }
+      }
+
+      if (clientIds.length > 0) {
+        const rows = clientIds.map((clientId) => ({ form_id: data.formId, client_id: clientId }));
+        const { error: insertError } = await access.supabaseAdmin
+          .from("nf_assignments")
+          .upsert(rows, { onConflict: "form_id,client_id" });
+        if (insertError) throw new Error(insertError.message);
+      }
+
+      return { ok: true, count: clientIds.length, error: null as string | null };
+    } catch (error: any) {
+      return { ok: false, count: 0, error: error?.message ?? "Assignments could not be saved." };
+    }
+  });
+
+export const deleteNativeForms = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => DeleteFormsSchema.parse(input))
+  .handler(async ({ data, context }) => {
+    try {
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      const { data: adminRole, error: roleError } = await supabaseAdmin
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", context.userId)
+        .eq("role", "admin")
+        .maybeSingle();
+      if (roleError) throw new Error(roleError.message);
+      if (!adminRole) throw new Error("Only admins can delete forms.");
+
+      const formIds = Array.from(new Set(data.formIds));
+      const { error } = await supabaseAdmin.from("nf_forms").delete().in("id", formIds);
+      if (error) throw new Error(error.message);
+      return { ok: true, count: formIds.length, error: null as string | null };
+    } catch (error: any) {
+      return { ok: false, count: 0, error: error?.message ?? "Forms could not be deleted." };
+    }
   });
