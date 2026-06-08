@@ -313,7 +313,6 @@ function ClientDetail() {
   const links = [
     ["Program Sheet", form.program_sheet_link],
     ["Drive Folder", form.drive_folder_link],
-    ["Check-In Form", form.checkin_form_link],
     ["Agreement", form.agreement_link],
     ["Calendar", form.calendar_link],
     ["Stripe", form.stripe_link],
@@ -564,29 +563,13 @@ function ClientDetail() {
           <Card className="border-border bg-card p-6 md:col-span-3 space-y-4">
             <div className="flex items-center justify-between gap-3 flex-wrap">
               <div>
-                <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Weekly Check-In</h3>
-                <p className="text-xs text-muted-foreground mt-1">Assign a reusable check-in link from your library, or paste a custom one below.</p>
+                <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Check-Ins & Forms</h3>
+                <p className="text-xs text-muted-foreground mt-1">Assign this client to forms from the unified form builder.</p>
               </div>
-              <Badge variant="outline" className={form.checkin_form_link ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300" : "border-warning/40 bg-warning/10 text-warning"}>
-                Weekly check-in link: {form.checkin_form_link ? "Added" : "Missing"}
-              </Badge>
+              <Link to="/admin/native-forms"><Button variant="outline" size="sm">Manage forms</Button></Link>
             </div>
-            <AssignCheckInLibrary
-              value={form.assigned_check_in_link_id ?? null}
-              onChange={(v: string | null) => set("assigned_check_in_link_id", v)}
-            />
+            <ClientNativeFormsAssignment clientId={id} />
             <div className="grid gap-3 md:grid-cols-2">
-              <div className="md:col-span-2">
-                <Label>Weekly Check-In Link</Label>
-                <Input
-                  value={form.checkin_form_link ?? ""}
-                  onChange={(e) => { set("checkin_form_link", e.target.value); set("checkin_link_updated_at", new Date().toISOString()); }}
-                  placeholder="https://forms.google.com/…"
-                />
-                {form.checkin_link_updated_at && (
-                  <div className="mt-1 text-[11px] text-muted-foreground">Last updated: {new Date(form.checkin_link_updated_at).toLocaleString()}</div>
-                )}
-              </div>
               <div>
                 <Label>Check-in due day</Label>
                 <Input value={form.checkin_due_day ?? ""} onChange={(e) => set("checkin_due_day", e.target.value)} placeholder="e.g. Every Sunday" />
@@ -623,7 +606,6 @@ function ClientDetail() {
             <div className="grid gap-3 md:grid-cols-2">
               <div><Label>Program sheet (Google Sheets)</Label><Input value={form.program_sheet_link ?? ""} onChange={(e) => set("program_sheet_link", e.target.value)} placeholder="https://sheets.google.com/…" /></div>
               <div><Label>Drive folder</Label><Input value={form.drive_folder_link ?? ""} onChange={(e) => set("drive_folder_link", e.target.value)} placeholder="https://drive.google.com/…" /></div>
-              <div><Label>Check-in form</Label><Input value={form.checkin_form_link ?? ""} onChange={(e) => set("checkin_form_link", e.target.value)} /></div>
               <div><Label>Agreement / contract</Label><Input value={form.agreement_link ?? ""} onChange={(e) => set("agreement_link", e.target.value)} /></div>
               <div><Label>Calendar / booking link</Label><Input value={form.calendar_link ?? ""} onChange={(e) => set("calendar_link", e.target.value)} /></div>
               <div><Label>Stripe payment link</Label><Input value={form.stripe_link ?? ""} onChange={(e) => set("stripe_link", e.target.value)} /></div>
