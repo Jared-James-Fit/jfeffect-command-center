@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
   Users, UserPlus, AlertTriangle, Calendar, DollarSign,
-  Plus, Zap, ExternalLink, Activity, Dumbbell, Package, Timer, UserCheck, Apple,
+  Plus, Zap, ExternalLink, Activity, Dumbbell, Package, Timer, UserCheck, Apple, Eye,
   ClipboardCheck, Heart, FileText, Target, MessageCircle, Video, FileSignature,
 } from "lucide-react";
 import { derivePhase, displayTitle, toneClasses, type TrainingPhase } from "@/lib/training-phases";
