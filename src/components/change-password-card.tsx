@@ -2,34 +2,27 @@ import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Eye, EyeOff, KeyRound } from "lucide-react";
 import { toast } from "sonner";
+import { ActionButton } from "@/components/action-button";
 
 export function ChangePasswordCard({ className }: { className?: string }) {
   const { user } = useAuth();
   const [pwd, setPwd] = useState({ current: "", next: "", confirm: "", showCurrent: false, showNext: false });
-  const [busy, setBusy] = useState(false);
 
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!user?.email) return toast.error("No signed-in user");
-    if (!pwd.next) return toast.error("Please enter a new password");
-    if (pwd.next !== pwd.confirm) return toast.error("Passwords don't match");
-    if (pwd.next === pwd.current) return toast.error("New password must differ from current");
-    setBusy(true);
+  const submit = async () => {
+    if (!user?.email) throw new Error("No signed-in user");
+    if (!pwd.next) throw new Error("Please enter a new password");
+    if (pwd.next !== pwd.confirm) throw new Error("Passwords don't match");
+    if (pwd.next === pwd.current) throw new Error("New password must differ from current");
     const { error: signInErr } = await supabase.auth.signInWithPassword({ email: user.email, password: pwd.current });
-    if (signInErr) {
-      setBusy(false);
-      return toast.error("Current password is incorrect");
-    }
+    if (signInErr) throw new Error("Current password is incorrect");
     const { error } = await supabase.auth.updateUser({ password: pwd.next });
-    setBusy(false);
-    if (error) return toast.error(error.message);
-    toast.success("Password updated");
+    if (error) throw new Error(error.message);
     setPwd({ current: "", next: "", confirm: "", showCurrent: false, showNext: false });
+    toast.success("Password updated");
   };
 
   return (
@@ -38,7 +31,12 @@ export function ChangePasswordCard({ className }: { className?: string }) {
         <KeyRound className="h-4 w-4 text-primary" />
         <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Change Password</h3>
       </div>
-      <form onSubmit={submit} className="grid gap-3 md:grid-cols-3">
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+        }}
+        className="grid gap-3 md:grid-cols-3"
+      >
         <div>
           <Label>Current password</Label>
           <div className="relative">
@@ -63,7 +61,17 @@ export function ChangePasswordCard({ className }: { className?: string }) {
         </div>
         <div className="md:col-span-3 flex flex-wrap items-center justify-between gap-3">
           <p className="text-[11px] text-muted-foreground">Minimum 8 characters. Use a mix of letters and numbers. You'll stay signed in after the change.</p>
-          <Button type="submit" disabled={busy} className="bg-gradient-primary uppercase font-bold">{busy ? "Updating…" : "Update password"}</Button>
+          <ActionButton
+            type="submit"
+            onAction={submit}
+            loadingLabel="Updating…"
+            successLabel="Updated"
+            errorToast
+            successToast={false}
+            className="bg-gradient-primary uppercase font-bold"
+          >
+            Update password
+          </ActionButton>
         </div>
       </form>
     </Card>
