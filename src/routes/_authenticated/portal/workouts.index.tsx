@@ -5,7 +5,7 @@ import { usePortalUserId } from "@/lib/client-impersonation";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Clock, CheckCircle2, Activity, FileText, Dumbbell, ChevronRight, Play, ChevronDown, CalendarRange, Crosshair, AlertCircle } from "lucide-react";
+import { Clock, CheckCircle2, Activity, FileText, Dumbbell, ChevronRight, Play, ChevronDown, CalendarRange, Crosshair } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getClientWorkouts, durationRange } from "@/lib/pl-programs";
 import { useState } from "react";
