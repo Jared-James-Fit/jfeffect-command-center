@@ -18,8 +18,10 @@ import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiDriveUploadRouteImport } from './routes/api/drive-upload'
 import { Route as AuthenticatedPortalRouteRouteImport } from './routes/_authenticated/portal/route'
+import { Route as AuthenticatedMRouteRouteImport } from './routes/_authenticated/m/route'
 import { Route as AuthenticatedAdminRouteRouteImport } from './routes/_authenticated/admin/route'
 import { Route as AuthenticatedPortalIndexRouteImport } from './routes/_authenticated/portal/index'
+import { Route as AuthenticatedMIndexRouteImport } from './routes/_authenticated/m/index'
 import { Route as AuthenticatedAdminIndexRouteImport } from './routes/_authenticated/admin/index'
 import { Route as ApiPublicStripeWebhookRouteImport } from './routes/api/public/stripe-webhook'
 import { Route as ApiPublicSignnowWebhookRouteImport } from './routes/api/public/signnow-webhook'
@@ -132,6 +134,11 @@ const AuthenticatedPortalRouteRoute =
     path: '/portal',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedMRouteRoute = AuthenticatedMRouteRouteImport.update({
+  id: '/m',
+  path: '/m',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedAdminRouteRoute = AuthenticatedAdminRouteRouteImport.update({
   id: '/admin',
   path: '/admin',
@@ -143,6 +150,11 @@ const AuthenticatedPortalIndexRoute =
     path: '/',
     getParentRoute: () => AuthenticatedPortalRouteRoute,
   } as any)
+const AuthenticatedMIndexRoute = AuthenticatedMIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AuthenticatedMRouteRoute,
+} as any)
 const AuthenticatedAdminIndexRoute = AuthenticatedAdminIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -542,6 +554,7 @@ export interface FileRoutesByFullPath {
   '/setup': typeof SetupRoute
   '/sitemap': typeof SitemapRoute
   '/admin': typeof AuthenticatedAdminRouteRouteWithChildren
+  '/m': typeof AuthenticatedMRouteRouteWithChildren
   '/portal': typeof AuthenticatedPortalRouteRouteWithChildren
   '/api/drive-upload': typeof ApiDriveUploadRoute
   '/admin/account': typeof AuthenticatedAdminAccountRoute
@@ -592,6 +605,7 @@ export interface FileRoutesByFullPath {
   '/api/public/signnow-webhook': typeof ApiPublicSignnowWebhookRoute
   '/api/public/stripe-webhook': typeof ApiPublicStripeWebhookRoute
   '/admin/': typeof AuthenticatedAdminIndexRoute
+  '/m/': typeof AuthenticatedMIndexRoute
   '/portal/': typeof AuthenticatedPortalIndexRoute
   '/admin/agreements/signed': typeof AuthenticatedAdminAgreementsSignedRoute
   '/admin/blocks/$blockId': typeof AuthenticatedAdminBlocksBlockIdRoute
@@ -668,6 +682,7 @@ export interface FileRoutesByTo {
   '/api/public/signnow-webhook': typeof ApiPublicSignnowWebhookRoute
   '/api/public/stripe-webhook': typeof ApiPublicStripeWebhookRoute
   '/admin': typeof AuthenticatedAdminIndexRoute
+  '/m': typeof AuthenticatedMIndexRoute
   '/portal': typeof AuthenticatedPortalIndexRoute
   '/admin/agreements/signed': typeof AuthenticatedAdminAgreementsSignedRoute
   '/admin/blocks/$blockId': typeof AuthenticatedAdminBlocksBlockIdRoute
@@ -698,6 +713,7 @@ export interface FileRoutesById {
   '/setup': typeof SetupRoute
   '/sitemap': typeof SitemapRoute
   '/_authenticated/admin': typeof AuthenticatedAdminRouteRouteWithChildren
+  '/_authenticated/m': typeof AuthenticatedMRouteRouteWithChildren
   '/_authenticated/portal': typeof AuthenticatedPortalRouteRouteWithChildren
   '/api/drive-upload': typeof ApiDriveUploadRoute
   '/_authenticated/admin/account': typeof AuthenticatedAdminAccountRoute
@@ -748,6 +764,7 @@ export interface FileRoutesById {
   '/api/public/signnow-webhook': typeof ApiPublicSignnowWebhookRoute
   '/api/public/stripe-webhook': typeof ApiPublicStripeWebhookRoute
   '/_authenticated/admin/': typeof AuthenticatedAdminIndexRoute
+  '/_authenticated/m/': typeof AuthenticatedMIndexRoute
   '/_authenticated/portal/': typeof AuthenticatedPortalIndexRoute
   '/_authenticated/admin/agreements/signed': typeof AuthenticatedAdminAgreementsSignedRoute
   '/_authenticated/admin/blocks/$blockId': typeof AuthenticatedAdminBlocksBlockIdRoute
@@ -778,6 +795,7 @@ export interface FileRouteTypes {
     | '/setup'
     | '/sitemap'
     | '/admin'
+    | '/m'
     | '/portal'
     | '/api/drive-upload'
     | '/admin/account'
@@ -828,6 +846,7 @@ export interface FileRouteTypes {
     | '/api/public/signnow-webhook'
     | '/api/public/stripe-webhook'
     | '/admin/'
+    | '/m/'
     | '/portal/'
     | '/admin/agreements/signed'
     | '/admin/blocks/$blockId'
@@ -904,6 +923,7 @@ export interface FileRouteTypes {
     | '/api/public/signnow-webhook'
     | '/api/public/stripe-webhook'
     | '/admin'
+    | '/m'
     | '/portal'
     | '/admin/agreements/signed'
     | '/admin/blocks/$blockId'
@@ -933,6 +953,7 @@ export interface FileRouteTypes {
     | '/setup'
     | '/sitemap'
     | '/_authenticated/admin'
+    | '/_authenticated/m'
     | '/_authenticated/portal'
     | '/api/drive-upload'
     | '/_authenticated/admin/account'
@@ -983,6 +1004,7 @@ export interface FileRouteTypes {
     | '/api/public/signnow-webhook'
     | '/api/public/stripe-webhook'
     | '/_authenticated/admin/'
+    | '/_authenticated/m/'
     | '/_authenticated/portal/'
     | '/_authenticated/admin/agreements/signed'
     | '/_authenticated/admin/blocks/$blockId'
@@ -1084,6 +1106,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedPortalRouteRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/m': {
+      id: '/_authenticated/m'
+      path: '/m'
+      fullPath: '/m'
+      preLoaderRoute: typeof AuthenticatedMRouteRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/admin': {
       id: '/_authenticated/admin'
       path: '/admin'
@@ -1097,6 +1126,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/portal/'
       preLoaderRoute: typeof AuthenticatedPortalIndexRouteImport
       parentRoute: typeof AuthenticatedPortalRouteRoute
+    }
+    '/_authenticated/m/': {
+      id: '/_authenticated/m/'
+      path: '/'
+      fullPath: '/m/'
+      preLoaderRoute: typeof AuthenticatedMIndexRouteImport
+      parentRoute: typeof AuthenticatedMRouteRoute
     }
     '/_authenticated/admin/': {
       id: '/_authenticated/admin/'
@@ -1698,6 +1734,17 @@ const AuthenticatedAdminRouteRouteWithChildren =
     AuthenticatedAdminRouteRouteChildren,
   )
 
+interface AuthenticatedMRouteRouteChildren {
+  AuthenticatedMIndexRoute: typeof AuthenticatedMIndexRoute
+}
+
+const AuthenticatedMRouteRouteChildren: AuthenticatedMRouteRouteChildren = {
+  AuthenticatedMIndexRoute: AuthenticatedMIndexRoute,
+}
+
+const AuthenticatedMRouteRouteWithChildren =
+  AuthenticatedMRouteRoute._addFileChildren(AuthenticatedMRouteRouteChildren)
+
 interface AuthenticatedPortalCheckInsRouteChildren {
   AuthenticatedPortalCheckInsFormIdRoute: typeof AuthenticatedPortalCheckInsFormIdRoute
 }
@@ -1796,11 +1843,13 @@ const AuthenticatedPortalRouteRouteWithChildren =
 
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedAdminRouteRoute: typeof AuthenticatedAdminRouteRouteWithChildren
+  AuthenticatedMRouteRoute: typeof AuthenticatedMRouteRouteWithChildren
   AuthenticatedPortalRouteRoute: typeof AuthenticatedPortalRouteRouteWithChildren
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAdminRouteRoute: AuthenticatedAdminRouteRouteWithChildren,
+  AuthenticatedMRouteRoute: AuthenticatedMRouteRouteWithChildren,
   AuthenticatedPortalRouteRoute: AuthenticatedPortalRouteRouteWithChildren,
 }
 
