@@ -636,7 +636,16 @@ function WeekColumn({
             <Crosshair className="mr-1 h-3 w-3" /> Current Week
           </Badge>
         )}
-        <WeekDateBadge block={(week as any).__block ?? null} week={week} />
+        <WeekDateBadge
+          block={block as any}
+          week={week}
+          onSave={async (start, end) => {
+            await onAction(() => setWeekDates(week.id, start, end));
+          }}
+          onReset={async () => {
+            await onAction(() => resetWeekToAuto(week.id));
+          }}
+        />
         {linkLabel && (
           <Badge variant="outline" className="h-5 border-primary/30 bg-primary/5 px-1.5 text-[10px] text-primary">
             <Link2 className="mr-1 h-3 w-3" /> {linkLabel}
