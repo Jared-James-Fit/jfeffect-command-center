@@ -30,6 +30,9 @@ import {
   EditScopeDialog, LinkBadge, flushPendingCells, type EditScopeChoice, type ExerciseRef,
 } from "@/components/program-builder";
 import { cn } from "@/lib/utils";
+import { setBlockStartDate, setWeekDates, resetWeekToAuto, countManualWeeks, weekDisplayRange, formatWeekRange, computeBlockEnd } from "@/lib/block-dates";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { format } from "date-fns";
 
 export const Route = createFileRoute("/_authenticated/admin/blocks/$blockId")({ component: BlockEditor });
 
@@ -315,6 +318,16 @@ function BlockEditor() {
             <Button size="sm" variant="outline" onClick={() => run(() => updateBlock(blockId, { client_visible: !block.client_visible }))}>
               {block.client_visible ? <><Eye className="mr-1 h-4 w-4" /> Visible</> : <><EyeOff className="mr-1 h-4 w-4" /> Hidden</>}
             </Button>
+            <BlockStartDateControl block={block} onChange={async (date) => {
+              const manual = await countManualWeeks(blockId);
+              if (manual > 0) {
+                const ok = confirm(`Recalculate all automatic week dates? ${manual} manually-overridden week(s) will be preserved unless you choose "Yes & override".`);
+                if (!ok) return;
+              }
+              await save.wrap(() => setBlockStartDate({ blockId, startDate: date }));
+              refresh();
+              toast.success(date ? "Block dates updated" : "Block start date cleared");
+            }} />
             <Button size="sm" variant="outline" onClick={() => run(() => addWeek(blockId))}><Plus className="mr-1 h-4 w-4" /> Week</Button>
             <Button size="sm" variant="outline" onClick={() => { setCopyDefault(undefined); setCopyOpen(true); }}><Copy className="mr-1 h-4 w-4" /> Copy week…</Button>
             {weeks.length > 1 && (
