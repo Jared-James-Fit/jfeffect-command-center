@@ -251,6 +251,10 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
 
                 // Sync stripe_customer_id to clients table for portal access
                 await syncClientStripeCustomerId(supabase, obj.customer ?? null, purchase.client_id ?? null);
+
+                if (obj.payment_status === "paid") {
+                  await provisionMemberFromPurchase(supabase, { ...purchase, stripe_customer_id: obj.customer ?? purchase.stripe_customer_id });
+                }
               }
               break;
             }
@@ -280,6 +284,10 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
                 }).eq("id", purchase.id);
 
                 await syncClientStripeCustomerId(supabase, obj.customer ?? null, purchase.client_id ?? null);
+
+                if (obj.status === "active" || obj.status === "trialing") {
+                  await provisionMemberFromPurchase(supabase, { ...purchase, stripe_customer_id: obj.customer ?? purchase.stripe_customer_id });
+                }
               }
               break;
             }
@@ -331,6 +339,12 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
                 }).eq("id", purchase.id);
 
                 await syncClientStripeCustomerId(supabase, obj.customer ?? null, purchase.client_id ?? null);
+
+                if (obj.status === "active" || obj.status === "trialing") {
+                  await provisionMemberFromPurchase(supabase, { ...purchase, stripe_customer_id: obj.customer ?? purchase.stripe_customer_id });
+                } else if (obj.status === "canceled" || obj.status === "unpaid") {
+                  await revokeMemberFromPurchase(supabase, purchase);
+                }
               }
               break;
             }
@@ -345,6 +359,7 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
                   last_payment_update_source: "stripe_webhook",
                   last_payment_update_at: now,
                 }).eq("id", purchase.id);
+                await revokeMemberFromPurchase(supabase, purchase);
               }
               break;
             }
@@ -365,6 +380,7 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
                   last_payment_update_source: "stripe_webhook",
                   last_payment_update_at: now,
                 }).eq("id", purchase.id);
+                await provisionMemberFromPurchase(supabase, { ...purchase, stripe_customer_id: obj.customer ?? purchase.stripe_customer_id });
               }
               break;
             }
@@ -396,6 +412,7 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
                   last_payment_update_source: "stripe_webhook",
                   last_payment_update_at: now,
                 }).eq("id", purchase.id);
+                await provisionMemberFromPurchase(supabase, purchase);
               }
               break;
             }
@@ -424,6 +441,7 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
                   last_payment_update_source: "stripe_webhook",
                   last_payment_update_at: now,
                 }).eq("id", purchase.id);
+                await revokeMemberFromPurchase(supabase, purchase);
               }
               break;
             }
