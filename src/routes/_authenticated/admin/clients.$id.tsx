@@ -50,6 +50,7 @@ import { useAuth } from "@/lib/auth";
 import { Checkbox } from "@/components/ui/checkbox";
 import { listForms as listNativeForms, type NfForm } from "@/lib/native-forms";
 import { replaceClientNativeFormAssignments } from "@/lib/native-forms.functions";
+import { ActionButton } from "@/components/action-button";
 
 function AssignedCoachSelect({ value, onChange }: { value: string | null; onChange: (v: string | null) => void }) {
   const { data: coaches = [] } = useQuery({
@@ -368,7 +369,7 @@ function ClientDetail() {
               </Button>
             )}
             <Button variant="outline" size="sm" onClick={() => setPriceCardOpen(true)}><Tag className="mr-2 h-4 w-4" />Assign Offer / View Price Card</Button>
-            <Button variant="outline" size="sm" onClick={sendSetup}><Mail className="mr-2 h-4 w-4" />Send setup link</Button>
+            <ActionButton variant="outline" size="sm" onAction={sendSetup} loadingLabel="Sending…" successLabel="Sent" successToast={false} errorToast={false} icon={<Mail className="h-4 w-4" />}>Send setup link</ActionButton>
             {form.status === "Deactivated" ? (
               <Button variant="outline" size="sm" onClick={() => setReactivateOpen(true)}>
                 <Eye className="mr-2 h-4 w-4" />Reactivate
@@ -790,14 +791,14 @@ function ClientDetail() {
               </div>
 
               <div className="flex flex-wrap gap-2 pt-2">
-                <Button size="sm" variant="outline" onClick={sendSetup}><Mail className="mr-2 h-4 w-4" />{form.invite_sent_at ? "Resend setup email" : "Send setup email"}</Button>
-                <Button size="sm" variant="outline" onClick={copySetupLink}><Copy className="mr-2 h-4 w-4" />Copy setup link</Button>
-                <Button size="sm" variant="outline" onClick={sendReset}><KeyRound className="mr-2 h-4 w-4" />Send password reset</Button>
-                <Button size="sm" variant="outline" onClick={copyResetLink}><Copy className="mr-2 h-4 w-4" />Copy reset link</Button>
+                <ActionButton size="sm" variant="outline" onAction={sendSetup} loadingLabel="Sending…" successLabel="Sent" successToast={false} errorToast={false} icon={<Mail className="h-4 w-4" />}>{form.invite_sent_at ? "Resend setup email" : "Send setup email"}</ActionButton>
+                <ActionButton size="sm" variant="outline" onAction={copySetupLink} loadingLabel="Copying…" successLabel="Copied" successToast={false} errorToast={false} icon={<Copy className="h-4 w-4" />}>Copy setup link</ActionButton>
+                <ActionButton size="sm" variant="outline" onAction={sendReset} loadingLabel="Sending…" successLabel="Sent" successToast={false} errorToast={false} icon={<KeyRound className="h-4 w-4" />}>Send password reset</ActionButton>
+                <ActionButton size="sm" variant="outline" onAction={copyResetLink} loadingLabel="Copying…" successLabel="Copied" successToast={false} errorToast={false} icon={<Copy className="h-4 w-4" />}>Copy reset link</ActionButton>
                 <Button size="sm" variant="outline" onClick={() => { setPwValue(""); setPwOpen(true); }}>
                   <KeyRound className="mr-2 h-4 w-4" />Set password
                 </Button>
-                <Button size="sm" variant="outline" onClick={markComplete}><CheckCircle2 className="mr-2 h-4 w-4" />Mark setup complete</Button>
+                <ActionButton size="sm" variant="outline" onAction={markComplete} loadingLabel="Saving…" successLabel="Done" successToast={false} errorToast={false} icon={<CheckCircle2 className="h-4 w-4" />}>Mark setup complete</ActionButton>
                 <Button size="sm" variant={form.needs_admin_help ? "default" : "outline"} onClick={toggleNeedsHelp}>
                   <AlertCircle className="mr-2 h-4 w-4" />{form.needs_admin_help ? "Clear admin help flag" : "Mark needs admin help"}
                 </Button>
@@ -1165,10 +1166,10 @@ function SetupStatusBanner({
   onGoToAccountTab,
 }: {
   form: any;
-  onSendSetup: () => void;
-  onCopySetup: () => void;
-  onSendReset: () => void;
-  onCopyReset: () => void;
+  onSendSetup: () => unknown | Promise<unknown>;
+  onCopySetup: () => unknown | Promise<unknown>;
+  onSendReset: () => unknown | Promise<unknown>;
+  onCopyReset: () => unknown | Promise<unknown>;
   onSetPassword: () => void;
   onGoToAccountTab: () => void;
 }) {
@@ -1244,22 +1245,22 @@ function SetupStatusBanner({
         <div className="flex flex-wrap items-center gap-2">
           {(stage === "no_account" || stage === "invite_pending" || stage === "invite_expired") && (
             <>
-              <Button size="sm" variant="outline" onClick={onSendSetup}>
-                <Mail className="mr-2 h-4 w-4" />{stage === "no_account" ? "Send setup link" : "Resend setup link"}
-              </Button>
-              <Button size="sm" variant="outline" onClick={onCopySetup}>
-                <Copy className="mr-2 h-4 w-4" />Copy setup link
-              </Button>
+              <ActionButton size="sm" variant="outline" onAction={onSendSetup} loadingLabel="Sending…" successLabel="Sent" successToast={false} errorToast={false} icon={<Mail className="h-4 w-4" />}>
+                {stage === "no_account" ? "Send setup link" : "Resend setup link"}
+              </ActionButton>
+              <ActionButton size="sm" variant="outline" onAction={onCopySetup} loadingLabel="Copying…" successLabel="Copied" successToast={false} errorToast={false} icon={<Copy className="h-4 w-4" />}>
+                Copy setup link
+              </ActionButton>
             </>
           )}
           {stage === "account_no_signin" && (
             <>
-              <Button size="sm" variant="outline" onClick={onSendReset}>
-                <KeyRound className="mr-2 h-4 w-4" />Send reset link
-              </Button>
-              <Button size="sm" variant="outline" onClick={onCopyReset}>
-                <Copy className="mr-2 h-4 w-4" />Copy reset link
-              </Button>
+              <ActionButton size="sm" variant="outline" onAction={onSendReset} loadingLabel="Sending…" successLabel="Sent" successToast={false} errorToast={false} icon={<KeyRound className="h-4 w-4" />}>
+                Send reset link
+              </ActionButton>
+              <ActionButton size="sm" variant="outline" onAction={onCopyReset} loadingLabel="Copying…" successLabel="Copied" successToast={false} errorToast={false} icon={<Copy className="h-4 w-4" />}>
+                Copy reset link
+              </ActionButton>
               <Button size="sm" variant="outline" onClick={onSetPassword}>
                 <KeyRound className="mr-2 h-4 w-4" />Set password
               </Button>
