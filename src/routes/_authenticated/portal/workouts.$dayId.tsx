@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { usePortalUserId } from "@/lib/client-impersonation";
@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Clock, CheckCircle2, Play } from "lucide-react";
+import { ArrowLeft, Clock, CheckCircle2, Play, StickyNote, NotebookPen } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { getExerciseVideoSource } from "@/lib/exercise-video";
 import { toast } from "sonner";
@@ -66,6 +66,48 @@ function WorkoutDay() {
     queryFn: async () => (await sb.from("pl_day_completions").select("*").eq("day_id", dayId).eq("client_id", client!.id).maybeSingle()).data,
   });
 
+  // Exercise notes for this day
+  const { data: exerciseNotes = [] } = useQuery({
+    queryKey: ["pl-day-exercise-notes", dayId, client?.id],
+    enabled: !!client?.id,
+    queryFn: async () => (await sb.from("pl_exercise_notes").select("*").eq("client_id", client!.id).eq("day_id", dayId)).data ?? [],
+  });
+  const notesByRowId = useMemo(() => {
+    const m = new Map<string, any>();
+    for (const n of exerciseNotes as any[]) if (n.row_id) m.set(n.row_id, n);
+    return m;
+  }, [exerciseNotes]);
+
+  // Auto-track: started_at on first mount (creates draft row if needed)
+  const startedRef = useRef(false);
+  useEffect(() => {
+    if (!client?.id || startedRef.current) return;
+    if (completion?.started_at) { startedRef.current = true; return; }
+    startedRef.current = true;
+    (async () => {
+      const payload: any = { day_id: dayId, client_id: client.id, started_at: new Date().toISOString(), completed_at: null };
+      if (completion) {
+        if (!completion.started_at) await sb.from("pl_day_completions").update({ started_at: payload.started_at }).eq("id", completion.id);
+      } else {
+        await sb.from("pl_day_completions").insert(payload);
+        qc.invalidateQueries({ queryKey: ["pl-day-completion", dayId] });
+      }
+    })();
+  }, [client?.id, completion?.id, completion?.started_at, dayId, qc]);
+
+  // Mark in_progress when any meaningful entry occurs
+  const markInProgress = async () => {
+    if (!client?.id) return;
+    if (completion?.in_progress_at) return;
+    const now = new Date().toISOString();
+    if (completion) {
+      await sb.from("pl_day_completions").update({ in_progress_at: now }).eq("id", completion.id);
+    } else {
+      await sb.from("pl_day_completions").insert({ day_id: dayId, client_id: client.id, in_progress_at: now, started_at: now, completed_at: null });
+    }
+    qc.invalidateQueries({ queryKey: ["pl-day-completion", dayId] });
+  };
+
   const [notes, setNotes] = useState("");
   const [actualMin, setActualMin] = useState<string>("");
 
@@ -112,6 +154,20 @@ function WorkoutDay() {
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["pl-day-results", dayId] });
     qc.invalidateQueries({ queryKey: ["pl-day-completion", dayId] });
+    markInProgress();
+  };
+
+  const refreshNotes = () => {
+    qc.invalidateQueries({ queryKey: ["pl-day-exercise-notes", dayId] });
+    qc.invalidateQueries({ queryKey: ["client-exercise-notes", client?.id] });
+    markInProgress();
+  };
+
+  // Sticky general-notes shortcut: scroll to the bottom notes card and focus textarea
+  const generalNotesRef = useRef<HTMLDivElement>(null);
+  const focusGeneralNotes = () => {
+    generalNotesRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    setTimeout(() => generalNotesRef.current?.querySelector("textarea")?.focus(), 350);
   };
 
   if (!day) return <div className="p-8 text-sm text-muted-foreground">Loading…</div>;
@@ -139,18 +195,28 @@ function WorkoutDay() {
 
         <div className="space-y-3">
           {(rows as any[]).map((r) => (
-            <ExerciseBlock key={r.id} row={r} clientId={client?.id} existingResults={(results as any[]).filter((x) => x.row_id === r.id)} onChange={refresh} />
+            <ExerciseBlock
+              key={r.id}
+              row={r}
+              dayId={dayId}
+              dayTitle={day.title || `Day ${day.day_index}`}
+              clientId={client?.id}
+              existingResults={(results as any[]).filter((x) => x.row_id === r.id)}
+              existingNote={notesByRowId.get(r.id)}
+              onChange={refresh}
+              onNoteChange={refreshNotes}
+            />
           ))}
         </div>
 
-        <Card className="p-4 space-y-3">
+        <Card ref={generalNotesRef} className="p-4 space-y-3">
           <div className="flex items-center justify-between">
             <div className="text-sm font-bold">Workout Notes</div>
             <SaveStatus state={metaSave.state} savedAt={metaSave.savedAt} />
           </div>
           <Textarea
             value={notes}
-            onChange={(e) => setNotes(e.target.value)}
+            onChange={(e) => { setNotes(e.target.value); if (!completion?.in_progress_at) markInProgress(); }}
             placeholder={completion?.client_notes || "How did it feel? Any pain, PRs, surprises?"}
           />
           <div className="flex items-center gap-2">
@@ -170,12 +236,19 @@ function WorkoutDay() {
               onAction={async () => {
                 if (!client?.id) return;
                 await metaSave.flush();
+                const startedAt = completion?.started_at ?? new Date().toISOString();
+                const completedAt = new Date().toISOString();
+                const durationMin = actualMin
+                  ? parseInt(actualMin)
+                  : completion?.actual_duration_min ?? Math.max(1, Math.round((new Date(completedAt).getTime() - new Date(startedAt).getTime()) / 60000));
                 const payload = {
                   day_id: dayId,
                   client_id: client.id,
                   client_notes: notes.length > 0 ? notes : (completion?.client_notes ?? null),
-                  actual_duration_min: actualMin ? parseInt(actualMin) : (completion?.actual_duration_min ?? null),
-                  completed_at: new Date().toISOString(),
+                  actual_duration_min: durationMin,
+                  started_at: startedAt,
+                  completed_at: completedAt,
+                  completion_method: "manual",
                 };
                 if (completion) await sb.from("pl_day_completions").update(payload).eq("id", completion.id);
                 else await sb.from("pl_day_completions").insert(payload);
@@ -190,11 +263,18 @@ function WorkoutDay() {
           </div>
         </Card>
       </div>
+
+      {/* Sticky general-notes shortcut */}
+      <div className="fixed bottom-4 right-4 z-30 md:bottom-6 md:right-6">
+        <Button size="lg" variant="secondary" onClick={focusGeneralNotes} className="shadow-lg">
+          <NotebookPen className="mr-2 h-4 w-4" /> Workout Notes
+        </Button>
+      </div>
     </>
   );
 }
 
-function ExerciseBlock({ row, clientId, existingResults, onChange }: { row: any; clientId: string | undefined; existingResults: any[]; onChange: () => void }) {
+function ExerciseBlock({ row, dayId, dayTitle, clientId, existingResults, existingNote, onChange, onNoteChange }: { row: any; dayId: string; dayTitle: string; clientId: string | undefined; existingResults: any[]; existingNote?: any; onChange: () => void; onNoteChange: () => void }) {
   const name = row.exercises?.name ?? row.exercise_name_override ?? "Exercise";
   const exercise = row.exercises ?? null;
   const exerciseId = exercise?.id ?? null;
@@ -204,13 +284,22 @@ function ExerciseBlock({ row, clientId, existingResults, onChange }: { row: any;
   const setCount = Math.max(1, row.sets ?? 1);
   const accent = movementAccent(name);
   const [howToOpen, setHowToOpen] = useState(false);
+  const [notesOpen, setNotesOpen] = useState(false);
+  const hasNote = Boolean(existingNote?.id);
 
   return (
     <Card className="relative overflow-hidden p-4 pl-5">
       <div className={`absolute left-0 top-0 h-full w-1.5 ${accent}`} aria-hidden />
       <div className="flex items-start justify-between gap-2">
         <div>
-          <div className="font-bold">{name}</div>
+          <div className="flex items-center gap-2">
+            <div className="font-bold">{name}</div>
+            {hasNote && (
+              <span title="You saved a note for this exercise" className="inline-flex items-center gap-1 rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] font-bold text-primary">
+                <StickyNote className="h-2.5 w-2.5" /> Note
+              </span>
+            )}
+          </div>
           <div className="text-xs text-muted-foreground">
             {row.sets ?? "?"} × {row.reps_text ?? "?"}
             {row.rpe && ` @ RPE ${row.rpe}`}
@@ -222,11 +311,16 @@ function ExerciseBlock({ row, clientId, existingResults, onChange }: { row: any;
           </div>
           {row.notes && <p className="mt-1 text-xs text-muted-foreground italic">{row.notes}</p>}
         </div>
-        {hasGuide && (
-          <Button size="sm" variant="outline" onClick={() => setHowToOpen(true)} className="shrink-0">
-            <Play className="mr-1 h-3 w-3 fill-current" /> How To
+        <div className="flex shrink-0 flex-col items-end gap-1">
+          {hasGuide && (
+            <Button size="sm" variant="outline" onClick={() => setHowToOpen(true)} className="w-full">
+              <Play className="mr-1 h-3 w-3 fill-current" /> How To
+            </Button>
+          )}
+          <Button size="sm" variant={hasNote ? "default" : "outline"} onClick={() => setNotesOpen(true)} className="w-full">
+            <StickyNote className="mr-1 h-3 w-3" /> Notes
           </Button>
-        )}
+        </div>
       </div>
 
       {cues && (
@@ -242,6 +336,18 @@ function ExerciseBlock({ row, clientId, existingResults, onChange }: { row: any;
         })}
       </div>
       <HowToSheet open={howToOpen} onOpenChange={setHowToOpen} exercise={exercise} fallbackName={name} fallbackVideo={video} />
+      <ExerciseNotesSheet
+        open={notesOpen}
+        onOpenChange={setNotesOpen}
+        clientId={clientId}
+        dayId={dayId}
+        dayTitle={dayTitle}
+        rowId={row.id}
+        exerciseId={exerciseId}
+        exerciseName={name}
+        existingNote={existingNote}
+        onSaved={onNoteChange}
+      />
     </Card>
   );
 }
@@ -253,7 +359,9 @@ function HowToSheet({ open, onOpenChange, exercise, fallbackName, fallbackVideo 
   const muscles = exercise?.muscle_group ?? null;
   const category = exercise?.category ?? null;
   const videoSrc = exercise ? getExerciseVideoSource(exercise) : null;
-  const directVideo = !videoSrc && fallbackVideo ? fallbackVideo : null;
+  // Always try fallbacks if primary source is not ready
+  const directVideo = fallbackVideo || exercise?.youtube_url || null;
+  const hasPrimary = videoSrc && videoSrc.status !== "coming_soon" && !!videoSrc.url;
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -267,19 +375,19 @@ function HowToSheet({ open, onOpenChange, exercise, fallbackName, fallbackVideo 
           )}
         </SheetHeader>
         <div className="px-5 py-4 space-y-4 pb-32">
-          {videoSrc && videoSrc.status !== "coming_soon" && videoSrc.url ? (
+          {hasPrimary ? (
             <iframe
-              src={videoSrc.url}
+              src={videoSrc!.url!}
               title={`${name} video`}
-              allow="autoplay; fullscreen; picture-in-picture"
+              allow="autoplay; fullscreen; picture-in-picture; encrypted-media"
               allowFullScreen
               className="w-full aspect-video rounded-xl border border-border bg-black"
             />
           ) : directVideo ? (
             <iframe
-              src={directVideo}
+              src={toEmbedUrl(directVideo)}
               title={`${name} video`}
-              allow="autoplay; fullscreen; picture-in-picture"
+              allow="autoplay; fullscreen; picture-in-picture; encrypted-media"
               allowFullScreen
               className="w-full aspect-video rounded-xl border border-border bg-black"
             />
@@ -316,6 +424,117 @@ function HowToSheet({ open, onOpenChange, exercise, fallbackName, fallbackVideo 
         </div>
         <div className="sticky bottom-0 left-0 right-0 border-t border-border bg-background/95 backdrop-blur px-5 py-3">
           <Button className="w-full" size="lg" onClick={() => onOpenChange(false)}>
+            <ArrowLeft className="mr-2 h-4 w-4" /> Back to Workout
+          </Button>
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+function toEmbedUrl(url: string): string {
+  // Convert common YouTube watch URLs to embed form so iframe can play on mobile
+  try {
+    const u = new URL(url);
+    if (u.hostname.includes("youtube.com") && u.pathname === "/watch") {
+      const id = u.searchParams.get("v");
+      if (id) return `https://www.youtube.com/embed/${id}?playsinline=1`;
+    }
+    if (u.hostname === "youtu.be") {
+      const id = u.pathname.replace("/", "");
+      if (id) return `https://www.youtube.com/embed/${id}?playsinline=1`;
+    }
+    if (u.hostname.includes("vimeo.com") && !u.hostname.includes("player.")) {
+      const id = u.pathname.replace("/", "");
+      if (id) return `https://player.vimeo.com/video/${id}`;
+    }
+  } catch {}
+  return url;
+}
+
+function ExerciseNotesSheet({ open, onOpenChange, clientId, dayId, dayTitle, rowId, exerciseId, exerciseName, existingNote, onSaved }: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  clientId: string | undefined;
+  dayId: string;
+  dayTitle: string;
+  rowId: string;
+  exerciseId: string | null;
+  exerciseName: string;
+  existingNote?: any;
+  onSaved: () => void;
+}) {
+  const [draft, setDraft] = useState(existingNote?.content ?? "");
+  useEffect(() => { setDraft(existingNote?.content ?? ""); }, [existingNote?.id, existingNote?.content, open]);
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="bottom" className="h-[88vh] overflow-y-auto p-0 sm:max-w-xl sm:mx-auto sm:rounded-t-2xl">
+        <SheetHeader className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b border-border px-5 py-3 text-left">
+          <SheetTitle className="text-base font-black">{exerciseName}</SheetTitle>
+          <SheetDescription className="text-xs">{dayTitle} · Exercise notes</SheetDescription>
+        </SheetHeader>
+        <div className="px-5 py-4 space-y-4 pb-32">
+          <div>
+            <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Your note</label>
+            <Textarea
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              rows={6}
+              placeholder="How did this exercise feel? Form cues, pain, PRs, equipment notes…"
+              className="mt-1"
+            />
+          </div>
+          {existingNote && (
+            <section className="rounded-md border border-border bg-secondary/30 p-3">
+              <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                <StickyNote className="h-3 w-3" />
+                <span>Last saved</span>
+                <span>·</span>
+                <span>{new Date(existingNote.updated_at).toLocaleString()}</span>
+                {existingNote.status === "edited" && <Badge variant="outline" className="ml-auto text-[10px]">Edited</Badge>}
+              </div>
+              <p className="mt-1 whitespace-pre-wrap text-sm">{existingNote.content}</p>
+            </section>
+          )}
+        </div>
+        <div className="sticky bottom-0 left-0 right-0 border-t border-border bg-background/95 backdrop-blur px-5 py-3 space-y-2">
+          <ActionButton
+            className="w-full"
+            size="lg"
+            loadingLabel="Saving…"
+            successLabel="Saved"
+            successToast={existingNote ? "Note updated" : "Note saved"}
+            disabled={!clientId || draft.trim().length === 0}
+            onAction={async () => {
+              if (!clientId) return;
+              const trimmed = draft.trim();
+              if (!trimmed) throw new Error("Note is empty");
+              if (existingNote) {
+                const { error } = await sb.from("pl_exercise_notes").update({
+                  content: trimmed,
+                  status: "edited",
+                  coach_seen_at: null,
+                }).eq("id", existingNote.id);
+                if (error) throw error;
+              } else {
+                const { error } = await sb.from("pl_exercise_notes").insert({
+                  client_id: clientId,
+                  day_id: dayId,
+                  row_id: rowId,
+                  exercise_id: exerciseId,
+                  exercise_name: exerciseName,
+                  content: trimmed,
+                  status: "new",
+                });
+                if (error) throw error;
+              }
+              onSaved();
+            }}
+          >
+            <StickyNote className="mr-2 h-4 w-4" /> Save Note
+          </ActionButton>
+          <Button variant="outline" className="w-full" size="lg" onClick={() => onOpenChange(false)}>
             <ArrowLeft className="mr-2 h-4 w-4" /> Back to Workout
           </Button>
         </div>
