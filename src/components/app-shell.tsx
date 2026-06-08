@@ -38,6 +38,7 @@ function groupNavItems(items: NavItem[]) {
   }
   const order = [
     "Core",
+    "Membership",
     "Programming",
     "Business",
     "Documents",
