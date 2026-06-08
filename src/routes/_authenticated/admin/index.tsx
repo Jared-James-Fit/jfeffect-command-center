@@ -315,7 +315,7 @@ function AdminDashboard() {
           </>
         }
       />
-      <div className="space-y-6 p-6 md:p-8">
+      <div className="space-y-4 p-4 md:p-6">
         <Link to="/admin/client-pov" className="block">
           <Card className="border-warning/40 bg-gradient-to-r from-warning/20 to-warning/5 p-4 md:p-5 hover:shadow-md transition-shadow cursor-pointer">
             <div className="flex items-center gap-3 md:gap-4">
