@@ -47,8 +47,8 @@ export const inviteClient = createServerFn({ method: "POST" })
       });
 
     const now = new Date().toISOString();
-    // Default invite expiry tracked at 7 days (Supabase default)
-    const expires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+    // Invite expiry tracked at 48 hours
+    const expires = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString();
 
     if (inviteErr) {
       // If user already exists, fall back to a password recovery email.
@@ -127,6 +127,29 @@ export const sendPasswordReset = createServerFn({ method: "POST" })
       account_status: "Password Reset Sent",
     }).eq("id", client.id);
     return { ok: true, url: null as string | null };
+  });
+
+// Generate a password reset link without sending an email — for copy-to-clipboard.
+export const getPasswordResetLink = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) =>
+    z.object({ clientId: z.string().uuid(), redirectTo: z.string().url() }).parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    await assertAdmin(supabase, userId);
+    const { data: client, error } = await supabase
+      .from("clients").select("id, email").eq("id", data.clientId).single();
+    if (error) throw new Error(error.message);
+    if (!client?.email) throw new Error("Client has no email address");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: link, error: lErr } = await supabaseAdmin.auth.admin.generateLink({
+      type: "recovery",
+      email: client.email,
+      options: { redirectTo: data.redirectTo },
+    });
+    if (lErr) throw new Error(lErr.message);
+    return { url: (link as any)?.properties?.action_link as string };
   });
 
 // Admin manual toggles
