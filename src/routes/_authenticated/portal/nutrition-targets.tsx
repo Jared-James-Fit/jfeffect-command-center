@@ -39,7 +39,7 @@ function NutritionTargets() {
   return (
     <>
       <PageHeader title="Nutrition" subtitle={current ? (current.phase === "Custom" ? current.custom_phase : current.phase) : "Your assigned targets from Coach Jared."} />
-      <div className="p-6 md:p-8 space-y-6">
+      <div className="p-4 pb-28 md:p-8 md:pb-12 space-y-6">
         {!current ? (
           <Card className="border-border bg-card p-10 text-center">
             <Apple className="mx-auto h-10 w-10 text-primary" />

@@ -68,7 +68,6 @@ export const clientNav: NavItem[] = [
   { to: "/portal/workouts", label: "Workouts", icon: Activity },
   { to: "/portal/nutrition-targets", label: "Nutrition", icon: Apple },
   { to: "/portal/lift-videos", label: "Lift Videos", icon: Video },
-  { to: "/portal/program", label: "My Program", icon: FileText },
   { to: "/portal/check-ins", label: "Check-Ins & Forms", icon: ClipboardCheck },
   { to: "/portal/progress-metrics", label: "Progress Metrics", icon: Scale },
   { to: "/portal/exercises", label: "Exercises", icon: Dumbbell },
