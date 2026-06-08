@@ -361,19 +361,19 @@ function StructureCanvas({ type, payload, setP, exercises, appendRowToFirstDay }
 
 // ---------- Structure editing for the JSON payload ----------
 
-function StructureEditor({ type, payload, setPayload, exercises }: { type: string; payload: any; setPayload: (p: any) => void; exercises: any[] }) {
-  if (type === "full_prep") return <FullPrepEditor payload={payload} setPayload={setPayload} exercises={exercises} />;
-  if (type === "block") return <BlockPayloadEditor weeksData={payload.weeks_data || []} setWeeksData={(wd) => setPayload({ ...payload, weeks_data: wd })} exercises={exercises} />;
-  if (type === "week") return <WeekEditor week={payload} setWeek={setPayload} exercises={exercises} />;
-  if (type === "day") return <DayEditor day={payload} setDay={setPayload} exercises={exercises} />;
+function StructureEditor({ type, payload, setPayload, exercises, compact }: { type: string; payload: any; setPayload: (p: any) => void; exercises: any[]; compact?: boolean }) {
+  if (type === "full_prep") return <FullPrepEditor payload={payload} setPayload={setPayload} exercises={exercises} compact={compact} />;
+  if (type === "block") return <BlockPayloadEditor weeksData={payload.weeks_data || []} setWeeksData={(wd) => setPayload({ ...payload, weeks_data: wd })} exercises={exercises} compact={compact} />;
+  if (type === "week") return <WeekEditor week={payload} setWeek={setPayload} exercises={exercises} compact={compact} />;
+  if (type === "day") return <DayEditor day={payload} setDay={setPayload} exercises={exercises} compact={compact} />;
   return (
     <Card className="p-4 max-w-3xl">
-      <RowEditor row={payload} setRow={setPayload} exercises={exercises} />
+      <RowEditor row={payload} setRow={setPayload} exercises={exercises} compact={compact} />
     </Card>
   );
 }
 
-function FullPrepEditor({ payload, setPayload, exercises }: any) {
+function FullPrepEditor({ payload, setPayload, exercises, compact }: any) {
   const prep = payload.prep || {};
   const blocks = payload.blocks_data || [];
   const setPrep = (patch: any) => setPayload({ ...payload, prep: { ...prep, ...patch } });
@@ -407,6 +407,7 @@ function FullPrepEditor({ payload, setPayload, exercises }: any) {
             weeksData={b.weeks_data || []}
             setWeeksData={(wd) => { const copy = [...blocks]; copy[i] = { ...b, weeks_data: wd }; setBlocks(copy); }}
             exercises={exercises}
+            compact={compact}
           />
         </Card>
       ))}
@@ -414,7 +415,7 @@ function FullPrepEditor({ payload, setPayload, exercises }: any) {
   );
 }
 
-function BlockPayloadEditor({ weeksData, setWeeksData, exercises }: { weeksData: any[]; setWeeksData: (wd: any[]) => void; exercises: any[] }) {
+function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact }: { weeksData: any[]; setWeeksData: (wd: any[]) => void; exercises: any[]; compact?: boolean }) {
   const [activeIdx, setActiveIdx] = useState(0);
   const [view, setView] = useState<"block" | "week">("block");
   const weekStats = useMemo(() => weeksData.map((w: any) => {
