@@ -76,7 +76,7 @@ export const clientNav: NavItem[] = [
   { to: "/portal/resources", label: "Resources", icon: FolderOpen },
   { to: "/portal/calendar", label: "Calendar", icon: Calendar },
   { to: "/portal/documents", label: "Documents", icon: FileText },
-  { to: "/portal/account", label: "Account Settings", icon: UserCog },
+  { to: "/portal/account", label: "Account Settings", icon: Settings },
 ];
 
 // App Member portal navigation
