@@ -5,17 +5,21 @@ import {
   UserCheck, FileSignature, Film,
   ClipboardList, FileEdit,
   Scale, BookOpen, Activity, Archive,
+  UserPlus, Library, Wrench,
 } from "lucide-react";
 import type { NavItem } from "@/components/app-shell";
 
 export const adminNav: NavItem[] = [
   // CORE
   { to: "/admin", label: "Dashboard", icon: LayoutDashboard, group: "Core" },
-  { to: "/admin/clients", label: "Clients", icon: Users, group: "Core" },
+  { to: "/admin/clients", label: "Coaching Clients", icon: Users, group: "Core" },
   { to: "/admin/messages", label: "Messages", icon: MessageCircle, group: "Core" },
   { to: "/admin/check-in-reviews", label: "Check-Ins", icon: ClipboardList, group: "Core" },
   { to: "/admin/lift-videos", label: "Lift Reviews", icon: Video, group: "Core" },
   { to: "/admin/training-intelligence", label: "Training Intel", icon: Activity, group: "Core" },
+  // MEMBERSHIP
+  { to: "/admin/members", label: "App Members", icon: UserPlus, group: "Membership" },
+  { to: "/admin/member-plans", label: "Plan Library", icon: Library, group: "Membership" },
   // PROGRAMMING
   { to: "/admin/program-library", label: "Program Library", icon: BookOpen, group: "Programming" },
   { to: "/admin/exercises", label: "Exercise Library", icon: Dumbbell, group: "Programming" },
@@ -73,4 +77,14 @@ export const clientNav: NavItem[] = [
   { to: "/portal/calendar", label: "Calendar", icon: Calendar },
   { to: "/portal/documents", label: "Documents", icon: FileText },
   { to: "/portal/account", label: "Account Settings", icon: UserCog },
+];
+
+// App Member portal navigation
+export const memberNav: NavItem[] = [
+  { to: "/m", label: "Dashboard", icon: LayoutDashboard },
+  { to: "/m/my-plans", label: "My Plans", icon: ClipboardCheck },
+  { to: "/m/plans", label: "Program Library", icon: BookOpen },
+  { to: "/m/resources", label: "Resources", icon: FolderOpen },
+  { to: "/m/tools", label: "Tools", icon: Wrench },
+  { to: "/m/account", label: "My Account", icon: UserCog },
 ];
