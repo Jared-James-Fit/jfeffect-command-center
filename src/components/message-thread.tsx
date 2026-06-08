@@ -24,7 +24,7 @@ import { cn } from "@/lib/utils";
 import {
   Paperclip, Send, X, FileText, Image as ImageIcon, Video, Link as LinkIcon, ExternalLink,
   Mic, Trash2, Play, Pause, Camera, File as FileIcon, Flag, AlertCircle, AlertTriangle,
-  Gauge, Download, ChevronDown, ChevronUp, Square,
+  Gauge, Download, ChevronDown, ChevronUp, Square, Loader2,
 } from "lucide-react";
 import { format, parseISO, isToday, isYesterday } from "date-fns";
 import { toast } from "sonner";
@@ -862,9 +862,19 @@ export function MessageThread({
 
             {/* Voice or Send */}
             {body.trim() || attachments.length > 0 ? (
-              <Button type="button" onClick={onSend} disabled={sending || uploading}
-                size="icon" className="h-10 w-10 shrink-0 rounded-full bg-primary">
-                <Send className="h-4 w-4" />
+              <Button
+                type="button"
+                onClick={onSend}
+                disabled={sending || uploading}
+                aria-busy={sending || uploading || undefined}
+                size="icon"
+                className="h-10 w-10 shrink-0 rounded-full bg-primary transition-transform active:scale-90"
+              >
+                {sending || uploading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Send className="h-4 w-4" />
+                )}
               </Button>
             ) : (
               <Button type="button" variant="ghost" size="icon" className="h-10 w-10 shrink-0 rounded-full"
