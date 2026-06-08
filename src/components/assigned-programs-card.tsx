@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Dumbbell, Target, ChevronRight, Layers, ArrowRight, Trash2 } from "lucide-react";
 import { listClientPreps, listClientBlocks, countdownLabel, deletePrep, deleteBlock } from "@/lib/pl-programs";
 import {
@@ -24,6 +25,15 @@ export function AssignedProgramsCard({ clientId, mode }: { clientId: string; mod
   const qc = useQueryClient();
   const [pending, setPending] = useState<{ kind: "prep" | "block"; id: string; label: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [selectedPreps, setSelectedPreps] = useState<Set<string>>(new Set());
+  const [selectedBlocks, setSelectedBlocks] = useState<Set<string>>(new Set());
+  const [bulkConfirm, setBulkConfirm] = useState(false);
+
+  const togglePrep = (id: string) =>
+    setSelectedPreps((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const toggleBlock = (id: string) =>
+    setSelectedBlocks((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const clearSelection = () => { setSelectedPreps(new Set()); setSelectedBlocks(new Set()); };
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ["assigned-preps", clientId] });
@@ -49,6 +59,26 @@ export function AssignedProgramsCard({ clientId, mode }: { clientId: string; mod
     }
   };
 
+  const confirmBulkRemove = async () => {
+    setBusy(true);
+    let ok = 0, fail = 0;
+    try {
+      for (const id of selectedBlocks) {
+        try { await deleteBlock(id); ok++; } catch { fail++; }
+      }
+      for (const id of selectedPreps) {
+        try { await deletePrep(id); ok++; } catch { fail++; }
+      }
+      if (ok) toast.success(`Removed ${ok} item${ok === 1 ? "" : "s"}`);
+      if (fail) toast.error(`${fail} failed to remove`);
+      clearSelection();
+      setBulkConfirm(false);
+      invalidate();
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const { data: preps = [] } = useQuery({
     queryKey: ["assigned-preps", clientId],
     queryFn: () => listClientPreps(clientId),
@@ -64,6 +94,17 @@ export function AssignedProgramsCard({ clientId, mode }: { clientId: string; mod
   const visiblePreps = (preps as any[]).filter(
     (p) => p.status !== "Archived" && (mode === "admin" || p.client_visible !== false),
   );
+
+  const allIds = [...visiblePreps.map((p: any) => `p:${p.id}`), ...visibleBlocks.map((b: any) => `b:${b.id}`)];
+  const selectedCount = selectedPreps.size + selectedBlocks.size;
+  const allSelected = allIds.length > 0 && selectedCount === allIds.length;
+  const toggleAll = () => {
+    if (allSelected) clearSelection();
+    else {
+      setSelectedPreps(new Set(visiblePreps.map((p: any) => p.id)));
+      setSelectedBlocks(new Set(visibleBlocks.map((b: any) => b.id)));
+    }
+  };
 
   if (visibleBlocks.length === 0 && visiblePreps.length === 0) {
     return (
@@ -101,9 +142,22 @@ export function AssignedProgramsCard({ clientId, mode }: { clientId: string; mod
           </p>
         </div>
         {mode === "admin" ? (
-          <Link to="/admin/client-programs/$clientId" params={{ clientId }}>
-            <Button size="sm" variant="outline"><Dumbbell className="mr-1 h-4 w-4" /> Manage Programs</Button>
-          </Link>
+          <div className="flex flex-wrap items-center gap-2">
+            {allIds.length > 0 && (
+              <Button size="sm" variant="outline" onClick={toggleAll}>
+                <Checkbox checked={allSelected} className="mr-2 pointer-events-none" />
+                {allSelected ? "Clear all" : "Select all"}
+              </Button>
+            )}
+            {selectedCount > 0 && (
+              <Button size="sm" variant="destructive" onClick={() => setBulkConfirm(true)}>
+                <Trash2 className="mr-1 h-4 w-4" /> Remove ({selectedCount})
+              </Button>
+            )}
+            <Link to="/admin/client-programs/$clientId" params={{ clientId }}>
+              <Button size="sm" variant="outline"><Dumbbell className="mr-1 h-4 w-4" /> Manage Programs</Button>
+            </Link>
+          </div>
         ) : (
           <Link to="/portal/workouts">
             <Button size="sm" variant="outline">Open Workouts <ArrowRight className="ml-1 h-4 w-4" /></Button>
@@ -121,7 +175,15 @@ export function AssignedProgramsCard({ clientId, mode }: { clientId: string; mod
               return (
                 <div key={p.id} className="rounded-md border border-border bg-secondary/30 p-3">
                   <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex items-start gap-2">
+                      {mode === "admin" && (
+                        <Checkbox
+                          checked={selectedPreps.has(p.id)}
+                          onCheckedChange={() => togglePrep(p.id)}
+                          className="mt-1"
+                        />
+                      )}
+                      <div className="min-w-0">
                       <div className="flex items-center gap-2">
                         <Target className="h-4 w-4 text-primary" />
                         <div className="font-bold truncate">{p.title}</div>
@@ -133,6 +195,7 @@ export function AssignedProgramsCard({ clientId, mode }: { clientId: string; mod
                           {p.event_date && <span className="text-muted-foreground"> · {p.event_date}</span>}
                         </div>
                       )}
+                      </div>
                     </div>
                     <div className="flex flex-col items-end gap-1">
                       <Badge variant="outline" className="text-[10px]">{p.status}</Badge>
@@ -153,7 +216,14 @@ export function AssignedProgramsCard({ clientId, mode }: { clientId: string; mod
                   {prepBlocks.length > 0 && (
                     <div className="mt-2 space-y-1">
                       {prepBlocks.map((b: any) => (
-                        <BlockRow key={b.id} block={b} mode={mode} onRemove={() => setPending({ kind: "block", id: b.id, label: b.name })} />
+                        <BlockRow
+                          key={b.id}
+                          block={b}
+                          mode={mode}
+                          onRemove={() => setPending({ kind: "block", id: b.id, label: b.name })}
+                          selected={selectedBlocks.has(b.id)}
+                          onToggleSelect={() => toggleBlock(b.id)}
+                        />
                       ))}
                     </div>
                   )}
@@ -169,7 +239,14 @@ export function AssignedProgramsCard({ clientId, mode }: { clientId: string; mod
           <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Standalone Blocks</div>
           <div className="grid gap-2">
             {visibleBlocks.filter((b: any) => !b.prep_id).map((b: any) => (
-              <BlockRow key={b.id} block={b} mode={mode} onRemove={() => setPending({ kind: "block", id: b.id, label: b.name })} />
+              <BlockRow
+                key={b.id}
+                block={b}
+                mode={mode}
+                onRemove={() => setPending({ kind: "block", id: b.id, label: b.name })}
+                selected={selectedBlocks.has(b.id)}
+                onToggleSelect={() => toggleBlock(b.id)}
+              />
             ))}
           </div>
         </div>
@@ -198,11 +275,35 @@ export function AssignedProgramsCard({ clientId, mode }: { clientId: string; mod
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
+
+    <AlertDialog open={bulkConfirm} onOpenChange={(o) => !o && !busy && setBulkConfirm(false)}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Remove {selectedCount} item{selectedCount === 1 ? "" : "s"}?</AlertDialogTitle>
+          <AlertDialogDescription>
+            Blocks will be permanently deleted along with their weeks, days, exercise rows, and any client completions.
+            Preps will be removed; any blocks inside them that weren't selected become standalone. This cannot be undone.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={(e) => { e.preventDefault(); void confirmBulkRemove(); }}
+            disabled={busy}
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+          >
+            {busy ? "Removing…" : `Remove ${selectedCount}`}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
     </>
   );
 }
 
-function BlockRow({ block, mode, onRemove }: { block: any; mode: Mode; onRemove?: () => void }) {
+function BlockRow({
+  block, mode, onRemove, selected, onToggleSelect,
+}: { block: any; mode: Mode; onRemove?: () => void; selected?: boolean; onToggleSelect?: () => void }) {
   const inner = (
     <div className="flex flex-1 items-center justify-between rounded border border-border bg-card p-2.5 hover:bg-secondary/40 transition">
       <div className="min-w-0">
@@ -231,6 +332,11 @@ function BlockRow({ block, mode, onRemove }: { block: any; mode: Mode; onRemove?
   if (mode !== "admin" || !onRemove) return link;
   return (
     <div className="flex items-stretch gap-1">
+      {onToggleSelect && (
+        <div className="flex items-center px-1">
+          <Checkbox checked={!!selected} onCheckedChange={onToggleSelect} />
+        </div>
+      )}
       {link}
       <Button
         variant="ghost"
