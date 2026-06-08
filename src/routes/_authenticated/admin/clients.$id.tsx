@@ -765,26 +765,33 @@ function ClientDetail() {
             <AccountStatusBadge status={form.account_status} needsHelp={form.needs_admin_help} />
           </div>
 
-          <div className="grid gap-3 text-sm md:grid-cols-2 lg:grid-cols-4">
-            <Field label="Email" value={form.email ?? "—"} />
-            <Field label="Invite sent" value={fmtDate(form.invite_sent_at)} />
-            <Field label="Last resent" value={fmtDate(form.invite_last_resent_at)} />
-            <Field label="Account created" value={fmtDate(form.account_created_at)} />
-            <Field label="Invite expires" value={fmtDate(form.invite_expires_at)} />
-            <Field label="Password reset sent" value={fmtDate(form.password_reset_sent_at)} />
-            <Field label="Linked auth user" value={form.user_id ? "Yes" : "No"} />
-            <Field label="Needs admin help" value={form.needs_admin_help ? "Yes" : "No"} />
-          </div>
+          <div className="grid gap-4 md:grid-cols-3">
+            <div className="space-y-4 md:col-span-2">
+              <div className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-3">
+                <Field label="Email" value={form.email ?? "—"} />
+                <Field label="Invite sent" value={fmtDate(form.invite_sent_at)} />
+                <Field label="Last resent" value={fmtDate(form.invite_last_resent_at)} />
+                <Field label="Account created" value={fmtDate(form.account_created_at)} />
+                <Field label="Password reset sent" value={fmtDate(form.password_reset_sent_at)} />
+                <Field label="Linked auth user" value={form.user_id ? "Yes" : "No"} />
+              </div>
 
-          <div className="flex flex-wrap gap-2 pt-2">
-            <Button size="sm" variant="outline" onClick={sendSetup}><Mail className="mr-2 h-4 w-4" />{form.invite_sent_at ? "Resend setup email" : "Send setup email"}</Button>
-            <Button size="sm" variant="outline" onClick={copySetupLink}><Copy className="mr-2 h-4 w-4" />Copy setup link</Button>
-            <Button size="sm" variant="outline" onClick={sendReset}><KeyRound className="mr-2 h-4 w-4" />Send password reset</Button>
-            <Button size="sm" variant="outline" onClick={copyResetLink}><Copy className="mr-2 h-4 w-4" />Copy reset link</Button>
-            <Button size="sm" variant="outline" onClick={markComplete}><CheckCircle2 className="mr-2 h-4 w-4" />Mark setup complete</Button>
-            <Button size="sm" variant={form.needs_admin_help ? "default" : "outline"} onClick={toggleNeedsHelp}>
-              <AlertCircle className="mr-2 h-4 w-4" />{form.needs_admin_help ? "Clear admin help flag" : "Mark needs admin help"}
-            </Button>
+              <div className="flex flex-wrap gap-2 pt-2">
+                <Button size="sm" variant="outline" onClick={sendSetup}><Mail className="mr-2 h-4 w-4" />{form.invite_sent_at ? "Resend setup email" : "Send setup email"}</Button>
+                <Button size="sm" variant="outline" onClick={copySetupLink}><Copy className="mr-2 h-4 w-4" />Copy setup link</Button>
+                <Button size="sm" variant="outline" onClick={sendReset}><KeyRound className="mr-2 h-4 w-4" />Send password reset</Button>
+                <Button size="sm" variant="outline" onClick={copyResetLink}><Copy className="mr-2 h-4 w-4" />Copy reset link</Button>
+                <Button size="sm" variant="outline" onClick={markComplete}><CheckCircle2 className="mr-2 h-4 w-4" />Mark setup complete</Button>
+                <Button size="sm" variant={form.needs_admin_help ? "default" : "outline"} onClick={toggleNeedsHelp}>
+                  <AlertCircle className="mr-2 h-4 w-4" />{form.needs_admin_help ? "Clear admin help flag" : "Mark needs admin help"}
+                </Button>
+              </div>
+            </div>
+
+            <InviteExpiryPanel
+              expiresAt={form.invite_expires_at}
+              accountCreatedAt={form.account_created_at}
+            />
           </div>
         </Card>
         </TabsContent>
