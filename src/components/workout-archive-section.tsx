@@ -5,7 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Archive, ChevronRight, RotateCcw } from "lucide-react";
+import { Archive, ChevronDown, ChevronRight, RotateCcw } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { toast } from "sonner";
 import { listArchivedBlocks, getBlockSummary, unarchiveBlock } from "@/lib/pl-programs";
@@ -16,6 +16,7 @@ type SortKey = "newest" | "oldest" | "name" | "range" | "completion";
 export function WorkoutArchiveSection({ clientId, mode }: { clientId: string; mode: Mode }) {
   const qc = useQueryClient();
   const [sort, setSort] = useState<SortKey>("newest");
+  const [open, setOpen] = useState(false);
   const { data: blocks = [] } = useQuery({
     queryKey: ["archived-blocks", clientId],
     queryFn: () => listArchivedBlocks(clientId),
@@ -42,25 +43,34 @@ export function WorkoutArchiveSection({ clientId, mode }: { clientId: string; mo
   if (sorted.length === 0) return null;
 
   return (
-    <Card className="p-6 space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
+    <Card className="overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between gap-2 p-4 text-left hover:bg-secondary/30"
+      >
         <div className="flex items-center gap-2">
           <Archive className="h-4 w-4 text-primary" />
           <h3 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">Workout Archive</h3>
           <Badge variant="outline" className="text-[10px]">{sorted.length}</Badge>
         </div>
-        <Select value={sort} onValueChange={(v) => setSort(v as SortKey)}>
-          <SelectTrigger className="h-8 w-44 text-xs"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="newest">Newest first</SelectItem>
-            <SelectItem value="oldest">Oldest first</SelectItem>
-            <SelectItem value="name">Block name</SelectItem>
-            <SelectItem value="range">Date range</SelectItem>
-            <SelectItem value="completion">Completion status</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-      <div className="grid gap-2">
+        <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open && (
+        <div className="space-y-3 border-t border-border p-4">
+          <div className="flex justify-end">
+            <Select value={sort} onValueChange={(v) => setSort(v as SortKey)}>
+              <SelectTrigger className="h-8 w-44 text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="newest">Newest first</SelectItem>
+                <SelectItem value="oldest">Oldest first</SelectItem>
+                <SelectItem value="name">Block name</SelectItem>
+                <SelectItem value="range">Date range</SelectItem>
+                <SelectItem value="completion">Completion status</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid gap-2">
         {sorted.map((b: any) => (
           <ArchivedRow key={b.id} block={b} mode={mode} onUnarchive={async () => {
             try {
@@ -71,7 +81,9 @@ export function WorkoutArchiveSection({ clientId, mode }: { clientId: string; mo
             } catch (e: any) { toast.error(e.message); }
           }} />
         ))}
-      </div>
+          </div>
+        </div>
+      )}
     </Card>
   );
 }
