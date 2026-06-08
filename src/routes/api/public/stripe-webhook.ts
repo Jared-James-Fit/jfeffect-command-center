@@ -107,11 +107,15 @@ async function provisionMemberFromPurchase(supabase: any, purchase: any) {
   if (!grant) return;
   if (grant.account_type_granted === "coaching_client") return; // coaching path unchanged
 
-  // Need an email to identify/create the member
-  const email: string | null =
-    purchase.client_email
-    || purchase.email
-    || null;
+  // Resolve email: prefer the terms_accepted email, else look up the linked client.
+  let email: string | null = purchase.terms_accepted_client_email ?? null;
+  let fullName: string | null = purchase.terms_accepted_client_name ?? null;
+  if (!email && purchase.client_id) {
+    const { data: cli } = await supabase
+      .from("clients").select("email, full_name").eq("id", purchase.client_id).maybeSingle();
+    email = cli?.email ?? null;
+    fullName = fullName ?? cli?.full_name ?? null;
+  }
   if (!email) return;
 
   // Upsert app_members row by email
@@ -134,7 +138,7 @@ async function provisionMemberFromPurchase(supabase: any, purchase: any) {
   } else {
     const { data: created } = await supabase.from("app_members").insert({
       email,
-      full_name: purchase.client_name ?? null,
+      full_name: fullName,
       account_type: grant.account_type_granted,
       status: "Active",
       stripe_customer_id: purchase.stripe_customer_id ?? null,
@@ -170,7 +174,11 @@ async function revokeMemberFromPurchase(supabase: any, purchase: any) {
   const { data: grant } = await supabase
     .from("product_access_grants").select("*").eq("offer_id", purchase.offer_id).maybeSingle();
   if (!grant || grant.account_type_granted === "coaching_client") return;
-  const email = purchase.client_email || purchase.email;
+  let email: string | null = purchase.terms_accepted_client_email ?? null;
+  if (!email && purchase.client_id) {
+    const { data: cli } = await supabase.from("clients").select("email").eq("id", purchase.client_id).maybeSingle();
+    email = cli?.email ?? null;
+  }
   if (!email) return;
   const { data: member } = await supabase.from("app_members").select("id").ilike("email", email).maybeSingle();
   if (!member) return;
