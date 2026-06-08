@@ -18,7 +18,7 @@ import {
   getTemplate, updateTemplate, summarizeTemplatePayload, TIME_PROFILES,
   estimateDayMinutes, durationRange, PERCENTAGE_BASES, type TrainingStyle,
 } from "@/lib/pl-programs";
-import { ExerciseLibraryPanel, type ExerciseRef, DND_EXERCISE, readDrop } from "@/components/program-builder";
+import { ExerciseLibraryPanel, type ExerciseRef, DND_EXERCISE, readDrop, movementAccent } from "@/components/program-builder";
 import { cn } from "@/lib/utils";
 import { useAutosave } from "@/hooks/use-autosave";
 import { SaveStatus } from "@/components/save-status";
@@ -634,8 +634,11 @@ function DayEditor({ day, setDay, exercises }: { day: any; setDay: (d: any) => v
 }
 
 function RowEditor({ row, setRow, onDelete, exercises, compact }: { row: any; setRow: (r: any) => void; onDelete?: () => void; exercises: any[]; compact?: boolean }) {
+  const exName = (exercises as any[]).find((e) => e.id === row.exercise_id)?.name ?? row.exercise_name_override ?? "";
+  const accent = movementAccent(exName);
   return (
-    <div className="rounded-md border border-border bg-secondary/20 p-2 space-y-1">
+    <div className="relative overflow-hidden rounded-md border border-border bg-secondary/20 p-2 pl-3 space-y-1">
+      <div className={`absolute left-0 top-0 h-full w-1.5 ${accent}`} aria-hidden />
       <div className="grid grid-cols-12 items-center gap-1">
         <div className="col-span-4">
         <Select value={row.exercise_id ?? "__custom"} onValueChange={(v) => setRow({ ...row, exercise_id: v === "__custom" ? null : v })}>
