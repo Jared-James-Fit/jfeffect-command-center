@@ -15,6 +15,7 @@ import {
   getBlockSummary,
   archiveBlock,
   markBlockComplete,
+  updateBlock,
 } from "@/lib/pl-programs";
 import { useAuth } from "@/lib/auth";
 import { EditBlockDatesDialog } from "@/components/edit-block-dates-dialog";
@@ -122,6 +123,16 @@ export function BlockSummaryCard({
                   <Button size="icon" variant="ghost" className="h-8 w-8"><MoreVertical className="h-4 w-4" /></Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={async () => {
+                    const next = window.prompt("Rename block", block.name ?? "");
+                    if (next == null) return;
+                    const name = next.trim();
+                    if (!name || name === block.name) return;
+                    try { await updateBlock(blockId, { name }); refresh(); toast.success("Renamed"); }
+                    catch (e: any) { toast.error(e.message); }
+                  }}>
+                    <Pencil className="mr-2 h-4 w-4" /> Rename block
+                  </DropdownMenuItem>
                   <DropdownMenuItem onClick={async () => {
                     try { await markBlockComplete(blockId); refresh(); toast.success("Block marked complete"); }
                     catch (e: any) { toast.error(e.message); }
