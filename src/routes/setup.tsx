@@ -31,37 +31,52 @@ function SetupPage() {
   const acceptCoachFn = useServerFn(acceptCoachInvite);
 
   useEffect(() => {
-    const sub = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user) {
-        setEmail(session.user.email ?? "");
-        setFullName((session.user.user_metadata as any)?.full_name ?? "");
-        setIsCoachInvite(((session.user.user_metadata as any)?.invite_role) === "coach");
-        setPhase("ready");
+    // SECURITY: Never trust a pre-existing session here. If an admin (or any
+    // other user) is already signed in, using their session would let this
+    // page change THEIR password / metadata via updateUser(). Always require
+    // a fresh invite/magic-link token from the URL and sign out any other
+    // session before consuming it.
+    let cancelled = false;
+    let unsubscribe: (() => void) | null = null;
+    (async () => {
+      const params = new URLSearchParams(window.location.search);
+      const tokenHash = params.get("token_hash");
+      const hash = window.location.hash || "";
+      const hashParams = new URLSearchParams(hash.startsWith("#") ? hash.slice(1) : hash);
+      const hashType = hashParams.get("type");
+      const hasInviteHash =
+        !!hashParams.get("access_token") &&
+        (hashType === "invite" || hashType === "magiclink" || hashType === "signup" || hashType === "recovery");
+
+      if (!tokenHash && !hasInviteHash) {
+        await supabase.auth.signOut({ scope: "local" }).catch(() => {});
+        if (!cancelled) setPhase("expired");
+        return;
       }
-    });
-    // Look for a token_hash query param (our copy-link flow that defeats
-    // email/SMS link prefetchers). If present, wait for the user to click
-    // Continue before calling verifyOtp.
-    const params = new URLSearchParams(window.location.search);
-    const tokenHash = params.get("token_hash");
-    if (tokenHash) {
-      setPhase("confirm");
-    } else {
-      // Otherwise fall back to the hash-based magic link flow (emailed links).
-      supabase.auth.getSession().then(({ data }) => {
-        if (data.session?.user) {
-          setEmail(data.session.user.email ?? "");
-          setFullName((data.session.user.user_metadata as any)?.full_name ?? "");
-          setIsCoachInvite(((data.session.user.user_metadata as any)?.invite_role) === "coach");
+
+      // Clear any other account's session before exchanging the token.
+      await supabase.auth.signOut({ scope: "local" }).catch(() => {});
+
+      if (tokenHash) {
+        if (!cancelled) setPhase("confirm");
+        return;
+      }
+
+      const sub = supabase.auth.onAuthStateChange((_event, session) => {
+        if (cancelled) return;
+        if (session?.user) {
+          setEmail(session.user.email ?? "");
+          setFullName((session.user.user_metadata as any)?.full_name ?? "");
+          setIsCoachInvite(((session.user.user_metadata as any)?.invite_role) === "coach");
           setPhase("ready");
-        } else {
-          setTimeout(() => {
-            setPhase((p) => (p === "loading" ? "expired" : p));
-          }, 1500);
         }
       });
-    }
-    return () => sub.data.subscription.unsubscribe();
+      unsubscribe = () => sub.data.subscription.unsubscribe();
+      setTimeout(() => {
+        if (!cancelled) setPhase((p) => (p === "loading" ? "expired" : p));
+      }, 4000);
+    })();
+    return () => { cancelled = true; if (unsubscribe) unsubscribe(); };
   }, []);
 
   const verifyTokenHash = async () => {
@@ -70,18 +85,32 @@ function SetupPage() {
     const tokenHash = params.get("token_hash");
     const type = (params.get("type") || "invite") as any;
     if (!tokenHash) { setVerifying(false); setPhase("expired"); return; }
-    const { error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type });
+    // Defense in depth: clear any session immediately before token exchange.
+    await supabase.auth.signOut({ scope: "local" }).catch(() => {});
+    const { data, error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type });
     setVerifying(false);
     if (error) { setPhase("expired"); return; }
+    if (data.user) {
+      setEmail(data.user.email ?? "");
+      setFullName((data.user.user_metadata as any)?.full_name ?? "");
+      setIsCoachInvite(((data.user.user_metadata as any)?.invite_role) === "coach");
+      setPhase("ready");
+    }
     // Clean the URL so a refresh doesn't try to re-use a now-spent token.
     window.history.replaceState({}, "", window.location.pathname);
-    // onAuthStateChange will flip phase to "ready".
   };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!password) return toast.error("Please enter a password");
     if (password !== confirm) return toast.error("Passwords don't match");
+    // SECURITY: confirm we're operating on the user we verified, not some
+    // pre-existing session.
+    const { data: u } = await supabase.auth.getUser();
+    if (!u.user) return toast.error("Your setup link is no longer valid. Please request a new one.");
+    if (email && u.user.email && email.toLowerCase() !== u.user.email.toLowerCase()) {
+      return toast.error("Session mismatch. Please open the setup link again.");
+    }
     setBusy(true);
     const { error } = await supabase.auth.updateUser({ password });
     if (error) { setBusy(false); return toast.error(error.message); }
