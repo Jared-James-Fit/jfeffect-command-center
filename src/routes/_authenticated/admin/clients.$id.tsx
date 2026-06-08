@@ -29,6 +29,7 @@ import { calcAge, formatHeight } from "@/lib/basic-info";
 import { Switch } from "@/components/ui/switch";
 import { COMMON_TIMEZONES } from "@/lib/pt-sessions";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { ClientExerciseNotesCard } from "@/components/client-exercise-notes-card";
 import { ProfilePictureCapture } from "@/components/profile-picture-capture";
 import { MessageThread } from "@/components/message-thread";
 import type { ConversationState } from "@/lib/messages";
