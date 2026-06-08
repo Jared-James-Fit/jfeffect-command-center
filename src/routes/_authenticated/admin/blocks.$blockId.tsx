@@ -1265,3 +1265,42 @@ function ClientPreview({ weeks, days, rows }: { weeks: any[]; days: any[]; rows:
     </div>
   );
 }
+
+function BlockStartDateControl({
+  block,
+  onChange,
+}: {
+  block: any;
+  onChange: (date: string | null) => Promise<void> | void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [value, setValue] = useState<string>(block?.start_date ?? "");
+  const endDate = computeBlockEnd(block?.start_date ?? null, block?.weeks ?? 0, block?.week_duration_days ?? 7);
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button size="sm" variant="outline" className="text-xs">
+          <CalendarDays className="mr-1 h-4 w-4" />
+          {block?.start_date ? `Starts ${format(new Date(block.start_date + "T00:00:00"), "MMM d, yyyy")}` : "Set start date"}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-72 space-y-2 p-3">
+        <Label className="text-xs">Block start date</Label>
+        <Input type="date" value={value} onChange={(e) => setValue(e.target.value)} />
+        {endDate && value && (
+          <div className="text-[11px] text-muted-foreground">
+            Ends {format(endDate, "MMM d, yyyy")} · {block?.weeks ?? 0} weeks
+          </div>
+        )}
+        <div className="flex justify-between gap-2">
+          <Button size="sm" variant="ghost" onClick={async () => { setOpen(false); setValue(""); await onChange(null); }}>
+            Clear
+          </Button>
+          <Button size="sm" onClick={async () => { setOpen(false); await onChange(value || null); }}>
+            Save
+          </Button>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
