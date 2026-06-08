@@ -65,11 +65,11 @@ export const coachNav: NavItem[] = [
 export const clientNav: NavItem[] = [
   { to: "/portal", label: "Dashboard", icon: LayoutDashboard },
   { to: "/portal/messages", label: "Messages", icon: MessageCircle },
-  { to: "/portal/program", label: "My Program", icon: FileText },
   { to: "/portal/workouts", label: "Workouts", icon: Activity },
+  { to: "/portal/nutrition-targets", label: "Nutrition", icon: Apple },
   { to: "/portal/lift-videos", label: "Lift Videos", icon: Video },
+  { to: "/portal/program", label: "My Program", icon: FileText },
   { to: "/portal/check-ins", label: "Check-Ins & Forms", icon: ClipboardCheck },
-  { to: "/portal/nutrition-targets", label: "Nutrition Targets", icon: Apple },
   { to: "/portal/progress-metrics", label: "Progress Metrics", icon: Scale },
   { to: "/portal/exercises", label: "Exercises", icon: Dumbbell },
   { to: "/portal/purchases", label: "My Purchases", icon: Package },
