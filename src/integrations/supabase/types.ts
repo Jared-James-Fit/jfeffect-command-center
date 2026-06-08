@@ -3951,6 +3951,13 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "pl_blocks_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "pl_blocks_prep_id_fkey"
             columns: ["prep_id"]
             isOneToOne: false
@@ -4295,6 +4302,13 @@ export type Database = {
           weight_class?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "pl_preps_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "pl_preps_source_template_id_fkey"
             columns: ["source_template_id"]

@@ -198,7 +198,7 @@ export async function createPrep(input: { client_id: string; title: string; goal
   return data;
 }
 
-export async function createBlock(input: { client_id: string; prep_id?: string | null; name: string; weeks: number; training_focus?: string | null; week_start_index?: number | null; source_template_id?: string | null }) {
+export async function createBlock(input: { client_id: string; prep_id?: string | null; name: string; weeks: number; training_focus?: string | null; week_start_index?: number | null; source_template_id?: string | null; status?: BlockStatus }) {
   const { data: block, error } = await sb.from("pl_blocks").insert(input as any).select("*").single();
   if (error) throw error;
   // Seed weeks + 1 day each
@@ -1025,7 +1025,7 @@ export async function applyTemplateToClient(opts: { templateId: string; clientId
       event_name: prepInfo.event_name ?? payload.prep?.event_name ?? null,
       event_date: prepInfo.event_date ?? payload.prep?.event_date ?? null,
       total_weeks: payload.prep?.total_weeks ?? null,
-      status: "Planned",
+      status: "Active",
       client_visible: opts.clientVisible ?? true,
       source_template_id: tpl.id,
     });
@@ -1034,6 +1034,7 @@ export async function applyTemplateToClient(opts: { templateId: string; clientId
         client_id: opts.clientId, prep_id: prep.id, name: b.name || "Block",
         weeks: (b.weeks_data?.length || b.weeks || 4), training_focus: b.training_focus ?? null,
         source_template_id: tpl.id,
+        status: "Active",
       });
       if (Array.isArray(b.weeks_data) && b.weeks_data.length) {
         await sb.from("pl_weeks").delete().eq("block_id", blk.id);
@@ -1083,7 +1084,7 @@ export async function applyTemplateToClient(opts: { templateId: string; clientId
       goal_type: prepInfo.goal_type,
       event_name: prepInfo.event_name ?? null,
       event_date: prepInfo.event_date ?? null,
-      status: "Planned",
+      status: "Active",
       client_visible: opts.clientVisible ?? true,
       source_template_id: tpl.id,
     });
@@ -1096,6 +1097,7 @@ export async function applyTemplateToClient(opts: { templateId: string; clientId
     weeks: tpl.weeks ?? payload.weeks ?? 4,
     training_focus: tpl.training_focus ?? null,
     source_template_id: tpl.id,
+    status: "Active",
   });
   // If payload has a structured tree, copy it. For MVP: empty seeded block + library can be enhanced later.
   if (Array.isArray(payload.weeks_data)) {
