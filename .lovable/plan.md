@@ -1,83 +1,64 @@
-## Training Block System Overhaul
+# Training Block Overhaul — Implementation Plan
 
-Large change touching DB, admin builder, client portal, and a new Archive section. Breaking into 5 phases so we can ship and validate each piece. I'll start phase 1 immediately on approval and continue straight through unless you stop me.
+This builds on the existing `pl_blocks` / `pl_weeks` / `pl_days` / `pl_exercise_rows` / `pl_row_results` / `pl_day_completions` system. No disconnected pages — everything attaches to existing screens.
 
-### Phase 1 — Data model (one migration)
+## Phase 1 — Horizontal Week Layout (everywhere)
 
-Add to `pl_blocks`:
-- `status` text — `Draft | Active | Completed | Archived`
-- `archived_at`, `completed_at` timestamps
-- `completion_method` — `auto | manual`
-- `est_minutes_per_workout` int (optional fallback)
-- (already have `start_date`, `end_date`, `weeks`, `week_duration_days`)
+Replace stacked/collapsible weeks with horizontal columns, always open, vertical divider between weeks.
 
-Add to `pl_weeks`:
-- `status` text — `Not Started | In Progress | Completed | Manually Completed`
-- `manually_completed` bool
-- `manual_completed_at`, `manual_completed_by`
-- `est_minutes` int (per-week override)
-- `training_days` text[] (Mon, Tue, …)
-- `notes` text
+Files:
+- `src/routes/_authenticated/portal/workouts.index.tsx` — replace `WeekSection` collapsibles with a horizontally scrollable strip of week columns.
+- `src/routes/_authenticated/admin/blocks.$blockId.tsx` (library editor) — same horizontal column layout.
+- `src/components/assigned-programs-card.tsx` — admin client view, same layout.
+- New shared `src/components/block-week-columns.tsx` — renders an array of weeks as horizontal columns. Each column shows: Week #, date range, training days, est time, notes, status badge, list of workouts (always expanded). Mobile = horizontal scroll snap, dividers between columns.
 
-New helpers (SQL functions):
-- `pl_week_required_workouts(week_id)` and `pl_week_completed_workouts(week_id, client_id)` for status calc.
+## Phase 2 — Block Progress Analytics
 
-RLS: keep existing (client read own, admin all); add policies for the new toggle write paths.
+New section embedded **inside** each block view (active + archived), below the week columns, above the Workout Archive list.
 
-### Phase 2 — Shared block card
+New files:
+- `src/lib/block-analytics.ts` — pure calc helpers (volume, e1RM via Epley, top set, avg RPE, completion %, PRs, trends). Only uses completed sets from `pl_row_results` filtered to that block. Respects client unit (kg/lb) — read from `clients.weight_unit` or default.
+- `src/lib/block-analytics.functions.ts` — `getBlockAnalytics(blockId)` server fn returning summary + per-week aggregates + per-exercise series. Single round trip.
+- `src/components/block-progress-section.tsx` — main UI:
+  - Summary cards (workouts done/total/%, sets done/total, total volume, avg RPE, missed workouts, manual weeks, total training time).
+  - Block graph with metric toggle (Weekly Volume default, Workouts Completed, Avg RPE, Top Set, e1RM, Completion %). Use existing `recharts` (already a shadcn dep).
+  - Exercise selector (only exercises present in this block). Exercise graph with metric toggle (Top Set default, e1RM, Volume, Avg RPE, Reps, Sets, Frequency).
+  - PRs list (Highest Load, Highest e1RM, Highest Volume Session, Highest Rep PR) with "New Block PR" badge.
+  - Block Insights (Most Improved, Most Stalled, Largest e1RM gain, Highest/Lowest compliance exercise, Avg RPE trend, Volume trend, Most consistent week) — derived rules, no AI.
+  - Compliance block (completion %, missed workouts/weeks, manual completions, "Low Compliance" flag when <70% — configurable in `clients` settings later).
+  - Flags strip (Missed Workout, Missed Week, Manual Completion, New PR, Volume Drop/Increase >20%, Load Drop, RPE Spike, Deload Week).
+  - Filters: Week, Exercise, Workout Day, Movement Category (squat/bench/deadlift/upper/lower/accessories — derived from `exercises.category` already on the table).
+  - Empty state: "No training data logged yet…"
+  - Drilldown: graph point click opens existing workout day route (`/portal/workouts/$dayId`).
 
-A reusable `<BlockCard>` (admin + client) showing:
-Name · Status badge · Duration (weeks) · Start → End · Current week · Progress % · Week strip with status pips.
+## Phase 3 — Block Card Polish (already mostly done)
 
-Progress = completed workouts / total workouts in block.
+`src/components/block-summary-card.tsx` already shows name/status/duration/dates/current week/progress %/week strip + admin Edit Dates + end-passed banner. Confirm both admin and client mount it; add to client `portal/program.tsx` if missing.
 
-### Phase 3 — Admin: editable dates + horizontal weeks
+## Phase 4 — Export
 
-- "Edit Dates" button on each block card → dialog with start/end date pickers.
-  - Changing start → recompute end from weeks × duration.
-  - Manually editing end → respect, mark `date_source=manual` on block.
-- In `blocks.$blockId.tsx`, switch week list to a horizontal scroll/grid (Week 1 | 2 | 3 | 4 …), cards expanded by default, each showing week #, range, training days, est time, notes, status, workouts.
-- Current week auto-highlighted via `isCurrentWeek` (already in `block-dates.ts`).
+Admin-only buttons in Block Progress:
+- CSV export — client-side, builds CSV string from analytics payload.
+- PDF Summary — use existing `jspdf` if present; else add `jspdf` + `jspdf-autotable`. Server fn not required.
 
-### Phase 4 — Client portal + manual completion
+## Phase 5 — Wire Into Pages
 
-- Client block view mirrors admin layout (read-only on dates).
-- Per-week "Mark Week Complete" toggle:
-  - ON → status `Manually Completed`, stamp `manual_completed_at/by`.
-  - OFF → recompute from workout completions.
-- Status auto-rolls to `Completed` when all required workouts done.
-- Block auto-rolls to `Completed` when all weeks complete; record `completion_method`.
+- `src/routes/_authenticated/portal/workouts.index.tsx` (client): for each block, render BlockSummaryCard → horizontal week columns → `<BlockProgressSection clientView blockId />` → existing archive section stays below.
+- `src/components/assigned-programs-card.tsx` (admin client detail page): same structure, admin variant (export buttons, edit-archived toggle when block is Archived).
+- Archive: clicking an archived block opens a read-only block detail with the same BlockProgressSection.
 
-### Phase 5 — Workout Archive
+## Out of scope (explicit)
 
-New route `/_authenticated/admin/archives/blocks` and a "Workout Archive" section on the client program page.
+- No new analytics route, no separate dashboard.
+- No data backfill / migrations beyond what's needed for movement categories — `exercises.category` already exists.
+- No unit conversion. Use client's `weight_unit` as-is.
+- No "Planned vs Completed" weight tracking beyond what's already stored (we use prescribed vs logged from existing rows).
 
-- Archive triggers:
-  - All weeks completed → auto-archive
-  - Admin "Mark block complete" → archive
-  - End date passed → admin gets "Archive now?" prompt
-- Archived card shows: name, range, duration, completion status, completed/total workouts, archived date.
-- Click → read-only block detail (weeks, workouts, weights, reps, RPE, notes, missed, manual flags).
-- Admin gets "Edit Archived Block" toggle that unlocks editing; client never can.
-- Sort dropdown: Newest, Oldest, Name, Date range, Completion status.
+## Open Questions
 
-### Files I expect to touch
+1. **Mobile horizontal weeks** — swipe-snap one week per screen, or free horizontal scroll showing partial next week? (default: free scroll with snap on column edges)
+2. **Low Compliance threshold** — global 70% default, or per-client setting? (default: global 70%, hardcoded for now)
+3. **PDF export** — full styled report or simple table-only summary? (default: table-only summary to avoid heavy deps)
+4. **Movement category source** — use `exercises.category` text as-is, or add a normalized enum mapping? (default: lowercase string match on existing `category` field)
 
-- `supabase/migrations/<new>.sql` (phase 1)
-- `src/lib/block-dates.ts` (extend with status calc)
-- `src/lib/blocks.functions.ts` (new — toggle/complete/archive serverFns)
-- `src/components/block-card.tsx` (new)
-- `src/components/block-week-strip.tsx` (new)
-- `src/components/edit-block-dates-dialog.tsx` (new)
-- `src/routes/_authenticated/admin/blocks.$blockId.tsx`
-- `src/routes/_authenticated/admin/client-programs.$clientId.tsx`
-- `src/routes/_authenticated/admin/archives.tsx` (add blocks tab) OR new `archives.blocks.tsx`
-- `src/routes/_authenticated/portal/program.tsx` and `portal/workouts.index.tsx`
-
-### Open questions before I start
-
-1. **End-date "passed" archive prompt** — should it appear as a banner on the admin block card, or as a notification in the bell? (I'll default to a banner on the card unless you say otherwise.)
-2. **Client manual toggle** — confirm clients can toggle this themselves with no admin approval. (I'll assume yes.)
-3. **Archive location** — extend the existing `admin/archives.tsx` with a "Blocks" tab, or create a separate `archives.blocks.tsx`? (I'll extend the existing page.)
-
-If those defaults are fine just say "go" and I'll start phase 1. Otherwise answer the 3 questions and I'll adjust.
+Reply with answers or "go with defaults" and I'll ship Phases 1–5 in one batch.
