@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, Star, GripVertical, Check, Loader2, AlertCircle, Circle, Plus, Link as LinkIcon, Unlink } from "lucide-react";
+import { Search, Star, GripVertical, Check, Loader2, AlertCircle, Circle, Plus, Link as LinkIcon, Unlink, CloudOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // ---------------- Drag & drop payload helpers ----------------
@@ -62,28 +62,69 @@ export const DENSITY_CLASSES: Record<Density, { row: string; cell: string; input
 
 // ---------------- Save state pill ----------------
 
-export type SaveState = "idle" | "saving" | "saved" | "error";
+export type SaveState = "idle" | "saving" | "saved" | "error" | "offline" | "pending";
+
+// Global event so a "Save now" button or other components can flush pending
+// debounced CellInput timers without re-plumbing every input.
+export const PB_FLUSH_EVENT = "pb:flush-cells";
+export function flushPendingCells() {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent(PB_FLUSH_EVENT));
+}
 
 export function useSaveState() {
   const [state, setState] = useState<SaveState>("idle");
+  const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
+  const [online, setOnline] = useState(typeof navigator === "undefined" ? true : navigator.onLine);
+  const inflight = useRef(0);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const up = () => setOnline(true);
+    const down = () => { setOnline(false); setState((s) => (s === "saving" || s === "pending" ? "offline" : s)); };
+    window.addEventListener("online", up);
+    window.addEventListener("offline", down);
+    return () => { window.removeEventListener("online", up); window.removeEventListener("offline", down); };
+  }, []);
+
   const wrap = async <T,>(fn: () => Promise<T>): Promise<T | undefined> => {
+    inflight.current++;
     setState("saving");
     try {
       const r = await fn();
-      setState("saved");
-      if (timer.current) clearTimeout(timer.current);
-      timer.current = setTimeout(() => setState("idle"), 1500);
+      inflight.current = Math.max(0, inflight.current - 1);
+      if (inflight.current === 0) {
+        setState("saved");
+        setLastSavedAt(Date.now());
+        if (timer.current) clearTimeout(timer.current);
+        timer.current = setTimeout(() => setState("idle"), 2500);
+      }
       return r;
     } catch (e) {
+      inflight.current = Math.max(0, inflight.current - 1);
       setState("error");
       throw e;
     }
   };
-  return { state, wrap, setState };
+
+  // Allow CellInput / external typing to mark the builder dirty so the pill flips
+  // from "Saved" to "Unsaved" without waiting for the network round-trip.
+  const markPending = () => setState((s) => (s === "saving" ? s : "pending"));
+
+  return { state, wrap, setState, lastSavedAt, online, markPending };
 }
 
-export function SaveStatePill({ state }: { state: SaveState }) {
+function timeAgo(ts: number) {
+  const s = Math.floor((Date.now() - ts) / 1000);
+  if (s < 5) return "just now";
+  if (s < 60) return `${s}s ago`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ago`;
+  return `${Math.floor(m / 60)}h ago`;
+}
+
+export function SaveStatePill({ state, lastSavedAt }: { state: SaveState; lastSavedAt?: number | null }) {
   if (state === "saving")
     return (
       <Badge variant="outline" className="gap-1 text-[10px] font-normal">
@@ -93,13 +134,25 @@ export function SaveStatePill({ state }: { state: SaveState }) {
   if (state === "saved")
     return (
       <Badge variant="outline" className="gap-1 border-emerald-500/40 text-emerald-500 text-[10px] font-normal">
-        <Check className="h-3 w-3" /> Saved
+        <Check className="h-3 w-3" /> {lastSavedAt ? `Saved ${timeAgo(lastSavedAt)}` : "Saved"}
       </Badge>
     );
   if (state === "error")
     return (
       <Badge variant="outline" className="gap-1 border-destructive/40 text-destructive text-[10px] font-normal">
-        <AlertCircle className="h-3 w-3" /> Error
+        <AlertCircle className="h-3 w-3" /> Save failed
+      </Badge>
+    );
+  if (state === "offline")
+    return (
+      <Badge variant="outline" className="gap-1 border-amber-500/40 text-amber-500 text-[10px] font-normal">
+        <CloudOff className="h-3 w-3" /> Offline — queued
+      </Badge>
+    );
+  if (state === "pending")
+    return (
+      <Badge variant="outline" className="gap-1 text-[10px] font-normal text-muted-foreground">
+        <Circle className="h-2 w-2 fill-current animate-pulse" /> Unsaved changes
       </Badge>
     );
   return (
