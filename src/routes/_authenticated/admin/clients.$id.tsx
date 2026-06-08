@@ -14,7 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, ExternalLink, Save, Trash2, Mail, Archive, KeyRound, Copy, CheckCircle2, AlertCircle, BellRing, Tag, Dumbbell } from "lucide-react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
-import { inviteClient, deleteClient, getSetupLink, getPasswordResetLink, sendPasswordReset, markSetupComplete, setNeedsAdminHelp } from "@/lib/clients.functions";
+import { inviteClient, deleteClient, getSetupLink, getPasswordResetLink, sendPasswordReset, markSetupComplete, setNeedsAdminHelp, setClientPassword } from "@/lib/clients.functions";
 import { deactivateClient, reactivateClient, DEACTIVATION_REASONS } from "@/lib/client-deactivation.functions";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { TrainingPhasesPanel } from "@/components/training-phases-panel";
@@ -100,6 +100,10 @@ function ClientDetail() {
   const getSetupLinkFn = useServerFn(getSetupLink);
   const sendResetFn = useServerFn(sendPasswordReset);
   const getResetLinkFn = useServerFn(getPasswordResetLink);
+  const setPasswordFn = useServerFn(setClientPassword);
+  const [pwOpen, setPwOpen] = useState(false);
+  const [pwValue, setPwValue] = useState("");
+  const [pwSaving, setPwSaving] = useState(false);
   const markCompleteFn = useServerFn(markSetupComplete);
   const needsHelpFn = useServerFn(setNeedsAdminHelp);
   const deactivateFn = useServerFn(deactivateClient);
@@ -781,6 +785,9 @@ function ClientDetail() {
                 <Button size="sm" variant="outline" onClick={copySetupLink}><Copy className="mr-2 h-4 w-4" />Copy setup link</Button>
                 <Button size="sm" variant="outline" onClick={sendReset}><KeyRound className="mr-2 h-4 w-4" />Send password reset</Button>
                 <Button size="sm" variant="outline" onClick={copyResetLink}><Copy className="mr-2 h-4 w-4" />Copy reset link</Button>
+                <Button size="sm" variant="outline" onClick={() => { setPwValue(""); setPwOpen(true); }}>
+                  <KeyRound className="mr-2 h-4 w-4" />Set password
+                </Button>
                 <Button size="sm" variant="outline" onClick={markComplete}><CheckCircle2 className="mr-2 h-4 w-4" />Mark setup complete</Button>
                 <Button size="sm" variant={form.needs_admin_help ? "default" : "outline"} onClick={toggleNeedsHelp}>
                   <AlertCircle className="mr-2 h-4 w-4" />{form.needs_admin_help ? "Clear admin help flag" : "Mark needs admin help"}
@@ -821,6 +828,53 @@ function ClientDetail() {
         </AlertDialogContent>
       </AlertDialog>
       <PriceCardPickerDialog open={priceCardOpen} onClose={() => setPriceCardOpen(false)} fixedClientId={id} />
+
+      <AlertDialog open={pwOpen} onOpenChange={(o) => !pwSaving && setPwOpen(o)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Set password for {form.full_name}</AlertDialogTitle>
+            <AlertDialogDescription>
+              This sets the client's login password directly. Share it with them securely — they can change it later from their account settings.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="admin-set-pw">New password</Label>
+            <Input
+              id="admin-set-pw"
+              type="text"
+              autoComplete="new-password"
+              value={pwValue}
+              onChange={(e) => setPwValue(e.target.value)}
+              placeholder="At least 8 characters"
+            />
+            <p className="text-xs text-muted-foreground">Minimum 8 characters.</p>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={pwSaving}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={pwSaving || pwValue.length < 8}
+              onClick={async (e) => {
+                e.preventDefault();
+                setPwSaving(true);
+                const t = toast.loading("Setting password…");
+                try {
+                  await setPasswordFn({ data: { clientId: id, password: pwValue } });
+                  toast.success("Password updated", { id: t });
+                  setPwOpen(false);
+                  setPwValue("");
+                  qc.invalidateQueries({ queryKey: ["client", id] });
+                } catch (err: any) {
+                  toast.error(err?.message ?? "Failed to set password", { id: t });
+                } finally {
+                  setPwSaving(false);
+                }
+              }}
+            >
+              {pwSaving ? "Saving…" : "Set password"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog open={deactivateOpen} onOpenChange={setDeactivateOpen}>
         <AlertDialogContent>
