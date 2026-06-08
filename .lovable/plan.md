@@ -1,51 +1,83 @@
-A four-part refactor. I'll ship them as independent commits so each can be reviewed.
+## Training Block System Overhaul
 
-## 1. Gear icon + profile picture access (admin / coach / client)
+Large change touching DB, admin builder, client portal, and a new Archive section. Breaking into 5 phases so we can ship and validate each piece. I'll start phase 1 immediately on approval and continue straight through unless you stop me.
 
-- Add a `Settings` (gear) button in the app shell header (`src/components/app-shell.tsx`) that links to the role's account page:
-  - admin → `/admin/account`
-  - coach → reuse admin account or coach-specific page if present
-  - client → `/portal/account`
-  - member → `/m/account`
-- Ensure every account page exposes the profile-picture editor:
-  - admin/coach: already have `AccountProfileSettings` — make sure `/admin/account` and any coach account route render it (it's currently missing from `admin/account.tsx`).
-  - client: surface `ProfilePictureCapture` in `/portal/account` (today only the gate forces it; add a "Replace photo" entry there too).
+### Phase 1 — Data model (one migration)
 
-## 2. Tap-to-expand avatar (app-wide)
+Add to `pl_blocks`:
+- `status` text — `Draft | Active | Completed | Archived`
+- `archived_at`, `completed_at` timestamps
+- `completion_method` — `auto | manual`
+- `est_minutes_per_workout` int (optional fallback)
+- (already have `start_date`, `end_date`, `weeks`, `week_duration_days`)
 
-- Update `src/components/user-avatar.tsx` to make the avatar clickable. On click, open a dialog (shadcn `Dialog`) that shows the full-resolution signed image centered on a dim backdrop.
-- Add an `expandable` prop (default `true`) so call-sites that need a non-interactive avatar (e.g. inside a `<button>`) can opt out.
-- Because `UserAvatar` is used everywhere, this single change covers admin/coach/client/member.
+Add to `pl_weeks`:
+- `status` text — `Not Started | In Progress | Completed | Manually Completed`
+- `manually_completed` bool
+- `manual_completed_at`, `manual_completed_by`
+- `est_minutes` int (per-week override)
+- `training_days` text[] (Mon, Tue, …)
+- `notes` text
 
-## 3. Autosave + inline "Saved" indicator
+New helpers (SQL functions):
+- `pl_week_required_workouts(week_id)` and `pl_week_completed_workouts(week_id, client_id)` for status calc.
 
-- New component `src/components/saved-indicator.tsx` — tiny inline `Saving… / Saved ✓ / Error` text that fades after ~1.5s. Uses muted-foreground + a check icon, no toast.
-- New hook `src/hooks/use-autosave-field.ts` — debounced (600ms) save wrapper that drives a `SavedIndicator` state.
-- Apply to the highest-friction forms first (keep this PR bounded):
-  - `AccountProfileSettings` display name → autosave, drop the Save button.
-  - `BasicInfoForm` fields (admin client profile + client portal) → autosave per field, keep one Save button only under multi-field grouped sections that genuinely need an explicit commit (e.g. address block where partial values are invalid).
-  - Targets / schedules / nutrition panels that currently have per-field save buttons → convert to autosave with indicator.
-- Keep explicit Save buttons for: password change, sending invites/links, anything destructive, and forms whose validation requires a complete set (e.g. creating a new client).
+RLS: keep existing (client read own, admin all); add policies for the new toggle write paths.
 
-## 4. Simplify admin/coach messenger to match client messenger
+### Phase 2 — Shared block card
 
-- Diff `src/components/message-thread.tsx` rendering between admin entry points and the client portal (`/portal/messages`). Strip admin-only chrome (extra panels, action bars, status pills) so it visually matches the client thread: bubbles, composer, send button. Keep underlying message data/sending logic unchanged.
+A reusable `<BlockCard>` (admin + client) showing:
+Name · Status badge · Duration (weeks) · Start → End · Current week · Progress % · Week strip with status pips.
 
-## Technical details (for reference)
+Progress = completed workouts / total workouts in block.
 
-- Saved indicator API:
-  ```ts
-  type SaveState = "idle" | "saving" | "saved" | "error";
-  <SavedIndicator state={state} />
-  ```
-- Autosave hook signature:
-  ```ts
-  const { state, onChange } = useAutosaveField(value, async (next) => { /* save */ });
-  ```
-- Avatar lightbox: reuses signed URL already fetched; falls back to initials view (no expansion) when there's no image.
-- Gear icon placement: right side of `PageHeader` / shell top bar, hidden on `/auth` and setup routes.
+### Phase 3 — Admin: editable dates + horizontal weeks
 
-## Out of scope (ask before doing)
+- "Edit Dates" button on each block card → dialog with start/end date pickers.
+  - Changing start → recompute end from weeks × duration.
+  - Manually editing end → respect, mark `date_source=manual` on block.
+- In `blocks.$blockId.tsx`, switch week list to a horizontal scroll/grid (Week 1 | 2 | 3 | 4 …), cards expanded by default, each showing week #, range, training days, est time, notes, status, workouts.
+- Current week auto-highlighted via `isCurrentWeek` (already in `block-dates.ts`).
 
-- I will NOT touch authentication flows, RLS, or the database. No migrations.
-- Won't convert *every* form to autosave — only the ones called out. Tell me if you want a specific screen included.
+### Phase 4 — Client portal + manual completion
+
+- Client block view mirrors admin layout (read-only on dates).
+- Per-week "Mark Week Complete" toggle:
+  - ON → status `Manually Completed`, stamp `manual_completed_at/by`.
+  - OFF → recompute from workout completions.
+- Status auto-rolls to `Completed` when all required workouts done.
+- Block auto-rolls to `Completed` when all weeks complete; record `completion_method`.
+
+### Phase 5 — Workout Archive
+
+New route `/_authenticated/admin/archives/blocks` and a "Workout Archive" section on the client program page.
+
+- Archive triggers:
+  - All weeks completed → auto-archive
+  - Admin "Mark block complete" → archive
+  - End date passed → admin gets "Archive now?" prompt
+- Archived card shows: name, range, duration, completion status, completed/total workouts, archived date.
+- Click → read-only block detail (weeks, workouts, weights, reps, RPE, notes, missed, manual flags).
+- Admin gets "Edit Archived Block" toggle that unlocks editing; client never can.
+- Sort dropdown: Newest, Oldest, Name, Date range, Completion status.
+
+### Files I expect to touch
+
+- `supabase/migrations/<new>.sql` (phase 1)
+- `src/lib/block-dates.ts` (extend with status calc)
+- `src/lib/blocks.functions.ts` (new — toggle/complete/archive serverFns)
+- `src/components/block-card.tsx` (new)
+- `src/components/block-week-strip.tsx` (new)
+- `src/components/edit-block-dates-dialog.tsx` (new)
+- `src/routes/_authenticated/admin/blocks.$blockId.tsx`
+- `src/routes/_authenticated/admin/client-programs.$clientId.tsx`
+- `src/routes/_authenticated/admin/archives.tsx` (add blocks tab) OR new `archives.blocks.tsx`
+- `src/routes/_authenticated/portal/program.tsx` and `portal/workouts.index.tsx`
+
+### Open questions before I start
+
+1. **End-date "passed" archive prompt** — should it appear as a banner on the admin block card, or as a notification in the bell? (I'll default to a banner on the card unless you say otherwise.)
+2. **Client manual toggle** — confirm clients can toggle this themselves with no admin approval. (I'll assume yes.)
+3. **Archive location** — extend the existing `admin/archives.tsx` with a "Blocks" tab, or create a separate `archives.blocks.tsx`? (I'll extend the existing page.)
+
+If those defaults are fine just say "go" and I'll start phase 1. Otherwise answer the 3 questions and I'll adjust.

@@ -852,6 +852,185 @@ export async function getCompletedHistory(clientId: string) {
   return { preps: preps ?? [], blocks: blocks ?? [] };
 }
 
+/* ---------------------------------------------------------------------- */
+/* Block summary, week status, archive helpers (training-block overhaul). */
+/* ---------------------------------------------------------------------- */
+
+export type WeekStatus = "Not Started" | "In Progress" | "Completed" | "Manually Completed";
+
+export interface BlockSummaryWeek {
+  id: string;
+  week_index: number;
+  start_date: string | null;
+  end_date: string | null;
+  date_source: string | null;
+  status: WeekStatus;
+  manually_completed: boolean;
+  manual_completed_at: string | null;
+  manual_completed_by: string | null;
+  est_minutes: number | null;
+  training_days: string[];
+  notes: string | null;
+  day_count: number;
+  completed_count: number;
+}
+
+export interface BlockSummary {
+  block: any;
+  weeks: BlockSummaryWeek[];
+  total_workouts: number;
+  completed_workouts: number;
+  progress_pct: number;
+  current_week_index: number | null;
+}
+
+/** Build a normalized summary for a block: weeks, status, progress, current week. */
+export async function getBlockSummary(blockId: string): Promise<BlockSummary | null> {
+  const { data: block } = await sb.from("pl_blocks").select("*").eq("id", blockId).maybeSingle();
+  if (!block) return null;
+  const { data: weeksRaw } = await sb.from("pl_weeks").select("*").eq("block_id", blockId).order("week_index");
+  const weeks = (weeksRaw ?? []) as any[];
+  const weekIds = weeks.map((w) => w.id);
+  const { data: days } = weekIds.length
+    ? await sb.from("pl_days").select("id, week_id").in("week_id", weekIds)
+    : { data: [] as any[] };
+  const dayIds = (days ?? []).map((d: any) => d.id);
+  const { data: comps } = dayIds.length
+    ? await sb.from("pl_day_completions").select("day_id, client_id, completed_at").in("day_id", dayIds).eq("client_id", block.client_id)
+    : { data: [] as any[] };
+  const completedDayIds = new Set(
+    (comps ?? []).filter((c: any) => c.completed_at).map((c: any) => c.day_id),
+  );
+  const dayByWeek = new Map<string, string[]>();
+  for (const d of (days ?? []) as any[]) {
+    const arr = dayByWeek.get(d.week_id) ?? [];
+    arr.push(d.id);
+    dayByWeek.set(d.week_id, arr);
+  }
+  const summaryWeeks: BlockSummaryWeek[] = weeks.map((w) => {
+    const dIds = dayByWeek.get(w.id) ?? [];
+    const doneCount = dIds.filter((id) => completedDayIds.has(id)).length;
+    return {
+      id: w.id,
+      week_index: w.week_index,
+      start_date: w.start_date ?? null,
+      end_date: w.end_date ?? null,
+      date_source: w.date_source ?? null,
+      status: (w.status ?? "Not Started") as WeekStatus,
+      manually_completed: !!w.manually_completed,
+      manual_completed_at: w.manual_completed_at ?? null,
+      manual_completed_by: w.manual_completed_by ?? null,
+      est_minutes: w.est_minutes ?? null,
+      training_days: w.training_days ?? [],
+      notes: w.notes ?? null,
+      day_count: dIds.length,
+      completed_count: doneCount,
+    };
+  });
+  const total = summaryWeeks.reduce((s, w) => s + w.day_count, 0);
+  const done = summaryWeeks.reduce((s, w) => s + w.completed_count, 0);
+  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+
+  // Current week: by status (In Progress / Not Started after a Completed),
+  // then by date range if block has start_date.
+  let currentWeekIndex: number | null = null;
+  const sd: string | null = block.start_date ?? null;
+  if (sd) {
+    const dur = block.week_duration_days ?? 7;
+    const start = new Date(sd + "T00:00:00");
+    if (!isNaN(start.getTime())) {
+      const ms = Date.now() - start.getTime();
+      const idx = Math.floor(ms / (dur * 86400000)) + 1;
+      if (idx >= 1 && idx <= summaryWeeks.length) currentWeekIndex = idx;
+    }
+  }
+  if (currentWeekIndex == null) {
+    const firstUnfinished = summaryWeeks.find(
+      (w) => w.status === "In Progress" || w.status === "Not Started",
+    );
+    if (firstUnfinished) currentWeekIndex = firstUnfinished.week_index;
+  }
+
+  return {
+    block,
+    weeks: summaryWeeks,
+    total_workouts: total,
+    completed_workouts: done,
+    progress_pct: pct,
+    current_week_index: currentWeekIndex,
+  };
+}
+
+/** Toggle a week's manual completion flag. Re-runs status calc via DB trigger fallback. */
+export async function setWeekManualComplete(weekId: string, on: boolean, userId?: string | null) {
+  const patch: Record<string, any> = {
+    manually_completed: on,
+    manual_completed_at: on ? new Date().toISOString() : null,
+    manual_completed_by: on ? userId ?? null : null,
+  };
+  const { error } = await sb.from("pl_weeks").update(patch).eq("id", weekId);
+  if (error) throw error;
+  // Recompute status (function exists in DB).
+  await sb.rpc("pl_recompute_week_status", { _week_id: weekId });
+  // Pull the block_id so we can also refresh block status.
+  const { data: w } = await sb.from("pl_weeks").select("block_id").eq("id", weekId).maybeSingle();
+  if (w?.block_id) await sb.rpc("pl_recompute_block_status", { _block_id: w.block_id });
+}
+
+export async function archiveBlock(blockId: string, userId?: string | null) {
+  const { error } = await sb.from("pl_blocks").update({
+    status: "Archived",
+    archived: true,
+    archived_at: new Date().toISOString(),
+    archived_by: userId ?? null,
+  }).eq("id", blockId);
+  if (error) throw error;
+}
+
+export async function unarchiveBlock(blockId: string) {
+  const { error } = await sb.from("pl_blocks").update({
+    status: "Active",
+    archived: false,
+    archived_at: null,
+    archived_by: null,
+  }).eq("id", blockId);
+  if (error) throw error;
+}
+
+export async function markBlockComplete(blockId: string, opts?: { archive?: boolean }) {
+  const { error } = await sb.from("pl_blocks").update({
+    status: opts?.archive ? "Archived" : "Completed",
+    completed_at: new Date().toISOString(),
+    completion_method: "manual",
+    archived: !!opts?.archive,
+    archived_at: opts?.archive ? new Date().toISOString() : null,
+  }).eq("id", blockId);
+  if (error) throw error;
+}
+
+/** List archived blocks for a client (workout archive). */
+export async function listArchivedBlocks(clientId: string) {
+  const { data } = await sb
+    .from("pl_blocks")
+    .select("*")
+    .eq("client_id", clientId)
+    .or("status.eq.Archived,archived.eq.true")
+    .order("archived_at", { ascending: false, nullsFirst: false });
+  return (data ?? []) as any[];
+}
+
+/** Set the block end date manually (marks the end date as overridden). */
+export async function setBlockEndDate(blockId: string, endDate: string | null) {
+  const { error } = await sb.from("pl_blocks").update({ end_date: endDate }).eq("id", blockId);
+  if (error) throw error;
+}
+
+/** Update per-week schedule fields (training days, est minutes, notes). */
+export async function updateWeekMeta(weekId: string, patch: Partial<{ training_days: string[]; est_minutes: number | null; notes: string }>) {
+  const { error } = await sb.from("pl_weeks").update(patch).eq("id", weekId);
+  if (error) throw error;
+}
+
 export const PREP_STATUSES: PrepStatus[] = ["Planned", "Active", "Completed", "Archived"];
 export const BLOCK_STATUSES: BlockStatus[] = ["Draft", "Active", "Completed", "Archived"];
 

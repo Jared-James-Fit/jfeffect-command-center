@@ -3914,9 +3914,12 @@ export type Database = {
           client_id: string
           client_visible: boolean
           coach_notes: string | null
+          completed_at: string | null
+          completion_method: string | null
           created_at: string
           created_by: string | null
           end_date: string | null
+          est_minutes_per_workout: number | null
           goal: string | null
           id: string
           name: string
@@ -3938,9 +3941,12 @@ export type Database = {
           client_id: string
           client_visible?: boolean
           coach_notes?: string | null
+          completed_at?: string | null
+          completion_method?: string | null
           created_at?: string
           created_by?: string | null
           end_date?: string | null
+          est_minutes_per_workout?: number | null
           goal?: string | null
           id?: string
           name: string
@@ -3962,9 +3968,12 @@ export type Database = {
           client_id?: string
           client_visible?: boolean
           coach_notes?: string | null
+          completed_at?: string | null
+          completion_method?: string | null
           created_at?: string
           created_by?: string | null
           end_date?: string | null
+          est_minutes_per_workout?: number | null
           goal?: string | null
           id?: string
           name?: string
@@ -4559,9 +4568,15 @@ export type Database = {
           created_at: string
           date_source: string
           end_date: string | null
+          est_minutes: number | null
           id: string
+          manual_completed_at: string | null
+          manual_completed_by: string | null
+          manually_completed: boolean
           notes: string | null
           start_date: string | null
+          status: string
+          training_days: string[]
           updated_at: string
           week_index: number
         }
@@ -4570,9 +4585,15 @@ export type Database = {
           created_at?: string
           date_source?: string
           end_date?: string | null
+          est_minutes?: number | null
           id?: string
+          manual_completed_at?: string | null
+          manual_completed_by?: string | null
+          manually_completed?: boolean
           notes?: string | null
           start_date?: string | null
+          status?: string
+          training_days?: string[]
           updated_at?: string
           week_index: number
         }
@@ -4581,9 +4602,15 @@ export type Database = {
           created_at?: string
           date_source?: string
           end_date?: string | null
+          est_minutes?: number | null
           id?: string
+          manual_completed_at?: string | null
+          manual_completed_by?: string | null
+          manually_completed?: boolean
           notes?: string | null
           start_date?: string | null
+          status?: string
+          training_days?: string[]
           updated_at?: string
           week_index?: number
         }
@@ -5283,6 +5310,16 @@ export type Database = {
         Returns: number
       }
       ping_client_activity: { Args: { _route?: string }; Returns: undefined }
+      pl_recompute_block_status: {
+        Args: { _block_id: string }
+        Returns: string
+      }
+      pl_recompute_week_status: { Args: { _week_id: string }; Returns: string }
+      pl_week_completed_workouts: {
+        Args: { _client_id: string; _week_id: string }
+        Returns: number
+      }
+      pl_week_required_workouts: { Args: { _week_id: string }; Returns: number }
       purge_old_client_media: { Args: never; Returns: undefined }
       read_email_batch: {
         Args: { batch_size: number; queue_name: string; vt: number }

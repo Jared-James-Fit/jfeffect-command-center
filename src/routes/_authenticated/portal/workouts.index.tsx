@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { usePortalUserId } from "@/lib/client-impersonation";
 import { PageHeader } from "@/components/app-shell";
@@ -7,7 +7,11 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Clock, CheckCircle2, Activity, FileText, Dumbbell, ChevronRight, Play, ChevronDown, CalendarRange, Crosshair } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { getClientWorkouts, durationRange } from "@/lib/pl-programs";
+import { Switch } from "@/components/ui/switch";
+import { getClientWorkouts, durationRange, setWeekManualComplete } from "@/lib/pl-programs";
+import { useAuth } from "@/lib/auth";
+import { toast } from "sonner";
+import { WorkoutArchiveSection } from "@/components/workout-archive-section";
 import { useState } from "react";
 import { weekDisplayRange, formatWeekRange, isCurrentWeek } from "@/lib/block-dates";
 import { format, parseISO } from "date-fns";
@@ -85,6 +89,7 @@ function WorkoutsPage() {
             <BlockSection key={block?.id ?? "none"} block={block} weeks={[...weeks.values()]} />
           ))
         )}
+        {client?.id && <WorkoutArchiveSection clientId={client.id} mode="client" />}
       </div>
     </>
   );
@@ -128,11 +133,20 @@ function BlockSection({ block, weeks }: { block: any; weeks: { week: any; entrie
 }
 
 function WeekSection({ block, week, entries, defaultOpen }: { block: any; week: any; entries: any[]; defaultOpen: boolean }) {
+  const qc = useQueryClient();
+  const { user } = useAuth();
   const range = week ? weekDisplayRange(block, week) : null;
   const isNow = isCurrentWeek(range);
   const [open, setOpen] = useState(defaultOpen || isNow);
   const totalMin = entries.reduce((s, it) => s + (it.day.duration_override_min ?? it.day.duration_estimate_min ?? 60), 0);
   const doneCount = entries.filter((it) => it.completion?.completed_at).length;
+  const status: string = week?.status ?? "Not Started";
+  const manual = !!week?.manually_completed;
+  const statusTone =
+    status === "Completed" ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-500"
+    : status === "Manually Completed" ? "border-sky-500/40 bg-sky-500/10 text-sky-500"
+    : status === "In Progress" ? "border-amber-500/40 bg-amber-500/10 text-amber-500"
+    : "border-muted-foreground/30 bg-muted/30 text-muted-foreground";
   return (
     <Card className="overflow-hidden">
       <button
@@ -154,6 +168,7 @@ function WeekSection({ block, week, entries, defaultOpen }: { block: any; week: 
                 <Crosshair className="mr-1 h-3 w-3" /> Current Week
               </Badge>
             )}
+            {week && <Badge variant="outline" className={`text-[10px] ${statusTone}`}>{status}</Badge>}
           </div>
           <div className="text-[11px] text-muted-foreground">
             {entries.length} workout{entries.length === 1 ? "" : "s"}
@@ -165,6 +180,22 @@ function WeekSection({ block, week, entries, defaultOpen }: { block: any; week: 
       </button>
       {open && (
         <div className="grid gap-2 border-t border-border p-2">
+          {week && (
+            <label className="flex items-center justify-between gap-2 rounded-md border border-border bg-secondary/30 p-2 text-xs cursor-pointer">
+              <span className="font-semibold">Mark Week Complete</span>
+              <Switch
+                checked={manual}
+                onCheckedChange={async (v) => {
+                  try {
+                    await setWeekManualComplete(week.id, v, user?.id ?? null);
+                    qc.invalidateQueries({ queryKey: ["my-workouts"] });
+                    qc.invalidateQueries({ queryKey: ["block-summary"] });
+                    toast.success(v ? "Week marked complete" : "Manual flag removed");
+                  } catch (e: any) { toast.error(e.message); }
+                }}
+              />
+            </label>
+          )}
           {entries.map((it) => (
             <Link
               key={it.day.id}
