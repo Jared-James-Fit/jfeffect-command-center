@@ -138,7 +138,17 @@ function NewFormDialog({ open, onPick, onClose }: { open: boolean; onPick: (k: N
   );
 }
 
-function FormRow({ form, onEdit }: { form: NfForm; onEdit: () => void }) {
+function FormRow({
+  form,
+  selected,
+  onSelect,
+  onEdit,
+}: {
+  form: NfForm;
+  selected: boolean;
+  onSelect: (checked: boolean) => void;
+  onEdit: () => void;
+}) {
   const qc = useQueryClient();
   const { data: questions = [] } = useQuery({
     queryKey: ["nf-questions", form.id],
@@ -156,7 +166,9 @@ function FormRow({ form, onEdit }: { form: NfForm; onEdit: () => void }) {
   return (
     <Card className="border-border bg-card p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
+        <div className="flex min-w-0 items-start gap-3">
+          <Checkbox checked={selected} onCheckedChange={(checked) => onSelect(checked === true)} aria-label={`Select ${form.title}`} />
+          <div className="min-w-0">
           <div className="flex items-center gap-2">
             <div className="text-base font-black">{form.title}</div>
             <Badge variant="outline" className="text-[10px]">{kindLabel}</Badge>
@@ -171,6 +183,7 @@ function FormRow({ form, onEdit }: { form: NfForm; onEdit: () => void }) {
           <div className="mt-1 text-xs text-muted-foreground">
             {form.kind === "native" ? `${questions.length} questions` : (form.external_url ? "External link set" : "No URL yet")}
             {" · "}{assignedCount}{" · "}{form.recurrence}
+          </div>
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
