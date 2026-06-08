@@ -47,7 +47,7 @@ export function ClientTrainingScheduleGate({ children }: { children: ReactNode }
             </p>
           </div>
         </div>
-        <TrainingScheduleCard client={client as any} editable />
+        <TrainingScheduleCard client={client as any} editable defaultEditing />
       </Card>
     </div>
   );
