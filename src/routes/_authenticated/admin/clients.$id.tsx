@@ -526,6 +526,7 @@ function ClientDetail() {
 
         <TabsContent value="training" className="grid gap-6 md:grid-cols-3">
           <div className="md:col-span-3"><TrainingScheduleCard client={form} /></div>
+          <AssignedProgramsCard clientId={id} mode="admin" />
           <TrainingPhasesPanel clientId={id} />
           <ImportantDatesPanel clientId={id} />
         </TabsContent>
