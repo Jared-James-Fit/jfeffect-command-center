@@ -27,7 +27,7 @@ import {
 import {
   ExerciseLibraryPanel, CellInput, CopyWeekDialog, useDensity, DENSITY_CLASSES,
   useSaveState, SaveStatePill, readDrop, setDragRow, movementAccent, inferPriority,
-  EditScopeDialog, LinkBadge, type EditScopeChoice, type ExerciseRef,
+  EditScopeDialog, LinkBadge, flushPendingCells, type EditScopeChoice, type ExerciseRef,
 } from "@/components/program-builder";
 import { cn } from "@/lib/utils";
 
@@ -281,7 +281,18 @@ function BlockEditor() {
             <ArrowLeft className="mr-1 h-4 w-4" /> Back to client programs
           </Link>
           <div className="ml-auto flex flex-wrap items-center gap-2">
-            <SaveStatePill state={save.state} />
+            <SaveStatePill state={save.state} lastSavedAt={save.lastSavedAt} />
+            <Button
+              size="sm"
+              variant="outline"
+              title="Flush any pending edits and save now"
+              onClick={() => {
+                flushPendingCells();
+                toast.success("Saving any pending edits…");
+              }}
+            >
+              <Save className="mr-1 h-4 w-4" /> Save now
+            </Button>
             <div className="flex items-center gap-1 rounded-md border border-border bg-card p-0.5 text-[11px]">
               <button onClick={() => setDensity("compact")} className={cn("rounded px-2 py-0.5", density === "compact" && "bg-secondary")} title="Compact"><Rows3 className="h-3 w-3" /></button>
               <button onClick={() => setDensity("comfortable")} className={cn("rounded px-2 py-0.5", density === "comfortable" && "bg-secondary")} title="Comfortable"><Columns2 className="h-3 w-3" /></button>
