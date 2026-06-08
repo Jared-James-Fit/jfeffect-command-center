@@ -111,7 +111,7 @@ function NutritionView({ current }: { current: any }) {
         </div>
       )}
 
-      {activeDay && <DayPanel day={activeDay} />}
+      {activeDay && <DayPanel day={activeDay} water={current.water} />}
 
       {current.pdf_url && <PdfCard path={current.pdf_url} name={current.pdf_name} />}
     </>
