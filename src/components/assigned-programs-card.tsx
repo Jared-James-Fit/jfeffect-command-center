@@ -14,6 +14,7 @@ import {
 import { toast } from "sonner";
 import { BlockSummaryCard } from "@/components/block-summary-card";
 import { WorkoutArchiveSection } from "@/components/workout-archive-section";
+import { BlockProgressSection } from "@/components/block-progress-section";
 
 type Mode = "admin" | "client";
 
@@ -258,12 +259,14 @@ export function AssignedProgramsCard({ clientId, mode }: { clientId: string; mod
           <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Standalone Blocks</div>
           <div className="grid gap-3">
             {visibleBlocks.filter((b: any) => !b.prep_id).map((b: any) => (
-              <BlockSummaryCard
-                key={b.id}
-                blockId={b.id}
-                mode={mode}
-                onRemove={() => setPending({ kind: "block", id: b.id, label: b.name })}
-              />
+              <div key={b.id} className="space-y-2">
+                <BlockSummaryCard
+                  blockId={b.id}
+                  mode={mode}
+                  onRemove={() => setPending({ kind: "block", id: b.id, label: b.name })}
+                />
+                <BlockProgressSection blockId={b.id} mode={mode} />
+              </div>
             ))}
           </div>
         </div>
