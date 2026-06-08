@@ -5,6 +5,9 @@ import {
   getMember, updateAppMember, generateSetupLink, generatePasswordResetLink,
   grantAccess, revokeAccess,
 } from "@/lib/members.functions";
+import { copyPovFromMember } from "@/lib/pov.functions";
+import { setPovFlag } from "@/components/admin-pov";
+import { useNavigate } from "@tanstack/react-router";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -12,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Copy, Link2, KeyRound, Trash2, Plus } from "lucide-react";
+import { Copy, Link2, KeyRound, Trash2, Plus, Eye } from "lucide-react";
 import { toast } from "sonner";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -30,6 +33,8 @@ function MemberProfile() {
   const reset = useServerFn(generatePasswordResetLink);
   const grant = useServerFn(grantAccess);
   const revoke = useServerFn(revokeAccess);
+  const copyPov = useServerFn(copyPovFromMember);
+  const navigate = useNavigate();
 
   const { data } = useQuery({ queryKey: ["admin-member", memberId], queryFn: () => fetch({ data: { memberId } }) });
   const { data: levels = [] } = useQuery({
@@ -51,9 +56,19 @@ function MemberProfile() {
       <PageHeader
         title={member.full_name || member.email}
         subtitle={member.email}
-        actions={<div className="flex gap-2">
+        actions={<div className="flex flex-wrap items-center gap-2">
           <Badge variant="outline">{member.account_type}</Badge>
           <Badge>{member.status}</Badge>
+          <Button size="sm" variant="outline" onClick={async () => {
+            try {
+              await copyPov({ data: { memberId } });
+              setPovFlag(`as:${member.full_name || member.email}`);
+              toast.success("Entering member POV");
+              navigate({ to: "/m" });
+            } catch (e: any) { toast.error(e?.message ?? "Failed"); }
+          }}>
+            <Eye className="mr-1 h-3.5 w-3.5" />View as this member
+          </Button>
         </div>}
       />
 
