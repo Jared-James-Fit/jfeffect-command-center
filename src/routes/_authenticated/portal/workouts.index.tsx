@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { getClientWorkouts, durationRange } from "@/lib/pl-programs";
 import { useState } from "react";
 
-export const Route = createFileRoute("/_authenticated/portal/workouts")({ component: WorkoutsPage });
+export const Route = createFileRoute("/_authenticated/portal/workouts/")({ component: WorkoutsPage });
 
 function WorkoutsPage() {
   const portalUserId = usePortalUserId();
