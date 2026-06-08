@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
@@ -22,10 +21,11 @@ import {
   listQuestions, upsertQuestion, deleteQuestion, reorderQuestions,
   listAssignments,
   listActiveCoachingClientIds,
+  assignFormToClient, unassignForm,
+  bulkAssignFormToClients, clearAllAssignments,
   NF_QUESTION_TYPES, NF_QUESTION_TYPE_LABEL,
   type NfForm, type NfQuestion, type NfQuestionType, type NfRecurrence, type NfKind, type NfOpenStyle,
 } from "@/lib/native-forms";
-import { bulkAssignNativeFormToClients, clearNativeFormAssignments, setNativeFormAssignment } from "@/lib/native-forms.functions";
 
 export const Route = createFileRoute("/_authenticated/admin/native-forms")({
   component: AdminNativeForms,
