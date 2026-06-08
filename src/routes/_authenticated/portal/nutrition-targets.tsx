@@ -6,7 +6,7 @@ import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Apple, Beef, Wheat, Droplets, Footprints, Flame, Cookie, FileText, Download, ExternalLink } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { MealPlanDisplay } from "@/components/meal-plan-display";
 
 export const Route = createFileRoute("/_authenticated/portal/nutrition-targets")({ component: NutritionTargets });
@@ -38,7 +38,7 @@ function NutritionTargets() {
 
   return (
     <>
-      <PageHeader title="Nutrition Targets" subtitle={current ? (current.phase === "Custom" ? current.custom_phase : current.phase) : "Your assigned targets from Coach Jared."} />
+      <PageHeader title="Nutrition" subtitle={current ? (current.phase === "Custom" ? current.custom_phase : current.phase) : "Your assigned targets from Coach Jared."} />
       <div className="p-6 md:p-8 space-y-6">
         {!current ? (
           <Card className="border-border bg-card p-10 text-center">
@@ -47,35 +47,104 @@ function NutritionTargets() {
             <p className="mt-2 text-sm text-muted-foreground">Your coach hasn't set up your nutrition targets. Check back soon.</p>
           </Card>
         ) : (
-          <>
-            <Card className="border-border bg-card p-6">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <div className="text-xs uppercase tracking-widest text-muted-foreground">Current goal</div>
-                  <div className="mt-1 text-lg font-black">{current.goal === "Custom" ? current.custom_goal : current.goal}</div>
-                </div>
-                <div className="text-right text-xs text-muted-foreground">
-                  <div>Start: {current.start_date}</div>
-                  <div>End: {current.end_date ?? "ongoing"}</div>
-                  <div>Last updated: {new Date(current.last_updated_at).toLocaleDateString()}</div>
-                </div>
-              </div>
-              {current.client_notes && (
-                <div className="mt-4 rounded-md border border-primary/30 bg-primary/5 p-3 text-sm">{current.client_notes}</div>
-              )}
-            </Card>
-
-            {current.pdf_url && <PdfCard path={current.pdf_url} name={current.pdf_name} />}
-
-            <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
-              {(current.nutrition_target_days ?? []).sort((a: any, b: any) => a.sort_order - b.sort_order).map((day: any) => (
-                <DayCard key={day.id} day={day} />
-              ))}
-            </div>
-          </>
+          <NutritionView current={current} />
         )}
       </div>
     </>
+  );
+}
+
+function NutritionView({ current }: { current: any }) {
+  const days = useMemo(
+    () => [...(current.nutrition_target_days ?? [])].sort((a: any, b: any) => a.sort_order - b.sort_order),
+    [current.nutrition_target_days],
+  );
+  const [activeId, setActiveId] = useState<string | null>(days[0]?.id ?? null);
+  useEffect(() => {
+    if (days.length && !days.find((d: any) => d.id === activeId)) setActiveId(days[0].id);
+  }, [days, activeId]);
+  const activeDay = days.find((d: any) => d.id === activeId) ?? days[0];
+
+  return (
+    <>
+      <Card className="border-border bg-card p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Current goal</div>
+            <div className="mt-0.5 text-base font-black">{current.goal === "Custom" ? current.custom_goal : current.goal}</div>
+          </div>
+          <div className="text-right text-[11px] text-muted-foreground">
+            <div>{current.start_date} → {current.end_date ?? "ongoing"}</div>
+            <div>Updated {new Date(current.last_updated_at).toLocaleDateString()}</div>
+          </div>
+        </div>
+        {current.client_notes && (
+          <div className="mt-3 rounded-md border border-primary/30 bg-primary/5 p-3 text-sm">{current.client_notes}</div>
+        )}
+      </Card>
+
+      {days.length > 1 && (
+        <div className="-mx-2 overflow-x-auto px-2">
+          <div className="inline-flex rounded-md border border-border bg-secondary/30 p-1">
+            {days.map((d: any) => (
+              <button
+                key={d.id}
+                onClick={() => setActiveId(d.id)}
+                className={
+                  "rounded px-3 py-1.5 text-xs font-bold uppercase tracking-wider whitespace-nowrap transition " +
+                  (d.id === activeDay?.id
+                    ? "bg-gradient-primary text-primary-foreground shadow"
+                    : "text-muted-foreground hover:text-foreground")
+                }
+              >
+                {d.day_label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {activeDay && <DayPanel day={activeDay} />}
+
+      {current.pdf_url && <PdfCard path={current.pdf_url} name={current.pdf_name} />}
+    </>
+  );
+}
+
+function DayPanel({ day }: { day: any }) {
+  return (
+    <Card className="border-border bg-card p-5 space-y-4">
+      {/* Compact macro summary row */}
+      <div className="rounded-md border border-primary/30 bg-primary/5 px-4 py-3">
+        <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{day.day_label}</div>
+        <div className="mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          <span className="text-2xl font-black">{day.calories ?? "—"}<span className="ml-1 text-xs font-normal text-muted-foreground">kcal</span></span>
+          <span className="text-sm font-bold text-foreground/90">
+            P {day.protein ?? "—"} <span className="text-muted-foreground">/</span> C {day.carbs ?? "—"} <span className="text-muted-foreground">/</span> F {day.fats ?? "—"}
+          </span>
+        </div>
+      </div>
+
+      {/* Detailed macro cards */}
+      <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
+        <Macro icon={Flame} label="Cal" value={day.calories} unit="" />
+        <Macro icon={Beef} label="Protein" value={day.protein} unit="g" />
+        <Macro icon={Wheat} label="Carbs" value={day.carbs} unit="g" />
+        <Macro icon={Cookie} label="Fats" value={day.fats} unit="g" />
+        <Macro icon={Droplets} label="Water" value={day.water} unit="oz" />
+        <Macro icon={Footprints} label="Steps" value={day.steps} unit="" />
+      </div>
+      {day.fibre != null && (
+        <div className="text-xs"><span className="text-muted-foreground">Fibre:</span> <span className="font-semibold">{day.fibre}g</span></div>
+      )}
+
+      {day.notes && (
+        <div>
+          <div className="mb-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Meal Plan</div>
+          <MealPlanDisplay text={day.notes} />
+        </div>
+      )}
+    </Card>
   );
 }
 
@@ -146,11 +215,11 @@ function DayCard({ day }: { day: any }) {
 
 function Macro({ icon: Icon, label, value, unit }: { icon: any; label: string; value: any; unit: string }) {
   return (
-    <div className="rounded-md border border-border bg-secondary/30 p-3">
-      <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-widest text-muted-foreground">
+    <div className="rounded-md border border-border bg-secondary/30 p-2">
+      <div className="flex items-center gap-1 text-[10px] uppercase tracking-widest text-muted-foreground">
         <Icon className="h-3 w-3" /> {label}
       </div>
-      <div className="mt-1 text-xl font-black">{value ?? "—"}<span className="text-xs font-normal text-muted-foreground ml-1">{unit}</span></div>
+      <div className="mt-0.5 text-base font-black leading-tight">{value ?? "—"}{unit && <span className="ml-0.5 text-[10px] font-normal text-muted-foreground">{unit}</span>}</div>
     </div>
   );
 }
