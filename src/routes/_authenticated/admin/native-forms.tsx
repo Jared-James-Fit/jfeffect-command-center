@@ -516,6 +516,8 @@ function AssignmentsEditor({ formId, form, onFormChange }: { formId: string; for
       await qc.invalidateQueries({ queryKey: ["nf-assignments", formId] });
       await qc.invalidateQueries({ queryKey: ["nf-forms"] });
       toast.success(`Saved ${result.count} assignment${result.count === 1 ? "" : "s"}`);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Assignments could not be saved");
     } finally {
       setSaving(false);
     }
