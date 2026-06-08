@@ -674,7 +674,6 @@ function RowEditor({ row, setRow, onDelete, exercises, compact }: { row: any; se
           <SelectContent>{TIME_PROFILES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}</SelectContent>
         </Select>
       </div>
-      <Textarea className="h-12 w-full text-xs" placeholder="Coaching notes" value={row.notes ?? ""} onChange={(e) => setRow({ ...row, notes: e.target.value })} />
     </div>
   );
 }
