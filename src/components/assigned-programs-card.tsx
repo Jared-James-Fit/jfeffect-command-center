@@ -216,7 +216,7 @@ export function AssignedProgramsCard({ clientId, mode }: { clientId: string; mod
                       </div>
                     </div>
                     <div className="flex flex-col items-end gap-1">
-                      <Badge variant="outline" className="text-[10px]">{p.status}</Badge>
+                      <Badge variant="outline" className={`text-[10px] ${statusTone(p.status)}`}>{p.status ?? "—"}</Badge>
                       {cd && <Badge variant="secondary" className="text-[10px]">{cd}</Badge>}
                       {mode === "admin" && (
                         <Button
@@ -328,7 +328,7 @@ function BlockRow({
         <div className="flex items-center gap-2">
           <Dumbbell className="h-3.5 w-3.5 text-primary shrink-0" />
           <div className="font-semibold text-sm truncate">{block.name}</div>
-          <Badge variant="outline" className="text-[10px]">{block.status}</Badge>
+          <Badge variant="outline" className={`text-[10px] ${statusTone(block.status)}`}>{block.status ?? "—"}</Badge>
         </div>
         <div className="text-[11px] text-muted-foreground">
           {block.weeks ?? 0} weeks{block.training_focus ? ` · ${block.training_focus}` : ""}
