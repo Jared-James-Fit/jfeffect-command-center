@@ -16,6 +16,7 @@ import { SocialHandlesEditor } from "@/components/social-handles-editor";
 import { SOCIAL_FIELDS } from "@/lib/social-handles";
 import { BasicInfoForm } from "@/components/basic-info-form";
 import { ChangePasswordCard } from "@/components/change-password-card";
+import { TrainingScheduleCard } from "@/components/training-schedule-card";
 
 export const Route = createFileRoute("/_authenticated/portal/account")({
   component: AccountPage,
@@ -171,6 +172,10 @@ function AccountPage() {
 
         <div className="md:col-span-3">
           <ChangePasswordCard />
+        </div>
+
+        <div className="md:col-span-3">
+          <TrainingScheduleCard client={client as any} editable />
         </div>
 
         {/* ── Billing & Subscription ─────────────────────────────────────── */}
