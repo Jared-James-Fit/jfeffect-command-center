@@ -20,6 +20,7 @@ export const adminNav: NavItem[] = [
   // MEMBERSHIP
   { to: "/admin/members", label: "App Members", icon: UserPlus, group: "Membership" },
   { to: "/admin/member-plans", label: "Plan Library", icon: Library, group: "Membership" },
+  { to: "/admin/member-resources", label: "Resources & Tools", icon: FolderOpen, group: "Membership" },
   // PROGRAMMING
   { to: "/admin/program-library", label: "Program Library", icon: BookOpen, group: "Programming" },
   { to: "/admin/exercises", label: "Exercise Library", icon: Dumbbell, group: "Programming" },
