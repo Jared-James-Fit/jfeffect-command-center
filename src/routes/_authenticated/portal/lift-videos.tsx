@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { ActionButton } from "@/components/action-button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Plus, Video, ChevronRight, MoreVertical, Pencil, Link2, Trash2, Settings2 } from "lucide-react";
@@ -206,7 +207,15 @@ function ClientLiftVideos() {
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                       <AlertDialogCancel>Cancel</AlertDialogCancel>
-                      <AlertDialogAction onClick={doDelete}>Delete</AlertDialogAction>
+                      <ActionButton
+                        onAction={doDelete}
+                        loadingLabel="Deleting…"
+                        successLabel="Deleted"
+                        successToast={false}
+                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      >
+                        Delete
+                      </ActionButton>
                     </AlertDialogFooter>
                   </AlertDialogContent>
                 </AlertDialog>
