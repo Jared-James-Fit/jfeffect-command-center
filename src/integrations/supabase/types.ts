@@ -3895,6 +3895,7 @@ export type Database = {
           name: string
           prep_id: string | null
           sort_order: number
+          source_template_id: string | null
           start_date: string | null
           status: string
           training_focus: string | null
@@ -3917,6 +3918,7 @@ export type Database = {
           name: string
           prep_id?: string | null
           sort_order?: number
+          source_template_id?: string | null
           start_date?: string | null
           status?: string
           training_focus?: string | null
@@ -3939,6 +3941,7 @@ export type Database = {
           name?: string
           prep_id?: string | null
           sort_order?: number
+          source_template_id?: string | null
           start_date?: string | null
           status?: string
           training_focus?: string | null
@@ -3952,6 +3955,13 @@ export type Database = {
             columns: ["prep_id"]
             isOneToOne: false
             referencedRelation: "pl_preps"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pl_blocks_source_template_id_fkey"
+            columns: ["source_template_id"]
+            isOneToOne: false
+            referencedRelation: "pl_templates"
             referencedColumns: ["id"]
           },
         ]
@@ -4224,6 +4234,7 @@ export type Database = {
           federation: string | null
           goal_type: string
           id: string
+          source_template_id: string | null
           start_date: string | null
           status: string
           title: string
@@ -4249,6 +4260,7 @@ export type Database = {
           federation?: string | null
           goal_type?: string
           id?: string
+          source_template_id?: string | null
           start_date?: string | null
           status?: string
           title: string
@@ -4274,6 +4286,7 @@ export type Database = {
           federation?: string | null
           goal_type?: string
           id?: string
+          source_template_id?: string | null
           start_date?: string | null
           status?: string
           title?: string
@@ -4281,7 +4294,15 @@ export type Database = {
           updated_at?: string
           weight_class?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "pl_preps_source_template_id_fkey"
+            columns: ["source_template_id"]
+            isOneToOne: false
+            referencedRelation: "pl_templates"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       pl_row_results: {
         Row: {
