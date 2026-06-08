@@ -32,6 +32,10 @@ export const NF_QUESTION_TYPE_LABEL: Record<NfQuestionType, string> = {
 export type NfRecurrence = "none" | "weekly" | "biweekly" | "monthly";
 export type NfSubmissionStatus = "in_progress" | "submitted" | "pending_review" | "reviewed";
 
+export type NfKind = "native" | "external";
+export type NfOpenStyle = "embed" | "modal" | "new_tab";
+export type NfVisibility = "selected" | "all_active_clients";
+
 export type NfForm = {
   id: string;
   title: string;
@@ -44,6 +48,12 @@ export type NfForm = {
   version: number;
   created_at: string;
   updated_at: string;
+  kind: NfKind;
+  external_url: string | null;
+  button_label: string | null;
+  open_style: NfOpenStyle;
+  visibility: NfVisibility;
+  auto_assign_new_clients: boolean;
 };
 
 export type NfConditionalRule = {
