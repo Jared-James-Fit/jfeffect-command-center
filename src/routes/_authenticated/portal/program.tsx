@@ -112,6 +112,8 @@ function MyProgram() {
     <>
       <PageHeader title="My Program" subtitle={activePhase ? displayTitle(activePhase) : (client?.program_phase ?? "Current training phase")} />
       <div className="p-6 md:p-8 space-y-6">
+        {client?.id && <AssignedProgramsCard clientId={client.id} mode="client" />}
+
         {activePrep && (activePrep as any).client_visible !== false && (
           <Card className="border-primary/30 bg-primary/5 p-6">
             <div className="flex flex-wrap items-start justify-between gap-4">
