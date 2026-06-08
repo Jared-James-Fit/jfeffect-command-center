@@ -22,6 +22,8 @@ import { ExerciseLibraryPanel, type ExerciseRef, DND_EXERCISE, readDrop } from "
 import { cn } from "@/lib/utils";
 import { useAutosave } from "@/hooks/use-autosave";
 import { SaveStatus } from "@/components/save-status";
+import { useConflictWatch } from "@/hooks/use-conflict-watch";
+import { AlertTriangle } from "lucide-react";
 
 // Append a row into the first day reachable inside any template payload shape.
 function appendRowToFirstDay(payload: any, type: string, row: any) {
@@ -127,6 +129,18 @@ function TemplateEditor() {
     },
   });
 
+  // Cross-coach conflict watcher for the template meta fields.
+  const remoteMeta = useMemo(() => tpl ? {
+    name: tpl.name, training_style: tpl.training_style, training_focus: tpl.training_focus ?? "",
+    notes: tpl.notes ?? "", weeks: tpl.weeks ?? 0, days_per_week: tpl.days_per_week ?? 0,
+    est_duration_min: tpl.est_duration_min ?? 0, tags: (tpl.tags ?? []).join(", "), status: tpl.status,
+  } : undefined, [tpl]);
+  const conflictWatch = useConflictWatch({
+    remote: remoteMeta,
+    local: meta,
+    savedAt: autosave.savedAt,
+  });
+
   const save = async () => {
     if (!meta || !payload) return;
     setSaving(true);
@@ -153,6 +167,27 @@ function TemplateEditor() {
             </Button>
           </div>
         </div>
+
+        {conflictWatch.conflict && (
+          <Card className="flex flex-wrap items-start gap-3 border-amber-500/60 bg-amber-500/5 p-3 text-sm">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+            <div className="min-w-0 flex-1">
+              <div className="font-semibold text-amber-700 dark:text-amber-400">This template was updated somewhere else.</div>
+              <div className="text-xs text-muted-foreground">Another coach saved changes to the template settings after you started editing.</div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" variant="default" onClick={conflictWatch.dismiss}>Keep mine</Button>
+              <Button size="sm" variant="outline" onClick={() => {
+                if (conflictWatch.conflict) {
+                  setMeta({ ...(conflictWatch.conflict as any) });
+                  setDirty(false);
+                }
+                conflictWatch.acceptRemote();
+              }}>Use latest saved value</Button>
+              <Button size="sm" variant="ghost" onClick={conflictWatch.dismiss}>Review</Button>
+            </div>
+          </Card>
+        )}
 
         <Tabs defaultValue="structure">
           <TabsList>

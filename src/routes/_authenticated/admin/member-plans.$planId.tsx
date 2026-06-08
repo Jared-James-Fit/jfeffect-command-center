@@ -16,6 +16,8 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { Copy, Trash2 } from "lucide-react";
 import { useAutosave } from "@/hooks/use-autosave";
 import { SaveStatus } from "@/components/save-status";
+import { useConflictWatch } from "@/hooks/use-conflict-watch";
+import { AlertTriangle } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/admin/member-plans/$planId")({ component: MemberPlanEditor });
 
@@ -103,6 +105,38 @@ function MemberPlanEditor() {
     },
   });
 
+  // Cross-coach conflict watcher — compare the freshly fetched meta against
+  // what we last successfully saved. If another coach moves a field while we
+  // have an unsaved local edit, surface a warning instead of silently
+  // clobbering them on the next autosave round.
+  const remoteSnapshot = useMemo(
+    () => plan ? {
+      name: plan.name ?? "",
+      description: plan.description ?? "",
+      access: plan.required_access_level ?? "app_membership",
+      diff: plan.difficulty ?? "All Levels",
+      style: plan.training_style ?? "custom",
+      goal: plan.goal ?? "",
+      estMin: plan.est_minutes_per_workout != null ? String(plan.est_minutes_per_workout) : "",
+      tracking: !!plan.tracking_enabled,
+      logging: !!plan.logging_enabled,
+      featured: !!plan.featured,
+      equip: (plan.equipment_needed ?? []).join(", "),
+      tags: (plan.tags ?? []).join(", "),
+    } : undefined,
+    [plan],
+  );
+  const conflictWatch = useConflictWatch({
+    remote: remoteSnapshot,
+    local: metaSnapshot,
+    savedAt: autosave.savedAt,
+  });
+  const applyRemote = (s: typeof metaSnapshot) => {
+    setName(s.name); setDescription(s.description); setAccess(s.access); setDiff(s.diff);
+    setStyle(s.style); setGoal(s.goal); setEstMin(s.estMin); setTracking(s.tracking);
+    setLogging(s.logging); setFeatured(s.featured); setEquip(s.equip); setTags(s.tags);
+  };
+
   if (!plan) return <div className="p-6 text-sm text-muted-foreground">Loading…</div>;
 
   const save = async () => {
@@ -137,6 +171,22 @@ function MemberPlanEditor() {
           </div>
         }
       />
+      {conflictWatch.conflict && (
+        <Card className="flex flex-wrap items-start gap-3 border-amber-500/60 bg-amber-500/5 p-3 text-sm">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+          <div className="min-w-0 flex-1">
+            <div className="font-semibold text-amber-700 dark:text-amber-400">This plan was updated somewhere else.</div>
+            <div className="text-xs text-muted-foreground">
+              Another coach (or another tab) saved changes to this plan after you started editing. Pick how to proceed:
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" variant="default" onClick={conflictWatch.dismiss}>Keep mine</Button>
+            <Button size="sm" variant="outline" onClick={() => { if (conflictWatch.conflict) applyRemote(conflictWatch.conflict as typeof metaSnapshot); conflictWatch.acceptRemote(); }}>Use latest saved value</Button>
+            <Button size="sm" variant="ghost" onClick={conflictWatch.dismiss}>Review</Button>
+          </div>
+        </Card>
+      )}
       <Card className="space-y-4 p-5">
         <div><Label>Name</Label><Input value={name} onChange={(e) => setName(e.target.value)} /></div>
         <div><Label>Description</Label><Textarea value={description} onChange={(e) => setDescription(e.target.value)} /></div>

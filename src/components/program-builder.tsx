@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, Star, GripVertical, Check, Loader2, AlertCircle, Circle, Plus, Link as LinkIcon, Unlink, CloudOff } from "lucide-react";
+import { Search, Star, GripVertical, Check, Loader2, AlertCircle, Circle, Plus, Link as LinkIcon, Unlink, CloudOff, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // ---------------- Drag & drop payload helpers ----------------
@@ -197,6 +197,10 @@ export function CellInput({
   const lastSyncedRef = useRef(initial);
   const lastCommittedRef = useRef(initial);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Cross-coach conflict: when server value diverges while user has unsaved
+  // local edits, surface a tiny "keep mine / use latest" prompt and pause
+  // autosave so we don't silently clobber the other coach's change.
+  const [conflictRemote, setConflictRemote] = useState<string | null>(null);
 
   // ---- Local draft hydration (only on first mount, only if input was actually
   // edited last session AND the server value still matches the baseline at the
@@ -222,15 +226,24 @@ export function CellInput({
   useEffect(() => {
     const next = stringify(value);
     if (next === lastSyncedRef.current) return;
+    const hadLocalEdit = local !== lastCommittedRef.current;
     lastSyncedRef.current = next;
     // Don't overwrite live typing. Only sync if the input isn't focused AND
     // local matches what we last committed (i.e. user has no unsaved diff).
-    if (!focusedRef.current && local === lastCommittedRef.current) {
+    if (!focusedRef.current && !hadLocalEdit) {
       setLocal(next);
       lastCommittedRef.current = next;
       if (draftKey && typeof window !== "undefined") {
         try { window.localStorage.removeItem(`lov:pb:cell:${draftKey}`); } catch {}
       }
+      setConflictRemote(null);
+      return;
+    }
+    // User has an in-flight local edit AND the server value changed to
+    // something that isn't what they're typing → another coach saved.
+    if (hadLocalEdit && next !== local) {
+      setConflictRemote(next);
+      if (debounceRef.current) { clearTimeout(debounceRef.current); debounceRef.current = null; }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value]);
@@ -265,27 +278,29 @@ export function CellInput({
   // Debounced autosave: fire commit after the user pauses typing.
   useEffect(() => {
     if (local === lastCommittedRef.current) return;
+    // Block silent commits while a conflict is unresolved — user must pick.
+    if (conflictRemote !== null) return;
     onDirty?.();
     writeDraft(local);
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => commit(local), autosaveDelay);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [local]);
+  }, [local, conflictRemote]);
 
   // Listen for global flush ("Save now" button or manual flush).
   useEffect(() => {
     if (typeof window === "undefined") return;
     const handler = () => {
       if (debounceRef.current) { clearTimeout(debounceRef.current); debounceRef.current = null; }
-      commit(local);
+      if (conflictRemote === null) commit(local);
     };
     window.addEventListener(PB_FLUSH_EVENT, handler);
     return () => window.removeEventListener(PB_FLUSH_EVENT, handler);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [local]);
+  }, [local, conflictRemote]);
 
-  return (
+  const inputEl = (
     <Input
       type={type}
       inputMode={inputMode}
@@ -296,12 +311,11 @@ export function CellInput({
       onBlur={() => {
         focusedRef.current = false;
         if (debounceRef.current) { clearTimeout(debounceRef.current); debounceRef.current = null; }
-        commit(local);
+        if (conflictRemote === null) commit(local);
       }}
       onKeyDown={(e) => {
         if (e.key === "Enter") {
           (e.target as HTMLInputElement).blur();
-          // jump down: find next .pb-cell-input one row below
           const all = Array.from(
             (e.target as HTMLInputElement)
               .closest("[data-pb-grid]")
@@ -315,11 +329,64 @@ export function CellInput({
         } else if (e.key === "Escape") {
           setLocal(lastCommittedRef.current);
           clearDraft();
+          setConflictRemote(null);
           (e.target as HTMLInputElement).blur();
         }
       }}
-      className={cn("pb-cell-input", DENSITY_CLASSES[density].input, className)}
+      className={cn(
+        "pb-cell-input",
+        DENSITY_CLASSES[density].input,
+        conflictRemote !== null && "border-amber-500/70 ring-1 ring-amber-500/40",
+        className,
+      )}
     />
+  );
+
+  if (conflictRemote === null) return inputEl;
+
+  return (
+    <div className="relative w-full">
+      {inputEl}
+      <div className="absolute left-0 right-0 top-full z-40 mt-1 min-w-[180px] rounded-md border border-amber-500/60 bg-background p-1.5 text-[10px] shadow-lg">
+        <div className="flex items-start gap-1">
+          <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0 text-amber-500" />
+          <div className="min-w-0 flex-1">
+            <div className="font-semibold text-amber-600 dark:text-amber-400">This field was updated somewhere else.</div>
+            <div className="truncate text-muted-foreground">
+              Latest saved: <span className="font-mono text-foreground">{conflictRemote || "(empty)"}</span>
+            </div>
+            <div className="mt-1 flex flex-wrap gap-1">
+              <button
+                onClick={() => setConflictRemote(null)}
+                className="rounded bg-amber-500 px-1.5 py-0.5 font-semibold text-white hover:bg-amber-600"
+                title="Keep your edit — it will autosave over the latest value"
+              >
+                Keep mine
+              </button>
+              <button
+                onClick={() => {
+                  setLocal(conflictRemote);
+                  lastCommittedRef.current = conflictRemote;
+                  clearDraft();
+                  setConflictRemote(null);
+                }}
+                className="rounded border border-border bg-background px-1.5 py-0.5 hover:bg-secondary"
+                title="Discard your edit and use the latest saved value"
+              >
+                Use latest
+              </button>
+              <button
+                onClick={() => setConflictRemote(null)}
+                className="rounded border border-border bg-background px-1.5 py-0.5 text-muted-foreground hover:bg-secondary"
+                title="Dismiss this warning without committing"
+              >
+                Review
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
