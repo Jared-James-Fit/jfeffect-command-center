@@ -91,22 +91,46 @@ function WorkoutsPage() {
 }
 
 function BlockSection({ block, weeks }: { block: any; weeks: { week: any; entries: any[] }[] }) {
+  const blockStart = block?.start_date ?? null;
+  const blockEnd = block?.end_date ?? null;
+  const today = new Date();
+  let bannerText: string | null = null;
+  if (blockStart) {
+    const s = parseISO(blockStart);
+    if (today < s) bannerText = `Starts ${format(s, "MMM d, yyyy")}`;
+    else if (blockEnd) {
+      const e = parseISO(blockEnd);
+      if (today > e) bannerText = `Ended ${format(e, "MMM d, yyyy")}`;
+    }
+  }
   return (
     <section>
-      <h2 className="mb-3 text-sm font-bold uppercase tracking-widest text-muted-foreground">
-        {block?.name ?? "Workouts"}
-      </h2>
+      <div className="mb-3 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <h2 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">
+          {block?.name ?? "Workouts"}
+        </h2>
+        {blockStart && blockEnd && (
+          <span className="text-[11px] text-muted-foreground">
+            {format(parseISO(blockStart), "MMM d")} – {format(parseISO(blockEnd), "MMM d, yyyy")}
+          </span>
+        )}
+        {bannerText && (
+          <Badge variant="outline" className="text-[10px]">{bannerText}</Badge>
+        )}
+      </div>
       <div className="space-y-3">
         {weeks.map((w, i) => (
-          <WeekSection key={w.week?.id ?? `w-${i}`} week={w.week} entries={w.entries} defaultOpen={i === 0} />
+          <WeekSection key={w.week?.id ?? `w-${i}`} block={block} week={w.week} entries={w.entries} defaultOpen={i === 0} />
         ))}
       </div>
     </section>
   );
 }
 
-function WeekSection({ week, entries, defaultOpen }: { week: any; entries: any[]; defaultOpen: boolean }) {
-  const [open, setOpen] = useState(defaultOpen);
+function WeekSection({ block, week, entries, defaultOpen }: { block: any; week: any; entries: any[]; defaultOpen: boolean }) {
+  const range = week ? weekDisplayRange(block, week) : null;
+  const isNow = isCurrentWeek(range);
+  const [open, setOpen] = useState(defaultOpen || isNow);
   const totalMin = entries.reduce((s, it) => s + (it.day.duration_override_min ?? it.day.duration_estimate_min ?? 60), 0);
   const doneCount = entries.filter((it) => it.completion?.completed_at).length;
   return (
@@ -117,7 +141,20 @@ function WeekSection({ week, entries, defaultOpen }: { week: any; entries: any[]
         className="flex w-full items-center justify-between gap-3 p-3 text-left hover:bg-secondary/30"
       >
         <div className="min-w-0">
-          <div className="font-bold">Week {week?.week_index ?? "—"}</div>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-bold">Week {week?.week_index ?? "—"}</span>
+            {range && (
+              <span className="text-[11px] text-muted-foreground inline-flex items-center gap-1">
+                <CalendarRange className="h-3 w-3" />
+                {formatWeekRange(range.start, range.end)}
+              </span>
+            )}
+            {isNow && (
+              <Badge className="h-5 border-primary/40 bg-primary/15 px-1.5 text-[10px] font-semibold text-primary hover:bg-primary/20">
+                <Crosshair className="mr-1 h-3 w-3" /> Current Week
+              </Badge>
+            )}
+          </div>
           <div className="text-[11px] text-muted-foreground">
             {entries.length} workout{entries.length === 1 ? "" : "s"}
             {doneCount > 0 ? ` · ${doneCount} done` : ""}
