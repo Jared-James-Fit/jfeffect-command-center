@@ -607,6 +607,9 @@ function AssignDialog({ template, onClose }: { template: any; onClose: () => voi
       qc.invalidateQueries({ queryKey: ["pl-template-assignments", template.id] });
       qc.invalidateQueries({ queryKey: ["pl-preps", clientId] });
       qc.invalidateQueries({ queryKey: ["pl-blocks", clientId] });
+      qc.invalidateQueries({ queryKey: ["assigned-preps", clientId] });
+      qc.invalidateQueries({ queryKey: ["assigned-blocks", clientId] });
+      qc.invalidateQueries({ queryKey: ["my-workouts"] });
       onClose();
     } catch (e: any) {
       toast.error(e.message);
