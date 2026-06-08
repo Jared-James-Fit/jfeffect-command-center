@@ -921,6 +921,47 @@ function Field({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
+function InviteExpiryPanel({ expiresAt, accountCreatedAt }: { expiresAt: string | null; accountCreatedAt: string | null }) {
+  if (accountCreatedAt) {
+    return (
+      <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-4">
+        <div className="text-[10px] uppercase tracking-widest text-emerald-400">Invite Status</div>
+        <div className="mt-1 text-sm font-semibold text-emerald-300">Account created</div>
+        <div className="mt-0.5 text-xs text-muted-foreground">{fmtDate(accountCreatedAt)}</div>
+      </div>
+    );
+  }
+  if (!expiresAt) {
+    return (
+      <div className="rounded-lg border border-border bg-muted/30 p-4">
+        <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Invite Expiry</div>
+        <div className="mt-1 text-sm font-semibold">No invite sent yet</div>
+        <div className="mt-0.5 text-xs text-muted-foreground">Send a setup link to start the 48-hour window.</div>
+      </div>
+    );
+  }
+  const ms = new Date(expiresAt).getTime() - Date.now();
+  const expired = ms <= 0;
+  const hours = Math.floor(Math.abs(ms) / 3_600_000);
+  const mins = Math.floor((Math.abs(ms) % 3_600_000) / 60_000);
+  const display = hours >= 1 ? `${hours}h ${mins}m` : `${mins}m`;
+  const tone = expired
+    ? "border-destructive/40 bg-destructive/10 text-destructive"
+    : ms < 6 * 3_600_000
+      ? "border-amber-500/40 bg-amber-500/10 text-amber-400"
+      : "border-primary/30 bg-primary/10 text-primary";
+  return (
+    <div className={`rounded-lg border p-4 ${tone}`}>
+      <div className="text-[10px] uppercase tracking-widest opacity-80">Invite Expiry</div>
+      <div className="mt-1 text-lg font-bold">{expired ? "Expired" : `${display} left`}</div>
+      <div className="mt-1 text-xs text-muted-foreground">
+        {expired ? "Expired on " : "Expires "} {fmtDate(expiresAt)}
+      </div>
+      <div className="mt-2 text-[11px] text-muted-foreground">Invites are valid for 48 hours.</div>
+    </div>
+  );
+}
+
 function ClientMessagesTab({ clientId }: { clientId: string }) {
   const { data: state } = useQuery({
     queryKey: ["conversation-state", clientId],
