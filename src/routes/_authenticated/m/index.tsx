@@ -40,8 +40,8 @@ function MemberHome() {
     <div className="space-y-6">
       <PageHeader
         title={`Welcome${me?.member?.full_name ? `, ${me.member.full_name.split(" ")[0]}` : ""}`}
-        description="Your training, plans, and resources."
-        right={<Badge variant="outline">{subscriptionStatus}</Badge>}
+        subtitle="Your training, plans, and resources."
+        actions={<Badge variant="outline">{subscriptionStatus}</Badge>}
       />
       {activeEnrollment ? (
         <Card className="p-6">
