@@ -19,7 +19,8 @@ export const Route = createFileRoute("/setup")({
 
 function SetupPage() {
   const navigate = useNavigate();
-  const [phase, setPhase] = useState<"loading" | "ready" | "social" | "expired" | "done">("loading");
+  const [phase, setPhase] = useState<"loading" | "confirm" | "ready" | "social" | "expired" | "done">("loading");
+  const [verifying, setVerifying] = useState(false);
   const [email, setEmail] = useState<string>("");
   const [fullName, setFullName] = useState<string>("");
   const [isCoachInvite, setIsCoachInvite] = useState(false);
@@ -30,8 +31,6 @@ function SetupPage() {
   const acceptCoachFn = useServerFn(acceptCoachInvite);
 
   useEffect(() => {
-    // Supabase recovery / invite links return a session via URL hash and
-    // fire onAuthStateChange with event=PASSWORD_RECOVERY or SIGNED_IN.
     const sub = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
         setEmail(session.user.email ?? "");
@@ -40,22 +39,44 @@ function SetupPage() {
         setPhase("ready");
       }
     });
-    // If already logged in / hash already exchanged
-    supabase.auth.getSession().then(({ data }) => {
-      if (data.session?.user) {
-        setEmail(data.session.user.email ?? "");
-        setFullName((data.session.user.user_metadata as any)?.full_name ?? "");
-        setIsCoachInvite(((data.session.user.user_metadata as any)?.invite_role) === "coach");
-        setPhase("ready");
-      } else {
-        // Give the hash exchange ~1.5s, then assume the link is invalid/expired
-        setTimeout(() => {
-          setPhase((p) => (p === "loading" ? "expired" : p));
-        }, 1500);
-      }
-    });
+    // Look for a token_hash query param (our copy-link flow that defeats
+    // email/SMS link prefetchers). If present, wait for the user to click
+    // Continue before calling verifyOtp.
+    const params = new URLSearchParams(window.location.search);
+    const tokenHash = params.get("token_hash");
+    if (tokenHash) {
+      setPhase("confirm");
+    } else {
+      // Otherwise fall back to the hash-based magic link flow (emailed links).
+      supabase.auth.getSession().then(({ data }) => {
+        if (data.session?.user) {
+          setEmail(data.session.user.email ?? "");
+          setFullName((data.session.user.user_metadata as any)?.full_name ?? "");
+          setIsCoachInvite(((data.session.user.user_metadata as any)?.invite_role) === "coach");
+          setPhase("ready");
+        } else {
+          setTimeout(() => {
+            setPhase((p) => (p === "loading" ? "expired" : p));
+          }, 1500);
+        }
+      });
+    }
     return () => sub.data.subscription.unsubscribe();
   }, []);
+
+  const verifyTokenHash = async () => {
+    setVerifying(true);
+    const params = new URLSearchParams(window.location.search);
+    const tokenHash = params.get("token_hash");
+    const type = (params.get("type") || "invite") as any;
+    if (!tokenHash) { setVerifying(false); setPhase("expired"); return; }
+    const { error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type });
+    setVerifying(false);
+    if (error) { setPhase("expired"); return; }
+    // Clean the URL so a refresh doesn't try to re-use a now-spent token.
+    window.history.replaceState({}, "", window.location.pathname);
+    // onAuthStateChange will flip phase to "ready".
+  };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -108,6 +129,22 @@ function SetupPage() {
   return (
     <Shell>
       {phase === "loading" && <p className="text-sm text-muted-foreground">Verifying your link…</p>}
+
+      {phase === "confirm" && (
+        <div className="space-y-4 text-center">
+          <h2 className="text-xl font-black tracking-tight">Welcome to JF Effect</h2>
+          <p className="text-sm text-muted-foreground">
+            Tap continue to set up your account.
+          </p>
+          <Button
+            onClick={verifyTokenHash}
+            disabled={verifying}
+            className="w-full bg-gradient-primary py-6 text-sm font-bold uppercase tracking-[0.15em] shadow-glow"
+          >
+            {verifying ? "Verifying…" : "Continue setup"}
+          </Button>
+        </div>
+      )}
 
       {phase === "expired" && (
         <div className="space-y-4 text-center">

@@ -99,7 +99,17 @@ export const getSetupLink = createServerFn({ method: "POST" })
       options: { redirectTo: data.redirectTo },
     });
     if (lErr) throw new Error(lErr.message);
-    return { url: (link as any)?.properties?.action_link as string };
+    // Build our own link using the hashed_token + type. The default
+    // `action_link` is a one-time Supabase /verify URL — link prefetchers in
+    // iMessage/WhatsApp/Gmail consume the token before the recipient clicks,
+    // making the link appear expired. Our /setup page exchanges the token via
+    // verifyOtp on user click, which prefetchers cannot trigger.
+    const hashedToken = (link as any)?.properties?.hashed_token as string | undefined;
+    if (!hashedToken) throw new Error("Could not generate setup link token");
+    const url = new URL(data.redirectTo);
+    url.searchParams.set("token_hash", hashedToken);
+    url.searchParams.set("type", linkType);
+    return { url: url.toString() };
   });
 
 // Send a password reset email.
@@ -149,7 +159,12 @@ export const getPasswordResetLink = createServerFn({ method: "POST" })
       options: { redirectTo: data.redirectTo },
     });
     if (lErr) throw new Error(lErr.message);
-    return { url: (link as any)?.properties?.action_link as string };
+    const hashedToken = (link as any)?.properties?.hashed_token as string | undefined;
+    if (!hashedToken) throw new Error("Could not generate reset link token");
+    const url = new URL(data.redirectTo);
+    url.searchParams.set("token_hash", hashedToken);
+    url.searchParams.set("type", "recovery");
+    return { url: url.toString() };
   });
 
 // Admin sets a client's password directly.

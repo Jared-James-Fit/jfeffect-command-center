@@ -15,7 +15,8 @@ export const Route = createFileRoute("/reset-password")({
 
 function ResetPage() {
   const navigate = useNavigate();
-  const [phase, setPhase] = useState<"loading" | "ready" | "expired" | "done">("loading");
+  const [phase, setPhase] = useState<"loading" | "confirm" | "ready" | "expired" | "done">("loading");
+  const [verifying, setVerifying] = useState(false);
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [busy, setBusy] = useState(false);
@@ -24,12 +25,29 @@ function ResetPage() {
     const sub = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) setPhase("ready");
     });
-    supabase.auth.getSession().then(({ data }) => {
-      if (data.session?.user) setPhase("ready");
-      else setTimeout(() => setPhase((p) => (p === "loading" ? "expired" : p)), 1500);
-    });
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("token_hash")) {
+      setPhase("confirm");
+    } else {
+      supabase.auth.getSession().then(({ data }) => {
+        if (data.session?.user) setPhase("ready");
+        else setTimeout(() => setPhase((p) => (p === "loading" ? "expired" : p)), 1500);
+      });
+    }
     return () => sub.data.subscription.unsubscribe();
   }, []);
+
+  const verifyTokenHash = async () => {
+    setVerifying(true);
+    const params = new URLSearchParams(window.location.search);
+    const tokenHash = params.get("token_hash");
+    const type = (params.get("type") || "recovery") as any;
+    if (!tokenHash) { setVerifying(false); setPhase("expired"); return; }
+    const { error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type });
+    setVerifying(false);
+    if (error) { setPhase("expired"); return; }
+    window.history.replaceState({}, "", window.location.pathname);
+  };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -55,6 +73,19 @@ function ResetPage() {
           </div>
           <Card className="border-border bg-card/60 p-6 backdrop-blur-sm">
             {phase === "loading" && <p className="text-sm text-muted-foreground">Verifying your link…</p>}
+            {phase === "confirm" && (
+              <div className="space-y-4 text-center">
+                <h2 className="text-xl font-black tracking-tight">Reset your password</h2>
+                <p className="text-sm text-muted-foreground">Tap continue to verify your link.</p>
+                <Button
+                  onClick={verifyTokenHash}
+                  disabled={verifying}
+                  className="w-full bg-gradient-primary py-6 text-sm font-bold uppercase tracking-[0.15em] shadow-glow"
+                >
+                  {verifying ? "Verifying…" : "Continue"}
+                </Button>
+              </div>
+            )}
             {phase === "expired" && (
               <div className="space-y-4 text-center">
                 <h2 className="text-xl font-black">This reset link has expired</h2>
