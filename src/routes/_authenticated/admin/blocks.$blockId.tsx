@@ -602,7 +602,7 @@ function WeekColumn({
         "flex min-w-0 flex-col overflow-hidden",
         stacked
           ? cn(
-              "rounded-lg border-2 bg-card shadow-sm",
+              "w-[82vw] max-w-[460px] shrink-0 rounded-lg border-2 bg-card shadow-sm sm:w-[420px] xl:w-[450px]",
               isCurrent ? "border-primary/70 shadow-[0_0_0_1px_color-mix(in_oklab,var(--primary)_30%,transparent)]" : "border-border",
             )
           : "border-r border-border last:border-r-0",
