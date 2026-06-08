@@ -40,6 +40,11 @@ import { Route as AuthenticatedPortalCheckInsRouteImport } from './routes/_authe
 import { Route as AuthenticatedPortalCheckInRouteImport } from './routes/_authenticated/portal/check-in'
 import { Route as AuthenticatedPortalCalendarRouteImport } from './routes/_authenticated/portal/calendar'
 import { Route as AuthenticatedPortalAccountRouteImport } from './routes/_authenticated/portal/account'
+import { Route as AuthenticatedMToolsRouteImport } from './routes/_authenticated/m/tools'
+import { Route as AuthenticatedMResourcesRouteImport } from './routes/_authenticated/m/resources'
+import { Route as AuthenticatedMPlansRouteImport } from './routes/_authenticated/m/plans'
+import { Route as AuthenticatedMMyPlansRouteImport } from './routes/_authenticated/m/my-plans'
+import { Route as AuthenticatedMAccountRouteImport } from './routes/_authenticated/m/account'
 import { Route as AuthenticatedAdminTrainingPhasesRouteImport } from './routes/_authenticated/admin/training-phases'
 import { Route as AuthenticatedAdminTrainingIntelligenceRouteImport } from './routes/_authenticated/admin/training-intelligence'
 import { Route as AuthenticatedAdminTestimonialsRouteImport } from './routes/_authenticated/admin/testimonials'
@@ -79,6 +84,8 @@ import { Route as ApiPublicHooksMediaArchiveRouteImport } from './routes/api/pub
 import { Route as AuthenticatedPortalWorkoutsDayIdRouteImport } from './routes/_authenticated/portal/workouts.$dayId'
 import { Route as AuthenticatedPortalPurchasesIdRouteImport } from './routes/_authenticated/portal/purchases.$id'
 import { Route as AuthenticatedPortalCheckInsFormIdRouteImport } from './routes/_authenticated/portal/check-ins.$formId'
+import { Route as AuthenticatedMPlansPlanIdRouteImport } from './routes/_authenticated/m/plans.$planId'
+import { Route as AuthenticatedMMyPlansEnrollmentIdRouteImport } from './routes/_authenticated/m/my-plans.$enrollmentId'
 import { Route as AuthenticatedAdminPurchasesIdRouteImport } from './routes/_authenticated/admin/purchases.$id'
 import { Route as AuthenticatedAdminProgramLibraryTemplateIdRouteImport } from './routes/_authenticated/admin/program-library_.$templateId'
 import { Route as AuthenticatedAdminCoachesIdRouteImport } from './routes/_authenticated/admin/coaches.$id'
@@ -88,6 +95,7 @@ import { Route as AuthenticatedAdminBlocksBlockIdRouteImport } from './routes/_a
 import { Route as AuthenticatedAdminAgreementsSignedRouteImport } from './routes/_authenticated/admin/agreements.signed'
 import { Route as AuthenticatedAdminClientProgramsClientIdHistoryRouteImport } from './routes/_authenticated/admin/client-programs.$clientId.history'
 import { Route as AuthenticatedAdminClientProgramsClientIdAnalyticsRouteImport } from './routes/_authenticated/admin/client-programs.$clientId.analytics'
+import { Route as AuthenticatedMWorkoutsEnrollmentIdWeekDayRouteImport } from './routes/_authenticated/m/workouts.$enrollmentId.$week.$day'
 
 const SitemapRoute = SitemapRouteImport.update({
   id: '/sitemap',
@@ -260,6 +268,31 @@ const AuthenticatedPortalAccountRoute =
     path: '/account',
     getParentRoute: () => AuthenticatedPortalRouteRoute,
   } as any)
+const AuthenticatedMToolsRoute = AuthenticatedMToolsRouteImport.update({
+  id: '/tools',
+  path: '/tools',
+  getParentRoute: () => AuthenticatedMRouteRoute,
+} as any)
+const AuthenticatedMResourcesRoute = AuthenticatedMResourcesRouteImport.update({
+  id: '/resources',
+  path: '/resources',
+  getParentRoute: () => AuthenticatedMRouteRoute,
+} as any)
+const AuthenticatedMPlansRoute = AuthenticatedMPlansRouteImport.update({
+  id: '/plans',
+  path: '/plans',
+  getParentRoute: () => AuthenticatedMRouteRoute,
+} as any)
+const AuthenticatedMMyPlansRoute = AuthenticatedMMyPlansRouteImport.update({
+  id: '/my-plans',
+  path: '/my-plans',
+  getParentRoute: () => AuthenticatedMRouteRoute,
+} as any)
+const AuthenticatedMAccountRoute = AuthenticatedMAccountRouteImport.update({
+  id: '/account',
+  path: '/account',
+  getParentRoute: () => AuthenticatedMRouteRoute,
+} as any)
 const AuthenticatedAdminTrainingPhasesRoute =
   AuthenticatedAdminTrainingPhasesRouteImport.update({
     id: '/training-phases',
@@ -491,6 +524,18 @@ const AuthenticatedPortalCheckInsFormIdRoute =
     path: '/$formId',
     getParentRoute: () => AuthenticatedPortalCheckInsRoute,
   } as any)
+const AuthenticatedMPlansPlanIdRoute =
+  AuthenticatedMPlansPlanIdRouteImport.update({
+    id: '/$planId',
+    path: '/$planId',
+    getParentRoute: () => AuthenticatedMPlansRoute,
+  } as any)
+const AuthenticatedMMyPlansEnrollmentIdRoute =
+  AuthenticatedMMyPlansEnrollmentIdRouteImport.update({
+    id: '/$enrollmentId',
+    path: '/$enrollmentId',
+    getParentRoute: () => AuthenticatedMMyPlansRoute,
+  } as any)
 const AuthenticatedAdminPurchasesIdRoute =
   AuthenticatedAdminPurchasesIdRouteImport.update({
     id: '/$id',
@@ -545,6 +590,12 @@ const AuthenticatedAdminClientProgramsClientIdAnalyticsRoute =
     path: '/analytics',
     getParentRoute: () => AuthenticatedAdminClientProgramsClientIdRoute,
   } as any)
+const AuthenticatedMWorkoutsEnrollmentIdWeekDayRoute =
+  AuthenticatedMWorkoutsEnrollmentIdWeekDayRouteImport.update({
+    id: '/workouts/$enrollmentId/$week/$day',
+    path: '/workouts/$enrollmentId/$week/$day',
+    getParentRoute: () => AuthenticatedMRouteRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -587,6 +638,11 @@ export interface FileRoutesByFullPath {
   '/admin/testimonials': typeof AuthenticatedAdminTestimonialsRoute
   '/admin/training-intelligence': typeof AuthenticatedAdminTrainingIntelligenceRoute
   '/admin/training-phases': typeof AuthenticatedAdminTrainingPhasesRoute
+  '/m/account': typeof AuthenticatedMAccountRoute
+  '/m/my-plans': typeof AuthenticatedMMyPlansRouteWithChildren
+  '/m/plans': typeof AuthenticatedMPlansRouteWithChildren
+  '/m/resources': typeof AuthenticatedMResourcesRoute
+  '/m/tools': typeof AuthenticatedMToolsRoute
   '/portal/account': typeof AuthenticatedPortalAccountRoute
   '/portal/calendar': typeof AuthenticatedPortalCalendarRoute
   '/portal/check-in': typeof AuthenticatedPortalCheckInRoute
@@ -614,6 +670,8 @@ export interface FileRoutesByFullPath {
   '/admin/coaches/$id': typeof AuthenticatedAdminCoachesIdRoute
   '/admin/program-library/$templateId': typeof AuthenticatedAdminProgramLibraryTemplateIdRoute
   '/admin/purchases/$id': typeof AuthenticatedAdminPurchasesIdRoute
+  '/m/my-plans/$enrollmentId': typeof AuthenticatedMMyPlansEnrollmentIdRoute
+  '/m/plans/$planId': typeof AuthenticatedMPlansPlanIdRoute
   '/portal/check-ins/$formId': typeof AuthenticatedPortalCheckInsFormIdRoute
   '/portal/purchases/$id': typeof AuthenticatedPortalPurchasesIdRoute
   '/portal/workouts/$dayId': typeof AuthenticatedPortalWorkoutsDayIdRoute
@@ -625,6 +683,7 @@ export interface FileRoutesByFullPath {
   '/portal/agreements/': typeof AuthenticatedPortalAgreementsIndexRoute
   '/admin/client-programs/$clientId/analytics': typeof AuthenticatedAdminClientProgramsClientIdAnalyticsRoute
   '/admin/client-programs/$clientId/history': typeof AuthenticatedAdminClientProgramsClientIdHistoryRoute
+  '/m/workouts/$enrollmentId/$week/$day': typeof AuthenticatedMWorkoutsEnrollmentIdWeekDayRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -664,6 +723,11 @@ export interface FileRoutesByTo {
   '/admin/testimonials': typeof AuthenticatedAdminTestimonialsRoute
   '/admin/training-intelligence': typeof AuthenticatedAdminTrainingIntelligenceRoute
   '/admin/training-phases': typeof AuthenticatedAdminTrainingPhasesRoute
+  '/m/account': typeof AuthenticatedMAccountRoute
+  '/m/my-plans': typeof AuthenticatedMMyPlansRouteWithChildren
+  '/m/plans': typeof AuthenticatedMPlansRouteWithChildren
+  '/m/resources': typeof AuthenticatedMResourcesRoute
+  '/m/tools': typeof AuthenticatedMToolsRoute
   '/portal/account': typeof AuthenticatedPortalAccountRoute
   '/portal/calendar': typeof AuthenticatedPortalCalendarRoute
   '/portal/check-in': typeof AuthenticatedPortalCheckInRoute
@@ -691,6 +755,8 @@ export interface FileRoutesByTo {
   '/admin/coaches/$id': typeof AuthenticatedAdminCoachesIdRoute
   '/admin/program-library/$templateId': typeof AuthenticatedAdminProgramLibraryTemplateIdRoute
   '/admin/purchases/$id': typeof AuthenticatedAdminPurchasesIdRoute
+  '/m/my-plans/$enrollmentId': typeof AuthenticatedMMyPlansEnrollmentIdRoute
+  '/m/plans/$planId': typeof AuthenticatedMPlansPlanIdRoute
   '/portal/check-ins/$formId': typeof AuthenticatedPortalCheckInsFormIdRoute
   '/portal/purchases/$id': typeof AuthenticatedPortalPurchasesIdRoute
   '/portal/workouts/$dayId': typeof AuthenticatedPortalWorkoutsDayIdRoute
@@ -702,6 +768,7 @@ export interface FileRoutesByTo {
   '/portal/agreements': typeof AuthenticatedPortalAgreementsIndexRoute
   '/admin/client-programs/$clientId/analytics': typeof AuthenticatedAdminClientProgramsClientIdAnalyticsRoute
   '/admin/client-programs/$clientId/history': typeof AuthenticatedAdminClientProgramsClientIdHistoryRoute
+  '/m/workouts/$enrollmentId/$week/$day': typeof AuthenticatedMWorkoutsEnrollmentIdWeekDayRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -746,6 +813,11 @@ export interface FileRoutesById {
   '/_authenticated/admin/testimonials': typeof AuthenticatedAdminTestimonialsRoute
   '/_authenticated/admin/training-intelligence': typeof AuthenticatedAdminTrainingIntelligenceRoute
   '/_authenticated/admin/training-phases': typeof AuthenticatedAdminTrainingPhasesRoute
+  '/_authenticated/m/account': typeof AuthenticatedMAccountRoute
+  '/_authenticated/m/my-plans': typeof AuthenticatedMMyPlansRouteWithChildren
+  '/_authenticated/m/plans': typeof AuthenticatedMPlansRouteWithChildren
+  '/_authenticated/m/resources': typeof AuthenticatedMResourcesRoute
+  '/_authenticated/m/tools': typeof AuthenticatedMToolsRoute
   '/_authenticated/portal/account': typeof AuthenticatedPortalAccountRoute
   '/_authenticated/portal/calendar': typeof AuthenticatedPortalCalendarRoute
   '/_authenticated/portal/check-in': typeof AuthenticatedPortalCheckInRoute
@@ -773,6 +845,8 @@ export interface FileRoutesById {
   '/_authenticated/admin/coaches/$id': typeof AuthenticatedAdminCoachesIdRoute
   '/_authenticated/admin/program-library_/$templateId': typeof AuthenticatedAdminProgramLibraryTemplateIdRoute
   '/_authenticated/admin/purchases/$id': typeof AuthenticatedAdminPurchasesIdRoute
+  '/_authenticated/m/my-plans/$enrollmentId': typeof AuthenticatedMMyPlansEnrollmentIdRoute
+  '/_authenticated/m/plans/$planId': typeof AuthenticatedMPlansPlanIdRoute
   '/_authenticated/portal/check-ins/$formId': typeof AuthenticatedPortalCheckInsFormIdRoute
   '/_authenticated/portal/purchases/$id': typeof AuthenticatedPortalPurchasesIdRoute
   '/_authenticated/portal/workouts/$dayId': typeof AuthenticatedPortalWorkoutsDayIdRoute
@@ -784,6 +858,7 @@ export interface FileRoutesById {
   '/_authenticated/portal/agreements/': typeof AuthenticatedPortalAgreementsIndexRoute
   '/_authenticated/admin/client-programs/$clientId/analytics': typeof AuthenticatedAdminClientProgramsClientIdAnalyticsRoute
   '/_authenticated/admin/client-programs/$clientId/history': typeof AuthenticatedAdminClientProgramsClientIdHistoryRoute
+  '/_authenticated/m/workouts/$enrollmentId/$week/$day': typeof AuthenticatedMWorkoutsEnrollmentIdWeekDayRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -828,6 +903,11 @@ export interface FileRouteTypes {
     | '/admin/testimonials'
     | '/admin/training-intelligence'
     | '/admin/training-phases'
+    | '/m/account'
+    | '/m/my-plans'
+    | '/m/plans'
+    | '/m/resources'
+    | '/m/tools'
     | '/portal/account'
     | '/portal/calendar'
     | '/portal/check-in'
@@ -855,6 +935,8 @@ export interface FileRouteTypes {
     | '/admin/coaches/$id'
     | '/admin/program-library/$templateId'
     | '/admin/purchases/$id'
+    | '/m/my-plans/$enrollmentId'
+    | '/m/plans/$planId'
     | '/portal/check-ins/$formId'
     | '/portal/purchases/$id'
     | '/portal/workouts/$dayId'
@@ -866,6 +948,7 @@ export interface FileRouteTypes {
     | '/portal/agreements/'
     | '/admin/client-programs/$clientId/analytics'
     | '/admin/client-programs/$clientId/history'
+    | '/m/workouts/$enrollmentId/$week/$day'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -905,6 +988,11 @@ export interface FileRouteTypes {
     | '/admin/testimonials'
     | '/admin/training-intelligence'
     | '/admin/training-phases'
+    | '/m/account'
+    | '/m/my-plans'
+    | '/m/plans'
+    | '/m/resources'
+    | '/m/tools'
     | '/portal/account'
     | '/portal/calendar'
     | '/portal/check-in'
@@ -932,6 +1020,8 @@ export interface FileRouteTypes {
     | '/admin/coaches/$id'
     | '/admin/program-library/$templateId'
     | '/admin/purchases/$id'
+    | '/m/my-plans/$enrollmentId'
+    | '/m/plans/$planId'
     | '/portal/check-ins/$formId'
     | '/portal/purchases/$id'
     | '/portal/workouts/$dayId'
@@ -943,6 +1033,7 @@ export interface FileRouteTypes {
     | '/portal/agreements'
     | '/admin/client-programs/$clientId/analytics'
     | '/admin/client-programs/$clientId/history'
+    | '/m/workouts/$enrollmentId/$week/$day'
   id:
     | '__root__'
     | '/'
@@ -986,6 +1077,11 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/testimonials'
     | '/_authenticated/admin/training-intelligence'
     | '/_authenticated/admin/training-phases'
+    | '/_authenticated/m/account'
+    | '/_authenticated/m/my-plans'
+    | '/_authenticated/m/plans'
+    | '/_authenticated/m/resources'
+    | '/_authenticated/m/tools'
     | '/_authenticated/portal/account'
     | '/_authenticated/portal/calendar'
     | '/_authenticated/portal/check-in'
@@ -1013,6 +1109,8 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/coaches/$id'
     | '/_authenticated/admin/program-library_/$templateId'
     | '/_authenticated/admin/purchases/$id'
+    | '/_authenticated/m/my-plans/$enrollmentId'
+    | '/_authenticated/m/plans/$planId'
     | '/_authenticated/portal/check-ins/$formId'
     | '/_authenticated/portal/purchases/$id'
     | '/_authenticated/portal/workouts/$dayId'
@@ -1024,6 +1122,7 @@ export interface FileRouteTypes {
     | '/_authenticated/portal/agreements/'
     | '/_authenticated/admin/client-programs/$clientId/analytics'
     | '/_authenticated/admin/client-programs/$clientId/history'
+    | '/_authenticated/m/workouts/$enrollmentId/$week/$day'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -1259,6 +1358,41 @@ declare module '@tanstack/react-router' {
       fullPath: '/portal/account'
       preLoaderRoute: typeof AuthenticatedPortalAccountRouteImport
       parentRoute: typeof AuthenticatedPortalRouteRoute
+    }
+    '/_authenticated/m/tools': {
+      id: '/_authenticated/m/tools'
+      path: '/tools'
+      fullPath: '/m/tools'
+      preLoaderRoute: typeof AuthenticatedMToolsRouteImport
+      parentRoute: typeof AuthenticatedMRouteRoute
+    }
+    '/_authenticated/m/resources': {
+      id: '/_authenticated/m/resources'
+      path: '/resources'
+      fullPath: '/m/resources'
+      preLoaderRoute: typeof AuthenticatedMResourcesRouteImport
+      parentRoute: typeof AuthenticatedMRouteRoute
+    }
+    '/_authenticated/m/plans': {
+      id: '/_authenticated/m/plans'
+      path: '/plans'
+      fullPath: '/m/plans'
+      preLoaderRoute: typeof AuthenticatedMPlansRouteImport
+      parentRoute: typeof AuthenticatedMRouteRoute
+    }
+    '/_authenticated/m/my-plans': {
+      id: '/_authenticated/m/my-plans'
+      path: '/my-plans'
+      fullPath: '/m/my-plans'
+      preLoaderRoute: typeof AuthenticatedMMyPlansRouteImport
+      parentRoute: typeof AuthenticatedMRouteRoute
+    }
+    '/_authenticated/m/account': {
+      id: '/_authenticated/m/account'
+      path: '/account'
+      fullPath: '/m/account'
+      preLoaderRoute: typeof AuthenticatedMAccountRouteImport
+      parentRoute: typeof AuthenticatedMRouteRoute
     }
     '/_authenticated/admin/training-phases': {
       id: '/_authenticated/admin/training-phases'
@@ -1533,6 +1667,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedPortalCheckInsFormIdRouteImport
       parentRoute: typeof AuthenticatedPortalCheckInsRoute
     }
+    '/_authenticated/m/plans/$planId': {
+      id: '/_authenticated/m/plans/$planId'
+      path: '/$planId'
+      fullPath: '/m/plans/$planId'
+      preLoaderRoute: typeof AuthenticatedMPlansPlanIdRouteImport
+      parentRoute: typeof AuthenticatedMPlansRoute
+    }
+    '/_authenticated/m/my-plans/$enrollmentId': {
+      id: '/_authenticated/m/my-plans/$enrollmentId'
+      path: '/$enrollmentId'
+      fullPath: '/m/my-plans/$enrollmentId'
+      preLoaderRoute: typeof AuthenticatedMMyPlansEnrollmentIdRouteImport
+      parentRoute: typeof AuthenticatedMMyPlansRoute
+    }
     '/_authenticated/admin/purchases/$id': {
       id: '/_authenticated/admin/purchases/$id'
       path: '/$id'
@@ -1595,6 +1743,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/admin/client-programs/$clientId/analytics'
       preLoaderRoute: typeof AuthenticatedAdminClientProgramsClientIdAnalyticsRouteImport
       parentRoute: typeof AuthenticatedAdminClientProgramsClientIdRoute
+    }
+    '/_authenticated/m/workouts/$enrollmentId/$week/$day': {
+      id: '/_authenticated/m/workouts/$enrollmentId/$week/$day'
+      path: '/workouts/$enrollmentId/$week/$day'
+      fullPath: '/m/workouts/$enrollmentId/$week/$day'
+      preLoaderRoute: typeof AuthenticatedMWorkoutsEnrollmentIdWeekDayRouteImport
+      parentRoute: typeof AuthenticatedMRouteRoute
     }
   }
 }
@@ -1734,12 +1889,50 @@ const AuthenticatedAdminRouteRouteWithChildren =
     AuthenticatedAdminRouteRouteChildren,
   )
 
+interface AuthenticatedMMyPlansRouteChildren {
+  AuthenticatedMMyPlansEnrollmentIdRoute: typeof AuthenticatedMMyPlansEnrollmentIdRoute
+}
+
+const AuthenticatedMMyPlansRouteChildren: AuthenticatedMMyPlansRouteChildren = {
+  AuthenticatedMMyPlansEnrollmentIdRoute:
+    AuthenticatedMMyPlansEnrollmentIdRoute,
+}
+
+const AuthenticatedMMyPlansRouteWithChildren =
+  AuthenticatedMMyPlansRoute._addFileChildren(
+    AuthenticatedMMyPlansRouteChildren,
+  )
+
+interface AuthenticatedMPlansRouteChildren {
+  AuthenticatedMPlansPlanIdRoute: typeof AuthenticatedMPlansPlanIdRoute
+}
+
+const AuthenticatedMPlansRouteChildren: AuthenticatedMPlansRouteChildren = {
+  AuthenticatedMPlansPlanIdRoute: AuthenticatedMPlansPlanIdRoute,
+}
+
+const AuthenticatedMPlansRouteWithChildren =
+  AuthenticatedMPlansRoute._addFileChildren(AuthenticatedMPlansRouteChildren)
+
 interface AuthenticatedMRouteRouteChildren {
+  AuthenticatedMAccountRoute: typeof AuthenticatedMAccountRoute
+  AuthenticatedMMyPlansRoute: typeof AuthenticatedMMyPlansRouteWithChildren
+  AuthenticatedMPlansRoute: typeof AuthenticatedMPlansRouteWithChildren
+  AuthenticatedMResourcesRoute: typeof AuthenticatedMResourcesRoute
+  AuthenticatedMToolsRoute: typeof AuthenticatedMToolsRoute
   AuthenticatedMIndexRoute: typeof AuthenticatedMIndexRoute
+  AuthenticatedMWorkoutsEnrollmentIdWeekDayRoute: typeof AuthenticatedMWorkoutsEnrollmentIdWeekDayRoute
 }
 
 const AuthenticatedMRouteRouteChildren: AuthenticatedMRouteRouteChildren = {
+  AuthenticatedMAccountRoute: AuthenticatedMAccountRoute,
+  AuthenticatedMMyPlansRoute: AuthenticatedMMyPlansRouteWithChildren,
+  AuthenticatedMPlansRoute: AuthenticatedMPlansRouteWithChildren,
+  AuthenticatedMResourcesRoute: AuthenticatedMResourcesRoute,
+  AuthenticatedMToolsRoute: AuthenticatedMToolsRoute,
   AuthenticatedMIndexRoute: AuthenticatedMIndexRoute,
+  AuthenticatedMWorkoutsEnrollmentIdWeekDayRoute:
+    AuthenticatedMWorkoutsEnrollmentIdWeekDayRoute,
 }
 
 const AuthenticatedMRouteRouteWithChildren =
