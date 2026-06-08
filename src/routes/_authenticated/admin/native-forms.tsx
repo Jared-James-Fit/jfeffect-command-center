@@ -610,8 +610,7 @@ function AssignmentsEditor({ formId, form, onFormChange }: { formId: string; for
               checked={broadcastOn ? true : selectedIds.has(c.id)}
               disabled={broadcastOn || saving}
               tabIndex={-1}
-              onClick={(e) => e.stopPropagation()}
-              onCheckedChange={(checked) => setClientSelected(c.id, checked === true)}
+              className="pointer-events-none"
             />
             <span className="text-sm">{c.full_name}</span>
             <span className="ml-auto truncate text-xs text-muted-foreground">{c.email}</span>
