@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { ActionButton } from "@/components/action-button";
 import { AgreementStatusBadge } from "@/components/agreement-status-badge";
 import { FileText, ExternalLink, CheckCircle2, Download } from "lucide-react";
 import type { Agreement } from "@/lib/agreements";
@@ -18,13 +19,9 @@ export const Route = createFileRoute("/_authenticated/portal/agreements/")({
 function PortalAgreementsPage() {
   const getUrl = useServerFn(getSignedAgreementUrl);
   const downloadSigned = async (id: string) => {
-    try {
-      const r: any = await getUrl({ data: { id } });
-      if (r?.url) window.open(r.url, "_blank", "noopener,noreferrer");
-      else toast.error("No signed copy available yet.");
-    } catch (e: any) {
-      toast.error(e?.message ?? "Couldn't fetch signed copy");
-    }
+    const r: any = await getUrl({ data: { id } });
+    if (r?.url) window.open(r.url, "_blank", "noopener,noreferrer");
+    else throw new Error("No signed copy available yet.");
   };
   const { data = [], isLoading } = useQuery({
     queryKey: ["portal-agreements"],
@@ -101,9 +98,9 @@ function PortalAgreementsPage() {
                       <p className="text-xs text-muted-foreground">Signed {a.signed_at ? new Date(a.signed_at).toLocaleDateString() : "—"}</p>
                     </div>
                     {a.signed_copy_storage_path ? (
-                      <Button size="sm" variant="outline" onClick={() => downloadSigned(a.id)}>
+                      <ActionButton size="sm" variant="outline" onAction={() => downloadSigned(a.id)} loadingLabel="Loading…" successLabel="Opened">
                         Download signed copy <Download className="h-3 w-3 ml-1" />
-                      </Button>
+                      </ActionButton>
                     ) : a.signed_copy_url ? (
                       <Button size="sm" variant="outline" asChild>
                         <a href={a.signed_copy_url} target="_blank" rel="noreferrer">View signed copy <ExternalLink className="h-3 w-3 ml-1" /></a>

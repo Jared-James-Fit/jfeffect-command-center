@@ -16,6 +16,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ActionButton } from "@/components/action-button";
 
 import {
   listArchived, restoreArchivedItems, permanentlyDeleteArchivedItems,
@@ -100,24 +101,20 @@ function ArchivesPage() {
 
   const performDelete = async () => {
     if (!confirmDelete) return;
-    try {
-      const res = await deleteFn({
-        data: {
-          items: confirmDelete.items.map((i) => ({ type: i.type, id: i.id })),
-          confirm: "DELETE",
-        },
-      });
-      const ok = res.results.filter((r) => r.ok).length;
-      const fail = res.results.length - ok;
-      toast.success(`Permanently deleted ${ok}${fail ? `, ${fail} failed` : ""}`);
-      setConfirmDelete(null);
-      setDeleteConfirmText("");
-      clear();
-      qc.invalidateQueries({ queryKey: ["archives"] });
-      refetch();
-    } catch (e: any) {
-      toast.error(e?.message ?? "Delete failed");
-    }
+    const res = await deleteFn({
+      data: {
+        items: confirmDelete.items.map((i) => ({ type: i.type, id: i.id })),
+        confirm: "DELETE",
+      },
+    });
+    const ok = res.results.filter((r) => r.ok).length;
+    const fail = res.results.length - ok;
+    toast.success(`Permanently deleted ${ok}${fail ? `, ${fail} failed` : ""}`);
+    setConfirmDelete(null);
+    setDeleteConfirmText("");
+    clear();
+    qc.invalidateQueries({ queryKey: ["archives"] });
+    refetch();
   };
 
   const bulkDeleteRequiresType = (confirmDelete?.items.length ?? 0) > 1;
@@ -274,13 +271,16 @@ function ArchivesPage() {
           )}
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
+            <ActionButton
               disabled={bulkDeleteRequiresType && deleteConfirmText !== "DELETE"}
-              onClick={performDelete}
+              onAction={performDelete}
+              loadingLabel="Deleting…"
+              successLabel="Deleted"
+              successToast={false}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               Permanently Delete
-            </AlertDialogAction>
+            </ActionButton>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

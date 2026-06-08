@@ -15,6 +15,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { Loader2, Send, MessageCircle, Upload, ArrowLeft, ExternalLink, Check } from "lucide-react";
+import { ActionButton } from "@/components/action-button";
 import {
   listFormsForClient,
   listQuestions,
@@ -150,17 +151,11 @@ function ClientFormRenderer() {
         return v === undefined || v === null || v === "";
       });
     if (missing.length > 0) {
-      toast.error(`Please answer required: ${missing.map((m) => m.label).join(", ")}`);
-      return;
+      throw new Error(`Please answer required: ${missing.map((m) => m.label).join(", ")}`);
     }
-    try {
-      await submitSubmission(submission.id);
-      toast.success("Submitted! Coach Jared will reply in messenger.");
-      qc.invalidateQueries({ queryKey: ["nf-current-submission", formId, client?.id] });
-      qc.invalidateQueries({ queryKey: ["nf-submissions-for-client", client?.id] });
-    } catch (e: any) {
-      toast.error(e.message);
-    }
+    await submitSubmission(submission.id);
+    qc.invalidateQueries({ queryKey: ["nf-current-submission", formId, client?.id] });
+    qc.invalidateQueries({ queryKey: ["nf-submissions-for-client", client?.id] });
   }
 
   if (client?.id && formsFetched && !form) {
@@ -260,9 +255,16 @@ function ClientFormRenderer() {
             <Card className="border-primary/30 bg-card/95 p-4 backdrop-blur">
               <div className="flex items-center justify-between gap-3">
                 <div className="text-xs text-muted-foreground">Auto-saving as you type.</div>
-                <Button onClick={handleSubmit} className="bg-gradient-primary font-bold">
-                  <Send className="mr-2 h-4 w-4" /> Submit Check-In
-                </Button>
+                <ActionButton
+                  onAction={handleSubmit}
+                  loadingLabel="Submitting…"
+                  successLabel="Submitted"
+                  successToast="Submitted! Coach Jared will reply in messenger."
+                  className="bg-gradient-primary font-bold"
+                  icon={<Send className="h-4 w-4" />}
+                >
+                  Submit Check-In
+                </ActionButton>
               </div>
             </Card>
           </div>
@@ -479,14 +481,17 @@ function ExternalFormView({
                 ? "Marked as submitted. Your coach will follow up in messenger."
                 : "Finished the form? Tap below so your coach knows to review it."}
             </div>
-            <Button
-              onClick={onMarkSubmitted}
+            <ActionButton
+              onAction={async () => { await onMarkSubmitted(); }}
               disabled={submitted}
+              loadingLabel="Marking…"
+              successLabel="Submitted"
+              successToast={submitted ? false : "Marked submitted"}
               className="bg-gradient-primary font-bold"
+              icon={<Check className="h-4 w-4" />}
             >
-              <Check className="mr-2 h-4 w-4" />
               {submitted ? "Submitted" : "I submitted my check-in"}
-            </Button>
+            </ActionButton>
           </div>
         </Card>
       </div>

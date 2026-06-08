@@ -15,6 +15,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
+import { ActionButton } from "@/components/action-button";
 
 export const Route = createFileRoute("/_authenticated/m/plans/$planId")({ component: PlanDetail });
 
@@ -40,12 +41,9 @@ function PlanDetail() {
   const weeks = plan.published_payload?.weeks_data ?? [];
 
   const handleStart = async (confirmReplace = false) => {
-    try {
-      const res = await start({ data: { planId, confirmReplace } });
-      if (res.conflict) { setConflict(true); return; }
-      toast.success("Plan started");
-      navigate({ to: "/m/my-plans/$enrollmentId", params: { enrollmentId: res.enrollmentId! } });
-    } catch (e: any) { toast.error(e?.message ?? "Couldn't start plan"); }
+    const res = await start({ data: { planId, confirmReplace } });
+    if (res.conflict) { setConflict(true); return; }
+    navigate({ to: "/m/my-plans/$enrollmentId", params: { enrollmentId: res.enrollmentId! } });
   };
 
   return (
@@ -54,7 +52,7 @@ function PlanDetail() {
         title={plan.name}
         subtitle={plan.description ?? undefined}
         actions={unlocked
-          ? <Button onClick={() => handleStart(false)}><PlayCircle className="mr-2 h-4 w-4" />Start Plan</Button>
+          ? <ActionButton onAction={() => handleStart(false)} loadingLabel="Starting…" successLabel="Started" successToast="Plan started" icon={<PlayCircle className="h-4 w-4" />}>Start Plan</ActionButton>
           : <Badge variant="secondary"><Lock className="mr-1 h-3.5 w-3.5" />Locked</Badge>}
       />
       <div className="flex flex-wrap gap-3 text-sm text-muted-foreground">

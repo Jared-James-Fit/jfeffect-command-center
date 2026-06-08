@@ -17,6 +17,7 @@ import { durationRange } from "@/lib/pl-programs";
 import { movementAccent } from "@/components/program-builder";
 import { useAutosave, readLocalDraft, clearLocalDraft } from "@/hooks/use-autosave";
 import { SaveStatus } from "@/components/save-status";
+import { ActionButton } from "@/components/action-button";
 
 export const Route = createFileRoute("/_authenticated/portal/workouts/$dayId")({ component: WorkoutDay });
 
@@ -161,9 +162,13 @@ function WorkoutDay() {
               value={actualMin}
               onChange={(e) => setActualMin(e.target.value)}
             />
-            <Button onClick={async () => {
-              if (!client?.id) return;
-              try {
+            <ActionButton
+              loadingLabel="Saving…"
+              successLabel="Complete"
+              successToast="Workout marked complete"
+              icon={<CheckCircle2 className="h-4 w-4" />}
+              onAction={async () => {
+                if (!client?.id) return;
                 await metaSave.flush();
                 const payload = {
                   day_id: dayId,
@@ -174,15 +179,14 @@ function WorkoutDay() {
                 };
                 if (completion) await sb.from("pl_day_completions").update(payload).eq("id", completion.id);
                 else await sb.from("pl_day_completions").insert(payload);
-                toast.success("Workout marked complete");
                 if (draftKey) clearLocalDraft(draftKey);
                 setNotes("");
                 setActualMin("");
                 refresh();
-              } catch (e: any) { toast.error(e.message); }
-            }}>
-              <CheckCircle2 className="mr-2 h-4 w-4" /> Mark Workout Complete
-            </Button>
+              }}
+            >
+              Mark Workout Complete
+            </ActionButton>
           </div>
         </Card>
       </div>
