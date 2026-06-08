@@ -386,9 +386,6 @@ function QuestionRow({ q, formId, onMoveUp, onMoveDown }: { q: NfQuestion; formI
 
 function AssignmentsEditor({ formId, form, onFormChange }: { formId: string; form: NfForm; onFormChange: (f: NfForm) => void }) {
   const qc = useQueryClient();
-  const setAssignment = useServerFn(setNativeFormAssignment);
-  const bulkAssign = useServerFn(bulkAssignNativeFormToClients);
-  const clearAssignments = useServerFn(clearNativeFormAssignments);
   const [search, setSearch] = useState("");
   const [saving, setSaving] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
