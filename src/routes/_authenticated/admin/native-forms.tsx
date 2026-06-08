@@ -382,18 +382,30 @@ function QuestionRow({ q, formId, onMoveUp, onMoveDown }: { q: NfQuestion; formI
   );
 }
 
-function AssignmentsEditor({ formId }: { formId: string }) {
+function AssignmentsEditor({ formId, form, onFormChange }: { formId: string; form: NfForm; onFormChange: (f: NfForm) => void }) {
   const qc = useQueryClient();
+  const [search, setSearch] = useState("");
+  const [saving, setSaving] = useState(false);
+
   const { data: assignments = [] } = useQuery({ queryKey: ["nf-assignments", formId], queryFn: () => listAssignments(formId) });
   const { data: clients = [] } = useQuery({
     queryKey: ["all-clients-min"],
     queryFn: async () => {
-      const { data } = await supabase.from("clients").select("id, full_name, email").eq("archived", false).order("full_name");
+      const { data } = await supabase
+        .from("clients")
+        .select("id, full_name, email, status, archived")
+        .eq("archived", false)
+        .order("full_name");
       return data ?? [];
     },
   });
 
   const assigned = new Set(assignments.map((a: any) => a.client_id));
+  const filtered = clients.filter((c: any) => {
+    const q = search.trim().toLowerCase();
+    if (!q) return true;
+    return (c.full_name ?? "").toLowerCase().includes(q) || (c.email ?? "").toLowerCase().includes(q);
+  });
 
   async function toggle(clientId: string) {
     if (assigned.has(clientId)) await unassignForm(formId, clientId);
@@ -401,11 +413,98 @@ function AssignmentsEditor({ formId }: { formId: string }) {
     qc.invalidateQueries({ queryKey: ["nf-assignments", formId] });
   }
 
+  async function selectAllVisible() {
+    const toAdd = filtered.filter((c: any) => !assigned.has(c.id)).map((c: any) => c.id);
+    if (toAdd.length === 0) return;
+    await bulkAssignFormToClients(formId, toAdd);
+    qc.invalidateQueries({ queryKey: ["nf-assignments", formId] });
+    toast.success(`Assigned ${toAdd.length}`);
+  }
+
+  async function clearAll() {
+    if (!confirm("Remove all individual assignments for this form?")) return;
+    await clearAllAssignments(formId);
+    qc.invalidateQueries({ queryKey: ["nf-assignments", formId] });
+    toast.success("Cleared");
+  }
+
+  async function setBroadcast(on: boolean) {
+    setSaving(true);
+    try {
+      const visibility = on ? "all_active_clients" : "selected";
+      await upsertForm({ id: formId, visibility });
+      onFormChange({ ...form, visibility });
+      if (on) {
+        // Materialize assignments for every active client now so submissions, due
+        // dates, and admin counts still work cleanly.
+        const ids = await listActiveCoachingClientIds();
+        await bulkAssignFormToClients(formId, ids);
+      }
+      qc.invalidateQueries({ queryKey: ["nf-forms"] });
+      qc.invalidateQueries({ queryKey: ["nf-assignments", formId] });
+      toast.success(on ? "Now visible to all active clients" : "Switched to selected clients");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function setAutoAssign(on: boolean) {
+    setSaving(true);
+    try {
+      await upsertForm({ id: formId, auto_assign_new_clients: on });
+      onFormChange({ ...form, auto_assign_new_clients: on });
+      qc.invalidateQueries({ queryKey: ["nf-forms"] });
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const broadcastOn = form.visibility === "all_active_clients";
+
   return (
-    <div className="space-y-2">
-      <div className="text-xs text-muted-foreground">Tick clients who should see this form in their portal.</div>
-      <div className="max-h-[50vh] space-y-1 overflow-y-auto rounded border border-border p-2">
-        {clients.map((c: any) => (
+    <div className="space-y-3">
+      <div className="rounded-lg border border-border bg-secondary/10 p-3 space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <Label className="text-sm font-bold">Assign to all active coaching clients</Label>
+            <p className="text-xs text-muted-foreground">Every Active / New Client sees this form. No need to tick individually.</p>
+          </div>
+          <Switch checked={broadcastOn} disabled={saving} onCheckedChange={setBroadcast} />
+        </div>
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <Label className="text-sm font-bold">Auto-assign to new coaching clients</Label>
+            <p className="text-xs text-muted-foreground">Future active clients get this form added automatically.</p>
+          </div>
+          <Switch checked={form.auto_assign_new_clients} disabled={saving} onCheckedChange={setAutoAssign} />
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="text-xs text-muted-foreground">
+          {broadcastOn
+            ? `Visible to all active clients · ${assignments.length} materialized`
+            : `${assignments.length} client${assignments.length === 1 ? "" : "s"} assigned`}
+        </div>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={selectAllVisible}>Select all visible</Button>
+          <Button variant="ghost" size="sm" onClick={clearAll}>Clear all</Button>
+        </div>
+      </div>
+
+      <div className="relative">
+        <Search className="pointer-events-none absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <Input className="pl-8" placeholder="Search clients…" value={search} onChange={(e) => setSearch(e.target.value)} />
+      </div>
+
+      <div className="max-h-[40vh] space-y-1 overflow-y-auto rounded border border-border p-2">
+        {filtered.length === 0 ? (
+          <div className="p-3 text-xs text-muted-foreground">No matching clients.</div>
+        ) : filtered.map((c: any) => (
           <label key={c.id} className="flex items-center gap-2 rounded p-2 hover:bg-muted/30">
             <Checkbox checked={assigned.has(c.id)} onCheckedChange={() => toggle(c.id)} />
             <span className="text-sm">{c.full_name}</span>
