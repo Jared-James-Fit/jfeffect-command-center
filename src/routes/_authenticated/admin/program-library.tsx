@@ -286,6 +286,17 @@ function RowMenu({ tpl, onChanged }: { tpl: any; onChanged: () => void }) {
         <Button size="icon" variant="ghost" className="h-7 w-7"><MoreVertical className="h-4 w-4" /></Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-40">
+        <DropdownMenuItem
+          onClick={() => {
+            const next = window.prompt("Rename template", tpl.name ?? "");
+            if (next == null) return;
+            const name = next.trim();
+            if (!name || name === tpl.name) return;
+            run(() => updateTemplate(tpl.id, { name }), "Renamed");
+          }}
+        >
+          <Pencil className="mr-2 h-3.5 w-3.5" /> Rename
+        </DropdownMenuItem>
         <DropdownMenuItem onClick={() => run(() => duplicateTemplate(tpl.id), "Duplicated")}>
           <Copy className="mr-2 h-3.5 w-3.5" /> Duplicate
         </DropdownMenuItem>
