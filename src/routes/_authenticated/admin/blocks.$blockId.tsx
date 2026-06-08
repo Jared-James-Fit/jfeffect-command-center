@@ -528,10 +528,11 @@ function BlockEditor() {
 }
 
 function WeekColumn({
-  week, days, rows, exercises, density, onAction, onCopyWeek,
+  blockId, week, days, rows, exercises, density, onAction, onCopyWeek,
   selectedDayId, onSelectDay, dayLinkInfo, onRowPatch, onDayPatch, onCopyDayToFuture,
   stacked = false, collapsed = false, onToggleCollapse, isCurrent = false, stats,
 }: {
+  blockId: string;
   week: any;
   days: any[];
   rows: any[];
@@ -619,18 +620,22 @@ function WeekColumn({
             <Link2 className="mr-1 h-3 w-3" /> {linkLabel}
           </Badge>
         )}
-        <Input
-          defaultValue={week.notes ?? ""}
-          placeholder="Week notes"
-          className="h-6 max-w-[180px] border-0 bg-transparent px-1 text-[11px] focus-visible:ring-1"
-          onBlur={(e) => {
-            if (e.target.value !== (week.notes ?? "")) {
-              onAction(async () => {
-                await (supabase as any).from("pl_weeks").update({ notes: e.target.value }).eq("id", week.id);
-              });
-            }
-          }}
-        />
+        <div className="max-w-[180px]">
+          <CellInput
+            density={density}
+            value={week.notes ?? ""}
+            placeholder="Week notes"
+            draftKey={`${blockId}::w${week.week_index}::notes`}
+            className="h-6 border-0 bg-transparent px-1 text-[11px] focus-visible:ring-1"
+            onCommit={(v) => {
+              if (v !== (week.notes ?? "")) {
+                onAction(async () => {
+                  await (supabase as any).from("pl_weeks").update({ notes: v }).eq("id", week.id);
+                });
+              }
+            }}
+          />
+        </div>
         <div className="ml-auto flex items-center gap-1">
           <Button size="sm" variant="ghost" className="h-6 px-2 text-[11px]" onClick={onCopyWeek} title="Copy to / from">
             <Copy className="mr-1 h-3 w-3" /> Copy
@@ -651,6 +656,7 @@ function WeekColumn({
         {days.map((d: any) => (
           <DayBlock
             key={d.id}
+            blockId={blockId}
             day={d}
             rows={rows.filter((r: any) => r.day_id === d.id)}
             exercises={exercises}
