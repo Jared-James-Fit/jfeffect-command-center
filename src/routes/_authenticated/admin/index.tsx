@@ -305,17 +305,9 @@ function AdminDashboard() {
         subtitle="Your coaching business at a glance."
         actions={
           <>
-            <Link to="/admin/client-pov">
-              <Button
-                size="sm"
-                className="bg-warning/15 text-warning border border-warning/40 hover:bg-warning/25 font-semibold"
-              >
-                <Eye className="mr-2 h-4 w-4" /> Client POV
-              </Button>
-            </Link>
             {quickActions.map((a) => (
               <Link key={a.label} to={a.to}>
-                <Button variant="outline" size="sm" className="font-semibold">
+                <Button variant="outline" size="sm" className="font-semibold hidden md:inline-flex">
                   <a.icon className="mr-2 h-4 w-4" />{a.label}
                 </Button>
               </Link>
@@ -324,6 +316,23 @@ function AdminDashboard() {
         }
       />
       <div className="space-y-6 p-6 md:p-8">
+        <Link to="/admin/client-pov" className="block">
+          <Card className="border-warning/40 bg-gradient-to-r from-warning/20 to-warning/5 p-4 md:p-5 hover:shadow-md transition-shadow cursor-pointer">
+            <div className="flex items-center gap-3 md:gap-4">
+              <div className="grid h-12 w-12 md:h-14 md:w-14 shrink-0 place-items-center rounded-full bg-warning/20 text-warning">
+                <Eye className="h-6 w-6 md:h-7 md:w-7" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-base md:text-lg font-bold text-foreground">Enter Client POV</div>
+                <div className="text-sm text-muted-foreground truncate">View the portal as any assigned client</div>
+              </div>
+              <Button size="sm" className="bg-warning/15 text-warning border border-warning/40 hover:bg-warning/25 font-semibold shrink-0">
+                <Eye className="mr-2 h-4 w-4" /> Client POV
+              </Button>
+            </div>
+          </Card>
+        </Link>
+
         <DriveSetupBanner />
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard label="Active Clients" value={active} icon={Users} tone="primary" />
