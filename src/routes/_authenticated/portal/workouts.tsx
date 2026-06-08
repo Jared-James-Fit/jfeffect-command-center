@@ -5,7 +5,8 @@ import { usePortalUserId } from "@/lib/client-impersonation";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Clock, CheckCircle2, Activity, FileText, Dumbbell, ChevronRight } from "lucide-react";
+import { Clock, CheckCircle2, Activity, FileText, Dumbbell, ChevronRight, Play } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { getClientWorkouts, durationRange } from "@/lib/pl-programs";
 
 export const Route = createFileRoute("/_authenticated/portal/workouts")({ component: WorkoutsPage });
@@ -74,18 +75,34 @@ function WorkoutsPage() {
               <h2 className="mb-2 text-sm font-bold uppercase tracking-widest text-muted-foreground">{block?.name ?? "Workouts"}</h2>
               <div className="grid gap-2">
                 {entries.map((it) => (
-                  <Link key={it.day.id} to="/portal/workouts/$dayId" params={{ dayId: it.day.id }}>
-                    <Card className="p-3 flex items-center justify-between hover:bg-secondary/30">
-                      <div>
-                        <div className="font-bold">{it.day.title || `Day ${it.day.day_index}`}</div>
-                        <div className="text-xs text-muted-foreground">Week {it.week?.week_index} {it.day.focus ? `· ${it.day.focus}` : ""}</div>
+                  <Link
+                    key={it.day.id}
+                    to="/portal/workouts/$dayId"
+                    params={{ dayId: it.day.id }}
+                    className="block"
+                  >
+                    <Card className="p-3 flex items-center justify-between gap-3 cursor-pointer hover:bg-secondary/30 active:bg-secondary/50 transition">
+                      <div className="min-w-0 flex-1">
+                        <div className="font-bold truncate">{it.day.title || `Day ${it.day.day_index}`}</div>
+                        <div className="text-xs text-muted-foreground">
+                          Week {it.week?.week_index}
+                          {it.day.focus ? ` · ${it.day.focus}` : ""}
+                          {" · "}
+                          <Clock className="inline h-3 w-3 -mt-0.5" />{" "}
+                          {durationRange(it.day.duration_override_min ?? it.day.duration_estimate_min ?? 60)}
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 shrink-0">
                         {it.completion ? (
-                          <Badge variant="outline" className="text-green-500 border-green-500/30 bg-green-500/10"><CheckCircle2 className="mr-1 h-3 w-3" /> Done</Badge>
+                          <Badge variant="outline" className="text-green-500 border-green-500/30 bg-green-500/10">
+                            <CheckCircle2 className="mr-1 h-3 w-3" /> Done
+                          </Badge>
                         ) : (
-                          <Badge variant="outline"><Clock className="mr-1 h-3 w-3" /> {durationRange(it.day.duration_override_min ?? it.day.duration_estimate_min ?? 60)}</Badge>
+                          <Button size="sm" className="h-8" tabIndex={-1}>
+                            <Play className="mr-1 h-3.5 w-3.5" /> Open
+                          </Button>
                         )}
+                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
                       </div>
                     </Card>
                   </Link>
