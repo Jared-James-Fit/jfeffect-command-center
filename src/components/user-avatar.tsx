@@ -73,11 +73,13 @@ export function UserAvatar({
     return hit && hit.expiresAt > Date.now() ? hit.url : null;
   });
   const [failed, setFailed] = useState(false);
+  const [imgLoaded, setImgLoaded] = useState(false);
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     setFailed(false);
+    setImgLoaded(false);
     if (!src) {
       setUrl(null);
       return;
