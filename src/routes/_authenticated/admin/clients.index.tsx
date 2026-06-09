@@ -605,6 +605,14 @@ function ClientsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      {assignTo && (
+        <QuickAssignTemplateDialog
+          open={!!assignTo}
+          onOpenChange={(o) => { if (!o) setAssignTo(null); }}
+          clientId={assignTo.id}
+          clientName={assignTo.name}
+        />
+      )}
     </>
   );
 }
