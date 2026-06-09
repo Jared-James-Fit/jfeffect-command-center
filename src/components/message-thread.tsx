@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useAuth } from "@/lib/auth";
@@ -757,6 +757,29 @@ export function MessageThread({
     return null;
   }, [visibleMessages, role]);
 
+  // First incoming message that was unread when this thread opened — used
+  // to render an iMessage-style "New messages" divider so unread items are
+  // still distinguishable after the auto mark-read fires.
+  const initialUnreadFirstIdRef = useRef<string | null>(null);
+  const initialUnreadCapturedRef = useRef(false);
+  useEffect(() => {
+    if (initialUnreadCapturedRef.current) return;
+    if (!visibleMessages.length) return;
+    initialUnreadCapturedRef.current = true;
+    const oppRole: SenderRole = role === "admin" ? "client" : "admin";
+    const first = visibleMessages.find((m) =>
+      m.sender_role === oppRole &&
+      !m.is_internal_note &&
+      !(role === "admin" ? m.read_by_admin_at : m.read_by_client_at),
+    );
+    initialUnreadFirstIdRef.current = first?.id ?? null;
+  }, [visibleMessages, role]);
+  // Reset divider when switching conversations.
+  useEffect(() => {
+    initialUnreadCapturedRef.current = false;
+    initialUnreadFirstIdRef.current = null;
+  }, [clientId]);
+
   // ---------- Long-press + selection helpers ----------
   const startLongPress = (id: string, x: number, y: number) => {
     if (longPressRef.current?.t) clearTimeout(longPressRef.current.t);
@@ -989,8 +1012,17 @@ export function MessageThread({
             ? peerAvatarPath ?? null
             : null;
           return (
-            <div
-              key={m.id}
+            <Fragment key={m.id}>
+              {initialUnreadFirstIdRef.current === m.id && (
+                <div className="my-1 flex items-center gap-2 px-1">
+                  <span className="h-px flex-1 bg-primary/40" />
+                  <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-primary">
+                    New
+                  </span>
+                  <span className="h-px flex-1 bg-primary/40" />
+                </div>
+              )}
+              <div
               className={cn(
                 "relative flex w-full min-w-0 items-end gap-2 will-change-transform",
                 mine ? "justify-end" : "justify-start",
@@ -1317,6 +1349,7 @@ export function MessageThread({
                 )}
               </div>
             </div>
+            </Fragment>
           );
         })}
       </div>

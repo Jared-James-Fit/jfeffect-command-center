@@ -19,6 +19,7 @@ import {
 import { Search, ChevronLeft, MoreHorizontal, ExternalLink } from "lucide-react";
 import { formatDistanceToNow, parseISO } from "date-fns";
 import { cn } from "@/lib/utils";
+import { useChatPresence, LiveDot } from "@/hooks/use-chat-presence";
 
 const FILTERS = ["All", "Unread", "Needs Response", "High Priority", "Important", "Resolved", "Archived"] as const;
 type Filter = typeof FILTERS[number];
@@ -41,10 +42,14 @@ function MessagesInbox() {
   const { data: clients = [] } = useQuery({
     queryKey: ["clients-min"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("clients").select("id, full_name, first_name, last_name, email, profile_picture_url, archived, status").order("full_name");
+      const { data, error } = await supabase
+        .from("clients")
+        .select("id, full_name, first_name, last_name, email, profile_picture_url, archived, status, last_active_at")
+        .order("full_name");
       if (error) throw error;
       return data;
     },
+    refetchInterval: 60_000,
   });
 
   const { data: states = [] } = useQuery({
@@ -141,6 +146,13 @@ function MessagesInbox() {
 
   const selected = clients.find((c) => c.id === selectedId);
   const selectedState = selectedId ? stateMap.get(selectedId) : undefined;
+  const { peerLive: selectedClientLive } = useChatPresence(selectedId, "admin");
+
+  // A client is "active in the app" if they've pinged within the last 3 min.
+  const isClientActive = (last_active_at?: string | null) => {
+    if (!last_active_at) return false;
+    return Date.now() - new Date(last_active_at).getTime() < 3 * 60_000;
+  };
 
   const selectClient = (id: string) => {
     setSelectedId(id);
@@ -224,12 +236,17 @@ function MessagesInbox() {
                 selectedId === client.id && "bg-secondary/60",
               )}
             >
-              <UserAvatar
-                src={client.profile_picture_url}
-                name={client.full_name}
-                size={44}
-                ring
-              />
+              <span className="relative shrink-0">
+                <UserAvatar
+                  src={client.profile_picture_url}
+                  name={client.full_name}
+                  size={44}
+                  ring
+                />
+                {isClientActive((client as any).last_active_at) && (
+                  <span className="absolute bottom-0 right-0"><LiveDot /></span>
+                )}
+              </span>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center justify-between gap-2">
                   <span className={cn("truncate text-sm", unread > 0 ? "font-bold" : "font-semibold")}>
@@ -285,14 +302,26 @@ function MessagesInbox() {
               >
                 <ChevronLeft className="h-5 w-5" />
               </Button>
-              <UserAvatar
-                src={selected.profile_picture_url}
-                name={selected.full_name}
-                size={40}
-                ring
-              />
+              <span className="relative shrink-0">
+                <UserAvatar
+                  src={selected.profile_picture_url}
+                  name={selected.full_name}
+                  size={40}
+                  ring
+                />
+                {(selectedClientLive || isClientActive((selected as any).last_active_at)) && (
+                  <span className="absolute bottom-0 right-0"><LiveDot /></span>
+                )}
+              </span>
               <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-bold">{selected.full_name}</div>
+                <div className="flex items-center gap-1.5 truncate text-sm font-bold">
+                  <span className="truncate">{selected.full_name}</span>
+                  {(selectedClientLive || isClientActive((selected as any).last_active_at)) && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-600">
+                      <LiveDot /> {selectedClientLive ? "Live in chat" : "Active"}
+                    </span>
+                  )}
+                </div>
                 <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
                   {selectedState?.priority && selectedState.priority !== "Normal" && (
                     <PriorityChip priority={selectedState.priority} />
