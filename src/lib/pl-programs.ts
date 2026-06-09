@@ -1187,7 +1187,7 @@ export type TemplatePlacement =
   | { mode: "into_week"; weekId: string }
   | { mode: "into_day"; dayId: string };
 
-export async function applyTemplateToClient(opts: { templateId: string; clientId: string; placement?: TemplatePlacement; prepId?: string | null; name?: string; clientVisible?: boolean }) {
+export async function applyTemplateToClient(opts: { templateId: string; clientId: string; placement?: TemplatePlacement; prepId?: string | null; name?: string; clientVisible?: boolean; startDate?: string | null; endDate?: string | null }) {
   const { data: tpl, error: te } = await sb.from("pl_templates").select("*").eq("id", opts.templateId).maybeSingle();
   if (te) throw te;
   if (!tpl) throw new Error("Template not found");
@@ -1207,6 +1207,8 @@ export async function applyTemplateToClient(opts: { templateId: string; clientId
       status: "Active",
       client_visible: opts.clientVisible ?? true,
       source_template_id: tpl.id,
+      start_date: opts.startDate ?? null,
+      end_date: opts.endDate ?? null,
     });
     for (const b of (payload.blocks_data || [])) {
       const wdLen = Array.isArray(b.weeks_data) ? b.weeks_data.length : (b.weeks || 4);
@@ -1268,6 +1270,8 @@ export async function applyTemplateToClient(opts: { templateId: string; clientId
       status: "Active",
       client_visible: opts.clientVisible ?? true,
       source_template_id: tpl.id,
+      start_date: opts.startDate ?? null,
+      end_date: opts.endDate ?? null,
     });
     targetPrepId = prep.id;
   }
@@ -1279,6 +1283,8 @@ export async function applyTemplateToClient(opts: { templateId: string; clientId
     training_focus: tpl.training_focus ?? null,
     source_template_id: tpl.id,
     status: "Active",
+    start_date: opts.startDate ?? null,
+    end_date: opts.endDate ?? null,
   });
   // If payload has a structured tree, copy it. For MVP: empty seeded block + library can be enhanced later.
   if (Array.isArray(payload.weeks_data)) {
