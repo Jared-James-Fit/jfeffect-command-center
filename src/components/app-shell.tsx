@@ -258,7 +258,10 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
         <nav className={cn("flex-1 overflow-y-auto", isCollapsed ? "p-1.5" : "p-2")}>
           <div className={isCollapsed ? "space-y-2" : "space-y-2.5"}>
             {grouped.map((group) => {
-              const sectionCollapsed = group.label ? collapsedSections.has(group.label) : false;
+              const containsActive = group.label === activeGroupLabel;
+              const sectionCollapsed = group.label
+                ? collapsedSections.has(group.label) && !containsActive
+                : false;
               return (
                 <div key={group.label ?? "default"}>
                   {group.label && !isCollapsed && (
