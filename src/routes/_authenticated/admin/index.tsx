@@ -360,6 +360,59 @@ function AdminDashboard() {
           <StatCard label="Payment Overdue" value={overdue} icon={DollarSign} tone="warn" />
         </div>
 
+        <Card className={`${clientsWithoutProduct.length > 0 ? "border-destructive/40 bg-destructive/5" : "border-border bg-card"} p-6`}>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <h2 className="flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-muted-foreground">
+              <ShoppingCart className={`h-4 w-4 ${clientsWithoutProduct.length > 0 ? "text-destructive" : ""}`} />
+              Clients Without an Active Product
+              {clientsWithoutProduct.length > 0 && (
+                <Badge variant="outline" className="border-destructive/40 bg-destructive/10 text-destructive">
+                  {clientsWithoutProduct.length}
+                </Badge>
+              )}
+            </h2>
+            <Link to="/admin/payment-links" className="text-xs font-semibold text-primary hover:underline">Browse offers →</Link>
+          </div>
+          {clientsWithoutProduct.length === 0 ? (
+            <div className="rounded-md border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+              Every active client has at least one active purchased product. Nice.
+            </div>
+          ) : (
+            <ul className="divide-y divide-border">
+              {clientsWithoutProduct.slice(0, 10).map((c) => (
+                <li key={c.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <Badge variant="outline" className="border-destructive/40 bg-destructive/10 text-destructive">No active product</Badge>
+                    <Link to="/admin/clients/$id" params={{ id: c.id }} className="text-sm font-semibold hover:underline">
+                      {c.full_name}
+                    </Link>
+                    {c.status && c.status !== "Active" && (
+                      <span className="text-xs text-muted-foreground">{c.status}</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      className="bg-gradient-primary font-bold uppercase"
+                      onClick={() => setSellTo({ id: c.id, name: c.full_name })}
+                    >
+                      <ShoppingCart className="mr-1.5 h-3.5 w-3.5" /> Sell product
+                    </Button>
+                    <Link to="/admin/clients/$id" params={{ id: c.id }} search={{ tab: "purchases" as any }} className="text-xs font-semibold text-primary hover:underline">
+                      View
+                    </Link>
+                  </div>
+                </li>
+              ))}
+              {clientsWithoutProduct.length > 10 && (
+                <li className="pt-3 text-center text-xs text-muted-foreground">
+                  + {clientsWithoutProduct.length - 10} more — <Link to="/admin/clients" className="font-semibold text-primary hover:underline">view all clients</Link>
+                </li>
+              )}
+            </ul>
+          )}
+        </Card>
+
         <UpcomingBirthdaysWidget />
 
         <Card className="border-border bg-card p-6">
