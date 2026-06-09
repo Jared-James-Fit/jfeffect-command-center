@@ -81,10 +81,24 @@ function BlockMaxesDialog({
     queryKey: ["pl-client-maxes", clientId, blockId],
     queryFn: () => listClientMaxes(clientId, blockId),
   });
+  // Full exercise library for the "Add Exercise Max" picker.
+  const { data: libraryExercises = [] } = useQuery<{ id: string; name: string; muscle_group: string | null; category: string | null }[]>({
+    queryKey: ["pl-maxes-exercise-library"],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("exercises")
+        .select("id, name, muscle_group, category")
+        .order("name");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
 
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [saving, setSaving] = useState(false);
-  const [addLift, setAddLift] = useState<string>("");
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [customMode, setCustomMode] = useState(false);
+  const [customName, setCustomName] = useState("");
   // Main lift unit selector (applies to Squat/Bench/Deadlift rows only).
   const [mainUnit, setMainUnit] = useState<"kg" | "lb">("kg");
   const [applyExistingRows, setApplyExistingRows] = useState<"yes" | "no">("no");
@@ -100,7 +114,7 @@ function BlockMaxesDialog({
       const m = byLift.get(lift);
       if (m) {
         initial.push({
-          id: m.id, lift: m.lift,
+          id: m.id, lift: m.lift, exercise_id: m.exercise_id,
           one_rm: m.one_rm ?? "", training_max: m.training_max ?? "",
           unit: m.unit, scope: m.block_id ? "block" : "profile",
           source_lift: m.source_lift,
@@ -115,7 +129,7 @@ function BlockMaxesDialog({
       if (!m.active) continue;
       if (DEFAULT_LIFTS.includes(m.lift)) continue;
       initial.push({
-        id: m.id, lift: m.lift,
+        id: m.id, lift: m.lift, exercise_id: m.exercise_id,
         one_rm: m.one_rm ?? "", training_max: m.training_max ?? "",
         unit: m.unit, scope: m.block_id ? "block" : "profile",
         source_lift: m.source_lift,
@@ -162,15 +176,21 @@ function BlockMaxesDialog({
     }
   };
 
-  const addRow = () => {
-    const lift = addLift.trim();
-    if (!lift) return;
-    if (drafts.some((d) => d.lift.toLowerCase() === lift.toLowerCase())) {
+  const addExerciseRow = (lift: string, exerciseId?: string | null) => {
+    const name = lift.trim();
+    if (!name) return;
+    if (drafts.some((d) => d.lift.toLowerCase() === name.toLowerCase())) {
       toast.error("Already in list");
       return;
     }
-    setDrafts((arr) => [...arr, { lift, one_rm: "", training_max: "", unit: "kg", scope: "profile" }]);
-    setAddLift("");
+    setDrafts((arr) => [...arr, {
+      lift: name,
+      exercise_id: exerciseId ?? null,
+      one_rm: "", training_max: "", unit: mainUnit, scope: "profile",
+    }]);
+    setPickerOpen(false);
+    setCustomMode(false);
+    setCustomName("");
   };
 
   const removeRow = async (i: number) => {
@@ -190,6 +210,7 @@ function BlockMaxesDialog({
         await upsertClientMax({
           client_id: clientId,
           lift: d.lift.trim(),
+          exercise_id: d.exercise_id ?? null,
           one_rm: d.one_rm === "" ? null : Number(d.one_rm),
           training_max: d.training_max === "" ? null : Number(d.training_max),
           unit: d.unit,
