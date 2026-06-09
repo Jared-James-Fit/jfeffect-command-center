@@ -34,6 +34,8 @@ import { cn } from "@/lib/utils";
 import { getChatSettings, DEFAULT_REACTION } from "@/lib/chat-settings";
 import { GifPicker } from "@/components/gif-picker";
 import { markRecent } from "@/lib/chat-gifs";
+import { markRecent as markSoundRecent } from "@/lib/chat-sounds";
+import { ChatSoundCard } from "@/components/chat-sound-card";
 import {
   Paperclip, Send, X, FileText, Image as ImageIcon, Video, Link as LinkIcon, ExternalLink,
   Mic, Trash2, Play, Pause, Camera, File as FileIcon, Flag, AlertCircle, AlertTriangle,
@@ -340,6 +342,16 @@ function LinkAttachment({ att, mine }: { att: MessageAttachment; mine: boolean }
 }
 
 function AttachmentView({ att, mine, message }: { att: MessageAttachment; mine: boolean; message?: Message }) {
+  if (att.kind === "sound") {
+    return (
+      <ChatSoundCard
+        url={att.url}
+        title={att.name ?? "Sound Effect"}
+        durationMs={att.duration ? Math.round(att.duration * 1000) : null}
+        mine={mine}
+      />
+    );
+  }
   if (att.type === "image") return <ImageAttachment att={att} />;
   if (att.type === "video") return <VideoAttachment att={att} />;
   if (att.type === "audio") return <AudioAttachment att={att} mine={mine} message={message} />;
@@ -599,6 +611,12 @@ export function MessageThread({
       ? true
       : role === "client"
       ? !!chatSettings?.clientsCanSendGifs
+      : true;
+  const canSendSounds =
+    role === "admin"
+      ? true
+      : role === "client"
+      ? !!chatSettings?.clientsCanSendSounds
       : true;
 
   // Group reactions by message id for fast lookup.
@@ -1363,6 +1381,36 @@ export function MessageThread({
             {canSendGifs && (
               <GifPicker
                 disabled={sending || uploading}
+                showSounds
+                onPickSound={!canSendSounds ? undefined : async (s) => {
+                  if (!user) return;
+                  setSending(true);
+                  try {
+                    await sendMessage({
+                      clientId,
+                      senderId: user.id,
+                      senderRole: role,
+                      body: "",
+                      attachments: [{
+                        type: "audio",
+                        kind: "sound",
+                        url: s.media_url,
+                        name: s.title,
+                        mime: s.mime,
+                        duration: s.duration_ms ? s.duration_ms / 1000 : undefined,
+                      }],
+                      messageType,
+                      isInternalNote: role === "admin" ? internalNote : false,
+                      priority: role === "admin" ? priority : undefined,
+                    });
+                    qc.invalidateQueries({ queryKey: ["messages", clientId, role] });
+                    try { await markSoundRecent(user.id, s.id); } catch {}
+                  } catch (e: any) {
+                    toast.error(e?.message ?? "Failed to send sound");
+                  } finally {
+                    setSending(false);
+                  }
+                }}
                 onPick={async (g) => {
                   if (!user) return;
                   setSending(true);

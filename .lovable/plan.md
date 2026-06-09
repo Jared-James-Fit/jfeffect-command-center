@@ -1,73 +1,106 @@
-## Two features for chat
+## Sound Effects in Chat — Implementation Plan
 
-### Feature 1 — Double-tap quick reaction + admin default
+Build on the existing GIF/effects system. Sounds reuse the same patterns: a library table, favorites/recent, an admin manager, a picker tab inside the existing GIF popover, and a clean in-chat audio card. No autoplay anywhere.
 
-**Admin setting**
-- New row in `app_settings`: `key = 'chat_default_reaction'`, `value_text` = emoji (default `✅`).
-- New admin route `/admin/settings/chat` (under Communication) with a 7-emoji picker: ✅ 👍 🔥 💪 ❤️ 👀 😂. Saves to `app_settings`.
-- Add nav entry under existing admin Settings/Communication area.
+---
 
-**Client behavior (`src/components/message-thread.tsx`)**
-- Load setting once via React Query (`chatDefaultReactionQuery`), default `✅` if unset.
-- Add `useDoubleTap(onDoubleTap)` hook attached to each non-deleted message bubble:
-  - Mobile: track `touchend` timestamps, fire when 2 taps <300ms and movement <10px.
-  - Desktop: `onDoubleClick` only when `window.getSelection().isCollapsed`.
-  - Ignore taps where `e.target.closest('a, video, img, button, [data-no-doubletap]')`.
-- On double-tap, call existing optimistic `onToggleReaction(message.id, defaultEmoji)` — already toggles add/remove.
-- Add a tiny CSS pop animation (`@keyframes reaction-pop { 0%{scale:.6;opacity:0} 60%{scale:1.15} 100%{scale:1} }`, ~240ms) applied to the reaction chip when it first mounts.
-- Verify reaction chip styling — remove any red ring/border, use subtle muted bubble; align left for incoming, right for outgoing.
+### 1. Database & Storage (one migration)
 
-### Feature 2 — GIF / Effects library
+New tables (mirror `chat_gifs`):
+- `chat_sounds` — `id, title, category, tags[], media_url, duration_ms, is_featured, active, archived, sort_order, created_text, created_at`
+- `chat_sound_favorites` — `user_id, sound_id, created_at`
+- `chat_sound_recent` — `user_id, sound_id, last_used_at, use_count`
 
-**DB (one migration)**
-- `chat_gifs(id, title, category, tags text[], media_url, media_type, thumb_url, is_featured, active, archived, sort_order, created_at)`
-- `chat_gif_favorites(user_id, gif_id, created_at, pk(user_id,gif_id))`
-- `chat_gif_recent(user_id, gif_id, used_at, pk(user_id,gif_id))`
-- Add app_settings keys: `gifs_clients_send`, `gifs_app_members_send`, `gifs_program_members_send` (bool).
-- GRANTs + RLS: everyone authenticated reads active gifs; admin/coach manage; users manage own favorites/recent.
-- Storage bucket `chat-gifs` (private, signed URLs); admin uploads.
-- Seed ~30 starter rows pointing to curated public Giphy/Tenor URLs across categories (Hype/PR/Reviewed/Support/Funny/Humour/Gym Pain/Cardio/Excuses/Celebration).
+`app_settings` keys (new rows, all default to sane values):
+- `chat_sound_clients_send` → `true`
+- `chat_sound_clients_play` → `true`
+- `chat_sound_app_members_send` → `false`
+- `chat_sound_program_members_send` → `false`
 
-**Sending (extends existing message system)**
-- Reuse `messages` with `message_type = 'gif'`, store URL in existing media field. No schema change to messages if `media_url + media_type` already exist; otherwise add `media_kind` text.
-- `MessageThread` renders gif messages as clean media card (img with object-contain, max-h 240, rounded, no border), respects `prefers-reduced-motion` (swap animated webp/gif for static thumb).
+Storage: new private bucket `chat-sounds`. Signed URLs for playback.
 
-**Picker (`src/components/gif-picker.tsx`)**
-- Trigger: small `✨ GIF` button in composer (`message-thread.tsx` composer).
-- Popover/sheet with: search input, category chips, Recent + Favorites tabs, virtualized grid (lazy `<img loading="lazy">`), star-to-favorite.
-- Selecting a gif → sends message via existing `sendMessage` with media url, increments `chat_gif_recent`.
-- Gate visibility by user role + admin permission settings.
+RLS:
+- `chat_sounds` — admin/coach full; authenticated select where `active = true AND archived = false`
+- favorites/recent — owner-only
+- Standard GRANTs included in the migration
 
-**Admin library (`/admin/chat-gifs`)**
-- List/grid with category filter, add/edit dialog: title, category, tags, URL or upload, featured, active, archive.
-- Permissions toggles for clients/app_members/program_members.
+Seed: 24 starter sounds across Hype / PR & Wins / Funny / Coach Reactions / Cardio / Gym Pain, sourced from royalty-free hosts (mixkit / pixabay) — short MP3 URLs (~1–3s, <60KB each).
 
-### Files
+### 2. Reuse `messages` table
 
-New:
-- `supabase/migrations/<ts>_chat_gifs_and_defaults.sql`
-- `src/lib/chat-settings.ts` (read/write app_settings keys)
-- `src/lib/chat-gifs.ts`
-- `src/hooks/use-double-tap.ts`
-- `src/components/gif-picker.tsx`
-- `src/routes/_authenticated/admin/settings.chat.tsx`
-- `src/routes/_authenticated/admin/chat-gifs.tsx`
+New `message_type = 'sound'`. Existing `media_url` / `media_type = 'audio/mpeg'` carries the file. `body` carries the sound title for display + delete-for-everyone parity.
 
-Edited:
-- `src/components/message-thread.tsx` (double-tap, animation, gif button, gif rendering)
-- `src/lib/messages.ts` (support gif message type if needed)
-- `src/lib/admin-nav.ts` (Chat Settings + GIF Library entries)
-- `src/integrations/supabase/types.ts`
-- `src/styles.css` (reaction-pop keyframes)
+### 3. Lib
 
-### Testing
-- Admin set default → verify `app_settings` row, refresh, default persists.
-- Mobile double-tap bubble: reaction appears with pop, double-tap again removes.
-- Tap link/image inside bubble still opens it.
-- Long-press menu, swipe-to-time, scroll unaffected.
-- Deleted messages: double-tap no-op.
-- GIF picker: search, categories, favorites, recents, send, render, lazy-load.
-- Permission toggles hide button for disallowed roles.
-- Reduced-motion: static thumbs.
+`src/lib/chat-sounds.ts`:
+- `listSounds({ category?, search? })`, `listCategories()`
+- `toggleFavorite(soundId)`, `bumpRecent(soundId)`
+- `listFavorites()`, `listRecent(limit=12)`
+- Admin CRUD: `createSound`, `updateSound`, `archiveSound`, `uploadSoundFile(file) → media_url`
+- `sendSoundMessage({ conversationId, sound })` — wraps existing `sendMessage`
 
-Scope note: GIF-as-reaction (vs standalone message) is deferred per your "prioritize standalone first" guidance.
+Extend `chat-settings.ts` with the four new toggles + helpers `canSendSound(role)`, `canPlaySound(role)`.
+
+### 4. Audio playback singleton
+
+`src/lib/sound-player.ts`:
+- Single shared `HTMLAudioElement`; starting a new sound stops the previous one
+- Lazy `new Audio(url)` only on first play per message
+- LRU cache of last 8 decoded URLs
+- Respects `prefers-reduced-motion` only for visual pulse, not muting
+- Never autoplays — `playSound(url)` is always user-gesture-initiated
+
+### 5. Picker UI
+
+Extend the existing `gif-picker.tsx` (currently `✨ GIF`) into tabs: **GIFs | Sounds**.
+- Sounds tab: search input, category chips, lists Featured / Recent / Favorites / All
+- Each row: title, duration badge, ▶︎ preview (uses shared player, stops on next), ★ favorite, tap card → send
+- Virtualized list, fetch-on-open only (no preloading on chat mount)
+
+### 6. Chat message rendering
+
+In `message-thread.tsx` branch on `message_type === 'sound'`:
+- Clean card: speaker icon, "Sound Effect" label, bold title, big circular Play button, duration
+- Tap play → shared player; button shows pause + progress while active
+- Honors `canPlaySound(viewerRole)` — if disabled, shows the card but Play is disabled with a tooltip
+- Inherits delete-for-everyone, read receipts, timestamps, retry, failed state from existing message pipeline
+- Double-tap and existing reactions continue to work on the bubble
+
+### 7. Admin manager
+
+New route `/admin/chat-sounds`:
+- Table with category filter, featured toggle, active/archived toggle
+- Upload dialog: file input (mp3/m4a/ogg, max 200KB, <5s enforced client-side via `Audio.duration`), title, category, tags, featured
+- Archive with confirm dialog
+- Linked from `admin-nav.ts` next to "Chat GIF Library"
+
+Extend `/admin/settings/chat` with a "Sound Effects" section exposing the four permission toggles.
+
+### 8. Permissions enforcement
+
+- Composer hides the Sounds tab when `canSendSound(role)` is false
+- Server-side: extend the existing message insert guard to reject `message_type = 'sound'` when sender role lacks permission
+- Play disabled for clients when `chat_sound_clients_play = false`
+
+### 9. Scope deferral
+
+- **Sound-as-reaction** is deferred per the user's own "prioritize standalone first" guidance. Will be follow-up once standalone is solid.
+- **Autoplay setting** intentionally omitted — autoplay stays off, no toggle.
+
+### 10. Files
+
+**New:**
+- `supabase/migrations/<ts>_chat_sounds.sql`
+- `src/lib/chat-sounds.ts`, `src/lib/sound-player.ts`
+- `src/components/sound-picker-panel.tsx`, `src/components/chat-sound-card.tsx`
+- `src/routes/_authenticated/admin/chat-sounds.tsx`
+
+**Edited:**
+- `src/components/gif-picker.tsx` (add Sounds tab)
+- `src/components/message-thread.tsx` (render sound message)
+- `src/lib/chat-settings.ts`, `src/lib/messages.ts`, `src/lib/admin-nav.ts`
+- `src/routes/_authenticated/admin/chat-settings.tsx` (or wherever the existing settings page lives)
+- `src/integrations/supabase/types.ts`, `src/routeTree.gen.ts`
+
+### Testing checklist mapping
+All items from the user's checklist map to the above. Will verify by build + spot-check the picker, audio card render, permission gating, and admin upload flow.

@@ -823,6 +823,109 @@ export type Database = {
         }
         Relationships: []
       }
+      chat_sound_favorites: {
+        Row: {
+          created_at: string
+          sound_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          sound_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          sound_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_sound_favorites_sound_id_fkey"
+            columns: ["sound_id"]
+            isOneToOne: false
+            referencedRelation: "chat_sounds"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      chat_sound_recent: {
+        Row: {
+          sound_id: string
+          used_at: string
+          user_id: string
+        }
+        Insert: {
+          sound_id: string
+          used_at?: string
+          user_id: string
+        }
+        Update: {
+          sound_id?: string
+          used_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_sound_recent_sound_id_fkey"
+            columns: ["sound_id"]
+            isOneToOne: false
+            referencedRelation: "chat_sounds"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      chat_sounds: {
+        Row: {
+          active: boolean
+          archived: boolean
+          category: string
+          created_at: string
+          created_text: string | null
+          duration_ms: number | null
+          id: string
+          is_featured: boolean
+          media_url: string
+          mime: string
+          sort_order: number
+          tags: string[]
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          archived?: boolean
+          category?: string
+          created_at?: string
+          created_text?: string | null
+          duration_ms?: number | null
+          id?: string
+          is_featured?: boolean
+          media_url: string
+          mime?: string
+          sort_order?: number
+          tags?: string[]
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          archived?: boolean
+          category?: string
+          created_at?: string
+          created_text?: string | null
+          duration_ms?: number | null
+          id?: string
+          is_featured?: boolean
+          media_url?: string
+          mime?: string
+          sort_order?: number
+          tags?: string[]
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       check_in_links: {
         Row: {
           active: boolean
