@@ -4088,42 +4088,87 @@ export type Database = {
       }
       pl_client_maxes: {
         Row: {
+          active: boolean
           client_id: string
           created_at: string
           estimated_1rm: number | null
+          exercise_id: string | null
           id: string
           lift: string
+          manual_override: boolean
           notes: string | null
           one_rm: number | null
+          rounding_mode: string
+          rounding_step: number | null
+          source: string
+          source_exercise_id: string | null
+          source_lift: string | null
+          tested_at: string | null
           training_max: number | null
           unit: string
           updated_at: string
+          variation_modifier: number | null
         }
         Insert: {
+          active?: boolean
           client_id: string
           created_at?: string
           estimated_1rm?: number | null
+          exercise_id?: string | null
           id?: string
           lift: string
+          manual_override?: boolean
           notes?: string | null
           one_rm?: number | null
+          rounding_mode?: string
+          rounding_step?: number | null
+          source?: string
+          source_exercise_id?: string | null
+          source_lift?: string | null
+          tested_at?: string | null
           training_max?: number | null
           unit?: string
           updated_at?: string
+          variation_modifier?: number | null
         }
         Update: {
+          active?: boolean
           client_id?: string
           created_at?: string
           estimated_1rm?: number | null
+          exercise_id?: string | null
           id?: string
           lift?: string
+          manual_override?: boolean
           notes?: string | null
           one_rm?: number | null
+          rounding_mode?: string
+          rounding_step?: number | null
+          source?: string
+          source_exercise_id?: string | null
+          source_lift?: string | null
+          tested_at?: string | null
           training_max?: number | null
           unit?: string
           updated_at?: string
+          variation_modifier?: number | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "pl_client_maxes_exercise_id_fkey"
+            columns: ["exercise_id"]
+            isOneToOne: false
+            referencedRelation: "exercises"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pl_client_maxes_source_exercise_id_fkey"
+            columns: ["source_exercise_id"]
+            isOneToOne: false
+            referencedRelation: "exercises"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       pl_day_completions: {
         Row: {
