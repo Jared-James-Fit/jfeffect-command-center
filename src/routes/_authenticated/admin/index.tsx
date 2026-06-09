@@ -230,6 +230,14 @@ function AdminDashboard() {
       .limit(8)).data ?? [],
   });
 
+  const { data: activePurchases = [] } = useQuery({
+    queryKey: ["active-purchases-by-client"],
+    queryFn: async () => (await supabase
+      .from("purchase_records")
+      .select("client_id, status")
+      .eq("status", "Active")).data ?? [],
+  });
+
   const liftNeedReview = liftVideos
     .filter((v) => !v.reviewed_at && v.status !== "Archived")
     .sort((a, b) => (Number(b.is_urgent) - Number(a.is_urgent)) || (new Date(a.created_at).getTime() - new Date(b.created_at).getTime()))
