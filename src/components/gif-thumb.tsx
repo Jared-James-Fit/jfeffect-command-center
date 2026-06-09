@@ -19,7 +19,8 @@ export function GifThumb({
   emojiClassName?: string;
   alt?: string;
 }) {
-  const [state, setState] = useState<"loading" | "loaded" | "error">(src ? "loading" : "error");
+  type S = "loading" | "loaded" | "error";
+  const [state, setState] = useState<S>(src ? "loading" : "error");
   const emoji = fallback || fallbackEmoji(title, category);
 
   const showImg = !!src && state !== "error";
