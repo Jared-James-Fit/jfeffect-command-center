@@ -664,6 +664,41 @@ export type Database = {
         }
         Relationships: []
       }
+      client_birthday_wishes: {
+        Row: {
+          birthday_year: number
+          client_id: string
+          created_at: string
+          id: string
+          wished_at: string
+          wished_by: string | null
+        }
+        Insert: {
+          birthday_year: number
+          client_id: string
+          created_at?: string
+          id?: string
+          wished_at?: string
+          wished_by?: string | null
+        }
+        Update: {
+          birthday_year?: number
+          client_id?: string
+          created_at?: string
+          id?: string
+          wished_at?: string
+          wished_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_birthday_wishes_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       client_compliance_settings: {
         Row: {
           bodyweight_expected: boolean
