@@ -1,60 +1,53 @@
-## Goal
+## Current state (what already works)
 
-The client's assigned block (`/admin/blocks/$blockId`) should edit with the **same layout, toolbar, compact mode, zoom, undo/redo, copy/paste, single-line rows, and collapsible library** as the Program Library template editor.
+Reading the code, much of what you described is already in place:
 
-## Approach
+- A `BlockMaxesButton` already shows in the client Block Builder toolbar (`blocks.$blockId.tsx`), opens a panel with the three SBD rows (Competition Squat / Bench / Deadlift), 1RM + Training Max inputs, kg/lb unit per row, scope (block-only vs save to profile), and an "Add another lift" picker for Pause Squat, Close Grip Bench, Block Pull, etc.
+- Each program row already computes `75% TM = 162.5 kg` from the maxes (`computeRowLoad` → `RowEditor`).
+- "No max set" warning + inline **Set Max** button already opens a max editor.
+- The button is just **not labeled "Set 1RM / TM"** and the panel is missing the bulk unit controls and per-row load-mode controls you described.
+- Note: the button only appears in the **client Block editor** (`/admin/blocks/:blockId`), not the **template editor** (`/admin/program-library/:id`). Templates have no client → no maxes; that's intentional.
 
-### 1. Extract shared editor into its own component file
-Move these pieces out of `src/routes/_authenticated/admin/program-library_.$templateId.tsx` into `src/components/payload-block-editor.tsx`:
-- `EditorChrome` (top sticky header + Save / SaveStatus)
-- `StructureCanvas` (compact-mode toolbar, zoom controls, undo/redo, sidebar)
-- `BlockPayloadEditor`, `WeekEditor`, `DayEditor`, `RowEditor`
-- Prefs (`PREFS_KEY` / `readPrefs` / `writePrefs`)
+## What I'll add
 
-Re-import them in the template editor route — behavior stays identical.
+### 1. Rename + make prominent
+`BlockMaxesButton` → label **"Set 1RM / TM"**, larger button size, kept beside the Compact / Zoom / Copy controls in the canvas toolbar.
 
-### 2. Rewrite the client block editor
-`src/routes/_authenticated/admin/blocks.$blockId.tsx` (1402 lines → ~250). The new file:
-1. Loads the block tree (`getBlockTree`).
-2. Converts to a JSON payload `{ weeks_data: [{ week_index, notes, days: [{ day_index, title, focus, notes, rows: [...] }] }] }`. Each entity keeps its DB `id` in a hidden `_dbId` field so the diff can match.
-3. Renders the shared `StructureCanvas` / `BlockPayloadEditor` with `compact` / `zoom` / undo / redo / copy / paste.
-4. On save (autosave + Save Now), runs a non-destructive diff:
-   - Match weeks / days / rows by `_dbId` first, then by index.
-   - Update fields in place via existing `updateBlock`, `updateDay`, `updateRow`.
-   - Create new entities via `addWeek`, `addDay`, `addRow` / `addRowFromExercise`.
-   - Delete only entities the user explicitly removed.
-   - Reordering: update `sort_order` via `updateRow`.
+### 2. Block Maxes panel — new controls at the top
+- **Main lift unit** selector: `kg / lb`. One click sets the unit on Competition Squat, Bench, Deadlift rows in the draft.
+- Below it, a clear two-option radio (no on/off):
+  - "Yes — update existing Squat/Bench/Deadlift rows too"
+  - "No — only update the max inputs"
+- When the user changes a single row's unit and a number is present, prompt:
+  - "Convert the value (100 kg → 220 lb)"
+  - "Keep the number (100 kg → 100 lb)"
 
-### 3. What changes for the user
-- Same look/feel as the library editor: compact mode, zoom (saved per browser), undo/redo (Cmd/Ctrl+Z, Cmd/Ctrl+Shift+Z), copy/paste exercise rows, collapsible exercise library, side-by-side week cards with snap, dense single-line row inputs.
-- Block name, week notes, day title/focus/notes, all row fields (sets / reps / RPE / RIR / % / basis / load / rest / tempo / time_profile / exercise / custom name) editable.
-- Add / delete / duplicate weeks and days, drag exercises onto days, paste rows.
+### 3. Row-level load mode (in `RowEditor`)
+Add a 3-way segmented control above the Load basis / % / Load fields:
 
-### 4. Features that will be REMOVED from the client block editor
+- **Percentage-based** — keeps current behavior (basis + % + maxes → computed load).
+- **Manual target load** — clears %/basis, lets admin type exact load. Sets `percentage_basis = "manual"` (already supported).
+- **No prescribed load** — new basis value `"none"`; client just logs what they used.
 
-You picked "Full replacement with JSON editor", so these admin-only block features will no longer be in this screen:
+Plus an **Override calculated** affordance: when in Percentage mode and a load is computed, an admin can click "Override" to lock a manual number for that row only. Stored in payload as `manual_override: true` + manual load value; row shows a small "Manual override" label.
 
-| Removed | Impact |
-|---|---|
-| Linked-day editing + scope dialog ("this day / future weeks / entire block") | Edits affect only the single day; future weeks no longer auto-update |
-| `relinkDay` / `breakDayLink` / `breakAllLinks` controls | Existing links remain in the DB but UI to manage them is gone |
-| Per-week date controls (start date / week dates) | Block start date stays editable elsewhere (block summary card); per-week date overrides removed from this screen |
-| `applyProgression` (auto weekly progression rules) | No progression UI |
-| `copyDayToFutureWeeks` / `copyWeekToAll` with scope options | Replaced by the simpler "copy week → future weeks" button from the library editor |
-| Day-level archive / completion toggles | Completions still tracked by client, but no admin override here |
+### 4. Per-row unit selector beside Load
+Add `kg / lb` dropdown next to the Load input. (Bodyweight / machine / time are NOT in scope for this pass — they need schema work on `pl_exercise_rows` and the client logging view; I'd ship those in a follow-up.)
 
-Existing `pl_row_results` and `pl_day_completions` rows are **preserved** as long as the underlying row/day isn't deleted. The diff-based save keeps DB IDs whenever it can. Rows you delete in the UI **will** cascade-delete their completion history.
+### 5. Client workout view
+When a row uses `"none"` basis, show "Log the load used" instead of a target.
+When override is set, show the override load instead of the calculated one.
+Existing `pl_row_results` logs are never touched.
 
-### 5. Files touched
-- New: `src/components/payload-block-editor.tsx`
-- Edited: `src/routes/_authenticated/admin/program-library_.$templateId.tsx` (imports from new module instead of defining inline)
-- Rewritten: `src/routes/_authenticated/admin/blocks.$blockId.tsx`
+### 6. What I'm NOT doing in this pass (call-outs)
+- **Bulk unit actions menu** ("set this day to kg", "set this week to lb", "set selected rows", "set all rows with this exercise") — needs a new row-selection model. Significant UI work.
+- **Bodyweight / machine / time** row units — needs schema changes on `pl_exercise_rows` and updates to the client logger UI.
+- **Block-level / week-level bulk convert** with the convert-or-keep prompt at scale — only the per-row case is included.
 
-### 6. Not touched
-- `src/lib/pl-programs.ts` (uses existing functions only)
-- Client-facing workout / portal screens
-- Database schema / migrations
+If you want any of the "NOT doing" items in this pass, say which and I'll add them — otherwise I'll ship the above and we can stack the bulk tools as a second turn.
 
-## Confirm before I build
+## Technical notes
 
-Reply **"go"** to proceed, or tell me which removed feature you want kept.
+- `PERCENTAGE_BASES` (`src/lib/pl-programs.ts`) gets a new `"none"` value; `computeRowLoad` returns `status: "no-load"` for it.
+- `manual_override` + override load are stored in the row payload JSON (templates) and as `load_kg`/`load_lb` with `percentage_basis = "manual"` on `pl_exercise_rows` (no schema change). A small `override_of_pct` numeric is added as a free key in payload JSON for templates; for client rows we read/write it via `notes`-adjacent metadata only if needed — most cases are covered by setting basis to manual + keeping the % field visible as "was: 75% TM".
+- No changes to `pl_row_results`, completed flags, or any history.
