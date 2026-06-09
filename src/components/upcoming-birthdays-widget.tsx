@@ -30,8 +30,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { prefilledBirthdayMessage } from "@/lib/birthday-templates";
 import { cn } from "@/lib/utils";
 
-const UPCOMING_WINDOW_DAYS = 30;
-
 type Status = "today" | "overdue" | "upcoming" | "wished";
 
 function computeBirthdayInfo(dob: string, ref: Date = new Date()) {
