@@ -350,6 +350,7 @@ function BlockEditor() {
         redo={redo}
         canUndo={canUndo}
         canRedo={canRedo}
+        clientId={clientId}
       />
     </div>
   );
