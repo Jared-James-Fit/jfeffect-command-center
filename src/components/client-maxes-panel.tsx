@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -173,7 +173,7 @@ export function MaxEditorDialog({
   const [saving, setSaving] = useState(false);
 
   // Reset form whenever a new value is opened.
-  useMemo(() => { if (value) setForm(value); }, [value]);
+  useEffect(() => { if (value) setForm(value); }, [value]);
 
   if (!value) return null;
   const isEdit = !!form.id;
