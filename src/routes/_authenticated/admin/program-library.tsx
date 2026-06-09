@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
@@ -19,6 +19,7 @@ import { toast } from "sonner";
 import {
   listTemplates, createTemplate, applyTemplateToClient, duplicateTemplate, updateTemplate,
   setTemplateArchived, deleteTemplate, summarizeTemplatePayload,
+  getTemplateWeeks, computeEndDateFromStart,
   listTemplateAssignments,
   type TemplateType, type TrainingStyle, type TemplatePlacement,
 } from "@/lib/pl-programs";
@@ -549,6 +550,13 @@ function AssignDialog({ template, onClose }: { template: any; onClose: () => voi
   const [newPrep, setNewPrep] = useState({ title: "", event_name: "", event_date: "" });
   const [startDate, setStartDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
   const [endDate, setEndDate] = useState<string>("");
+  const templateWeeks = template ? getTemplateWeeks(template) : 0;
+
+  useEffect(() => {
+    if (startDate && templateWeeks > 0) {
+      setEndDate(computeEndDateFromStart(startDate, templateWeeks));
+    }
+  }, [startDate, templateWeeks]);
 
   const { data: clients = [] } = useQuery({
     queryKey: ["clients-min"], enabled: !!template,

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { applyTemplateToClient } from "@/lib/pl-programs";
+import { applyTemplateToClient, getTemplateWeeks, computeEndDateFromStart } from "@/lib/pl-programs";
 import { toast } from "sonner";
 
 type Props = {
@@ -38,6 +38,13 @@ export function QuickAssignTemplateDialog({ open, onOpenChange, clientId, client
   });
 
   const selected = (templates as any[]).find((t) => t.id === templateId);
+  const selectedWeeks = selected ? getTemplateWeeks(selected) : 0;
+
+  useEffect(() => {
+    if (startDate && selectedWeeks > 0) {
+      setEndDate(computeEndDateFromStart(startDate, selectedWeeks));
+    }
+  }, [startDate, selectedWeeks]);
 
   const submit = async () => {
     if (!templateId) return toast.error("Pick a template");
