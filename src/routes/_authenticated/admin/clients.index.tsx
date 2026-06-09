@@ -814,6 +814,11 @@ function ClientsPage() {
           clientName={assignTo.name}
         />
       )}
+      <PriceCardPickerDialog
+        open={!!sellTo}
+        fixedClientId={sellTo?.id}
+        onClose={() => setSellTo(null)}
+      />
     </>
   );
 }
