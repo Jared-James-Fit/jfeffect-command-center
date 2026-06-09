@@ -1370,7 +1370,7 @@ export function MessageThread({
                       <Trash2 className="mr-3 h-5 w-5" /> Delete for everyone
                     </Button>
                   )}
-                  {!canEdit && !canDelete && (
+                  {!canEdit && !canDelete && !canReact && (
                     <div className="rounded-md bg-secondary/40 p-3 text-center text-xs text-muted-foreground">
                       No actions available for this message.
                     </div>
