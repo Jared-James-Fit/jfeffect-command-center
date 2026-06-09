@@ -25,6 +25,7 @@ export interface ClientMaxRow {
   manual_override: boolean;
   rounding_step: number | null;
   rounding_mode: RoundingMode;
+  block_id: string | null;
   updated_at: string;
   created_at: string;
 }
@@ -78,25 +79,61 @@ export function effectiveMax(
   };
 }
 
-export async function listClientMaxes(clientId: string): Promise<ClientMaxRow[]> {
-  const { data, error } = await db
-    .from("pl_client_maxes")
-    .select("*")
-    .eq("client_id", clientId)
+/**
+ * List a client's maxes.
+ * When `blockId` is provided, returns both the client's global maxes
+ * (block_id IS NULL) AND any block-scoped maxes for that block.
+ * When omitted, only global maxes are returned.
+ */
+export async function listClientMaxes(
+  clientId: string,
+  blockId?: string | null,
+): Promise<ClientMaxRow[]> {
+  let q = db.from("pl_client_maxes").select("*").eq("client_id", clientId);
+  if (blockId) q = q.or(`block_id.is.null,block_id.eq.${blockId}`);
+  else q = q.is("block_id", null);
+  const { data, error } = await q
     .order("active", { ascending: false })
     .order("lift");
   if (error) throw error;
   return (data ?? []) as ClientMaxRow[];
 }
 
-export async function upsertClientMax(input: Partial<ClientMaxRow> & { client_id: string; lift: string }) {
+/**
+ * Insert-or-update a client max. If `block_id` is set the row is block-scoped,
+ * otherwise it is the client's global max for that lift. Uses an explicit
+ * find-then-write so it works with the partial unique indexes that gate
+ * (client_id, lift) global vs (client_id, block_id, lift) block-scoped rows.
+ */
+export async function upsertClientMax(
+  input: Partial<ClientMaxRow> & { client_id: string; lift: string },
+) {
   const payload: Record<string, unknown> = { ...input };
   delete payload.id;
   delete payload.created_at;
   delete payload.updated_at;
+  const block_id = (input.block_id ?? null) as string | null;
+  let q = db
+    .from("pl_client_maxes")
+    .select("id")
+    .eq("client_id", input.client_id)
+    .eq("lift", input.lift);
+  q = block_id ? q.eq("block_id", block_id) : q.is("block_id", null);
+  const { data: existing, error: findErr } = await q.maybeSingle();
+  if (findErr) throw findErr;
+  if (existing?.id) {
+    const { data, error } = await db
+      .from("pl_client_maxes")
+      .update(payload)
+      .eq("id", existing.id)
+      .select("*")
+      .single();
+    if (error) throw error;
+    return data as ClientMaxRow;
+  }
   const { data, error } = await db
     .from("pl_client_maxes")
-    .upsert(payload, { onConflict: "client_id,lift" })
+    .insert(payload)
     .select("*")
     .single();
   if (error) throw error;
@@ -118,10 +155,23 @@ export function findMaxByLift(
   return rows.find((r) => r.lift.toLowerCase() === lower && r.active) ?? null;
 }
 
-/** Build map keyed by lift name (lowercase). */
+/**
+ * Build map keyed by lift name (lowercase). Block-scoped rows win over
+ * global rows for the same lift, so percentage calculations always prefer
+ * the temporary block max when one exists.
+ */
 export function buildMaxIndex(rows: ClientMaxRow[]): Map<string, ClientMaxRow> {
   const m = new Map<string, ClientMaxRow>();
-  for (const r of rows) if (r.active) m.set(r.lift.toLowerCase(), r);
+  // First pass: globals.
+  for (const r of rows) {
+    if (!r.active || r.block_id) continue;
+    m.set(r.lift.toLowerCase(), r);
+  }
+  // Second pass: block-scoped overrides.
+  for (const r of rows) {
+    if (!r.active || !r.block_id) continue;
+    m.set(r.lift.toLowerCase(), r);
+  }
   return m;
 }
 
