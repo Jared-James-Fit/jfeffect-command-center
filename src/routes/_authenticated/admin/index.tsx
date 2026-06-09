@@ -1,28 +1,25 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
+import { useState, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
 import {
-  Users, UserPlus, AlertTriangle, Calendar, DollarSign,
-  Plus, Zap, ExternalLink, Activity, Dumbbell, Package, Timer, UserCheck, Apple, Eye,
-  ClipboardCheck, Heart, FileText, Target, MessageCircle, Video, FileSignature,
+  Users, UserPlus, AlertTriangle, Calendar, DollarSign, Plus, ExternalLink,
+  Activity, Eye, ClipboardCheck, MessageCircle, Video, Timer, ShoppingCart,
+  HardDrive, Mail, Apple, ChefHat, FileText, Megaphone, Zap, ClipboardList,
+  ArrowRight,
 } from "lucide-react";
 import { derivePhase, displayTitle, toneClasses, type TrainingPhase } from "@/lib/training-phases";
-import { deriveImportantDate, dateTypeLabel, importantToneClasses, type ImportantDate } from "@/lib/important-dates";
-import { deriveTarget } from "@/lib/nutrition-cardio";
-import { statusTone, fmtTimeRange } from "@/lib/pt-sessions";
 import type { ConversationState, Message } from "@/lib/messages";
-import { listLiftVideos, statusTone as liftStatusTone } from "@/lib/lift-videos";
-import { formatDistanceToNow, parseISO, format, startOfWeek, endOfWeek } from "date-fns";
-import { HardDrive } from "lucide-react";
+import { listLiftVideos } from "@/lib/lift-videos";
+import { formatDistanceToNow, parseISO, format, startOfWeek, endOfWeek, isToday } from "date-fns";
 import { UpcomingBirthdaysWidget } from "@/components/upcoming-birthdays-widget";
-import { Progress } from "@/components/ui/progress";
-import { useState } from "react";
 import { PriceCardPickerDialog } from "@/components/price-card-picker-dialog";
-import { ShoppingCart } from "lucide-react";
+import { UserAvatar } from "@/components/user-avatar";
 
 export const Route = createFileRoute("/_authenticated/admin/")({
   component: AdminDashboard,
@@ -30,17 +27,17 @@ export const Route = createFileRoute("/_authenticated/admin/")({
 
 function StatCard({ label, value, icon: Icon, tone = "default" }: { label: string; value: string | number; icon: React.ComponentType<{ className?: string }>; tone?: "default" | "warn" | "primary" }) {
   return (
-    <Card className="border-border bg-card p-5">
-      <div className="flex items-start justify-between">
-        <div>
-          <div className="text-xs uppercase tracking-widest text-muted-foreground">{label}</div>
-          <div className="mt-2 text-3xl font-black tracking-tight">{value}</div>
+    <Card className="border-border bg-card p-4">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="text-[10px] uppercase tracking-widest text-muted-foreground">{label}</div>
+          <div className="mt-1 text-2xl font-black tracking-tight md:text-3xl">{value}</div>
         </div>
-        <div className={`grid h-10 w-10 place-items-center rounded-md ${
+        <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-md ${
           tone === "primary" ? "bg-gradient-primary text-primary-foreground" :
           tone === "warn" ? "bg-warning/15 text-warning" : "bg-secondary text-foreground"
         }`}>
-          <Icon className="h-5 w-5" />
+          <Icon className="h-4 w-4" />
         </div>
       </div>
     </Card>
@@ -53,41 +50,51 @@ function DriveSetupBanner() {
     queryFn: async () => {
       const { data } = await supabase
         .from("media_drive_settings" as any)
-        .select("root_folder_id,status")
-        .limit(1)
-        .maybeSingle();
+        .select("root_folder_id,status").limit(1).maybeSingle();
       return data as { root_folder_id?: string | null; status?: string | null } | null;
     },
   });
   const ready = !!data?.root_folder_id && data?.status === "Ready";
   if (ready) return null;
-  const headline = !data?.root_folder_id
-    ? "Google Drive uploads are not ready"
-    : `Google Drive status: ${data?.status ?? "Unknown"}`;
   return (
-    <Card className="border-warning/40 bg-warning/5 p-4">
-      <div className="flex items-start gap-3">
-        <div className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-warning/15 text-warning">
-          <HardDrive className="h-4 w-4" />
+    <Card className="border-warning/40 bg-warning/5 p-3">
+      <div className="flex items-center gap-2">
+        <HardDrive className="h-4 w-4 text-warning shrink-0" />
+        <div className="text-xs font-semibold min-w-0 flex-1 truncate">
+          {data?.root_folder_id ? `Google Drive: ${data?.status ?? "Unknown"}` : "Google Drive not configured"}
         </div>
-        <div className="flex-1 min-w-0">
-          <div className="font-bold">{headline}</div>
-          <p className="text-sm text-muted-foreground">
-            {data?.root_folder_id
-              ? "Re-test the connection in Settings → Google Drive so clients can upload videos and photos."
-              : "Set up your root folder before clients upload check-in videos, lift videos, or progress photos."}
-          </p>
-        </div>
-        <Link to="/admin/settings">
-          <Button size="sm" variant="outline" className="font-semibold">Open Google Drive Settings</Button>
-        </Link>
+        <Link to="/admin/settings"><Button size="sm" variant="outline" className="h-7 text-xs">Fix</Button></Link>
       </div>
     </Card>
   );
 }
 
+function SectionHeader({ title, icon: Icon, viewAll }: { title: string; icon?: any; viewAll?: { to: string; label?: string; search?: any; params?: any } }) {
+  return (
+    <div className="mb-3 flex items-center justify-between">
+      <h2 className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">
+        {Icon && <Icon className="h-3.5 w-3.5" />}{title}
+      </h2>
+      {viewAll && (
+        <Link to={viewAll.to as any} search={viewAll.search} params={viewAll.params} className="text-[11px] font-semibold text-primary hover:underline">
+          {viewAll.label ?? "View all"} →
+        </Link>
+      )}
+    </div>
+  );
+}
+
+function EmptyMini({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="rounded-md border border-dashed border-border px-3 py-4 text-center text-xs text-muted-foreground">
+      {children}
+    </div>
+  );
+}
+
 function AdminDashboard() {
   const [sellTo, setSellTo] = useState<{ id: string; name: string } | null>(null);
+
   const { data: clients = [] } = useQuery({
     queryKey: ["admin-clients"],
     queryFn: async () => {
@@ -109,91 +116,15 @@ function AdminDashboard() {
     },
   });
 
-  // Include every phase whose end_date is in (or before the end of) the current week,
-  // plus anything already past due. Sorted by end_date so coach sees most urgent first.
-  const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 }); // Monday
-  const weekEnd = endOfWeek(new Date(), { weekStartsOn: 1 });     // Sunday
+  const weekEnd = endOfWeek(new Date(), { weekStartsOn: 1 });
+  void startOfWeek;
   const deadlines = phaseRows
     .map((r) => ({ ...r, derived: derivePhase(r) }))
     .filter((r) => {
       if (["completed", "archived", "upcoming"].includes(r.derived.state)) return false;
-      const end = parseISO(r.end_date);
-      return end <= weekEnd; // past-due, due-today, or expiring this week
+      return parseISO(r.end_date) <= weekEnd;
     })
     .sort((a, b) => a.end_date.localeCompare(b.end_date));
-  void weekStart;
-
-  const { data: ptSessions = [] } = useQuery({
-    queryKey: ["pt-sessions"],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("pt_sessions")
-        .select("*, clients(id, full_name)")
-        .order("session_date", { ascending: true })
-        .order("start_time", { ascending: true });
-      return data ?? [];
-    },
-  });
-
-  const { data: nutritionTargets = [] } = useQuery({
-    queryKey: ["nutrition-targets"],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("nutrition_targets")
-        .select("id, client_id, start_date, end_date, status, ending_soon_days, phase, custom_phase, clients(id, full_name)")
-        .neq("status", "Archived")
-        .order("end_date", { ascending: true });
-      return data ?? [];
-    },
-  });
-
-  const today = new Date(); today.setHours(0, 0, 0, 0);
-  const todayStr = today.toISOString().slice(0, 10);
-  const inSevenDays = new Date(today.getTime() + 7 * 86400000).toISOString().slice(0, 10);
-
-  const sessionsToday = ptSessions.filter((s: any) => s.session_date === todayStr && s.status === "Scheduled");
-  const sessionsThisWeek = ptSessions.filter((s: any) => s.session_date >= todayStr && s.session_date <= inSevenDays && s.status === "Scheduled");
-  const sessionsNeedMarking = ptSessions.filter((s: any) => s.session_date < todayStr && s.status === "Scheduled");
-  const sessionsMissedOrCancelled = ptSessions.filter((s: any) => s.status === "Missed" || s.status === "Cancelled").slice(0, 5);
-  const nextSession = sessionsThisWeek[0];
-
-  const nutritionAlerts = nutritionTargets
-    .map((t: any) => ({ ...t, derived: deriveTarget(t) }))
-    .filter((t: any) => ["ending-soon", "due-today", "past-due"].includes(t.derived.state))
-    .slice(0, 8);
-
-  const { data: importantDates = [] } = useQuery({
-    queryKey: ["important-dates"],
-    queryFn: async () => {
-      const { data } = await (supabase.from("important_dates") as any)
-        .select("*, clients(id, full_name)")
-        .neq("status", "Archived")
-        .order("target_date", { ascending: true });
-      return (data ?? []) as Array<ImportantDate & { clients: { id: string; full_name: string } | null }>;
-    },
-  });
-
-  const { data: agreementsNeedingAttention = [] } = useQuery({
-    queryKey: ["dashboard-agreements"],
-    queryFn: async () => {
-      const { data } = await supabase.from("agreements")
-        .select("id, template_name, agreement_type, status, sent_at, updated_at, client_id, signer_mismatch, verification_status, webhook_last_event, webhook_last_event_at, clients(id, full_name)")
-        .or("signer_mismatch.eq.true,status.in.(Sent,Opened,Waiting on Client,Expired,Needs Resend,Needs Manual Verification,Error,Manual Action Needed)")
-        .order("updated_at", { ascending: false })
-        .limit(20);
-      return (data ?? []) as any[];
-    },
-  });
-
-  const importantAlerts = importantDates
-    .map((d) => ({ ...d, derived: deriveImportantDate(d) }))
-    .filter((d) => {
-      const s = d.derived.state;
-      if (["past-due", "due-today", "approaching"].includes(s)) return true;
-      if (s === "active" && d.derived.daysRemaining <= 30) return true;
-      return false;
-    })
-    .slice(0, 8);
 
   const { data: convStates = [] } = useQuery({
     queryKey: ["conversation-states"],
@@ -208,10 +139,8 @@ function AdminDashboard() {
     queryFn: async () => {
       const { data } = await (supabase.from("messages") as any)
         .select("client_id, body, created_at, sender_role, is_internal_note")
-        .eq("is_internal_note", false)
-        .eq("sender_role", "client")
-        .order("created_at", { ascending: false })
-        .limit(200);
+        .eq("is_internal_note", false).eq("sender_role", "client")
+        .order("created_at", { ascending: false }).limit(200);
       return (data ?? []) as Message[];
     },
   });
@@ -225,87 +154,191 @@ function AdminDashboard() {
     queryKey: ["payments-needing-attention"],
     queryFn: async () => (await supabase
       .from("purchase_records")
-      .select("id, offer_name, payment_status, full_payable_amount, currency, purchased_at, client_id, stripe_payment_link, clients(id, full_name)")
+      .select("id, offer_name, payment_status, full_payable_amount, currency, purchased_at, client_id, clients(id, full_name)")
       .in("payment_status", ["Pending", "Pending Payment", "Overdue", "Failed", "Manual Payment Needed", "Partially Paid"])
-      .order("purchased_at", { ascending: false })
-      .limit(8)).data ?? [],
+      .order("purchased_at", { ascending: false }).limit(8)).data ?? [],
   });
 
   const { data: activePurchases = [] } = useQuery({
     queryKey: ["active-purchases-by-client"],
-    queryFn: async () => (await supabase
-      .from("purchase_records")
-      .select("client_id, status")
-      .eq("status", "Active")).data ?? [],
+    queryFn: async () => (await supabase.from("purchase_records").select("client_id, status").eq("status", "Active")).data ?? [],
   });
 
-  const liftNeedReview = liftVideos
-    .filter((v) => !v.reviewed_at && v.status !== "Archived")
-    .sort((a, b) => (Number(b.is_urgent) - Number(a.is_urgent)) || (new Date(a.created_at).getTime() - new Date(b.created_at).getTime()))
-    .slice(0, 8);
+  const { data: actionRequests = [] } = useQuery({
+    queryKey: ["dashboard-action-requests"],
+    queryFn: async () => (await supabase
+      .from("client_action_requests")
+      .select("id, client_id, completed_at, clients(id, full_name)")
+      .is("completed_at", null).limit(50)).data ?? [],
+  });
 
-  const clientNameById = new Map(clients.map((c) => [c.id, c.full_name]));
-  const stateMap = new Map(convStates.map((s) => [s.client_id, s]));
+  const { data: checkInSubmissions = [] } = useQuery({
+    queryKey: ["dashboard-checkin-submissions"],
+    queryFn: async () => (await (supabase.from("nf_submissions") as any)
+      .select("id, client_id, submitted_at, reviewed_at")
+      .not("submitted_at", "is", null).is("reviewed_at", null).limit(50)).data ?? [],
+  });
+
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const todayStr = today.toISOString().slice(0, 10);
+
+  const liftNeedReview = liftVideos.filter((v) => !v.reviewed_at && v.status !== "Archived");
+
+  const clientNameById = useMemo(() => new Map(clients.map((c) => [c.id, c.full_name])), [clients]);
+  const stateMap = useMemo(() => new Map(convStates.map((s) => [s.client_id, s])), [convStates]);
+
   const seenC = new Set<string>();
-  const messagesNeedingResponse = recentMsgs
-    .filter((m) => {
-      if (seenC.has(m.client_id)) return false;
-      const st = stateMap.get(m.client_id);
-      const lr = st?.admin_last_read_at ? new Date(st.admin_last_read_at).getTime() : 0;
-      const unread = new Date(m.created_at).getTime() > lr;
-      const needs = st?.status === "needs_response";
-      const highPriority = st?.priority === "High Priority" || st?.priority === "Important";
-      if (unread || needs || highPriority) {
-        seenC.add(m.client_id);
-        return true;
-      }
-      return false;
-    })
-    .slice(0, 8);
+  const messagesNeedingResponse = recentMsgs.filter((m) => {
+    if (seenC.has(m.client_id)) return false;
+    const st = stateMap.get(m.client_id);
+    const lr = st?.admin_last_read_at ? new Date(st.admin_last_read_at).getTime() : 0;
+    const unread = new Date(m.created_at).getTime() > lr;
+    const needs = st?.status === "needs_response";
+    const highPriority = st?.priority === "High Priority" || st?.priority === "Important";
+    if (unread || needs || highPriority) { seenC.add(m.client_id); return true; }
+    return false;
+  });
 
-  // Account setup alerts
   const now = Date.now();
   const setupAlerts = clients
     .map((c) => {
       const expired = c.invite_expires_at && new Date(c.invite_expires_at).getTime() < now && !c.account_created_at;
       const notCreated = !c.account_created_at;
       const needsHelp = c.needs_admin_help;
-      const recentReset = c.password_reset_sent_at && (now - new Date(c.password_reset_sent_at).getTime()) < 7 * 24 * 60 * 60 * 1000;
-      let tone: "warn" | "primary" | "default" | null = null;
-      let label = "";
-      if (needsHelp) { tone = "warn"; label = "Needs admin help"; }
-      else if (expired) { tone = "warn"; label = "Invite expired"; }
-      else if (notCreated && c.invite_sent_at) { tone = "primary"; label = "Setup pending"; }
-      else if (notCreated && c.email) { tone = "default"; label = "No invite sent"; }
-      else if (recentReset) { tone = "primary"; label = "Reset email sent"; }
-      return tone ? { ...c, _tone: tone, _label: label } : null;
+      let label = ""; let urgent = false;
+      if (needsHelp) { label = "Needs admin help"; urgent = true; }
+      else if (expired) { label = "Invite expired"; urgent = true; }
+      else if (notCreated && c.invite_sent_at) { label = "Setup pending"; }
+      else if (notCreated && c.email) { label = "No invite sent"; }
+      return label ? { ...c, _label: label, _urgent: urgent } : null;
     })
-    .filter((x): x is NonNullable<typeof x> => !!x)
-    .slice(0, 8);
+    .filter((x): x is NonNullable<typeof x> => !!x);
 
   const active = clients.length;
   const newClients = clients.filter((c) => c.status === "New Client").length;
   const overdue = clients.filter((c) => c.status === "Payment Overdue" || c.payment_status === "Overdue").length;
   const needsAttention = clients.filter((c) => c.status === "Needs Attention" || c.status === "Check-In Overdue").length;
 
-  // Clients without any active purchased product — surfaced near the top so coach can sell right away.
   const clientsWithActivePurchase = new Set((activePurchases as any[]).map((p) => p.client_id));
   const EXCLUDED_FOR_SELL = new Set(["Deactivated", "Archived", "Paused", "Cancelling"]);
   const clientsWithoutProduct = clients
     .filter((c) => !EXCLUDED_FOR_SELL.has(c.status ?? "") && !clientsWithActivePurchase.has(c.id))
     .sort((a, b) => (a.full_name ?? "").localeCompare(b.full_name ?? ""));
 
+  // Birthdays today
+  const birthdaysToday = clients.filter((c) => {
+    const dob = (c as any).date_of_birth;
+    if (!dob) return false;
+    const b = new Date(dob);
+    return b.getMonth() === today.getMonth() && b.getDate() === today.getDate();
+  });
+
+  // Build Needs Attention unified feed
+  type NeedItem = { id: string; clientId?: string; name: string; reason: string; time?: string; tone: string; priority: number; href: string; search?: any; params?: any; action: string };
+  const need: NeedItem[] = [];
+  for (const v of liftNeedReview.slice(0, 10)) {
+    need.push({
+      id: `lift-${v.id}`,
+      clientId: v.client_id,
+      name: clientNameById.get(v.client_id) ?? "Client",
+      reason: `Lift video · ${v.exercise}`,
+      time: formatDistanceToNow(parseISO(v.created_at), { addSuffix: true }),
+      tone: v.is_urgent ? "border-destructive/40 bg-destructive/10 text-destructive" : "border-primary/40 bg-primary/10 text-primary",
+      priority: v.is_urgent ? 1 : 4,
+      href: "/admin/lift-videos",
+      action: "Review",
+    });
+  }
+  for (const s of checkInSubmissions.slice(0, 10)) {
+    need.push({
+      id: `ci-${(s as any).id}`,
+      clientId: (s as any).client_id,
+      name: clientNameById.get((s as any).client_id) ?? "Client",
+      reason: "Check-in awaiting review",
+      time: (s as any).submitted_at ? formatDistanceToNow(parseISO((s as any).submitted_at), { addSuffix: true }) : undefined,
+      tone: "border-primary/40 bg-primary/10 text-primary",
+      priority: 3,
+      href: "/admin/check-in-reviews",
+      action: "Review",
+    });
+  }
+  for (const m of messagesNeedingResponse.slice(0, 10)) {
+    const st = stateMap.get(m.client_id);
+    need.push({
+      id: `msg-${m.client_id}`,
+      clientId: m.client_id,
+      name: clientNameById.get(m.client_id) ?? "Client",
+      reason: "Unread message",
+      time: formatDistanceToNow(parseISO(m.created_at), { addSuffix: true }),
+      tone: st?.priority === "High Priority" ? "border-destructive/40 bg-destructive/10 text-destructive" : "border-primary/40 bg-primary/10 text-primary",
+      priority: st?.priority === "High Priority" ? 1 : 2,
+      href: "/admin/messages",
+      search: { client: m.client_id },
+      action: "Reply",
+    });
+  }
+  for (const p of (paymentsAttention as any[]).slice(0, 5)) {
+    need.push({
+      id: `pay-${p.id}`,
+      clientId: p.client_id,
+      name: p.clients?.full_name ?? "Client",
+      reason: `${p.payment_status} · ${p.offer_name ?? ""}`,
+      tone: "border-destructive/40 bg-destructive/10 text-destructive",
+      priority: 1,
+      href: "/admin/purchases/$id",
+      params: { id: p.id },
+      action: "Open",
+    });
+  }
+  for (const c of setupAlerts.slice(0, 5)) {
+    need.push({
+      id: `setup-${c.id}`,
+      clientId: c.id,
+      name: c.full_name,
+      reason: c._label,
+      tone: c._urgent ? "border-warning/40 bg-warning/10 text-warning" : "border-muted/40 bg-muted/10 text-muted-foreground",
+      priority: c._urgent ? 2 : 5,
+      href: "/admin/clients/$id",
+      params: { id: c.id },
+      action: "Fix Setup",
+    });
+  }
+  for (const a of (actionRequests as any[]).slice(0, 5)) {
+    need.push({
+      id: `ar-${a.id}`,
+      clientId: a.client_id,
+      name: a.clients?.full_name ?? "Client",
+      reason: "Action request pending",
+      tone: "border-primary/40 bg-primary/10 text-primary",
+      priority: 4,
+      href: "/admin/client-action-requests",
+      action: "Open",
+    });
+  }
+  need.sort((a, b) => a.priority - b.priority);
+  const needsTop = need.slice(0, 5);
+
+  // Command Center counts
+  const cc = {
+    unread: messagesNeedingResponse.length,
+    checkIns: (checkInSubmissions as any[]).length,
+    lifts: liftNeedReview.length,
+    actions: (actionRequests as any[]).length,
+    payments: (paymentsAttention as any[]).length,
+    setup: setupAlerts.length,
+    birthdays: birthdaysToday.length,
+  };
+  void isToday; void format; void todayStr;
+
   const quickActions = [
     { label: "Add Client", to: "/admin/clients", icon: Plus },
-    { label: "Payment Links", to: "/admin/payment-links", icon: Zap },
-    { label: "Book PT Session", to: "/admin/calendar", icon: Calendar },
-    { label: "Update Phase", to: "/admin/training-phases", icon: Timer },
-    { label: "Nutrition Targets", to: "/admin/nutrition-targets", icon: Apple },
-    { label: "Cardio Targets", to: "/admin/cardio-targets", icon: Heart },
-    { label: "Phase Deadlines", to: "/admin/training-phases", icon: Timer },
-    { label: "Programs", to: "/admin/programs", icon: FileText },
-    { label: "Add Exercise", to: "/admin/exercises", icon: Dumbbell },
-    { label: "Create Product", to: "/admin/payment-links", icon: Package },
+    { label: "Message Client", to: "/admin/messages", icon: MessageCircle },
+    { label: "Review Check-Ins", to: "/admin/check-in-reviews", icon: ClipboardList },
+    { label: "Review Lift Videos", to: "/admin/lift-videos", icon: Video },
+    { label: "Create Program", to: "/admin/program-library", icon: FileText },
+    { label: "Send Payment Link", to: "/admin/payment-links", icon: DollarSign },
+    { label: "New Broadcast", to: "/admin/broadcasts", icon: Megaphone },
+    { label: "New Recipe", to: "/admin/recipes", icon: ChefHat },
   ];
 
   const shortcuts = [
@@ -319,502 +352,248 @@ function AdminDashboard() {
 
   return (
     <>
-      <PageHeader
-        title="Command Center"
-        subtitle="Your coaching business at a glance."
-        actions={
-          <>
-            {quickActions.map((a) => (
-              <Link key={a.label} to={a.to}>
-                <Button variant="outline" size="sm" className="font-semibold hidden md:inline-flex">
-                  <a.icon className="mr-2 h-4 w-4" />{a.label}
-                </Button>
-              </Link>
-            ))}
-          </>
-        }
-      />
-      <div className="space-y-4 p-4 md:p-6">
-        <Link to="/admin/client-pov" className="block">
-          <Card className="border-warning/40 bg-gradient-to-r from-warning/20 to-warning/5 p-4 md:p-5 hover:shadow-md transition-shadow cursor-pointer">
-            <div className="flex items-center gap-3 md:gap-4">
-              <div className="grid h-12 w-12 md:h-14 md:w-14 shrink-0 place-items-center rounded-full bg-warning/20 text-warning">
-                <Eye className="h-6 w-6 md:h-7 md:w-7" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="text-base md:text-lg font-bold text-foreground">Enter Client POV</div>
-                <div className="text-sm text-muted-foreground truncate">View the portal as any assigned client</div>
-              </div>
-              <Button size="sm" className="bg-warning/15 text-warning border border-warning/40 hover:bg-warning/25 font-semibold shrink-0">
-                <Eye className="mr-2 h-4 w-4" /> Client POV
-              </Button>
-            </div>
-          </Card>
-        </Link>
+      <PageHeader title="Command Center" subtitle="What needs your attention today." />
 
-        <DriveSetupBanner />
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="space-y-4 p-4 pb-24 md:p-6 md:pb-8">
+        {/* POV + Drive */}
+        <div className="grid gap-3 md:grid-cols-2">
+          <Link to="/admin/client-pov" className="block">
+            <Card className="border-warning/40 bg-gradient-to-r from-warning/20 to-warning/5 p-3 hover:shadow-md transition-shadow cursor-pointer h-full">
+              <div className="flex items-center gap-3">
+                <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-warning/20 text-warning"><Eye className="h-5 w-5" /></div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-bold">Enter Client POV</div>
+                  <div className="text-xs text-muted-foreground truncate">View the portal as any client</div>
+                </div>
+              </div>
+            </Card>
+          </Link>
+          <DriveSetupBanner />
+        </div>
+
+        {/* TODAY'S COMMAND CENTER */}
+        <Card className="border-primary/30 bg-gradient-to-br from-primary/5 via-card to-card p-4 md:p-5">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="flex items-center gap-2 text-sm font-black uppercase tracking-widest">
+              <Zap className="h-4 w-4 text-primary" /> Today's Command Center
+            </h2>
+            <span className="text-[10px] uppercase tracking-widest text-muted-foreground">{format(today, "EEE MMM d")}</span>
+          </div>
+          <ul className="space-y-1.5 text-sm">
+            {cc.checkIns > 0 && <CcLine label="check-ins to review" count={cc.checkIns} to="/admin/check-in-reviews" />}
+            {cc.lifts > 0 && <CcLine label="lift videos pending" count={cc.lifts} to="/admin/lift-videos" />}
+            {cc.unread > 0 && <CcLine label={cc.unread === 1 ? "unread client message" : "unread client messages"} count={cc.unread} to="/admin/messages" />}
+            {cc.actions > 0 && <CcLine label={cc.actions === 1 ? "action request" : "action requests"} count={cc.actions} to="/admin/client-action-requests" />}
+            {cc.payments > 0 && <CcLine label="payments need attention" count={cc.payments} to="/admin/payments" />}
+            {cc.setup > 0 && <CcLine label={cc.setup === 1 ? "client needs setup" : "clients need setup"} count={cc.setup} to="/admin/clients" />}
+            {cc.birthdays > 0 && <CcLine label={cc.birthdays === 1 ? "birthday today" : "birthdays today"} count={cc.birthdays} to="/admin/clients" />}
+            {cc.checkIns + cc.lifts + cc.unread + cc.actions + cc.payments + cc.setup + cc.birthdays === 0 && (
+              <li className="rounded-md border border-dashed border-border px-3 py-4 text-center text-xs text-muted-foreground">Inbox zero. You're all caught up.</li>
+            )}
+          </ul>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Link to="/admin/check-in-reviews"><Button size="sm" variant="outline" className="h-8 text-xs">Review Check-Ins</Button></Link>
+            <Link to="/admin/lift-videos"><Button size="sm" variant="outline" className="h-8 text-xs">Review Lift Videos</Button></Link>
+            <Link to="/admin/messages"><Button size="sm" variant="outline" className="h-8 text-xs">Open Messages</Button></Link>
+            {cc.setup > 0 && <Link to="/admin/clients"><Button size="sm" variant="outline" className="h-8 text-xs">Fix Setup</Button></Link>}
+          </div>
+        </Card>
+
+        {/* QUICK STATS */}
+        <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
           <StatCard label="Active Clients" value={active} icon={Users} tone="primary" />
           <StatCard label="New This Period" value={newClients} icon={UserPlus} />
           <StatCard label="Needs Attention" value={needsAttention} icon={AlertTriangle} tone="warn" />
           <StatCard label="Payment Overdue" value={overdue} icon={DollarSign} tone="warn" />
         </div>
 
-        <Card className={`${clientsWithoutProduct.length > 0 ? "border-destructive/40 bg-destructive/5" : "border-border bg-card"} p-6`}>
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <h2 className="flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-muted-foreground">
-              <ShoppingCart className={`h-4 w-4 ${clientsWithoutProduct.length > 0 ? "text-destructive" : ""}`} />
-              Clients Without an Active Product
-              {clientsWithoutProduct.length > 0 && (
-                <Badge variant="outline" className="border-destructive/40 bg-destructive/10 text-destructive">
-                  {clientsWithoutProduct.length}
-                </Badge>
-              )}
-            </h2>
-            <Link to="/admin/payment-links" className="text-xs font-semibold text-primary hover:underline">Browse offers →</Link>
+        {/* QUICK ACTIONS */}
+        <Card className="border-border bg-card p-4">
+          <SectionHeader title="Quick Actions" />
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {quickActions.map((a) => (
+              <Link key={a.label} to={a.to}>
+                <Button variant="outline" size="sm" className="w-full justify-start font-semibold h-9 text-xs">
+                  <a.icon className="mr-1.5 h-3.5 w-3.5" />
+                  <span className="truncate">{a.label}</span>
+                </Button>
+              </Link>
+            ))}
           </div>
-          {clientsWithoutProduct.length === 0 ? (
-            <div className="rounded-md border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-              Every active client has at least one active purchased product. Nice.
-            </div>
-          ) : (
-            <ul className="divide-y divide-border">
-              {clientsWithoutProduct.slice(0, 10).map((c) => (
-                <li key={c.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <Badge variant="outline" className="border-destructive/40 bg-destructive/10 text-destructive">No active product</Badge>
-                    <Link to="/admin/clients/$id" params={{ id: c.id }} className="text-sm font-semibold hover:underline">
-                      {c.full_name}
-                    </Link>
-                    {c.status && c.status !== "Active" && (
-                      <span className="text-xs text-muted-foreground">{c.status}</span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      size="sm"
-                      className="bg-gradient-primary font-bold uppercase"
-                      onClick={() => setSellTo({ id: c.id, name: c.full_name })}
-                    >
-                      <ShoppingCart className="mr-1.5 h-3.5 w-3.5" /> Sell product
-                    </Button>
-                    <Link to="/admin/clients/$id" params={{ id: c.id }} search={{ tab: "purchases" as any }} className="text-xs font-semibold text-primary hover:underline">
-                      View
-                    </Link>
-                  </div>
-                </li>
-              ))}
-              {clientsWithoutProduct.length > 10 && (
-                <li className="pt-3 text-center text-xs text-muted-foreground">
-                  + {clientsWithoutProduct.length - 10} more — <Link to="/admin/clients" className="font-semibold text-primary hover:underline">view all clients</Link>
-                </li>
-              )}
-            </ul>
-          )}
         </Card>
 
-        <UpcomingBirthdaysWidget />
-
-        <Card className="border-border bg-card p-6">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-muted-foreground">
-              <MessageCircle className="h-4 w-4" /> Messages Needing Response
-            </h2>
-            <Link to="/admin/messages" className="text-xs font-semibold text-primary hover:underline">Open inbox →</Link>
-          </div>
-          {messagesNeedingResponse.length === 0 ? (
-            <div className="rounded-md border border-dashed border-border p-6 text-center text-sm text-muted-foreground">No client messages need a response.</div>
-          ) : (
-            <ul className="divide-y divide-border">
-              {messagesNeedingResponse.map((m) => {
-                const st = stateMap.get(m.client_id);
-                return (
-                  <li key={m.client_id} className="flex flex-wrap items-center justify-between gap-2 py-2.5">
-                    <div className="flex items-center gap-3 min-w-0">
-                      {st?.priority === "High Priority" && <Badge variant="outline" className="border-destructive/40 bg-destructive/10 text-destructive">High</Badge>}
-                      {st?.priority === "Important" && <Badge variant="outline" className="border-warning/40 bg-warning/10 text-warning">Important</Badge>}
-                      <Link to="/admin/messages" search={{ client: m.client_id }} className="text-sm font-semibold hover:underline">
-                        {clientNameById.get(m.client_id) ?? "Client"}
-                      </Link>
-                      <span className="truncate text-xs text-muted-foreground max-w-md">{m.body || "(attachment)"}</span>
-                    </div>
-                    <span className="text-xs text-muted-foreground">{formatDistanceToNow(parseISO(m.created_at), { addSuffix: true })}</span>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </Card>
-
-        <Card className="border-border bg-card p-6">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-muted-foreground">
-              <DollarSign className="h-4 w-4" /> Payments Needing Attention
-            </h2>
-            <Link to="/admin/payments" className="text-xs font-semibold text-primary hover:underline">Open payments →</Link>
-          </div>
-          {paymentsAttention.length === 0 ? (
-            <div className="rounded-md border border-dashed border-border p-6 text-center text-sm text-muted-foreground">All payments look settled.</div>
-          ) : (
-            <ul className="divide-y divide-border">
-              {paymentsAttention.map((p: any) => (
-                <li key={p.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <Badge variant="outline" className={
-                      p.payment_status === "Overdue" || p.payment_status === "Failed" || p.payment_status === "Manual Payment Needed"
-                        ? "border-destructive/40 bg-destructive/10 text-destructive"
-                        : "border-warning/40 bg-warning/10 text-warning"
-                    }>{p.payment_status}</Badge>
-                    <Link to="/admin/clients/$id" params={{ id: p.clients?.id ?? p.client_id }} className="text-sm font-semibold hover:underline">{p.clients?.full_name ?? "Client"}</Link>
-                    <span className="truncate text-xs text-muted-foreground max-w-md">{p.offer_name}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono text-xs">{p.currency ?? "USD"} {Number(p.full_payable_amount ?? 0).toLocaleString()}</span>
-                    <Link to="/admin/purchases/$id" params={{ id: p.id }} className="text-xs font-semibold text-primary hover:underline">Open →</Link>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
-
-        <Card className="border-border bg-card p-6">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-muted-foreground">
-              <Video className="h-4 w-4" /> Lift Videos Needing Review
-            </h2>
-            <Link to="/admin/lift-videos" className="text-xs font-semibold text-primary hover:underline">Open reviews →</Link>
-          </div>
-          {liftNeedReview.length === 0 ? (
-            <div className="rounded-md border border-dashed border-border p-6 text-center text-sm text-muted-foreground">All caught up — no videos awaiting review.</div>
-          ) : (
-            <ul className="divide-y divide-border">
-              {liftNeedReview.map((v) => (
-                <li key={v.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5">
-                  <div className="flex min-w-0 items-center gap-3">
-                    {v.is_urgent && <Badge variant="outline" className="border-destructive/40 bg-destructive/10 text-destructive"><AlertTriangle className="mr-1 h-3 w-3" />Urgent</Badge>}
-                    <Link to="/admin/clients/$id" params={{ id: v.client_id }} search={{ tab: "lift-videos" as any }} className="text-sm font-semibold hover:underline">
-                      {clientNameById.get(v.client_id) ?? "Client"}
-                    </Link>
-                    <span className="truncate text-xs text-muted-foreground max-w-md">{v.exercise} · {v.training_day ?? "—"}</span>
-                    <Badge variant="outline" className={liftStatusTone(v.status)}>{v.status}</Badge>
-                  </div>
-                  <span className="text-xs text-muted-foreground">{formatDistanceToNow(parseISO(v.created_at), { addSuffix: true })}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
-
-        <Card className="border-border bg-card p-6">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-muted-foreground">
-              <Calendar className="h-4 w-4" /> Upcoming Personal Training Sessions
-            </h2>
-            <Link to="/admin/calendar" className="text-xs font-semibold text-primary hover:underline">View calendar →</Link>
-          </div>
-          <div className="mb-4 grid gap-3 sm:grid-cols-4 text-xs">
-            <MiniStat label="Today" value={sessionsToday.length} />
-            <MiniStat label="This week" value={sessionsThisWeek.length} />
-            <MiniStat label="Needs marking" value={sessionsNeedMarking.length} tone={sessionsNeedMarking.length > 0 ? "warn" : undefined} />
-            <MiniStat label="Missed / cancelled" value={sessionsMissedOrCancelled.length} />
-          </div>
-          {nextSession && (
-            <div className="mb-3 rounded-md border border-primary/30 bg-primary/5 p-3 text-sm">
-              <span className="text-[10px] uppercase tracking-widest text-primary">Next up</span>
-              <div className="mt-1 flex flex-wrap items-center gap-2">
-                <Link to="/admin/clients/$id" params={{ id: nextSession.clients?.id }} className="font-semibold hover:underline">{nextSession.clients?.full_name}</Link>
-                <span className="text-xs text-muted-foreground">{nextSession.title} · {new Date(nextSession.session_date + "T00:00:00").toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })} · {fmtTimeRange(nextSession.start_time, nextSession.end_time)} · {nextSession.location}</span>
-              </div>
-            </div>
-          )}
-          {sessionsThisWeek.length === 0 && sessionsNeedMarking.length === 0 ? (
-            <div className="rounded-md border border-dashed border-border p-6 text-center text-sm text-muted-foreground">No upcoming sessions in the next 7 days.</div>
-          ) : (
-            <ul className="divide-y divide-border">
-              {[...sessionsNeedMarking, ...sessionsThisWeek].slice(0, 8).map((s: any) => (
-                <li key={s.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5">
-                  <div className="flex items-center gap-3">
-                    <Badge variant="outline" className={statusTone(s.status)}>{s.status}</Badge>
-                    {s.clients && <Link to="/admin/clients/$id" params={{ id: s.clients.id }} className="text-sm font-semibold hover:underline">{s.clients.full_name}</Link>}
-                    <span className="text-xs text-muted-foreground">{s.title}</span>
-                  </div>
-                  <span className="text-xs text-muted-foreground">
-                    {new Date(s.session_date + "T00:00:00").toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })} · {fmtTimeRange(s.start_time, s.end_time)}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
-
-        <Card className="border-border bg-card p-6">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-muted-foreground">
-              <Apple className="h-4 w-4" /> Nutrition Targets Needing Updates
-            </h2>
-            <Link to="/admin/nutrition-targets" className="text-xs font-semibold text-primary hover:underline">View all →</Link>
-          </div>
-          {nutritionAlerts.length === 0 ? (
-            <div className="rounded-md border border-dashed border-border p-6 text-center text-sm text-muted-foreground">All clients' nutrition targets are current.</div>
-          ) : (
-            <ul className="divide-y divide-border">
-              {nutritionAlerts.map((t: any) => (
-                <li key={t.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5">
-                  <div className="flex items-center gap-3">
-                    <Badge variant="outline" className={t.derived.tone}>{t.derived.label}</Badge>
-                    {t.clients && <Link to="/admin/clients/$id" params={{ id: t.clients.id }} className="text-sm font-semibold hover:underline">{t.clients.full_name}</Link>}
-                    <span className="text-xs text-muted-foreground">{t.phase === "Custom" ? t.custom_phase : t.phase}</span>
-                  </div>
-                  <span className="text-xs text-muted-foreground">{t.derived.daysRemaining < 0 ? `${Math.abs(t.derived.daysRemaining)}d past due` : `${t.derived.daysRemaining}d left`}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
-
-        <Card className="border-border bg-card p-6">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-muted-foreground">
-              <UserCheck className="h-4 w-4" /> Account Setup Alerts
-            </h2>
-            <Link to="/admin/clients" className="text-xs font-semibold text-primary hover:underline">View all →</Link>
-          </div>
-          {setupAlerts.length === 0 ? (
-            <div className="rounded-md border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-              Every client has set up their account. Nice.
-            </div>
-          ) : (
-            <ul className="divide-y divide-border">
-              {setupAlerts.map((c) => (
-                <li key={c.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5">
-                  <div className="flex items-center gap-3">
-                    <Badge
-                      variant="outline"
-                      className={
-                        c._tone === "warn"
-                          ? "border-warning/40 bg-warning/10 text-warning"
-                          : c._tone === "primary"
-                          ? "border-primary/40 bg-primary/10 text-primary"
-                          : "border-border text-muted-foreground"
-                      }
-                    >
-                      {c._label}
-                    </Badge>
-                    <Link to="/admin/clients/$id" params={{ id: c.id }} className="text-sm font-semibold hover:underline">
-                      {c.full_name}
-                    </Link>
-                    <span className="text-xs text-muted-foreground">{c.email ?? "no email"}</span>
-                  </div>
-                  <span className="text-xs text-muted-foreground">{c.account_status}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
-
-        <Card className="border-border bg-card p-6">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-muted-foreground">
-              <Timer className="h-4 w-4" /> Training Phase Deadlines · This Week
-            </h2>
-            <Link to="/admin/training-phases" className="text-xs font-semibold text-primary hover:underline">View all →</Link>
-          </div>
-          {(() => {
-            const pastDue = deadlines.filter((p) => p.derived.state === "past-due").length;
-            const dueToday = deadlines.filter((p) => p.derived.state === "due-today").length;
-            const thisWeek = deadlines.length - pastDue - dueToday;
-            return (
-              <div className="mb-4 grid gap-3 sm:grid-cols-3 text-xs">
-                <MiniStat label="Past due" value={pastDue} tone={pastDue > 0 ? "warn" : undefined} />
-                <MiniStat label="Due today" value={dueToday} tone={dueToday > 0 ? "warn" : undefined} />
-                <MiniStat label="Ending this week" value={thisWeek} />
-              </div>
-            );
-          })()}
-          {deadlines.length === 0 ? (
-            <div className="rounded-md border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-              No phases due this week. You're ahead.
-            </div>
-          ) : (
-            <div className="divide-y divide-border">
-              {deadlines.map((p) => (
-                <div key={p.id} className="grid grid-cols-12 items-center gap-3 py-3">
-                  <div className="col-span-12 md:col-span-3 min-w-0">
-                    {p.clients ? (
-                      <Link to="/admin/clients/$id" params={{ id: p.clients.id }} search={{ tab: "training" }} className="block text-sm font-semibold hover:underline truncate">
-                        {p.clients.full_name}
-                      </Link>
-                    ) : <span className="text-sm text-muted-foreground">—</span>}
-                    <div className="text-xs text-muted-foreground truncate">{displayTitle(p)}</div>
-                  </div>
-                  <div className="col-span-6 md:col-span-2 text-xs">
-                    <div className="font-medium">{p.phase_type}</div>
-                    <div className="text-muted-foreground">Ends {format(parseISO(p.end_date), "EEE MMM d")}</div>
-                  </div>
-                  <div className="col-span-6 md:col-span-2">
-                    <Badge variant="outline" className={toneClasses(p.derived.tone)}>
-                      {p.derived.daysRemaining < 0
-                        ? `${Math.abs(p.derived.daysRemaining)}d past due`
-                        : p.derived.daysRemaining === 0
-                        ? "Due today"
-                        : `${p.derived.daysRemaining}d left`}
-                    </Badge>
-                  </div>
-                  <div className="col-span-8 md:col-span-3">
-                    <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-                      <span>Week {p.derived.currentWeek} / {p.derived.totalWeeks}</span>
-                      <span>{p.derived.percentComplete}%</span>
-                    </div>
-                    <Progress value={p.derived.percentComplete} className="mt-1 h-1.5" />
-                  </div>
-                  <div className="col-span-4 md:col-span-2 flex items-center justify-end gap-2">
-                    {p.program_link && (
-                      <a href={p.program_link} target="_blank" rel="noreferrer" className="text-xs font-semibold text-primary hover:underline inline-flex items-center gap-1">
-                        Program <ExternalLink className="h-3 w-3" />
-                      </a>
-                    )}
-                    <Link to="/admin/clients/$id" params={{ id: p.client_id }} search={{ tab: "training" }} className="text-xs font-semibold text-primary hover:underline">
-                      Update →
-                    </Link>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </Card>
-
-        <Card className="border-border bg-card p-6">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-muted-foreground">
-              <Target className="h-4 w-4" /> Important Training Dates
-            </h2>
-          </div>
-          {importantAlerts.length === 0 ? (
-            <div className="rounded-md border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-              No important dates in the next 30 days.
-            </div>
-          ) : (
-            <ul className="divide-y divide-border">
-              {importantAlerts.map((d) => (
-                <li key={d.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5">
-                  <div className="flex items-center gap-3">
-                    <Badge variant="outline" className={importantToneClasses(d.derived.tone)}>{d.derived.label}</Badge>
-                    {d.clients && (
-                      <Link to="/admin/clients/$id" params={{ id: d.clients.id }} search={{ tab: "training" }} className="text-sm font-semibold hover:underline">
-                        {d.clients.full_name}
-                      </Link>
-                    )}
-                    <span className="text-xs text-muted-foreground">{d.title} · {dateTypeLabel(d)}</span>
-                  </div>
-                  <span className="text-xs text-muted-foreground">
-                    {d.derived.daysRemaining < 0 ? `${Math.abs(d.derived.daysRemaining)}d past` : `${d.derived.daysRemaining}d left`}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
-
-        <div className="grid gap-6 lg:grid-cols-3">
-          <Card className="border-border bg-card p-6 lg:col-span-2">
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">Recent Clients</h2>
-
-              <Link to="/admin/clients" className="text-xs font-semibold text-primary hover:underline">View all →</Link>
-            </div>
-            {clients.length === 0 ? (
-              <div className="rounded-md border border-dashed border-border p-10 text-center text-sm text-muted-foreground">
-                No clients yet. <Link to="/admin/clients" className="text-primary underline">Add your first client</Link>.
-              </div>
-            ) : (
-              <ul className="divide-y divide-border">
-                {clients.slice(0, 6).map((c) => (
-                  <li key={c.id} className="flex items-center justify-between py-3">
-                    <Link to="/admin/clients/$id" params={{ id: c.id }} className="flex items-center gap-3 hover:opacity-80">
-                      <div className="grid h-9 w-9 place-items-center rounded-full bg-gradient-primary text-xs font-black text-primary-foreground">
-                        {c.full_name.slice(0, 2).toUpperCase()}
+        {/* DESKTOP 2-COL GRID below */}
+        <div className="grid gap-4 lg:grid-cols-3">
+          {/* LEFT (col-span-2) */}
+          <div className="space-y-4 lg:col-span-2">
+            {/* NEEDS ATTENTION */}
+            <Card className="border-border bg-card p-4 md:p-5">
+              <SectionHeader title="Needs Attention" icon={AlertTriangle} />
+              {needsTop.length === 0 ? (
+                <EmptyMini>Nothing urgent right now.</EmptyMini>
+              ) : (
+                <ul className="divide-y divide-border">
+                  {needsTop.map((n) => (
+                    <li key={n.id} className="flex items-start justify-between gap-2 py-2.5">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <Badge variant="outline" className={`text-[10px] ${n.tone}`}>{n.reason}</Badge>
+                          {n.clientId ? (
+                            <Link to="/admin/clients/$id" params={{ id: n.clientId }} className="text-sm font-semibold hover:underline truncate">{n.name}</Link>
+                          ) : (
+                            <span className="text-sm font-semibold truncate">{n.name}</span>
+                          )}
+                        </div>
+                        {n.time && <div className="text-[10px] text-muted-foreground mt-0.5">{n.time}</div>}
                       </div>
+                      <Link to={n.href as any} params={n.params as any} search={n.search}>
+                        <Button variant="outline" size="sm" className="h-7 text-[11px] shrink-0">{n.action}</Button>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Card>
+
+            {/* REVIEWS */}
+            <Card className="border-border bg-card p-4 md:p-5">
+              <SectionHeader title="Reviews" icon={ClipboardCheck} />
+              <div className="grid gap-2 sm:grid-cols-2">
+                <Link to="/admin/check-in-reviews">
+                  <Card className="border-border bg-secondary/30 p-3 hover:bg-secondary transition cursor-pointer h-full">
+                    <div className="flex items-center justify-between">
                       <div>
-                        <div className="text-sm font-semibold">{c.full_name}</div>
-                        <div className="text-xs text-muted-foreground">{c.coaching_type ?? "—"}</div>
+                        <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Check-Ins</div>
+                        <div className="text-2xl font-black">{cc.checkIns}</div>
                       </div>
-                    </Link>
-                    <Badge variant="outline" className="text-xs">{c.status}</Badge>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Card>
-          <Card className="border-border bg-card p-6">
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-muted-foreground">
-                <FileSignature className="h-4 w-4" /> Agreements Needing Attention
-              </h2>
-              <Link to="/admin/agreements" className="text-xs font-semibold text-primary hover:underline">View all →</Link>
-            </div>
-            {agreementsNeedingAttention.length === 0 ? (
-              <div className="rounded-md border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-                All agreements are signed or up-to-date.
+                      <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                    </div>
+                    <div className="mt-1 text-xs text-muted-foreground">Open Check-In Reviews</div>
+                  </Card>
+                </Link>
+                <Link to="/admin/lift-videos">
+                  <Card className="border-border bg-secondary/30 p-3 hover:bg-secondary transition cursor-pointer h-full">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Lift Videos</div>
+                        <div className="text-2xl font-black">{cc.lifts}</div>
+                      </div>
+                      <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                    </div>
+                    <div className="mt-1 text-xs text-muted-foreground">Open Lift Reviews</div>
+                  </Card>
+                </Link>
               </div>
-            ) : (
-              <>
-                {(() => {
-                  const cats = categorizeAgreements(agreementsNeedingAttention);
-                  return (
-                    <>
-                      <div className="mb-3 flex flex-wrap gap-1.5">
-                        {cats.counts.map((c) => (
-                          <Badge key={c.key} variant="outline" className={`text-[10px] ${c.tone}`}>
-                            {c.label}: {c.count}
-                          </Badge>
-                        ))}
-                      </div>
-                      <ul className="divide-y divide-border">
-                        {agreementsNeedingAttention.slice(0, 8).map((a: any) => {
-                          const cat = blockerFor(a);
-                          return (
-                            <li key={a.id} className="py-2 flex items-center justify-between gap-2">
-                              <Link to="/admin/clients/$id" params={{ id: a.client_id }} search={{ tab: "agreements" as any }} className="min-w-0 flex-1">
-                                <p className="text-sm font-semibold truncate">{a.clients?.full_name ?? "—"}</p>
-                                <p className="text-xs text-muted-foreground truncate">{a.agreement_type ?? a.template_name}</p>
-                              </Link>
-                              <Badge variant="outline" className={`text-[10px] shrink-0 ${cat.tone}`}>{cat.label}</Badge>
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    </>
-                  );
-                })()}
-              </>
-            )}
-          </Card>
+            </Card>
 
-          <Card className="border-border bg-card p-6">
-            <h2 className="mb-4 text-sm font-bold uppercase tracking-widest text-muted-foreground">Quick Tools</h2>
-            <div className="grid grid-cols-2 gap-2">
-              {shortcuts.map((s) => (
-                <a
-                  key={s.name}
-                  href={s.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="flex items-center justify-between rounded-md border border-border bg-secondary/40 px-3 py-2.5 text-xs font-semibold transition hover:border-primary hover:bg-secondary"
-                >
-                  <span>{s.name}</span>
-                  <ExternalLink className="h-3 w-3 text-muted-foreground" />
-                </a>
-              ))}
-            </div>
-            <Link to="/admin/apps">
-              <Button variant="ghost" size="sm" className="mt-4 w-full justify-center">
-                <Activity className="mr-2 h-4 w-4" /> View all tools
-              </Button>
-            </Link>
-          </Card>
+            {/* TRAINING DEADLINES */}
+            <Card className="border-border bg-card p-4 md:p-5">
+              <SectionHeader title="Training Deadlines" icon={Timer} viewAll={{ to: "/admin/training-phases" }} />
+              {deadlines.length === 0 ? (
+                <EmptyMini>No phases due this week. You're ahead.</EmptyMini>
+              ) : (
+                <ul className="divide-y divide-border">
+                  {deadlines.slice(0, 5).map((p) => (
+                    <li key={p.id} className="py-2.5">
+                      <div className="flex items-center justify-between gap-2 mb-1">
+                        <div className="min-w-0">
+                          {p.clients ? (
+                            <Link to="/admin/clients/$id" params={{ id: p.clients.id }} search={{ tab: "training" }} className="text-sm font-semibold hover:underline truncate block">
+                              {p.clients.full_name}
+                            </Link>
+                          ) : <span className="text-sm text-muted-foreground">—</span>}
+                          <div className="text-[11px] text-muted-foreground truncate">{displayTitle(p)} · {p.phase_type}</div>
+                        </div>
+                        <Badge variant="outline" className={toneClasses(p.derived.tone)}>
+                          {p.derived.daysRemaining < 0 ? `${Math.abs(p.derived.daysRemaining)}d past` : p.derived.daysRemaining === 0 ? "Due today" : `${p.derived.daysRemaining}d left`}
+                        </Badge>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Progress value={p.derived.percentComplete} className="h-1 flex-1" />
+                        <span className="text-[10px] text-muted-foreground">{p.derived.percentComplete}%</span>
+                        <Link to="/admin/clients/$id" params={{ id: p.client_id }} search={{ tab: "training" }} className="text-[11px] font-semibold text-primary hover:underline">Update</Link>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Card>
+          </div>
+
+          {/* RIGHT */}
+          <div className="space-y-4">
+            {/* BIRTHDAYS */}
+            <UpcomingBirthdaysWidget />
+
+            {/* PAYMENTS / PRODUCTS */}
+            <Card className="border-border bg-card p-4 md:p-5">
+              <SectionHeader title="Payments & Products" icon={ShoppingCart} viewAll={{ to: "/admin/payment-links", label: "Sell product" }} />
+              {clientsWithoutProduct.length === 0 ? (
+                <EmptyMini>Every active client has a product. Nice.</EmptyMini>
+              ) : (
+                <>
+                  <div className="mb-2 text-xs text-muted-foreground">
+                    Clients without active product: <span className="font-bold text-foreground">{clientsWithoutProduct.length}</span>
+                  </div>
+                  <ul className="divide-y divide-border">
+                    {clientsWithoutProduct.slice(0, 3).map((c) => (
+                      <li key={c.id} className="flex items-center justify-between gap-2 py-2">
+                        <Link to="/admin/clients/$id" params={{ id: c.id }} className="text-sm font-semibold hover:underline truncate">{c.full_name}</Link>
+                        <Button size="sm" variant="outline" className="h-7 text-[11px]" onClick={() => setSellTo({ id: c.id, name: c.full_name })}>
+                          Sell
+                        </Button>
+                      </li>
+                    ))}
+                  </ul>
+                  {clientsWithoutProduct.length > 3 && (
+                    <Link to="/admin/clients" className="mt-2 block text-center text-[11px] font-semibold text-primary hover:underline">
+                      View all ({clientsWithoutProduct.length})
+                    </Link>
+                  )}
+                </>
+              )}
+            </Card>
+
+            {/* RECENT CLIENTS */}
+            <Card className="border-border bg-card p-4 md:p-5">
+              <SectionHeader title="Recent Clients" icon={Users} viewAll={{ to: "/admin/clients" }} />
+              {clients.length === 0 ? (
+                <EmptyMini>No clients yet.</EmptyMini>
+              ) : (
+                <ul className="divide-y divide-border">
+                  {clients.slice(0, 5).map((c) => (
+                    <li key={c.id} className="flex items-center justify-between py-2">
+                      <Link to="/admin/clients/$id" params={{ id: c.id }} className="flex items-center gap-2 hover:opacity-80 min-w-0">
+                        <UserAvatar src={c.profile_picture_url} name={c.full_name} size={32} />
+                        <div className="min-w-0">
+                          <div className="text-sm font-semibold truncate">{c.full_name}</div>
+                          <div className="text-[10px] text-muted-foreground truncate">{c.coaching_type ?? "—"}</div>
+                        </div>
+                      </Link>
+                      <Badge variant="outline" className="text-[10px] shrink-0">{c.status}</Badge>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Card>
+
+            {/* QUICK TOOLS */}
+            <Card className="border-border bg-card p-4 md:p-5">
+              <SectionHeader title="Quick Tools" icon={Activity} />
+              <div className="grid grid-cols-2 gap-2">
+                {shortcuts.map((s) => (
+                  <a key={s.name} href={s.url} target="_blank" rel="noreferrer"
+                    className="flex items-center justify-between rounded-md border border-border bg-secondary/40 px-2.5 py-2 text-xs font-semibold transition hover:border-primary hover:bg-secondary">
+                    <span className="truncate">{s.name}</span>
+                    <ExternalLink className="h-3 w-3 text-muted-foreground shrink-0" />
+                  </a>
+                ))}
+              </div>
+            </Card>
+          </div>
         </div>
       </div>
+
       <PriceCardPickerDialog
         open={!!sellTo}
         fixedClientId={sellTo?.id}
@@ -824,49 +603,16 @@ function AdminDashboard() {
   );
 }
 
-void Calendar;
-
-function MiniStat({ label, value, tone }: { label: string; value: number; tone?: "warn" }) {
+function CcLine({ label, count, to }: { label: string; count: number; to: string }) {
   return (
-    <div className={`rounded-md border px-3 py-2 ${tone === "warn" ? "border-warning/40 bg-warning/10" : "border-border bg-secondary/40"}`}>
-      <div className="text-[10px] uppercase tracking-widest text-muted-foreground">{label}</div>
-      <div className="text-lg font-black">{value}</div>
-    </div>
+    <li>
+      <Link to={to as any} className="flex items-center justify-between rounded-md px-2 py-1.5 hover:bg-secondary/50 transition">
+        <span className="text-sm"><span className="font-black text-base text-primary">{count}</span> {label}</span>
+        <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" />
+      </Link>
+    </li>
   );
 }
 
-type AgreementBlocker = { key: string; label: string; tone: string };
-
-function blockerFor(a: any): AgreementBlocker {
-  if (a.signer_mismatch) return { key: "mismatch", label: "Signer mismatch", tone: "border-destructive/40 bg-destructive/10 text-destructive" };
-  if (a.status === "Error" || a.webhook_last_event === "error" || a.webhook_last_event === "failed") {
-    return { key: "error", label: "SignNow error", tone: "border-destructive/40 bg-destructive/10 text-destructive" };
-  }
-  if (a.status === "Manual Action Needed" || a.status === "Needs Resend") {
-    return { key: "manual", label: "Manual action", tone: "border-warning/40 bg-warning/10 text-warning" };
-  }
-  if (a.status === "Needs Manual Verification") {
-    return { key: "verify", label: "Needs verification", tone: "border-warning/40 bg-warning/10 text-warning" };
-  }
-  if (a.status === "Expired") return { key: "expired", label: "Expired", tone: "border-destructive/40 bg-destructive/10 text-destructive" };
-  if (a.status === "Signed" && a.verification_status === "Not Verified") {
-    return { key: "unverified", label: "Signed · unverified", tone: "border-warning/40 bg-warning/10 text-warning" };
-  }
-  if (["Sent", "Opened", "Waiting on Client"].includes(a.status)) {
-    return { key: "pending", label: "Sent · awaiting signature", tone: "border-blue-500/40 bg-blue-500/10 text-blue-600 dark:text-blue-300" };
-  }
-  return { key: "other", label: a.status ?? "Attention", tone: "border-border text-muted-foreground" };
-}
-
-function categorizeAgreements(rows: any[]) {
-  const order = ["mismatch", "error", "expired", "manual", "verify", "unverified", "pending", "other"];
-  const map = new Map<string, { key: string; label: string; tone: string; count: number }>();
-  for (const r of rows) {
-    const c = blockerFor(r);
-    const prev = map.get(c.key);
-    if (prev) prev.count += 1;
-    else map.set(c.key, { ...c, count: 1 });
-  }
-  const counts = order.flatMap((k) => (map.has(k) ? [map.get(k)!] : []));
-  return { counts };
-}
+// keep silence for unused imports that may become used later
+void Calendar; void Mail; void Apple;
