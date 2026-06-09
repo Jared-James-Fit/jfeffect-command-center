@@ -36,6 +36,7 @@ export function GifThumb({
           alt={alt ?? title ?? ""}
           loading="lazy"
           decoding="async"
+          referrerPolicy="no-referrer"
           onLoad={() => setState("loaded")}
           onError={() => setState("error")}
           className={cn(
