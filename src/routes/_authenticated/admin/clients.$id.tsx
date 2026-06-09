@@ -469,6 +469,31 @@ function ClientDetail() {
                   }}
                 />
               </label>
+              <label className="mt-2 flex items-center justify-between gap-2 rounded-md border border-border bg-secondary/30 px-3 py-2 text-xs">
+                <span>
+                  <span className="font-semibold">SMS opt-out</span>
+                  <span className="block text-[10px] text-muted-foreground">
+                    When on, this client will not receive any SMS (manual or unread reminders).
+                  </span>
+                </span>
+                <Switch
+                  checked={!!form.sms_opt_out}
+                  onCheckedChange={async (v) => {
+                    set("sms_opt_out", v);
+                    const { error } = await supabase
+                      .from("clients")
+                      .update({ sms_opt_out: v })
+                      .eq("id", id);
+                    if (error) {
+                      toast.error(error.message);
+                      set("sms_opt_out", !v);
+                    } else {
+                      toast.success(v ? "SMS opted out" : "SMS enabled");
+                      qc.invalidateQueries({ queryKey: ["client", id] });
+                    }
+                  }}
+                />
+              </label>
             </div>
             <div><Label>Instagram</Label><Input value={form.instagram ?? ""} onChange={(e) => set("instagram", e.target.value)} /></div>
             <div><Label>Start date</Label><Input type="date" value={form.start_date ?? ""} onChange={(e) => set("start_date", e.target.value || null)} /></div>
