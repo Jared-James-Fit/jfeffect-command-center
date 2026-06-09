@@ -331,10 +331,12 @@ function EditorChrome({ meta, summary, typeLabel, autosave, save, dirty, childre
   );
 }
 
-export function StructureCanvas({ type, payload, setP, exercises, appendRowToFirstDay, undo, redo, canUndo, canRedo }: {
+export function StructureCanvas({ type, payload, setP, exercises, appendRowToFirstDay, undo, redo, canUndo, canRedo, clientId }: {
   type: string; payload: any; setP: (p: any, opts?: { skipHistory?: boolean }) => void; exercises: any[];
   appendRowToFirstDay: (payload: any, type: string, row: any) => void;
   undo: () => void; redo: () => void; canUndo: boolean; canRedo: boolean;
+  /** Optional — when present, RowEditor will display computed loads & "no max" warnings. */
+  clientId?: string | null;
 }) {
   const [prefs, setPrefsState] = useState<EditorPrefs>(() => readPrefs());
   const setPrefs = (patch: Partial<EditorPrefs>) => {
