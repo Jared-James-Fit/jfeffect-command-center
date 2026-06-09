@@ -225,3 +225,9 @@ html[data-keyboard-open="true"] { --bottom-nav-clearance: 0px; }
   0%, 100% { transform: translateY(0) scale(1); }
   50%      { transform: translateY(-6%) scale(1.06); }
 }
+
+/* Avatar shimmer — lightweight CSS-only loading state */
+@keyframes avatar-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}

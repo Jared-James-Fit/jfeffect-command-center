@@ -73,11 +73,13 @@ export function UserAvatar({
     return hit && hit.expiresAt > Date.now() ? hit.url : null;
   });
   const [failed, setFailed] = useState(false);
+  const [imgLoaded, setImgLoaded] = useState(false);
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     setFailed(false);
+    setImgLoaded(false);
     if (!src) {
       setUrl(null);
       return;
@@ -129,25 +131,45 @@ export function UserAvatar({
         style={{ width: size, height: size }}
         aria-label={canExpand ? `View ${name ?? "profile"} photo` : name ?? "User"}
       >
-        {url && !failed ? (
+        {/* Base initials — always rendered so there's never a blank state */}
+        <div
+          className={cn(
+            "absolute inset-0 grid h-full w-full place-items-center font-bold leading-none",
+            toneClass,
+          )}
+          style={{ fontSize }}
+        >
+          {initials}
+        </div>
+
+        {/* Subtle shimmer overlay while image is resolving/loading */}
+        {url && !failed && !imgLoaded && (
+          <div
+            className="absolute inset-0"
+            style={{
+              background:
+                "linear-gradient(105deg, transparent 40%, rgba(255,255,255,0.18) 45%, rgba(255,255,255,0.22) 50%, rgba(255,255,255,0.18) 55%, transparent 60%)",
+              backgroundSize: "200% 100%",
+              animation: "avatar-shimmer 1.6s ease-in-out infinite",
+              mixBlendMode: "overlay",
+            }}
+          />
+        )}
+
+        {/* Loaded image fades in on top */}
+        {url && !failed && (
           <img
             src={url}
             alt={name ?? ""}
-            loading="lazy"
+            loading={size >= 48 ? "eager" : "lazy"}
             decoding="async"
-            className="h-full w-full object-cover"
+            className={cn(
+              "absolute inset-0 h-full w-full object-cover transition-opacity duration-500",
+              imgLoaded ? "opacity-100" : "opacity-0",
+            )}
+            onLoad={() => setImgLoaded(true)}
             onError={() => setFailed(true)}
           />
-        ) : (
-          <div
-            className={cn(
-              "grid h-full w-full place-items-center font-bold leading-none",
-              toneClass,
-            )}
-            style={{ fontSize }}
-          >
-            {initials}
-          </div>
         )}
       </Tag>
       {canExpand && (
