@@ -1016,6 +1016,33 @@ export function MessageThread({
                 onPointerUp={cancelLongPress}
                 onPointerCancel={cancelLongPress}
                 onPointerLeave={cancelLongPress}
+                onTouchEnd={(e) => {
+                  if (isDeleted || isEditing || selectionMode) return;
+                  const lp = longPressRef.current;
+                  if (lp) return; // long-press handler owns this gesture
+                  const t = e.changedTouches[0];
+                  if (!t) return;
+                  if ((t.target as HTMLElement).closest("a,button,textarea,input,audio,video,img,[data-no-doubletap]")) return;
+                  const now = Date.now();
+                  const last = (m as any).__lastTap as { t: number; x: number; y: number } | undefined;
+                  if (last && now - last.t < 320 && Math.hypot(t.clientX - last.x, t.clientY - last.y) < 14) {
+                    (m as any).__lastTap = undefined;
+                    e.preventDefault();
+                    suppressClickRef.current = true;
+                    void onToggleReaction(m.id, defaultReaction);
+                  } else {
+                    (m as any).__lastTap = { t: now, x: t.clientX, y: t.clientY };
+                  }
+                }}
+                onDoubleClick={(e) => {
+                  if (isDeleted || isEditing || selectionMode) return;
+                  if ((e.target as HTMLElement).closest("a,button,textarea,input,audio,video,img")) return;
+                  try {
+                    const sel = window.getSelection();
+                    if (sel && !sel.isCollapsed) return;
+                  } catch {}
+                  void onToggleReaction(m.id, defaultReaction);
+                }}
                 onClickCapture={(e) => {
                   if (suppressClickRef.current) {
                     suppressClickRef.current = false;
