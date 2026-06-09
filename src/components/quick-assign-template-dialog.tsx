@@ -38,6 +38,13 @@ export function QuickAssignTemplateDialog({ open, onOpenChange, clientId, client
   });
 
   const selected = (templates as any[]).find((t) => t.id === templateId);
+  const selectedWeeks = selected ? getTemplateWeeks(selected) : 0;
+
+  useEffect(() => {
+    if (startDate && selectedWeeks > 0) {
+      setEndDate(computeEndDateFromStart(startDate, selectedWeeks));
+    }
+  }, [startDate, selectedWeeks]);
 
   const submit = async () => {
     if (!templateId) return toast.error("Pick a template");
