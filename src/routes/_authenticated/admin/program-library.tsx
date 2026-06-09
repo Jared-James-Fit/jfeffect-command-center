@@ -742,6 +742,19 @@ function AssignDialog({ template, onClose }: { template: any; onClose: () => voi
                 </div>
               )}
 
+              {(type === "block" || type === "full_prep") && (
+                <div className="grid grid-cols-2 gap-2 rounded-md border border-border bg-secondary/30 p-3">
+                  <div>
+                    <Label className="text-xs">Start date</Label>
+                    <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+                  </div>
+                  <div>
+                    <Label className="text-xs">End date (optional)</Label>
+                    <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+                  </div>
+                </div>
+              )}
+
               <div className="flex items-center justify-between rounded-md border border-border bg-secondary/30 px-3 py-2">
                 <Label className="text-xs">Visible to client</Label>
                 <Switch checked={visible} onCheckedChange={setVisible} />
