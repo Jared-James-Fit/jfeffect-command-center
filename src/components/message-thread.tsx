@@ -835,6 +835,8 @@ export function MessageThread({
                 "flex items-end gap-2",
                 mine ? "justify-end" : "justify-start",
                 selectionMode && "cursor-pointer",
+                (reactionsByMsg.get(m.id)?.length ?? 0) > 0 && "pb-3",
+                mine && !isDeleted && m.id === lastOwnMessageId && !selectionMode && "pb-4",
               )}
               onClick={() => { if (selectionMode && canModify) toggleSelected(m.id); }}
             >
