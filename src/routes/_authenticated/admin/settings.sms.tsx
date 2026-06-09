@@ -11,12 +11,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { updateSmsSettings, sendTestSms, runReminderSweepNow } from "@/lib/sms.functions";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { toast } from "sonner";
 import { Plus, Trash2, Send, RefreshCw, Search, UserPlus } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Link } from "@tanstack/react-router";
-import { useMemo } from "react";
 
 export const Route = createFileRoute("/_authenticated/admin/settings/sms")({ component: SmsSettings });
 
@@ -27,7 +26,6 @@ function SmsSettings() {
   const update = useServerFn(updateSmsSettings);
   const test = useServerFn(sendTestSms);
   const sweep = useServerFn(runReminderSweepNow);
-  const qc2 = useQueryClient();
   const [recipSearch, setRecipSearch] = useState("");
   const [addOpen, setAddOpen] = useState(false);
 
