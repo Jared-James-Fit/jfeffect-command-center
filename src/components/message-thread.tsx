@@ -1361,6 +1361,39 @@ export function MessageThread({
               </DropdownMenuContent>
             </DropdownMenu>
 
+            {canSendGifs && (
+              <GifPicker
+                disabled={sending || uploading}
+                onPick={async (g) => {
+                  if (!user) return;
+                  setSending(true);
+                  try {
+                    await sendMessage({
+                      clientId,
+                      senderId: user.id,
+                      senderRole: role,
+                      body: "",
+                      attachments: [{
+                        type: g.media_type.startsWith("video") ? "video" : "image",
+                        url: g.media_url,
+                        name: g.title,
+                        mime: g.media_type,
+                      }],
+                      messageType,
+                      isInternalNote: role === "admin" ? internalNote : false,
+                      priority: role === "admin" ? priority : undefined,
+                    });
+                    qc.invalidateQueries({ queryKey: ["messages", clientId, role] });
+                    try { await markRecent(user.id, g.id); } catch {}
+                  } catch (e: any) {
+                    toast.error(e?.message ?? "Failed to send GIF");
+                  } finally {
+                    setSending(false);
+                  }
+                }}
+              />
+            )}
+
             {/* Priority selector removed for simplicity. */}
 
             {/* Textarea */}
