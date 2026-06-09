@@ -551,6 +551,9 @@ export function MessageThread({
   // Long-press timer — fires after ~450ms hold without movement.
   const longPressRef = useRef<{ id: string; t: any; x: number; y: number } | null>(null);
   const suppressClickRef = useRef(false);
+  // iMessage-style swipe-left to reveal exact per-message timestamps.
+  const [swipeX, setSwipeX] = useState(0);
+  const swipeRef = useRef<{ x: number; y: number; decided: boolean; horizontal: boolean } | null>(null);
 
   const { data: messages = [] } = useQuery({
     queryKey: ["messages", clientId, role],
