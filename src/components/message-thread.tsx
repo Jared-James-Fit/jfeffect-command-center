@@ -31,6 +31,10 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
+import { useDoubleTap } from "@/hooks/use-double-tap";
+import { getChatSettings, DEFAULT_REACTION } from "@/lib/chat-settings";
+import { GifPicker } from "@/components/gif-picker";
+import { markRecent } from "@/lib/chat-gifs";
 import {
   Paperclip, Send, X, FileText, Image as ImageIcon, Video, Link as LinkIcon, ExternalLink,
   Mic, Trash2, Play, Pause, Camera, File as FileIcon, Flag, AlertCircle, AlertTriangle,
@@ -584,6 +588,19 @@ export function MessageThread({
     enabled: !!clientId,
     queryFn: () => listReactions(clientId),
   });
+
+  const { data: chatSettings } = useQuery({
+    queryKey: ["chat-settings"],
+    queryFn: getChatSettings,
+    staleTime: 60_000,
+  });
+  const defaultReaction = chatSettings?.defaultReaction || DEFAULT_REACTION;
+  const canSendGifs =
+    role === "admin"
+      ? true
+      : role === "client"
+      ? !!chatSettings?.clientsCanSendGifs
+      : true;
 
   // Group reactions by message id for fast lookup.
   const reactionsByMsg = useMemo(() => {
