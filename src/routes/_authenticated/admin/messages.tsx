@@ -16,7 +16,8 @@ import {
   type ConversationState, type Message,
   setConversationStatus, setConversationPriority, PRIORITIES,
 } from "@/lib/messages";
-import { Search, ChevronLeft, MoreHorizontal, ExternalLink, Phone } from "lucide-react";
+import { Search, ChevronLeft, MoreHorizontal, ExternalLink, Phone, MessageSquare } from "lucide-react";
+import { SendSmsDialog } from "@/components/send-sms-dialog";
 import { formatDistanceToNow, parseISO } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useChatPresence, LiveDot } from "@/hooks/use-chat-presence";
@@ -36,6 +37,7 @@ function MessagesInbox() {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<Filter>("All");
   const [selectedId, setSelectedId] = useState<string | null>(selectedFromUrl ?? null);
+  const [smsOpen, setSmsOpen] = useState(false);
 
   useEffect(() => { if (selectedFromUrl) setSelectedId(selectedFromUrl); }, [selectedFromUrl]);
 
@@ -44,7 +46,7 @@ function MessagesInbox() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("clients")
-        .select("id, full_name, first_name, last_name, email, phone, call_access_enabled, profile_picture_url, archived, status, last_active_at")
+        .select("id, full_name, first_name, last_name, email, phone, call_access_enabled, sms_opt_out, profile_picture_url, archived, status, last_active_at")
         .order("full_name");
       if (error) throw error;
       return data;
@@ -352,6 +354,17 @@ function MessagesInbox() {
                   </a>
                 </Button>
               ) : null}
+              {(selected as any).phone && !(selected as any).sms_opt_out ? (
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-9 w-9 shrink-0 border-primary/40 bg-primary/10 text-primary hover:bg-primary/20"
+                  title={`Send SMS to ${selected.full_name ?? "client"}`}
+                  onClick={() => setSmsOpen(true)}
+                >
+                  <MessageSquare className="h-4 w-4" />
+                </Button>
+              ) : null}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0">
@@ -389,6 +402,14 @@ function MessagesInbox() {
               fullBleed
               peerName={selected.full_name}
               peerAvatarPath={selected.profile_picture_url}
+            />
+            <SendSmsDialog
+              open={smsOpen}
+              onOpenChange={setSmsOpen}
+              clientId={selected.id}
+              clientName={selected.full_name}
+              firstName={(selected as any).first_name}
+              phone={(selected as any).phone}
             />
           </>
         ) : (

@@ -95,6 +95,7 @@ import { Route as AuthenticatedAdminAgreementsIndexRouteImport } from './routes/
 import { Route as LovableEmailQueueProcessRouteImport } from './routes/lovable/email/queue/process'
 import { Route as LovableEmailAuthWebhookRouteImport } from './routes/lovable/email/auth/webhook'
 import { Route as LovableEmailAuthPreviewRouteImport } from './routes/lovable/email/auth/preview'
+import { Route as ApiPublicHooksSmsRemindersRouteImport } from './routes/api/public/hooks/sms-reminders'
 import { Route as ApiPublicHooksMediaArchiveRouteImport } from './routes/api/public/hooks/media-archive'
 import { Route as AuthenticatedPortalWorkoutsDayIdRouteImport } from './routes/_authenticated/portal/workouts.$dayId'
 import { Route as AuthenticatedPortalRecipesRecipeIdRouteImport } from './routes/_authenticated/portal/recipes.$recipeId'
@@ -103,6 +104,7 @@ import { Route as AuthenticatedPortalCheckInsFormIdRouteImport } from './routes/
 import { Route as AuthenticatedMResourcesSlugRouteImport } from './routes/_authenticated/m/resources.$slug'
 import { Route as AuthenticatedMPlansPlanIdRouteImport } from './routes/_authenticated/m/plans.$planId'
 import { Route as AuthenticatedMMyPlansEnrollmentIdRouteImport } from './routes/_authenticated/m/my-plans.$enrollmentId'
+import { Route as AuthenticatedAdminSettingsSmsRouteImport } from './routes/_authenticated/admin/settings.sms'
 import { Route as AuthenticatedAdminSettingsChatRouteImport } from './routes/_authenticated/admin/settings.chat'
 import { Route as AuthenticatedAdminPurchasesIdRouteImport } from './routes/_authenticated/admin/purchases.$id'
 import { Route as AuthenticatedAdminProgramLibraryTemplateIdRouteImport } from './routes/_authenticated/admin/program-library_.$templateId'
@@ -611,6 +613,12 @@ const LovableEmailAuthPreviewRoute = LovableEmailAuthPreviewRouteImport.update({
   path: '/lovable/email/auth/preview',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicHooksSmsRemindersRoute =
+  ApiPublicHooksSmsRemindersRouteImport.update({
+    id: '/api/public/hooks/sms-reminders',
+    path: '/api/public/hooks/sms-reminders',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicHooksMediaArchiveRoute =
   ApiPublicHooksMediaArchiveRouteImport.update({
     id: '/api/public/hooks/media-archive',
@@ -658,6 +666,12 @@ const AuthenticatedMMyPlansEnrollmentIdRoute =
     id: '/$enrollmentId',
     path: '/$enrollmentId',
     getParentRoute: () => AuthenticatedMMyPlansRoute,
+  } as any)
+const AuthenticatedAdminSettingsSmsRoute =
+  AuthenticatedAdminSettingsSmsRouteImport.update({
+    id: '/sms',
+    path: '/sms',
+    getParentRoute: () => AuthenticatedAdminSettingsRoute,
   } as any)
 const AuthenticatedAdminSettingsChatRoute =
   AuthenticatedAdminSettingsChatRouteImport.update({
@@ -858,6 +872,7 @@ export interface FileRoutesByFullPath {
   '/admin/program-library/$templateId': typeof AuthenticatedAdminProgramLibraryTemplateIdRoute
   '/admin/purchases/$id': typeof AuthenticatedAdminPurchasesIdRoute
   '/admin/settings/chat': typeof AuthenticatedAdminSettingsChatRoute
+  '/admin/settings/sms': typeof AuthenticatedAdminSettingsSmsRoute
   '/m/my-plans/$enrollmentId': typeof AuthenticatedMMyPlansEnrollmentIdRoute
   '/m/plans/$planId': typeof AuthenticatedMPlansPlanIdRoute
   '/m/resources/$slug': typeof AuthenticatedMResourcesSlugRoute
@@ -866,6 +881,7 @@ export interface FileRoutesByFullPath {
   '/portal/recipes/$recipeId': typeof AuthenticatedPortalRecipesRecipeIdRoute
   '/portal/workouts/$dayId': typeof AuthenticatedPortalWorkoutsDayIdRoute
   '/api/public/hooks/media-archive': typeof ApiPublicHooksMediaArchiveRoute
+  '/api/public/hooks/sms-reminders': typeof ApiPublicHooksSmsRemindersRoute
   '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
   '/lovable/email/auth/webhook': typeof LovableEmailAuthWebhookRoute
   '/lovable/email/queue/process': typeof LovableEmailQueueProcessRoute
@@ -968,6 +984,7 @@ export interface FileRoutesByTo {
   '/admin/program-library/$templateId': typeof AuthenticatedAdminProgramLibraryTemplateIdRoute
   '/admin/purchases/$id': typeof AuthenticatedAdminPurchasesIdRoute
   '/admin/settings/chat': typeof AuthenticatedAdminSettingsChatRoute
+  '/admin/settings/sms': typeof AuthenticatedAdminSettingsSmsRoute
   '/m/my-plans/$enrollmentId': typeof AuthenticatedMMyPlansEnrollmentIdRoute
   '/m/plans/$planId': typeof AuthenticatedMPlansPlanIdRoute
   '/m/resources/$slug': typeof AuthenticatedMResourcesSlugRoute
@@ -976,6 +993,7 @@ export interface FileRoutesByTo {
   '/portal/recipes/$recipeId': typeof AuthenticatedPortalRecipesRecipeIdRoute
   '/portal/workouts/$dayId': typeof AuthenticatedPortalWorkoutsDayIdRoute
   '/api/public/hooks/media-archive': typeof ApiPublicHooksMediaArchiveRoute
+  '/api/public/hooks/sms-reminders': typeof ApiPublicHooksSmsRemindersRoute
   '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
   '/lovable/email/auth/webhook': typeof LovableEmailAuthWebhookRoute
   '/lovable/email/queue/process': typeof LovableEmailQueueProcessRoute
@@ -1083,6 +1101,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/program-library_/$templateId': typeof AuthenticatedAdminProgramLibraryTemplateIdRoute
   '/_authenticated/admin/purchases/$id': typeof AuthenticatedAdminPurchasesIdRoute
   '/_authenticated/admin/settings/chat': typeof AuthenticatedAdminSettingsChatRoute
+  '/_authenticated/admin/settings/sms': typeof AuthenticatedAdminSettingsSmsRoute
   '/_authenticated/m/my-plans/$enrollmentId': typeof AuthenticatedMMyPlansEnrollmentIdRoute
   '/_authenticated/m/plans/$planId': typeof AuthenticatedMPlansPlanIdRoute
   '/_authenticated/m/resources/$slug': typeof AuthenticatedMResourcesSlugRoute
@@ -1091,6 +1110,7 @@ export interface FileRoutesById {
   '/_authenticated/portal/recipes/$recipeId': typeof AuthenticatedPortalRecipesRecipeIdRoute
   '/_authenticated/portal/workouts/$dayId': typeof AuthenticatedPortalWorkoutsDayIdRoute
   '/api/public/hooks/media-archive': typeof ApiPublicHooksMediaArchiveRoute
+  '/api/public/hooks/sms-reminders': typeof ApiPublicHooksSmsRemindersRoute
   '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
   '/lovable/email/auth/webhook': typeof LovableEmailAuthWebhookRoute
   '/lovable/email/queue/process': typeof LovableEmailQueueProcessRoute
@@ -1198,6 +1218,7 @@ export interface FileRouteTypes {
     | '/admin/program-library/$templateId'
     | '/admin/purchases/$id'
     | '/admin/settings/chat'
+    | '/admin/settings/sms'
     | '/m/my-plans/$enrollmentId'
     | '/m/plans/$planId'
     | '/m/resources/$slug'
@@ -1206,6 +1227,7 @@ export interface FileRouteTypes {
     | '/portal/recipes/$recipeId'
     | '/portal/workouts/$dayId'
     | '/api/public/hooks/media-archive'
+    | '/api/public/hooks/sms-reminders'
     | '/lovable/email/auth/preview'
     | '/lovable/email/auth/webhook'
     | '/lovable/email/queue/process'
@@ -1308,6 +1330,7 @@ export interface FileRouteTypes {
     | '/admin/program-library/$templateId'
     | '/admin/purchases/$id'
     | '/admin/settings/chat'
+    | '/admin/settings/sms'
     | '/m/my-plans/$enrollmentId'
     | '/m/plans/$planId'
     | '/m/resources/$slug'
@@ -1316,6 +1339,7 @@ export interface FileRouteTypes {
     | '/portal/recipes/$recipeId'
     | '/portal/workouts/$dayId'
     | '/api/public/hooks/media-archive'
+    | '/api/public/hooks/sms-reminders'
     | '/lovable/email/auth/preview'
     | '/lovable/email/auth/webhook'
     | '/lovable/email/queue/process'
@@ -1422,6 +1446,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/program-library_/$templateId'
     | '/_authenticated/admin/purchases/$id'
     | '/_authenticated/admin/settings/chat'
+    | '/_authenticated/admin/settings/sms'
     | '/_authenticated/m/my-plans/$enrollmentId'
     | '/_authenticated/m/plans/$planId'
     | '/_authenticated/m/resources/$slug'
@@ -1430,6 +1455,7 @@ export interface FileRouteTypes {
     | '/_authenticated/portal/recipes/$recipeId'
     | '/_authenticated/portal/workouts/$dayId'
     | '/api/public/hooks/media-archive'
+    | '/api/public/hooks/sms-reminders'
     | '/lovable/email/auth/preview'
     | '/lovable/email/auth/webhook'
     | '/lovable/email/queue/process'
@@ -1458,6 +1484,7 @@ export interface RootRouteChildren {
   ApiPublicSignnowWebhookRoute: typeof ApiPublicSignnowWebhookRoute
   ApiPublicStripeWebhookRoute: typeof ApiPublicStripeWebhookRoute
   ApiPublicHooksMediaArchiveRoute: typeof ApiPublicHooksMediaArchiveRoute
+  ApiPublicHooksSmsRemindersRoute: typeof ApiPublicHooksSmsRemindersRoute
   LovableEmailAuthPreviewRoute: typeof LovableEmailAuthPreviewRoute
   LovableEmailAuthWebhookRoute: typeof LovableEmailAuthWebhookRoute
   LovableEmailQueueProcessRoute: typeof LovableEmailQueueProcessRoute
@@ -2067,6 +2094,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LovableEmailAuthPreviewRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/sms-reminders': {
+      id: '/api/public/hooks/sms-reminders'
+      path: '/api/public/hooks/sms-reminders'
+      fullPath: '/api/public/hooks/sms-reminders'
+      preLoaderRoute: typeof ApiPublicHooksSmsRemindersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/hooks/media-archive': {
       id: '/api/public/hooks/media-archive'
       path: '/api/public/hooks/media-archive'
@@ -2122,6 +2156,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/m/my-plans/$enrollmentId'
       preLoaderRoute: typeof AuthenticatedMMyPlansEnrollmentIdRouteImport
       parentRoute: typeof AuthenticatedMMyPlansRoute
+    }
+    '/_authenticated/admin/settings/sms': {
+      id: '/_authenticated/admin/settings/sms'
+      path: '/sms'
+      fullPath: '/admin/settings/sms'
+      preLoaderRoute: typeof AuthenticatedAdminSettingsSmsRouteImport
+      parentRoute: typeof AuthenticatedAdminSettingsRoute
     }
     '/_authenticated/admin/settings/chat': {
       id: '/_authenticated/admin/settings/chat'
@@ -2283,11 +2324,13 @@ const AuthenticatedAdminPurchasesRouteWithChildren =
 
 interface AuthenticatedAdminSettingsRouteChildren {
   AuthenticatedAdminSettingsChatRoute: typeof AuthenticatedAdminSettingsChatRoute
+  AuthenticatedAdminSettingsSmsRoute: typeof AuthenticatedAdminSettingsSmsRoute
 }
 
 const AuthenticatedAdminSettingsRouteChildren: AuthenticatedAdminSettingsRouteChildren =
   {
     AuthenticatedAdminSettingsChatRoute: AuthenticatedAdminSettingsChatRoute,
+    AuthenticatedAdminSettingsSmsRoute: AuthenticatedAdminSettingsSmsRoute,
   }
 
 const AuthenticatedAdminSettingsRouteWithChildren =
@@ -2655,6 +2698,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicSignnowWebhookRoute: ApiPublicSignnowWebhookRoute,
   ApiPublicStripeWebhookRoute: ApiPublicStripeWebhookRoute,
   ApiPublicHooksMediaArchiveRoute: ApiPublicHooksMediaArchiveRoute,
+  ApiPublicHooksSmsRemindersRoute: ApiPublicHooksSmsRemindersRoute,
   LovableEmailAuthPreviewRoute: LovableEmailAuthPreviewRoute,
   LovableEmailAuthWebhookRoute: LovableEmailAuthWebhookRoute,
   LovableEmailQueueProcessRoute: LovableEmailQueueProcessRoute,

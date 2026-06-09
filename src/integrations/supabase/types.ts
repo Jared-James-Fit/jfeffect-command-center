@@ -1565,6 +1565,7 @@ export type Database = {
           schedule_updated_at: string | null
           sessions_purchased: number
           sessions_used: number
+          sms_opt_out: boolean
           start_date: string | null
           status: string
           stripe_customer_id: string | null
@@ -1707,6 +1708,7 @@ export type Database = {
           schedule_updated_at?: string | null
           sessions_purchased?: number
           sessions_used?: number
+          sms_opt_out?: boolean
           start_date?: string | null
           status?: string
           stripe_customer_id?: string | null
@@ -1849,6 +1851,7 @@ export type Database = {
           schedule_updated_at?: string | null
           sessions_purchased?: number
           sessions_used?: number
+          sms_opt_out?: boolean
           start_date?: string | null
           status?: string
           stripe_customer_id?: string | null
@@ -6097,6 +6100,105 @@ export type Database = {
           singleton?: boolean
           status?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      sms_log: {
+        Row: {
+          body: string
+          client_id: string
+          created_at: string
+          error: string | null
+          id: string
+          kind: string
+          message_id: string | null
+          reminder_step: number | null
+          sender_user_id: string | null
+          status: string
+          to_phone: string
+          twilio_sid: string | null
+        }
+        Insert: {
+          body: string
+          client_id: string
+          created_at?: string
+          error?: string | null
+          id?: string
+          kind: string
+          message_id?: string | null
+          reminder_step?: number | null
+          sender_user_id?: string | null
+          status?: string
+          to_phone: string
+          twilio_sid?: string | null
+        }
+        Update: {
+          body?: string
+          client_id?: string
+          created_at?: string
+          error?: string | null
+          id?: string
+          kind?: string
+          message_id?: string | null
+          reminder_step?: number | null
+          sender_user_id?: string | null
+          status?: string
+          to_phone?: string
+          twilio_sid?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sms_log_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sms_log_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sms_settings: {
+        Row: {
+          brand_name: string
+          enabled: boolean
+          from_phone: string | null
+          id: string
+          manual_default_template: string
+          rate_limit_per_hour: number
+          reminder_steps: Json
+          singleton: boolean
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          brand_name?: string
+          enabled?: boolean
+          from_phone?: string | null
+          id?: string
+          manual_default_template?: string
+          rate_limit_per_hour?: number
+          reminder_steps?: Json
+          singleton?: boolean
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          brand_name?: string
+          enabled?: boolean
+          from_phone?: string | null
+          id?: string
+          manual_default_template?: string
+          rate_limit_per_hour?: number
+          reminder_steps?: Json
+          singleton?: boolean
+          updated_at?: string
+          updated_by?: string | null
         }
         Relationships: []
       }
