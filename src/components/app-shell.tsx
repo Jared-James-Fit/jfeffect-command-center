@@ -100,7 +100,7 @@ function useCollapsedSections() {
   return [collapsed, toggle] as const;
 }
 
-export function AppShell({ items, title, children }: { items: NavItem[]; title: string; children: ReactNode }) {
+export function AppShell({ items, bottomItems: customBottomItems, title, children }: { items: NavItem[]; bottomItems?: NavItem[]; title: string; children: ReactNode }) {
   useKeyboardOpen();
   const { signOut, user } = useAuth();
   const navigate = useNavigate();
@@ -154,7 +154,7 @@ export function AppShell({ items, title, children }: { items: NavItem[]; title: 
   };
 
   const grouped = useMemo(() => groupNavItems(items), [items]);
-  const bottomItems = items.slice(0, 5);
+  const bottomItems = customBottomItems ?? items.slice(0, 5);
   const accountHref =
     items.find((i) => i.to.endsWith("/account") || i.to.endsWith("/account-settings"))?.to ??
     "/admin/account";
