@@ -4157,6 +4157,7 @@ export type Database = {
       pl_client_maxes: {
         Row: {
           active: boolean
+          block_id: string | null
           client_id: string
           created_at: string
           estimated_1rm: number | null
@@ -4179,6 +4180,7 @@ export type Database = {
         }
         Insert: {
           active?: boolean
+          block_id?: string | null
           client_id: string
           created_at?: string
           estimated_1rm?: number | null
@@ -4201,6 +4203,7 @@ export type Database = {
         }
         Update: {
           active?: boolean
+          block_id?: string | null
           client_id?: string
           created_at?: string
           estimated_1rm?: number | null
@@ -4222,6 +4225,13 @@ export type Database = {
           variation_modifier?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "pl_client_maxes_block_id_fkey"
+            columns: ["block_id"]
+            isOneToOne: false
+            referencedRelation: "pl_blocks"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "pl_client_maxes_exercise_id_fkey"
             columns: ["exercise_id"]
