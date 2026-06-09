@@ -13,11 +13,24 @@ function AdminLayout() {
   const { role, loading } = useAuth();
   const navigate = useNavigate();
   useEffect(() => {
-    if (!loading && role === "client") navigate({ to: "/portal", replace: true });
+    if (loading || !role) return;
+    if (role === "admin" || role === "coach") return;
+    if (role === "member") {
+      navigate({ to: "/m", replace: true });
+      return;
+    }
+    // Any other role (client / unknown) → portal
+    navigate({ to: "/portal", replace: true });
   }, [role, loading, navigate]);
 
   if (loading || !role) {
     return <div className="grid min-h-screen place-items-center text-muted-foreground">Loading…</div>;
+  }
+
+  // While the effect-driven redirect is in flight, render nothing for non-admin/coach
+  // so admin UI never flashes to members/clients.
+  if (role !== "admin" && role !== "coach") {
+    return <div className="grid min-h-screen place-items-center text-muted-foreground">Redirecting…</div>;
   }
 
   const isCoach = role === "coach";
