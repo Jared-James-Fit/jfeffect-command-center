@@ -6,7 +6,7 @@ import {
   ClipboardList, FileEdit,
   Scale, BookOpen, Activity, Archive,
   UserPlus, Library, Wrench, HelpCircle,
-  ChefHat, Megaphone,
+  ChefHat, Megaphone, Phone,
 } from "lucide-react";
 import { Sparkles } from "lucide-react";
 import type { NavItem } from "@/components/app-shell";
@@ -16,6 +16,7 @@ export const adminNav: NavItem[] = [
   { to: "/admin", label: "Dashboard", icon: LayoutDashboard, group: "Core" },
   { to: "/admin/clients", label: "Coaching Clients", icon: Users, group: "Core" },
   { to: "/admin/messages", label: "Messages", icon: MessageCircle, group: "Core" },
+  { to: "/admin/call-access", label: "Call Access", icon: Phone, group: "Core" },
   { to: "/admin/check-in-reviews", label: "Check-In Reviews", icon: ClipboardList, group: "Core" },
   { to: "/admin/client-action-requests", label: "Action Requests", icon: ClipboardCheck, group: "Core" },
   { to: "/admin/lift-videos", label: "Lift Reviews", icon: Video, group: "Core" },
