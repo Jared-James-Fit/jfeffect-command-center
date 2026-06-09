@@ -625,6 +625,15 @@ export function MessageThread({
     [messages, role],
   );
 
+  // Id of the latest message I sent (for inline "Read/Sent" receipt).
+  const lastOwnMessageId = useMemo(() => {
+    for (let i = visibleMessages.length - 1; i >= 0; i--) {
+      const m = visibleMessages[i];
+      if (m.sender_role === role && !m.is_internal_note) return m.id;
+    }
+    return null;
+  }, [visibleMessages, role]);
+
   // ---------- Long-press + selection helpers ----------
   const startLongPress = (id: string, x: number, y: number) => {
     if (longPressRef.current?.t) clearTimeout(longPressRef.current.t);
