@@ -75,6 +75,7 @@ import { Route as AuthenticatedAdminCheckInReviewsRouteImport } from './routes/_
 import { Route as AuthenticatedAdminCardioTargetsRouteImport } from './routes/_authenticated/admin/cardio-targets'
 import { Route as AuthenticatedAdminCalendarRouteImport } from './routes/_authenticated/admin/calendar'
 import { Route as AuthenticatedAdminBusinessSystemsRouteImport } from './routes/_authenticated/admin/business-systems'
+import { Route as AuthenticatedAdminBroadcastsRouteImport } from './routes/_authenticated/admin/broadcasts'
 import { Route as AuthenticatedAdminAutomationsRouteImport } from './routes/_authenticated/admin/automations'
 import { Route as AuthenticatedAdminArchivesRouteImport } from './routes/_authenticated/admin/archives'
 import { Route as AuthenticatedAdminAppsRouteImport } from './routes/_authenticated/admin/apps'
@@ -487,6 +488,12 @@ const AuthenticatedAdminBusinessSystemsRoute =
     path: '/business-systems',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
+const AuthenticatedAdminBroadcastsRoute =
+  AuthenticatedAdminBroadcastsRouteImport.update({
+    id: '/broadcasts',
+    path: '/broadcasts',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
 const AuthenticatedAdminAutomationsRoute =
   AuthenticatedAdminAutomationsRouteImport.update({
     id: '/automations',
@@ -734,6 +741,7 @@ export interface FileRoutesByFullPath {
   '/admin/apps': typeof AuthenticatedAdminAppsRoute
   '/admin/archives': typeof AuthenticatedAdminArchivesRoute
   '/admin/automations': typeof AuthenticatedAdminAutomationsRoute
+  '/admin/broadcasts': typeof AuthenticatedAdminBroadcastsRoute
   '/admin/business-systems': typeof AuthenticatedAdminBusinessSystemsRoute
   '/admin/calendar': typeof AuthenticatedAdminCalendarRoute
   '/admin/cardio-targets': typeof AuthenticatedAdminCardioTargetsRoute
@@ -837,6 +845,7 @@ export interface FileRoutesByTo {
   '/admin/apps': typeof AuthenticatedAdminAppsRoute
   '/admin/archives': typeof AuthenticatedAdminArchivesRoute
   '/admin/automations': typeof AuthenticatedAdminAutomationsRoute
+  '/admin/broadcasts': typeof AuthenticatedAdminBroadcastsRoute
   '/admin/business-systems': typeof AuthenticatedAdminBusinessSystemsRoute
   '/admin/calendar': typeof AuthenticatedAdminCalendarRoute
   '/admin/cardio-targets': typeof AuthenticatedAdminCardioTargetsRoute
@@ -945,6 +954,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/apps': typeof AuthenticatedAdminAppsRoute
   '/_authenticated/admin/archives': typeof AuthenticatedAdminArchivesRoute
   '/_authenticated/admin/automations': typeof AuthenticatedAdminAutomationsRoute
+  '/_authenticated/admin/broadcasts': typeof AuthenticatedAdminBroadcastsRoute
   '/_authenticated/admin/business-systems': typeof AuthenticatedAdminBusinessSystemsRoute
   '/_authenticated/admin/calendar': typeof AuthenticatedAdminCalendarRoute
   '/_authenticated/admin/cardio-targets': typeof AuthenticatedAdminCardioTargetsRoute
@@ -1053,6 +1063,7 @@ export interface FileRouteTypes {
     | '/admin/apps'
     | '/admin/archives'
     | '/admin/automations'
+    | '/admin/broadcasts'
     | '/admin/business-systems'
     | '/admin/calendar'
     | '/admin/cardio-targets'
@@ -1156,6 +1167,7 @@ export interface FileRouteTypes {
     | '/admin/apps'
     | '/admin/archives'
     | '/admin/automations'
+    | '/admin/broadcasts'
     | '/admin/business-systems'
     | '/admin/calendar'
     | '/admin/cardio-targets'
@@ -1263,6 +1275,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/apps'
     | '/_authenticated/admin/archives'
     | '/_authenticated/admin/automations'
+    | '/_authenticated/admin/broadcasts'
     | '/_authenticated/admin/business-systems'
     | '/_authenticated/admin/calendar'
     | '/_authenticated/admin/cardio-targets'
@@ -1836,6 +1849,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminBusinessSystemsRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
+    '/_authenticated/admin/broadcasts': {
+      id: '/_authenticated/admin/broadcasts'
+      path: '/broadcasts'
+      fullPath: '/admin/broadcasts'
+      preLoaderRoute: typeof AuthenticatedAdminBroadcastsRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
     '/_authenticated/admin/automations': {
       id: '/_authenticated/admin/automations'
       path: '/automations'
@@ -2149,6 +2169,7 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminAppsRoute: typeof AuthenticatedAdminAppsRoute
   AuthenticatedAdminArchivesRoute: typeof AuthenticatedAdminArchivesRoute
   AuthenticatedAdminAutomationsRoute: typeof AuthenticatedAdminAutomationsRoute
+  AuthenticatedAdminBroadcastsRoute: typeof AuthenticatedAdminBroadcastsRoute
   AuthenticatedAdminBusinessSystemsRoute: typeof AuthenticatedAdminBusinessSystemsRoute
   AuthenticatedAdminCalendarRoute: typeof AuthenticatedAdminCalendarRoute
   AuthenticatedAdminCardioTargetsRoute: typeof AuthenticatedAdminCardioTargetsRoute
@@ -2206,6 +2227,7 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
     AuthenticatedAdminAppsRoute: AuthenticatedAdminAppsRoute,
     AuthenticatedAdminArchivesRoute: AuthenticatedAdminArchivesRoute,
     AuthenticatedAdminAutomationsRoute: AuthenticatedAdminAutomationsRoute,
+    AuthenticatedAdminBroadcastsRoute: AuthenticatedAdminBroadcastsRoute,
     AuthenticatedAdminBusinessSystemsRoute:
       AuthenticatedAdminBusinessSystemsRoute,
     AuthenticatedAdminCalendarRoute: AuthenticatedAdminCalendarRoute,
