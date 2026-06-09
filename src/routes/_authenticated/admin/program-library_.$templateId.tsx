@@ -332,12 +332,16 @@ function EditorChrome({ meta, summary, typeLabel, autosave, save, dirty, childre
   );
 }
 
-export function StructureCanvas({ type, payload, setP, exercises, appendRowToFirstDay, undo, redo, canUndo, canRedo, clientId }: {
+export function StructureCanvas({ type, payload, setP, exercises, appendRowToFirstDay, undo, redo, canUndo, canRedo, clientId, blockId, toolbarExtras }: {
   type: string; payload: any; setP: (p: any, opts?: { skipHistory?: boolean }) => void; exercises: any[];
   appendRowToFirstDay: (payload: any, type: string, row: any) => void;
   undo: () => void; redo: () => void; canUndo: boolean; canRedo: boolean;
   /** Optional — when present, RowEditor will display computed loads & "no max" warnings. */
   clientId?: string | null;
+  /** Optional — when set, maxes are loaded with block-scoped overrides applied. */
+  blockId?: string | null;
+  /** Optional — rendered in the canvas toolbar (e.g. "Block Maxes" button). */
+  toolbarExtras?: React.ReactNode;
 }) {
   const [prefs, setPrefsState] = useState<EditorPrefs>(() => readPrefs());
   const setPrefs = (patch: Partial<EditorPrefs>) => {
@@ -369,16 +373,17 @@ export function StructureCanvas({ type, payload, setP, exercises, appendRowToFir
   }, [undo, redo]);
 
   const maxesQuery = useQuery({
-    queryKey: ["pl-client-maxes", clientId],
-    queryFn: () => listClientMaxes(clientId as string),
+    queryKey: ["pl-client-maxes", clientId, blockId ?? null],
+    queryFn: () => listClientMaxes(clientId as string, blockId ?? null),
     enabled: !!clientId,
   });
   const maxesCtx: MaxesCtx = useMemo(() => ({
     clientId: clientId ?? null,
+    blockId: blockId ?? null,
     maxes: maxesQuery.data ?? [],
     index: buildMaxIndex(maxesQuery.data ?? []),
     refresh: () => maxesQuery.refetch(),
-  }), [clientId, maxesQuery.data]);
+  }), [clientId, blockId, maxesQuery.data]);
 
   return (
     <MaxesContext.Provider value={maxesCtx}>
