@@ -209,9 +209,24 @@ export async function removeReaction(messageId: string, userId: string, emoji: s
 export async function toggleReaction(
   messageId: string, userId: string, emoji: string, mine: MessageReaction[],
 ) {
-  const has = mine.some((r) => r.message_id === messageId && r.emoji === emoji);
-  if (has) await removeReaction(messageId, userId, emoji);
-  else await addReaction(messageId, userId, emoji);
+  // One reaction per user per message:
+  //  - tap same emoji again -> remove
+  //  - tap a different emoji -> replace previous
+  //  - no prior reaction -> add
+  const mineOnMsg = mine.filter((r) => r.message_id === messageId);
+  const samePicked = mineOnMsg.find((r) => r.emoji === emoji);
+  if (samePicked) {
+    await removeReaction(messageId, userId, emoji);
+    return { removed: [emoji], added: null as string | null };
+  }
+  // Replace: clear all of this user's other emojis on this message first.
+  const removed: string[] = [];
+  for (const r of mineOnMsg) {
+    await removeReaction(messageId, userId, r.emoji);
+    removed.push(r.emoji);
+  }
+  await addReaction(messageId, userId, emoji);
+  return { removed, added: emoji };
 }
 
 export function priorityTone(p?: string | null) {
