@@ -1112,6 +1112,97 @@ export type Database = {
         }
         Relationships: []
       }
+      client_birthday_card_views: {
+        Row: {
+          birthday_year: number
+          client_id: string
+          created_at: string
+          dismissed_at: string | null
+          id: string
+          seen_at: string
+        }
+        Insert: {
+          birthday_year: number
+          client_id: string
+          created_at?: string
+          dismissed_at?: string | null
+          id?: string
+          seen_at?: string
+        }
+        Update: {
+          birthday_year?: number
+          client_id?: string
+          created_at?: string
+          dismissed_at?: string | null
+          id?: string
+          seen_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_birthday_card_views_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      client_birthday_cards: {
+        Row: {
+          celebration_effect: boolean
+          client_id: string
+          coach_message: string | null
+          created_at: string
+          enabled: boolean
+          headline: string | null
+          id: string
+          message: string | null
+          quote: string | null
+          show_message_coach_button: boolean
+          template_key: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          celebration_effect?: boolean
+          client_id: string
+          coach_message?: string | null
+          created_at?: string
+          enabled?: boolean
+          headline?: string | null
+          id?: string
+          message?: string | null
+          quote?: string | null
+          show_message_coach_button?: boolean
+          template_key?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          celebration_effect?: boolean
+          client_id?: string
+          coach_message?: string | null
+          created_at?: string
+          enabled?: boolean
+          headline?: string | null
+          id?: string
+          message?: string | null
+          quote?: string | null
+          show_message_coach_button?: boolean
+          template_key?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_birthday_cards_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: true
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       client_birthday_wishes: {
         Row: {
           birthday_year: number
