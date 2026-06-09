@@ -367,7 +367,20 @@ export function StructureCanvas({ type, payload, setP, exercises, appendRowToFir
     return () => window.removeEventListener("keydown", onKey);
   }, [undo, redo]);
 
+  const maxesQuery = useQuery({
+    queryKey: ["pl-client-maxes", clientId],
+    queryFn: () => listClientMaxes(clientId as string),
+    enabled: !!clientId,
+  });
+  const maxesCtx: MaxesCtx = useMemo(() => ({
+    clientId: clientId ?? null,
+    maxes: maxesQuery.data ?? [],
+    index: buildMaxIndex(maxesQuery.data ?? []),
+    refresh: () => maxesQuery.refetch(),
+  }), [clientId, maxesQuery.data]);
+
   return (
+    <MaxesContext.Provider value={maxesCtx}>
     <div className="rounded-md border border-border bg-background">
       {/* Sticky compact toolbar */}
       <div className="sticky top-[42px] z-20 flex flex-wrap items-center gap-1.5 border-b border-border bg-background/95 px-2 py-1.5 backdrop-blur">
