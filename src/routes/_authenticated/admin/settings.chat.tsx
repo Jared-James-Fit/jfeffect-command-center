@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {
-  ALLOWED_REACTIONS, getChatSettings, setDefaultReaction, setGifPermission,
+  ALLOWED_REACTIONS, getChatSettings, setDefaultReaction, setGifPermission, setSoundPermission,
 } from "@/lib/chat-settings";
 
 export const Route = createFileRoute("/_authenticated/admin/settings/chat")({
@@ -42,6 +42,18 @@ function ChatSettingsPage() {
   const updatePermission = async (who: "clients" | "app" | "program", val: boolean) => {
     try {
       await setGifPermission(who, val);
+      qc.invalidateQueries({ queryKey: ["chat-settings"] });
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to save");
+    }
+  };
+
+  const updateSoundPermission = async (
+    who: "clients_send" | "clients_play" | "app_send" | "program_send",
+    val: boolean,
+  ) => {
+    try {
+      await setSoundPermission(who, val);
       qc.invalidateQueries({ queryKey: ["chat-settings"] });
     } catch (e: any) {
       toast.error(e?.message ?? "Failed to save");
@@ -100,6 +112,30 @@ function ChatSettingsPage() {
                   id={`gifs-${row.key}`}
                   checked={!!row.val}
                   onCheckedChange={(v) => updatePermission(row.key, v)}
+                />
+              </div>
+            ))}
+          </div>
+        </Card>
+
+        <Card className="p-4 sm:p-6">
+          <h3 className="text-base font-semibold">Sound Effect Permissions</h3>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Control who can send and play chat sound effects. Sounds never autoplay — users must tap play.
+          </p>
+          <div className="mt-4 space-y-3">
+            {[
+              { key: "clients_send" as const, label: "Coaching Clients can send sounds", val: data?.clientsCanSendSounds },
+              { key: "clients_play" as const, label: "Coaching Clients can play sounds", val: data?.clientsCanPlaySounds },
+              { key: "app_send" as const, label: "App Members can send sounds", val: data?.appMembersCanSendSounds },
+              { key: "program_send" as const, label: "Program-Only Members can send sounds", val: data?.programMembersCanSendSounds },
+            ].map((row) => (
+              <div key={row.key} className="flex items-center justify-between">
+                <Label htmlFor={`sounds-${row.key}`}>{row.label}</Label>
+                <Switch
+                  id={`sounds-${row.key}`}
+                  checked={!!row.val}
+                  onCheckedChange={(v) => updateSoundPermission(row.key, v)}
                 />
               </div>
             ))}
