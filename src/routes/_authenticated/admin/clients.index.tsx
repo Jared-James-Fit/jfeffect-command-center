@@ -73,6 +73,7 @@ function ClientsPage() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [open, setOpen] = useState(false);
   const [deleteState, setDeleteState] = useState<{ id: string; name: string; step: 1 | 2 } | null>(null);
+  const [assignTo, setAssignTo] = useState<{ id: string; name: string } | null>(null);
 
   const inviteFn = useServerFn(inviteClient);
   const archiveFn = useServerFn(archiveClient);
