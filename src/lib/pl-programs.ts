@@ -17,7 +17,8 @@ export type PercentageBasis =
   | "top_set"
   | "prev_set"
   | "prev_week"
-  | "manual";
+  | "manual"
+  | "none";
 export type TemplateType = "full_prep" | "block" | "week" | "day" | "exercise_row";
 export type TrainingStyle =
   | "powerlifting"
