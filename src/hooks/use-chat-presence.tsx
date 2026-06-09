@@ -20,7 +20,10 @@ export function useChatPresence(
     }
     const peerRole: SenderRole = myRole === "admin" ? "client" : "admin";
     const channel = supabase.channel(`chat-presence:${clientId}`, {
-      config: { presence: { key: `${myRole}:${user.id}` } },
+      config: {
+        private: true,
+        presence: { key: `${myRole}:${user.id}` },
+      },
     });
 
     const recompute = () => {
