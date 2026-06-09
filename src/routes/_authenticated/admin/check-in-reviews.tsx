@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { Send, MessageCircle, Loader2 } from "lucide-react";
+import { Send, MessageCircle, Loader2, Plus, ExternalLink, Trash2 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import {
   listAllSubmissionsForReview,
@@ -25,56 +25,87 @@ import {
   type NfSubmissionStatus,
 } from "@/lib/native-forms";
 import { sendMessage } from "@/lib/messages";
+import { ManualCheckInReviewComposer } from "@/components/manual-check-in-review-composer";
+import { listAllManualReviews, deleteManualReview, reviewStatus, sourceLabel } from "@/lib/manual-check-in-reviews";
 
 export const Route = createFileRoute("/_authenticated/admin/check-in-reviews")({
   component: AdminCheckInReviews,
 });
 
 function AdminCheckInReviews() {
-  const [tab, setTab] = useState<NfSubmissionStatus>("pending_review");
+  const [tab, setTab] = useState<string>("pending_review");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [composerOpen, setComposerOpen] = useState(false);
+  const qc = useQueryClient();
 
   const { data: items = [], isLoading } = useQuery({
     queryKey: ["nf-review-inbox", tab],
-    queryFn: () => listAllSubmissionsForReview({ status: tab }),
+    enabled: tab === "pending_review" || tab === "reviewed",
+    queryFn: () => listAllSubmissionsForReview({ status: tab as NfSubmissionStatus }),
+  });
+
+  const { data: manualReviews = [], isLoading: loadingManual } = useQuery({
+    queryKey: ["manual-check-in-reviews", "all"],
+    enabled: tab === "manual",
+    queryFn: () => listAllManualReviews(),
   });
 
   return (
     <>
-      <PageHeader title="Check-In Reviews" subtitle="Review submitted check-ins and reply directly into messenger." />
+      <PageHeader
+        title="Check-In Reviews"
+        subtitle="Review submitted check-ins and send manual reviews for external (Fillout) check-ins."
+        actions={
+          <Button onClick={() => setComposerOpen(true)} className="bg-gradient-primary font-bold">
+            <Plus className="mr-1 h-4 w-4" /> New Manual Review
+          </Button>
+        }
+      />
       <div className="grid gap-4 p-4 md:grid-cols-[360px_1fr] md:p-6">
         <div>
-          <Tabs value={tab} onValueChange={(v) => { setTab(v as any); setSelectedId(null); }}>
+          <Tabs value={tab} onValueChange={(v) => { setTab(v); setSelectedId(null); }}>
             <TabsList className="w-full">
               <TabsTrigger value="pending_review" className="flex-1">Pending</TabsTrigger>
               <TabsTrigger value="reviewed" className="flex-1">Reviewed</TabsTrigger>
+              <TabsTrigger value="manual" className="flex-1">Manual</TabsTrigger>
             </TabsList>
-            <TabsContent value={tab} className="mt-3">
-              {isLoading ? (
+
+            <TabsContent value="pending_review" className="mt-3">
+              <SubmissionList items={items} loading={isLoading} selectedId={selectedId} setSelectedId={setSelectedId} />
+            </TabsContent>
+            <TabsContent value="reviewed" className="mt-3">
+              <SubmissionList items={items} loading={isLoading} selectedId={selectedId} setSelectedId={setSelectedId} />
+            </TabsContent>
+            <TabsContent value="manual" className="mt-3">
+              {loadingManual ? (
                 <Loader2 className="mx-auto mt-4 h-5 w-5 animate-spin text-muted-foreground" />
-              ) : items.length === 0 ? (
-                <Card className="p-4 text-sm text-muted-foreground">Nothing here.</Card>
+              ) : manualReviews.length === 0 ? (
+                <Card className="p-4 text-sm text-muted-foreground">No manual reviews yet. Click "New Manual Review" above.</Card>
               ) : (
                 <ul className="space-y-2">
-                  {items.map((s: any) => (
-                    <li key={s.id}>
-                      <button
-                        onClick={() => setSelectedId(s.id)}
-                        className={`w-full rounded-md border p-3 text-left transition ${
-                          selectedId === s.id ? "border-primary bg-primary/5" : "border-border bg-card hover:bg-muted/30"
-                        }`}
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="truncate text-sm font-bold">{s.client?.full_name ?? "Client"}</div>
-                          <Badge className={statusTone(s.status) + " border text-[10px]"}>{statusLabel(s.status)}</Badge>
-                        </div>
-                        <div className="mt-1 truncate text-xs text-muted-foreground">{s.form?.title}</div>
-                        <div className="mt-1 text-[11px] text-muted-foreground">
-                          {s.submitted_at ? new Date(s.submitted_at).toLocaleString() : new Date(s.updated_at).toLocaleString()}
-                        </div>
-                      </button>
-                    </li>
-                  ))}
+                  {manualReviews.map((r) => {
+                    const st = reviewStatus(r);
+                    return (
+                      <li key={r.id}>
+                        <button
+                          onClick={() => setSelectedId(r.id)}
+                          className={`w-full rounded-md border p-3 text-left transition ${
+                            selectedId === r.id ? "border-primary bg-primary/5" : "border-border bg-card hover:bg-muted/30"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="truncate text-sm font-bold">{r.client?.full_name ?? "Client"}</div>
+                            <Badge className={st.tone + " border text-[10px]"}>{st.label}</Badge>
+                          </div>
+                          <div className="mt-1 truncate text-xs text-muted-foreground">{r.title} · {sourceLabel(r.source)}</div>
+                          <div className="mt-1 text-[11px] text-muted-foreground">
+                            Sent {new Date(r.created_at).toLocaleString()}
+                            {r.read_at && <> · Read {new Date(r.read_at).toLocaleString()}</>}
+                          </div>
+                        </button>
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
             </TabsContent>
@@ -82,12 +113,112 @@ function AdminCheckInReviews() {
         </div>
 
         <div>
-          {selectedId ? <SubmissionDetail submissionId={selectedId} /> : (
-            <Card className="p-6 text-sm text-muted-foreground">Select a submission to review.</Card>
+          {!selectedId ? (
+            <Card className="p-6 text-sm text-muted-foreground">Select an item to review.</Card>
+          ) : tab === "manual" ? (
+            <ManualReviewDetail
+              review={manualReviews.find((m: any) => m.id === selectedId) ?? null}
+              onDeleted={() => { setSelectedId(null); qc.invalidateQueries({ queryKey: ["manual-check-in-reviews"] }); }}
+            />
+          ) : (
+            <SubmissionDetail submissionId={selectedId} />
           )}
         </div>
       </div>
+
+      <ManualCheckInReviewComposer open={composerOpen} onOpenChange={setComposerOpen} />
     </>
+  );
+}
+
+function SubmissionList({ items, loading, selectedId, setSelectedId }: { items: any[]; loading: boolean; selectedId: string | null; setSelectedId: (v: string) => void }) {
+  if (loading) return <Loader2 className="mx-auto mt-4 h-5 w-5 animate-spin text-muted-foreground" />;
+  if (items.length === 0) return <Card className="p-4 text-sm text-muted-foreground">Nothing here.</Card>;
+  return (
+    <ul className="space-y-2">
+      {items.map((s: any) => (
+        <li key={s.id}>
+          <button
+            onClick={() => setSelectedId(s.id)}
+            className={`w-full rounded-md border p-3 text-left transition ${
+              selectedId === s.id ? "border-primary bg-primary/5" : "border-border bg-card hover:bg-muted/30"
+            }`}
+          >
+            <div className="flex items-center justify-between gap-2">
+              <div className="truncate text-sm font-bold">{s.client?.full_name ?? "Client"}</div>
+              <Badge className={statusTone(s.status) + " border text-[10px]"}>{statusLabel(s.status)}</Badge>
+            </div>
+            <div className="mt-1 truncate text-xs text-muted-foreground">{s.form?.title}</div>
+            <div className="mt-1 text-[11px] text-muted-foreground">
+              {s.submitted_at ? new Date(s.submitted_at).toLocaleString() : new Date(s.updated_at).toLocaleString()}
+            </div>
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function ManualReviewDetail({ review, onDeleted }: { review: any; onDeleted: () => void }) {
+  if (!review) return <Card className="p-6 text-sm text-muted-foreground">Loading…</Card>;
+  const st = reviewStatus(review);
+  return (
+    <div className="space-y-4">
+      <Card className="border-border bg-card p-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <div className="text-sm font-bold">{review.client?.full_name ?? "Client"} — {review.title}</div>
+            <div className="text-xs text-muted-foreground">
+              {sourceLabel(review.source)} · {review.check_in_date ?? "no date"} · Sent {new Date(review.created_at).toLocaleString()}
+            </div>
+          </div>
+          <Badge className={st.tone + " border"}>{st.label}</Badge>
+        </div>
+      </Card>
+
+      <Card className="border-border bg-card p-4">
+        <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Coach Feedback</div>
+        <div className="mt-2 whitespace-pre-wrap text-sm">{review.message}</div>
+        {review.action_items && (
+          <>
+            <div className="mt-4 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Action Items</div>
+            <div className="mt-1 whitespace-pre-wrap text-sm">{review.action_items}</div>
+          </>
+        )}
+        {review.priority && (
+          <div className="mt-3 text-xs text-muted-foreground">Priority: <span className="font-bold uppercase">{review.priority}</span></div>
+        )}
+      </Card>
+
+      {(review.internal_notes || review.external_link) && (
+        <Card className="border-amber-500/20 bg-amber-500/5 p-4">
+          <div className="text-[11px] font-bold uppercase tracking-wider text-amber-300">Admin-only</div>
+          {review.external_link && (
+            <a href={review.external_link} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-1 text-sm text-primary underline">
+              External response link <ExternalLink className="h-3 w-3" />
+            </a>
+          )}
+          {review.internal_notes && <div className="mt-2 whitespace-pre-wrap text-sm">{review.internal_notes}</div>}
+        </Card>
+      )}
+
+      <div className="flex justify-end gap-2">
+        <Link to="/admin/messages" search={{ clientId: review.client_id } as any}>
+          <Button variant="outline" size="sm"><MessageCircle className="mr-1 h-4 w-4" /> Open Messenger</Button>
+        </Link>
+        <Button
+          variant="destructive"
+          size="sm"
+          onClick={async () => {
+            if (!confirm("Delete this review?")) return;
+            try { await deleteManualReview(review.id); toast.success("Deleted"); onDeleted(); }
+            catch (e: any) { toast.error(e.message); }
+          }}
+        >
+          <Trash2 className="mr-1 h-4 w-4" /> Delete
+        </Button>
+      </div>
+    </div>
   );
 }
 
