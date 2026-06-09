@@ -1,106 +1,84 @@
-## Sound Effects in Chat — Implementation Plan
+# Premium Birthdays System
 
-Build on the existing GIF/effects system. Sounds reuse the same patterns: a library table, favorites/recent, an admin manager, a picker tab inside the existing GIF popover, and a clean in-chat audio card. No autoplay anywhere.
+A large, multi-part feature. Here's how I'd ship it cleanly.
 
----
+## 1. Data model (new migration)
 
-### 1. Database & Storage (one migration)
+New table `client_birthday_cards` — per-client customization:
+- `client_id` (FK, unique)
+- `enabled` (bool, default true)
+- `headline`, `message`, `quote`, `coach_message` (text, nullable = use default)
+- `template_key` (text, nullable — strong, simple, jf_effect, client_win)
+- `celebration_effect` (bool, default true)
+- `show_message_coach_button` (bool, default true)
+- `updated_at`, `updated_by`
 
-New tables (mirror `chat_gifs`):
-- `chat_sounds` — `id, title, category, tags[], media_url, duration_ms, is_featured, active, archived, sort_order, created_text, created_at`
-- `chat_sound_favorites` — `user_id, sound_id, created_at`
-- `chat_sound_recent` — `user_id, sound_id, last_used_at, use_count`
+New table `client_birthday_card_views` — track per-year dismissal:
+- `client_id`, `birthday_year` (unique pair), `seen_at`, `dismissed_at`
 
-`app_settings` keys (new rows, all default to sane values):
-- `chat_sound_clients_send` → `true`
-- `chat_sound_clients_play` → `true`
-- `chat_sound_app_members_send` → `false`
-- `chat_sound_program_members_send` → `false`
+Both: GRANTs + RLS (admin/coach manage cards; clients read their own card + write their own view).
 
-Storage: new private bucket `chat-sounds`. Signed URLs for playback.
+## 2. Admin dashboard — Upcoming Birthdays widget
 
-RLS:
-- `chat_sounds` — admin/coach full; authenticated select where `active = true AND archived = false`
-- favorites/recent — owner-only
-- Standard GRANTs included in the migration
+Rewrite `src/components/upcoming-birthdays-widget.tsx`:
+- Premium card per client with `UserAvatar` (uses the new shimmer)
+- Name, formatted birthday, "Turning X", "X days away" / "Today" / "Tomorrow"
+- 4 quick actions: Message · Customize Card · Preview · View Profile
+- Sort soonest first, 30-day window default
+- Clean empty state
+- Keeps existing "Wished" / overdue logic
+- Today's birthdays get a subtle red/primary accent stripe
 
-Seed: 24 starter sounds across Hype / PR & Wins / Funny / Coach Reactions / Cardio / Gym Pain, sourced from royalty-free hosts (mixkit / pixabay) — short MP3 URLs (~1–3s, <60KB each).
+## 3. Customize + Preview dialogs
 
-### 2. Reuse `messages` table
+New `src/components/birthday-card-editor.tsx`:
+- Loads/saves `client_birthday_cards` row
+- Template picker (4 templates with default copy)
+- Editable fields: headline, message, quote, coach message
+- Toggles: enabled, celebration effect, message-coach button
+- "Reset to default" + "Save"
 
-New `message_type = 'sound'`. Existing `media_url` / `media_type = 'audio/mpeg'` carries the file. `body` carries the sound title for display + delete-for-everyone parity.
+New `src/components/birthday-card-preview.tsx`:
+- Renders the exact client-facing card with current draft values
+- Mobile-frame preview
+- Respects `prefers-reduced-motion`
+- Reusable in both the Customize dialog and the standalone Preview button
 
-### 3. Lib
+## 4. Client-side birthday card
 
-`src/lib/chat-sounds.ts`:
-- `listSounds({ category?, search? })`, `listCategories()`
-- `toggleFavorite(soundId)`, `bumpRecent(soundId)`
-- `listFavorites()`, `listRecent(limit=12)`
-- Admin CRUD: `createSound`, `updateSound`, `archiveSound`, `uploadSoundFile(file) → media_url`
-- `sendSoundMessage({ conversationId, sound })` — wraps existing `sendMessage`
+New `src/components/client-birthday-card.tsx`:
+- Modal-style card shown to client on their birthday
+- Uses defaults unless admin customized
+- Subtle confetti (lightweight inline canvas/CSS — no new dep), respects reduced motion
+- Buttons: "Thank you", optional "Message Coach", optional "View Today's Plan"
+- On dismiss: insert `client_birthday_card_views` row → won't reappear
+- Mounted in the client portal root layout, gated by `date_of_birth` matching today + `enabled` + not-yet-dismissed-this-year
 
-Extend `chat-settings.ts` with the four new toggles + helpers `canSendSound(role)`, `canPlaySound(role)`.
+## 5. Send Birthday Message action
 
-### 4. Audio playback singleton
+Hook into existing messaging — open the message thread for the client with a prefilled draft (no auto-send).
 
-`src/lib/sound-player.ts`:
-- Single shared `HTMLAudioElement`; starting a new sound stops the previous one
-- Lazy `new Audio(url)` only on first play per message
-- LRU cache of last 8 decoded URLs
-- Respects `prefers-reduced-motion` only for visual pulse, not muting
-- Never autoplays — `playSound(url)` is always user-gesture-initiated
+## 6. Admin notification
 
-### 5. Picker UI
+Lightweight: today's-birthday clients automatically pin to the top of the widget with a "Today 🎂" accent + a single toast on dashboard mount (deduped via sessionStorage per day). No new notification table.
 
-Extend the existing `gif-picker.tsx` (currently `✨ GIF`) into tabs: **GIFs | Sounds**.
-- Sounds tab: search input, category chips, lists Featured / Recent / Favorites / All
-- Each row: title, duration badge, ▶︎ preview (uses shared player, stops on next), ★ favorite, tap card → send
-- Virtualized list, fetch-on-open only (no preloading on chat mount)
+## Out of scope (call out)
+- No email/push notifications to admin (toast + dashboard pin only).
+- No "Announcements history" entry on dismissal — just the views table.
+- No iPad-specific layout beyond responsive defaults.
 
-### 6. Chat message rendering
+## Files
 
-In `message-thread.tsx` branch on `message_type === 'sound'`:
-- Clean card: speaker icon, "Sound Effect" label, bold title, big circular Play button, duration
-- Tap play → shared player; button shows pause + progress while active
-- Honors `canPlaySound(viewerRole)` — if disabled, shows the card but Play is disabled with a tooltip
-- Inherits delete-for-everyone, read receipts, timestamps, retry, failed state from existing message pipeline
-- Double-tap and existing reactions continue to work on the bubble
+New:
+- `supabase/migrations/<ts>_birthday_cards.sql`
+- `src/components/birthday-card-editor.tsx`
+- `src/components/birthday-card-preview.tsx`
+- `src/components/client-birthday-card.tsx`
+- `src/lib/birthday-templates.ts`
 
-### 7. Admin manager
+Edited:
+- `src/components/upcoming-birthdays-widget.tsx` (rewrite)
+- Client portal root layout (mount `ClientBirthdayCard`)
+- `src/routes/_authenticated/admin/index.tsx` (dashboard toast for today's birthdays)
 
-New route `/admin/chat-sounds`:
-- Table with category filter, featured toggle, active/archived toggle
-- Upload dialog: file input (mp3/m4a/ogg, max 200KB, <5s enforced client-side via `Audio.duration`), title, category, tags, featured
-- Archive with confirm dialog
-- Linked from `admin-nav.ts` next to "Chat GIF Library"
-
-Extend `/admin/settings/chat` with a "Sound Effects" section exposing the four permission toggles.
-
-### 8. Permissions enforcement
-
-- Composer hides the Sounds tab when `canSendSound(role)` is false
-- Server-side: extend the existing message insert guard to reject `message_type = 'sound'` when sender role lacks permission
-- Play disabled for clients when `chat_sound_clients_play = false`
-
-### 9. Scope deferral
-
-- **Sound-as-reaction** is deferred per the user's own "prioritize standalone first" guidance. Will be follow-up once standalone is solid.
-- **Autoplay setting** intentionally omitted — autoplay stays off, no toggle.
-
-### 10. Files
-
-**New:**
-- `supabase/migrations/<ts>_chat_sounds.sql`
-- `src/lib/chat-sounds.ts`, `src/lib/sound-player.ts`
-- `src/components/sound-picker-panel.tsx`, `src/components/chat-sound-card.tsx`
-- `src/routes/_authenticated/admin/chat-sounds.tsx`
-
-**Edited:**
-- `src/components/gif-picker.tsx` (add Sounds tab)
-- `src/components/message-thread.tsx` (render sound message)
-- `src/lib/chat-settings.ts`, `src/lib/messages.ts`, `src/lib/admin-nav.ts`
-- `src/routes/_authenticated/admin/chat-settings.tsx` (or wherever the existing settings page lives)
-- `src/integrations/supabase/types.ts`, `src/routeTree.gen.ts`
-
-### Testing checklist mapping
-All items from the user's checklist map to the above. Will verify by build + spot-check the picker, audio card render, permission gating, and admin upload flow.
+Want me to proceed with all of this, or cut/reorder any parts first?
