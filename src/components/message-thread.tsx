@@ -530,6 +530,9 @@ export function MessageThread({
   } | null>(null);
   const previewAudioRef = useRef<HTMLAudioElement | null>(null);
   const [previewPlaying, setPreviewPlaying] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingBody, setEditingBody] = useState("");
+  const [actionsForId, setActionsForId] = useState<string | null>(null);
 
   const { data: messages = [] } = useQuery({
     queryKey: ["messages", clientId, role],
@@ -696,6 +699,8 @@ export function MessageThread({
           </div>
         ) : visibleMessages.map((m) => {
           const mine = m.sender_role === role;
+          const isDeleted = !!m.deleted_at;
+          const isEditing = editingId === m.id;
           const otherName = mine
             ? null
             : m.is_internal_note
