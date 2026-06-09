@@ -163,8 +163,15 @@ function CallAccessPage() {
                           </Select>
                         </td>
                         <td className="px-3 py-2 min-w-[180px]">
-                          <Input defaultValue={c.phone ?? ""} placeholder="+15551234567" className="h-8 text-sm"
-                            onBlur={(e) => { if (e.target.value !== (c.phone ?? "")) updateClient(c.id, { phone: e.target.value || null }); }} />
+                          <div className="flex items-center gap-1">
+                            <Input defaultValue={c.phone ?? ""} placeholder="+15551234567" className="h-8 text-sm"
+                              onBlur={(e) => { if (e.target.value !== (c.phone ?? "")) updateClient(c.id, { phone: e.target.value || null }); }} />
+                            {tel && (
+                              <Button asChild size="icon" variant="outline" className="h-8 w-8 shrink-0 border-emerald-500/40 text-emerald-600">
+                                <a href={`tel:${tel}`} title={`Call ${c.full_name}`}><Phone className="h-4 w-4" /></a>
+                              </Button>
+                            )}
+                          </div>
                         </td>
                         <td className="px-3 py-2">
                           <div className="flex items-center gap-2">
@@ -231,8 +238,13 @@ function CallAccessPage() {
                             onBlur={(e) => { if (e.target.value !== (co.email ?? "")) updateCoach(co.id, { email: e.target.value }); }} />
                         </td>
                         <td className="px-3 py-2 min-w-[180px]">
-                          <Input defaultValue={co.phone ?? ""} placeholder="+15551234567" className="h-8 text-sm"
-                            onBlur={(e) => { if (e.target.value !== (co.phone ?? "")) updateCoach(co.id, { phone: e.target.value || null }); }} />
+                          <Input required defaultValue={co.phone ?? ""} placeholder="+15551234567 (required)"
+                            className={`h-8 text-sm ${!co.phone ? "border-destructive" : ""}`}
+                            onBlur={(e) => {
+                              const v = e.target.value.trim();
+                              if (!v) { toast.error("Coach phone is required"); e.target.value = co.phone ?? ""; return; }
+                              if (v !== (co.phone ?? "")) updateCoach(co.id, { phone: v });
+                            }} />
                         </td>
                         <td className="px-3 py-2 min-w-[140px]">
                           <Select value={co.status ?? "Active"} onValueChange={(v) => updateCoach(co.id, { status: v })}>
