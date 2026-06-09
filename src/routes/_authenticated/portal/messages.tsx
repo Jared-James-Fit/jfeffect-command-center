@@ -28,7 +28,7 @@ function ClientMessages() {
       style={{
         // On mobile, use the dynamic viewport so the chat tracks the
         // visible area (URL bar collapse + on-screen keyboard).
-        height: "100dvh",
+        height: "calc(100dvh - var(--bottom-nav-clearance, 0px))",
       }}
     >
       {/* Slim chat header — coach identity, not a giant page hero */}
