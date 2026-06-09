@@ -38,6 +38,51 @@ export type Database = {
         }
         Relationships: []
       }
+      admin_audit_log: {
+        Row: {
+          action: string
+          actor_role: string | null
+          actor_user_id: string | null
+          after: Json | null
+          before: Json | null
+          created_at: string
+          id: string
+          ip: string | null
+          summary: string | null
+          target_id: string | null
+          target_table: string | null
+          user_agent: string | null
+        }
+        Insert: {
+          action: string
+          actor_role?: string | null
+          actor_user_id?: string | null
+          after?: Json | null
+          before?: Json | null
+          created_at?: string
+          id?: string
+          ip?: string | null
+          summary?: string | null
+          target_id?: string | null
+          target_table?: string | null
+          user_agent?: string | null
+        }
+        Update: {
+          action?: string
+          actor_role?: string | null
+          actor_user_id?: string | null
+          after?: Json | null
+          before?: Json | null
+          created_at?: string
+          id?: string
+          ip?: string | null
+          summary?: string | null
+          target_id?: string | null
+          target_table?: string | null
+          user_agent?: string | null
+        }
+        Relationships: []
+      }
       agreement_audit_log: {
         Row: {
           actor_role: string
