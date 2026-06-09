@@ -1381,6 +1381,36 @@ export function MessageThread({
             {canSendGifs && (
               <GifPicker
                 disabled={sending || uploading}
+                showSounds
+                onPickSound={!canSendSounds ? undefined : async (s) => {
+                  if (!user) return;
+                  setSending(true);
+                  try {
+                    await sendMessage({
+                      clientId,
+                      senderId: user.id,
+                      senderRole: role,
+                      body: "",
+                      attachments: [{
+                        type: "audio",
+                        kind: "sound",
+                        url: s.media_url,
+                        name: s.title,
+                        mime: s.mime,
+                        duration: s.duration_ms ? s.duration_ms / 1000 : undefined,
+                      }],
+                      messageType,
+                      isInternalNote: role === "admin" ? internalNote : false,
+                      priority: role === "admin" ? priority : undefined,
+                    });
+                    qc.invalidateQueries({ queryKey: ["messages", clientId, role] });
+                    try { await markSoundRecent(user.id, s.id); } catch {}
+                  } catch (e: any) {
+                    toast.error(e?.message ?? "Failed to send sound");
+                  } finally {
+                    setSending(false);
+                  }
+                }}
                 onPick={async (g) => {
                   if (!user) return;
                   setSending(true);
