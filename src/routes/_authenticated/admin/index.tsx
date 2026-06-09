@@ -815,6 +815,11 @@ function AdminDashboard() {
           </Card>
         </div>
       </div>
+      <PriceCardPickerDialog
+        open={!!sellTo}
+        fixedClientId={sellTo?.id}
+        onClose={() => setSellTo(null)}
+      />
     </>
   );
 }
