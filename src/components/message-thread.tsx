@@ -31,7 +31,6 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
-import { useDoubleTap } from "@/hooks/use-double-tap";
 import { getChatSettings, DEFAULT_REACTION } from "@/lib/chat-settings";
 import { GifPicker } from "@/components/gif-picker";
 import { markRecent } from "@/lib/chat-gifs";
