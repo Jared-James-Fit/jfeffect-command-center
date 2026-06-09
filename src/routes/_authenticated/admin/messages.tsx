@@ -146,6 +146,13 @@ function MessagesInbox() {
 
   const selected = clients.find((c) => c.id === selectedId);
   const selectedState = selectedId ? stateMap.get(selectedId) : undefined;
+  const { peerLive: selectedClientLive } = useChatPresence(selectedId, "admin");
+
+  // A client is "active in the app" if they've pinged within the last 3 min.
+  const isClientActive = (last_active_at?: string | null) => {
+    if (!last_active_at) return false;
+    return Date.now() - new Date(last_active_at).getTime() < 3 * 60_000;
+  };
 
   const selectClient = (id: string) => {
     setSelectedId(id);
@@ -235,6 +242,9 @@ function MessagesInbox() {
                 size={44}
                 ring
               />
+              {isClientActive((client as any).last_active_at) && (
+                <span className="pointer-events-none absolute -ml-3 mt-7"><LiveDot /></span>
+              )}
               <div className="min-w-0 flex-1">
                 <div className="flex items-center justify-between gap-2">
                   <span className={cn("truncate text-sm", unread > 0 ? "font-bold" : "font-semibold")}>
@@ -297,7 +307,14 @@ function MessagesInbox() {
                 ring
               />
               <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-bold">{selected.full_name}</div>
+                <div className="flex items-center gap-1.5 truncate text-sm font-bold">
+                  <span className="truncate">{selected.full_name}</span>
+                  {(selectedClientLive || isClientActive((selected as any).last_active_at)) && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-600">
+                      <LiveDot /> {selectedClientLive ? "Live in chat" : "Active"}
+                    </span>
+                  )}
+                </div>
                 <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
                   {selectedState?.priority && selectedState.priority !== "Normal" && (
                     <PriorityChip priority={selectedState.priority} />
