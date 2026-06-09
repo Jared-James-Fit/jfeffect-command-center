@@ -288,6 +288,24 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, existingResults, existi
   const [notesOpen, setNotesOpen] = useState(false);
   const hasNote = Boolean(existingNote?.id);
 
+  const { data: maxes = [] } = useQuery({
+    queryKey: ["pl-client-maxes", clientId],
+    enabled: !!clientId && !!row.percentage && row.percentage_basis !== "manual",
+    queryFn: () => listClientMaxes(clientId as string),
+  });
+  const computed = useMemo(() => {
+    if (!row.percentage || !row.percentage_basis || row.percentage_basis === "manual") return null;
+    return computeRowLoad({
+      exerciseName: name,
+      basis: row.percentage_basis,
+      percentage: Number(row.percentage),
+      manualLoadKg: row.load_kg ? Number(row.load_kg) : null,
+      manualLoadLb: row.load_lb ? Number(row.load_lb) : null,
+      unit: "kg",
+      maxesIndex: buildMaxIndex(maxes),
+    });
+  }, [row.percentage, row.percentage_basis, row.load_kg, row.load_lb, name, maxes]);
+
   return (
     <Card className="relative overflow-hidden p-4 pl-5">
       <div className={`absolute left-0 top-0 h-full w-1.5 ${accent}`} aria-hidden />
