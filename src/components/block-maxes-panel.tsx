@@ -7,6 +7,7 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Dumbbell, Plus, Trash2, Save, Link2 } from "lucide-react";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { toast } from "sonner";
 import {
   listClientMaxes, upsertClientMax, deleteClientMax, effectiveMax, buildMaxIndex,
@@ -57,6 +58,9 @@ function BlockMaxesDialog({
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [saving, setSaving] = useState(false);
   const [addLift, setAddLift] = useState<string>("");
+  // Main lift unit selector (applies to Squat/Bench/Deadlift rows only).
+  const [mainUnit, setMainUnit] = useState<"kg" | "lb">("kg");
+  const [applyExistingRows, setApplyExistingRows] = useState<"yes" | "no">("no");
 
   // Seed drafts from existing maxes once loaded.
   useEffect(() => {
@@ -98,6 +102,38 @@ function BlockMaxesDialog({
 
   const update = (i: number, patch: Partial<Draft>) =>
     setDrafts((arr) => arr.map((d, idx) => (idx === i ? { ...d, ...patch } : d)));
+
+  // Apply the chosen main-lift unit to the three SBD draft rows. Numbers stay
+  // the same — admin opts into conversion per-row if they want it.
+  const applyMainUnit = (u: "kg" | "lb") => {
+    setMainUnit(u);
+    setDrafts((arr) => arr.map((d) =>
+      DEFAULT_LIFTS.includes(d.lift) ? { ...d, unit: u } : d
+    ));
+  };
+
+  // Per-row unit change: if there's a value, ask whether to convert or keep.
+  const changeRowUnit = (i: number, nextUnit: "kg" | "lb") => {
+    const d = drafts[i];
+    if (d.unit === nextUnit) return;
+    const hasNumber = d.one_rm !== "" || d.training_max !== "";
+    if (!hasNumber) { update(i, { unit: nextUnit }); return; }
+    const convert = window.confirm(
+      `Changing ${d.lift} from ${d.unit} to ${nextUnit}.\n\n` +
+      `OK = Convert the value (e.g. 100 kg → 220 lb)\n` +
+      `Cancel = Keep the number (e.g. 100 kg → 100 lb)`
+    );
+    if (convert) {
+      const f = nextUnit === "lb" ? 2.20462262 : 1 / 2.20462262;
+      update(i, {
+        unit: nextUnit,
+        one_rm: d.one_rm === "" ? "" : Number((Number(d.one_rm) * f).toFixed(1)),
+        training_max: d.training_max === "" ? "" : Number((Number(d.training_max) * f).toFixed(1)),
+      });
+    } else {
+      update(i, { unit: nextUnit });
+    }
+  };
 
   const addRow = () => {
     const lift = addLift.trim();
@@ -173,6 +209,45 @@ function BlockMaxesDialog({
           <div className="text-sm text-muted-foreground">Loading…</div>
         ) : (
           <div className="space-y-2">
+            {/* Quick main-lift unit selector */}
+            <div className="rounded-md border border-primary/30 bg-primary/5 p-2.5 space-y-2">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold uppercase tracking-wide text-primary">Set Squat / Bench / Deadlift unit</span>
+                <div className="inline-flex rounded-md border border-border bg-background p-0.5">
+                  <button
+                    type="button"
+                    onClick={() => applyMainUnit("kg")}
+                    className={`rounded px-3 py-1 text-xs font-semibold ${mainUnit === "kg" ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
+                  >kg</button>
+                  <button
+                    type="button"
+                    onClick={() => applyMainUnit("lb")}
+                    className={`rounded px-3 py-1 text-xs font-semibold ${mainUnit === "lb" ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
+                  >lb</button>
+                </div>
+              </div>
+              <div>
+                <div className="mb-1 text-[11px] font-semibold text-foreground">
+                  Apply this unit to existing Squat, Bench, and Deadlift rows in this block?
+                </div>
+                <RadioGroup value={applyExistingRows} onValueChange={(v) => setApplyExistingRows(v as any)} className="space-y-1">
+                  <label className="flex items-start gap-2 text-xs">
+                    <RadioGroupItem value="yes" id="apply-yes" className="mt-0.5" />
+                    <span><strong>Yes</strong> — update existing Squat/Bench/Deadlift rows too</span>
+                  </label>
+                  <label className="flex items-start gap-2 text-xs">
+                    <RadioGroupItem value="no" id="apply-no" className="mt-0.5" />
+                    <span><strong>No</strong> — only update the max inputs</span>
+                  </label>
+                </RadioGroup>
+                {applyExistingRows === "yes" && (
+                  <p className="mt-1 text-[10px] text-muted-foreground">
+                    Existing rows update on save: any Competition Squat / Bench / Deadlift rows in this block switch to {mainUnit}.
+                  </p>
+                )}
+              </div>
+            </div>
+
             <div className="grid grid-cols-12 gap-1 px-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
               <div className="col-span-4">Exercise</div>
               <div className="col-span-2 text-center">1RM</div>
@@ -208,7 +283,7 @@ function BlockMaxesDialog({
                   value={d.training_max}
                   onChange={(e) => update(i, { training_max: e.target.value === "" ? "" : Number(e.target.value) })}
                 />
-                <Select value={d.unit} onValueChange={(v) => update(i, { unit: v as "kg" | "lb" })}>
+                <Select value={d.unit} onValueChange={(v) => changeRowUnit(i, v as "kg" | "lb")}>
                   <SelectTrigger className="col-span-1 h-7 text-xs"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="kg">kg</SelectItem>
