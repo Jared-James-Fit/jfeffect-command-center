@@ -17,7 +17,7 @@ import { Plus, Trash2, Send, RefreshCw, Search, UserPlus } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Link } from "@tanstack/react-router";
 
-export const Route = createFileRoute("/_authenticated/admin/settings/sms")({ component: SmsSettings });
+export const Route = createFileRoute("/_authenticated/admin/settings_/sms")({ component: SmsSettings });
 
 type Step = { delay_minutes: number; enabled: boolean; template: string };
 
