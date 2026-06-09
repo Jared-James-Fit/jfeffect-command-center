@@ -1,12 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Dumbbell, Plus, Trash2, Save, Link2 } from "lucide-react";
+import { Dumbbell, Plus, Trash2, Save, Link2, Search } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { toast } from "sonner";
 import {
@@ -24,6 +27,7 @@ const MORE_LIFTS = [
 type Draft = {
   id?: string;
   lift: string;
+  exercise_id?: string | null;
   one_rm: number | "";
   training_max: number | "";
   unit: "kg" | "lb";
@@ -77,10 +81,24 @@ function BlockMaxesDialog({
     queryKey: ["pl-client-maxes", clientId, blockId],
     queryFn: () => listClientMaxes(clientId, blockId),
   });
+  // Full exercise library for the "Add Exercise Max" picker.
+  const { data: libraryExercises = [] } = useQuery<{ id: string; name: string; muscle_group: string | null; category: string | null }[]>({
+    queryKey: ["pl-maxes-exercise-library"],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("exercises")
+        .select("id, name, muscle_group, category")
+        .order("name");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
 
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [saving, setSaving] = useState(false);
-  const [addLift, setAddLift] = useState<string>("");
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [customMode, setCustomMode] = useState(false);
+  const [customName, setCustomName] = useState("");
   // Main lift unit selector (applies to Squat/Bench/Deadlift rows only).
   const [mainUnit, setMainUnit] = useState<"kg" | "lb">("kg");
   const [applyExistingRows, setApplyExistingRows] = useState<"yes" | "no">("no");
@@ -96,7 +114,7 @@ function BlockMaxesDialog({
       const m = byLift.get(lift);
       if (m) {
         initial.push({
-          id: m.id, lift: m.lift,
+          id: m.id, lift: m.lift, exercise_id: m.exercise_id,
           one_rm: m.one_rm ?? "", training_max: m.training_max ?? "",
           unit: m.unit, scope: m.block_id ? "block" : "profile",
           source_lift: m.source_lift,
@@ -111,7 +129,7 @@ function BlockMaxesDialog({
       if (!m.active) continue;
       if (DEFAULT_LIFTS.includes(m.lift)) continue;
       initial.push({
-        id: m.id, lift: m.lift,
+        id: m.id, lift: m.lift, exercise_id: m.exercise_id,
         one_rm: m.one_rm ?? "", training_max: m.training_max ?? "",
         unit: m.unit, scope: m.block_id ? "block" : "profile",
         source_lift: m.source_lift,
@@ -158,15 +176,21 @@ function BlockMaxesDialog({
     }
   };
 
-  const addRow = () => {
-    const lift = addLift.trim();
-    if (!lift) return;
-    if (drafts.some((d) => d.lift.toLowerCase() === lift.toLowerCase())) {
+  const addExerciseRow = (lift: string, exerciseId?: string | null) => {
+    const name = lift.trim();
+    if (!name) return;
+    if (drafts.some((d) => d.lift.toLowerCase() === name.toLowerCase())) {
       toast.error("Already in list");
       return;
     }
-    setDrafts((arr) => [...arr, { lift, one_rm: "", training_max: "", unit: "kg", scope: "profile" }]);
-    setAddLift("");
+    setDrafts((arr) => [...arr, {
+      lift: name,
+      exercise_id: exerciseId ?? null,
+      one_rm: "", training_max: "", unit: mainUnit, scope: "profile",
+    }]);
+    setPickerOpen(false);
+    setCustomMode(false);
+    setCustomName("");
   };
 
   const removeRow = async (i: number) => {
@@ -186,6 +210,7 @@ function BlockMaxesDialog({
         await upsertClientMax({
           client_id: clientId,
           lift: d.lift.trim(),
+          exercise_id: d.exercise_id ?? null,
           one_rm: d.one_rm === "" ? null : Number(d.one_rm),
           training_max: d.training_max === "" ? null : Number(d.training_max),
           unit: d.unit,
@@ -209,10 +234,6 @@ function BlockMaxesDialog({
       setSaving(false);
     }
   };
-
-  const availableLifts = MORE_LIFTS.filter(
-    (l) => !drafts.some((d) => d.lift.toLowerCase() === l.toLowerCase()),
-  );
 
   return (
     <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
@@ -280,7 +301,8 @@ function BlockMaxesDialog({
               <div className="col-span-1" />
             </div>
             {drafts.map((d, i) => (
-              <div key={`${d.lift}-${i}`} className="grid grid-cols-12 items-center gap-1 rounded-md border border-border bg-secondary/20 px-2 py-1.5">
+              <div key={`${d.lift}-${i}`} className="space-y-1 rounded-md border border-border bg-secondary/20 px-2 py-1.5">
+              <div className="grid grid-cols-12 items-center gap-1">
                 <div className="col-span-4 min-w-0">
                   <Input
                     className="h-7 text-xs"
@@ -326,27 +348,119 @@ function BlockMaxesDialog({
                   </Button>
                 </div>
               </div>
+              {/* Variation mapping: "Use max from … modifier %" */}
+              <div className="flex flex-wrap items-center gap-1.5 pt-0.5 text-[10px] text-muted-foreground">
+                <span className="font-semibold uppercase tracking-wide">Use max from</span>
+                <Select
+                  value={d.source_lift ?? "__none"}
+                  onValueChange={(v) => update(i, { source_lift: v === "__none" ? null : v, variation_modifier: v === "__none" ? "" : (d.variation_modifier === "" || d.variation_modifier == null ? 100 : d.variation_modifier) })}
+                >
+                  <SelectTrigger className="h-6 w-[180px] text-[11px]"><SelectValue placeholder="— direct max —" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none">— direct max —</SelectItem>
+                    {drafts
+                      .filter((other, oi) => oi !== i && other.lift && other.lift.toLowerCase() !== d.lift.toLowerCase())
+                      .map((other) => (
+                        <SelectItem key={other.lift} value={other.lift}>{other.lift}</SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+                {d.source_lift && (
+                  <>
+                    <span>· Modifier</span>
+                    <Input
+                      className="h-6 w-16 text-center font-mono text-[11px]"
+                      inputMode="decimal"
+                      placeholder="100"
+                      value={d.variation_modifier}
+                      onChange={(e) => update(i, { variation_modifier: e.target.value === "" ? "" : Number(e.target.value) })}
+                    />
+                    <span>%</span>
+                  </>
+                )}
+              </div>
+              </div>
             ))}
 
-            <div className="flex items-center gap-2 pt-2">
-              <Select value={addLift} onValueChange={setAddLift}>
-                <SelectTrigger className="h-8 flex-1 text-xs"><SelectValue placeholder="Add another lift…" /></SelectTrigger>
-                <SelectContent>
-                  {availableLifts.map((l) => <SelectItem key={l} value={l}>{l}</SelectItem>)}
-                  <SelectItem value="__custom">— Custom name —</SelectItem>
-                </SelectContent>
-              </Select>
-              {addLift === "__custom" && (
-                <Input
-                  className="h-8 flex-1 text-xs"
-                  placeholder="Custom lift name"
-                  onKeyDown={(e) => { if (e.key === "Enter") { setAddLift((e.target as HTMLInputElement).value); addRow(); } }}
-                  onBlur={(e) => setAddLift(e.target.value)}
-                />
+            {/* Add Exercise Max — searches the full Exercise Library */}
+            <div className="flex flex-wrap items-center gap-2 pt-2">
+              <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
+                <PopoverTrigger asChild>
+                  <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs">
+                    <Plus className="h-3 w-3" /> Add Exercise Max
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[320px] p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="Search exercise library…" />
+                    <CommandList className="max-h-[280px]">
+                      <CommandEmpty>
+                        <div className="px-2 py-3 text-xs text-muted-foreground">
+                          No exercise found.{" "}
+                          <button
+                            type="button"
+                            className="font-semibold text-primary underline"
+                            onClick={() => { setCustomMode(true); setPickerOpen(false); }}
+                          >
+                            Add custom name
+                          </button>
+                        </div>
+                      </CommandEmpty>
+                      <CommandGroup heading="Quick add">
+                        {MORE_LIFTS
+                          .filter((l) => !drafts.some((d) => d.lift.toLowerCase() === l.toLowerCase()))
+                          .map((l) => (
+                            <CommandItem key={`quick-${l}`} value={l} onSelect={() => addExerciseRow(l, null)}>
+                              <Search className="mr-2 h-3 w-3 opacity-50" /> {l}
+                            </CommandItem>
+                          ))}
+                      </CommandGroup>
+                      <CommandGroup heading="Exercise library">
+                        {libraryExercises
+                          .filter((ex) => !drafts.some((d) => d.lift.toLowerCase() === ex.name.toLowerCase()))
+                          .slice(0, 200)
+                          .map((ex) => (
+                            <CommandItem
+                              key={ex.id}
+                              value={`${ex.name} ${ex.muscle_group ?? ""} ${ex.category ?? ""}`}
+                              onSelect={() => addExerciseRow(ex.name, ex.id)}
+                            >
+                              <div className="flex w-full items-center justify-between gap-2">
+                                <span className="truncate">{ex.name}</span>
+                                {ex.muscle_group && (
+                                  <span className="shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground">
+                                    {ex.muscle_group}
+                                  </span>
+                                )}
+                              </div>
+                            </CommandItem>
+                          ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+              {customMode && (
+                <div className="flex items-center gap-1">
+                  <Input
+                    autoFocus
+                    className="h-8 w-48 text-xs"
+                    placeholder="Custom exercise name"
+                    value={customName}
+                    onChange={(e) => setCustomName(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") addExerciseRow(customName, null); }}
+                  />
+                  <Button size="sm" variant="outline" className="h-8" onClick={() => addExerciseRow(customName, null)}>
+                    Add
+                  </Button>
+                  <Button size="sm" variant="ghost" className="h-8" onClick={() => { setCustomMode(false); setCustomName(""); }}>
+                    Cancel
+                  </Button>
+                </div>
               )}
-              <Button size="sm" variant="outline" className="h-8" onClick={addRow} disabled={!addLift || addLift === "__custom"}>
-                <Plus className="mr-1 h-3 w-3" /> Add
-              </Button>
+              <span className="text-[11px] text-muted-foreground">
+                Pick any exercise — Pause Squat, Close Grip Bench, Block Pull, hip thrust, leg press, custom names, anything.
+              </span>
             </div>
           </div>
         )}
