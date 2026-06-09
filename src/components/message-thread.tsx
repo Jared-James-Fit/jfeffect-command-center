@@ -768,6 +768,8 @@ export function MessageThread({
           const mine = m.sender_role === role;
           const isDeleted = !!m.deleted_at;
           const isEditing = editingId === m.id;
+          const isSelected = selectedIds.has(m.id);
+          const canModify = mine && !isDeleted;
           const otherName = mine
             ? null
             : m.is_internal_note
@@ -781,7 +783,26 @@ export function MessageThread({
             ? peerAvatarPath ?? null
             : null;
           return (
-            <div key={m.id} className={cn("flex items-end gap-2", mine ? "justify-end" : "justify-start")}>
+            <div
+              key={m.id}
+              className={cn(
+                "flex items-end gap-2",
+                mine ? "justify-end" : "justify-start",
+                selectionMode && "cursor-pointer",
+              )}
+              onClick={() => { if (selectionMode && canModify) toggleSelected(m.id); }}
+            >
+              {selectionMode && (
+                <div className={cn("self-center shrink-0", mine && "order-last")}>
+                  {canModify ? (
+                    isSelected
+                      ? <CheckCircle2 className="h-5 w-5 text-primary" />
+                      : <Circle className="h-5 w-5 text-muted-foreground/60" />
+                  ) : (
+                    <Circle className="h-5 w-5 text-muted-foreground/20" />
+                  )}
+                </div>
+              )}
               {!mine && (
                 <UserAvatar
                   src={otherAvatar}
@@ -791,17 +812,37 @@ export function MessageThread({
                   className="mb-1"
                 />
               )}
-              <div className={cn(
-                "group relative",
-                "max-w-[80%] rounded-2xl px-3 py-2 text-sm shadow-sm",
-                m.is_internal_note
-                  ? "border border-warning/40 bg-warning/10"
-                  : mine
-                  ? "bg-primary text-primary-foreground rounded-br-md"
-                  : "bg-secondary text-foreground",
-                !mine && !m.is_internal_note && "rounded-bl-md",
-                isDeleted && "italic opacity-70",
-              )}>
+              <div
+                className={cn(
+                  "group relative select-none touch-manipulation",
+                  "max-w-[80%] rounded-2xl px-3 py-2 text-sm shadow-sm transition-shadow",
+                  m.is_internal_note
+                    ? "border border-warning/40 bg-warning/10"
+                    : mine
+                    ? "bg-primary text-primary-foreground rounded-br-md"
+                    : "bg-secondary text-foreground",
+                  !mine && !m.is_internal_note && "rounded-bl-md",
+                  isDeleted && "italic opacity-70",
+                  selectionMode && isSelected && "ring-2 ring-primary ring-offset-2 ring-offset-background",
+                )}
+                onContextMenu={(e) => { if (!isDeleted) e.preventDefault(); }}
+                onPointerDown={(e) => {
+                  if (isEditing || isDeleted) return;
+                  if ((e.target as HTMLElement).closest("a,button,textarea,input,audio,video")) return;
+                  startLongPress(m.id, e.clientX, e.clientY);
+                }}
+                onPointerMove={onPointerMoveDuringHold}
+                onPointerUp={cancelLongPress}
+                onPointerCancel={cancelLongPress}
+                onPointerLeave={cancelLongPress}
+                onClickCapture={(e) => {
+                  if (suppressClickRef.current) {
+                    suppressClickRef.current = false;
+                    e.stopPropagation();
+                    e.preventDefault();
+                  }
+                }}
+              >
                 {m.is_internal_note && (
                   <div className="mb-1 text-[10px] font-bold uppercase tracking-widest text-warning">Internal Coach Note</div>
                 )}
@@ -877,16 +918,16 @@ export function MessageThread({
                   {m.message_type !== "General" && <span>· {m.message_type}</span>}
                   {m.priority && <span>· {m.priority}</span>}
                 </div>
-                {mine && !isDeleted && !isEditing && (
+                {mine && !isDeleted && !isEditing && !selectionMode && (
                   <div className={cn(
-                    "absolute -top-2 right-1 opacity-0 transition-opacity group-hover:opacity-100",
+                    "absolute -top-2 right-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100",
                     actionsForId === m.id && "opacity-100",
                   )}>
                     <DropdownMenu open={actionsForId === m.id} onOpenChange={(o) => setActionsForId(o ? m.id : null)}>
                       <DropdownMenuTrigger asChild>
                         <Button type="button" size="icon" variant="secondary"
-                          className="h-6 w-6 rounded-full border border-border shadow-sm">
-                          <MoreHorizontal className="h-3 w-3" />
+                          className="h-8 w-8 rounded-full border border-border shadow-sm">
+                          <MoreHorizontal className="h-4 w-4" />
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="w-44">
@@ -895,18 +936,17 @@ export function MessageThread({
                         >
                           <Pencil className="mr-2 h-4 w-4" /> Edit
                         </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => { setActionsForId(null); setSelectionMode(true); setSelectedIds(new Set([m.id])); }}
+                        >
+                          <CheckSquare className="mr-2 h-4 w-4" /> Select
+                        </DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem
                           className="text-destructive focus:text-destructive"
-                          onClick={async () => {
+                          onClick={() => {
                             setActionsForId(null);
-                            if (!confirm("Delete this message for everyone? This cannot be undone.")) return;
-                            try {
-                              await deleteMessageForEveryone(m.id);
-                              qc.invalidateQueries({ queryKey: ["messages", clientId, role] });
-                            } catch (err: any) {
-                              toast.error(err?.message ?? "Failed to delete");
-                            }
+                            setConfirmDelete({ ids: [m.id], label: "Delete this message for everyone?" });
                           }}
                         >
                           <Trash2 className="mr-2 h-4 w-4" /> Delete for everyone
