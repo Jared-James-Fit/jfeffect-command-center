@@ -1156,6 +1156,28 @@ export function summarizeTemplatePayload(tpl: any) {
   return { blocks: 0, weeks: 0, days: 0, rows: 1 };
 }
 
+export function getTemplateWeeks(tpl: any): number {
+  if (!tpl) return 0;
+  const p = tpl.payload || {};
+  if (tpl.template_type === "full_prep") {
+    if (p.prep?.total_weeks) return Number(p.prep.total_weeks);
+    const blocks = p.blocks_data || [];
+    return blocks.reduce((s: number, b: any) => s + (b.weeks_data?.length || b.weeks || 0), 0);
+  }
+  if (tpl.template_type === "block") {
+    if (Array.isArray(p.weeks_data)) return p.weeks_data.length;
+    return Number(tpl.weeks) || 0;
+  }
+  if (tpl.template_type === "week") return 1;
+  return 0;
+}
+
+export function computeEndDateFromStart(startDate: string, weeks: number): string {
+  const d = new Date(startDate + "T00:00:00");
+  d.setDate(d.getDate() + weeks * 7 - 1);
+  return d.toISOString().slice(0, 10);
+}
+
 async function insertWeekTree(blockId: string, weekIndex: number, w: any) {
   const { data: newWeek } = await sb.from("pl_weeks").insert({ block_id: blockId, week_index: weekIndex, notes: w.notes ?? null }).select("*").single();
   for (const d of (w.days || [])) await insertDayTree(newWeek.id, d.day_index ?? 1, d);
