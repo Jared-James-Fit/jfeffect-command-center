@@ -541,6 +541,14 @@ export function MessageThread({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingBody, setEditingBody] = useState("");
   const [actionsForId, setActionsForId] = useState<string | null>(null);
+  // Mobile/tablet long-press action sheet + iMessage-style selection mode.
+  const [sheetForId, setSheetForId] = useState<string | null>(null);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [confirmDelete, setConfirmDelete] = useState<{ ids: string[]; label: string } | null>(null);
+  // Long-press timer — fires after ~450ms hold without movement.
+  const longPressRef = useRef<{ id: string; t: any; x: number; y: number } | null>(null);
+  const suppressClickRef = useRef(false);
 
   const { data: messages = [] } = useQuery({
     queryKey: ["messages", clientId, role],
