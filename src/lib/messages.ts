@@ -11,6 +11,7 @@ export type MessageAttachment = {
   duration?: number;
   storage_path?: string;
   peaks?: number[];
+  kind?: "sound";
 };
 
 export type Message = {
