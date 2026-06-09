@@ -18,7 +18,6 @@ import {
 } from "@/lib/messages";
 import { Search, ChevronLeft, MoreHorizontal, ExternalLink, Phone, MessageSquare } from "lucide-react";
 import { SendSmsDialog } from "@/components/send-sms-dialog";
-import { useState as useStateSms } from "react";
 import { formatDistanceToNow, parseISO } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useChatPresence, LiveDot } from "@/hooks/use-chat-presence";
@@ -38,6 +37,7 @@ function MessagesInbox() {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<Filter>("All");
   const [selectedId, setSelectedId] = useState<string | null>(selectedFromUrl ?? null);
+  const [smsOpen, setSmsOpen] = useState(false);
 
   useEffect(() => { if (selectedFromUrl) setSelectedId(selectedFromUrl); }, [selectedFromUrl]);
 
