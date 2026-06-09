@@ -100,7 +100,7 @@ function useCollapsedSections() {
   return [collapsed, toggle] as const;
 }
 
-export function AppShell({ items, title, children }: { items: NavItem[]; title: string; children: ReactNode }) {
+export function AppShell({ items, bottomItems: customBottomItems, title, children }: { items: NavItem[]; bottomItems?: NavItem[]; title: string; children: ReactNode }) {
   useKeyboardOpen();
   const { signOut, user } = useAuth();
   const navigate = useNavigate();
