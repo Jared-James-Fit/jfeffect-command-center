@@ -160,6 +160,20 @@ function ClientsPage() {
     },
   });
 
+  const { data: blocksAll = [] } = useQuery({
+    queryKey: ["pl-blocks", "all-clients"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("pl_blocks")
+        .select("id, client_id, name, status, start_date, end_date, weeks, sort_order, archived, training_focus")
+        .eq("archived", false)
+        .neq("status", "Archived")
+        .order("sort_order", { ascending: true })
+        .order("created_at", { ascending: true });
+      return data ?? [];
+    },
+  });
+
   const { data: convStates = [] } = useQuery({
     queryKey: ["conversation-states"],
     queryFn: async () => {
@@ -208,6 +222,37 @@ function ClientsPage() {
     }
     return m;
   }, [cardTargets]);
+
+  const blocksByClient = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const map = new Map<string, { current?: any; next?: any }>();
+    const byClient = new Map<string, any[]>();
+    for (const b of blocksAll as any[]) {
+      const list = byClient.get(b.client_id) ?? [];
+      list.push(b);
+      byClient.set(b.client_id, list);
+    }
+    for (const [cid, list] of byClient.entries()) {
+      const current = list.find((b) => b.status === "Active")
+        ?? list.find((b) => {
+          if (!b.start_date || !b.end_date) return false;
+          const s = new Date(b.start_date); const e = new Date(b.end_date);
+          return s <= today && today <= e;
+        });
+      const next = list
+        .filter((b) => b !== current)
+        .filter((b) => b.status === "Planned" || b.status === "Draft" || (b.start_date && new Date(b.start_date) > today))
+        .sort((a, b) => {
+          const ad = a.start_date ? new Date(a.start_date).getTime() : Number.POSITIVE_INFINITY;
+          const bd = b.start_date ? new Date(b.start_date).getTime() : Number.POSITIVE_INFINITY;
+          if (ad !== bd) return ad - bd;
+          return (a.sort_order ?? 0) - (b.sort_order ?? 0);
+        })[0];
+      map.set(cid, { current, next });
+    }
+    return map;
+  }, [blocksAll]);
 
   const msgInfoByClient = useMemo(() => {
     const stateMap = new Map(convStates.map((s) => [s.client_id, s]));
@@ -281,6 +326,8 @@ function ClientsPage() {
                     <th className="px-4 py-3">Type</th>
                     <th className="px-4 py-3 min-w-[260px]">Current Phase</th>
                     <th className="px-4 py-3">Next Phase</th>
+                    <th className="px-4 py-3 min-w-[180px]">Assigned Training</th>
+                    <th className="px-4 py-3 min-w-[160px]">Next Assigned Training</th>
                     <th className="px-4 py-3">Nutrition</th>
                     <th className="px-4 py-3">Cardio</th>
                     <th className="px-4 py-3">Payment</th>
@@ -349,6 +396,72 @@ function ClientsPage() {
                           </Link>
                         ) : <span className="text-muted-foreground">—</span>}
                       </td>
+                      {(() => {
+                        const bs = blocksByClient.get(c.id);
+                        const cur = bs?.current;
+                        const nxt = bs?.next;
+                        return (
+                          <>
+                            <td className="px-4 py-3 text-xs">
+                              {cur ? (
+                                <div className="space-y-1">
+                                  <Link
+                                    to="/admin/blocks/$blockId"
+                                    params={{ blockId: cur.id }}
+                                    className="block hover:opacity-80"
+                                  >
+                                    <div className="flex items-center gap-1.5">
+                                      <Dumbbell className="h-3 w-3 text-primary" />
+                                      <span className="font-semibold truncate max-w-[140px]">{cur.name}</span>
+                                    </div>
+                                    <div className="text-[10px] text-muted-foreground truncate">
+                                      {cur.training_focus ? `${cur.training_focus} · ` : ""}
+                                      {cur.weeks}w
+                                      {cur.start_date && cur.end_date ? ` · ${format(parseISO(cur.start_date), "MMM d")} → ${format(parseISO(cur.end_date), "MMM d")}` : ""}
+                                    </div>
+                                  </Link>
+                                  <Link
+                                    to="/admin/clients/$id"
+                                    params={{ id: c.id }}
+                                    search={{ tab: "training" }}
+                                    className="inline-flex items-center text-[10px] font-semibold text-primary hover:underline"
+                                  >
+                                    + Add block
+                                  </Link>
+                                </div>
+                              ) : (
+                                <AddCell id={c.id} tab="training" label="Add Training Block" />
+                              )}
+                            </td>
+                            <td className="px-4 py-3 text-xs">
+                              {nxt ? (
+                                <Link
+                                  to="/admin/blocks/$blockId"
+                                  params={{ blockId: nxt.id }}
+                                  className="block hover:opacity-80"
+                                >
+                                  <div className="font-medium truncate max-w-[140px]">{nxt.name}</div>
+                                  <div className="text-[10px] text-muted-foreground truncate">
+                                    {nxt.start_date ? format(parseISO(nxt.start_date), "MMM d") : nxt.status}
+                                    {" · "}{nxt.weeks}w
+                                  </div>
+                                </Link>
+                              ) : cur ? (
+                                <Link
+                                  to="/admin/clients/$id"
+                                  params={{ id: c.id }}
+                                  search={{ tab: "training" }}
+                                  className="text-[11px] font-semibold text-primary hover:underline"
+                                >
+                                  + Queue next
+                                </Link>
+                              ) : (
+                                <span className="text-muted-foreground">—</span>
+                              )}
+                            </td>
+                          </>
+                        );
+                      })()}
                       <td className="px-4 py-3">
                         {dNut ? (
                           <Link to="/admin/clients/$id" params={{ id: c.id }} search={{ tab: "nutrition" }}>
