@@ -11,7 +11,7 @@ import {
   ALLOWED_REACTIONS, getChatSettings, setDefaultReaction, setGifPermission, setSoundPermission,
 } from "@/lib/chat-settings";
 
-export const Route = createFileRoute("/_authenticated/admin/settings/chat")({
+export const Route = createFileRoute("/_authenticated/admin/settings_/chat")({
   component: ChatSettingsPage,
   errorComponent: ({ error, reset }) => {
     const router = useRouter();
