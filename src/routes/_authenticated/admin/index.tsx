@@ -288,6 +288,13 @@ function AdminDashboard() {
   const overdue = clients.filter((c) => c.status === "Payment Overdue" || c.payment_status === "Overdue").length;
   const needsAttention = clients.filter((c) => c.status === "Needs Attention" || c.status === "Check-In Overdue").length;
 
+  // Clients without any active purchased product — surfaced near the top so coach can sell right away.
+  const clientsWithActivePurchase = new Set((activePurchases as any[]).map((p) => p.client_id));
+  const EXCLUDED_FOR_SELL = new Set(["Deactivated", "Archived", "Paused", "Cancelling"]);
+  const clientsWithoutProduct = clients
+    .filter((c) => !EXCLUDED_FOR_SELL.has(c.status ?? "") && !clientsWithActivePurchase.has(c.id))
+    .sort((a, b) => (a.full_name ?? "").localeCompare(b.full_name ?? ""));
+
   const quickActions = [
     { label: "Add Client", to: "/admin/clients", icon: Plus },
     { label: "Payment Links", to: "/admin/payment-links", icon: Zap },
