@@ -6,11 +6,26 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import {
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { NUTRITION_PHASES, NUTRITION_GOALS, NUTRITION_STRUCTURES, dayLabelsForStructure, TARGET_STATUSES } from "@/lib/nutrition-cardio";
-import { FileText, Upload, X } from "lucide-react";
+import { FileText, Upload, X, Plus, ChevronDown } from "lucide-react";
+
+const QUICK_DAY_TYPES = [
+  "Training Day",
+  "Non-Training Day",
+  "High Day",
+  "Low Day",
+  "Rest Day",
+  "Refeed Day",
+  "Custom Day",
+] as const;
+
+const DEFAULT_NEW_DAYS = ["Training Day", "Non-Training Day", "High Day"];
 
 const WATER_UNITS = ["ml", "L", "oz", "cups", "glasses", "custom"] as const;
 type WaterUnit = typeof WATER_UNITS[number];
@@ -121,10 +136,10 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
         visible_to_client: true,
         pdf_url: "",
         pdf_name: "",
-        water: "",
+        water: "3.5 L",
       };
       setForm(f);
-      setDays(dayLabelsForStructure(f.structure).map((label, i) => ({ day_label: label, sort_order: i })));
+      setDays(DEFAULT_NEW_DAYS.map((label, i) => ({ day_label: label, sort_order: i })));
     }
   }, [open, initial, clientId]);
 
@@ -158,7 +173,8 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
     setDays(next);
   };
 
-  const addDay = () => setDays([...days, { day_label: `Day ${days.length + 1}`, sort_order: days.length }]);
+  const addDay = (label?: string) =>
+    setDays([...days, { day_label: label ?? `Day ${days.length + 1}`, sort_order: days.length }]);
   const removeDay = (i: number) => setDays(days.filter((_, idx) => idx !== i));
 
   const save = async () => {
@@ -270,7 +286,20 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <h4 className="text-xs uppercase tracking-widest text-muted-foreground">Day Targets</h4>
-            <Button size="sm" variant="outline" onClick={addDay}>+ Add day</Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button size="sm" variant="outline" className="gap-1">
+                  <Plus className="h-3.5 w-3.5" /> Add day <ChevronDown className="h-3 w-3 opacity-70" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                {QUICK_DAY_TYPES.map((t) => (
+                  <DropdownMenuItem key={t} onClick={() => addDay(t === "Custom Day" ? "Custom Day" : t)}>
+                    {t}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
           {days.map((d, i) => (
             <div key={i} className="rounded-md border border-border bg-secondary/20 p-3 space-y-2">
