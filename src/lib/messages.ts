@@ -164,6 +164,56 @@ export async function deleteMessageForEveryone(messageId: string) {
   if (error) throw error;
 }
 
+/* ------------------------------- Reactions ------------------------------- */
+
+export type MessageReaction = {
+  id: string;
+  message_id: string;
+  user_id: string;
+  emoji: string;
+  created_at: string;
+};
+
+export const REACTION_EMOJIS = ["👍", "🔥", "💪", "✅", "👀", "❤️", "😂"];
+
+export async function listReactions(clientId: string): Promise<MessageReaction[]> {
+  // Pull all reactions for messages in this client's thread in one shot.
+  const { data: msgs, error: mErr } = await db
+    .from("messages").select("id").eq("client_id", clientId);
+  if (mErr) throw mErr;
+  const ids = (msgs ?? []).map((m: any) => m.id);
+  if (ids.length === 0) return [];
+  const { data, error } = await db
+    .from("message_reactions").select("*").in("message_id", ids);
+  if (error) throw error;
+  return (data ?? []) as MessageReaction[];
+}
+
+export async function addReaction(messageId: string, userId: string, emoji: string) {
+  const { error } = await db
+    .from("message_reactions")
+    .insert({ message_id: messageId, user_id: userId, emoji });
+  if (error && !/duplicate key/i.test(error.message)) throw error;
+}
+
+export async function removeReaction(messageId: string, userId: string, emoji: string) {
+  const { error } = await db
+    .from("message_reactions")
+    .delete()
+    .eq("message_id", messageId)
+    .eq("user_id", userId)
+    .eq("emoji", emoji);
+  if (error) throw error;
+}
+
+export async function toggleReaction(
+  messageId: string, userId: string, emoji: string, mine: MessageReaction[],
+) {
+  const has = mine.some((r) => r.message_id === messageId && r.emoji === emoji);
+  if (has) await removeReaction(messageId, userId, emoji);
+  else await addReaction(messageId, userId, emoji);
+}
+
 export function priorityTone(p?: string | null) {
   switch (p) {
     case "High Priority": return "border-destructive/40 bg-destructive/10 text-destructive";

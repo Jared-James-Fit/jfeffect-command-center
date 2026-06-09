@@ -7,7 +7,9 @@ import {
   listMessages, sendMessage, markRead, setConversationStatus, setConversationPriority,
   detectAttachmentType, MESSAGE_TYPES, PRIORITIES, QUICK_REPLIES, priorityTone,
   editMessage, deleteMessageForEveryone,
+  listReactions, toggleReaction, REACTION_EMOJIS,
   type Message, type MessageAttachment, type SenderRole, type ConversationState,
+  type MessageReaction,
 } from "@/lib/messages";
 import { transcribeVoiceMessage } from "@/lib/voice-transcribe.functions";
 import { Button } from "@/components/ui/button";
@@ -556,6 +558,38 @@ export function MessageThread({
     queryFn: () => listMessages(clientId, { includeInternal: role === "admin" }),
   });
 
+  const { data: reactions = [] } = useQuery({
+    queryKey: ["message-reactions", clientId],
+    enabled: !!clientId,
+    queryFn: () => listReactions(clientId),
+  });
+
+  // Group reactions by message id for fast lookup.
+  const reactionsByMsg = useMemo(() => {
+    const map = new Map<string, MessageReaction[]>();
+    for (const r of reactions) {
+      const list = map.get(r.message_id) ?? [];
+      list.push(r);
+      map.set(r.message_id, list);
+    }
+    return map;
+  }, [reactions]);
+
+  const myReactions = useMemo(
+    () => reactions.filter((r) => r.user_id === user?.id),
+    [reactions, user?.id],
+  );
+
+  const onToggleReaction = async (messageId: string, emoji: string) => {
+    if (!user) return;
+    try {
+      await toggleReaction(messageId, user.id, emoji, myReactions);
+      qc.invalidateQueries({ queryKey: ["message-reactions", clientId] });
+    } catch (e: any) {
+      toast.error(e?.message ?? "Reaction failed");
+    }
+  };
+
   // Realtime
   useEffect(() => {
     if (!clientId) return;
@@ -565,6 +599,9 @@ export function MessageThread({
         qc.invalidateQueries({ queryKey: ["messages", clientId, role] });
         qc.invalidateQueries({ queryKey: ["conversation-states"] });
         qc.invalidateQueries({ queryKey: ["unread-counts"] });
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "message_reactions" }, () => {
+        qc.invalidateQueries({ queryKey: ["message-reactions", clientId] });
       })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
@@ -587,6 +624,15 @@ export function MessageThread({
     () => role === "admin" ? messages : messages.filter((m) => !m.is_internal_note),
     [messages, role],
   );
+
+  // Id of the latest message I sent (for inline "Read/Sent" receipt).
+  const lastOwnMessageId = useMemo(() => {
+    for (let i = visibleMessages.length - 1; i >= 0; i--) {
+      const m = visibleMessages[i];
+      if (m.sender_role === role && !m.is_internal_note) return m.id;
+    }
+    return null;
+  }, [visibleMessages, role]);
 
   // ---------- Long-press + selection helpers ----------
   const startLongPress = (id: string, x: number, y: number) => {
@@ -789,6 +835,14 @@ export function MessageThread({
                 "flex items-end gap-2",
                 mine ? "justify-end" : "justify-start",
                 selectionMode && "cursor-pointer",
+                (() => {
+                  const hasR = (reactionsByMsg.get(m.id)?.length ?? 0) > 0;
+                  const hasReceipt = mine && !isDeleted && m.id === lastOwnMessageId && !selectionMode;
+                  if (hasR && hasReceipt) return "pb-8";
+                  if (hasR) return "pb-3";
+                  if (hasReceipt) return "pb-4";
+                  return "";
+                })(),
               )}
               onClick={() => { if (selectionMode && canModify) toggleSelected(m.id); }}
             >
@@ -918,6 +972,54 @@ export function MessageThread({
                   {m.message_type !== "General" && <span>· {m.message_type}</span>}
                   {m.priority && <span>· {m.priority}</span>}
                 </div>
+                {/* Reaction chips (grouped by emoji) */}
+                {!isDeleted && (() => {
+                  const list = reactionsByMsg.get(m.id) ?? [];
+                  if (list.length === 0) return null;
+                  const groups = new Map<string, MessageReaction[]>();
+                  for (const r of list) {
+                    const g = groups.get(r.emoji) ?? [];
+                    g.push(r);
+                    groups.set(r.emoji, g);
+                  }
+                  return (
+                    <div className={cn(
+                      "absolute -bottom-3 flex flex-wrap gap-1",
+                      mine ? "right-2" : "left-2",
+                    )}>
+                      {Array.from(groups.entries()).map(([emoji, rs]) => {
+                        const minePicked = rs.some((r) => r.user_id === user?.id);
+                        return (
+                          <button
+                            key={emoji}
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); void onToggleReaction(m.id, emoji); }}
+                            className={cn(
+                              "inline-flex items-center gap-0.5 rounded-full border bg-background px-1.5 py-0.5 text-[11px] shadow-sm transition",
+                              minePicked ? "border-primary bg-primary/10" : "border-border hover:bg-secondary",
+                            )}
+                          >
+                            <span>{emoji}</span>
+                            {rs.length > 1 && <span className="text-[10px] font-medium">{rs.length}</span>}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
+                {/* Read receipt (only under my latest message) */}
+                {mine && !isDeleted && m.id === lastOwnMessageId && !selectionMode && (() => {
+                  const readAt = role === "admin" ? m.read_by_client_at : m.read_by_admin_at;
+                  const hasReactions = (reactionsByMsg.get(m.id)?.length ?? 0) > 0;
+                  return (
+                    <div className={cn(
+                      "absolute right-1 text-[10px] text-muted-foreground",
+                      hasReactions ? "-bottom-8" : "-bottom-4",
+                    )}>
+                      {readAt ? `Read ${format(parseISO(readAt), "h:mm a")}` : "Sent"}
+                    </div>
+                  );
+                })()}
                 {mine && !isDeleted && !isEditing && !selectionMode && (
                   <div className={cn(
                     "absolute -top-2 right-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100",
@@ -931,6 +1033,22 @@ export function MessageThread({
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="w-44">
+                        <div className="flex items-center justify-around px-1 py-1.5">
+                          {REACTION_EMOJIS.map((emoji) => (
+                            <button
+                              key={emoji}
+                              type="button"
+                              className="rounded-full p-1 text-lg hover:bg-secondary"
+                              onClick={() => {
+                                void onToggleReaction(m.id, emoji);
+                                setActionsForId(null);
+                              }}
+                            >
+                              {emoji}
+                            </button>
+                          ))}
+                        </div>
+                        <DropdownMenuSeparator />
                         <DropdownMenuItem
                           onClick={() => { setEditingId(m.id); setEditingBody(m.body); setActionsForId(null); }}
                         >
@@ -951,6 +1069,39 @@ export function MessageThread({
                         >
                           <Trash2 className="mr-2 h-4 w-4" /> Delete for everyone
                         </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                )}
+                {/* Desktop hover quick-react for incoming messages */}
+                {!mine && !isDeleted && !isEditing && !selectionMode && (
+                  <div className={cn(
+                    "absolute -top-2 left-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100",
+                    actionsForId === m.id && "opacity-100",
+                  )}>
+                    <DropdownMenu open={actionsForId === m.id} onOpenChange={(o) => setActionsForId(o ? m.id : null)}>
+                      <DropdownMenuTrigger asChild>
+                        <Button type="button" size="icon" variant="secondary"
+                          className="h-8 w-8 rounded-full border border-border shadow-sm">
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start" className="w-44">
+                        <div className="flex items-center justify-around px-1 py-1.5">
+                          {REACTION_EMOJIS.map((emoji) => (
+                            <button
+                              key={emoji}
+                              type="button"
+                              className="rounded-full p-1 text-lg hover:bg-secondary"
+                              onClick={() => {
+                                void onToggleReaction(m.id, emoji);
+                                setActionsForId(null);
+                              }}
+                            >
+                              {emoji}
+                            </button>
+                          ))}
+                        </div>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>
@@ -1162,6 +1313,7 @@ export function MessageThread({
             if (!m) return null;
             const canEdit = m.sender_role === role && !m.deleted_at && (m.body?.length ?? 0) > 0;
             const canDelete = m.sender_role === role && !m.deleted_at;
+            const canReact = !m.deleted_at;
             return (
               <>
                 <SheetHeader className="text-left">
@@ -1170,6 +1322,31 @@ export function MessageThread({
                     {m.deleted_at ? "This message was deleted." : m.body || (m.attachments?.length ? "Attachment" : "")}
                   </SheetDescription>
                 </SheetHeader>
+                {canReact && (
+                  <div className="mt-3 flex items-center justify-around rounded-full border border-border bg-secondary/40 px-2 py-2">
+                    {REACTION_EMOJIS.map((emoji) => {
+                      const minePicked = myReactions.some(
+                        (r) => r.message_id === m.id && r.emoji === emoji,
+                      );
+                      return (
+                        <button
+                          key={emoji}
+                          type="button"
+                          className={cn(
+                            "rounded-full p-1 text-2xl transition active:scale-90",
+                            minePicked && "bg-primary/15 ring-1 ring-primary",
+                          )}
+                          onClick={() => {
+                            void onToggleReaction(m.id, emoji);
+                            setSheetForId(null);
+                          }}
+                        >
+                          {emoji}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
                 <div className="mt-3 grid gap-1">
                   {canEdit && (
                     <Button
@@ -1203,7 +1380,7 @@ export function MessageThread({
                       <Trash2 className="mr-3 h-5 w-5" /> Delete for everyone
                     </Button>
                   )}
-                  {!canEdit && !canDelete && (
+                  {!canEdit && !canDelete && !canReact && (
                     <div className="rounded-md bg-secondary/40 p-3 text-center text-xs text-muted-foreground">
                       No actions available for this message.
                     </div>
