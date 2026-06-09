@@ -872,7 +872,7 @@ export function MessageThread({
             <div
               key={m.id}
               className={cn(
-                "flex items-end gap-2",
+                "relative flex items-end gap-2 will-change-transform",
                 mine ? "justify-end" : "justify-start",
                 selectionMode && "cursor-pointer",
                 (() => {
@@ -884,8 +884,25 @@ export function MessageThread({
                   return "";
                 })(),
               )}
+              style={{
+                transform: swipeX !== 0 ? `translate3d(${swipeX}px,0,0)` : undefined,
+                transition: swipeX === 0 ? "transform 220ms cubic-bezier(.2,.8,.2,1)" : "none",
+              }}
               onClick={() => { if (selectionMode && canModify) toggleSelected(m.id); }}
             >
+              {/* iMessage-style exact timestamp revealed by swiping left */}
+              <div
+                aria-hidden
+                className="pointer-events-none absolute top-1/2 -translate-y-1/2 text-[10px] tabular-nums text-muted-foreground"
+                style={{
+                  right: -64,
+                  width: 56,
+                  opacity: Math.min(1, Math.abs(swipeX) / 48),
+                  transition: swipeX === 0 ? "opacity 220ms ease" : "none",
+                }}
+              >
+                {fmtTime(m.created_at)}
+              </div>
               {selectionMode && (
                 <div className={cn("self-center shrink-0", mine && "order-last")}>
                   {canModify ? (
