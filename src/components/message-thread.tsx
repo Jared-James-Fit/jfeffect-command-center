@@ -34,6 +34,8 @@ import { cn } from "@/lib/utils";
 import { getChatSettings, DEFAULT_REACTION } from "@/lib/chat-settings";
 import { GifPicker } from "@/components/gif-picker";
 import { markRecent } from "@/lib/chat-gifs";
+import { markRecent as markSoundRecent } from "@/lib/chat-sounds";
+import { ChatSoundCard } from "@/components/chat-sound-card";
 import {
   Paperclip, Send, X, FileText, Image as ImageIcon, Video, Link as LinkIcon, ExternalLink,
   Mic, Trash2, Play, Pause, Camera, File as FileIcon, Flag, AlertCircle, AlertTriangle,
@@ -340,6 +342,16 @@ function LinkAttachment({ att, mine }: { att: MessageAttachment; mine: boolean }
 }
 
 function AttachmentView({ att, mine, message }: { att: MessageAttachment; mine: boolean; message?: Message }) {
+  if (att.kind === "sound") {
+    return (
+      <ChatSoundCard
+        url={att.url}
+        title={att.name ?? "Sound Effect"}
+        durationMs={att.duration ? Math.round(att.duration * 1000) : null}
+        mine={mine}
+      />
+    );
+  }
   if (att.type === "image") return <ImageAttachment att={att} />;
   if (att.type === "video") return <VideoAttachment att={att} />;
   if (att.type === "audio") return <AudioAttachment att={att} mine={mine} message={message} />;
