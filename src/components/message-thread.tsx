@@ -1149,7 +1149,7 @@ export function MessageThread({
                             type="button"
                             onClick={(e) => { e.stopPropagation(); void onToggleReaction(m.id, emoji); }}
                             className={cn(
-                              "inline-flex items-center gap-0.5 rounded-full border bg-background px-1.5 py-0.5 text-[11px] shadow-sm transition",
+                              "inline-flex items-center gap-0.5 rounded-full border bg-background px-1.5 py-0.5 text-[11px] shadow-sm transition animate-reaction-pop",
                               minePicked ? "border-primary bg-primary/10" : "border-border hover:bg-secondary",
                             )}
                           >
