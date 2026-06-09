@@ -29,8 +29,8 @@ function CallAccessPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("clients")
-        .select("id, full_name, first_name, last_name, email, phone, call_access_enabled, sms_opt_out, assigned_coach_id, coach:assigned_coach_id(full_name)")
-        .eq("archived", false)
+        .select("id, full_name, first_name, last_name, email, phone, call_access_enabled, sms_opt_out, assigned_coach_id, archived")
+        .or("archived.is.null,archived.eq.false")
         .order("full_name");
       if (error) throw error;
       return data ?? [];
