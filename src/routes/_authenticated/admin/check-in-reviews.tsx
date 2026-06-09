@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { Send, MessageCircle, Loader2, Plus, ExternalLink, Trash2 } from "lucide-react";
+import { Send, MessageCircle, Loader2, Plus, ExternalLink, Trash2, RotateCcw } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import {
   listAllSubmissionsForReview,
@@ -26,7 +26,7 @@ import {
 } from "@/lib/native-forms";
 import { sendMessage } from "@/lib/messages";
 import { ManualCheckInReviewComposer } from "@/components/manual-check-in-review-composer";
-import { listAllManualReviews, deleteManualReview, reviewStatus, sourceLabel } from "@/lib/manual-check-in-reviews";
+import { listAllManualReviews, deleteManualReview, reviewStatus, sourceLabel, resendManualReview } from "@/lib/manual-check-in-reviews";
 
 export const Route = createFileRoute("/_authenticated/admin/check-in-reviews")({
   component: AdminCheckInReviews,
@@ -162,6 +162,8 @@ function SubmissionList({ items, loading, selectedId, setSelectedId }: { items: 
 function ManualReviewDetail({ review, onDeleted }: { review: any; onDeleted: () => void }) {
   if (!review) return <Card className="p-6 text-sm text-muted-foreground">Loading…</Card>;
   const st = reviewStatus(review);
+  const qc = useQueryClient();
+  const [resending, setResending] = useState(false);
   return (
     <div className="space-y-4">
       <Card className="border-border bg-card p-4">
@@ -206,6 +208,28 @@ function ManualReviewDetail({ review, onDeleted }: { review: any; onDeleted: () 
         <Link to="/admin/messages" search={{ clientId: review.client_id } as any}>
           <Button variant="outline" size="sm"><MessageCircle className="mr-1 h-4 w-4" /> Open Messenger</Button>
         </Link>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={resending}
+          onClick={async () => {
+            setResending(true);
+            try {
+              await resendManualReview(review.id);
+              toast.success("Resent — status reset to Unread");
+              qc.invalidateQueries({ queryKey: ["manual-check-in-reviews"] });
+              qc.invalidateQueries({ queryKey: ["manual-reviews-unread", review.client_id] });
+              qc.invalidateQueries({ queryKey: ["manual-reviews-for-client", review.client_id] });
+            } catch (e: any) {
+              toast.error(e.message ?? "Could not resend");
+            } finally {
+              setResending(false);
+            }
+          }}
+        >
+          {resending ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <RotateCcw className="mr-1 h-4 w-4" />}
+          Resend
+        </Button>
         <Button
           variant="destructive"
           size="sm"
