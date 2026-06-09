@@ -426,6 +426,7 @@ export function StructureCanvas({ type, payload, setP, exercises, appendRowToFir
             <Maximize2 className="h-3 w-3" />
           </Button>
         </div>
+        {toolbarExtras && <div className="ml-auto inline-flex items-center gap-1.5">{toolbarExtras}</div>}
       </div>
 
       <div className="flex h-[calc(100vh-150px)] gap-0 overflow-hidden">
