@@ -104,6 +104,7 @@ import { Route as AuthenticatedPortalCheckInsFormIdRouteImport } from './routes/
 import { Route as AuthenticatedMResourcesSlugRouteImport } from './routes/_authenticated/m/resources.$slug'
 import { Route as AuthenticatedMPlansPlanIdRouteImport } from './routes/_authenticated/m/plans.$planId'
 import { Route as AuthenticatedMMyPlansEnrollmentIdRouteImport } from './routes/_authenticated/m/my-plans.$enrollmentId'
+import { Route as AuthenticatedAdminSettingsSmsRouteImport } from './routes/_authenticated/admin/settings.sms'
 import { Route as AuthenticatedAdminSettingsChatRouteImport } from './routes/_authenticated/admin/settings.chat'
 import { Route as AuthenticatedAdminPurchasesIdRouteImport } from './routes/_authenticated/admin/purchases.$id'
 import { Route as AuthenticatedAdminProgramLibraryTemplateIdRouteImport } from './routes/_authenticated/admin/program-library_.$templateId'
@@ -666,6 +667,12 @@ const AuthenticatedMMyPlansEnrollmentIdRoute =
     path: '/$enrollmentId',
     getParentRoute: () => AuthenticatedMMyPlansRoute,
   } as any)
+const AuthenticatedAdminSettingsSmsRoute =
+  AuthenticatedAdminSettingsSmsRouteImport.update({
+    id: '/sms',
+    path: '/sms',
+    getParentRoute: () => AuthenticatedAdminSettingsRoute,
+  } as any)
 const AuthenticatedAdminSettingsChatRoute =
   AuthenticatedAdminSettingsChatRouteImport.update({
     id: '/chat',
@@ -865,6 +872,7 @@ export interface FileRoutesByFullPath {
   '/admin/program-library/$templateId': typeof AuthenticatedAdminProgramLibraryTemplateIdRoute
   '/admin/purchases/$id': typeof AuthenticatedAdminPurchasesIdRoute
   '/admin/settings/chat': typeof AuthenticatedAdminSettingsChatRoute
+  '/admin/settings/sms': typeof AuthenticatedAdminSettingsSmsRoute
   '/m/my-plans/$enrollmentId': typeof AuthenticatedMMyPlansEnrollmentIdRoute
   '/m/plans/$planId': typeof AuthenticatedMPlansPlanIdRoute
   '/m/resources/$slug': typeof AuthenticatedMResourcesSlugRoute
@@ -976,6 +984,7 @@ export interface FileRoutesByTo {
   '/admin/program-library/$templateId': typeof AuthenticatedAdminProgramLibraryTemplateIdRoute
   '/admin/purchases/$id': typeof AuthenticatedAdminPurchasesIdRoute
   '/admin/settings/chat': typeof AuthenticatedAdminSettingsChatRoute
+  '/admin/settings/sms': typeof AuthenticatedAdminSettingsSmsRoute
   '/m/my-plans/$enrollmentId': typeof AuthenticatedMMyPlansEnrollmentIdRoute
   '/m/plans/$planId': typeof AuthenticatedMPlansPlanIdRoute
   '/m/resources/$slug': typeof AuthenticatedMResourcesSlugRoute
@@ -1092,6 +1101,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/program-library_/$templateId': typeof AuthenticatedAdminProgramLibraryTemplateIdRoute
   '/_authenticated/admin/purchases/$id': typeof AuthenticatedAdminPurchasesIdRoute
   '/_authenticated/admin/settings/chat': typeof AuthenticatedAdminSettingsChatRoute
+  '/_authenticated/admin/settings/sms': typeof AuthenticatedAdminSettingsSmsRoute
   '/_authenticated/m/my-plans/$enrollmentId': typeof AuthenticatedMMyPlansEnrollmentIdRoute
   '/_authenticated/m/plans/$planId': typeof AuthenticatedMPlansPlanIdRoute
   '/_authenticated/m/resources/$slug': typeof AuthenticatedMResourcesSlugRoute
@@ -1208,6 +1218,7 @@ export interface FileRouteTypes {
     | '/admin/program-library/$templateId'
     | '/admin/purchases/$id'
     | '/admin/settings/chat'
+    | '/admin/settings/sms'
     | '/m/my-plans/$enrollmentId'
     | '/m/plans/$planId'
     | '/m/resources/$slug'
@@ -1319,6 +1330,7 @@ export interface FileRouteTypes {
     | '/admin/program-library/$templateId'
     | '/admin/purchases/$id'
     | '/admin/settings/chat'
+    | '/admin/settings/sms'
     | '/m/my-plans/$enrollmentId'
     | '/m/plans/$planId'
     | '/m/resources/$slug'
@@ -1434,6 +1446,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/program-library_/$templateId'
     | '/_authenticated/admin/purchases/$id'
     | '/_authenticated/admin/settings/chat'
+    | '/_authenticated/admin/settings/sms'
     | '/_authenticated/m/my-plans/$enrollmentId'
     | '/_authenticated/m/plans/$planId'
     | '/_authenticated/m/resources/$slug'
@@ -2144,6 +2157,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedMMyPlansEnrollmentIdRouteImport
       parentRoute: typeof AuthenticatedMMyPlansRoute
     }
+    '/_authenticated/admin/settings/sms': {
+      id: '/_authenticated/admin/settings/sms'
+      path: '/sms'
+      fullPath: '/admin/settings/sms'
+      preLoaderRoute: typeof AuthenticatedAdminSettingsSmsRouteImport
+      parentRoute: typeof AuthenticatedAdminSettingsRoute
+    }
     '/_authenticated/admin/settings/chat': {
       id: '/_authenticated/admin/settings/chat'
       path: '/chat'
@@ -2304,11 +2324,13 @@ const AuthenticatedAdminPurchasesRouteWithChildren =
 
 interface AuthenticatedAdminSettingsRouteChildren {
   AuthenticatedAdminSettingsChatRoute: typeof AuthenticatedAdminSettingsChatRoute
+  AuthenticatedAdminSettingsSmsRoute: typeof AuthenticatedAdminSettingsSmsRoute
 }
 
 const AuthenticatedAdminSettingsRouteChildren: AuthenticatedAdminSettingsRouteChildren =
   {
     AuthenticatedAdminSettingsChatRoute: AuthenticatedAdminSettingsChatRoute,
+    AuthenticatedAdminSettingsSmsRoute: AuthenticatedAdminSettingsSmsRoute,
   }
 
 const AuthenticatedAdminSettingsRouteWithChildren =

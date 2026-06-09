@@ -13,7 +13,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { updateSmsSettings, sendTestSms, runReminderSweepNow } from "@/lib/sms.functions";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
-import { Plus, Trash2, MessageSquare, Send, RefreshCw } from "lucide-react";
+import { Plus, Trash2, Send, RefreshCw } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/admin/settings/sms")({ component: SmsSettings });
 
@@ -90,7 +90,7 @@ function SmsSettings() {
 
   return (
     <div className="p-4 md:p-6 space-y-6 max-w-5xl">
-      <PageHeader title="SMS Notifications" subtitle="Twilio-powered text alerts for unread messages." icon={MessageSquare} />
+      <PageHeader title="SMS Notifications" subtitle="Twilio-powered text alerts for unread messages." />
 
       <Card className="p-5 space-y-4">
         <div className="flex items-center justify-between">
