@@ -87,6 +87,7 @@ function DriveSetupBanner() {
 }
 
 function AdminDashboard() {
+  const [sellTo, setSellTo] = useState<{ id: string; name: string } | null>(null);
   const { data: clients = [] } = useQuery({
     queryKey: ["admin-clients"],
     queryFn: async () => {
