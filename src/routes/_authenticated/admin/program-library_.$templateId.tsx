@@ -22,6 +22,20 @@ import { SaveStatus } from "@/components/save-status";
 import { useConflictWatch } from "@/hooks/use-conflict-watch";
 import { ActionButton } from "@/components/action-button";
 import { copyRows, useClip } from "@/lib/program-builder-clipboard";
+import { createContext, useContext } from "react";
+import { listClientMaxes, buildMaxIndex, computeRowLoad, type ClientMaxRow } from "@/lib/pl-maxes";
+import { MaxEditorDialog } from "@/components/client-maxes-panel";
+import { AlertCircle as PbAlertCircle, Calculator as PbCalculator } from "lucide-react";
+
+// ---- Client-max context shared by RowEditor regardless of nesting depth ----
+type MaxesCtx = {
+  clientId: string | null;
+  maxes: ClientMaxRow[];
+  index: Map<string, ClientMaxRow>;
+  refresh: () => void;
+};
+const MaxesContext = createContext<MaxesCtx>({ clientId: null, maxes: [], index: new Map(), refresh: () => {} });
+export function useClientMaxesCtx() { return useContext(MaxesContext); }
 
 // ---- Editor preferences (compact mode, zoom, sidebar) ----
 const PREFS_KEY = "pl-tpl-editor-prefs:v1";
@@ -317,10 +331,12 @@ function EditorChrome({ meta, summary, typeLabel, autosave, save, dirty, childre
   );
 }
 
-export function StructureCanvas({ type, payload, setP, exercises, appendRowToFirstDay, undo, redo, canUndo, canRedo }: {
+export function StructureCanvas({ type, payload, setP, exercises, appendRowToFirstDay, undo, redo, canUndo, canRedo, clientId }: {
   type: string; payload: any; setP: (p: any, opts?: { skipHistory?: boolean }) => void; exercises: any[];
   appendRowToFirstDay: (payload: any, type: string, row: any) => void;
   undo: () => void; redo: () => void; canUndo: boolean; canRedo: boolean;
+  /** Optional — when present, RowEditor will display computed loads & "no max" warnings. */
+  clientId?: string | null;
 }) {
   const [prefs, setPrefsState] = useState<EditorPrefs>(() => readPrefs());
   const setPrefs = (patch: Partial<EditorPrefs>) => {
@@ -351,7 +367,20 @@ export function StructureCanvas({ type, payload, setP, exercises, appendRowToFir
     return () => window.removeEventListener("keydown", onKey);
   }, [undo, redo]);
 
+  const maxesQuery = useQuery({
+    queryKey: ["pl-client-maxes", clientId],
+    queryFn: () => listClientMaxes(clientId as string),
+    enabled: !!clientId,
+  });
+  const maxesCtx: MaxesCtx = useMemo(() => ({
+    clientId: clientId ?? null,
+    maxes: maxesQuery.data ?? [],
+    index: buildMaxIndex(maxesQuery.data ?? []),
+    refresh: () => maxesQuery.refetch(),
+  }), [clientId, maxesQuery.data]);
+
   return (
+    <MaxesContext.Provider value={maxesCtx}>
     <div className="rounded-md border border-border bg-background">
       {/* Sticky compact toolbar */}
       <div className="sticky top-[42px] z-20 flex flex-wrap items-center gap-1.5 border-b border-border bg-background/95 px-2 py-1.5 backdrop-blur">
@@ -426,6 +455,7 @@ export function StructureCanvas({ type, payload, setP, exercises, appendRowToFir
         </div>
       </div>
     </div>
+    </MaxesContext.Provider>
   );
 }
 
@@ -835,6 +865,20 @@ function RowEditor({ row, setRow, onDelete, exercises, compact }: { row: any; se
   const [expanded, setExpanded] = useState(!compact);
   useEffect(() => { if (!compact) setExpanded(true); }, [compact]);
   const h = compact ? "h-7" : "h-8";
+  const { clientId, index: maxesIndex, maxes, refresh } = useClientMaxesCtx();
+  const [maxEditor, setMaxEditor] = useState<any>(null);
+  const computed = useMemo(() => {
+    if (!clientId) return null;
+    return computeRowLoad({
+      exerciseName: exName,
+      basis: row.percentage_basis,
+      percentage: row.percentage ? Number(row.percentage) : null,
+      manualLoadKg: row.load_kg ? Number(row.load_kg) : null,
+      manualLoadLb: row.load_lb ? Number(row.load_lb) : null,
+      unit: "kg",
+      maxesIndex,
+    });
+  }, [clientId, exName, row.percentage, row.percentage_basis, row.load_kg, row.load_lb, maxesIndex]);
   return (
     <div className={cn("relative overflow-hidden rounded-md border border-border bg-secondary/20 pl-3", compact ? "p-1.5 space-y-1" : "p-2 space-y-1")}>
       <div className={`absolute left-0 top-0 h-full w-1.5 ${accent}`} aria-hidden />
@@ -882,6 +926,48 @@ function RowEditor({ row, setRow, onDelete, exercises, compact }: { row: any; se
           <SelectContent>{TIME_PROFILES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}</SelectContent>
         </Select>
       </div>
+      )}
+      {expanded && clientId && computed && computed.status !== "manual" && (
+        <div className="flex flex-wrap items-center gap-1.5 pt-0.5 text-[11px]">
+          {computed.status === "ok" && (
+            <span className="inline-flex items-center gap-1 rounded-md bg-emerald-500/10 px-2 py-0.5 font-mono text-emerald-700 dark:text-emerald-400">
+              <PbCalculator className="h-3 w-3" />
+              {row.percentage}% {computed.baseLabel} = <strong>{computed.load} {computed.unit}</strong>
+              <span className="text-muted-foreground">(of {computed.base?.toFixed(1)})</span>
+            </span>
+          )}
+          {computed.status === "no-max" && (
+            <>
+              <span className="inline-flex items-center gap-1 rounded-md bg-warning/15 px-2 py-0.5 text-warning">
+                <PbAlertCircle className="h-3 w-3" /> No max set for "{exName}"
+              </span>
+              <Button
+                size="sm" variant="outline" className="h-6 px-2 text-[10px]"
+                onClick={() => setMaxEditor({
+                  client_id: clientId, lift: exName, unit: "kg",
+                  source: "manual", active: true, rounding_mode: "nearest", rounding_step: 2.5,
+                })}
+              >
+                <Plus className="mr-0.5 h-3 w-3" /> Set Max
+              </Button>
+            </>
+          )}
+          {computed.status === "no-percentage" && (
+            <span className="text-muted-foreground">Enter a % to compute load</span>
+          )}
+          {computed.status === "needs-link" && (
+            <span className="text-muted-foreground">Linked-row basis — set on the row this references</span>
+          )}
+        </div>
+      )}
+      {maxEditor && (
+        <MaxEditorDialog
+          clientId={clientId!}
+          value={maxEditor}
+          existing={maxes}
+          onClose={() => setMaxEditor(null)}
+          onSaved={() => { setMaxEditor(null); refresh(); }}
+        />
       )}
     </div>
   );

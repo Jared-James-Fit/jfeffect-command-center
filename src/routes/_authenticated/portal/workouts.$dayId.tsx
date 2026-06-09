@@ -15,6 +15,7 @@ import { getExerciseVideoSource } from "@/lib/exercise-video";
 import { toast } from "sonner";
 import { durationRange } from "@/lib/pl-programs";
 import { movementAccent } from "@/components/program-builder";
+import { listClientMaxes, buildMaxIndex, computeRowLoad } from "@/lib/pl-maxes";
 import { useAutosave, readLocalDraft, clearLocalDraft } from "@/hooks/use-autosave";
 import { SaveStatus } from "@/components/save-status";
 import { ActionButton } from "@/components/action-button";
@@ -287,6 +288,24 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, existingResults, existi
   const [notesOpen, setNotesOpen] = useState(false);
   const hasNote = Boolean(existingNote?.id);
 
+  const { data: maxes = [] } = useQuery({
+    queryKey: ["pl-client-maxes", clientId],
+    enabled: !!clientId && !!row.percentage && row.percentage_basis !== "manual",
+    queryFn: () => listClientMaxes(clientId as string),
+  });
+  const computed = useMemo(() => {
+    if (!row.percentage || !row.percentage_basis || row.percentage_basis === "manual") return null;
+    return computeRowLoad({
+      exerciseName: name,
+      basis: row.percentage_basis,
+      percentage: Number(row.percentage),
+      manualLoadKg: row.load_kg ? Number(row.load_kg) : null,
+      manualLoadLb: row.load_lb ? Number(row.load_lb) : null,
+      unit: "kg",
+      maxesIndex: buildMaxIndex(maxes),
+    });
+  }, [row.percentage, row.percentage_basis, row.load_kg, row.load_lb, name, maxes]);
+
   return (
     <Card className="relative overflow-hidden p-4 pl-5">
       <div className={`absolute left-0 top-0 h-full w-1.5 ${accent}`} aria-hidden />
@@ -309,6 +328,11 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, existingResults, existi
             {row.tempo && ` · tempo ${row.tempo}`}
             {row.rest_seconds && ` · rest ${row.rest_seconds}s`}
           </div>
+          {computed && computed.status === "ok" && (
+            <div className="mt-1 inline-flex items-center gap-1 rounded-md bg-primary/10 px-2 py-0.5 text-xs font-bold text-primary">
+              Target load: {computed.load} {computed.unit}
+            </div>
+          )}
           {row.notes && <p className="mt-1 text-xs text-muted-foreground italic">{row.notes}</p>}
         </div>
         <div className="flex shrink-0 flex-col items-end gap-1">
