@@ -493,7 +493,7 @@ export function ExerciseLibraryPanel({
   }
 
   return (
-    <div className="flex h-full w-64 flex-col border-r border-border bg-card text-xs">
+    <div className="flex h-full w-52 flex-col border-r border-border bg-card text-xs">
       <div className="border-b border-border">
         <div className="flex items-center gap-1 p-2">
           <Search className="h-3 w-3 text-muted-foreground" />
