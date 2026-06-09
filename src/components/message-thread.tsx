@@ -992,7 +992,7 @@ export function MessageThread({
             <div
               key={m.id}
               className={cn(
-                "relative flex items-end gap-2 will-change-transform",
+                "relative flex w-full min-w-0 items-end gap-2 will-change-transform",
                 mine ? "justify-end" : "justify-start",
                 selectionMode && "cursor-pointer",
                 (() => {
