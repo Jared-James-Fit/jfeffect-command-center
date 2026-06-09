@@ -16,6 +16,8 @@ import {
   listClientMaxes, upsertClientMax, deleteClientMax, effectiveMax, buildMaxIndex,
   defaultRoundingStep, type ClientMaxRow,
 } from "@/lib/pl-maxes";
+import { movementAccent } from "@/components/program-builder";
+import { cn } from "@/lib/utils";
 
 const DEFAULT_LIFTS = ["Competition Squat", "Competition Bench Press", "Competition Deadlift"];
 const MORE_LIFTS = [
