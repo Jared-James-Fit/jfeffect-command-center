@@ -30,11 +30,12 @@ import { AlertCircle as PbAlertCircle, Calculator as PbCalculator } from "lucide
 // ---- Client-max context shared by RowEditor regardless of nesting depth ----
 type MaxesCtx = {
   clientId: string | null;
+  blockId: string | null;
   maxes: ClientMaxRow[];
   index: Map<string, ClientMaxRow>;
   refresh: () => void;
 };
-const MaxesContext = createContext<MaxesCtx>({ clientId: null, maxes: [], index: new Map(), refresh: () => {} });
+const MaxesContext = createContext<MaxesCtx>({ clientId: null, blockId: null, maxes: [], index: new Map(), refresh: () => {} });
 export function useClientMaxesCtx() { return useContext(MaxesContext); }
 
 // ---- Editor preferences (compact mode, zoom, sidebar) ----
