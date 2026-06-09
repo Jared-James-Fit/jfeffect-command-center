@@ -334,14 +334,24 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
             {row.sets ?? "?"} × {row.reps_text ?? "?"}
             {row.rpe && ` @ RPE ${row.rpe}`}
             {row.rir && ` · ${row.rir} RIR`}
-            {row.percentage && ` · ${row.percentage}%`}
+            {row.percentage && !row.manual_override && row.percentage_basis !== "none" && ` · ${row.percentage}%`}
             {row.load_kg && ` · ${row.load_kg} kg`}
             {row.tempo && ` · tempo ${row.tempo}`}
             {row.rest_seconds && ` · rest ${row.rest_seconds}s`}
           </div>
-          {computed && computed.status === "ok" && (
+          {row.manual_override && (row.load_kg || row.load_lb) && (
+            <div className="mt-1 inline-flex items-center gap-1 rounded-md bg-primary/10 px-2 py-0.5 text-xs font-bold text-primary">
+              Target load: {row.load_kg ?? row.load_lb} {row.load_kg ? "kg" : "lb"}
+            </div>
+          )}
+          {!row.manual_override && computed && computed.status === "ok" && (
             <div className="mt-1 inline-flex items-center gap-1 rounded-md bg-primary/10 px-2 py-0.5 text-xs font-bold text-primary">
               Target load: {computed.load} {computed.unit}
+            </div>
+          )}
+          {row.percentage_basis === "none" && (
+            <div className="mt-1 inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+              Log the load used
             </div>
           )}
           {row.notes && <p className="mt-1 text-xs text-muted-foreground italic">{row.notes}</p>}
