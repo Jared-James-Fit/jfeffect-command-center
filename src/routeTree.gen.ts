@@ -101,6 +101,7 @@ import { Route as AuthenticatedPortalCheckInsFormIdRouteImport } from './routes/
 import { Route as AuthenticatedMResourcesSlugRouteImport } from './routes/_authenticated/m/resources.$slug'
 import { Route as AuthenticatedMPlansPlanIdRouteImport } from './routes/_authenticated/m/plans.$planId'
 import { Route as AuthenticatedMMyPlansEnrollmentIdRouteImport } from './routes/_authenticated/m/my-plans.$enrollmentId'
+import { Route as AuthenticatedAdminSettingsChatRouteImport } from './routes/_authenticated/admin/settings.chat'
 import { Route as AuthenticatedAdminPurchasesIdRouteImport } from './routes/_authenticated/admin/purchases.$id'
 import { Route as AuthenticatedAdminProgramLibraryTemplateIdRouteImport } from './routes/_authenticated/admin/program-library_.$templateId'
 import { Route as AuthenticatedAdminMembersNewRouteImport } from './routes/_authenticated/admin/members.new'
@@ -644,6 +645,12 @@ const AuthenticatedMMyPlansEnrollmentIdRoute =
     path: '/$enrollmentId',
     getParentRoute: () => AuthenticatedMMyPlansRoute,
   } as any)
+const AuthenticatedAdminSettingsChatRoute =
+  AuthenticatedAdminSettingsChatRouteImport.update({
+    id: '/chat',
+    path: '/chat',
+    getParentRoute: () => AuthenticatedAdminSettingsRoute,
+  } as any)
 const AuthenticatedAdminPurchasesIdRoute =
   AuthenticatedAdminPurchasesIdRouteImport.update({
     id: '/$id',
@@ -788,7 +795,7 @@ export interface FileRoutesByFullPath {
   '/admin/purchases': typeof AuthenticatedAdminPurchasesRouteWithChildren
   '/admin/recipes': typeof AuthenticatedAdminRecipesRoute
   '/admin/resources': typeof AuthenticatedAdminResourcesRoute
-  '/admin/settings': typeof AuthenticatedAdminSettingsRoute
+  '/admin/settings': typeof AuthenticatedAdminSettingsRouteWithChildren
   '/admin/sops': typeof AuthenticatedAdminSopsRoute
   '/admin/testimonials': typeof AuthenticatedAdminTestimonialsRoute
   '/admin/training-intelligence': typeof AuthenticatedAdminTrainingIntelligenceRoute
@@ -834,6 +841,7 @@ export interface FileRoutesByFullPath {
   '/admin/members/new': typeof AuthenticatedAdminMembersNewRoute
   '/admin/program-library/$templateId': typeof AuthenticatedAdminProgramLibraryTemplateIdRoute
   '/admin/purchases/$id': typeof AuthenticatedAdminPurchasesIdRoute
+  '/admin/settings/chat': typeof AuthenticatedAdminSettingsChatRoute
   '/m/my-plans/$enrollmentId': typeof AuthenticatedMMyPlansEnrollmentIdRoute
   '/m/plans/$planId': typeof AuthenticatedMPlansPlanIdRoute
   '/m/resources/$slug': typeof AuthenticatedMResourcesSlugRoute
@@ -895,7 +903,7 @@ export interface FileRoutesByTo {
   '/admin/purchases': typeof AuthenticatedAdminPurchasesRouteWithChildren
   '/admin/recipes': typeof AuthenticatedAdminRecipesRoute
   '/admin/resources': typeof AuthenticatedAdminResourcesRoute
-  '/admin/settings': typeof AuthenticatedAdminSettingsRoute
+  '/admin/settings': typeof AuthenticatedAdminSettingsRouteWithChildren
   '/admin/sops': typeof AuthenticatedAdminSopsRoute
   '/admin/testimonials': typeof AuthenticatedAdminTestimonialsRoute
   '/admin/training-intelligence': typeof AuthenticatedAdminTrainingIntelligenceRoute
@@ -941,6 +949,7 @@ export interface FileRoutesByTo {
   '/admin/members/new': typeof AuthenticatedAdminMembersNewRoute
   '/admin/program-library/$templateId': typeof AuthenticatedAdminProgramLibraryTemplateIdRoute
   '/admin/purchases/$id': typeof AuthenticatedAdminPurchasesIdRoute
+  '/admin/settings/chat': typeof AuthenticatedAdminSettingsChatRoute
   '/m/my-plans/$enrollmentId': typeof AuthenticatedMMyPlansEnrollmentIdRoute
   '/m/plans/$planId': typeof AuthenticatedMPlansPlanIdRoute
   '/m/resources/$slug': typeof AuthenticatedMResourcesSlugRoute
@@ -1007,7 +1016,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/purchases': typeof AuthenticatedAdminPurchasesRouteWithChildren
   '/_authenticated/admin/recipes': typeof AuthenticatedAdminRecipesRoute
   '/_authenticated/admin/resources': typeof AuthenticatedAdminResourcesRoute
-  '/_authenticated/admin/settings': typeof AuthenticatedAdminSettingsRoute
+  '/_authenticated/admin/settings': typeof AuthenticatedAdminSettingsRouteWithChildren
   '/_authenticated/admin/sops': typeof AuthenticatedAdminSopsRoute
   '/_authenticated/admin/testimonials': typeof AuthenticatedAdminTestimonialsRoute
   '/_authenticated/admin/training-intelligence': typeof AuthenticatedAdminTrainingIntelligenceRoute
@@ -1053,6 +1062,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/members/new': typeof AuthenticatedAdminMembersNewRoute
   '/_authenticated/admin/program-library_/$templateId': typeof AuthenticatedAdminProgramLibraryTemplateIdRoute
   '/_authenticated/admin/purchases/$id': typeof AuthenticatedAdminPurchasesIdRoute
+  '/_authenticated/admin/settings/chat': typeof AuthenticatedAdminSettingsChatRoute
   '/_authenticated/m/my-plans/$enrollmentId': typeof AuthenticatedMMyPlansEnrollmentIdRoute
   '/_authenticated/m/plans/$planId': typeof AuthenticatedMPlansPlanIdRoute
   '/_authenticated/m/resources/$slug': typeof AuthenticatedMResourcesSlugRoute
@@ -1165,6 +1175,7 @@ export interface FileRouteTypes {
     | '/admin/members/new'
     | '/admin/program-library/$templateId'
     | '/admin/purchases/$id'
+    | '/admin/settings/chat'
     | '/m/my-plans/$enrollmentId'
     | '/m/plans/$planId'
     | '/m/resources/$slug'
@@ -1272,6 +1283,7 @@ export interface FileRouteTypes {
     | '/admin/members/new'
     | '/admin/program-library/$templateId'
     | '/admin/purchases/$id'
+    | '/admin/settings/chat'
     | '/m/my-plans/$enrollmentId'
     | '/m/plans/$planId'
     | '/m/resources/$slug'
@@ -1383,6 +1395,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/members/new'
     | '/_authenticated/admin/program-library_/$templateId'
     | '/_authenticated/admin/purchases/$id'
+    | '/_authenticated/admin/settings/chat'
     | '/_authenticated/m/my-plans/$enrollmentId'
     | '/_authenticated/m/plans/$planId'
     | '/_authenticated/m/resources/$slug'
@@ -2070,6 +2083,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedMMyPlansEnrollmentIdRouteImport
       parentRoute: typeof AuthenticatedMMyPlansRoute
     }
+    '/_authenticated/admin/settings/chat': {
+      id: '/_authenticated/admin/settings/chat'
+      path: '/chat'
+      fullPath: '/admin/settings/chat'
+      preLoaderRoute: typeof AuthenticatedAdminSettingsChatRouteImport
+      parentRoute: typeof AuthenticatedAdminSettingsRoute
+    }
     '/_authenticated/admin/purchases/$id': {
       id: '/_authenticated/admin/purchases/$id'
       path: '/$id'
@@ -2221,6 +2241,20 @@ const AuthenticatedAdminPurchasesRouteWithChildren =
     AuthenticatedAdminPurchasesRouteChildren,
   )
 
+interface AuthenticatedAdminSettingsRouteChildren {
+  AuthenticatedAdminSettingsChatRoute: typeof AuthenticatedAdminSettingsChatRoute
+}
+
+const AuthenticatedAdminSettingsRouteChildren: AuthenticatedAdminSettingsRouteChildren =
+  {
+    AuthenticatedAdminSettingsChatRoute: AuthenticatedAdminSettingsChatRoute,
+  }
+
+const AuthenticatedAdminSettingsRouteWithChildren =
+  AuthenticatedAdminSettingsRoute._addFileChildren(
+    AuthenticatedAdminSettingsRouteChildren,
+  )
+
 interface AuthenticatedAdminClientProgramsClientIdRouteChildren {
   AuthenticatedAdminClientProgramsClientIdAnalyticsRoute: typeof AuthenticatedAdminClientProgramsClientIdAnalyticsRoute
   AuthenticatedAdminClientProgramsClientIdHistoryRoute: typeof AuthenticatedAdminClientProgramsClientIdHistoryRoute
@@ -2270,7 +2304,7 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminPurchasesRoute: typeof AuthenticatedAdminPurchasesRouteWithChildren
   AuthenticatedAdminRecipesRoute: typeof AuthenticatedAdminRecipesRoute
   AuthenticatedAdminResourcesRoute: typeof AuthenticatedAdminResourcesRoute
-  AuthenticatedAdminSettingsRoute: typeof AuthenticatedAdminSettingsRoute
+  AuthenticatedAdminSettingsRoute: typeof AuthenticatedAdminSettingsRouteWithChildren
   AuthenticatedAdminSopsRoute: typeof AuthenticatedAdminSopsRoute
   AuthenticatedAdminTestimonialsRoute: typeof AuthenticatedAdminTestimonialsRoute
   AuthenticatedAdminTrainingIntelligenceRoute: typeof AuthenticatedAdminTrainingIntelligenceRoute
@@ -2335,7 +2369,8 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
       AuthenticatedAdminPurchasesRouteWithChildren,
     AuthenticatedAdminRecipesRoute: AuthenticatedAdminRecipesRoute,
     AuthenticatedAdminResourcesRoute: AuthenticatedAdminResourcesRoute,
-    AuthenticatedAdminSettingsRoute: AuthenticatedAdminSettingsRoute,
+    AuthenticatedAdminSettingsRoute:
+      AuthenticatedAdminSettingsRouteWithChildren,
     AuthenticatedAdminSopsRoute: AuthenticatedAdminSopsRoute,
     AuthenticatedAdminTestimonialsRoute: AuthenticatedAdminTestimonialsRoute,
     AuthenticatedAdminTrainingIntelligenceRoute:

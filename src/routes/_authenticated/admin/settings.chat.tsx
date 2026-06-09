@@ -50,7 +50,7 @@ function ChatSettingsPage() {
 
   return (
     <div className="p-4 sm:p-6">
-      <PageHeader title="Chat Settings" description="Reactions, GIFs, and communication preferences" />
+      <PageHeader title="Chat Settings" subtitle="Reactions, GIFs, and communication preferences" />
       <div className="mt-4 grid gap-4">
         <Card className="p-4 sm:p-6">
           <h3 className="text-base font-semibold">Default Double-Tap Reaction</h3>
