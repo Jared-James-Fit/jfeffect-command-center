@@ -11,9 +11,9 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Phone, ExternalLink, Search, Plus, UserPlus } from "lucide-react";
+import { Phone, ExternalLink, Search, Plus, UserPlus, Save } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/admin/call-access")({ component: CallAccessPage });
 
@@ -23,6 +23,53 @@ function CallAccessPage() {
   const [filter, setFilter] = useState<"all" | "enabled" | "disabled" | "no_phone">("all");
   const [addClientOpen, setAddClientOpen] = useState(false);
   const [addCoachOpen, setAddCoachOpen] = useState(false);
+
+  // Current user's own coach row — so "my phone number" is editable here
+  const { data: me } = useQuery({
+    queryKey: ["call-access-my-coach"],
+    queryFn: async () => {
+      const { data: u } = await supabase.auth.getUser();
+      const uid = u.user?.id;
+      if (!uid) return null;
+      const { data } = await supabase
+        .from("coaches")
+        .select("id, full_name, email, phone, user_id")
+        .eq("user_id", uid)
+        .maybeSingle();
+      return data ?? { id: null, full_name: u.user?.user_metadata?.full_name ?? "", email: u.user?.email ?? "", phone: "", user_id: uid };
+    },
+  });
+  const [myPhone, setMyPhone] = useState("");
+  const [savingMyPhone, setSavingMyPhone] = useState(false);
+  useEffect(() => { if (me?.phone !== undefined) setMyPhone(me?.phone ?? ""); }, [me?.phone]);
+
+  const saveMyPhone = async () => {
+    const v = myPhone.trim();
+    if (!v) return toast.error("Enter a phone number in E.164 format, e.g. +12042907443");
+    if (!/^\+?[1-9]\d{7,14}$/.test(v.replace(/[\s\-()]/g, ""))) return toast.error("Use E.164 format: +12042907443");
+    setSavingMyPhone(true);
+    try {
+      const { data: u } = await supabase.auth.getUser();
+      const uid = u.user?.id;
+      if (!uid) throw new Error("Not signed in");
+      if (me?.id) {
+        const { error } = await supabase.from("coaches").update({ phone: v } as any).eq("id", me.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from("coaches").insert({
+          user_id: uid,
+          email: (u.user?.email ?? "").toLowerCase(),
+          full_name: u.user?.user_metadata?.full_name ?? (u.user?.email ?? "Coach"),
+          phone: v, status: "Active",
+        } as any);
+        if (error) throw error;
+      }
+      toast.success("Your phone number saved — clients can now call you.");
+      qc.invalidateQueries({ queryKey: ["call-access-my-coach"] });
+      qc.invalidateQueries({ queryKey: ["call-access-coaches"] });
+    } catch (e: any) { toast.error(e.message ?? "Could not save"); }
+    finally { setSavingMyPhone(false); }
+  };
 
   const { data: clients, isLoading } = useQuery({
     queryKey: ["call-access-clients"],
@@ -97,6 +144,24 @@ function CallAccessPage() {
         title="Call Access"
         subtitle="Manage who admins/coaches can dial straight from chat — plus contact info for clients, coaches, and admins."
       />
+
+      <Card className="p-4 border-primary/40 bg-primary/5">
+        <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+          <div className="space-y-1">
+            <div className="text-sm font-semibold flex items-center gap-2"><Phone className="h-4 w-4" /> Your phone number</div>
+            <p className="text-xs text-muted-foreground max-w-md">This is the number clients reach when they tap “Call coach”. Use E.164 format (e.g. +12042907443).</p>
+          </div>
+          <div className="flex items-center gap-2 md:w-[360px]">
+            <Input value={myPhone} onChange={(e) => setMyPhone(e.target.value)} placeholder="+12042907443" className="h-9" />
+            <Button onClick={saveMyPhone} disabled={savingMyPhone} size="sm"><Save className="h-4 w-4 mr-1" />{savingMyPhone ? "Saving…" : "Save"}</Button>
+            {myPhone && (
+              <Button asChild size="icon" variant="outline" className="h-9 w-9 border-emerald-500/40 text-emerald-600">
+                <a href={`tel:${myPhone.replace(/[^+\d]/g, "")}`} title="Test call"><Phone className="h-4 w-4" /></a>
+              </Button>
+            )}
+          </div>
+        </div>
+      </Card>
 
       <div className="grid gap-3 sm:grid-cols-4">
         <Card className="p-3"><div className="text-xs text-muted-foreground">Active clients</div><div className="text-2xl font-black">{stats.total}</div></Card>
