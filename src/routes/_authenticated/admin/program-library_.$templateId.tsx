@@ -455,7 +455,7 @@ export function StructureCanvas({ type, payload, setP, exercises, appendRowToFir
               width: `${100 / zoom}%`,
               minHeight: `${100 / zoom}%`,
             }}
-            className="p-2"
+            className="pl-1 pr-2 py-2"
           >
             <StructureEditor type={type} payload={payload} setPayload={setP} exercises={exercises as any[]} compact={compact} />
           </div>
