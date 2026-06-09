@@ -15,6 +15,7 @@ import { TrainingScheduleCard } from "@/components/training-schedule-card";
 import { BlockSummaryCard } from "@/components/block-summary-card";
 import { BlockWeekColumns } from "@/components/block-week-columns";
 import { SmartTodayCard } from "@/components/smart-today-card";
+import { FaqWidget } from "@/components/faq-widget";
 
 export const Route = createFileRoute("/_authenticated/portal/workouts/")({ component: WorkoutsPage });
 
@@ -62,6 +63,8 @@ function WorkoutsPage() {
     <>
       <PageHeader title="Workouts" subtitle="Your assigned training" />
       <div className="p-6 md:p-8 space-y-6 pb-32">
+        <FaqWidget category="workouts" />
+        <FaqWidget category="cardio" />
         {client && <TrainingScheduleCard client={client as any} editable />}
 
         {/* PRIORITY #1 — Smart Today Card */}

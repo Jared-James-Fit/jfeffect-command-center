@@ -5,7 +5,7 @@ import {
   UserCheck, FileSignature, Film,
   ClipboardList, FileEdit,
   Scale, BookOpen, Activity, Archive,
-  UserPlus, Library, Wrench,
+  UserPlus, Library, Wrench, HelpCircle,
 } from "lucide-react";
 import type { NavItem } from "@/components/app-shell";
 
@@ -25,6 +25,7 @@ export const adminNav: NavItem[] = [
   { to: "/admin/program-library", label: "Program Library", icon: BookOpen, group: "Programming" },
   { to: "/admin/exercises", label: "Exercise Library", icon: Dumbbell, group: "Programming" },
   { to: "/admin/native-forms", label: "Check-Ins & Forms", icon: FileEdit, group: "Programming" },
+  { to: "/admin/faqs", label: "FAQ Manager", icon: HelpCircle, group: "Programming" },
   // BUSINESS
   { to: "/admin/payment-links", label: "Products", icon: CreditCard, group: "Business" },
   { to: "/admin/payments", label: "Payments", icon: DollarSign, group: "Business" },

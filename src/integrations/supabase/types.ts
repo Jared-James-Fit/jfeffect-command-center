@@ -1288,6 +1288,42 @@ export type Database = {
           },
         ]
       }
+      coach_faqs: {
+        Row: {
+          active: boolean
+          answer: string
+          category: string
+          created_at: string
+          created_by: string | null
+          id: string
+          question: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          answer: string
+          category: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          question: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          answer?: string
+          category?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          question?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       coach_followups: {
         Row: {
           client_id: string

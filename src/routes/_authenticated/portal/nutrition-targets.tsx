@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Apple, Beef, Wheat, Droplets, Flame, Cookie, FileText, Download, ExternalLink } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { MealPlanDisplay } from "@/components/meal-plan-display";
+import { FaqWidget } from "@/components/faq-widget";
 
 export const Route = createFileRoute("/_authenticated/portal/nutrition-targets")({ component: NutritionTargets });
 
@@ -40,6 +41,7 @@ function NutritionTargets() {
     <>
       <PageHeader title="Nutrition" subtitle={current ? (current.phase === "Custom" ? current.custom_phase : current.phase) : "Your assigned targets from Coach Jared."} />
       <div className="p-4 pb-28 md:p-8 md:pb-12 space-y-6">
+        <FaqWidget category="nutrition" />
         {!current ? (
           <Card className="border-border bg-card p-10 text-center">
             <Apple className="mx-auto h-10 w-10 text-primary" />
