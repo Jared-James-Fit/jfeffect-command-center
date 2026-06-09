@@ -40,6 +40,16 @@ function WorkoutDay() {
     queryFn: async () => (await sb.from("pl_days").select("*").eq("id", dayId).maybeSingle()).data,
   });
 
+  // Resolve which block this day belongs to so block-scoped maxes apply.
+  const { data: blockId = null } = useQuery({
+    queryKey: ["pl-day-block", day?.week_id],
+    enabled: !!day?.week_id,
+    queryFn: async () => {
+      const { data } = await sb.from("pl_weeks").select("block_id").eq("id", day.week_id).maybeSingle();
+      return (data?.block_id as string | null) ?? null;
+    },
+  });
+
   const { data: rows = [] } = useQuery({
     queryKey: ["pl-day-rows", dayId],
     queryFn: async () => (await sb.from("pl_exercise_rows").select("*, exercises(id,name,video_url,vimeo_embed_url,thumbnail_url,cues,common_mistakes,muscle_group,category)").eq("day_id", dayId).order("sort_order")).data ?? [],
@@ -202,6 +212,7 @@ function WorkoutDay() {
               dayId={dayId}
               dayTitle={day.title || `Day ${day.day_index}`}
               clientId={client?.id}
+              blockId={blockId}
               existingResults={(results as any[]).filter((x) => x.row_id === r.id)}
               existingNote={notesByRowId.get(r.id)}
               onChange={refresh}
