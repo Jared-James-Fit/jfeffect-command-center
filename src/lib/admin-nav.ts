@@ -6,6 +6,7 @@ import {
   ClipboardList, FileEdit,
   Scale, BookOpen, Activity, Archive,
   UserPlus, Library, Wrench, HelpCircle,
+  ChefHat, Megaphone,
 } from "lucide-react";
 import type { NavItem } from "@/components/app-shell";
 
@@ -18,6 +19,7 @@ export const adminNav: NavItem[] = [
   { to: "/admin/client-action-requests", label: "Action Requests", icon: ClipboardCheck, group: "Core" },
   { to: "/admin/lift-videos", label: "Lift Reviews", icon: Video, group: "Core" },
   { to: "/admin/training-intelligence", label: "Training Intel", icon: Activity, group: "Core" },
+  { to: "/admin/broadcasts", label: "Broadcasts", icon: Megaphone, group: "Core" },
   // MEMBERSHIP
   { to: "/admin/members", label: "App Members", icon: UserPlus, group: "Membership" },
   { to: "/admin/member-plans", label: "Plan Library", icon: Library, group: "Membership" },
@@ -25,6 +27,7 @@ export const adminNav: NavItem[] = [
   // PROGRAMMING
   { to: "/admin/program-library", label: "Program Library", icon: BookOpen, group: "Programming" },
   { to: "/admin/exercises", label: "Exercise Library", icon: Dumbbell, group: "Programming" },
+  { to: "/admin/recipes", label: "Recipe Library", icon: ChefHat, group: "Programming" },
   { to: "/admin/native-forms", label: "Check-Ins & Forms", icon: FileEdit, group: "Programming" },
   { to: "/admin/faqs", label: "FAQ Manager", icon: HelpCircle, group: "Programming" },
   // BUSINESS
@@ -58,6 +61,8 @@ export const coachNav: NavItem[] = [
   { to: "/admin/check-in-reviews", label: "Check-In Reviews", icon: ClipboardList },
   { to: "/admin/client-action-requests", label: "Action Requests", icon: ClipboardCheck },
   { to: "/admin/media-review", label: "Media Review Inbox", icon: Film },
+  { to: "/admin/broadcasts", label: "Broadcasts", icon: Megaphone },
+  { to: "/admin/recipes", label: "Recipe Library", icon: ChefHat },
   { to: "/admin/calendar", label: "Calendar", icon: Calendar },
   { to: "/admin/exercises", label: "Exercise Library", icon: Dumbbell },
   { to: "/admin/program-library", label: "Program Library", icon: BookOpen },
@@ -71,7 +76,9 @@ export const clientNav: NavItem[] = [
   { to: "/portal/workouts", label: "Workouts", icon: Activity },
   { to: "/portal/lift-videos", label: "Lift Review Upload", icon: Video },
   { to: "/portal/nutrition-targets", label: "Nutrition", icon: Apple },
+  { to: "/portal/recipes", label: "Recipes", icon: ChefHat },
   { to: "/portal/check-ins", label: "Check-Ins & Forms", icon: ClipboardCheck },
+  { to: "/portal/announcements", label: "Announcements", icon: Megaphone },
   { to: "/portal/progress-metrics", label: "Progress Metrics", icon: Scale },
   { to: "/portal/exercises", label: "Exercises", icon: Dumbbell },
   { to: "/portal/purchases", label: "My Purchases", icon: Package },
@@ -89,5 +96,6 @@ export const memberNav: NavItem[] = [
   { to: "/m/plans", label: "Program Library", icon: BookOpen },
   { to: "/m/resources", label: "Resources", icon: FolderOpen },
   { to: "/m/tools", label: "Tools", icon: Wrench },
+  { to: "/m/announcements", label: "Announcements", icon: Megaphone },
   { to: "/m/account", label: "My Account", icon: UserCog },
 ];

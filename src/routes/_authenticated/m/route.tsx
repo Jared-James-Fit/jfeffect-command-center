@@ -4,6 +4,7 @@ import { useAuth } from "@/lib/auth";
 import { AppShell } from "@/components/app-shell";
 import { memberNav } from "@/lib/admin-nav";
 import { PovBanner, getPovFlag } from "@/components/admin-pov";
+import { BroadcastPopupGate } from "@/components/broadcast-popup-gate";
 
 function MemberLayout() {
   const { role, loading } = useAuth();
@@ -24,6 +25,7 @@ function MemberLayout() {
     <AppShell items={memberNav} title="Member">
       <PovBanner />
       <Outlet />
+      <BroadcastPopupGate />
     </AppShell>
   );
 }
