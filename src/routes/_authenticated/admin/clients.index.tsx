@@ -51,6 +51,43 @@ function nutritionUpdateTone(days: number | null): { tone: string; label: string
   if (days >= 14) return { tone: "border-warning/40 bg-warning/10 text-warning", label: `${days}d due` };
   return null;
 }
+
+type BlockDerived = {
+  state: "completed" | "archived" | "past-due" | "due-today" | "ending-soon" | "active" | "upcoming" | "unscheduled";
+  label: string;
+  tone: "green" | "yellow" | "red" | "grey" | "blue";
+  daysRemaining: number | null;
+  daysUntilStart: number | null;
+  percentComplete: number;
+};
+
+function deriveBlock(b: any, today = new Date()): BlockDerived {
+  const status = (b?.status ?? "").toLowerCase();
+  const start = b?.start_date ? parseISO(b.start_date) : null;
+  const end = b?.end_date ? parseISO(b.end_date) : null;
+  const t = new Date(today); t.setHours(0, 0, 0, 0);
+  if (status === "completed" || status === "manually completed")
+    return { state: "completed", label: "Completed", tone: "grey", daysRemaining: null, daysUntilStart: null, percentComplete: 100 };
+  if (status === "archived")
+    return { state: "archived", label: "Archived", tone: "grey", daysRemaining: null, daysUntilStart: null, percentComplete: 0 };
+  if (!start || !end)
+    return { state: "unscheduled", label: status === "active" ? "Active · No dates" : "Unscheduled", tone: "grey", daysRemaining: null, daysUntilStart: null, percentComplete: 0 };
+  const totalDays = Math.max(1, differenceInDays(end, start) + 1);
+  const elapsed = differenceInDays(t, start) + 1;
+  const daysRemaining = differenceInDays(end, t);
+  const daysUntilStart = differenceInDays(start, t);
+  const percentComplete = Math.min(100, Math.max(0, Math.round((elapsed / totalDays) * 100)));
+  if (daysUntilStart > 0)
+    return { state: "upcoming", label: daysUntilStart === 1 ? "Starts Tomorrow" : `Starts in ${daysUntilStart}d`, tone: "blue", daysRemaining, daysUntilStart, percentComplete: 0 };
+  if (daysRemaining < 0)
+    return { state: "past-due", label: `Past Due · ${Math.abs(daysRemaining)}d over`, tone: "red", daysRemaining, daysUntilStart, percentComplete: 100 };
+  if (daysRemaining === 0)
+    return { state: "due-today", label: "Due Today", tone: "red", daysRemaining, daysUntilStart, percentComplete };
+  if (daysRemaining <= 7)
+    return { state: "ending-soon", label: `Ending Soon · ${daysRemaining}d`, tone: "yellow", daysRemaining, daysUntilStart, percentComplete };
+  return { state: "active", label: "Active", tone: "green", daysRemaining, daysUntilStart, percentComplete };
+}
+
 function AddCell({ id, tab, label }: { id: string; tab: "training" | "nutrition" | "cardio"; label: string }) {
   return (
     <Link to="/admin/clients/$id" params={{ id }} search={{ tab }} className="text-xs font-semibold text-primary hover:underline">
