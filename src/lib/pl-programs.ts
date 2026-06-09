@@ -75,6 +75,7 @@ export const PERCENTAGE_BASES: { value: PercentageBasis; label: string }[] = [
   { value: "top_set",      label: "% of Top Set (linked row)" },
   { value: "prev_set",     label: "% of Previous Set (linked row)" },
   { value: "prev_week",    label: "% of Previous Week" },
+  { value: "none",         label: "No prescribed load" },
 ];
 
 // ---------- Duration estimator ----------
