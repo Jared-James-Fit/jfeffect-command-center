@@ -190,11 +190,15 @@ export function computeRowLoad(opts: {
   exact: number | null;
   base: number | null;
   baseLabel: string;
-  status: "ok" | "no-max" | "no-percentage" | "manual" | "needs-link";
+  status: "ok" | "no-max" | "no-percentage" | "manual" | "needs-link" | "no-load";
   max?: ClientMaxRow | null;
 } {
   const { exerciseName, basis, percentage, manualLoadKg, manualLoadLb, unit, maxesIndex } = opts;
   const manualLoad = unit === "kg" ? manualLoadKg : manualLoadLb;
+
+  if (basis === "none") {
+    return { load: null, unit, exact: null, base: null, baseLabel: "none", status: "no-load" };
+  }
 
   if (!basis || basis === "manual") {
     return { load: manualLoad ?? null, unit, exact: manualLoad ?? null, base: null, baseLabel: "manual", status: "manual" };
