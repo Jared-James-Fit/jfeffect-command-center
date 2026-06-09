@@ -841,6 +841,10 @@ export function MessageThread({
           "flex-1 min-h-0 space-y-3 overflow-y-auto",
           fullBleed ? "px-3 py-4 sm:px-6" : "p-3 sm:p-4",
         )}
+        onTouchStart={onSwipeTouchStart}
+        onTouchMove={onSwipeTouchMove}
+        onTouchEnd={onSwipeTouchEnd}
+        onTouchCancel={onSwipeTouchEnd}
       >
         {visibleMessages.length === 0 ? (
           <div className="grid h-full place-items-center text-sm text-muted-foreground">
