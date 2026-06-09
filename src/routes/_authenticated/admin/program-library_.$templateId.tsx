@@ -455,6 +455,7 @@ export function StructureCanvas({ type, payload, setP, exercises, appendRowToFir
         </div>
       </div>
     </div>
+    </MaxesContext.Provider>
   );
 }
 
