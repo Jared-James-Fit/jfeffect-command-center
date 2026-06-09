@@ -529,6 +529,7 @@ function FullPrepEditor({ payload, setPayload, exercises, compact }: any) {
 export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact }: { weeksData: any[]; setWeeksData: (wd: any[]) => void; exercises: any[]; compact?: boolean }) {
   const [activeIdx, setActiveIdx] = useState(0);
   const [view, setView] = useState<"block" | "week">("block");
+  const { clientId: ctxClientId, blockId: ctxBlockId } = useClientMaxesCtx();
   const weekStats = useMemo(() => weeksData.map((w: any) => {
     const days = w.days || [];
     let rowCount = 0;
@@ -604,6 +605,7 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
             <Copy className="mr-1 h-3 w-3" /> Copy Week 1 → all weeks
           </Button>
         )}
+        <BlockMaxesButton clientId={ctxClientId} blockId={ctxBlockId} />
         <Button size="sm" variant="ghost" className="ml-auto" onClick={addWeek}>
           <Plus className="mr-1 h-3 w-3" /> Add week
         </Button>
