@@ -3190,6 +3190,8 @@ export type Database = {
           body: string
           client_id: string
           created_at: string
+          deleted_at: string | null
+          edited_at: string | null
           id: string
           is_internal_note: boolean
           message_type: string
@@ -3207,6 +3209,8 @@ export type Database = {
           body?: string
           client_id: string
           created_at?: string
+          deleted_at?: string | null
+          edited_at?: string | null
           id?: string
           is_internal_note?: boolean
           message_type?: string
@@ -3224,6 +3228,8 @@ export type Database = {
           body?: string
           client_id?: string
           created_at?: string
+          deleted_at?: string | null
+          edited_at?: string | null
           id?: string
           is_internal_note?: boolean
           message_type?: string
