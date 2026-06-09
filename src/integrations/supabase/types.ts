@@ -658,6 +658,93 @@ export type Database = {
         }
         Relationships: []
       }
+      client_action_requests: {
+        Row: {
+          client_id: string
+          coach_user_id: string
+          completed_at: string | null
+          created_at: string
+          dismissed_at: string | null
+          due_date: string | null
+          external_form_url: string | null
+          file_mime: string | null
+          file_name: string | null
+          file_path: string | null
+          id: string
+          internal_notes: string | null
+          link_label: string | null
+          link_url: string | null
+          message: string
+          native_form_id: string | null
+          notify_client: boolean
+          priority: string | null
+          seen_at: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          client_id: string
+          coach_user_id: string
+          completed_at?: string | null
+          created_at?: string
+          dismissed_at?: string | null
+          due_date?: string | null
+          external_form_url?: string | null
+          file_mime?: string | null
+          file_name?: string | null
+          file_path?: string | null
+          id?: string
+          internal_notes?: string | null
+          link_label?: string | null
+          link_url?: string | null
+          message: string
+          native_form_id?: string | null
+          notify_client?: boolean
+          priority?: string | null
+          seen_at?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string
+          coach_user_id?: string
+          completed_at?: string | null
+          created_at?: string
+          dismissed_at?: string | null
+          due_date?: string | null
+          external_form_url?: string | null
+          file_mime?: string | null
+          file_name?: string | null
+          file_path?: string | null
+          id?: string
+          internal_notes?: string | null
+          link_label?: string | null
+          link_url?: string | null
+          message?: string
+          native_form_id?: string | null
+          notify_client?: boolean
+          priority?: string | null
+          seen_at?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_action_requests_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_action_requests_native_form_id_fkey"
+            columns: ["native_form_id"]
+            isOneToOne: false
+            referencedRelation: "nf_forms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       client_activity_log: {
         Row: {
           action: string
