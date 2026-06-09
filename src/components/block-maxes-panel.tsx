@@ -35,8 +35,8 @@ export function BlockMaxesButton({ clientId, blockId }: { clientId: string; bloc
   const [open, setOpen] = useState(false);
   return (
     <>
-      <Button size="sm" variant="outline" className="h-7 gap-1 text-xs" onClick={() => setOpen(true)}>
-        <Dumbbell className="h-3.5 w-3.5" /> Block Maxes
+      <Button size="sm" variant="default" className="h-8 gap-1.5 text-xs font-semibold" onClick={() => setOpen(true)}>
+        <Dumbbell className="h-3.5 w-3.5" /> Set 1RM / TM
       </Button>
       {open && (
         <BlockMaxesDialog clientId={clientId} blockId={blockId} onClose={() => setOpen(false)} />
