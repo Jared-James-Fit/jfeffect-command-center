@@ -1004,8 +1004,12 @@ export function MessageThread({
                 {/* Read receipt (only under my latest message) */}
                 {mine && !isDeleted && m.id === lastOwnMessageId && !selectionMode && (() => {
                   const readAt = role === "admin" ? m.read_by_client_at : m.read_by_admin_at;
+                  const hasReactions = (reactionsByMsg.get(m.id)?.length ?? 0) > 0;
                   return (
-                    <div className="absolute -bottom-4 right-1 text-[10px] text-muted-foreground">
+                    <div className={cn(
+                      "absolute right-1 text-[10px] text-muted-foreground",
+                      hasReactions ? "-bottom-8" : "-bottom-4",
+                    )}>
                       {readAt ? `Read ${format(parseISO(readAt), "h:mm a")}` : "Sent"}
                     </div>
                   );
