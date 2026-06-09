@@ -22,6 +22,20 @@ import { SaveStatus } from "@/components/save-status";
 import { useConflictWatch } from "@/hooks/use-conflict-watch";
 import { ActionButton } from "@/components/action-button";
 import { copyRows, useClip } from "@/lib/program-builder-clipboard";
+import { createContext, useContext } from "react";
+import { listClientMaxes, buildMaxIndex, computeRowLoad, type ClientMaxRow } from "@/lib/pl-maxes";
+import { MaxEditorDialog } from "@/components/client-maxes-panel";
+import { AlertCircle, Calculator } from "lucide-react";
+
+// ---- Client-max context shared by RowEditor regardless of nesting depth ----
+type MaxesCtx = {
+  clientId: string | null;
+  maxes: ClientMaxRow[];
+  index: Map<string, ClientMaxRow>;
+  refresh: () => void;
+};
+const MaxesContext = createContext<MaxesCtx>({ clientId: null, maxes: [], index: new Map(), refresh: () => {} });
+export function useClientMaxesCtx() { return useContext(MaxesContext); }
 
 // ---- Editor preferences (compact mode, zoom, sidebar) ----
 const PREFS_KEY = "pl-tpl-editor-prefs:v1";
