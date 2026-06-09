@@ -24,6 +24,7 @@ import { PowerlifterBadge } from "@/components/powerlifter-badge";
 import { UserAvatar } from "@/components/user-avatar";
 import { format, parseISO, differenceInDays } from "date-fns";
 import type { ConversationState, Message } from "@/lib/messages";
+import { QuickAssignTemplateDialog } from "@/components/quick-assign-template-dialog";
 
 function summarizeCardio(list: any[]): string {
   if (!list || list.length === 0) return "";
@@ -72,6 +73,7 @@ function ClientsPage() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [open, setOpen] = useState(false);
   const [deleteState, setDeleteState] = useState<{ id: string; name: string; step: 1 | 2 } | null>(null);
+  const [assignTo, setAssignTo] = useState<{ id: string; name: string } | null>(null);
 
   const inviteFn = useServerFn(inviteClient);
   const archiveFn = useServerFn(archiveClient);
@@ -420,17 +422,22 @@ function ClientsPage() {
                                       {cur.start_date && cur.end_date ? ` · ${format(parseISO(cur.start_date), "MMM d")} → ${format(parseISO(cur.end_date), "MMM d")}` : ""}
                                     </div>
                                   </Link>
-                                  <Link
-                                    to="/admin/clients/$id"
-                                    params={{ id: c.id }}
-                                    search={{ tab: "training" }}
+                                  <button
+                                    type="button"
+                                    onClick={() => setAssignTo({ id: c.id, name: c.full_name })}
                                     className="inline-flex items-center text-[10px] font-semibold text-primary hover:underline"
                                   >
-                                    + Add block
-                                  </Link>
+                                    + Assign from Library
+                                  </button>
                                 </div>
                               ) : (
-                                <AddCell id={c.id} tab="training" label="Add Training Block" />
+                                <button
+                                  type="button"
+                                  onClick={() => setAssignTo({ id: c.id, name: c.full_name })}
+                                  className="text-xs font-semibold text-primary hover:underline"
+                                >
+                                  + Assign from Library
+                                </button>
                               )}
                             </td>
                             <td className="px-4 py-3 text-xs">
@@ -447,14 +454,13 @@ function ClientsPage() {
                                   </div>
                                 </Link>
                               ) : cur ? (
-                                <Link
-                                  to="/admin/clients/$id"
-                                  params={{ id: c.id }}
-                                  search={{ tab: "training" }}
+                                <button
+                                  type="button"
+                                  onClick={() => setAssignTo({ id: c.id, name: c.full_name })}
                                   className="text-[11px] font-semibold text-primary hover:underline"
                                 >
-                                  + Queue next
-                                </Link>
+                                  + Queue from Library
+                                </button>
                               ) : (
                                 <span className="text-muted-foreground">—</span>
                               )}
@@ -599,6 +605,14 @@ function ClientsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      {assignTo && (
+        <QuickAssignTemplateDialog
+          open={!!assignTo}
+          onOpenChange={(o) => { if (!o) setAssignTo(null); }}
+          clientId={assignTo.id}
+          clientName={assignTo.name}
+        />
+      )}
     </>
   );
 }

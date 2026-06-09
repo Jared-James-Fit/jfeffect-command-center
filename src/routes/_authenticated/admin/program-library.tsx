@@ -547,6 +547,8 @@ function AssignDialog({ template, onClose }: { template: any; onClose: () => voi
   const [name, setName] = useState<string>("");
   const [visible, setVisible] = useState(true);
   const [newPrep, setNewPrep] = useState({ title: "", event_name: "", event_date: "" });
+  const [startDate, setStartDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
+  const [endDate, setEndDate] = useState<string>("");
 
   const { data: clients = [] } = useQuery({
     queryKey: ["clients-min"], enabled: !!template,
@@ -613,7 +615,7 @@ function AssignDialog({ template, onClose }: { template: any; onClose: () => voi
         default:
           placement = { mode: "standalone_block" };
       }
-      await applyTemplateToClient({ templateId: template.id, clientId, placement, name: name || undefined, clientVisible: visible });
+      await applyTemplateToClient({ templateId: template.id, clientId, placement, name: name || undefined, clientVisible: visible, startDate: startDate || null, endDate: endDate || null });
       toast.success("Template assigned");
       qc.invalidateQueries({ queryKey: ["pl-template-assignments", template.id] });
       qc.invalidateQueries({ queryKey: ["pl-preps", clientId] });
@@ -737,6 +739,19 @@ function AssignDialog({ template, onClose }: { template: any; onClose: () => voi
                 <div>
                   <Label>Override name (optional)</Label>
                   <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={template.name} />
+                </div>
+              )}
+
+              {(type === "block" || type === "full_prep") && (
+                <div className="grid grid-cols-2 gap-2 rounded-md border border-border bg-secondary/30 p-3">
+                  <div>
+                    <Label className="text-xs">Start date</Label>
+                    <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+                  </div>
+                  <div>
+                    <Label className="text-xs">End date (optional)</Label>
+                    <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+                  </div>
                 </div>
               )}
 
