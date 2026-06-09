@@ -16,7 +16,7 @@ import {
   type ConversationState, type Message,
   setConversationStatus, setConversationPriority, PRIORITIES,
 } from "@/lib/messages";
-import { Search, ChevronLeft, MoreHorizontal, ExternalLink } from "lucide-react";
+import { Search, ChevronLeft, MoreHorizontal, ExternalLink, Phone } from "lucide-react";
 import { formatDistanceToNow, parseISO } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useChatPresence, LiveDot } from "@/hooks/use-chat-presence";
@@ -44,7 +44,7 @@ function MessagesInbox() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("clients")
-        .select("id, full_name, first_name, last_name, email, profile_picture_url, archived, status, last_active_at")
+        .select("id, full_name, first_name, last_name, email, phone, call_access_enabled, profile_picture_url, archived, status, last_active_at")
         .order("full_name");
       if (error) throw error;
       return data;
@@ -339,6 +339,19 @@ function MessagesInbox() {
                   <span className="truncate">{selected.email}</span>
                 </div>
               </div>
+              {(selected as any).call_access_enabled && (selected as any).phone ? (
+                <Button
+                  asChild
+                  variant="outline"
+                  size="icon"
+                  className="h-9 w-9 shrink-0 border-emerald-500/40 bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20"
+                  title={`Call ${selected.full_name ?? "client"} (${(selected as any).phone})`}
+                >
+                  <a href={`tel:${String((selected as any).phone).replace(/[^+\d]/g, "")}`} aria-label="Call client">
+                    <Phone className="h-4 w-4" />
+                  </a>
+                </Button>
+              ) : null}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0">

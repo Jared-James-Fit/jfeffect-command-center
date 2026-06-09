@@ -1,0 +1,2 @@
+ALTER TABLE public.clients ADD COLUMN IF NOT EXISTS call_access_enabled boolean NOT NULL DEFAULT false;
+COMMENT ON COLUMN public.clients.call_access_enabled IS 'When true, admins and the assigned coach can tap a call button to dial the client''s phone from inside the app.';
