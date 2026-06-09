@@ -128,33 +128,8 @@ export function LogBodyweightCard({ clientId, defaultUnit = "lb" }: Props) {
         <Link to="/portal/progress-metrics" className="text-xs text-primary hover:underline">View history</Link>
       </div>
 
-      <div className="grid gap-2 sm:grid-cols-[1fr_80px_auto]">
-        <div>
-          <Label className="text-[10px] uppercase tracking-widest text-muted-foreground">Weight</Label>
-          <Input type="number" step="0.1" inputMode="decimal" placeholder="e.g. 182.4" value={weight} onChange={(e) => setWeight(e.target.value)} />
-        </div>
-        <div>
-          <Label className="text-[10px] uppercase tracking-widest text-muted-foreground">Unit</Label>
-          <Select value={unit} onValueChange={(v) => setUnit(v as WeightUnit)}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="lb">lb</SelectItem>
-              <SelectItem value="kg">kg</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div>
-          <Label className="text-[10px] uppercase tracking-widest text-muted-foreground">Date</Label>
-          <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-        </div>
-      </div>
-
-      <ActionButton onAction={save} disabled={saving} loadingLabel="Saving…" successLabel="Saved" successToast={false} className="w-full bg-gradient-primary font-bold uppercase btn-press">
-        Save Bodyweight
-      </ActionButton>
-
       {/* Mini sparkline + range toggle */}
-      <div className="space-y-2 border-t border-border pt-3">
+      <div className="space-y-2">
         <div className="flex items-center justify-between">
           <span className="text-[10px] uppercase tracking-widest text-muted-foreground">Trend</span>
           <div className="flex items-center gap-1 rounded-full border border-border bg-secondary/40 p-0.5">
@@ -218,6 +193,31 @@ export function LogBodyweightCard({ clientId, defaultUnit = "lb" }: Props) {
           )}
         </div>
       </div>
+
+      <div className="grid gap-2 sm:grid-cols-[1fr_80px_auto]">
+        <div>
+          <Label className="text-[10px] uppercase tracking-widest text-muted-foreground">Weight</Label>
+          <Input type="number" step="0.1" inputMode="decimal" placeholder="e.g. 182.4" value={weight} onChange={(e) => setWeight(e.target.value)} />
+        </div>
+        <div>
+          <Label className="text-[10px] uppercase tracking-widest text-muted-foreground">Unit</Label>
+          <Select value={unit} onValueChange={(v) => setUnit(v as WeightUnit)}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="lb">lb</SelectItem>
+              <SelectItem value="kg">kg</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label className="text-[10px] uppercase tracking-widest text-muted-foreground">Date</Label>
+          <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+        </div>
+      </div>
+
+      <ActionButton onAction={save} disabled={saving} loadingLabel="Saving…" successLabel="Saved" successToast={false} className="w-full bg-gradient-primary font-bold uppercase btn-press">
+        Save Bodyweight
+      </ActionButton>
 
       <div className="grid grid-cols-3 gap-2 border-t border-border pt-3 text-center">
         <Mini label="Latest" value={latest ? formatWeight(latest.value, unit) : "—"} />
