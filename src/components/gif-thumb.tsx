@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { fallbackEmoji } from "@/lib/gif-fallback";
 
@@ -23,6 +23,14 @@ export function GifThumb({
   const [state, setState] = useState<S>(src ? "loading" : "error");
   const emoji = fallback || fallbackEmoji(title, category);
 
+  // Safety net: if the image never fires load or error (CSP / CORS / dead
+  // CDN), bail to the emoji fallback after 5s so bubbles are never blank.
+  useEffect(() => {
+    if (!src || state !== "loading") return;
+    const t = window.setTimeout(() => setState((s) => (s === "loading" ? "error" : s)), 5000);
+    return () => window.clearTimeout(t);
+  }, [src, state]);
+
   const hasError = !src || state === "error";
   const showImg = !hasError;
   const showSkeleton = showImg && state === "loading";
@@ -36,6 +44,7 @@ export function GifThumb({
           alt={alt ?? title ?? ""}
           loading="lazy"
           decoding="async"
+          referrerPolicy="no-referrer"
           onLoad={() => setState("loaded")}
           onError={() => setState("error")}
           className={cn(
