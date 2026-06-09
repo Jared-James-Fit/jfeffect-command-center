@@ -1,6 +1,6 @@
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -12,13 +12,12 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Plus, Star, Pencil, Trash2, Play, Pause, Volume2, Upload } from "lucide-react";
+import { Plus, Star, Pencil, Trash2, Play, Pause, Volume2 } from "lucide-react";
 import {
   listAllSoundsAdmin, createSound, updateSound, deleteSound, uploadSoundFile,
   SOUND_CATEGORIES, type ChatSound,
 } from "@/lib/chat-sounds";
 import { playSound, stopSound, subscribeSound } from "@/lib/sound-player";
-import { useEffect } from "react";
 
 export const Route = createFileRoute("/_authenticated/admin/chat-sounds")({
   component: ChatSoundsPage,
