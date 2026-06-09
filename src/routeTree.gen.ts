@@ -92,6 +92,7 @@ import { Route as LovableEmailAuthWebhookRouteImport } from './routes/lovable/em
 import { Route as LovableEmailAuthPreviewRouteImport } from './routes/lovable/email/auth/preview'
 import { Route as ApiPublicHooksMediaArchiveRouteImport } from './routes/api/public/hooks/media-archive'
 import { Route as AuthenticatedPortalWorkoutsDayIdRouteImport } from './routes/_authenticated/portal/workouts.$dayId'
+import { Route as AuthenticatedPortalRecipesRecipeIdRouteImport } from './routes/_authenticated/portal/recipes.$recipeId'
 import { Route as AuthenticatedPortalPurchasesIdRouteImport } from './routes/_authenticated/portal/purchases.$id'
 import { Route as AuthenticatedPortalCheckInsFormIdRouteImport } from './routes/_authenticated/portal/check-ins.$formId'
 import { Route as AuthenticatedMResourcesSlugRouteImport } from './routes/_authenticated/m/resources.$slug'
@@ -585,6 +586,12 @@ const AuthenticatedPortalWorkoutsDayIdRoute =
     path: '/workouts/$dayId',
     getParentRoute: () => AuthenticatedPortalRouteRoute,
   } as any)
+const AuthenticatedPortalRecipesRecipeIdRoute =
+  AuthenticatedPortalRecipesRecipeIdRouteImport.update({
+    id: '/$recipeId',
+    path: '/$recipeId',
+    getParentRoute: () => AuthenticatedPortalRecipesRoute,
+  } as any)
 const AuthenticatedPortalPurchasesIdRoute =
   AuthenticatedPortalPurchasesIdRouteImport.update({
     id: '/$id',
@@ -775,7 +782,7 @@ export interface FileRoutesByFullPath {
   '/portal/nutrition-targets': typeof AuthenticatedPortalNutritionTargetsRoute
   '/portal/progress-metrics': typeof AuthenticatedPortalProgressMetricsRoute
   '/portal/purchases': typeof AuthenticatedPortalPurchasesRouteWithChildren
-  '/portal/recipes': typeof AuthenticatedPortalRecipesRoute
+  '/portal/recipes': typeof AuthenticatedPortalRecipesRouteWithChildren
   '/portal/resources': typeof AuthenticatedPortalResourcesRoute
   '/api/public/signnow-webhook': typeof ApiPublicSignnowWebhookRoute
   '/api/public/stripe-webhook': typeof ApiPublicStripeWebhookRoute
@@ -800,6 +807,7 @@ export interface FileRoutesByFullPath {
   '/m/resources/$slug': typeof AuthenticatedMResourcesSlugRoute
   '/portal/check-ins/$formId': typeof AuthenticatedPortalCheckInsFormIdRoute
   '/portal/purchases/$id': typeof AuthenticatedPortalPurchasesIdRoute
+  '/portal/recipes/$recipeId': typeof AuthenticatedPortalRecipesRecipeIdRoute
   '/portal/workouts/$dayId': typeof AuthenticatedPortalWorkoutsDayIdRoute
   '/api/public/hooks/media-archive': typeof ApiPublicHooksMediaArchiveRoute
   '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
@@ -877,7 +885,7 @@ export interface FileRoutesByTo {
   '/portal/nutrition-targets': typeof AuthenticatedPortalNutritionTargetsRoute
   '/portal/progress-metrics': typeof AuthenticatedPortalProgressMetricsRoute
   '/portal/purchases': typeof AuthenticatedPortalPurchasesRouteWithChildren
-  '/portal/recipes': typeof AuthenticatedPortalRecipesRoute
+  '/portal/recipes': typeof AuthenticatedPortalRecipesRouteWithChildren
   '/portal/resources': typeof AuthenticatedPortalResourcesRoute
   '/api/public/signnow-webhook': typeof ApiPublicSignnowWebhookRoute
   '/api/public/stripe-webhook': typeof ApiPublicStripeWebhookRoute
@@ -902,6 +910,7 @@ export interface FileRoutesByTo {
   '/m/resources/$slug': typeof AuthenticatedMResourcesSlugRoute
   '/portal/check-ins/$formId': typeof AuthenticatedPortalCheckInsFormIdRoute
   '/portal/purchases/$id': typeof AuthenticatedPortalPurchasesIdRoute
+  '/portal/recipes/$recipeId': typeof AuthenticatedPortalRecipesRecipeIdRoute
   '/portal/workouts/$dayId': typeof AuthenticatedPortalWorkoutsDayIdRoute
   '/api/public/hooks/media-archive': typeof ApiPublicHooksMediaArchiveRoute
   '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
@@ -984,7 +993,7 @@ export interface FileRoutesById {
   '/_authenticated/portal/nutrition-targets': typeof AuthenticatedPortalNutritionTargetsRoute
   '/_authenticated/portal/progress-metrics': typeof AuthenticatedPortalProgressMetricsRoute
   '/_authenticated/portal/purchases': typeof AuthenticatedPortalPurchasesRouteWithChildren
-  '/_authenticated/portal/recipes': typeof AuthenticatedPortalRecipesRoute
+  '/_authenticated/portal/recipes': typeof AuthenticatedPortalRecipesRouteWithChildren
   '/_authenticated/portal/resources': typeof AuthenticatedPortalResourcesRoute
   '/api/public/signnow-webhook': typeof ApiPublicSignnowWebhookRoute
   '/api/public/stripe-webhook': typeof ApiPublicStripeWebhookRoute
@@ -1009,6 +1018,7 @@ export interface FileRoutesById {
   '/_authenticated/m/resources/$slug': typeof AuthenticatedMResourcesSlugRoute
   '/_authenticated/portal/check-ins/$formId': typeof AuthenticatedPortalCheckInsFormIdRoute
   '/_authenticated/portal/purchases/$id': typeof AuthenticatedPortalPurchasesIdRoute
+  '/_authenticated/portal/recipes/$recipeId': typeof AuthenticatedPortalRecipesRecipeIdRoute
   '/_authenticated/portal/workouts/$dayId': typeof AuthenticatedPortalWorkoutsDayIdRoute
   '/api/public/hooks/media-archive': typeof ApiPublicHooksMediaArchiveRoute
   '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
@@ -1116,6 +1126,7 @@ export interface FileRouteTypes {
     | '/m/resources/$slug'
     | '/portal/check-ins/$formId'
     | '/portal/purchases/$id'
+    | '/portal/recipes/$recipeId'
     | '/portal/workouts/$dayId'
     | '/api/public/hooks/media-archive'
     | '/lovable/email/auth/preview'
@@ -1218,6 +1229,7 @@ export interface FileRouteTypes {
     | '/m/resources/$slug'
     | '/portal/check-ins/$formId'
     | '/portal/purchases/$id'
+    | '/portal/recipes/$recipeId'
     | '/portal/workouts/$dayId'
     | '/api/public/hooks/media-archive'
     | '/lovable/email/auth/preview'
@@ -1324,6 +1336,7 @@ export interface FileRouteTypes {
     | '/_authenticated/m/resources/$slug'
     | '/_authenticated/portal/check-ins/$formId'
     | '/_authenticated/portal/purchases/$id'
+    | '/_authenticated/portal/recipes/$recipeId'
     | '/_authenticated/portal/workouts/$dayId'
     | '/api/public/hooks/media-archive'
     | '/lovable/email/auth/preview'
@@ -1942,6 +1955,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedPortalWorkoutsDayIdRouteImport
       parentRoute: typeof AuthenticatedPortalRouteRoute
     }
+    '/_authenticated/portal/recipes/$recipeId': {
+      id: '/_authenticated/portal/recipes/$recipeId'
+      path: '/$recipeId'
+      fullPath: '/portal/recipes/$recipeId'
+      preLoaderRoute: typeof AuthenticatedPortalRecipesRecipeIdRouteImport
+      parentRoute: typeof AuthenticatedPortalRecipesRoute
+    }
     '/_authenticated/portal/purchases/$id': {
       id: '/_authenticated/portal/purchases/$id'
       path: '/$id'
@@ -2355,6 +2375,21 @@ const AuthenticatedPortalPurchasesRouteWithChildren =
     AuthenticatedPortalPurchasesRouteChildren,
   )
 
+interface AuthenticatedPortalRecipesRouteChildren {
+  AuthenticatedPortalRecipesRecipeIdRoute: typeof AuthenticatedPortalRecipesRecipeIdRoute
+}
+
+const AuthenticatedPortalRecipesRouteChildren: AuthenticatedPortalRecipesRouteChildren =
+  {
+    AuthenticatedPortalRecipesRecipeIdRoute:
+      AuthenticatedPortalRecipesRecipeIdRoute,
+  }
+
+const AuthenticatedPortalRecipesRouteWithChildren =
+  AuthenticatedPortalRecipesRoute._addFileChildren(
+    AuthenticatedPortalRecipesRouteChildren,
+  )
+
 interface AuthenticatedPortalRouteRouteChildren {
   AuthenticatedPortalAccountRoute: typeof AuthenticatedPortalAccountRoute
   AuthenticatedPortalCalendarRoute: typeof AuthenticatedPortalCalendarRoute
@@ -2368,7 +2403,7 @@ interface AuthenticatedPortalRouteRouteChildren {
   AuthenticatedPortalNutritionTargetsRoute: typeof AuthenticatedPortalNutritionTargetsRoute
   AuthenticatedPortalProgressMetricsRoute: typeof AuthenticatedPortalProgressMetricsRoute
   AuthenticatedPortalPurchasesRoute: typeof AuthenticatedPortalPurchasesRouteWithChildren
-  AuthenticatedPortalRecipesRoute: typeof AuthenticatedPortalRecipesRoute
+  AuthenticatedPortalRecipesRoute: typeof AuthenticatedPortalRecipesRouteWithChildren
   AuthenticatedPortalResourcesRoute: typeof AuthenticatedPortalResourcesRoute
   AuthenticatedPortalIndexRoute: typeof AuthenticatedPortalIndexRoute
   AuthenticatedPortalWorkoutsDayIdRoute: typeof AuthenticatedPortalWorkoutsDayIdRoute
@@ -2394,7 +2429,8 @@ const AuthenticatedPortalRouteRouteChildren: AuthenticatedPortalRouteRouteChildr
       AuthenticatedPortalProgressMetricsRoute,
     AuthenticatedPortalPurchasesRoute:
       AuthenticatedPortalPurchasesRouteWithChildren,
-    AuthenticatedPortalRecipesRoute: AuthenticatedPortalRecipesRoute,
+    AuthenticatedPortalRecipesRoute:
+      AuthenticatedPortalRecipesRouteWithChildren,
     AuthenticatedPortalResourcesRoute: AuthenticatedPortalResourcesRoute,
     AuthenticatedPortalIndexRoute: AuthenticatedPortalIndexRoute,
     AuthenticatedPortalWorkoutsDayIdRoute:
