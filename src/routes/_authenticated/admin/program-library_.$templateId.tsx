@@ -937,23 +937,23 @@ function RowEditor({ row, setRow, onDelete, exercises, compact }: { row: any; se
           </SelectContent>
         </Select>
         {!row.exercise_id && (
-          <Input className="mt-1 h-7 text-xs" placeholder="Custom name" value={row.exercise_name_override ?? ""} onChange={(e) => setRow({ ...row, exercise_name_override: e.target.value })} />
+          <RowCell className="mt-1 h-7 text-xs" placeholder="Custom name" value={row.exercise_name_override} onCommit={(v) => setRow({ ...row, exercise_name_override: v })} />
         )}
         </Field>
         <Field className="col-span-1" label="Sets">
-          <Input className={cn("text-xs", h)} inputMode="numeric" placeholder="3" value={row.sets ?? ""} onChange={(e) => setRow({ ...row, sets: parseInt(e.target.value) || null })} />
+          <RowCell className={cn("text-xs", h)} inputMode="numeric" placeholder="3" value={row.sets} onCommit={(v) => setRow({ ...row, sets: parseIntOrNull(v) })} />
         </Field>
         <Field className="col-span-2" label="Reps">
-          <Input className={cn("text-xs", h)} placeholder="8-12" value={row.reps_text ?? ""} onChange={(e) => setRow({ ...row, reps_text: e.target.value })} />
+          <RowCell className={cn("text-xs", h)} placeholder="8-12" value={row.reps_text} onCommit={(v) => setRow({ ...row, reps_text: v ?? "" })} />
         </Field>
         <Field className="col-span-1" label="RPE">
-          <Input className={cn("text-xs", h)} inputMode="decimal" placeholder="8" value={row.rpe ?? ""} onChange={(e) => setRow({ ...row, rpe: e.target.value })} />
+          <RowCell className={cn("text-xs", h)} inputMode="decimal" placeholder="8" value={row.rpe} onCommit={(v) => setRow({ ...row, rpe: v ?? "" })} />
         </Field>
         <Field className="col-span-1" label="RIR">
-          <Input className={cn("text-xs", h)} inputMode="decimal" placeholder="2" value={row.rir ?? ""} onChange={(e) => setRow({ ...row, rir: e.target.value })} />
+          <RowCell className={cn("text-xs", h)} inputMode="decimal" placeholder="2" value={row.rir} onCommit={(v) => setRow({ ...row, rir: v ?? "" })} />
         </Field>
         <Field className="col-span-1" label="Rest s">
-          <Input className={cn("text-xs", h)} inputMode="numeric" placeholder="90" value={row.rest_seconds ?? ""} onChange={(e) => setRow({ ...row, rest_seconds: parseInt(e.target.value) || null })} />
+          <RowCell className={cn("text-xs", h)} inputMode="numeric" placeholder="90" value={row.rest_seconds} onCommit={(v) => setRow({ ...row, rest_seconds: parseIntOrNull(v) })} />
         </Field>
         <div className="col-span-2 flex justify-end gap-0.5 pb-0.5">
           <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => { copyRows([row]); toast.success("Exercise copied"); }} title="Copy exercise">
@@ -986,21 +986,18 @@ function RowEditor({ row, setRow, onDelete, exercises, compact }: { row: any; se
         )}
         {loadMode === "pct" && (
         <Field className="col-span-1" label="%">
-          <Input className={cn("text-xs", h)} inputMode="decimal" placeholder="75" value={row.percentage ?? ""} onChange={(e) => setRow({ ...row, percentage: parseFloat(e.target.value) || null })} />
+          <RowCell className={cn("text-xs", h)} inputMode="decimal" placeholder="75" value={row.percentage} onCommit={(v) => setRow({ ...row, percentage: parseFloatOrNull(v) })} />
         </Field>
         )}
         {loadMode !== "none" && (
         <Field className={cn(loadMode === "pct" ? "col-span-2" : "col-span-3")} label={`Load (${rowUnit})`}>
           <div className="flex gap-1">
-            <Input
+            <RowCell
               className={cn("text-xs flex-1", h)}
               inputMode="decimal"
               placeholder={loadMode === "pct" ? "auto" : "100"}
-              value={rowUnit === "kg" ? (row.load_kg ?? "") : (row.load_lb ?? "")}
-              onChange={(e) => {
-                const v = parseFloat(e.target.value) || null;
-                setRow({ ...row, [rowUnit === "kg" ? "load_kg" : "load_lb"]: v });
-              }}
+              value={rowUnit === "kg" ? row.load_kg : row.load_lb}
+              onCommit={(v) => setRow({ ...row, [rowUnit === "kg" ? "load_kg" : "load_lb"]: parseFloatOrNull(v) })}
             />
             <Select value={rowUnit} onValueChange={(v) => setRow({ ...row, load_unit: v })}>
               <SelectTrigger className={cn("w-[52px] text-[11px] px-1.5", h)}><SelectValue /></SelectTrigger>
@@ -1013,7 +1010,7 @@ function RowEditor({ row, setRow, onDelete, exercises, compact }: { row: any; se
         </Field>
         )}
         <Field className="col-span-2" label="Tempo">
-          <Input className={cn("text-xs", h)} placeholder="3-1-1" value={row.tempo ?? ""} onChange={(e) => setRow({ ...row, tempo: e.target.value })} />
+          <RowCell className={cn("text-xs", h)} placeholder="3-1-1" value={row.tempo} onCommit={(v) => setRow({ ...row, tempo: v ?? "" })} />
         </Field>
         <Field className={cn(loadMode === "none" ? "col-span-5" : "col-span-3")} label="Type">
           <Select value={row.time_profile ?? "accessory_compound"} onValueChange={(v) => setRow({ ...row, time_profile: v })}>
