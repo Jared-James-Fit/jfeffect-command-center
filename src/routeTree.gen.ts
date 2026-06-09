@@ -45,7 +45,6 @@ import { Route as AuthenticatedMToolsRouteImport } from './routes/_authenticated
 import { Route as AuthenticatedMResourcesRouteImport } from './routes/_authenticated/m/resources'
 import { Route as AuthenticatedMPlansRouteImport } from './routes/_authenticated/m/plans'
 import { Route as AuthenticatedMMyPlansRouteImport } from './routes/_authenticated/m/my-plans'
-import { Route as AuthenticatedMAnnouncementsRouteImport } from './routes/_authenticated/m/announcements'
 import { Route as AuthenticatedMAccountRouteImport } from './routes/_authenticated/m/account'
 import { Route as AuthenticatedAdminTrainingPhasesRouteImport } from './routes/_authenticated/admin/training-phases'
 import { Route as AuthenticatedAdminTrainingIntelligenceRouteImport } from './routes/_authenticated/admin/training-intelligence'
@@ -315,12 +314,6 @@ const AuthenticatedMMyPlansRoute = AuthenticatedMMyPlansRouteImport.update({
   path: '/my-plans',
   getParentRoute: () => AuthenticatedMRouteRoute,
 } as any)
-const AuthenticatedMAnnouncementsRoute =
-  AuthenticatedMAnnouncementsRouteImport.update({
-    id: '/announcements',
-    path: '/announcements',
-    getParentRoute: () => AuthenticatedMRouteRoute,
-  } as any)
 const AuthenticatedMAccountRoute = AuthenticatedMAccountRouteImport.update({
   id: '/account',
   path: '/account',
@@ -794,7 +787,6 @@ export interface FileRoutesByFullPath {
   '/admin/training-intelligence': typeof AuthenticatedAdminTrainingIntelligenceRoute
   '/admin/training-phases': typeof AuthenticatedAdminTrainingPhasesRoute
   '/m/account': typeof AuthenticatedMAccountRoute
-  '/m/announcements': typeof AuthenticatedMAnnouncementsRoute
   '/m/my-plans': typeof AuthenticatedMMyPlansRouteWithChildren
   '/m/plans': typeof AuthenticatedMPlansRouteWithChildren
   '/m/resources': typeof AuthenticatedMResourcesRouteWithChildren
@@ -901,7 +893,6 @@ export interface FileRoutesByTo {
   '/admin/training-intelligence': typeof AuthenticatedAdminTrainingIntelligenceRoute
   '/admin/training-phases': typeof AuthenticatedAdminTrainingPhasesRoute
   '/m/account': typeof AuthenticatedMAccountRoute
-  '/m/announcements': typeof AuthenticatedMAnnouncementsRoute
   '/m/my-plans': typeof AuthenticatedMMyPlansRouteWithChildren
   '/m/plans': typeof AuthenticatedMPlansRouteWithChildren
   '/m/resources': typeof AuthenticatedMResourcesRouteWithChildren
@@ -1013,7 +1004,6 @@ export interface FileRoutesById {
   '/_authenticated/admin/training-intelligence': typeof AuthenticatedAdminTrainingIntelligenceRoute
   '/_authenticated/admin/training-phases': typeof AuthenticatedAdminTrainingPhasesRoute
   '/_authenticated/m/account': typeof AuthenticatedMAccountRoute
-  '/_authenticated/m/announcements': typeof AuthenticatedMAnnouncementsRoute
   '/_authenticated/m/my-plans': typeof AuthenticatedMMyPlansRouteWithChildren
   '/_authenticated/m/plans': typeof AuthenticatedMPlansRouteWithChildren
   '/_authenticated/m/resources': typeof AuthenticatedMResourcesRouteWithChildren
@@ -1125,7 +1115,6 @@ export interface FileRouteTypes {
     | '/admin/training-intelligence'
     | '/admin/training-phases'
     | '/m/account'
-    | '/m/announcements'
     | '/m/my-plans'
     | '/m/plans'
     | '/m/resources'
@@ -1232,7 +1221,6 @@ export interface FileRouteTypes {
     | '/admin/training-intelligence'
     | '/admin/training-phases'
     | '/m/account'
-    | '/m/announcements'
     | '/m/my-plans'
     | '/m/plans'
     | '/m/resources'
@@ -1343,7 +1331,6 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/training-intelligence'
     | '/_authenticated/admin/training-phases'
     | '/_authenticated/m/account'
-    | '/_authenticated/m/announcements'
     | '/_authenticated/m/my-plans'
     | '/_authenticated/m/plans'
     | '/_authenticated/m/resources'
@@ -1676,13 +1663,6 @@ declare module '@tanstack/react-router' {
       path: '/my-plans'
       fullPath: '/m/my-plans'
       preLoaderRoute: typeof AuthenticatedMMyPlansRouteImport
-      parentRoute: typeof AuthenticatedMRouteRoute
-    }
-    '/_authenticated/m/announcements': {
-      id: '/_authenticated/m/announcements'
-      path: '/announcements'
-      fullPath: '/m/announcements'
-      preLoaderRoute: typeof AuthenticatedMAnnouncementsRouteImport
       parentRoute: typeof AuthenticatedMRouteRoute
     }
     '/_authenticated/m/account': {
@@ -2420,7 +2400,6 @@ const AuthenticatedMResourcesRouteWithChildren =
 
 interface AuthenticatedMRouteRouteChildren {
   AuthenticatedMAccountRoute: typeof AuthenticatedMAccountRoute
-  AuthenticatedMAnnouncementsRoute: typeof AuthenticatedMAnnouncementsRoute
   AuthenticatedMMyPlansRoute: typeof AuthenticatedMMyPlansRouteWithChildren
   AuthenticatedMPlansRoute: typeof AuthenticatedMPlansRouteWithChildren
   AuthenticatedMResourcesRoute: typeof AuthenticatedMResourcesRouteWithChildren
@@ -2432,7 +2411,6 @@ interface AuthenticatedMRouteRouteChildren {
 
 const AuthenticatedMRouteRouteChildren: AuthenticatedMRouteRouteChildren = {
   AuthenticatedMAccountRoute: AuthenticatedMAccountRoute,
-  AuthenticatedMAnnouncementsRoute: AuthenticatedMAnnouncementsRoute,
   AuthenticatedMMyPlansRoute: AuthenticatedMMyPlansRouteWithChildren,
   AuthenticatedMPlansRoute: AuthenticatedMPlansRouteWithChildren,
   AuthenticatedMResourcesRoute: AuthenticatedMResourcesRouteWithChildren,
