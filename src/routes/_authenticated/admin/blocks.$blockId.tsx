@@ -354,7 +354,6 @@ function BlockEditor() {
         canRedo={canRedo}
         clientId={clientId}
         blockId={blockId}
-        toolbarExtras={<BlockMaxesButton clientId={clientId} blockId={blockId} />}
       />
     </div>
   );
