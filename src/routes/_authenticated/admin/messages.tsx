@@ -16,7 +16,9 @@ import {
   type ConversationState, type Message,
   setConversationStatus, setConversationPriority, PRIORITIES,
 } from "@/lib/messages";
-import { Search, ChevronLeft, MoreHorizontal, ExternalLink, Phone } from "lucide-react";
+import { Search, ChevronLeft, MoreHorizontal, ExternalLink, Phone, MessageSquare } from "lucide-react";
+import { SendSmsDialog } from "@/components/send-sms-dialog";
+import { useState as useStateSms } from "react";
 import { formatDistanceToNow, parseISO } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useChatPresence, LiveDot } from "@/hooks/use-chat-presence";
