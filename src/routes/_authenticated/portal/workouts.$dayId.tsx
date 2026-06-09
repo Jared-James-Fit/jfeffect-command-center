@@ -286,7 +286,7 @@ function WorkoutDay() {
   );
 }
 
-function ExerciseBlock({ row, dayId, dayTitle, clientId, existingResults, existingNote, onChange, onNoteChange }: { row: any; dayId: string; dayTitle: string; clientId: string | undefined; existingResults: any[]; existingNote?: any; onChange: () => void; onNoteChange: () => void }) {
+function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResults, existingNote, onChange, onNoteChange }: { row: any; dayId: string; dayTitle: string; clientId: string | undefined; blockId?: string | null; existingResults: any[]; existingNote?: any; onChange: () => void; onNoteChange: () => void }) {
   const name = row.exercises?.name ?? row.exercise_name_override ?? "Exercise";
   const exercise = row.exercises ?? null;
   const exerciseId = exercise?.id ?? null;
@@ -300,9 +300,9 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, existingResults, existi
   const hasNote = Boolean(existingNote?.id);
 
   const { data: maxes = [] } = useQuery({
-    queryKey: ["pl-client-maxes", clientId],
+    queryKey: ["pl-client-maxes", clientId, blockId ?? null],
     enabled: !!clientId && !!row.percentage && row.percentage_basis !== "manual",
-    queryFn: () => listClientMaxes(clientId as string),
+    queryFn: () => listClientMaxes(clientId as string, blockId ?? null),
   });
   const computed = useMemo(() => {
     if (!row.percentage || !row.percentage_basis || row.percentage_basis === "manual") return null;
