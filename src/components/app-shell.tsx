@@ -154,7 +154,7 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
   };
 
   const grouped = useMemo(() => groupNavItems(items), [items]);
-  const bottomItems = items.slice(0, 5);
+  const bottomItems = customBottomItems ?? items.slice(0, 5);
   const accountHref =
     items.find((i) => i.to.endsWith("/account") || i.to.endsWith("/account-settings"))?.to ??
     "/admin/account";
