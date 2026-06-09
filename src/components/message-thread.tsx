@@ -964,6 +964,50 @@ export function MessageThread({
                   {m.message_type !== "General" && <span>· {m.message_type}</span>}
                   {m.priority && <span>· {m.priority}</span>}
                 </div>
+                {/* Reaction chips (grouped by emoji) */}
+                {!isDeleted && (() => {
+                  const list = reactionsByMsg.get(m.id) ?? [];
+                  if (list.length === 0) return null;
+                  const groups = new Map<string, MessageReaction[]>();
+                  for (const r of list) {
+                    const g = groups.get(r.emoji) ?? [];
+                    g.push(r);
+                    groups.set(r.emoji, g);
+                  }
+                  return (
+                    <div className={cn(
+                      "absolute -bottom-3 flex flex-wrap gap-1",
+                      mine ? "right-2" : "left-2",
+                    )}>
+                      {Array.from(groups.entries()).map(([emoji, rs]) => {
+                        const minePicked = rs.some((r) => r.user_id === user?.id);
+                        return (
+                          <button
+                            key={emoji}
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); void onToggleReaction(m.id, emoji); }}
+                            className={cn(
+                              "inline-flex items-center gap-0.5 rounded-full border bg-background px-1.5 py-0.5 text-[11px] shadow-sm transition",
+                              minePicked ? "border-primary bg-primary/10" : "border-border hover:bg-secondary",
+                            )}
+                          >
+                            <span>{emoji}</span>
+                            {rs.length > 1 && <span className="text-[10px] font-medium">{rs.length}</span>}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
+                {/* Read receipt (only under my latest message) */}
+                {mine && !isDeleted && m.id === lastOwnMessageId && !selectionMode && (() => {
+                  const readAt = role === "admin" ? m.read_by_client_at : m.read_by_admin_at;
+                  return (
+                    <div className="absolute -bottom-4 right-1 text-[10px] text-muted-foreground">
+                      {readAt ? `Read ${format(parseISO(readAt), "h:mm a")}` : "Sent"}
+                    </div>
+                  );
+                })()}
                 {mine && !isDeleted && !isEditing && !selectionMode && (
                   <div className={cn(
                     "absolute -top-2 right-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100",
