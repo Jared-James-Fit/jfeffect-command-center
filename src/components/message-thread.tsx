@@ -1012,8 +1012,17 @@ export function MessageThread({
             ? peerAvatarPath ?? null
             : null;
           return (
-            <div
-              key={m.id}
+            <Fragment key={m.id}>
+              {initialUnreadFirstIdRef.current === m.id && (
+                <div className="my-1 flex items-center gap-2 px-1">
+                  <span className="h-px flex-1 bg-primary/40" />
+                  <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-primary">
+                    New
+                  </span>
+                  <span className="h-px flex-1 bg-primary/40" />
+                </div>
+              )}
+              <div
               className={cn(
                 "relative flex w-full min-w-0 items-end gap-2 will-change-transform",
                 mine ? "justify-end" : "justify-start",
