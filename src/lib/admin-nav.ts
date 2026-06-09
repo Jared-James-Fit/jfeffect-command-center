@@ -16,13 +16,17 @@ export const adminNav: NavItem[] = [
   { to: "/admin", label: "Dashboard", icon: LayoutDashboard, group: "Core" },
   { to: "/admin/clients", label: "Coaching Clients", icon: Users, group: "Core" },
   { to: "/admin/messages", label: "Messages", icon: MessageCircle, group: "Core" },
-  { to: "/admin/call-access", label: "Call Access", icon: Phone, group: "Core" },
-  { to: "/admin/settings/sms", label: "SMS Access", icon: MessageCircle, group: "Core" },
   { to: "/admin/check-in-reviews", label: "Check-In Reviews", icon: ClipboardList, group: "Core" },
-  { to: "/admin/client-action-requests", label: "Action Requests", icon: ClipboardCheck, group: "Core" },
   { to: "/admin/lift-videos", label: "Lift Reviews", icon: Video, group: "Core" },
   { to: "/admin/training-intelligence", label: "Training Intel", icon: Activity, group: "Core" },
-  { to: "/admin/broadcasts", label: "Broadcasts", icon: Megaphone, group: "Core" },
+  { to: "/admin/client-action-requests", label: "Action Requests", icon: ClipboardCheck, group: "Core" },
+  // COMMUNICATION
+  { to: "/admin/broadcasts", label: "Broadcasts", icon: Megaphone, group: "Communication" },
+  { to: "/admin/call-access", label: "Call Access", icon: Phone, group: "Communication" },
+  { to: "/admin/settings/sms", label: "SMS Access", icon: MessageCircle, group: "Communication" },
+  { to: "/admin/settings/chat", label: "Chat Settings", icon: MessageCircle, group: "Communication" },
+  { to: "/admin/chat-gifs", label: "Chat GIF Library", icon: Sparkles, group: "Communication" },
+  { to: "/admin/chat-sounds", label: "Chat Sound Library", icon: Sparkles, group: "Communication" },
   // MEMBERSHIP
   { to: "/admin/members", label: "App Members", icon: UserPlus, group: "Membership" },
   { to: "/admin/member-plans", label: "Plan Library", icon: Library, group: "Membership" },
@@ -52,9 +56,6 @@ export const adminNav: NavItem[] = [
   // ACCOUNT
   { to: "/admin/account", label: "Account", icon: UserCog, group: "Account" },
   { to: "/admin/settings", label: "Settings", icon: Settings, group: "Account" },
-  { to: "/admin/settings/chat", label: "Chat Settings", icon: MessageCircle, group: "Account" },
-  { to: "/admin/chat-gifs", label: "Chat GIF Library", icon: Sparkles, group: "Account" },
-  { to: "/admin/chat-sounds", label: "Chat Sound Library", icon: Sparkles, group: "Account" },
 ];
 
 // Coach navigation: same client-coaching tools as admin, without business/admin sections.

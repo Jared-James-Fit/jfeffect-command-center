@@ -3,7 +3,7 @@ import { Link, useRouterState, useNavigate } from "@tanstack/react-router";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import {
-  LogOut, ChevronLeft, ChevronRight, ChevronDown, Search, Settings as SettingsIcon, ArrowLeft,
+  LogOut, ChevronLeft, ChevronRight, ChevronDown, Search, Settings as SettingsIcon, ArrowLeft, MoreHorizontal,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { NotificationBell } from "@/components/notification-bell";
@@ -19,6 +19,8 @@ import {
 import {
   CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList,
 } from "@/components/ui/command";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Input } from "@/components/ui/input";
 
 export interface NavItem {
   to: string;
@@ -39,6 +41,7 @@ function groupNavItems(items: NavItem[]) {
   }
   const order = [
     "Core",
+    "Communication",
     "Membership",
     "Programming",
     "Business",
@@ -109,6 +112,9 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
   const [mode, setMode] = useSidebarMode();
   const [collapsedSections, toggleSection] = useCollapsedSections();
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [moreQuery, setMoreQuery] = useState("");
+  const [moreOpenGroup, setMoreOpenGroup] = useState<string | null>(null);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -155,6 +161,13 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
 
   const grouped = useMemo(() => groupNavItems(items), [items]);
   const bottomItems = customBottomItems ?? items.slice(0, 5);
+  // Sections that contain the currently active route should auto-open.
+  const activeGroupLabel = useMemo(() => {
+    for (const g of grouped) {
+      if (g.label && g.items.some((i) => i.to === activeTo)) return g.label;
+    }
+    return null;
+  }, [grouped, activeTo]);
   const accountHref =
     items.find((i) => i.to.endsWith("/account") || i.to.endsWith("/account-settings"))?.to ??
     "/admin/account";
@@ -172,6 +185,25 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
   const cycleMode = () => {
     setMode(mode === "expanded" ? "compact" : mode === "compact" ? "collapsed" : "expanded");
   };
+
+  // Open the active group when the More sheet opens, or when route changes.
+  useEffect(() => {
+    if (moreOpen) setMoreOpenGroup(activeGroupLabel);
+  }, [moreOpen, activeGroupLabel]);
+
+  const moreFiltered = useMemo(() => {
+    const q = moreQuery.trim().toLowerCase();
+    if (!q) return null;
+    const results: { item: NavItem; group: string }[] = [];
+    for (const g of grouped) {
+      for (const it of g.items) {
+        if (it.label.toLowerCase().includes(q)) {
+          results.push({ item: it, group: g.label ?? "" });
+        }
+      }
+    }
+    return results;
+  }, [moreQuery, grouped]);
 
   return (
     <TooltipProvider delayDuration={250}>
@@ -226,7 +258,10 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
         <nav className={cn("flex-1 overflow-y-auto", isCollapsed ? "p-1.5" : "p-2")}>
           <div className={isCollapsed ? "space-y-2" : "space-y-2.5"}>
             {grouped.map((group) => {
-              const sectionCollapsed = group.label ? collapsedSections.has(group.label) : false;
+              const containsActive = group.label === activeGroupLabel;
+              const sectionCollapsed = group.label
+                ? collapsedSections.has(group.label) && !containsActive
+                : false;
               return (
                 <div key={group.label ?? "default"}>
                   {group.label && !isCollapsed && (
@@ -424,7 +459,7 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
           className="fixed left-3 right-3 z-50 grid grid-cols-5 overflow-hidden rounded-2xl border border-border bg-card/95 px-1 py-1 backdrop-blur supports-[backdrop-filter]:bg-card/80 shadow-[0_8px_24px_-6px_rgba(0,0,0,0.55)] md:hidden"
           style={{ bottom: "calc(env(safe-area-inset-bottom) + 10px)" }}
         >
-          {bottomItems.map((item) => {
+          {bottomItems.slice(0, 4).map((item) => {
             const active = pathname === item.to;
             const Icon = item.icon;
             const badge = navBadges[item.to];
@@ -456,8 +491,111 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
               </Link>
             );
           })}
+          <button
+            type="button"
+            onClick={() => setMoreOpen(true)}
+            className={cn(
+              "relative flex min-h-[68px] flex-col items-center justify-center gap-1 px-1 pt-2 pb-2 text-[10px] font-medium transition-colors",
+              moreOpen ? "text-primary" : "text-muted-foreground hover:text-foreground",
+            )}
+            aria-label="More"
+          >
+            <MoreHorizontal className="h-6 w-6" />
+            <span className="w-full px-0.5 text-center text-[10px] leading-tight tracking-tight">More</span>
+          </button>
         </nav>
       </div>
+
+      {/* Mobile "More" sheet — full grouped menu + search */}
+      <Sheet open={moreOpen} onOpenChange={setMoreOpen}>
+        <SheetContent side="bottom" className="h-[88vh] overflow-hidden p-0 md:hidden">
+          <SheetHeader className="border-b border-border px-4 py-3">
+            <SheetTitle className="text-left text-sm font-black tracking-tight">All sections</SheetTitle>
+          </SheetHeader>
+          <div className="border-b border-border px-3 py-2">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={moreQuery}
+                onChange={(e) => setMoreQuery(e.target.value)}
+                placeholder="Search pages…"
+                className="h-9 pl-8"
+              />
+            </div>
+          </div>
+          <div className="h-[calc(88vh-7.5rem)] overflow-y-auto px-2 py-2">
+            {moreFiltered ? (
+              <ul className="space-y-1">
+                {moreFiltered.length === 0 && (
+                  <li className="px-3 py-6 text-center text-sm text-muted-foreground">No matches.</li>
+                )}
+                {moreFiltered.map(({ item, group }) => {
+                  const Icon = item.icon;
+                  return (
+                    <li key={item.to}>
+                      <Link
+                        to={item.to}
+                        onClick={() => { setMoreOpen(false); setMoreQuery(""); }}
+                        className="flex items-center gap-3 rounded-md px-3 py-2.5 text-sm hover:bg-sidebar-accent"
+                      >
+                        <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate font-medium">{item.label}</div>
+                          {group && <div className="truncate text-[11px] text-muted-foreground">{group}</div>}
+                        </div>
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <div className="space-y-1.5">
+                {grouped.map((group) => {
+                  if (!group.label) return null;
+                  const isOpen = moreOpenGroup === group.label;
+                  return (
+                    <div key={group.label} className="rounded-md border border-border/60">
+                      <button
+                        type="button"
+                        onClick={() => setMoreOpenGroup(isOpen ? null : group.label!)}
+                        className="flex w-full items-center justify-between px-3 py-2.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground"
+                      >
+                        <span>{group.label}</span>
+                        <ChevronDown className={cn("h-4 w-4 transition-transform", !isOpen && "-rotate-90")} />
+                      </button>
+                      {isOpen && (
+                        <ul className="border-t border-border/60 p-1">
+                          {group.items.map((item) => {
+                            const Icon = item.icon;
+                            const active = item.to === activeTo;
+                            return (
+                              <li key={item.to}>
+                                <Link
+                                  to={item.to}
+                                  onClick={() => setMoreOpen(false)}
+                                  className={cn(
+                                    "flex items-center gap-3 rounded-md px-3 py-2.5 text-sm",
+                                    active
+                                      ? "bg-primary/15 font-semibold text-primary"
+                                      : "hover:bg-sidebar-accent",
+                                  )}
+                                >
+                                  <Icon className="h-4 w-4 shrink-0" />
+                                  <span className="truncate">{item.label}</span>
+                                </Link>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </SheetContent>
+      </Sheet>
 
       {/* Command palette */}
       <CommandDialog open={paletteOpen} onOpenChange={setPaletteOpen}>

@@ -44,8 +44,7 @@ function AdminLayout() {
       pick("/admin"),
       pick("/admin/clients"),
       pick("/admin/messages"),
-      pick("/admin/lift-videos"),
-      pick("/admin/check-in-reviews"),
+      { ...pick("/admin/check-in-reviews"), label: "Reviews" },
     ];
   }, [isCoach]);
 
