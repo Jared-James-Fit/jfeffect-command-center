@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   listMessages, sendMessage, markRead, setConversationStatus, setConversationPriority,
   detectAttachmentType, MESSAGE_TYPES, PRIORITIES, QUICK_REPLIES, priorityTone,
+  editMessage, deleteMessageForEveryone,
   type Message, type MessageAttachment, type SenderRole, type ConversationState,
 } from "@/lib/messages";
 import { transcribeVoiceMessage } from "@/lib/voice-transcribe.functions";
@@ -24,7 +25,7 @@ import { cn } from "@/lib/utils";
 import {
   Paperclip, Send, X, FileText, Image as ImageIcon, Video, Link as LinkIcon, ExternalLink,
   Mic, Trash2, Play, Pause, Camera, File as FileIcon, Flag, AlertCircle, AlertTriangle,
-  Gauge, Download, ChevronDown, ChevronUp, Square, Loader2,
+  Gauge, Download, ChevronDown, ChevronUp, Square, Loader2, MoreHorizontal, Pencil, Check,
 } from "lucide-react";
 import { format, parseISO, isToday, isYesterday } from "date-fns";
 import { toast } from "sonner";
