@@ -13,7 +13,10 @@ import { useServerFn } from "@tanstack/react-start";
 import { updateSmsSettings, sendTestSms, runReminderSweepNow } from "@/lib/sms.functions";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
-import { Plus, Trash2, Send, RefreshCw } from "lucide-react";
+import { Plus, Trash2, Send, RefreshCw, Search, UserPlus } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Link } from "@tanstack/react-router";
+import { useMemo } from "react";
 
 export const Route = createFileRoute("/_authenticated/admin/settings/sms")({ component: SmsSettings });
 
@@ -24,6 +27,9 @@ function SmsSettings() {
   const update = useServerFn(updateSmsSettings);
   const test = useServerFn(sendTestSms);
   const sweep = useServerFn(runReminderSweepNow);
+  const qc2 = useQueryClient();
+  const [recipSearch, setRecipSearch] = useState("");
+  const [addOpen, setAddOpen] = useState(false);
 
   const { data: settings } = useQuery({
     queryKey: ["sms-settings"],
@@ -50,6 +56,32 @@ function SmsSettings() {
     },
     refetchInterval: 15000,
   });
+
+  const { data: recipients } = useQuery({
+    queryKey: ["sms-recipients"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("clients")
+        .select("id, full_name, email, phone, sms_opt_out, call_access_enabled")
+        .eq("archived", false)
+        .order("full_name");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  const updateRecipient = async (id: string, patch: Record<string, any>) => {
+    const { error } = await supabase.from("clients").update(patch as any).eq("id", id);
+    if (error) return toast.error(error.message);
+    qc.invalidateQueries({ queryKey: ["sms-recipients"] });
+  };
+
+  const filteredRecipients = useMemo(() => {
+    const q = recipSearch.trim().toLowerCase();
+    return (recipients ?? []).filter((c: any) =>
+      !q || `${c.full_name ?? ""} ${c.email ?? ""} ${c.phone ?? ""}`.toLowerCase().includes(q)
+    );
+  }, [recipients, recipSearch]);
 
   if (!f) return <div className="p-6 text-sm text-muted-foreground">Loading…</div>;
 
@@ -193,6 +225,105 @@ function SmsSettings() {
           </table>
         </div>
       </Card>
+
+      <Card className="p-5 space-y-3">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div>
+            <div className="font-bold">SMS recipients</div>
+            <div className="text-xs text-muted-foreground">All active clients. Edit phone, toggle opt-out, or add a new contact.</div>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input className="pl-8 h-9 w-[220px]" placeholder="Search" value={recipSearch} onChange={(e) => setRecipSearch(e.target.value)} />
+            </div>
+            <Button size="sm" onClick={() => setAddOpen(true)}><UserPlus className="mr-1 h-4 w-4" />Add contact</Button>
+          </div>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-secondary/40 text-xs uppercase tracking-wider text-muted-foreground">
+              <tr>
+                <th className="px-3 py-2 text-left">Name</th>
+                <th className="px-3 py-2 text-left">Email</th>
+                <th className="px-3 py-2 text-left">Phone</th>
+                <th className="px-3 py-2 text-left">SMS opt-out</th>
+                <th className="px-3 py-2 text-right">Profile</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredRecipients.length === 0 && <tr><td colSpan={5} className="p-6 text-center text-muted-foreground">No clients match.</td></tr>}
+              {filteredRecipients.map((c: any) => (
+                <tr key={c.id} className="border-t border-border align-middle">
+                  <td className="px-3 py-2 min-w-[200px]">
+                    <Input defaultValue={c.full_name ?? ""} className="h-8 text-sm font-semibold"
+                      onBlur={(e) => { if (e.target.value !== (c.full_name ?? "")) updateRecipient(c.id, { full_name: e.target.value }); }} />
+                  </td>
+                  <td className="px-3 py-2 min-w-[200px]">
+                    <Input defaultValue={c.email ?? ""} className="h-8 text-sm"
+                      onBlur={(e) => { if (e.target.value !== (c.email ?? "")) updateRecipient(c.id, { email: e.target.value }); }} />
+                  </td>
+                  <td className="px-3 py-2 min-w-[180px]">
+                    <Input defaultValue={c.phone ?? ""} placeholder="+15551234567" className="h-8 text-sm"
+                      onBlur={(e) => { if (e.target.value !== (c.phone ?? "")) updateRecipient(c.id, { phone: e.target.value || null }); }} />
+                  </td>
+                  <td className="px-3 py-2">
+                    <div className="flex items-center gap-2">
+                      <Switch checked={!!c.sms_opt_out} onCheckedChange={(v) => updateRecipient(c.id, { sms_opt_out: v })} />
+                      {c.sms_opt_out
+                        ? <Badge variant="outline" className="border-amber-500/40 text-amber-600">Opted out</Badge>
+                        : c.phone ? <Badge variant="outline" className="border-emerald-500/40 text-emerald-600">Will receive</Badge>
+                          : <Badge variant="outline">No phone</Badge>}
+                    </div>
+                  </td>
+                  <td className="px-3 py-2 text-right">
+                    <Button asChild size="sm" variant="ghost"><Link to="/admin/clients/$id" params={{ id: c.id }}>Open</Link></Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
+      <AddSmsContact open={addOpen} onOpenChange={setAddOpen} onCreated={() => qc.invalidateQueries({ queryKey: ["sms-recipients"] })} />
     </div>
+  );
+}
+
+function AddSmsContact({ open, onOpenChange, onCreated }: { open: boolean; onOpenChange: (v: boolean) => void; onCreated: () => void; }) {
+  const empty = { first_name: "", last_name: "", email: "", phone: "" };
+  const [f, setF] = useState<any>(empty);
+  const [busy, setBusy] = useState(false);
+  const save = async () => {
+    if (!f.first_name || !f.email) return toast.error("First name and email required");
+    setBusy(true);
+    const full_name = `${f.first_name} ${f.last_name}`.trim();
+    const { error } = await supabase.from("clients").insert({
+      first_name: f.first_name, last_name: f.last_name || null, full_name,
+      email: f.email.toLowerCase().trim(), phone: f.phone || null, status: "Active",
+    } as any);
+    setBusy(false);
+    if (error) return toast.error(error.message);
+    toast.success("Contact added"); onOpenChange(false); onCreated(); setF(empty);
+  };
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader><DialogTitle>Add SMS contact</DialogTitle></DialogHeader>
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-2">
+            <div><Label>First name *</Label><Input value={f.first_name} onChange={(e) => setF({ ...f, first_name: e.target.value })} /></div>
+            <div><Label>Last name</Label><Input value={f.last_name} onChange={(e) => setF({ ...f, last_name: e.target.value })} /></div>
+          </div>
+          <div><Label>Email *</Label><Input type="email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} /></div>
+          <div><Label>Phone</Label><Input value={f.phone} placeholder="+15551234567" onChange={(e) => setF({ ...f, phone: e.target.value })} /></div>
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button onClick={save} disabled={busy}>{busy ? "Saving…" : "Add"}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
