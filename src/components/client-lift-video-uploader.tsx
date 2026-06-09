@@ -53,6 +53,7 @@ type Clip = {
   url?: string;
   previewUrl?: string;
   previewStatus?: "pending" | "ready" | "failed";
+  isImage?: boolean;
   note: string;
   duration?: number;
 };
@@ -187,15 +188,23 @@ export function ClientLiftVideoUploader({ clientId, clientName, userId, onSaved 
         toast.error(`Unsupported file: ${f.name || "selected item"}`);
         continue;
       }
+      // createObjectURL is synchronous and effectively free — it does NOT
+      // read or decode the file. This gives an instant visual preview
+      // (image tag for photos, muted <video> for videos) without blocking
+      // the file handoff or the Send button.
+      let previewUrl: string | undefined;
+      try {
+        previewUrl = URL.createObjectURL(f);
+      } catch {
+        previewUrl = undefined;
+      }
       next.push({
         id: crypto.randomUUID(),
         kind: "file",
         file: f,
-        // Do not create object URLs, thumbnails, metadata, or video elements
-        // here. On iPhone, the only acceptable post-handoff work is adding
-        // the File reference and painting the send/details UI.
-        previewUrl: undefined,
-        previewStatus: "pending",
+        previewUrl,
+        previewStatus: previewUrl ? "ready" : "pending",
+        isImage: looksImage,
         note: "",
       });
     }
