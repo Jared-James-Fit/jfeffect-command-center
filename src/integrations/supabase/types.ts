@@ -4507,7 +4507,10 @@ export type Database = {
           intensity_techniques: string[]
           load_kg: number | null
           load_lb: number | null
+          load_unit: string | null
+          manual_override: boolean
           notes: string | null
+          override_of_pct: number | null
           percentage: number | null
           percentage_basis: string | null
           progression_method: string | null
@@ -4533,7 +4536,10 @@ export type Database = {
           intensity_techniques?: string[]
           load_kg?: number | null
           load_lb?: number | null
+          load_unit?: string | null
+          manual_override?: boolean
           notes?: string | null
+          override_of_pct?: number | null
           percentage?: number | null
           percentage_basis?: string | null
           progression_method?: string | null
@@ -4559,7 +4565,10 @@ export type Database = {
           intensity_techniques?: string[]
           load_kg?: number | null
           load_lb?: number | null
+          load_unit?: string | null
+          manual_override?: boolean
           notes?: string | null
+          override_of_pct?: number | null
           percentage?: number | null
           percentage_basis?: string | null
           progression_method?: string | null

@@ -26,6 +26,7 @@ const ROW_FIELDS = [
   "exercise_id","exercise_name_override","sets","reps_text","rpe","rir",
   "percentage","percentage_basis","load_kg","load_lb","rest_seconds",
   "tempo","time_profile","notes",
+  "manual_override","override_of_pct","load_unit",
 ] as const;
 
 function treeToPayload(tree: any) {
