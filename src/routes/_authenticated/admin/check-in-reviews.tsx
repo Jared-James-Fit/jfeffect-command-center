@@ -33,7 +33,7 @@ export const Route = createFileRoute("/_authenticated/admin/check-in-reviews")({
 });
 
 function AdminCheckInReviews() {
-  const [tab, setTab] = useState<string>("pending_review");
+  const [tab, setTab] = useState<string>("manual");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [composerOpen, setComposerOpen] = useState(false);
   const qc = useQueryClient();
@@ -65,17 +65,11 @@ function AdminCheckInReviews() {
         <div>
           <Tabs value={tab} onValueChange={(v) => { setTab(v); setSelectedId(null); }}>
             <TabsList className="w-full">
+              <TabsTrigger value="manual" className="flex-1">Manual</TabsTrigger>
               <TabsTrigger value="pending_review" className="flex-1">Pending</TabsTrigger>
               <TabsTrigger value="reviewed" className="flex-1">Reviewed</TabsTrigger>
-              <TabsTrigger value="manual" className="flex-1">Manual</TabsTrigger>
             </TabsList>
 
-            <TabsContent value="pending_review" className="mt-3">
-              <SubmissionList items={items} loading={isLoading} selectedId={selectedId} setSelectedId={setSelectedId} />
-            </TabsContent>
-            <TabsContent value="reviewed" className="mt-3">
-              <SubmissionList items={items} loading={isLoading} selectedId={selectedId} setSelectedId={setSelectedId} />
-            </TabsContent>
             <TabsContent value="manual" className="mt-3">
               {loadingManual ? (
                 <Loader2 className="mx-auto mt-4 h-5 w-5 animate-spin text-muted-foreground" />
@@ -108,6 +102,12 @@ function AdminCheckInReviews() {
                   })}
                 </ul>
               )}
+            </TabsContent>
+            <TabsContent value="pending_review" className="mt-3">
+              <SubmissionList items={items} loading={isLoading} selectedId={selectedId} setSelectedId={setSelectedId} />
+            </TabsContent>
+            <TabsContent value="reviewed" className="mt-3">
+              <SubmissionList items={items} loading={isLoading} selectedId={selectedId} setSelectedId={setSelectedId} />
             </TabsContent>
           </Tabs>
         </div>
