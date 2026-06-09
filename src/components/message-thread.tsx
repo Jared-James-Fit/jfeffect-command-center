@@ -555,6 +555,24 @@ export function MessageThread({
   const [swipeX, setSwipeX] = useState(0);
   const swipeRef = useRef<{ x: number; y: number; decided: boolean; horizontal: boolean } | null>(null);
 
+  // Safety net for the well-known Radix Dialog/Sheet quirk on iOS where
+  // `body { pointer-events: none }` (and stale aria-hidden) can stick after
+  // a fast open→close. Whenever our action sheet or dropdown closes, we
+  // proactively clear those so the chat is never frozen.
+  useEffect(() => {
+    if (sheetForId || actionsForId) return;
+    const t = window.setTimeout(() => {
+      try {
+        if (document.body.style.pointerEvents === "none") {
+          document.body.style.pointerEvents = "";
+        }
+        document.body.style.removeProperty("overflow");
+        document.body.removeAttribute("data-scroll-locked");
+      } catch {}
+    }, 350);
+    return () => window.clearTimeout(t);
+  }, [sheetForId, actionsForId]);
+
   const { data: messages = [] } = useQuery({
     queryKey: ["messages", clientId, role],
     enabled: !!clientId,
