@@ -865,6 +865,20 @@ function RowEditor({ row, setRow, onDelete, exercises, compact }: { row: any; se
   const [expanded, setExpanded] = useState(!compact);
   useEffect(() => { if (!compact) setExpanded(true); }, [compact]);
   const h = compact ? "h-7" : "h-8";
+  const { clientId, index: maxesIndex, maxes, refresh } = useClientMaxesCtx();
+  const [maxEditor, setMaxEditor] = useState<any>(null);
+  const computed = useMemo(() => {
+    if (!clientId) return null;
+    return computeRowLoad({
+      exerciseName: exName,
+      basis: row.percentage_basis,
+      percentage: row.percentage ? Number(row.percentage) : null,
+      manualLoadKg: row.load_kg ? Number(row.load_kg) : null,
+      manualLoadLb: row.load_lb ? Number(row.load_lb) : null,
+      unit: "kg",
+      maxesIndex,
+    });
+  }, [clientId, exName, row.percentage, row.percentage_basis, row.load_kg, row.load_lb, maxesIndex]);
   return (
     <div className={cn("relative overflow-hidden rounded-md border border-border bg-secondary/20 pl-3", compact ? "p-1.5 space-y-1" : "p-2 space-y-1")}>
       <div className={`absolute left-0 top-0 h-full w-1.5 ${accent}`} aria-hidden />
