@@ -20,6 +20,9 @@ import { formatDistanceToNow, parseISO, format, startOfWeek, endOfWeek } from "d
 import { HardDrive } from "lucide-react";
 import { UpcomingBirthdaysWidget } from "@/components/upcoming-birthdays-widget";
 import { Progress } from "@/components/ui/progress";
+import { useState } from "react";
+import { PriceCardPickerDialog } from "@/components/price-card-picker-dialog";
+import { ShoppingCart } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/admin/")({
   component: AdminDashboard,
