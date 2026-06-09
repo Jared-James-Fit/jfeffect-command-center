@@ -51,6 +51,43 @@ function nutritionUpdateTone(days: number | null): { tone: string; label: string
   if (days >= 14) return { tone: "border-warning/40 bg-warning/10 text-warning", label: `${days}d due` };
   return null;
 }
+
+type BlockDerived = {
+  state: "completed" | "archived" | "past-due" | "due-today" | "ending-soon" | "active" | "upcoming" | "unscheduled";
+  label: string;
+  tone: "green" | "yellow" | "red" | "grey" | "blue";
+  daysRemaining: number | null;
+  daysUntilStart: number | null;
+  percentComplete: number;
+};
+
+function deriveBlock(b: any, today = new Date()): BlockDerived {
+  const status = (b?.status ?? "").toLowerCase();
+  const start = b?.start_date ? parseISO(b.start_date) : null;
+  const end = b?.end_date ? parseISO(b.end_date) : null;
+  const t = new Date(today); t.setHours(0, 0, 0, 0);
+  if (status === "completed" || status === "manually completed")
+    return { state: "completed", label: "Completed", tone: "grey", daysRemaining: null, daysUntilStart: null, percentComplete: 100 };
+  if (status === "archived")
+    return { state: "archived", label: "Archived", tone: "grey", daysRemaining: null, daysUntilStart: null, percentComplete: 0 };
+  if (!start || !end)
+    return { state: "unscheduled", label: status === "active" ? "Active · No dates" : "Unscheduled", tone: "grey", daysRemaining: null, daysUntilStart: null, percentComplete: 0 };
+  const totalDays = Math.max(1, differenceInDays(end, start) + 1);
+  const elapsed = differenceInDays(t, start) + 1;
+  const daysRemaining = differenceInDays(end, t);
+  const daysUntilStart = differenceInDays(start, t);
+  const percentComplete = Math.min(100, Math.max(0, Math.round((elapsed / totalDays) * 100)));
+  if (daysUntilStart > 0)
+    return { state: "upcoming", label: daysUntilStart === 1 ? "Starts Tomorrow" : `Starts in ${daysUntilStart}d`, tone: "blue", daysRemaining, daysUntilStart, percentComplete: 0 };
+  if (daysRemaining < 0)
+    return { state: "past-due", label: `Past Due · ${Math.abs(daysRemaining)}d over`, tone: "red", daysRemaining, daysUntilStart, percentComplete: 100 };
+  if (daysRemaining === 0)
+    return { state: "due-today", label: "Due Today", tone: "red", daysRemaining, daysUntilStart, percentComplete };
+  if (daysRemaining <= 7)
+    return { state: "ending-soon", label: `Ending Soon · ${daysRemaining}d`, tone: "yellow", daysRemaining, daysUntilStart, percentComplete };
+  return { state: "active", label: "Active", tone: "green", daysRemaining, daysUntilStart, percentComplete };
+}
+
 function AddCell({ id, tab, label }: { id: string; tab: "training" | "nutrition" | "cardio"; label: string }) {
   return (
     <Link to="/admin/clients/$id" params={{ id }} search={{ tab }} className="text-xs font-semibold text-primary hover:underline">
@@ -406,21 +443,35 @@ function ClientsPage() {
                           <>
                             <td className="px-4 py-3 text-xs">
                               {cur ? (
-                                <div className="space-y-1">
+                                <div className="space-y-1 min-w-[200px]">
                                   <Link
                                     to="/admin/blocks/$blockId"
                                     params={{ blockId: cur.id }}
                                     className="block hover:opacity-80"
                                   >
-                                    <div className="flex items-center gap-1.5">
-                                      <Dumbbell className="h-3 w-3 text-primary" />
-                                      <span className="font-semibold truncate max-w-[140px]">{cur.name}</span>
-                                    </div>
-                                    <div className="text-[10px] text-muted-foreground truncate">
-                                      {cur.training_focus ? `${cur.training_focus} · ` : ""}
-                                      {cur.weeks}w
-                                      {cur.start_date && cur.end_date ? ` · ${format(parseISO(cur.start_date), "MMM d")} → ${format(parseISO(cur.end_date), "MMM d")}` : ""}
-                                    </div>
+                                    {(() => {
+                                      const dBlk = deriveBlock(cur);
+                                      return (
+                                        <div className="space-y-1">
+                                          <div className="flex items-center gap-1.5 flex-wrap">
+                                            <Dumbbell className="h-3 w-3 text-primary shrink-0" />
+                                            <span className="font-semibold truncate max-w-[140px]">{cur.name}</span>
+                                            <Badge variant="outline" className={toneClasses(dBlk.tone)}>{dBlk.label}</Badge>
+                                          </div>
+                                          <div className="text-[10px] text-muted-foreground truncate">
+                                            {cur.training_focus ? `${cur.training_focus} · ` : ""}
+                                            {cur.weeks}w
+                                            {cur.start_date && cur.end_date ? ` · ${format(parseISO(cur.start_date), "MMM d")} → ${format(parseISO(cur.end_date), "MMM d")}` : ""}
+                                            {dBlk.daysRemaining !== null ? (
+                                              <> · {dBlk.daysRemaining < 0 ? `${Math.abs(dBlk.daysRemaining)}d over` : `${dBlk.daysRemaining}d left`} · {dBlk.percentComplete}%</>
+                                            ) : null}
+                                          </div>
+                                          {dBlk.daysRemaining !== null && (
+                                            <Progress value={dBlk.percentComplete} className="h-1" />
+                                          )}
+                                        </div>
+                                      );
+                                    })()}
                                   </Link>
                                   <button
                                     type="button"
@@ -447,11 +498,21 @@ function ClientsPage() {
                                   params={{ blockId: nxt.id }}
                                   className="block hover:opacity-80"
                                 >
-                                  <div className="font-medium truncate max-w-[140px]">{nxt.name}</div>
-                                  <div className="text-[10px] text-muted-foreground truncate">
-                                    {nxt.start_date ? format(parseISO(nxt.start_date), "MMM d") : nxt.status}
-                                    {" · "}{nxt.weeks}w
-                                  </div>
+                                  {(() => {
+                                    const dNxt = deriveBlock(nxt);
+                                    return (
+                                      <div className="space-y-1">
+                                        <div className="flex items-center gap-1.5 flex-wrap">
+                                          <span className="font-medium truncate max-w-[140px]">{nxt.name}</span>
+                                          <Badge variant="outline" className={toneClasses(dNxt.tone)}>{dNxt.label}</Badge>
+                                        </div>
+                                        <div className="text-[10px] text-muted-foreground truncate">
+                                          {nxt.start_date ? format(parseISO(nxt.start_date), "MMM d") : nxt.status}
+                                          {" · "}{nxt.weeks}w
+                                        </div>
+                                      </div>
+                                    );
+                                  })()}
                                 </Link>
                               ) : cur ? (
                                 <button
