@@ -1023,6 +1023,22 @@ export function MessageThread({
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="w-44">
+                        <div className="flex items-center justify-around px-1 py-1.5">
+                          {REACTION_EMOJIS.map((emoji) => (
+                            <button
+                              key={emoji}
+                              type="button"
+                              className="rounded-full p-1 text-lg hover:bg-secondary"
+                              onClick={() => {
+                                void onToggleReaction(m.id, emoji);
+                                setActionsForId(null);
+                              }}
+                            >
+                              {emoji}
+                            </button>
+                          ))}
+                        </div>
+                        <DropdownMenuSeparator />
                         <DropdownMenuItem
                           onClick={() => { setEditingId(m.id); setEditingBody(m.body); setActionsForId(null); }}
                         >
@@ -1043,6 +1059,39 @@ export function MessageThread({
                         >
                           <Trash2 className="mr-2 h-4 w-4" /> Delete for everyone
                         </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                )}
+                {/* Desktop hover quick-react for incoming messages */}
+                {!mine && !isDeleted && !isEditing && !selectionMode && (
+                  <div className={cn(
+                    "absolute -top-2 left-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100",
+                    actionsForId === m.id && "opacity-100",
+                  )}>
+                    <DropdownMenu open={actionsForId === m.id} onOpenChange={(o) => setActionsForId(o ? m.id : null)}>
+                      <DropdownMenuTrigger asChild>
+                        <Button type="button" size="icon" variant="secondary"
+                          className="h-8 w-8 rounded-full border border-border shadow-sm">
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start" className="w-44">
+                        <div className="flex items-center justify-around px-1 py-1.5">
+                          {REACTION_EMOJIS.map((emoji) => (
+                            <button
+                              key={emoji}
+                              type="button"
+                              className="rounded-full p-1 text-lg hover:bg-secondary"
+                              onClick={() => {
+                                void onToggleReaction(m.id, emoji);
+                                setActionsForId(null);
+                              }}
+                            >
+                              {emoji}
+                            </button>
+                          ))}
+                        </div>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>
