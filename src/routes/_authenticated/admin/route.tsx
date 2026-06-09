@@ -37,8 +37,20 @@ function AdminLayout() {
   const nav = isCoach ? coachNav : adminNav;
   const title = isCoach ? "Coach" : "Admin";
 
+  const bottomItems = useMemo(() => {
+    if (isCoach) return undefined;
+    const pick = (to: string) => adminNav.find((i) => i.to === to)!;
+    return [
+      pick("/admin"),
+      pick("/admin/clients"),
+      pick("/admin/messages"),
+      pick("/admin/lift-videos"),
+      pick("/admin/check-in-reviews"),
+    ];
+  }, [isCoach]);
+
   return (
-    <AppShell items={nav} title={title}>
+    <AppShell items={nav} bottomItems={bottomItems} title={title}>
       {!isCoach && (
         <div className="flex justify-end border-b border-border bg-muted/30 px-4 py-1.5">
           <AdminPovMenu />
