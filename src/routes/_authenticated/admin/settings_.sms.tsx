@@ -28,6 +28,8 @@ function SmsSettings() {
   const sweep = useServerFn(runReminderSweepNow);
   const [recipSearch, setRecipSearch] = useState("");
   const [addOpen, setAddOpen] = useState(false);
+  const [testTo, setTestTo] = useState("");
+  const [busy, setBusy] = useState(false);
 
   const { data: settings } = useQuery({
     queryKey: ["sms-settings"],
@@ -102,8 +104,6 @@ function SmsSettings() {
     } catch (e: any) { toast.error(e?.message ?? "Failed to save"); }
   };
 
-  const [testTo, setTestTo] = useState("");
-  const [busy, setBusy] = useState(false);
   const doTest = async () => {
     if (!testTo) return toast.error("Enter a phone number");
     setBusy(true);
