@@ -550,6 +550,13 @@ function AssignDialog({ template, onClose }: { template: any; onClose: () => voi
   const [newPrep, setNewPrep] = useState({ title: "", event_name: "", event_date: "" });
   const [startDate, setStartDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
   const [endDate, setEndDate] = useState<string>("");
+  const templateWeeks = template ? getTemplateWeeks(template) : 0;
+
+  useEffect(() => {
+    if (startDate && templateWeeks > 0) {
+      setEndDate(computeEndDateFromStart(startDate, templateWeeks));
+    }
+  }, [startDate, templateWeeks]);
 
   const { data: clients = [] } = useQuery({
     queryKey: ["clients-min"], enabled: !!template,
