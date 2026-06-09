@@ -583,14 +583,44 @@ export function MessageThread({
     [reactions, user?.id],
   );
 
-  const onToggleReaction = async (messageId: string, emoji: string) => {
+  // Optimistic, non-blocking reaction toggle. Enforces one reaction per user
+  // per message: same emoji removes; different emoji replaces; none adds.
+  const onToggleReaction = (messageId: string, emoji: string) => {
     if (!user) return;
-    try {
-      await toggleReaction(messageId, user.id, emoji, myReactions);
-      qc.invalidateQueries({ queryKey: ["message-reactions", clientId] });
-    } catch (e: any) {
-      toast.error(e?.message ?? "Reaction failed");
+    const key = ["message-reactions", clientId] as const;
+    const prev = qc.getQueryData<MessageReaction[]>(key) ?? reactions;
+
+    const mineOnMsg = prev.filter((r) => r.user_id === user.id && r.message_id === messageId);
+    const samePicked = mineOnMsg.find((r) => r.emoji === emoji);
+
+    let next: MessageReaction[];
+    if (samePicked) {
+      next = prev.filter((r) => r.id !== samePicked.id);
+    } else {
+      const mineIds = new Set(mineOnMsg.map((r) => r.id));
+      next = prev.filter((r) => !mineIds.has(r.id));
+      next.push({
+        // temp id — gets replaced on next refetch
+        id: `optimistic-${messageId}-${user.id}-${Date.now()}`,
+        message_id: messageId,
+        user_id: user.id,
+        emoji,
+        created_at: new Date().toISOString(),
+      });
     }
+    qc.setQueryData(key, next);
+
+    // Fire to server in background; revert on failure. Never blocks the UI.
+    void (async () => {
+      try {
+        await toggleReaction(messageId, user.id, emoji, mineOnMsg);
+        // Quietly sync with server truth (real ids, etc.).
+        qc.invalidateQueries({ queryKey: key });
+      } catch (e: any) {
+        qc.setQueryData(key, prev);
+        toast.error(e?.message ?? "Reaction failed. Try again.");
+      }
+    })();
   };
 
   // Realtime
