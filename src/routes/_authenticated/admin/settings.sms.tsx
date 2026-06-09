@@ -1,0 +1,198 @@
+import { createFileRoute } from "@tanstack/react-router";
+import { PageHeader } from "@/components/app-shell";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
+import { supabase } from "@/integrations/supabase/client";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
+import { updateSmsSettings, sendTestSms, runReminderSweepNow } from "@/lib/sms.functions";
+import { useState, useEffect } from "react";
+import { toast } from "sonner";
+import { Plus, Trash2, MessageSquare, Send, RefreshCw } from "lucide-react";
+
+export const Route = createFileRoute("/_authenticated/admin/settings/sms")({ component: SmsSettings });
+
+type Step = { delay_minutes: number; enabled: boolean; template: string };
+
+function SmsSettings() {
+  const qc = useQueryClient();
+  const update = useServerFn(updateSmsSettings);
+  const test = useServerFn(sendTestSms);
+  const sweep = useServerFn(runReminderSweepNow);
+
+  const { data: settings } = useQuery({
+    queryKey: ["sms-settings"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("sms_settings").select("*").eq("singleton", true).maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const [form, setForm] = useState<any>(null);
+  useEffect(() => { if (settings && !form) setForm(settings); }, [settings, form]);
+  const f = form ?? settings;
+
+  const { data: recent } = useQuery({
+    queryKey: ["sms-log-recent"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("sms_log")
+        .select("id, created_at, kind, reminder_step, status, to_phone, body, error, clients(full_name)")
+        .order("created_at", { ascending: false })
+        .limit(30);
+      return data ?? [];
+    },
+    refetchInterval: 15000,
+  });
+
+  if (!f) return <div className="p-6 text-sm text-muted-foreground">Loading…</div>;
+
+  const setVal = (k: string, v: any) => setForm({ ...f, [k]: v });
+  const steps: Step[] = Array.isArray(f.reminder_steps) ? f.reminder_steps : [];
+  const setSteps = (s: Step[]) => setVal("reminder_steps", s);
+
+  const save = async () => {
+    try {
+      await update({ data: {
+        enabled: !!f.enabled,
+        from_phone: f.from_phone ?? null,
+        brand_name: f.brand_name,
+        manual_default_template: f.manual_default_template,
+        rate_limit_per_hour: Number(f.rate_limit_per_hour) || 3,
+        reminder_steps: steps,
+      }});
+      toast.success("SMS settings saved");
+      qc.invalidateQueries({ queryKey: ["sms-settings"] });
+    } catch (e: any) { toast.error(e?.message ?? "Failed to save"); }
+  };
+
+  const [testTo, setTestTo] = useState("");
+  const [busy, setBusy] = useState(false);
+  const doTest = async () => {
+    if (!testTo) return toast.error("Enter a phone number");
+    setBusy(true);
+    try { await test({ data: { to: testTo } }); toast.success("Test SMS sent"); }
+    catch (e: any) { toast.error(e?.message ?? "Failed"); }
+    finally { setBusy(false); }
+  };
+  const doSweep = async () => {
+    setBusy(true);
+    try { const r: any = await sweep({}); toast.success(`Reminder sweep ran — processed ${r?.processed ?? 0}`); }
+    catch (e: any) { toast.error(e?.message ?? "Failed"); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <div className="p-4 md:p-6 space-y-6 max-w-5xl">
+      <PageHeader title="SMS Notifications" subtitle="Twilio-powered text alerts for unread messages." icon={MessageSquare} />
+
+      <Card className="p-5 space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="font-bold">SMS sending</div>
+            <div className="text-xs text-muted-foreground">Master switch. Turn off to pause all manual + automatic SMS.</div>
+          </div>
+          <Switch checked={!!f.enabled} onCheckedChange={(v) => setVal("enabled", v)} />
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label>From phone (Twilio E.164)</Label>
+            <Input value={f.from_phone ?? ""} placeholder="+15551234567" onChange={(e) => setVal("from_phone", e.target.value)} />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Brand name in messages</Label>
+            <Input value={f.brand_name ?? ""} onChange={(e) => setVal("brand_name", e.target.value)} />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Hourly rate limit (per client)</Label>
+            <Input type="number" min={1} max={20} value={f.rate_limit_per_hour ?? 3} onChange={(e) => setVal("rate_limit_per_hour", Number(e.target.value))} />
+          </div>
+        </div>
+        <div className="space-y-1.5">
+          <Label>Default manual SMS template</Label>
+          <Textarea rows={3} value={f.manual_default_template ?? ""} onChange={(e) => setVal("manual_default_template", e.target.value)} />
+          <div className="text-[11px] text-muted-foreground">Available tags: <code>{"{first_name}"}</code> <code>{"{full_name}"}</code> <code>{"{brand}"}</code></div>
+        </div>
+      </Card>
+
+      <Card className="p-5 space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="font-bold">Automatic unread reminders</div>
+            <div className="text-xs text-muted-foreground">Sends after admin message has been unread for this many minutes. Reminders stop once the client reads the message or after the last step.</div>
+          </div>
+          <Button size="sm" variant="outline" onClick={() => setSteps([...steps, { delay_minutes: 60, enabled: true, template: `Hi {first_name}, this is ${f.brand_name}. You still have an unread message from your coach. Reply STOP to opt out.` }])}>
+            <Plus className="mr-1 h-4 w-4" /> Add step
+          </Button>
+        </div>
+        <div className="space-y-3">
+          {steps.length === 0 && <div className="text-sm text-muted-foreground">No reminder steps configured.</div>}
+          {steps.map((s, i) => (
+            <div key={i} className="rounded-lg border border-border p-3 space-y-2">
+              <div className="flex items-center gap-3">
+                <Badge variant="outline">Step {i + 1}</Badge>
+                <Label className="text-xs">Delay (min)</Label>
+                <Input type="number" min={1} className="w-28 h-8" value={s.delay_minutes}
+                  onChange={(e) => { const v = [...steps]; v[i] = { ...s, delay_minutes: Number(e.target.value) }; setSteps(v); }} />
+                <div className="ml-auto flex items-center gap-2">
+                  <Switch checked={s.enabled} onCheckedChange={(v) => { const arr = [...steps]; arr[i] = { ...s, enabled: v }; setSteps(arr); }} />
+                  <Button size="icon" variant="ghost" onClick={() => setSteps(steps.filter((_, j) => j !== i))}>
+                    <Trash2 className="h-4 w-4 text-destructive" />
+                  </Button>
+                </div>
+              </div>
+              <Textarea rows={3} value={s.template} onChange={(e) => { const v = [...steps]; v[i] = { ...s, template: e.target.value }; setSteps(v); }} />
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      <div className="flex gap-2">
+        <Button onClick={save}>Save settings</Button>
+        <Button variant="outline" onClick={doSweep} disabled={busy}><RefreshCw className="mr-1 h-4 w-4" />Run reminder sweep now</Button>
+      </div>
+
+      <Card className="p-5 space-y-3">
+        <div className="font-bold">Send a test SMS</div>
+        <div className="flex gap-2">
+          <Input placeholder="+15551234567" value={testTo} onChange={(e) => setTestTo(e.target.value)} className="max-w-xs" />
+          <Button onClick={doTest} disabled={busy}><Send className="mr-1 h-4 w-4" />Send test</Button>
+        </div>
+      </Card>
+
+      <Card className="p-5 space-y-3">
+        <div className="font-bold">Recent SMS activity</div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead className="text-left text-muted-foreground">
+              <tr><th className="p-2">When</th><th className="p-2">Client</th><th className="p-2">Kind</th><th className="p-2">To</th><th className="p-2">Status</th><th className="p-2">Body / error</th></tr>
+            </thead>
+            <tbody>
+              {(recent ?? []).map((r: any) => (
+                <tr key={r.id} className="border-t border-border align-top">
+                  <td className="p-2 whitespace-nowrap">{new Date(r.created_at).toLocaleString()}</td>
+                  <td className="p-2">{r.clients?.full_name ?? "—"}</td>
+                  <td className="p-2">{r.kind}{r.reminder_step != null ? ` #${r.reminder_step + 1}` : ""}</td>
+                  <td className="p-2 whitespace-nowrap">{r.to_phone || "—"}</td>
+                  <td className="p-2">
+                    <Badge variant={r.status === "sent" ? "default" : r.status === "failed" ? "destructive" : "outline"}>{r.status}</Badge>
+                  </td>
+                  <td className="p-2 max-w-md">{r.error ? <span className="text-destructive">{r.error}</span> : <span className="text-muted-foreground">{r.body}</span>}</td>
+                </tr>
+              ))}
+              {(!recent || recent.length === 0) && (
+                <tr><td className="p-3 text-muted-foreground" colSpan={6}>No SMS sent yet.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+    </div>
+  );
+}

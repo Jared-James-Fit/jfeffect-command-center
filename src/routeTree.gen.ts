@@ -95,6 +95,7 @@ import { Route as AuthenticatedAdminAgreementsIndexRouteImport } from './routes/
 import { Route as LovableEmailQueueProcessRouteImport } from './routes/lovable/email/queue/process'
 import { Route as LovableEmailAuthWebhookRouteImport } from './routes/lovable/email/auth/webhook'
 import { Route as LovableEmailAuthPreviewRouteImport } from './routes/lovable/email/auth/preview'
+import { Route as ApiPublicHooksSmsRemindersRouteImport } from './routes/api/public/hooks/sms-reminders'
 import { Route as ApiPublicHooksMediaArchiveRouteImport } from './routes/api/public/hooks/media-archive'
 import { Route as AuthenticatedPortalWorkoutsDayIdRouteImport } from './routes/_authenticated/portal/workouts.$dayId'
 import { Route as AuthenticatedPortalRecipesRecipeIdRouteImport } from './routes/_authenticated/portal/recipes.$recipeId'
@@ -611,6 +612,12 @@ const LovableEmailAuthPreviewRoute = LovableEmailAuthPreviewRouteImport.update({
   path: '/lovable/email/auth/preview',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicHooksSmsRemindersRoute =
+  ApiPublicHooksSmsRemindersRouteImport.update({
+    id: '/api/public/hooks/sms-reminders',
+    path: '/api/public/hooks/sms-reminders',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicHooksMediaArchiveRoute =
   ApiPublicHooksMediaArchiveRouteImport.update({
     id: '/api/public/hooks/media-archive',
@@ -866,6 +873,7 @@ export interface FileRoutesByFullPath {
   '/portal/recipes/$recipeId': typeof AuthenticatedPortalRecipesRecipeIdRoute
   '/portal/workouts/$dayId': typeof AuthenticatedPortalWorkoutsDayIdRoute
   '/api/public/hooks/media-archive': typeof ApiPublicHooksMediaArchiveRoute
+  '/api/public/hooks/sms-reminders': typeof ApiPublicHooksSmsRemindersRoute
   '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
   '/lovable/email/auth/webhook': typeof LovableEmailAuthWebhookRoute
   '/lovable/email/queue/process': typeof LovableEmailQueueProcessRoute
@@ -976,6 +984,7 @@ export interface FileRoutesByTo {
   '/portal/recipes/$recipeId': typeof AuthenticatedPortalRecipesRecipeIdRoute
   '/portal/workouts/$dayId': typeof AuthenticatedPortalWorkoutsDayIdRoute
   '/api/public/hooks/media-archive': typeof ApiPublicHooksMediaArchiveRoute
+  '/api/public/hooks/sms-reminders': typeof ApiPublicHooksSmsRemindersRoute
   '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
   '/lovable/email/auth/webhook': typeof LovableEmailAuthWebhookRoute
   '/lovable/email/queue/process': typeof LovableEmailQueueProcessRoute
@@ -1091,6 +1100,7 @@ export interface FileRoutesById {
   '/_authenticated/portal/recipes/$recipeId': typeof AuthenticatedPortalRecipesRecipeIdRoute
   '/_authenticated/portal/workouts/$dayId': typeof AuthenticatedPortalWorkoutsDayIdRoute
   '/api/public/hooks/media-archive': typeof ApiPublicHooksMediaArchiveRoute
+  '/api/public/hooks/sms-reminders': typeof ApiPublicHooksSmsRemindersRoute
   '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
   '/lovable/email/auth/webhook': typeof LovableEmailAuthWebhookRoute
   '/lovable/email/queue/process': typeof LovableEmailQueueProcessRoute
@@ -1206,6 +1216,7 @@ export interface FileRouteTypes {
     | '/portal/recipes/$recipeId'
     | '/portal/workouts/$dayId'
     | '/api/public/hooks/media-archive'
+    | '/api/public/hooks/sms-reminders'
     | '/lovable/email/auth/preview'
     | '/lovable/email/auth/webhook'
     | '/lovable/email/queue/process'
@@ -1316,6 +1327,7 @@ export interface FileRouteTypes {
     | '/portal/recipes/$recipeId'
     | '/portal/workouts/$dayId'
     | '/api/public/hooks/media-archive'
+    | '/api/public/hooks/sms-reminders'
     | '/lovable/email/auth/preview'
     | '/lovable/email/auth/webhook'
     | '/lovable/email/queue/process'
@@ -1430,6 +1442,7 @@ export interface FileRouteTypes {
     | '/_authenticated/portal/recipes/$recipeId'
     | '/_authenticated/portal/workouts/$dayId'
     | '/api/public/hooks/media-archive'
+    | '/api/public/hooks/sms-reminders'
     | '/lovable/email/auth/preview'
     | '/lovable/email/auth/webhook'
     | '/lovable/email/queue/process'
@@ -1458,6 +1471,7 @@ export interface RootRouteChildren {
   ApiPublicSignnowWebhookRoute: typeof ApiPublicSignnowWebhookRoute
   ApiPublicStripeWebhookRoute: typeof ApiPublicStripeWebhookRoute
   ApiPublicHooksMediaArchiveRoute: typeof ApiPublicHooksMediaArchiveRoute
+  ApiPublicHooksSmsRemindersRoute: typeof ApiPublicHooksSmsRemindersRoute
   LovableEmailAuthPreviewRoute: typeof LovableEmailAuthPreviewRoute
   LovableEmailAuthWebhookRoute: typeof LovableEmailAuthWebhookRoute
   LovableEmailQueueProcessRoute: typeof LovableEmailQueueProcessRoute
@@ -2067,6 +2081,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LovableEmailAuthPreviewRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/sms-reminders': {
+      id: '/api/public/hooks/sms-reminders'
+      path: '/api/public/hooks/sms-reminders'
+      fullPath: '/api/public/hooks/sms-reminders'
+      preLoaderRoute: typeof ApiPublicHooksSmsRemindersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/hooks/media-archive': {
       id: '/api/public/hooks/media-archive'
       path: '/api/public/hooks/media-archive'
@@ -2655,6 +2676,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicSignnowWebhookRoute: ApiPublicSignnowWebhookRoute,
   ApiPublicStripeWebhookRoute: ApiPublicStripeWebhookRoute,
   ApiPublicHooksMediaArchiveRoute: ApiPublicHooksMediaArchiveRoute,
+  ApiPublicHooksSmsRemindersRoute: ApiPublicHooksSmsRemindersRoute,
   LovableEmailAuthPreviewRoute: LovableEmailAuthPreviewRoute,
   LovableEmailAuthWebhookRoute: LovableEmailAuthWebhookRoute,
   LovableEmailQueueProcessRoute: LovableEmailQueueProcessRoute,
