@@ -25,6 +25,7 @@ import { copyRows, useClip } from "@/lib/program-builder-clipboard";
 import { createContext, useContext } from "react";
 import { listClientMaxes, buildMaxIndex, computeRowLoad, type ClientMaxRow } from "@/lib/pl-maxes";
 import { MaxEditorDialog } from "@/components/client-maxes-panel";
+import { BlockMaxesButton } from "@/components/block-maxes-panel";
 import { AlertCircle as PbAlertCircle, Calculator as PbCalculator } from "lucide-react";
 
 // ---- Client-max context shared by RowEditor regardless of nesting depth ----
