@@ -42,7 +42,7 @@ function AdminLayout() {
     const pick = (to: string) => adminNav.find((i) => i.to === to)!;
     return [
       pick("/admin"),
-      pick("/admin/clients"),
+      { ...pick("/admin/clients"), label: "Clients" },
       pick("/admin/messages"),
       { ...pick("/admin/check-in-reviews"), label: "Reviews" },
     ];
