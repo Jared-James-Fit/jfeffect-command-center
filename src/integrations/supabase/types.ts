@@ -392,6 +392,30 @@ export type Database = {
         }
         Relationships: []
       }
+      app_settings: {
+        Row: {
+          created_at: string | null
+          id: string
+          key: string
+          updated_at: string | null
+          value: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          key: string
+          updated_at?: string | null
+          value?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          key?: string
+          updated_at?: string | null
+          value?: string | null
+        }
+        Relationships: []
+      }
       app_shortcuts: {
         Row: {
           created_at: string
@@ -868,6 +892,7 @@ export type Database = {
           agreement_signed_date: string | null
           agreement_status: string
           agreement_version: string | null
+          allow_phone_calls: boolean | null
           archived: boolean
           archived_at: string | null
           archived_by: string | null
@@ -1008,6 +1033,7 @@ export type Database = {
           agreement_signed_date?: string | null
           agreement_status?: string
           agreement_version?: string | null
+          allow_phone_calls?: boolean | null
           archived?: boolean
           archived_at?: string | null
           archived_by?: string | null
@@ -1148,6 +1174,7 @@ export type Database = {
           agreement_signed_date?: string | null
           agreement_status?: string
           agreement_version?: string | null
+          allow_phone_calls?: boolean | null
           archived?: boolean
           archived_at?: string | null
           archived_by?: string | null
