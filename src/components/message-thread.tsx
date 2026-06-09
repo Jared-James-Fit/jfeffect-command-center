@@ -1102,6 +1102,159 @@ export function MessageThread({
 
         {/* Message-type + internal-note row removed for simplicity. */}
       </div>
+
+      {/* iMessage-style selection action bar — pinned above the composer on mobile/tablet/desktop. */}
+      {selectionMode && (
+        <div
+          className="fixed inset-x-0 z-40 flex items-center gap-2 border-t border-border bg-background/95 px-3 py-2 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-background/85"
+          style={{
+            bottom: 0,
+            paddingBottom: "calc(max(env(safe-area-inset-bottom), 0.5rem))",
+          }}
+        >
+          <Button type="button" variant="ghost" size="sm" className="h-9" onClick={exitSelection}>
+            Cancel
+          </Button>
+          <div className="flex-1 text-center text-sm font-semibold">
+            {selectedIds.size} selected
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-9"
+            onClick={() => {
+              if (allMineSelected) setSelectedIds(new Set());
+              else setSelectedIds(new Set(myIds));
+            }}
+            disabled={myIds.size === 0}
+          >
+            {allMineSelected ? "Deselect all" : "Select all"}
+          </Button>
+          <Button
+            type="button"
+            variant="destructive"
+            size="sm"
+            className="h-9 gap-1"
+            disabled={selectedDeletable.length === 0}
+            onClick={() => {
+              const blocked = selectedIds.size - selectedDeletable.length;
+              if (blocked > 0) toast.message(`Skipping ${blocked} message${blocked === 1 ? "" : "s"} you can't delete`);
+              setConfirmDelete({
+                ids: selectedDeletable,
+                label: `Delete ${selectedDeletable.length} message${selectedDeletable.length === 1 ? "" : "s"} for everyone?`,
+              });
+            }}
+          >
+            <Trash2 className="h-4 w-4" /> Delete ({selectedDeletable.length})
+          </Button>
+        </div>
+      )}
+
+      {/* Mobile/tablet long-press action sheet. */}
+      <Sheet open={!!sheetForId} onOpenChange={(o) => { if (!o) setSheetForId(null); }}>
+        <SheetContent
+          side="bottom"
+          className="rounded-t-2xl pb-[calc(max(env(safe-area-inset-bottom),0.75rem))]"
+        >
+          {(() => {
+            const m = visibleMessages.find((x) => x.id === sheetForId);
+            if (!m) return null;
+            const canEdit = m.sender_role === role && !m.deleted_at && (m.body?.length ?? 0) > 0;
+            const canDelete = m.sender_role === role && !m.deleted_at;
+            return (
+              <>
+                <SheetHeader className="text-left">
+                  <SheetTitle>Message actions</SheetTitle>
+                  <SheetDescription className="line-clamp-2">
+                    {m.deleted_at ? "This message was deleted." : m.body || (m.attachments?.length ? "Attachment" : "")}
+                  </SheetDescription>
+                </SheetHeader>
+                <div className="mt-3 grid gap-1">
+                  {canEdit && (
+                    <Button
+                      type="button" variant="ghost" className="h-12 justify-start text-base"
+                      onClick={() => {
+                        setEditingId(m.id); setEditingBody(m.body); setSheetForId(null);
+                      }}
+                    >
+                      <Pencil className="mr-3 h-5 w-5" /> Edit
+                    </Button>
+                  )}
+                  <Button
+                    type="button" variant="ghost" className="h-12 justify-start text-base"
+                    onClick={() => {
+                      setSheetForId(null);
+                      setSelectionMode(true);
+                      setSelectedIds(new Set(m.sender_role === role && !m.deleted_at ? [m.id] : []));
+                    }}
+                  >
+                    <CheckSquare className="mr-3 h-5 w-5" /> Select
+                  </Button>
+                  {canDelete && (
+                    <Button
+                      type="button" variant="ghost"
+                      className="h-12 justify-start text-base text-destructive hover:text-destructive"
+                      onClick={() => {
+                        setSheetForId(null);
+                        setConfirmDelete({ ids: [m.id], label: "Delete this message for everyone?" });
+                      }}
+                    >
+                      <Trash2 className="mr-3 h-5 w-5" /> Delete for everyone
+                    </Button>
+                  )}
+                  {!canEdit && !canDelete && (
+                    <div className="rounded-md bg-secondary/40 p-3 text-center text-xs text-muted-foreground">
+                      No actions available for this message.
+                    </div>
+                  )}
+                  <Button
+                    type="button" variant="outline" className="mt-2 h-11"
+                    onClick={() => setSheetForId(null)}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </>
+            );
+          })()}
+        </SheetContent>
+      </Sheet>
+
+      {/* Single/bulk delete confirmation. */}
+      <AlertDialog open={!!confirmDelete} onOpenChange={(o) => { if (!o) setConfirmDelete(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{confirmDelete?.label ?? "Delete?"}</AlertDialogTitle>
+            <AlertDialogDescription>
+              This cannot be undone. Both sides will see a "This message was deleted" placeholder.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={async () => {
+                const ids = confirmDelete?.ids ?? [];
+                setConfirmDelete(null);
+                if (ids.length === 1) {
+                  try {
+                    await deleteMessageForEveryone(ids[0]);
+                    qc.invalidateQueries({ queryKey: ["messages", clientId, role] });
+                    toast.success("Message deleted");
+                  } catch (err: any) {
+                    toast.error(err?.message ?? "Failed to delete");
+                  }
+                  return;
+                }
+                await performBulkDelete(ids);
+              }}
+            >
+              Delete for everyone
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
