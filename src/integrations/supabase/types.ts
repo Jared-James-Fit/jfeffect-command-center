@@ -446,6 +446,137 @@ export type Database = {
         }
         Relationships: []
       }
+      broadcast_recipients: {
+        Row: {
+          broadcast_id: string
+          client_id: string
+          created_at: string
+          id: string
+        }
+        Insert: {
+          broadcast_id: string
+          client_id: string
+          created_at?: string
+          id?: string
+        }
+        Update: {
+          broadcast_id?: string
+          client_id?: string
+          created_at?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "broadcast_recipients_broadcast_id_fkey"
+            columns: ["broadcast_id"]
+            isOneToOne: false
+            referencedRelation: "broadcasts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "broadcast_recipients_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      broadcast_seen: {
+        Row: {
+          broadcast_id: string
+          created_at: string
+          got_it_at: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          broadcast_id: string
+          created_at?: string
+          got_it_at?: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          broadcast_id?: string
+          created_at?: string
+          got_it_at?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "broadcast_seen_broadcast_id_fkey"
+            columns: ["broadcast_id"]
+            isOneToOne: false
+            referencedRelation: "broadcasts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      broadcasts: {
+        Row: {
+          audience_scope: string
+          author_id: string | null
+          body: string
+          created_at: string
+          expires_at: string | null
+          id: string
+          link_label: string | null
+          link_url: string | null
+          publish_at: string
+          status: string
+          title: string
+          transcript: string | null
+          type: string
+          updated_at: string
+          video_path: string | null
+          video_url: string | null
+          voice_path: string | null
+          voice_url: string | null
+        }
+        Insert: {
+          audience_scope?: string
+          author_id?: string | null
+          body?: string
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          link_label?: string | null
+          link_url?: string | null
+          publish_at?: string
+          status?: string
+          title: string
+          transcript?: string | null
+          type?: string
+          updated_at?: string
+          video_path?: string | null
+          video_url?: string | null
+          voice_path?: string | null
+          voice_url?: string | null
+        }
+        Update: {
+          audience_scope?: string
+          author_id?: string | null
+          body?: string
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          link_label?: string | null
+          link_url?: string | null
+          publish_at?: string
+          status?: string
+          title?: string
+          transcript?: string | null
+          type?: string
+          updated_at?: string
+          video_path?: string | null
+          video_url?: string | null
+          voice_path?: string | null
+          voice_url?: string | null
+        }
+        Relationships: []
+      }
       cardio_program_templates: {
         Row: {
           archived: boolean
@@ -5436,6 +5567,119 @@ export type Database = {
         }
         Relationships: []
       }
+      recipe_client_access: {
+        Row: {
+          client_id: string
+          created_at: string
+          id: string
+          recipe_id: string
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          id?: string
+          recipe_id: string
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          id?: string
+          recipe_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recipe_client_access_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recipe_client_access_recipe_id_fkey"
+            columns: ["recipe_id"]
+            isOneToOne: false
+            referencedRelation: "recipes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      recipe_notifications: {
+        Row: {
+          created_at: string
+          id: string
+          recipe_id: string
+          seen_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          recipe_id: string
+          seen_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          recipe_id?: string
+          seen_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recipe_notifications_recipe_id_fkey"
+            columns: ["recipe_id"]
+            isOneToOne: false
+            referencedRelation: "recipes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      recipes: {
+        Row: {
+          access_scope: string
+          author_id: string | null
+          body: string
+          category: string
+          created_at: string
+          id: string
+          published_at: string | null
+          status: string
+          tags: string[]
+          title: string
+          updated_at: string
+          video_url: string | null
+        }
+        Insert: {
+          access_scope?: string
+          author_id?: string | null
+          body?: string
+          category?: string
+          created_at?: string
+          id?: string
+          published_at?: string | null
+          status?: string
+          tags?: string[]
+          title: string
+          updated_at?: string
+          video_url?: string | null
+        }
+        Update: {
+          access_scope?: string
+          author_id?: string | null
+          body?: string
+          category?: string
+          created_at?: string
+          id?: string
+          published_at?: string | null
+          status?: string
+          tags?: string[]
+          title?: string
+          updated_at?: string
+          video_url?: string | null
+        }
+        Relationships: []
+      }
       signnow_settings: {
         Row: {
           access_token_expires_at: string | null
@@ -5680,6 +5924,14 @@ export type Database = {
           msg_id: number
           read_ct: number
         }[]
+      }
+      user_can_see_broadcast: {
+        Args: { _broadcast_id: string; _user_id: string }
+        Returns: boolean
+      }
+      user_can_see_recipe: {
+        Args: { _recipe_id: string; _user_id: string }
+        Returns: boolean
       }
     }
     Enums: {
