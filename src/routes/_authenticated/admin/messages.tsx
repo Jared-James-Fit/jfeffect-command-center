@@ -236,15 +236,17 @@ function MessagesInbox() {
                 selectedId === client.id && "bg-secondary/60",
               )}
             >
-              <UserAvatar
-                src={client.profile_picture_url}
-                name={client.full_name}
-                size={44}
-                ring
-              />
-              {isClientActive((client as any).last_active_at) && (
-                <span className="pointer-events-none absolute -ml-3 mt-7"><LiveDot /></span>
-              )}
+              <span className="relative shrink-0">
+                <UserAvatar
+                  src={client.profile_picture_url}
+                  name={client.full_name}
+                  size={44}
+                  ring
+                />
+                {isClientActive((client as any).last_active_at) && (
+                  <span className="absolute bottom-0 right-0"><LiveDot /></span>
+                )}
+              </span>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center justify-between gap-2">
                   <span className={cn("truncate text-sm", unread > 0 ? "font-bold" : "font-semibold")}>
@@ -300,12 +302,17 @@ function MessagesInbox() {
               >
                 <ChevronLeft className="h-5 w-5" />
               </Button>
-              <UserAvatar
-                src={selected.profile_picture_url}
-                name={selected.full_name}
-                size={40}
-                ring
-              />
+              <span className="relative shrink-0">
+                <UserAvatar
+                  src={selected.profile_picture_url}
+                  name={selected.full_name}
+                  size={40}
+                  ring
+                />
+                {(selectedClientLive || isClientActive((selected as any).last_active_at)) && (
+                  <span className="absolute bottom-0 right-0"><LiveDot /></span>
+                )}
+              </span>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-1.5 truncate text-sm font-bold">
                   <span className="truncate">{selected.full_name}</span>
