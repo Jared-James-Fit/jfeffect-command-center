@@ -241,6 +241,19 @@ export function ClientLiftVideoUploader({ clientId, clientName, userId, onSaved 
     });
   };
 
+  // Revoke any outstanding object URLs on unmount to avoid leaks.
+  const clipsRef = useRef<Clip[]>([]);
+  useEffect(() => { clipsRef.current = clips; }, [clips]);
+  useEffect(() => {
+    return () => {
+      for (const c of clipsRef.current) {
+        if (c.previewUrl) {
+          try { URL.revokeObjectURL(c.previewUrl); } catch { /* noop */ }
+        }
+      }
+    };
+  }, []);
+
   const updateClipNote = (id: string, note: string) => {
     setClips((c) => c.map((k) => (k.id === id ? { ...k, note } : k)));
   };
@@ -464,19 +477,34 @@ export function ClientLiftVideoUploader({ clientId, clientName, userId, onSaved 
                       className="block h-full w-full text-left"
                       aria-label={`Select clip ${idx + 1}`}
                     >
-                      {clip.kind === "file" && clip.previewUrl ? (
+                      {clip.kind === "file" && clip.previewUrl && clip.isImage ? (
+                        <img
+                          src={clip.previewUrl}
+                          alt={clip.file?.name || `Clip ${idx + 1}`}
+                          className="h-full w-full object-cover"
+                          loading="lazy"
+                          decoding="async"
+                          draggable={false}
+                          onError={() => {
+                            setClips((cs) => cs.map((k) => k.id === clip.id ? { ...k, previewStatus: "failed" } : k));
+                          }}
+                        />
+                      ) : clip.kind === "file" && clip.previewUrl ? (
                         <video
                           src={`${clip.previewUrl}#t=0.1`}
                           className="h-full w-full object-cover"
                           muted
                           playsInline
-                          preload="none"
+                          preload="metadata"
+                          onError={() => {
+                            setClips((cs) => cs.map((k) => k.id === clip.id ? { ...k, previewStatus: "failed" } : k));
+                          }}
                         />
                       ) : clip.kind === "file" ? (
                         <div className="flex h-full w-full flex-col items-center justify-center gap-1 bg-gradient-to-br from-muted to-muted/60 px-2 text-center">
                           <Film className="h-5 w-5 text-muted-foreground/70" />
                           <span className="text-[9px] font-medium text-muted-foreground">
-                            {clip.previewStatus === "failed" ? "Preview unavailable" : "Selected"}
+                            {clip.previewStatus === "failed" ? "Preview unavailable" : "Preview loading…"}
                           </span>
                         </div>
                       ) : (
