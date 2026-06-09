@@ -403,6 +403,14 @@ function MessagesInbox() {
               peerName={selected.full_name}
               peerAvatarPath={selected.profile_picture_url}
             />
+            <SendSmsDialog
+              open={smsOpen}
+              onOpenChange={setSmsOpen}
+              clientId={selected.id}
+              clientName={selected.full_name}
+              firstName={(selected as any).first_name}
+              phone={(selected as any).phone}
+            />
           </>
         ) : (
           <div className="grid flex-1 place-items-center text-sm text-muted-foreground">
