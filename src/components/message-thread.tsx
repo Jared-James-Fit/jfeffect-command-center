@@ -1420,6 +1420,22 @@ export function MessageThread({
                       <Pencil className="mr-3 h-5 w-5" /> Edit
                     </Button>
                   )}
+                  {!m.deleted_at && (m.body?.length ?? 0) > 0 && (
+                    <Button
+                      type="button" variant="ghost" className="h-12 justify-start text-base"
+                      onClick={async () => {
+                        try {
+                          await navigator.clipboard.writeText(m.body || "");
+                          toast.success("Copied to clipboard");
+                        } catch {
+                          toast.error("Couldn't copy");
+                        }
+                        setSheetForId(null);
+                      }}
+                    >
+                      <Copy className="mr-3 h-5 w-5" /> Copy Text
+                    </Button>
+                  )}
                   <Button
                     type="button" variant="ghost" className="h-12 justify-start text-base"
                     onClick={() => {
