@@ -168,8 +168,8 @@ function AdminDashboard() {
     queryKey: ["dashboard-action-requests"],
     queryFn: async () => (await supabase
       .from("client_action_requests")
-      .select("id, client_id, status, completed_at, clients(id, full_name)")
-      .neq("status", "Archived").is("completed_at", null).limit(50)).data ?? [],
+      .select("id, client_id, completed_at, clients(id, full_name)")
+      .is("completed_at", null).limit(50)).data ?? [],
   });
 
   const { data: checkInSubmissions = [] } = useQuery({
@@ -227,8 +227,9 @@ function AdminDashboard() {
 
   // Birthdays today
   const birthdaysToday = clients.filter((c) => {
-    if (!c.birth_date) return false;
-    const b = new Date(c.birth_date as any);
+    const dob = (c as any).date_of_birth;
+    if (!dob) return false;
+    const b = new Date(dob);
     return b.getMonth() === today.getMonth() && b.getDate() === today.getDate();
   });
 
