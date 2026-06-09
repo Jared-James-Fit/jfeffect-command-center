@@ -25,6 +25,7 @@ import { copyRows, useClip } from "@/lib/program-builder-clipboard";
 import { createContext, useContext } from "react";
 import { listClientMaxes, buildMaxIndex, computeRowLoad, type ClientMaxRow } from "@/lib/pl-maxes";
 import { MaxEditorDialog } from "@/components/client-maxes-panel";
+import { BlockMaxesButton } from "@/components/block-maxes-panel";
 import { AlertCircle as PbAlertCircle, Calculator as PbCalculator } from "lucide-react";
 
 // ---- Client-max context shared by RowEditor regardless of nesting depth ----
@@ -426,7 +427,10 @@ export function StructureCanvas({ type, payload, setP, exercises, appendRowToFir
             <Maximize2 className="h-3 w-3" />
           </Button>
         </div>
-        {toolbarExtras && <div className="ml-auto inline-flex items-center gap-1.5">{toolbarExtras}</div>}
+        <div className="ml-auto inline-flex items-center gap-1.5">
+          <BlockMaxesButton clientId={clientId ?? null} blockId={blockId ?? null} />
+          {toolbarExtras}
+        </div>
       </div>
 
       <div className="flex h-[calc(100vh-150px)] gap-0 overflow-hidden">
@@ -525,6 +529,7 @@ function FullPrepEditor({ payload, setPayload, exercises, compact }: any) {
 export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact }: { weeksData: any[]; setWeeksData: (wd: any[]) => void; exercises: any[]; compact?: boolean }) {
   const [activeIdx, setActiveIdx] = useState(0);
   const [view, setView] = useState<"block" | "week">("block");
+  const { clientId: ctxClientId, blockId: ctxBlockId } = useClientMaxesCtx();
   const weekStats = useMemo(() => weeksData.map((w: any) => {
     const days = w.days || [];
     let rowCount = 0;
@@ -600,6 +605,7 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
             <Copy className="mr-1 h-3 w-3" /> Copy Week 1 → all weeks
           </Button>
         )}
+        <BlockMaxesButton clientId={ctxClientId} blockId={ctxBlockId} />
         <Button size="sm" variant="ghost" className="ml-auto" onClick={addWeek}>
           <Plus className="mr-1 h-3 w-3" /> Add week
         </Button>
