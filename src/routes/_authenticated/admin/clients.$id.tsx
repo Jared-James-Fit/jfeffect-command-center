@@ -440,7 +440,36 @@ function ClientDetail() {
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2"><Label>Full name</Label><Input value={form.full_name ?? ""} onChange={(e) => set("full_name", e.target.value)} /></div>
             <div><Label>Email</Label><Input value={form.email ?? ""} onChange={(e) => set("email", e.target.value)} /></div>
-            <div><Label>Phone</Label><Input value={form.phone ?? ""} onChange={(e) => set("phone", e.target.value)} /></div>
+            <div>
+              <Label>Phone</Label>
+              <Input value={form.phone ?? ""} onChange={(e) => set("phone", e.target.value)} />
+              <label className="mt-2 flex items-center justify-between gap-2 rounded-md border border-border bg-secondary/30 px-3 py-2 text-xs">
+                <span>
+                  <span className="font-semibold">In-app call access</span>
+                  <span className="block text-[10px] text-muted-foreground">
+                    Shows a Call button in chat for admins & the assigned coach.
+                  </span>
+                </span>
+                <Switch
+                  checked={!!form.call_access_enabled}
+                  onCheckedChange={async (v) => {
+                    set("call_access_enabled", v);
+                    const { error } = await supabase
+                      .from("clients")
+                      .update({ call_access_enabled: v })
+                      .eq("id", id);
+                    if (error) {
+                      toast.error(error.message);
+                      set("call_access_enabled", !v);
+                    } else {
+                      toast.success(v ? "Call access enabled" : "Call access disabled");
+                      qc.invalidateQueries({ queryKey: ["client", id] });
+                      qc.invalidateQueries({ queryKey: ["clients-min"] });
+                    }
+                  }}
+                />
+              </label>
+            </div>
             <div><Label>Instagram</Label><Input value={form.instagram ?? ""} onChange={(e) => set("instagram", e.target.value)} /></div>
             <div><Label>Start date</Label><Input type="date" value={form.start_date ?? ""} onChange={(e) => set("start_date", e.target.value || null)} /></div>
             <div><Label>Renewal date</Label><Input type="date" value={form.renewal_date ?? ""} onChange={(e) => set("renewal_date", e.target.value || null)} /></div>
