@@ -18,6 +18,7 @@ import { inviteClient, deleteClient, getSetupLink, getPasswordResetLink, sendPas
 import { deactivateClient, reactivateClient, DEACTIVATION_REASONS } from "@/lib/client-deactivation.functions";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { TrainingPhasesPanel } from "@/components/training-phases-panel";
+import { ClientMaxesPanel } from "@/components/client-maxes-panel";
 import { ImportantDatesPanel } from "@/components/important-dates-panel";
 import { PtSessionsPanel } from "@/components/pt-sessions-panel";
 import { NutritionTargetsPanel } from "@/components/nutrition-targets-panel";
@@ -549,6 +550,7 @@ function ClientDetail() {
           <TrainingPhasesPanel clientId={id} />
           <ImportantDatesPanel clientId={id} />
           <ClientExerciseNotesCard clientId={id} />
+          <ClientMaxesPanel clientId={id} />
         </TabsContent>
 
         <TabsContent value="nutrition" className="grid gap-6 md:grid-cols-3">
