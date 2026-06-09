@@ -867,6 +867,12 @@ function DayEditor({ day, setDay, exercises, compact }: { day: any; setDay: (d: 
 }
 
 function RowEditor({ row, setRow, onDelete, exercises, compact }: { row: any; setRow: (r: any) => void; onDelete?: () => void; exercises: any[]; compact?: boolean }) {
+  const Field = ({ label, className, children }: { label: string; className?: string; children: React.ReactNode }) => (
+    <div className={cn("flex flex-col gap-0.5 min-w-0", className)}>
+      <span className="px-0.5 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground leading-none">{label}</span>
+      {children}
+    </div>
+  );
   const exName = (exercises as any[]).find((e) => e.id === row.exercise_id)?.name ?? row.exercise_name_override ?? "";
   const accent = movementAccent(exName);
   const [expanded, setExpanded] = useState(!compact);
