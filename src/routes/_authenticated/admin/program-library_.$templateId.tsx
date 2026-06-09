@@ -880,6 +880,22 @@ function RowEditor({ row, setRow, onDelete, exercises, compact }: { row: any; se
   const h = compact ? "h-7" : "h-8";
   const { clientId, blockId, index: maxesIndex, maxes, refresh } = useClientMaxesCtx();
   const [maxEditor, setMaxEditor] = useState<any>(null);
+  // Derive a clear "load mode" from the existing basis field.
+  const loadMode: "pct" | "manual" | "none" =
+    row.percentage_basis === "none" ? "none"
+    : (!row.percentage_basis || row.percentage_basis === "manual") ? "manual"
+    : "pct";
+  const rowUnit: "kg" | "lb" = row.load_unit === "lb" ? "lb" : "kg";
+  const setLoadMode = (mode: "pct" | "manual" | "none") => {
+    if (mode === "manual") {
+      setRow({ ...row, percentage_basis: "manual", percentage: null, manual_override: false });
+    } else if (mode === "none") {
+      setRow({ ...row, percentage_basis: "none", percentage: null, load_kg: null, load_lb: null, manual_override: false });
+    } else {
+      // Switch back to % — default to training_max if no basis previously.
+      setRow({ ...row, percentage_basis: row.percentage_basis && row.percentage_basis !== "manual" && row.percentage_basis !== "none" ? row.percentage_basis : "training_max", manual_override: false });
+    }
+  };
   const computed = useMemo(() => {
     if (!clientId) return null;
     return computeRowLoad({
@@ -888,10 +904,20 @@ function RowEditor({ row, setRow, onDelete, exercises, compact }: { row: any; se
       percentage: row.percentage ? Number(row.percentage) : null,
       manualLoadKg: row.load_kg ? Number(row.load_kg) : null,
       manualLoadLb: row.load_lb ? Number(row.load_lb) : null,
-      unit: "kg",
+      unit: rowUnit,
       maxesIndex,
     });
-  }, [clientId, exName, row.percentage, row.percentage_basis, row.load_kg, row.load_lb, maxesIndex]);
+  }, [clientId, exName, row.percentage, row.percentage_basis, row.load_kg, row.load_lb, rowUnit, maxesIndex]);
+  const overrideCalculated = () => {
+    if (!computed || computed.status !== "ok" || computed.load == null) return;
+    const patch: any = { ...row, manual_override: true, override_of_pct: row.percentage };
+    if (rowUnit === "kg") patch.load_kg = computed.load;
+    else patch.load_lb = computed.load;
+    setRow(patch);
+  };
+  const clearOverride = () => {
+    setRow({ ...row, manual_override: false, load_kg: null, load_lb: null });
+  };
   return (
     <div className={cn("relative overflow-hidden rounded-md border border-border bg-secondary/20 pl-3", compact ? "p-1.5 space-y-1" : "p-2 space-y-1")}>
       <div className={`absolute left-0 top-0 h-full w-1.5 ${accent}`} aria-hidden />
@@ -937,22 +963,53 @@ function RowEditor({ row, setRow, onDelete, exercises, compact }: { row: any; se
       </div>
       {expanded && (
       <div className="grid grid-cols-12 items-end gap-1">
-        <Field className="col-span-3" label="Load basis">
+        <Field className="col-span-3" label="Load mode">
+          <div className="inline-flex rounded-md border border-border p-0.5">
+            <button type="button" onClick={() => setLoadMode("pct")} className={cn("rounded px-1.5 py-0.5 text-[10px] font-semibold", loadMode === "pct" ? "bg-primary text-primary-foreground" : "text-muted-foreground")}>%</button>
+            <button type="button" onClick={() => setLoadMode("manual")} className={cn("rounded px-1.5 py-0.5 text-[10px] font-semibold", loadMode === "manual" ? "bg-primary text-primary-foreground" : "text-muted-foreground")}>Manual</button>
+            <button type="button" onClick={() => setLoadMode("none")} className={cn("rounded px-1.5 py-0.5 text-[10px] font-semibold", loadMode === "none" ? "bg-primary text-primary-foreground" : "text-muted-foreground")}>No load</button>
+          </div>
+        </Field>
+        {loadMode === "pct" && (
+        <Field className="col-span-3" label="Basis">
           <Select value={row.percentage_basis ?? "manual"} onValueChange={(v) => setRow({ ...row, percentage_basis: v })}>
             <SelectTrigger className={cn("text-xs", h)}><SelectValue /></SelectTrigger>
-            <SelectContent>{PERCENTAGE_BASES.map((p) => <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>)}</SelectContent>
+            <SelectContent>{PERCENTAGE_BASES.filter((p) => p.value !== "none" && p.value !== "manual").map((p) => <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>)}</SelectContent>
           </Select>
         </Field>
+        )}
+        {loadMode === "pct" && (
         <Field className="col-span-1" label="%">
           <Input className={cn("text-xs", h)} inputMode="decimal" placeholder="75" value={row.percentage ?? ""} onChange={(e) => setRow({ ...row, percentage: parseFloat(e.target.value) || null })} />
         </Field>
-        <Field className="col-span-2" label="Load (kg)">
-          <Input className={cn("text-xs", h)} inputMode="decimal" placeholder="100" value={row.load_kg ?? ""} onChange={(e) => setRow({ ...row, load_kg: parseFloat(e.target.value) || null })} />
+        )}
+        {loadMode !== "none" && (
+        <Field className={cn(loadMode === "pct" ? "col-span-2" : "col-span-3")} label={`Load (${rowUnit})`}>
+          <div className="flex gap-1">
+            <Input
+              className={cn("text-xs flex-1", h)}
+              inputMode="decimal"
+              placeholder={loadMode === "pct" ? "auto" : "100"}
+              value={rowUnit === "kg" ? (row.load_kg ?? "") : (row.load_lb ?? "")}
+              onChange={(e) => {
+                const v = parseFloat(e.target.value) || null;
+                setRow({ ...row, [rowUnit === "kg" ? "load_kg" : "load_lb"]: v });
+              }}
+            />
+            <Select value={rowUnit} onValueChange={(v) => setRow({ ...row, load_unit: v })}>
+              <SelectTrigger className={cn("w-[52px] text-[11px] px-1.5", h)}><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="kg">kg</SelectItem>
+                <SelectItem value="lb">lb</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </Field>
+        )}
         <Field className="col-span-2" label="Tempo">
           <Input className={cn("text-xs", h)} placeholder="3-1-1" value={row.tempo ?? ""} onChange={(e) => setRow({ ...row, tempo: e.target.value })} />
         </Field>
-        <Field className="col-span-4" label="Type">
+        <Field className={cn(loadMode === "none" ? "col-span-5" : "col-span-3")} label="Type">
           <Select value={row.time_profile ?? "accessory_compound"} onValueChange={(v) => setRow({ ...row, time_profile: v })}>
             <SelectTrigger className={cn("text-xs", h)}><SelectValue /></SelectTrigger>
             <SelectContent>{TIME_PROFILES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}</SelectContent>
@@ -960,14 +1017,33 @@ function RowEditor({ row, setRow, onDelete, exercises, compact }: { row: any; se
         </Field>
       </div>
       )}
+      {expanded && row.manual_override && (
+        <div className="flex flex-wrap items-center gap-2 text-[11px]">
+          <span className="inline-flex items-center gap-1 rounded-md bg-amber-500/15 px-2 py-0.5 font-semibold text-amber-600 dark:text-amber-400">
+            Manual override
+            {row.override_of_pct && <span className="text-muted-foreground">(was {row.override_of_pct}%)</span>}
+          </span>
+          <button onClick={clearOverride} className="text-[10px] underline text-muted-foreground hover:text-foreground">Remove override</button>
+        </div>
+      )}
+      {expanded && loadMode === "none" && (
+        <p className="text-[11px] text-muted-foreground italic">Client logs the load used — no target prescribed.</p>
+      )}
       {expanded && clientId && computed && computed.status !== "manual" && (
         <div className="flex flex-wrap items-center gap-1.5 pt-0.5 text-[11px]">
           {computed.status === "ok" && (
+            <>
             <span className="inline-flex items-center gap-1 rounded-md bg-emerald-500/10 px-2 py-0.5 font-mono text-emerald-700 dark:text-emerald-400">
               <PbCalculator className="h-3 w-3" />
               {row.percentage}% {computed.baseLabel} = <strong>{computed.load} {computed.unit}</strong>
               <span className="text-muted-foreground">(of {computed.base?.toFixed(1)})</span>
             </span>
+            {!row.manual_override && (
+              <Button size="sm" variant="outline" className="h-6 px-2 text-[10px]" onClick={overrideCalculated} title="Replace the calculated load with a fixed manual value for this row only">
+                Override
+              </Button>
+            )}
+            </>
           )}
           {computed.status === "no-max" && (
             <>
