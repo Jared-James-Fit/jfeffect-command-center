@@ -3,7 +3,7 @@ import { Link, useRouterState, useNavigate } from "@tanstack/react-router";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import {
-  LogOut, ChevronLeft, ChevronRight, ChevronDown, Search, Settings as SettingsIcon, ArrowLeft,
+  LogOut, ChevronLeft, ChevronRight, ChevronDown, Search, Settings as SettingsIcon, ArrowLeft, MoreHorizontal,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { NotificationBell } from "@/components/notification-bell";
@@ -19,6 +19,8 @@ import {
 import {
   CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList,
 } from "@/components/ui/command";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Input } from "@/components/ui/input";
 
 export interface NavItem {
   to: string;
@@ -110,6 +112,9 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
   const [mode, setMode] = useSidebarMode();
   const [collapsedSections, toggleSection] = useCollapsedSections();
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [moreQuery, setMoreQuery] = useState("");
+  const [moreOpenGroup, setMoreOpenGroup] = useState<string | null>(null);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -156,6 +161,13 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
 
   const grouped = useMemo(() => groupNavItems(items), [items]);
   const bottomItems = customBottomItems ?? items.slice(0, 5);
+  // Sections that contain the currently active route should auto-open.
+  const activeGroupLabel = useMemo(() => {
+    for (const g of grouped) {
+      if (g.label && g.items.some((i) => i.to === activeTo)) return g.label;
+    }
+    return null;
+  }, [grouped, activeTo]);
   const accountHref =
     items.find((i) => i.to.endsWith("/account") || i.to.endsWith("/account-settings"))?.to ??
     "/admin/account";
@@ -173,6 +185,25 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
   const cycleMode = () => {
     setMode(mode === "expanded" ? "compact" : mode === "compact" ? "collapsed" : "expanded");
   };
+
+  // Open the active group when the More sheet opens, or when route changes.
+  useEffect(() => {
+    if (moreOpen) setMoreOpenGroup(activeGroupLabel);
+  }, [moreOpen, activeGroupLabel]);
+
+  const moreFiltered = useMemo(() => {
+    const q = moreQuery.trim().toLowerCase();
+    if (!q) return null;
+    const results: { item: NavItem; group: string }[] = [];
+    for (const g of grouped) {
+      for (const it of g.items) {
+        if (it.label.toLowerCase().includes(q)) {
+          results.push({ item: it, group: g.label ?? "" });
+        }
+      }
+    }
+    return results;
+  }, [moreQuery, grouped]);
 
   return (
     <TooltipProvider delayDuration={250}>
