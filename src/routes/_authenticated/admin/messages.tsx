@@ -167,7 +167,7 @@ function MessagesInbox() {
   return (
     <div
       className="fixed inset-x-0 top-0 z-30 flex bg-background md:static md:inset-auto md:z-auto md:h-full md:flex-1"
-      style={{ height: "100dvh" }}
+      style={{ height: "calc(100dvh - var(--bottom-nav-clearance, 0px))" }}
     >
       {/* Inbox sidebar */}
       <aside
