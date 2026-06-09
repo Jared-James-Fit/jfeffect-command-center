@@ -757,6 +757,29 @@ export function MessageThread({
     return null;
   }, [visibleMessages, role]);
 
+  // First incoming message that was unread when this thread opened — used
+  // to render an iMessage-style "New messages" divider so unread items are
+  // still distinguishable after the auto mark-read fires.
+  const initialUnreadFirstIdRef = useRef<string | null>(null);
+  const initialUnreadCapturedRef = useRef(false);
+  useEffect(() => {
+    if (initialUnreadCapturedRef.current) return;
+    if (!visibleMessages.length) return;
+    initialUnreadCapturedRef.current = true;
+    const oppRole: SenderRole = role === "admin" ? "client" : "admin";
+    const first = visibleMessages.find((m) =>
+      m.sender_role === oppRole &&
+      !m.is_internal_note &&
+      !(role === "admin" ? m.read_by_admin_at : m.read_by_client_at),
+    );
+    initialUnreadFirstIdRef.current = first?.id ?? null;
+  }, [visibleMessages, role]);
+  // Reset divider when switching conversations.
+  useEffect(() => {
+    initialUnreadCapturedRef.current = false;
+    initialUnreadFirstIdRef.current = null;
+  }, [clientId]);
+
   // ---------- Long-press + selection helpers ----------
   const startLongPress = (id: string, x: number, y: number) => {
     if (longPressRef.current?.t) clearTimeout(longPressRef.current.t);
