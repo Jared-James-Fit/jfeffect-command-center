@@ -52,6 +52,7 @@ export const adminNav: NavItem[] = [
   { to: "/admin/settings", label: "Settings", icon: Settings, group: "Account" },
   { to: "/admin/settings/chat", label: "Chat Settings", icon: MessageCircle, group: "Account" },
   { to: "/admin/chat-gifs", label: "Chat GIF Library", icon: Sparkles, group: "Account" },
+  { to: "/admin/chat-sounds", label: "Chat Sound Library", icon: Sparkles, group: "Account" },
 ];
 
 // Coach navigation: same client-coaching tools as admin, without business/admin sections.
