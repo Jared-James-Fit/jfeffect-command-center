@@ -5,6 +5,7 @@ import { usePortalUserId } from "@/lib/client-impersonation";
 import { Card } from "@/components/ui/card";
 import { MessageThread } from "@/components/message-thread";
 import { NotificationBell } from "@/components/notification-bell";
+import { useChatPresence, LiveDot } from "@/hooks/use-chat-presence";
 
 export const Route = createFileRoute("/_authenticated/portal/messages")({
   component: ClientMessages,
@@ -22,6 +23,8 @@ function ClientMessages() {
     },
   });
 
+  const { peerLive: coachLive } = useChatPresence(client?.id ?? null, "client");
+
   return (
     <div
       className="fixed inset-x-0 top-0 z-30 flex flex-col bg-background md:static md:inset-auto md:z-auto md:h-full md:flex-1"
@@ -36,14 +39,25 @@ function ClientMessages() {
         className="flex items-center gap-3 border-b border-border bg-card/80 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-card/60 md:px-6"
         style={{ paddingTop: "max(env(safe-area-inset-top), 0.75rem)" }}
       >
-        <img
-          src="/logo.png"
-          alt="Coach Jared"
-          className="h-10 w-10 shrink-0 rounded-full object-cover ring-1 ring-border"
-        />
+        <span className="relative shrink-0">
+          <img
+            src="/logo.png"
+            alt="Coach Jared"
+            className="h-10 w-10 rounded-full object-cover ring-1 ring-border"
+          />
+          {coachLive && (
+            <span className="absolute bottom-0 right-0"><LiveDot /></span>
+          )}
+        </span>
         <div className="min-w-0 flex-1">
           <div className="truncate text-sm font-black tracking-tight">Coach Jared</div>
-          <div className="truncate text-[11px] text-muted-foreground">Direct line · usually replies within a day</div>
+          <div className="truncate text-[11px] text-muted-foreground">
+            {coachLive ? (
+              <span className="font-semibold text-emerald-600">● Live in chat</span>
+            ) : (
+              "Direct line · usually replies within a day"
+            )}
+          </div>
         </div>
         <NotificationBell />
       </header>
