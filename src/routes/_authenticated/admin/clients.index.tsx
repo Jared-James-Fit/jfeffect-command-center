@@ -160,6 +160,20 @@ function ClientsPage() {
     },
   });
 
+  const { data: blocksAll = [] } = useQuery({
+    queryKey: ["pl-blocks", "all-clients"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("pl_blocks")
+        .select("id, client_id, name, status, start_date, end_date, weeks, sort_order, archived, training_focus")
+        .eq("archived", false)
+        .neq("status", "Archived")
+        .order("sort_order", { ascending: true })
+        .order("created_at", { ascending: true });
+      return data ?? [];
+    },
+  });
+
   const { data: convStates = [] } = useQuery({
     queryKey: ["conversation-states"],
     queryFn: async () => {
@@ -208,6 +222,37 @@ function ClientsPage() {
     }
     return m;
   }, [cardTargets]);
+
+  const blocksByClient = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const map = new Map<string, { current?: any; next?: any }>();
+    const byClient = new Map<string, any[]>();
+    for (const b of blocksAll as any[]) {
+      const list = byClient.get(b.client_id) ?? [];
+      list.push(b);
+      byClient.set(b.client_id, list);
+    }
+    for (const [cid, list] of byClient.entries()) {
+      const current = list.find((b) => b.status === "Active")
+        ?? list.find((b) => {
+          if (!b.start_date || !b.end_date) return false;
+          const s = new Date(b.start_date); const e = new Date(b.end_date);
+          return s <= today && today <= e;
+        });
+      const next = list
+        .filter((b) => b !== current)
+        .filter((b) => b.status === "Planned" || b.status === "Draft" || (b.start_date && new Date(b.start_date) > today))
+        .sort((a, b) => {
+          const ad = a.start_date ? new Date(a.start_date).getTime() : Number.POSITIVE_INFINITY;
+          const bd = b.start_date ? new Date(b.start_date).getTime() : Number.POSITIVE_INFINITY;
+          if (ad !== bd) return ad - bd;
+          return (a.sort_order ?? 0) - (b.sort_order ?? 0);
+        })[0];
+      map.set(cid, { current, next });
+    }
+    return map;
+  }, [blocksAll]);
 
   const msgInfoByClient = useMemo(() => {
     const stateMap = new Map(convStates.map((s) => [s.client_id, s]));
@@ -281,6 +326,8 @@ function ClientsPage() {
                     <th className="px-4 py-3">Type</th>
                     <th className="px-4 py-3 min-w-[260px]">Current Phase</th>
                     <th className="px-4 py-3">Next Phase</th>
+                    <th className="px-4 py-3 min-w-[180px]">Assigned Training</th>
+                    <th className="px-4 py-3 min-w-[160px]">Next Assigned Training</th>
                     <th className="px-4 py-3">Nutrition</th>
                     <th className="px-4 py-3">Cardio</th>
                     <th className="px-4 py-3">Payment</th>
