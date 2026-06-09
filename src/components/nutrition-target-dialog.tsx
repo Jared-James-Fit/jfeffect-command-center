@@ -199,7 +199,10 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
           <div><Label>Start date</Label><Input type="date" value={form.start_date} onChange={(e) => set("start_date", e.target.value)} /></div>
           <div><Label>End date</Label><Input type="date" value={form.end_date} onChange={(e) => set("end_date", e.target.value)} /></div>
           <div><Label>Ending soon (days)</Label><Input type="number" value={form.ending_soon_days} onChange={(e) => set("ending_soon_days", e.target.value)} /></div>
-          <div><Label>Water target</Label><Input placeholder="e.g. 2000 ml or 2 litres" value={form.water ?? ""} onChange={(e) => set("water", e.target.value)} /></div>
+          <div>
+            <Label>Water target</Label>
+            <WaterTargetInput value={form.water ?? ""} onChange={(v) => set("water", v)} />
+          </div>
           <div className="flex items-center justify-between rounded-md border border-border bg-secondary/30 px-3 py-2 md:col-span-2">
             <Label className="text-xs">Visible to client</Label>
             <Switch checked={form.visible_to_client} onCheckedChange={(v) => set("visible_to_client", v)} />
