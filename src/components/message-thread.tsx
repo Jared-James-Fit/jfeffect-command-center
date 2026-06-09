@@ -835,8 +835,14 @@ export function MessageThread({
                 "flex items-end gap-2",
                 mine ? "justify-end" : "justify-start",
                 selectionMode && "cursor-pointer",
-                (reactionsByMsg.get(m.id)?.length ?? 0) > 0 && "pb-3",
-                mine && !isDeleted && m.id === lastOwnMessageId && !selectionMode && "pb-4",
+                (() => {
+                  const hasR = (reactionsByMsg.get(m.id)?.length ?? 0) > 0;
+                  const hasReceipt = mine && !isDeleted && m.id === lastOwnMessageId && !selectionMode;
+                  if (hasR && hasReceipt) return "pb-8";
+                  if (hasR) return "pb-3";
+                  if (hasReceipt) return "pb-4";
+                  return "";
+                })(),
               )}
               onClick={() => { if (selectionMode && canModify) toggleSelected(m.id); }}
             >
