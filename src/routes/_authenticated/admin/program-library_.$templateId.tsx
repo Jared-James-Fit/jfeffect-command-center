@@ -927,6 +927,48 @@ function RowEditor({ row, setRow, onDelete, exercises, compact }: { row: any; se
         </Select>
       </div>
       )}
+      {expanded && clientId && computed && computed.status !== "manual" && (
+        <div className="flex flex-wrap items-center gap-1.5 pt-0.5 text-[11px]">
+          {computed.status === "ok" && (
+            <span className="inline-flex items-center gap-1 rounded-md bg-emerald-500/10 px-2 py-0.5 font-mono text-emerald-700 dark:text-emerald-400">
+              <PbCalculator className="h-3 w-3" />
+              {row.percentage}% {computed.baseLabel} = <strong>{computed.load} {computed.unit}</strong>
+              <span className="text-muted-foreground">(of {computed.base?.toFixed(1)})</span>
+            </span>
+          )}
+          {computed.status === "no-max" && (
+            <>
+              <span className="inline-flex items-center gap-1 rounded-md bg-warning/15 px-2 py-0.5 text-warning">
+                <PbAlertCircle className="h-3 w-3" /> No max set for "{exName}"
+              </span>
+              <Button
+                size="sm" variant="outline" className="h-6 px-2 text-[10px]"
+                onClick={() => setMaxEditor({
+                  client_id: clientId, lift: exName, unit: "kg",
+                  source: "manual", active: true, rounding_mode: "nearest", rounding_step: 2.5,
+                })}
+              >
+                <Plus className="mr-0.5 h-3 w-3" /> Set Max
+              </Button>
+            </>
+          )}
+          {computed.status === "no-percentage" && (
+            <span className="text-muted-foreground">Enter a % to compute load</span>
+          )}
+          {computed.status === "needs-link" && (
+            <span className="text-muted-foreground">Linked-row basis — set on the row this references</span>
+          )}
+        </div>
+      )}
+      {maxEditor && (
+        <MaxEditorDialog
+          clientId={clientId!}
+          value={maxEditor}
+          existing={maxes}
+          onClose={() => setMaxEditor(null)}
+          onSaved={() => { setMaxEditor(null); refresh(); }}
+        />
+      )}
     </div>
   );
 }
