@@ -666,6 +666,39 @@ export function MessageThread({
     });
   };
   const exitSelection = () => { setSelectionMode(false); setSelectedIds(new Set()); };
+
+  // Horizontal-swipe gesture: when user drags left, slide bubbles to reveal
+  // exact timestamps on the right edge. Vertical scroll wins ties so the
+  // chat keeps scrolling naturally; back-gesture (right-edge swipe) is left
+  // alone because we only react to leftward dx.
+  const onSwipeTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length !== 1) return;
+    const t = e.touches[0];
+    swipeRef.current = { x: t.clientX, y: t.clientY, decided: false, horizontal: false };
+  };
+  const onSwipeTouchMove = (e: React.TouchEvent) => {
+    const s = swipeRef.current;
+    if (!s || e.touches.length !== 1) return;
+    const t = e.touches[0];
+    const dx = t.clientX - s.x;
+    const dy = t.clientY - s.y;
+    if (!s.decided) {
+      if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
+      // Only activate for a clear leftward horizontal drag.
+      s.horizontal = dx < -6 && Math.abs(dx) > Math.abs(dy) * 1.4;
+      s.decided = true;
+      if (s.horizontal) cancelLongPress();
+    }
+    if (s.horizontal) {
+      const clamped = Math.max(-72, Math.min(0, dx));
+      setSwipeX(clamped);
+    }
+  };
+  const onSwipeTouchEnd = () => {
+    swipeRef.current = null;
+    setSwipeX(0);
+  };
+
   const myIds = useMemo(
     () => new Set(visibleMessages.filter((m) => m.sender_role === role && !m.deleted_at).map((m) => m.id)),
     [visibleMessages, role],
