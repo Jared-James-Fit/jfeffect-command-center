@@ -24,6 +24,7 @@ import { PowerlifterBadge } from "@/components/powerlifter-badge";
 import { UserAvatar } from "@/components/user-avatar";
 import { format, parseISO, differenceInDays } from "date-fns";
 import type { ConversationState, Message } from "@/lib/messages";
+import { QuickAssignTemplateDialog } from "@/components/quick-assign-template-dialog";
 
 function summarizeCardio(list: any[]): string {
   if (!list || list.length === 0) return "";
