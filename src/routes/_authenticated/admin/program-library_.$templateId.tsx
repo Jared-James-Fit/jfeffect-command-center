@@ -872,7 +872,7 @@ function RowEditor({ row, setRow, onDelete, exercises, compact }: { row: any; se
   const [expanded, setExpanded] = useState(!compact);
   useEffect(() => { if (!compact) setExpanded(true); }, [compact]);
   const h = compact ? "h-7" : "h-8";
-  const { clientId, index: maxesIndex, maxes, refresh } = useClientMaxesCtx();
+  const { clientId, blockId, index: maxesIndex, maxes, refresh } = useClientMaxesCtx();
   const [maxEditor, setMaxEditor] = useState<any>(null);
   const computed = useMemo(() => {
     if (!clientId) return null;
@@ -953,6 +953,7 @@ function RowEditor({ row, setRow, onDelete, exercises, compact }: { row: any; se
                 onClick={() => setMaxEditor({
                   client_id: clientId, lift: exName, unit: "kg",
                   source: "manual", active: true, rounding_mode: "nearest", rounding_step: 2.5,
+                  block_id: blockId ?? null,
                 })}
               >
                 <Plus className="mr-0.5 h-3 w-3" /> Set Max
