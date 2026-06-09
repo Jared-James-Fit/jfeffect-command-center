@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   listMessages, sendMessage, markRead, setConversationStatus, setConversationPriority,
   detectAttachmentType, MESSAGE_TYPES, PRIORITIES, QUICK_REPLIES, priorityTone,
+  editMessage, deleteMessageForEveryone,
   type Message, type MessageAttachment, type SenderRole, type ConversationState,
 } from "@/lib/messages";
 import { transcribeVoiceMessage } from "@/lib/voice-transcribe.functions";
@@ -24,7 +25,7 @@ import { cn } from "@/lib/utils";
 import {
   Paperclip, Send, X, FileText, Image as ImageIcon, Video, Link as LinkIcon, ExternalLink,
   Mic, Trash2, Play, Pause, Camera, File as FileIcon, Flag, AlertCircle, AlertTriangle,
-  Gauge, Download, ChevronDown, ChevronUp, Square, Loader2,
+  Gauge, Download, ChevronDown, ChevronUp, Square, Loader2, MoreHorizontal, Pencil, Check,
 } from "lucide-react";
 import { format, parseISO, isToday, isYesterday } from "date-fns";
 import { toast } from "sonner";
@@ -529,6 +530,9 @@ export function MessageThread({
   } | null>(null);
   const previewAudioRef = useRef<HTMLAudioElement | null>(null);
   const [previewPlaying, setPreviewPlaying] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingBody, setEditingBody] = useState("");
+  const [actionsForId, setActionsForId] = useState<string | null>(null);
 
   const { data: messages = [] } = useQuery({
     queryKey: ["messages", clientId, role],
@@ -695,6 +699,8 @@ export function MessageThread({
           </div>
         ) : visibleMessages.map((m) => {
           const mine = m.sender_role === role;
+          const isDeleted = !!m.deleted_at;
+          const isEditing = editingId === m.id;
           const otherName = mine
             ? null
             : m.is_internal_note
@@ -719,6 +725,7 @@ export function MessageThread({
                 />
               )}
               <div className={cn(
+                "group relative",
                 "max-w-[80%] rounded-2xl px-3 py-2 text-sm shadow-sm",
                 m.is_internal_note
                   ? "border border-warning/40 bg-warning/10"
@@ -726,12 +733,71 @@ export function MessageThread({
                   ? "bg-primary text-primary-foreground rounded-br-md"
                   : "bg-secondary text-foreground",
                 !mine && !m.is_internal_note && "rounded-bl-md",
+                isDeleted && "italic opacity-70",
               )}>
                 {m.is_internal_note && (
                   <div className="mb-1 text-[10px] font-bold uppercase tracking-widest text-warning">Internal Coach Note</div>
                 )}
-                {m.body && <div className="whitespace-pre-wrap break-words">{m.body}</div>}
-                {m.attachments?.length > 0 && (
+                {isDeleted ? (
+                  <div className="flex items-center gap-1.5 whitespace-pre-wrap break-words">
+                    <Trash2 className="h-3 w-3 opacity-70" />
+                    <span>This message was deleted</span>
+                  </div>
+                ) : isEditing ? (
+                  <div className="space-y-1.5">
+                    <Textarea
+                      value={editingBody}
+                      onChange={(e) => setEditingBody(e.target.value)}
+                      rows={2}
+                      className={cn(
+                        "min-h-[60px] resize-none rounded-md border-0 bg-background/20 px-2 py-1 text-sm",
+                        mine ? "text-primary-foreground placeholder:text-primary-foreground/60" : "text-foreground",
+                      )}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !e.shiftKey) {
+                          e.preventDefault();
+                          void (async () => {
+                            const next = editingBody.trim();
+                            if (!next || next === m.body) { setEditingId(null); return; }
+                            try {
+                              await editMessage(m.id, next);
+                              setEditingId(null);
+                              qc.invalidateQueries({ queryKey: ["messages", clientId, role] });
+                            } catch (err: any) {
+                              toast.error(err?.message ?? "Failed to edit");
+                            }
+                          })();
+                        }
+                        if (e.key === "Escape") setEditingId(null);
+                      }}
+                      autoFocus
+                    />
+                    <div className="flex items-center justify-end gap-1">
+                      <Button type="button" size="sm" variant="ghost" className="h-7 px-2 text-[11px]"
+                        onClick={() => setEditingId(null)}>
+                        Cancel
+                      </Button>
+                      <Button type="button" size="sm" className="h-7 px-2 text-[11px]"
+                        onClick={async () => {
+                          const next = editingBody.trim();
+                          if (!next || next === m.body) { setEditingId(null); return; }
+                          try {
+                            await editMessage(m.id, next);
+                            setEditingId(null);
+                            qc.invalidateQueries({ queryKey: ["messages", clientId, role] });
+                          } catch (err: any) {
+                            toast.error(err?.message ?? "Failed to edit");
+                          }
+                        }}
+                      >
+                        <Check className="mr-1 h-3 w-3" /> Save
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  m.body && <div className="whitespace-pre-wrap break-words">{m.body}</div>
+                )}
+                {!isDeleted && !isEditing && m.attachments?.length > 0 && (
                   <div className={cn("mt-2 space-y-2", m.body ? "" : "")}>
                     {m.attachments.map((a, i) => (
                       <AttachmentView key={i} att={a} mine={mine} message={m} />
@@ -740,9 +806,48 @@ export function MessageThread({
                 )}
                 <div className={cn("mt-1 flex items-center gap-2 text-[10px]", mine ? "text-primary-foreground/70" : "text-muted-foreground")}>
                   <span>{fmtTime(m.created_at)}</span>
+                  {m.edited_at && !isDeleted && <span>· edited</span>}
                   {m.message_type !== "General" && <span>· {m.message_type}</span>}
                   {m.priority && <span>· {m.priority}</span>}
                 </div>
+                {mine && !isDeleted && !isEditing && (
+                  <div className={cn(
+                    "absolute -top-2 right-1 opacity-0 transition-opacity group-hover:opacity-100",
+                    actionsForId === m.id && "opacity-100",
+                  )}>
+                    <DropdownMenu open={actionsForId === m.id} onOpenChange={(o) => setActionsForId(o ? m.id : null)}>
+                      <DropdownMenuTrigger asChild>
+                        <Button type="button" size="icon" variant="secondary"
+                          className="h-6 w-6 rounded-full border border-border shadow-sm">
+                          <MoreHorizontal className="h-3 w-3" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-44">
+                        <DropdownMenuItem
+                          onClick={() => { setEditingId(m.id); setEditingBody(m.body); setActionsForId(null); }}
+                        >
+                          <Pencil className="mr-2 h-4 w-4" /> Edit
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          className="text-destructive focus:text-destructive"
+                          onClick={async () => {
+                            setActionsForId(null);
+                            if (!confirm("Delete this message for everyone? This cannot be undone.")) return;
+                            try {
+                              await deleteMessageForEveryone(m.id);
+                              qc.invalidateQueries({ queryKey: ["messages", clientId, role] });
+                            } catch (err: any) {
+                              toast.error(err?.message ?? "Failed to delete");
+                            }
+                          }}
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" /> Delete for everyone
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                )}
               </div>
             </div>
           );

@@ -29,6 +29,8 @@ export type Message = {
   updated_at: string;
   transcript?: string | null;
   transcript_status?: string | null;
+  edited_at?: string | null;
+  deleted_at?: string | null;
 };
 
 export type ConversationState = {
@@ -137,6 +139,29 @@ export async function setConversationStatus(clientId: string, status: Conversati
 
 export async function setConversationPriority(clientId: string, priority: string) {
   await db.from("conversation_state").upsert({ client_id: clientId, priority }, { onConflict: "client_id" });
+}
+
+export async function editMessage(messageId: string, body: string) {
+  const { data, error } = await db
+    .from("messages")
+    .update({ body, edited_at: new Date().toISOString() })
+    .eq("id", messageId)
+    .select()
+    .single();
+  if (error) throw error;
+  return data as Message;
+}
+
+export async function deleteMessageForEveryone(messageId: string) {
+  const { error } = await db
+    .from("messages")
+    .update({
+      deleted_at: new Date().toISOString(),
+      body: "",
+      attachments: [],
+    })
+    .eq("id", messageId);
+  if (error) throw error;
 }
 
 export function priorityTone(p?: string | null) {
