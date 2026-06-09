@@ -128,10 +128,28 @@ function useSignedUrl(path?: string) {
 function ImageAttachment({ att }: { att: MessageAttachment }) {
   const signed = useSignedUrl(att.storage_path);
   const src = att.storage_path ? signed : att.url;
-  if (!src) return null;
+  const [errored, setErrored] = useState(false);
+  const looksLikeGif = !!att.url && /tenor\.com|\.gif(\?|$)/i.test(att.url);
+  if (!src || errored) {
+    return (
+      <div className="flex w-[180px] flex-col items-center justify-center gap-1 rounded-xl border border-border bg-secondary/40 p-4">
+        <span className="text-5xl">{att.fallback_emoji ?? fallbackEmoji(att.name, att.category)}</span>
+        {att.name && <span className="text-[11px] text-muted-foreground">{att.name}</span>}
+      </div>
+    );
+  }
   return (
     <a href={src} target="_blank" rel="noreferrer" className="block max-w-[280px]">
-      <img src={src} alt={att.name ?? ""} className="max-h-80 w-auto rounded-md object-cover" loading="lazy" />
+      <img
+        src={src}
+        alt={att.name ?? ""}
+        className={cn(
+          looksLikeGif ? "h-[180px] w-[180px] object-cover" : "max-h-80 w-auto object-cover",
+          "rounded-md",
+        )}
+        loading="lazy"
+        onError={() => setErrored(true)}
+      />
     </a>
   );
 }
