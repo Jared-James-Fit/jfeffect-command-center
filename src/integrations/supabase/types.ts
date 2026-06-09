@@ -1469,6 +1469,7 @@ export type Database = {
           bodyweight_goal_value: number | null
           bodyweight_goal_value_max: number | null
           calendar_link: string | null
+          call_access_enabled: boolean
           checkin_allow_photos: boolean
           checkin_allow_video: boolean
           checkin_due_day: string | null
@@ -1610,6 +1611,7 @@ export type Database = {
           bodyweight_goal_value?: number | null
           bodyweight_goal_value_max?: number | null
           calendar_link?: string | null
+          call_access_enabled?: boolean
           checkin_allow_photos?: boolean
           checkin_allow_video?: boolean
           checkin_due_day?: string | null
@@ -1751,6 +1753,7 @@ export type Database = {
           bodyweight_goal_value?: number | null
           bodyweight_goal_value_max?: number | null
           calendar_link?: string | null
+          call_access_enabled?: boolean
           checkin_allow_photos?: boolean
           checkin_allow_video?: boolean
           checkin_due_day?: string | null
