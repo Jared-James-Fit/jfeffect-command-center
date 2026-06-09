@@ -81,11 +81,12 @@ export async function listUnreadForClientUser(clientId: string) {
     .from("manual_check_in_reviews")
     .select("*")
     .eq("client_id", clientId)
-    .is("dismissed_at", null)
     .is("read_at", null)
     .order("created_at", { ascending: false });
   if (error) throw error;
-  return (data ?? []) as ManualCheckInReview[];
+  // Session-only "view later" dismissals — clears on tab reload / app re-entry.
+  const suppressed = getSessionDismissed();
+  return ((data ?? []) as ManualCheckInReview[]).filter((r) => !suppressed.has(r.id));
 }
 
 export async function markReviewSeen(id: string) {
@@ -98,8 +99,44 @@ export async function markReviewRead(id: string) {
   if (error) throw error;
 }
 
+/**
+ * Suppress this review for the current browser session only. The DB is not
+ * touched, so when the client re-enters the app it will pop up again until
+ * they tap "Got it" (which calls markReviewRead).
+ */
 export async function dismissReviewForNow(id: string) {
-  const { error } = await db.from("manual_check_in_reviews").update({ dismissed_at: new Date().toISOString() }).eq("id", id);
+  const set = getSessionDismissed();
+  set.add(id);
+  try {
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify(Array.from(set)));
+  } catch {}
+}
+
+const SESSION_KEY = "manual-check-in-reviews:session-dismissed";
+function getSessionDismissed(): Set<string> {
+  if (typeof sessionStorage === "undefined") return new Set();
+  try {
+    const raw = sessionStorage.getItem(SESSION_KEY);
+    return new Set(raw ? (JSON.parse(raw) as string[]) : []);
+  } catch {
+    return new Set();
+  }
+}
+
+/**
+ * Resend a manual review — clears read/seen/dismissed timestamps and bumps
+ * updated_at so it shows back up in the client's unread pop-up.
+ */
+export async function resendManualReview(id: string) {
+  const { error } = await db
+    .from("manual_check_in_reviews")
+    .update({
+      read_at: null,
+      seen_at: null,
+      dismissed_at: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", id);
   if (error) throw error;
 }
 
