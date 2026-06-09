@@ -422,17 +422,22 @@ function ClientsPage() {
                                       {cur.start_date && cur.end_date ? ` · ${format(parseISO(cur.start_date), "MMM d")} → ${format(parseISO(cur.end_date), "MMM d")}` : ""}
                                     </div>
                                   </Link>
-                                  <Link
-                                    to="/admin/clients/$id"
-                                    params={{ id: c.id }}
-                                    search={{ tab: "training" }}
+                                  <button
+                                    type="button"
+                                    onClick={() => setAssignTo({ id: c.id, name: c.full_name })}
                                     className="inline-flex items-center text-[10px] font-semibold text-primary hover:underline"
                                   >
-                                    + Add block
-                                  </Link>
+                                    + Assign from Library
+                                  </button>
                                 </div>
                               ) : (
-                                <AddCell id={c.id} tab="training" label="Add Training Block" />
+                                <button
+                                  type="button"
+                                  onClick={() => setAssignTo({ id: c.id, name: c.full_name })}
+                                  className="text-xs font-semibold text-primary hover:underline"
+                                >
+                                  + Assign from Library
+                                </button>
                               )}
                             </td>
                             <td className="px-4 py-3 text-xs">
@@ -449,14 +454,13 @@ function ClientsPage() {
                                   </div>
                                 </Link>
                               ) : cur ? (
-                                <Link
-                                  to="/admin/clients/$id"
-                                  params={{ id: c.id }}
-                                  search={{ tab: "training" }}
+                                <button
+                                  type="button"
+                                  onClick={() => setAssignTo({ id: c.id, name: c.full_name })}
                                   className="text-[11px] font-semibold text-primary hover:underline"
                                 >
-                                  + Queue next
-                                </Link>
+                                  + Queue from Library
+                                </button>
                               ) : (
                                 <span className="text-muted-foreground">—</span>
                               )}
