@@ -612,6 +612,12 @@ export function MessageThread({
       : role === "client"
       ? !!chatSettings?.clientsCanSendGifs
       : true;
+  const canSendSounds =
+    role === "admin"
+      ? true
+      : role === "client"
+      ? !!chatSettings?.clientsCanSendSounds
+      : true;
 
   // Group reactions by message id for fast lookup.
   const reactionsByMsg = useMemo(() => {
