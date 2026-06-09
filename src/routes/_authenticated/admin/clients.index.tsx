@@ -443,21 +443,35 @@ function ClientsPage() {
                           <>
                             <td className="px-4 py-3 text-xs">
                               {cur ? (
-                                <div className="space-y-1">
+                                <div className="space-y-1 min-w-[200px]">
                                   <Link
                                     to="/admin/blocks/$blockId"
                                     params={{ blockId: cur.id }}
                                     className="block hover:opacity-80"
                                   >
-                                    <div className="flex items-center gap-1.5">
-                                      <Dumbbell className="h-3 w-3 text-primary" />
-                                      <span className="font-semibold truncate max-w-[140px]">{cur.name}</span>
-                                    </div>
-                                    <div className="text-[10px] text-muted-foreground truncate">
-                                      {cur.training_focus ? `${cur.training_focus} · ` : ""}
-                                      {cur.weeks}w
-                                      {cur.start_date && cur.end_date ? ` · ${format(parseISO(cur.start_date), "MMM d")} → ${format(parseISO(cur.end_date), "MMM d")}` : ""}
-                                    </div>
+                                    {(() => {
+                                      const dBlk = deriveBlock(cur);
+                                      return (
+                                        <div className="space-y-1">
+                                          <div className="flex items-center gap-1.5 flex-wrap">
+                                            <Dumbbell className="h-3 w-3 text-primary shrink-0" />
+                                            <span className="font-semibold truncate max-w-[140px]">{cur.name}</span>
+                                            <Badge variant="outline" className={toneClasses(dBlk.tone)}>{dBlk.label}</Badge>
+                                          </div>
+                                          <div className="text-[10px] text-muted-foreground truncate">
+                                            {cur.training_focus ? `${cur.training_focus} · ` : ""}
+                                            {cur.weeks}w
+                                            {cur.start_date && cur.end_date ? ` · ${format(parseISO(cur.start_date), "MMM d")} → ${format(parseISO(cur.end_date), "MMM d")}` : ""}
+                                            {dBlk.daysRemaining !== null ? (
+                                              <> · {dBlk.daysRemaining < 0 ? `${Math.abs(dBlk.daysRemaining)}d over` : `${dBlk.daysRemaining}d left`} · {dBlk.percentComplete}%</>
+                                            ) : null}
+                                          </div>
+                                          {dBlk.daysRemaining !== null && (
+                                            <Progress value={dBlk.percentComplete} className="h-1" />
+                                          )}
+                                        </div>
+                                      );
+                                    })()}
                                   </Link>
                                   <button
                                     type="button"
@@ -484,11 +498,21 @@ function ClientsPage() {
                                   params={{ blockId: nxt.id }}
                                   className="block hover:opacity-80"
                                 >
-                                  <div className="font-medium truncate max-w-[140px]">{nxt.name}</div>
-                                  <div className="text-[10px] text-muted-foreground truncate">
-                                    {nxt.start_date ? format(parseISO(nxt.start_date), "MMM d") : nxt.status}
-                                    {" · "}{nxt.weeks}w
-                                  </div>
+                                  {(() => {
+                                    const dNxt = deriveBlock(nxt);
+                                    return (
+                                      <div className="space-y-1">
+                                        <div className="flex items-center gap-1.5 flex-wrap">
+                                          <span className="font-medium truncate max-w-[140px]">{nxt.name}</span>
+                                          <Badge variant="outline" className={toneClasses(dNxt.tone)}>{dNxt.label}</Badge>
+                                        </div>
+                                        <div className="text-[10px] text-muted-foreground truncate">
+                                          {nxt.start_date ? format(parseISO(nxt.start_date), "MMM d") : nxt.status}
+                                          {" · "}{nxt.weeks}w
+                                        </div>
+                                      </div>
+                                    );
+                                  })()}
                                 </Link>
                               ) : cur ? (
                                 <button
