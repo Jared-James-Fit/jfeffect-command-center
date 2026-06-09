@@ -700,13 +700,21 @@ export function ClientLiftVideoUploader({ clientId, clientName, userId, onSaved 
             </DialogTitle>
           </DialogHeader>
           {previewClip?.previewUrl && (
-            <video
-              src={previewClip.previewUrl}
-              className="w-full rounded-lg bg-black"
-              controls
-              autoPlay
-              playsInline
-            />
+            previewClip.isImage ? (
+              <img
+                src={previewClip.previewUrl}
+                alt={previewClip.file?.name || "Preview"}
+                className="w-full rounded-lg bg-black object-contain"
+              />
+            ) : (
+              <video
+                src={previewClip.previewUrl}
+                className="w-full rounded-lg bg-black"
+                controls
+                autoPlay
+                playsInline
+              />
+            )
           )}
         </DialogContent>
       </Dialog>
