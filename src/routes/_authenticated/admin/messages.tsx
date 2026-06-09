@@ -212,7 +212,7 @@ function MessagesInbox() {
             ))}
           </div>
         </header>
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto pb-[calc(var(--bottom-nav-clearance,0px)+max(env(safe-area-inset-bottom),1.5rem))]">
           {conversations.length === 0 ? (
             <div className="p-6 text-center text-sm text-muted-foreground">No conversations.</div>
           ) : conversations.map(({ client, state, last, unread }) => (
