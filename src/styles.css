@@ -209,3 +209,13 @@ html[data-keyboard-open="true"] { --bottom-nav-clearance: 0px; }
     font-size: 16px;
   }
 }
+
+/* Reaction chip pop-in animation (≈240ms) */
+@keyframes reaction-pop {
+  0%   { transform: scale(0.6); opacity: 0; }
+  60%  { transform: scale(1.15); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.animate-reaction-pop {
+  animation: reaction-pop 240ms cubic-bezier(.2,.8,.2,1);
+}

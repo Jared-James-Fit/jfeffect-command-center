@@ -8,6 +8,7 @@ import {
   UserPlus, Library, Wrench, HelpCircle,
   ChefHat, Megaphone,
 } from "lucide-react";
+import { Sparkles } from "lucide-react";
 import type { NavItem } from "@/components/app-shell";
 
 export const adminNav: NavItem[] = [
@@ -49,6 +50,8 @@ export const adminNav: NavItem[] = [
   // ACCOUNT
   { to: "/admin/account", label: "Account", icon: UserCog, group: "Account" },
   { to: "/admin/settings", label: "Settings", icon: Settings, group: "Account" },
+  { to: "/admin/settings/chat", label: "Chat Settings", icon: MessageCircle, group: "Account" },
+  { to: "/admin/chat-gifs", label: "Chat GIF Library", icon: Sparkles, group: "Account" },
 ];
 
 // Coach navigation: same client-coaching tools as admin, without business/admin sections.

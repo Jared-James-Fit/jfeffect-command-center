@@ -31,6 +31,9 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
+import { getChatSettings, DEFAULT_REACTION } from "@/lib/chat-settings";
+import { GifPicker } from "@/components/gif-picker";
+import { markRecent } from "@/lib/chat-gifs";
 import {
   Paperclip, Send, X, FileText, Image as ImageIcon, Video, Link as LinkIcon, ExternalLink,
   Mic, Trash2, Play, Pause, Camera, File as FileIcon, Flag, AlertCircle, AlertTriangle,
@@ -585,6 +588,19 @@ export function MessageThread({
     queryFn: () => listReactions(clientId),
   });
 
+  const { data: chatSettings } = useQuery({
+    queryKey: ["chat-settings"],
+    queryFn: getChatSettings,
+    staleTime: 60_000,
+  });
+  const defaultReaction = chatSettings?.defaultReaction || DEFAULT_REACTION;
+  const canSendGifs =
+    role === "admin"
+      ? true
+      : role === "client"
+      ? !!chatSettings?.clientsCanSendGifs
+      : true;
+
   // Group reactions by message id for fast lookup.
   const reactionsByMsg = useMemo(() => {
     const map = new Map<string, MessageReaction[]>();
@@ -999,6 +1015,33 @@ export function MessageThread({
                 onPointerUp={cancelLongPress}
                 onPointerCancel={cancelLongPress}
                 onPointerLeave={cancelLongPress}
+                onTouchEnd={(e) => {
+                  if (isDeleted || isEditing || selectionMode) return;
+                  const lp = longPressRef.current;
+                  if (lp) return; // long-press handler owns this gesture
+                  const t = e.changedTouches[0];
+                  if (!t) return;
+                  if ((t.target as HTMLElement).closest("a,button,textarea,input,audio,video,img,[data-no-doubletap]")) return;
+                  const now = Date.now();
+                  const last = (m as any).__lastTap as { t: number; x: number; y: number } | undefined;
+                  if (last && now - last.t < 320 && Math.hypot(t.clientX - last.x, t.clientY - last.y) < 14) {
+                    (m as any).__lastTap = undefined;
+                    e.preventDefault();
+                    suppressClickRef.current = true;
+                    void onToggleReaction(m.id, defaultReaction);
+                  } else {
+                    (m as any).__lastTap = { t: now, x: t.clientX, y: t.clientY };
+                  }
+                }}
+                onDoubleClick={(e) => {
+                  if (isDeleted || isEditing || selectionMode) return;
+                  if ((e.target as HTMLElement).closest("a,button,textarea,input,audio,video,img")) return;
+                  try {
+                    const sel = window.getSelection();
+                    if (sel && !sel.isCollapsed) return;
+                  } catch {}
+                  void onToggleReaction(m.id, defaultReaction);
+                }}
                 onClickCapture={(e) => {
                   if (suppressClickRef.current) {
                     suppressClickRef.current = false;
@@ -1105,7 +1148,7 @@ export function MessageThread({
                             type="button"
                             onClick={(e) => { e.stopPropagation(); void onToggleReaction(m.id, emoji); }}
                             className={cn(
-                              "inline-flex items-center gap-0.5 rounded-full border bg-background px-1.5 py-0.5 text-[11px] shadow-sm transition",
+                              "inline-flex items-center gap-0.5 rounded-full border bg-background px-1.5 py-0.5 text-[11px] shadow-sm transition animate-reaction-pop",
                               minePicked ? "border-primary bg-primary/10" : "border-border hover:bg-secondary",
                             )}
                           >
@@ -1316,6 +1359,39 @@ export function MessageThread({
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+
+            {canSendGifs && (
+              <GifPicker
+                disabled={sending || uploading}
+                onPick={async (g) => {
+                  if (!user) return;
+                  setSending(true);
+                  try {
+                    await sendMessage({
+                      clientId,
+                      senderId: user.id,
+                      senderRole: role,
+                      body: "",
+                      attachments: [{
+                        type: g.media_type.startsWith("video") ? "video" : "image",
+                        url: g.media_url,
+                        name: g.title,
+                        mime: g.media_type,
+                      }],
+                      messageType,
+                      isInternalNote: role === "admin" ? internalNote : false,
+                      priority: role === "admin" ? priority : undefined,
+                    });
+                    qc.invalidateQueries({ queryKey: ["messages", clientId, role] });
+                    try { await markRecent(user.id, g.id); } catch {}
+                  } catch (e: any) {
+                    toast.error(e?.message ?? "Failed to send GIF");
+                  } finally {
+                    setSending(false);
+                  }
+                }}
+              />
+            )}
 
             {/* Priority selector removed for simplicity. */}
 
