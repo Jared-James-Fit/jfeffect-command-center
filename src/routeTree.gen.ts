@@ -26,6 +26,7 @@ import { Route as AuthenticatedAdminIndexRouteImport } from './routes/_authentic
 import { Route as ApiPublicStripeWebhookRouteImport } from './routes/api/public/stripe-webhook'
 import { Route as ApiPublicSignnowWebhookRouteImport } from './routes/api/public/signnow-webhook'
 import { Route as AuthenticatedPortalResourcesRouteImport } from './routes/_authenticated/portal/resources'
+import { Route as AuthenticatedPortalRecipesRouteImport } from './routes/_authenticated/portal/recipes'
 import { Route as AuthenticatedPortalPurchasesRouteImport } from './routes/_authenticated/portal/purchases'
 import { Route as AuthenticatedPortalProgressMetricsRouteImport } from './routes/_authenticated/portal/progress-metrics'
 import { Route as AuthenticatedPortalNutritionTargetsRouteImport } from './routes/_authenticated/portal/nutrition-targets'
@@ -198,6 +199,12 @@ const AuthenticatedPortalResourcesRoute =
   AuthenticatedPortalResourcesRouteImport.update({
     id: '/resources',
     path: '/resources',
+    getParentRoute: () => AuthenticatedPortalRouteRoute,
+  } as any)
+const AuthenticatedPortalRecipesRoute =
+  AuthenticatedPortalRecipesRouteImport.update({
+    id: '/recipes',
+    path: '/recipes',
     getParentRoute: () => AuthenticatedPortalRouteRoute,
   } as any)
 const AuthenticatedPortalPurchasesRoute =
@@ -768,6 +775,7 @@ export interface FileRoutesByFullPath {
   '/portal/nutrition-targets': typeof AuthenticatedPortalNutritionTargetsRoute
   '/portal/progress-metrics': typeof AuthenticatedPortalProgressMetricsRoute
   '/portal/purchases': typeof AuthenticatedPortalPurchasesRouteWithChildren
+  '/portal/recipes': typeof AuthenticatedPortalRecipesRoute
   '/portal/resources': typeof AuthenticatedPortalResourcesRoute
   '/api/public/signnow-webhook': typeof ApiPublicSignnowWebhookRoute
   '/api/public/stripe-webhook': typeof ApiPublicStripeWebhookRoute
@@ -869,6 +877,7 @@ export interface FileRoutesByTo {
   '/portal/nutrition-targets': typeof AuthenticatedPortalNutritionTargetsRoute
   '/portal/progress-metrics': typeof AuthenticatedPortalProgressMetricsRoute
   '/portal/purchases': typeof AuthenticatedPortalPurchasesRouteWithChildren
+  '/portal/recipes': typeof AuthenticatedPortalRecipesRoute
   '/portal/resources': typeof AuthenticatedPortalResourcesRoute
   '/api/public/signnow-webhook': typeof ApiPublicSignnowWebhookRoute
   '/api/public/stripe-webhook': typeof ApiPublicStripeWebhookRoute
@@ -975,6 +984,7 @@ export interface FileRoutesById {
   '/_authenticated/portal/nutrition-targets': typeof AuthenticatedPortalNutritionTargetsRoute
   '/_authenticated/portal/progress-metrics': typeof AuthenticatedPortalProgressMetricsRoute
   '/_authenticated/portal/purchases': typeof AuthenticatedPortalPurchasesRouteWithChildren
+  '/_authenticated/portal/recipes': typeof AuthenticatedPortalRecipesRoute
   '/_authenticated/portal/resources': typeof AuthenticatedPortalResourcesRoute
   '/api/public/signnow-webhook': typeof ApiPublicSignnowWebhookRoute
   '/api/public/stripe-webhook': typeof ApiPublicStripeWebhookRoute
@@ -1081,6 +1091,7 @@ export interface FileRouteTypes {
     | '/portal/nutrition-targets'
     | '/portal/progress-metrics'
     | '/portal/purchases'
+    | '/portal/recipes'
     | '/portal/resources'
     | '/api/public/signnow-webhook'
     | '/api/public/stripe-webhook'
@@ -1182,6 +1193,7 @@ export interface FileRouteTypes {
     | '/portal/nutrition-targets'
     | '/portal/progress-metrics'
     | '/portal/purchases'
+    | '/portal/recipes'
     | '/portal/resources'
     | '/api/public/signnow-webhook'
     | '/api/public/stripe-webhook'
@@ -1287,6 +1299,7 @@ export interface FileRouteTypes {
     | '/_authenticated/portal/nutrition-targets'
     | '/_authenticated/portal/progress-metrics'
     | '/_authenticated/portal/purchases'
+    | '/_authenticated/portal/recipes'
     | '/_authenticated/portal/resources'
     | '/api/public/signnow-webhook'
     | '/api/public/stripe-webhook'
@@ -1465,6 +1478,13 @@ declare module '@tanstack/react-router' {
       path: '/resources'
       fullPath: '/portal/resources'
       preLoaderRoute: typeof AuthenticatedPortalResourcesRouteImport
+      parentRoute: typeof AuthenticatedPortalRouteRoute
+    }
+    '/_authenticated/portal/recipes': {
+      id: '/_authenticated/portal/recipes'
+      path: '/recipes'
+      fullPath: '/portal/recipes'
+      preLoaderRoute: typeof AuthenticatedPortalRecipesRouteImport
       parentRoute: typeof AuthenticatedPortalRouteRoute
     }
     '/_authenticated/portal/purchases': {
@@ -2348,6 +2368,7 @@ interface AuthenticatedPortalRouteRouteChildren {
   AuthenticatedPortalNutritionTargetsRoute: typeof AuthenticatedPortalNutritionTargetsRoute
   AuthenticatedPortalProgressMetricsRoute: typeof AuthenticatedPortalProgressMetricsRoute
   AuthenticatedPortalPurchasesRoute: typeof AuthenticatedPortalPurchasesRouteWithChildren
+  AuthenticatedPortalRecipesRoute: typeof AuthenticatedPortalRecipesRoute
   AuthenticatedPortalResourcesRoute: typeof AuthenticatedPortalResourcesRoute
   AuthenticatedPortalIndexRoute: typeof AuthenticatedPortalIndexRoute
   AuthenticatedPortalWorkoutsDayIdRoute: typeof AuthenticatedPortalWorkoutsDayIdRoute
@@ -2373,6 +2394,7 @@ const AuthenticatedPortalRouteRouteChildren: AuthenticatedPortalRouteRouteChildr
       AuthenticatedPortalProgressMetricsRoute,
     AuthenticatedPortalPurchasesRoute:
       AuthenticatedPortalPurchasesRouteWithChildren,
+    AuthenticatedPortalRecipesRoute: AuthenticatedPortalRecipesRoute,
     AuthenticatedPortalResourcesRoute: AuthenticatedPortalResourcesRoute,
     AuthenticatedPortalIndexRoute: AuthenticatedPortalIndexRoute,
     AuthenticatedPortalWorkoutsDayIdRoute:
