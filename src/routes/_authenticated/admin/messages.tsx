@@ -339,13 +339,6 @@ function MessagesInbox() {
                   <span className="truncate">{selected.email}</span>
                 </div>
               </div>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0">
-                    <MoreHorizontal className="h-5 w-5" />
-                  </Button>
-                </DropdownMenuTrigger>
-              </DropdownMenu>
               {(selected as any).call_access_enabled && (selected as any).phone ? (
                 <Button
                   asChild
