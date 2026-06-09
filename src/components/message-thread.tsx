@@ -1254,6 +1254,7 @@ export function MessageThread({
             if (!m) return null;
             const canEdit = m.sender_role === role && !m.deleted_at && (m.body?.length ?? 0) > 0;
             const canDelete = m.sender_role === role && !m.deleted_at;
+            const canReact = !m.deleted_at;
             return (
               <>
                 <SheetHeader className="text-left">
@@ -1262,6 +1263,31 @@ export function MessageThread({
                     {m.deleted_at ? "This message was deleted." : m.body || (m.attachments?.length ? "Attachment" : "")}
                   </SheetDescription>
                 </SheetHeader>
+                {canReact && (
+                  <div className="mt-3 flex items-center justify-around rounded-full border border-border bg-secondary/40 px-2 py-2">
+                    {REACTION_EMOJIS.map((emoji) => {
+                      const minePicked = myReactions.some(
+                        (r) => r.message_id === m.id && r.emoji === emoji,
+                      );
+                      return (
+                        <button
+                          key={emoji}
+                          type="button"
+                          className={cn(
+                            "rounded-full p-1 text-2xl transition active:scale-90",
+                            minePicked && "bg-primary/15 ring-1 ring-primary",
+                          )}
+                          onClick={() => {
+                            void onToggleReaction(m.id, emoji);
+                            setSheetForId(null);
+                          }}
+                        >
+                          {emoji}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
                 <div className="mt-3 grid gap-1">
                   {canEdit && (
                     <Button
