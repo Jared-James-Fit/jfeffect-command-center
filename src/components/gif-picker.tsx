@@ -1,22 +1,32 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Sparkles, Star, Search } from "lucide-react";
+import { Sparkles, Star, Search, Play, Pause, Volume2 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import {
   listGifs, listFavorites, listRecent, toggleFavorite, markRecent,
   GIF_CATEGORIES, type ChatGif,
 } from "@/lib/chat-gifs";
+import {
+  listSounds, listFavorites as listSoundFavs, listRecent as listSoundRecent,
+  toggleFavorite as toggleSoundFav, markRecent as markSoundRecent,
+  SOUND_CATEGORIES, type ChatSound,
+} from "@/lib/chat-sounds";
+import { playSound, subscribeSound, stopSound } from "@/lib/sound-player";
 
 export function GifPicker({
   onPick,
+  onPickSound,
+  showSounds = true,
   disabled,
 }: {
   onPick: (gif: ChatGif) => void;
+  onPickSound?: (sound: ChatSound) => void;
+  showSounds?: boolean;
   disabled?: boolean;
 }) {
   const { user } = useAuth();
@@ -24,25 +34,47 @@ export function GifPicker({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<string | "all">("all");
+  const [mode, setMode] = useState<"gifs" | "sounds">("gifs");
+
+  useEffect(() => { if (!open) stopSound(); }, [open]);
 
   const { data: gifs = [] } = useQuery({
     queryKey: ["chat-gifs"],
     queryFn: listGifs,
-    enabled: open,
+    enabled: open && mode === "gifs",
     staleTime: 60_000,
   });
 
   const { data: favoriteIds = new Set<string>() } = useQuery({
     queryKey: ["chat-gif-favorites", user?.id],
     queryFn: () => listFavorites(user!.id),
-    enabled: open && !!user?.id,
+    enabled: open && mode === "gifs" && !!user?.id,
     staleTime: 30_000,
   });
 
   const { data: recentIds = [] } = useQuery({
     queryKey: ["chat-gif-recent", user?.id],
     queryFn: () => listRecent(user!.id),
-    enabled: open && !!user?.id,
+    enabled: open && mode === "gifs" && !!user?.id,
+    staleTime: 30_000,
+  });
+
+  const { data: sounds = [] } = useQuery({
+    queryKey: ["chat-sounds"],
+    queryFn: listSounds,
+    enabled: open && mode === "sounds" && showSounds,
+    staleTime: 60_000,
+  });
+  const { data: soundFavIds = new Set<string>() } = useQuery({
+    queryKey: ["chat-sound-favorites", user?.id],
+    queryFn: () => listSoundFavs(user!.id),
+    enabled: open && mode === "sounds" && !!user?.id,
+    staleTime: 30_000,
+  });
+  const { data: soundRecentIds = [] } = useQuery({
+    queryKey: ["chat-sound-recent", user?.id],
+    queryFn: () => listSoundRecent(user!.id),
+    enabled: open && mode === "sounds" && !!user?.id,
     staleTime: 30_000,
   });
 
@@ -63,6 +95,22 @@ export function GifPicker({
   const recentGifs = recentIds.map((id) => byId.get(id)).filter(Boolean) as ChatGif[];
   const favoriteGifs = gifs.filter((g) => favoriteIds.has(g.id));
 
+  const filteredSounds = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return sounds.filter((s) => {
+      if (category !== "all" && s.category !== category) return false;
+      if (!q) return true;
+      return (
+        s.title.toLowerCase().includes(q) ||
+        s.category.toLowerCase().includes(q) ||
+        s.tags.some((t) => t.toLowerCase().includes(q))
+      );
+    });
+  }, [sounds, query, category]);
+  const soundById = useMemo(() => new Map(sounds.map((s) => [s.id, s])), [sounds]);
+  const recentSounds = soundRecentIds.map((id) => soundById.get(id)).filter(Boolean) as ChatSound[];
+  const favoriteSounds = sounds.filter((s) => soundFavIds.has(s.id));
+
   const pick = async (g: ChatGif) => {
     onPick(g);
     setOpen(false);
@@ -74,6 +122,19 @@ export function GifPicker({
     }
   };
 
+  const pickSound = async (s: ChatSound) => {
+    if (!onPickSound) return;
+    stopSound();
+    onPickSound(s);
+    setOpen(false);
+    if (user?.id) {
+      try {
+        await markSoundRecent(user.id, s.id);
+        qc.invalidateQueries({ queryKey: ["chat-sound-recent", user.id] });
+      } catch {}
+    }
+  };
+
   const onToggleFav = async (g: ChatGif, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!user?.id) return;
@@ -81,6 +142,16 @@ export function GifPicker({
     try {
       await toggleFavorite(user.id, g.id, isFav);
       qc.invalidateQueries({ queryKey: ["chat-gif-favorites", user.id] });
+    } catch {}
+  };
+
+  const onToggleSoundFav = async (s: ChatSound, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!user?.id) return;
+    const isFav = soundFavIds.has(s.id);
+    try {
+      await toggleSoundFav(user.id, s.id, isFav);
+      qc.invalidateQueries({ queryKey: ["chat-sound-favorites", user.id] });
     } catch {}
   };
 
@@ -124,6 +195,53 @@ export function GifPicker({
     </div>
   );
 
+  const SoundList = ({ items }: { items: ChatSound[] }) => (
+    <div className="flex flex-col gap-1.5">
+      {items.length === 0 && (
+        <div className="py-8 text-center text-xs text-muted-foreground">Nothing here yet.</div>
+      )}
+      {items.map((s) => <SoundRow key={s.id} sound={s} />)}
+    </div>
+  );
+
+  const SoundRow = ({ sound }: { sound: ChatSound }) => {
+    const [playing, setPlaying] = useState(false);
+    useEffect(() => subscribeSound((st) => setPlaying(st.url === sound.media_url && st.playing)), [sound.media_url]);
+    const isFav = soundFavIds.has(sound.id);
+    const seconds = sound.duration_ms ? Math.round(sound.duration_ms / 100) / 10 : null;
+    return (
+      <div
+        role="button"
+        onClick={() => pickSound(sound)}
+        className="group flex items-center gap-2.5 rounded-lg border border-border bg-background/40 p-2 transition hover:border-primary hover:bg-secondary/40"
+      >
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); void playSound(sound.media_url); }}
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground active:scale-95"
+          aria-label={playing ? "Stop preview" : "Preview"}
+        >
+          {playing ? <Pause className="h-4 w-4" /> : <Play className="ml-0.5 h-4 w-4" />}
+        </button>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+            <Volume2 className="h-3 w-3" />{sound.category}
+            {seconds != null && <span>· {seconds}s</span>}
+          </div>
+          <div className="truncate text-sm font-medium leading-tight">{sound.title}</div>
+        </div>
+        <button
+          type="button"
+          onClick={(e) => onToggleSoundFav(sound, e)}
+          className="rounded-full p-1.5 hover:bg-secondary"
+          aria-label={isFav ? "Unstar" : "Star"}
+        >
+          <Star className={cn("h-4 w-4", isFav ? "fill-warning text-warning" : "text-muted-foreground")} />
+        </button>
+      </div>
+    );
+  };
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -143,13 +261,39 @@ export function GifPicker({
         align="start"
         className="w-[min(92vw,420px)] p-0"
       >
+        {showSounds && onPickSound && (
+          <div className="flex items-center gap-1 border-b border-border p-1">
+            <button
+              type="button"
+              onClick={() => { setMode("gifs"); setCategory("all"); setQuery(""); }}
+              className={cn(
+                "flex-1 rounded-md py-1.5 text-xs font-medium",
+                mode === "gifs" ? "bg-primary text-primary-foreground" : "hover:bg-secondary",
+              )}
+            >
+              GIFs
+            </button>
+            <button
+              type="button"
+              onClick={() => { setMode("sounds"); setCategory("all"); setQuery(""); }}
+              className={cn(
+                "flex-1 rounded-md py-1.5 text-xs font-medium",
+                mode === "sounds" ? "bg-primary text-primary-foreground" : "hover:bg-secondary",
+              )}
+            >
+              Sounds
+            </button>
+          </div>
+        )}
         <div className="space-y-2 border-b border-border p-2">
           <div className="relative">
             <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search GIFs… hype, PR, cardio, excuses"
+              placeholder={mode === "sounds"
+                ? "Search sounds… PR bell, bruh, cardio"
+                : "Search GIFs… hype, PR, cardio, excuses"}
               className="h-8 pl-7 text-sm"
             />
           </div>
@@ -164,7 +308,7 @@ export function GifPicker({
             >
               All
             </button>
-            {GIF_CATEGORIES.map((c) => (
+            {(mode === "sounds" ? SOUND_CATEGORIES : GIF_CATEGORIES).map((c) => (
               <button
                 key={c}
                 type="button"
@@ -186,9 +330,19 @@ export function GifPicker({
             <TabsTrigger value="fav">Favorites</TabsTrigger>
           </TabsList>
           <div className="max-h-[60vh] overflow-y-auto p-2">
-            <TabsContent value="browse" className="m-0"><Grid items={filtered} /></TabsContent>
-            <TabsContent value="recent" className="m-0"><Grid items={recentGifs} /></TabsContent>
-            <TabsContent value="fav" className="m-0"><Grid items={favoriteGifs} /></TabsContent>
+            {mode === "gifs" ? (
+              <>
+                <TabsContent value="browse" className="m-0"><Grid items={filtered} /></TabsContent>
+                <TabsContent value="recent" className="m-0"><Grid items={recentGifs} /></TabsContent>
+                <TabsContent value="fav" className="m-0"><Grid items={favoriteGifs} /></TabsContent>
+              </>
+            ) : (
+              <>
+                <TabsContent value="browse" className="m-0"><SoundList items={filteredSounds} /></TabsContent>
+                <TabsContent value="recent" className="m-0"><SoundList items={recentSounds} /></TabsContent>
+                <TabsContent value="fav" className="m-0"><SoundList items={favoriteSounds} /></TabsContent>
+              </>
+            )}
           </div>
         </Tabs>
       </PopoverContent>
