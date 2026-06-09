@@ -25,6 +25,10 @@ import { UserAvatar } from "@/components/user-avatar";
 import { format, parseISO, differenceInDays } from "date-fns";
 import type { ConversationState, Message } from "@/lib/messages";
 import { QuickAssignTemplateDialog } from "@/components/quick-assign-template-dialog";
+import { ClientMobileCard } from "@/components/clients-mobile-card";
+import { PriceCardPickerDialog } from "@/components/price-card-picker-dialog";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { SlidersHorizontal } from "lucide-react";
 
 function summarizeCardio(list: any[]): string {
   if (!list || list.length === 0) return "";
@@ -108,6 +112,10 @@ function ClientsPage() {
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [priorityFilter, setPriorityFilter] = useState<string>("all");
+  const [typeFilter, setTypeFilter] = useState<string>("all");
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [sellTo, setSellTo] = useState<{ id: string; name: string } | null>(null);
   const [open, setOpen] = useState(false);
   const [deleteState, setDeleteState] = useState<{ id: string; name: string; step: 1 | 2 } | null>(null);
   const [assignTo, setAssignTo] = useState<{ id: string; name: string } | null>(null);
