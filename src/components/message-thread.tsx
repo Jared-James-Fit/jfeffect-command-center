@@ -7,7 +7,9 @@ import {
   listMessages, sendMessage, markRead, setConversationStatus, setConversationPriority,
   detectAttachmentType, MESSAGE_TYPES, PRIORITIES, QUICK_REPLIES, priorityTone,
   editMessage, deleteMessageForEveryone,
+  listReactions, toggleReaction, REACTION_EMOJIS,
   type Message, type MessageAttachment, type SenderRole, type ConversationState,
+  type MessageReaction,
 } from "@/lib/messages";
 import { transcribeVoiceMessage } from "@/lib/voice-transcribe.functions";
 import { Button } from "@/components/ui/button";
@@ -556,6 +558,38 @@ export function MessageThread({
     queryFn: () => listMessages(clientId, { includeInternal: role === "admin" }),
   });
 
+  const { data: reactions = [] } = useQuery({
+    queryKey: ["message-reactions", clientId],
+    enabled: !!clientId,
+    queryFn: () => listReactions(clientId),
+  });
+
+  // Group reactions by message id for fast lookup.
+  const reactionsByMsg = useMemo(() => {
+    const map = new Map<string, MessageReaction[]>();
+    for (const r of reactions) {
+      const list = map.get(r.message_id) ?? [];
+      list.push(r);
+      map.set(r.message_id, list);
+    }
+    return map;
+  }, [reactions]);
+
+  const myReactions = useMemo(
+    () => reactions.filter((r) => r.user_id === user?.id),
+    [reactions, user?.id],
+  );
+
+  const onToggleReaction = async (messageId: string, emoji: string) => {
+    if (!user) return;
+    try {
+      await toggleReaction(messageId, user.id, emoji, myReactions);
+      qc.invalidateQueries({ queryKey: ["message-reactions", clientId] });
+    } catch (e: any) {
+      toast.error(e?.message ?? "Reaction failed");
+    }
+  };
+
   // Realtime
   useEffect(() => {
     if (!clientId) return;
@@ -565,6 +599,9 @@ export function MessageThread({
         qc.invalidateQueries({ queryKey: ["messages", clientId, role] });
         qc.invalidateQueries({ queryKey: ["conversation-states"] });
         qc.invalidateQueries({ queryKey: ["unread-counts"] });
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "message_reactions" }, () => {
+        qc.invalidateQueries({ queryKey: ["message-reactions", clientId] });
       })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
