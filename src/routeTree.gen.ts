@@ -74,6 +74,7 @@ import { Route as AuthenticatedAdminClientPovRouteImport } from './routes/_authe
 import { Route as AuthenticatedAdminClientActionRequestsRouteImport } from './routes/_authenticated/admin/client-action-requests'
 import { Route as AuthenticatedAdminCheckInsRouteImport } from './routes/_authenticated/admin/check-ins'
 import { Route as AuthenticatedAdminCheckInReviewsRouteImport } from './routes/_authenticated/admin/check-in-reviews'
+import { Route as AuthenticatedAdminChatSoundsRouteImport } from './routes/_authenticated/admin/chat-sounds'
 import { Route as AuthenticatedAdminChatGifsRouteImport } from './routes/_authenticated/admin/chat-gifs'
 import { Route as AuthenticatedAdminCardioTargetsRouteImport } from './routes/_authenticated/admin/cardio-targets'
 import { Route as AuthenticatedAdminCalendarRouteImport } from './routes/_authenticated/admin/calendar'
@@ -487,6 +488,12 @@ const AuthenticatedAdminCheckInReviewsRoute =
     path: '/check-in-reviews',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
+const AuthenticatedAdminChatSoundsRoute =
+  AuthenticatedAdminChatSoundsRouteImport.update({
+    id: '/chat-sounds',
+    path: '/chat-sounds',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
 const AuthenticatedAdminChatGifsRoute =
   AuthenticatedAdminChatGifsRouteImport.update({
     id: '/chat-gifs',
@@ -781,6 +788,7 @@ export interface FileRoutesByFullPath {
   '/admin/calendar': typeof AuthenticatedAdminCalendarRoute
   '/admin/cardio-targets': typeof AuthenticatedAdminCardioTargetsRoute
   '/admin/chat-gifs': typeof AuthenticatedAdminChatGifsRoute
+  '/admin/chat-sounds': typeof AuthenticatedAdminChatSoundsRoute
   '/admin/check-in-reviews': typeof AuthenticatedAdminCheckInReviewsRoute
   '/admin/check-ins': typeof AuthenticatedAdminCheckInsRoute
   '/admin/client-action-requests': typeof AuthenticatedAdminClientActionRequestsRoute
@@ -890,6 +898,7 @@ export interface FileRoutesByTo {
   '/admin/calendar': typeof AuthenticatedAdminCalendarRoute
   '/admin/cardio-targets': typeof AuthenticatedAdminCardioTargetsRoute
   '/admin/chat-gifs': typeof AuthenticatedAdminChatGifsRoute
+  '/admin/chat-sounds': typeof AuthenticatedAdminChatSoundsRoute
   '/admin/check-in-reviews': typeof AuthenticatedAdminCheckInReviewsRoute
   '/admin/check-ins': typeof AuthenticatedAdminCheckInsRoute
   '/admin/client-action-requests': typeof AuthenticatedAdminClientActionRequestsRoute
@@ -1004,6 +1013,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/calendar': typeof AuthenticatedAdminCalendarRoute
   '/_authenticated/admin/cardio-targets': typeof AuthenticatedAdminCardioTargetsRoute
   '/_authenticated/admin/chat-gifs': typeof AuthenticatedAdminChatGifsRoute
+  '/_authenticated/admin/chat-sounds': typeof AuthenticatedAdminChatSoundsRoute
   '/_authenticated/admin/check-in-reviews': typeof AuthenticatedAdminCheckInReviewsRoute
   '/_authenticated/admin/check-ins': typeof AuthenticatedAdminCheckInsRoute
   '/_authenticated/admin/client-action-requests': typeof AuthenticatedAdminClientActionRequestsRoute
@@ -1118,6 +1128,7 @@ export interface FileRouteTypes {
     | '/admin/calendar'
     | '/admin/cardio-targets'
     | '/admin/chat-gifs'
+    | '/admin/chat-sounds'
     | '/admin/check-in-reviews'
     | '/admin/check-ins'
     | '/admin/client-action-requests'
@@ -1227,6 +1238,7 @@ export interface FileRouteTypes {
     | '/admin/calendar'
     | '/admin/cardio-targets'
     | '/admin/chat-gifs'
+    | '/admin/chat-sounds'
     | '/admin/check-in-reviews'
     | '/admin/check-ins'
     | '/admin/client-action-requests'
@@ -1340,6 +1352,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/calendar'
     | '/_authenticated/admin/cardio-targets'
     | '/_authenticated/admin/chat-gifs'
+    | '/_authenticated/admin/chat-sounds'
     | '/_authenticated/admin/check-in-reviews'
     | '/_authenticated/admin/check-ins'
     | '/_authenticated/admin/client-action-requests'
@@ -1907,6 +1920,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminCheckInReviewsRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
+    '/_authenticated/admin/chat-sounds': {
+      id: '/_authenticated/admin/chat-sounds'
+      path: '/chat-sounds'
+      fullPath: '/admin/chat-sounds'
+      preLoaderRoute: typeof AuthenticatedAdminChatSoundsRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
     '/_authenticated/admin/chat-gifs': {
       id: '/_authenticated/admin/chat-gifs'
       path: '/chat-gifs'
@@ -2303,6 +2323,7 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminCalendarRoute: typeof AuthenticatedAdminCalendarRoute
   AuthenticatedAdminCardioTargetsRoute: typeof AuthenticatedAdminCardioTargetsRoute
   AuthenticatedAdminChatGifsRoute: typeof AuthenticatedAdminChatGifsRoute
+  AuthenticatedAdminChatSoundsRoute: typeof AuthenticatedAdminChatSoundsRoute
   AuthenticatedAdminCheckInReviewsRoute: typeof AuthenticatedAdminCheckInReviewsRoute
   AuthenticatedAdminCheckInsRoute: typeof AuthenticatedAdminCheckInsRoute
   AuthenticatedAdminClientActionRequestsRoute: typeof AuthenticatedAdminClientActionRequestsRoute
@@ -2364,6 +2385,7 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
     AuthenticatedAdminCalendarRoute: AuthenticatedAdminCalendarRoute,
     AuthenticatedAdminCardioTargetsRoute: AuthenticatedAdminCardioTargetsRoute,
     AuthenticatedAdminChatGifsRoute: AuthenticatedAdminChatGifsRoute,
+    AuthenticatedAdminChatSoundsRoute: AuthenticatedAdminChatSoundsRoute,
     AuthenticatedAdminCheckInReviewsRoute:
       AuthenticatedAdminCheckInReviewsRoute,
     AuthenticatedAdminCheckInsRoute: AuthenticatedAdminCheckInsRoute,
