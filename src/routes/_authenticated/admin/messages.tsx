@@ -19,6 +19,7 @@ import {
 import { Search, ChevronLeft, MoreHorizontal, ExternalLink } from "lucide-react";
 import { formatDistanceToNow, parseISO } from "date-fns";
 import { cn } from "@/lib/utils";
+import { useChatPresence, LiveDot } from "@/hooks/use-chat-presence";
 
 const FILTERS = ["All", "Unread", "Needs Response", "High Priority", "Important", "Resolved", "Archived"] as const;
 type Filter = typeof FILTERS[number];
@@ -41,10 +42,14 @@ function MessagesInbox() {
   const { data: clients = [] } = useQuery({
     queryKey: ["clients-min"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("clients").select("id, full_name, first_name, last_name, email, profile_picture_url, archived, status").order("full_name");
+      const { data, error } = await supabase
+        .from("clients")
+        .select("id, full_name, first_name, last_name, email, profile_picture_url, archived, status, last_active_at")
+        .order("full_name");
       if (error) throw error;
       return data;
     },
+    refetchInterval: 60_000,
   });
 
   const { data: states = [] } = useQuery({
