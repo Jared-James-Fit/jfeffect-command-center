@@ -588,6 +588,57 @@ export function MessageThread({
     [messages, role],
   );
 
+  // ---------- Long-press + selection helpers ----------
+  const startLongPress = (id: string, x: number, y: number) => {
+    if (longPressRef.current?.t) clearTimeout(longPressRef.current.t);
+    const t = setTimeout(() => {
+      suppressClickRef.current = true;
+      // Haptic feedback when available.
+      try { (navigator as any).vibrate?.(10); } catch {}
+      if (selectionMode) toggleSelected(id);
+      else setSheetForId(id);
+    }, 450);
+    longPressRef.current = { id, t, x, y };
+  };
+  const cancelLongPress = () => {
+    if (longPressRef.current?.t) clearTimeout(longPressRef.current.t);
+    longPressRef.current = null;
+  };
+  const onPointerMoveDuringHold = (e: React.PointerEvent) => {
+    const lp = longPressRef.current;
+    if (!lp) return;
+    if (Math.hypot(e.clientX - lp.x, e.clientY - lp.y) > 10) cancelLongPress();
+  };
+  const toggleSelected = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+  const exitSelection = () => { setSelectionMode(false); setSelectedIds(new Set()); };
+  const myIds = useMemo(
+    () => new Set(visibleMessages.filter((m) => m.sender_role === role && !m.deleted_at).map((m) => m.id)),
+    [visibleMessages, role],
+  );
+  const selectedDeletable = useMemo(
+    () => Array.from(selectedIds).filter((id) => myIds.has(id)),
+    [selectedIds, myIds],
+  );
+  const allMineSelected = myIds.size > 0 && Array.from(myIds).every((id) => selectedIds.has(id));
+
+  const performBulkDelete = async (ids: string[]) => {
+    let failed = 0;
+    for (const id of ids) {
+      try { await deleteMessageForEveryone(id); }
+      catch { failed++; }
+    }
+    qc.invalidateQueries({ queryKey: ["messages", clientId, role] });
+    if (failed) toast.error(`${failed} message${failed === 1 ? "" : "s"} could not be deleted`);
+    else toast.success(`${ids.length} message${ids.length === 1 ? "" : "s"} deleted`);
+    exitSelection();
+  };
+
   const onPickFiles = async (files: FileList | null) => {
     if (!files || !files.length) return;
     setUploading(true);
