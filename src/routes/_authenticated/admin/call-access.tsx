@@ -51,13 +51,13 @@ function CallAccessPage() {
   });
 
   const updateClient = async (id: string, patch: Record<string, any>) => {
-    const { error } = await supabase.from("clients").update(patch).eq("id", id);
+    const { error } = await supabase.from("clients").update(patch as any).eq("id", id);
     if (error) return toast.error(error.message);
     qc.invalidateQueries({ queryKey: ["call-access-clients"] });
   };
 
   const updateCoach = async (id: string, patch: Record<string, any>) => {
-    const { error } = await supabase.from("coaches").update(patch).eq("id", id);
+    const { error } = await supabase.from("coaches").update(patch as any).eq("id", id);
     if (error) return toast.error(error.message);
     qc.invalidateQueries({ queryKey: ["call-access-coaches"] });
   };

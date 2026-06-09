@@ -77,6 +77,7 @@ import { Route as AuthenticatedAdminCheckInReviewsRouteImport } from './routes/_
 import { Route as AuthenticatedAdminChatSoundsRouteImport } from './routes/_authenticated/admin/chat-sounds'
 import { Route as AuthenticatedAdminChatGifsRouteImport } from './routes/_authenticated/admin/chat-gifs'
 import { Route as AuthenticatedAdminCardioTargetsRouteImport } from './routes/_authenticated/admin/cardio-targets'
+import { Route as AuthenticatedAdminCallAccessRouteImport } from './routes/_authenticated/admin/call-access'
 import { Route as AuthenticatedAdminCalendarRouteImport } from './routes/_authenticated/admin/calendar'
 import { Route as AuthenticatedAdminBusinessSystemsRouteImport } from './routes/_authenticated/admin/business-systems'
 import { Route as AuthenticatedAdminBroadcastsRouteImport } from './routes/_authenticated/admin/broadcasts'
@@ -508,6 +509,12 @@ const AuthenticatedAdminCardioTargetsRoute =
     path: '/cardio-targets',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
+const AuthenticatedAdminCallAccessRoute =
+  AuthenticatedAdminCallAccessRouteImport.update({
+    id: '/call-access',
+    path: '/call-access',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
 const AuthenticatedAdminCalendarRoute =
   AuthenticatedAdminCalendarRouteImport.update({
     id: '/calendar',
@@ -800,6 +807,7 @@ export interface FileRoutesByFullPath {
   '/admin/broadcasts': typeof AuthenticatedAdminBroadcastsRouteWithChildren
   '/admin/business-systems': typeof AuthenticatedAdminBusinessSystemsRoute
   '/admin/calendar': typeof AuthenticatedAdminCalendarRoute
+  '/admin/call-access': typeof AuthenticatedAdminCallAccessRoute
   '/admin/cardio-targets': typeof AuthenticatedAdminCardioTargetsRoute
   '/admin/chat-gifs': typeof AuthenticatedAdminChatGifsRoute
   '/admin/chat-sounds': typeof AuthenticatedAdminChatSoundsRoute
@@ -912,6 +920,7 @@ export interface FileRoutesByTo {
   '/admin/broadcasts': typeof AuthenticatedAdminBroadcastsRouteWithChildren
   '/admin/business-systems': typeof AuthenticatedAdminBusinessSystemsRoute
   '/admin/calendar': typeof AuthenticatedAdminCalendarRoute
+  '/admin/call-access': typeof AuthenticatedAdminCallAccessRoute
   '/admin/cardio-targets': typeof AuthenticatedAdminCardioTargetsRoute
   '/admin/chat-gifs': typeof AuthenticatedAdminChatGifsRoute
   '/admin/chat-sounds': typeof AuthenticatedAdminChatSoundsRoute
@@ -1029,6 +1038,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/broadcasts': typeof AuthenticatedAdminBroadcastsRouteWithChildren
   '/_authenticated/admin/business-systems': typeof AuthenticatedAdminBusinessSystemsRoute
   '/_authenticated/admin/calendar': typeof AuthenticatedAdminCalendarRoute
+  '/_authenticated/admin/call-access': typeof AuthenticatedAdminCallAccessRoute
   '/_authenticated/admin/cardio-targets': typeof AuthenticatedAdminCardioTargetsRoute
   '/_authenticated/admin/chat-gifs': typeof AuthenticatedAdminChatGifsRoute
   '/_authenticated/admin/chat-sounds': typeof AuthenticatedAdminChatSoundsRoute
@@ -1146,6 +1156,7 @@ export interface FileRouteTypes {
     | '/admin/broadcasts'
     | '/admin/business-systems'
     | '/admin/calendar'
+    | '/admin/call-access'
     | '/admin/cardio-targets'
     | '/admin/chat-gifs'
     | '/admin/chat-sounds'
@@ -1258,6 +1269,7 @@ export interface FileRouteTypes {
     | '/admin/broadcasts'
     | '/admin/business-systems'
     | '/admin/calendar'
+    | '/admin/call-access'
     | '/admin/cardio-targets'
     | '/admin/chat-gifs'
     | '/admin/chat-sounds'
@@ -1374,6 +1386,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/broadcasts'
     | '/_authenticated/admin/business-systems'
     | '/_authenticated/admin/calendar'
+    | '/_authenticated/admin/call-access'
     | '/_authenticated/admin/cardio-targets'
     | '/_authenticated/admin/chat-gifs'
     | '/_authenticated/admin/chat-sounds'
@@ -1968,6 +1981,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminCardioTargetsRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
+    '/_authenticated/admin/call-access': {
+      id: '/_authenticated/admin/call-access'
+      path: '/call-access'
+      fullPath: '/admin/call-access'
+      preLoaderRoute: typeof AuthenticatedAdminCallAccessRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
     '/_authenticated/admin/calendar': {
       id: '/_authenticated/admin/calendar'
       path: '/calendar'
@@ -2364,6 +2384,7 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminBroadcastsRoute: typeof AuthenticatedAdminBroadcastsRouteWithChildren
   AuthenticatedAdminBusinessSystemsRoute: typeof AuthenticatedAdminBusinessSystemsRoute
   AuthenticatedAdminCalendarRoute: typeof AuthenticatedAdminCalendarRoute
+  AuthenticatedAdminCallAccessRoute: typeof AuthenticatedAdminCallAccessRoute
   AuthenticatedAdminCardioTargetsRoute: typeof AuthenticatedAdminCardioTargetsRoute
   AuthenticatedAdminChatGifsRoute: typeof AuthenticatedAdminChatGifsRoute
   AuthenticatedAdminChatSoundsRoute: typeof AuthenticatedAdminChatSoundsRoute
@@ -2426,6 +2447,7 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
     AuthenticatedAdminBusinessSystemsRoute:
       AuthenticatedAdminBusinessSystemsRoute,
     AuthenticatedAdminCalendarRoute: AuthenticatedAdminCalendarRoute,
+    AuthenticatedAdminCallAccessRoute: AuthenticatedAdminCallAccessRoute,
     AuthenticatedAdminCardioTargetsRoute: AuthenticatedAdminCardioTargetsRoute,
     AuthenticatedAdminChatGifsRoute: AuthenticatedAdminChatGifsRoute,
     AuthenticatedAdminChatSoundsRoute: AuthenticatedAdminChatSoundsRoute,
@@ -2706,13 +2728,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
