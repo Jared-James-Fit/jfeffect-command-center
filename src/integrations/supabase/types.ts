@@ -2415,6 +2415,74 @@ export type Database = {
         }
         Relationships: []
       }
+      manual_check_in_reviews: {
+        Row: {
+          action_items: string | null
+          check_in_date: string | null
+          client_id: string
+          coach_user_id: string
+          created_at: string
+          dismissed_at: string | null
+          external_link: string | null
+          id: string
+          internal_notes: string | null
+          message: string
+          notify_client: boolean
+          priority: string | null
+          read_at: string | null
+          seen_at: string | null
+          source: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          action_items?: string | null
+          check_in_date?: string | null
+          client_id: string
+          coach_user_id: string
+          created_at?: string
+          dismissed_at?: string | null
+          external_link?: string | null
+          id?: string
+          internal_notes?: string | null
+          message: string
+          notify_client?: boolean
+          priority?: string | null
+          read_at?: string | null
+          seen_at?: string | null
+          source?: string
+          title?: string
+          updated_at?: string
+        }
+        Update: {
+          action_items?: string | null
+          check_in_date?: string | null
+          client_id?: string
+          coach_user_id?: string
+          created_at?: string
+          dismissed_at?: string | null
+          external_link?: string | null
+          id?: string
+          internal_notes?: string | null
+          message?: string
+          notify_client?: boolean
+          priority?: string | null
+          read_at?: string | null
+          seen_at?: string | null
+          source?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "manual_check_in_reviews_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       media_archive_settings: {
         Row: {
           auto_archive_enabled: boolean
