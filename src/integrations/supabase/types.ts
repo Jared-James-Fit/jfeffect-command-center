@@ -6215,6 +6215,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      can_access_chat_presence: { Args: { _topic: string }; Returns: boolean }
       current_coach_id: { Args: never; Returns: string }
       current_member_id: { Args: never; Returns: string }
       delete_email: {
