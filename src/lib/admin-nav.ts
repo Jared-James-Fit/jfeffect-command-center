@@ -50,6 +50,7 @@ export const adminNav: NavItem[] = [
   // ACCOUNT
   { to: "/admin/account", label: "Account", icon: UserCog, group: "Account" },
   { to: "/admin/settings", label: "Settings", icon: Settings, group: "Account" },
+  { to: "/admin/settings/sms", label: "SMS Notifications", icon: MessageCircle, group: "Account" },
   { to: "/admin/settings/chat", label: "Chat Settings", icon: MessageCircle, group: "Account" },
   { to: "/admin/chat-gifs", label: "Chat GIF Library", icon: Sparkles, group: "Account" },
   { to: "/admin/chat-sounds", label: "Chat Sound Library", icon: Sparkles, group: "Account" },
