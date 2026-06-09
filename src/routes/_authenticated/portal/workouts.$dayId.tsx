@@ -15,6 +15,7 @@ import { getExerciseVideoSource } from "@/lib/exercise-video";
 import { toast } from "sonner";
 import { durationRange } from "@/lib/pl-programs";
 import { movementAccent } from "@/components/program-builder";
+import { listClientMaxes, buildMaxIndex, computeRowLoad } from "@/lib/pl-maxes";
 import { useAutosave, readLocalDraft, clearLocalDraft } from "@/hooks/use-autosave";
 import { SaveStatus } from "@/components/save-status";
 import { ActionButton } from "@/components/action-button";
