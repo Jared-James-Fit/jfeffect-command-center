@@ -32,14 +32,37 @@ type Draft = {
   variation_modifier?: number | "";
 };
 
-export function BlockMaxesButton({ clientId, blockId }: { clientId: string; blockId: string }) {
+export function BlockMaxesButton({
+  clientId,
+  blockId,
+  size = "sm",
+  variant = "default",
+}: {
+  clientId?: string | null;
+  blockId?: string | null;
+  size?: "sm" | "default";
+  variant?: "default" | "outline" | "secondary";
+}) {
   const [open, setOpen] = useState(false);
+  const disabled = !clientId || !blockId;
   return (
     <>
-      <Button size="sm" variant="default" className="h-8 gap-1.5 text-xs font-semibold" onClick={() => setOpen(true)}>
+      <Button
+        size={size}
+        variant={variant}
+        className="h-8 gap-1.5 text-xs font-semibold"
+        onClick={() => {
+          if (disabled) {
+            toast.info("Assign this template to a client block to set 1RM / TM values.");
+            return;
+          }
+          setOpen(true);
+        }}
+        title={disabled ? "Available once assigned to a client block" : "Set 1RM / TM"}
+      >
         <Dumbbell className="h-3.5 w-3.5" /> Set 1RM / TM
       </Button>
-      {open && (
+      {open && clientId && blockId && (
         <BlockMaxesDialog clientId={clientId} blockId={blockId} onClose={() => setOpen(false)} />
       )}
     </>
