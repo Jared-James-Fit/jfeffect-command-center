@@ -23,9 +23,10 @@ export function GifThumb({
   const [state, setState] = useState<S>(src ? "loading" : "error");
   const emoji = fallback || fallbackEmoji(title, category);
 
-  const showImg = !!src && state !== "error";
+  const hasError = !src || state === "error";
+  const showImg = !hasError;
   const showSkeleton = showImg && state === "loading";
-  const showEmoji = !showImg || state === "error";
+  const showEmoji = hasError;
 
   return (
     <div className={cn("relative overflow-hidden bg-gradient-to-br from-secondary/60 to-secondary/30", className)}>

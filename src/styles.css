@@ -219,3 +219,9 @@ html[data-keyboard-open="true"] { --bottom-nav-clearance: 0px; }
 .animate-reaction-pop {
   animation: reaction-pop 240ms cubic-bezier(.2,.8,.2,1);
 }
+
+/* GIF fallback emoji subtle bounce */
+@keyframes gif-bounce {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50%      { transform: translateY(-6%) scale(1.06); }
+}
