@@ -15,6 +15,7 @@ import {
   statusTone,
   type NfForm,
 } from "@/lib/native-forms";
+import { listManualReviewsForClient, sourceLabel } from "@/lib/manual-check-in-reviews";
 
 export const Route = createFileRoute("/_authenticated/portal/check-ins")({
   component: ClientCheckInsList,
@@ -43,6 +44,12 @@ function ClientCheckInsList() {
     queryKey: ["nf-submissions-for-client", client?.id],
     enabled: !!client?.id,
     queryFn: () => listSubmissionsForClient(client!.id),
+  });
+
+  const { data: manualReviews = [] } = useQuery({
+    queryKey: ["manual-reviews-for-client", client?.id],
+    enabled: !!client?.id,
+    queryFn: () => listManualReviewsForClient(client!.id),
   });
 
   const byForm = useMemo(() => {
@@ -75,6 +82,40 @@ function ClientCheckInsList() {
         subtitle="Submit your assigned forms and see Coach Jared's reply in messenger."
       />
       <div className="space-y-6 p-4 md:p-8">
+        {manualReviews.length > 0 && (
+          <Card className="border-border bg-card p-5">
+            <div className="mb-3 flex items-center justify-between">
+              <div>
+                <div className="text-lg font-black">Check-In Reviews</div>
+                <div className="text-xs text-muted-foreground">Coach feedback on your check-ins.</div>
+              </div>
+              <Badge variant="outline">{manualReviews.length}</Badge>
+            </div>
+            <ul className="divide-y divide-border">
+              {manualReviews.map((r) => (
+                <li key={r.id} className="py-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-bold">{r.title}</div>
+                      <div className="text-[11px] text-muted-foreground">
+                        {sourceLabel(r.source)} · {r.check_in_date ?? new Date(r.created_at).toLocaleDateString()}
+                      </div>
+                    </div>
+                    <Badge variant="outline" className="text-[10px]">{r.read_at ? "Read" : "New"}</Badge>
+                  </div>
+                  <div className="mt-2 whitespace-pre-wrap rounded-md bg-muted/40 p-3 text-sm">{r.message}</div>
+                  {r.action_items && (
+                    <div className="mt-2 rounded-md border border-border p-2 text-sm">
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Action Items</div>
+                      <div className="mt-1 whitespace-pre-wrap">{r.action_items}</div>
+                    </div>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </Card>
+        )}
+
         {forms.length === 0 ? (
           <Card className="p-6 text-sm text-muted-foreground">
             No forms assigned yet. Your coach will assign your weekly check-in here.
