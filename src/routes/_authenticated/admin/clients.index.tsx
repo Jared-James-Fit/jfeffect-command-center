@@ -325,11 +325,41 @@ function ClientsPage() {
     return { stateMap, last, unread };
   }, [convStates, recentMsgs]);
 
+  const setupNeededFn = (c: any) =>
+    !c.account_created_at && (c.invite_sent_at || c.needs_admin_help || (c.invite_expires_at && new Date(c.invite_expires_at).getTime() < Date.now()));
+
+  const programEndingFn = (c: any) => {
+    const ph = phaseByClient.get(c.id);
+    if (!ph?.current) return false;
+    const d = derivePhase(ph.current);
+    return ["past-due", "due-today", "ending-soon"].includes(d.state);
+  };
+
+  const needsReviewFn = (c: any) => (msgInfoByClient.unread.get(c.id) ?? 0) > 0 || msgInfoByClient.stateMap.get(c.id)?.status === "needs_response";
+  const paymentIssueFn = (c: any) =>
+    ["Overdue", "Failed", "Manual Payment Needed"].includes(c.payment_status ?? "") || c.status === "Payment Overdue";
+
   const filtered = clients.filter((c) => {
     const matchesSearch = !search || c.full_name?.toLowerCase().includes(search.toLowerCase()) || c.email?.toLowerCase().includes(search.toLowerCase());
     const matchesStatus = statusFilter === "all" || c.status === statusFilter;
-    return matchesSearch && matchesStatus;
+    const matchesType = typeFilter === "all" || c.coaching_type === typeFilter;
+    let matchesPriority = true;
+    if (priorityFilter === "needs-setup") matchesPriority = !!setupNeededFn(c);
+    else if (priorityFilter === "needs-review") matchesPriority = needsReviewFn(c);
+    else if (priorityFilter === "program-ending") matchesPriority = programEndingFn(c);
+    else if (priorityFilter === "payment-issues") matchesPriority = paymentIssueFn(c);
+    else if (priorityFilter === "new-clients") matchesPriority = c.status === "New Client";
+    return matchesSearch && matchesStatus && matchesType && matchesPriority;
   });
+
+  const PRIORITY_CHIPS = [
+    { key: "all", label: "All" },
+    { key: "needs-setup", label: "Needs Setup" },
+    { key: "needs-review", label: "Needs Review" },
+    { key: "program-ending", label: "Program Ending" },
+    { key: "payment-issues", label: "Payment Issues" },
+    { key: "new-clients", label: "New Clients" },
+  ];
 
   return (
     <>
