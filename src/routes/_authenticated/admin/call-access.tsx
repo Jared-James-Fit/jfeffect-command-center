@@ -339,12 +339,12 @@ function AddCoachDialog({ open, onOpenChange, onCreated }: { open: boolean; onOp
   const [f, setF] = useState<any>(empty);
   const [busy, setBusy] = useState(false);
   const save = async () => {
-    if (!f.first_name || !f.email) return toast.error("First name and email required");
+    if (!f.first_name || !f.email || !f.phone) return toast.error("First name, email, and phone are required");
     setBusy(true);
     const full_name = `${f.first_name} ${f.last_name}`.trim();
     const { error } = await supabase.from("coaches").insert({
       first_name: f.first_name, last_name: f.last_name || null, full_name,
-      email: f.email.toLowerCase().trim(), phone: f.phone || null, status: f.status,
+      email: f.email.toLowerCase().trim(), phone: f.phone.trim(), status: f.status,
     } as any);
     setBusy(false);
     if (error) return toast.error(error.message);
@@ -362,7 +362,7 @@ function AddCoachDialog({ open, onOpenChange, onCreated }: { open: boolean; onOp
             <div><Label>Last name</Label><Input value={f.last_name} onChange={(e) => setF({ ...f, last_name: e.target.value })} /></div>
           </div>
           <div><Label>Email *</Label><Input type="email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} /></div>
-          <div><Label>Phone</Label><Input value={f.phone} placeholder="+15551234567" onChange={(e) => setF({ ...f, phone: e.target.value })} /></div>
+          <div><Label>Phone *</Label><Input required value={f.phone} placeholder="+15551234567" onChange={(e) => setF({ ...f, phone: e.target.value })} /><p className="text-[11px] text-muted-foreground mt-1">Required — powers the team directory dial buttons.</p></div>
           <div><Label>Status</Label>
             <Select value={f.status} onValueChange={(v) => setF({ ...f, status: v })}>
               <SelectTrigger><SelectValue /></SelectTrigger>
