@@ -15,6 +15,7 @@ export const adminNav: NavItem[] = [
   { to: "/admin/clients", label: "Coaching Clients", icon: Users, group: "Core" },
   { to: "/admin/messages", label: "Messages", icon: MessageCircle, group: "Core" },
   { to: "/admin/check-in-reviews", label: "Check-In Reviews", icon: ClipboardList, group: "Core" },
+  { to: "/admin/client-action-requests", label: "Action Requests", icon: ClipboardCheck, group: "Core" },
   { to: "/admin/lift-videos", label: "Lift Reviews", icon: Video, group: "Core" },
   { to: "/admin/training-intelligence", label: "Training Intel", icon: Activity, group: "Core" },
   // MEMBERSHIP
@@ -55,6 +56,7 @@ export const coachNav: NavItem[] = [
   { to: "/admin/messages", label: "Messages", icon: MessageCircle },
   { to: "/admin/lift-videos", label: "Lift Reviews", icon: Video },
   { to: "/admin/check-in-reviews", label: "Check-In Reviews", icon: ClipboardList },
+  { to: "/admin/client-action-requests", label: "Action Requests", icon: ClipboardCheck },
   { to: "/admin/media-review", label: "Media Review Inbox", icon: Film },
   { to: "/admin/calendar", label: "Calendar", icon: Calendar },
   { to: "/admin/exercises", label: "Exercise Library", icon: Dumbbell },

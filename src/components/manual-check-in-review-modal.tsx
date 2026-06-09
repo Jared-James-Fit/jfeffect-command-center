@@ -68,6 +68,10 @@ export function ManualCheckInReviewModal({ clientId }: { clientId: string | null
           {current.message}
         </div>
 
+        <p className="text-[11px] text-muted-foreground">
+          This will keep popping up each time you open the app until you tap <span className="font-bold">Got it</span> to confirm.
+        </p>
+
         {current.action_items && (
           <div className="rounded-xl border border-border bg-card p-3">
             <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Action Items</div>

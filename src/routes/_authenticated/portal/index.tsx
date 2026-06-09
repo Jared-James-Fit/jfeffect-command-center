@@ -23,6 +23,7 @@ import type { WeightUnit } from "@/lib/progress-metrics";
 import { HomeScreenSetupCard } from "@/components/home-screen-setup-card";
 import { listFormsForClient } from "@/lib/native-forms";
 import { ManualCheckInReviewModal } from "@/components/manual-check-in-review-modal";
+import { ClientActionRequestModal } from "@/components/client-action-request-modal";
 
 export const Route = createFileRoute("/_authenticated/portal/")({ component: PortalHome });
 
@@ -199,6 +200,7 @@ function PortalHome() {
       />
       <div className="space-y-6 p-6 md:p-8">
         {client?.id && <ManualCheckInReviewModal clientId={client.id} />}
+        {client?.id && <ClientActionRequestModal clientId={client.id} />}
         {client?.id && (
           <HomeScreenSetupCard
             clientId={client.id}
