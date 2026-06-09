@@ -229,6 +229,15 @@ function ClientsPage() {
     },
   });
 
+  const { data: activePurchases = [] } = useQuery({
+    queryKey: ["active-purchases-by-client"],
+    queryFn: async () => (await supabase
+      .from("purchase_records")
+      .select("client_id, status")
+      .eq("status", "Active")).data ?? [],
+  });
+  const activeProductSet = useMemo(() => new Set((activePurchases as any[]).map((p) => p.client_id)), [activePurchases]);
+
   const { data: recentMsgs = [] } = useQuery({
     queryKey: ["recent-client-messages"],
     queryFn: async () => {
