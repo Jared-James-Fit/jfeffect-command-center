@@ -53,6 +53,7 @@ type Clip = {
   url?: string;
   previewUrl?: string;
   previewStatus?: "pending" | "ready" | "failed";
+  isImage?: boolean;
   note: string;
   duration?: number;
 };
@@ -187,15 +188,23 @@ export function ClientLiftVideoUploader({ clientId, clientName, userId, onSaved 
         toast.error(`Unsupported file: ${f.name || "selected item"}`);
         continue;
       }
+      // createObjectURL is synchronous and effectively free — it does NOT
+      // read or decode the file. This gives an instant visual preview
+      // (image tag for photos, muted <video> for videos) without blocking
+      // the file handoff or the Send button.
+      let previewUrl: string | undefined;
+      try {
+        previewUrl = URL.createObjectURL(f);
+      } catch {
+        previewUrl = undefined;
+      }
       next.push({
         id: crypto.randomUUID(),
         kind: "file",
         file: f,
-        // Do not create object URLs, thumbnails, metadata, or video elements
-        // here. On iPhone, the only acceptable post-handoff work is adding
-        // the File reference and painting the send/details UI.
-        previewUrl: undefined,
-        previewStatus: "pending",
+        previewUrl,
+        previewStatus: previewUrl ? "ready" : "pending",
+        isImage: looksImage,
         note: "",
       });
     }
@@ -231,6 +240,19 @@ export function ClientLiftVideoUploader({ clientId, clientName, userId, onSaved 
       return next;
     });
   };
+
+  // Revoke any outstanding object URLs on unmount to avoid leaks.
+  const clipsRef = useRef<Clip[]>([]);
+  useEffect(() => { clipsRef.current = clips; }, [clips]);
+  useEffect(() => {
+    return () => {
+      for (const c of clipsRef.current) {
+        if (c.previewUrl) {
+          try { URL.revokeObjectURL(c.previewUrl); } catch { /* noop */ }
+        }
+      }
+    };
+  }, []);
 
   const updateClipNote = (id: string, note: string) => {
     setClips((c) => c.map((k) => (k.id === id ? { ...k, note } : k)));
@@ -455,19 +477,34 @@ export function ClientLiftVideoUploader({ clientId, clientName, userId, onSaved 
                       className="block h-full w-full text-left"
                       aria-label={`Select clip ${idx + 1}`}
                     >
-                      {clip.kind === "file" && clip.previewUrl ? (
+                      {clip.kind === "file" && clip.previewUrl && clip.isImage ? (
+                        <img
+                          src={clip.previewUrl}
+                          alt={clip.file?.name || `Clip ${idx + 1}`}
+                          className="h-full w-full object-cover"
+                          loading="lazy"
+                          decoding="async"
+                          draggable={false}
+                          onError={() => {
+                            setClips((cs) => cs.map((k) => k.id === clip.id ? { ...k, previewStatus: "failed" } : k));
+                          }}
+                        />
+                      ) : clip.kind === "file" && clip.previewUrl ? (
                         <video
                           src={`${clip.previewUrl}#t=0.1`}
                           className="h-full w-full object-cover"
                           muted
                           playsInline
-                          preload="none"
+                          preload="metadata"
+                          onError={() => {
+                            setClips((cs) => cs.map((k) => k.id === clip.id ? { ...k, previewStatus: "failed" } : k));
+                          }}
                         />
                       ) : clip.kind === "file" ? (
                         <div className="flex h-full w-full flex-col items-center justify-center gap-1 bg-gradient-to-br from-muted to-muted/60 px-2 text-center">
                           <Film className="h-5 w-5 text-muted-foreground/70" />
                           <span className="text-[9px] font-medium text-muted-foreground">
-                            {clip.previewStatus === "failed" ? "Preview unavailable" : "Selected"}
+                            {clip.previewStatus === "failed" ? "Preview unavailable" : "Preview loading…"}
                           </span>
                         </div>
                       ) : (
@@ -663,13 +700,21 @@ export function ClientLiftVideoUploader({ clientId, clientName, userId, onSaved 
             </DialogTitle>
           </DialogHeader>
           {previewClip?.previewUrl && (
-            <video
-              src={previewClip.previewUrl}
-              className="w-full rounded-lg bg-black"
-              controls
-              autoPlay
-              playsInline
-            />
+            previewClip.isImage ? (
+              <img
+                src={previewClip.previewUrl}
+                alt={previewClip.file?.name || "Preview"}
+                className="w-full rounded-lg bg-black object-contain"
+              />
+            ) : (
+              <video
+                src={previewClip.previewUrl}
+                className="w-full rounded-lg bg-black"
+                controls
+                autoPlay
+                playsInline
+              />
+            )
           )}
         </DialogContent>
       </Dialog>
