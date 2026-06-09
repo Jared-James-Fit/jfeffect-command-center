@@ -396,6 +396,72 @@ function ClientsPage() {
                           </Link>
                         ) : <span className="text-muted-foreground">—</span>}
                       </td>
+                      {(() => {
+                        const bs = blocksByClient.get(c.id);
+                        const cur = bs?.current;
+                        const nxt = bs?.next;
+                        return (
+                          <>
+                            <td className="px-4 py-3 text-xs">
+                              {cur ? (
+                                <div className="space-y-1">
+                                  <Link
+                                    to="/admin/blocks/$blockId"
+                                    params={{ blockId: cur.id }}
+                                    className="block hover:opacity-80"
+                                  >
+                                    <div className="flex items-center gap-1.5">
+                                      <Dumbbell className="h-3 w-3 text-primary" />
+                                      <span className="font-semibold truncate max-w-[140px]">{cur.name}</span>
+                                    </div>
+                                    <div className="text-[10px] text-muted-foreground truncate">
+                                      {cur.training_focus ? `${cur.training_focus} · ` : ""}
+                                      {cur.weeks}w
+                                      {cur.start_date && cur.end_date ? ` · ${format(parseISO(cur.start_date), "MMM d")} → ${format(parseISO(cur.end_date), "MMM d")}` : ""}
+                                    </div>
+                                  </Link>
+                                  <Link
+                                    to="/admin/clients/$id"
+                                    params={{ id: c.id }}
+                                    search={{ tab: "training" }}
+                                    className="inline-flex items-center text-[10px] font-semibold text-primary hover:underline"
+                                  >
+                                    + Add block
+                                  </Link>
+                                </div>
+                              ) : (
+                                <AddCell id={c.id} tab="training" label="Add Training Block" />
+                              )}
+                            </td>
+                            <td className="px-4 py-3 text-xs">
+                              {nxt ? (
+                                <Link
+                                  to="/admin/blocks/$blockId"
+                                  params={{ blockId: nxt.id }}
+                                  className="block hover:opacity-80"
+                                >
+                                  <div className="font-medium truncate max-w-[140px]">{nxt.name}</div>
+                                  <div className="text-[10px] text-muted-foreground truncate">
+                                    {nxt.start_date ? format(parseISO(nxt.start_date), "MMM d") : nxt.status}
+                                    {" · "}{nxt.weeks}w
+                                  </div>
+                                </Link>
+                              ) : cur ? (
+                                <Link
+                                  to="/admin/clients/$id"
+                                  params={{ id: c.id }}
+                                  search={{ tab: "training" }}
+                                  className="text-[11px] font-semibold text-primary hover:underline"
+                                >
+                                  + Queue next
+                                </Link>
+                              ) : (
+                                <span className="text-muted-foreground">—</span>
+                              )}
+                            </td>
+                          </>
+                        );
+                      })()}
                       <td className="px-4 py-3">
                         {dNut ? (
                           <Link to="/admin/clients/$id" params={{ id: c.id }} search={{ tab: "nutrition" }}>
