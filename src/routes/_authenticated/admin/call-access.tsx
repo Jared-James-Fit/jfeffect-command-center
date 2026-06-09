@@ -163,8 +163,15 @@ function CallAccessPage() {
                           </Select>
                         </td>
                         <td className="px-3 py-2 min-w-[180px]">
-                          <Input defaultValue={c.phone ?? ""} placeholder="+15551234567" className="h-8 text-sm"
-                            onBlur={(e) => { if (e.target.value !== (c.phone ?? "")) updateClient(c.id, { phone: e.target.value || null }); }} />
+                          <div className="flex items-center gap-1">
+                            <Input defaultValue={c.phone ?? ""} placeholder="+15551234567" className="h-8 text-sm"
+                              onBlur={(e) => { if (e.target.value !== (c.phone ?? "")) updateClient(c.id, { phone: e.target.value || null }); }} />
+                            {tel && (
+                              <Button asChild size="icon" variant="outline" className="h-8 w-8 shrink-0 border-emerald-500/40 text-emerald-600">
+                                <a href={`tel:${tel}`} title={`Call ${c.full_name}`}><Phone className="h-4 w-4" /></a>
+                              </Button>
+                            )}
+                          </div>
                         </td>
                         <td className="px-3 py-2">
                           <div className="flex items-center gap-2">
@@ -231,8 +238,13 @@ function CallAccessPage() {
                             onBlur={(e) => { if (e.target.value !== (co.email ?? "")) updateCoach(co.id, { email: e.target.value }); }} />
                         </td>
                         <td className="px-3 py-2 min-w-[180px]">
-                          <Input defaultValue={co.phone ?? ""} placeholder="+15551234567" className="h-8 text-sm"
-                            onBlur={(e) => { if (e.target.value !== (co.phone ?? "")) updateCoach(co.id, { phone: e.target.value || null }); }} />
+                          <Input required defaultValue={co.phone ?? ""} placeholder="+15551234567 (required)"
+                            className={`h-8 text-sm ${!co.phone ? "border-destructive" : ""}`}
+                            onBlur={(e) => {
+                              const v = e.target.value.trim();
+                              if (!v) { toast.error("Coach phone is required"); e.target.value = co.phone ?? ""; return; }
+                              if (v !== (co.phone ?? "")) updateCoach(co.id, { phone: v });
+                            }} />
                         </td>
                         <td className="px-3 py-2 min-w-[140px]">
                           <Select value={co.status ?? "Active"} onValueChange={(v) => updateCoach(co.id, { status: v })}>
@@ -327,12 +339,12 @@ function AddCoachDialog({ open, onOpenChange, onCreated }: { open: boolean; onOp
   const [f, setF] = useState<any>(empty);
   const [busy, setBusy] = useState(false);
   const save = async () => {
-    if (!f.first_name || !f.email) return toast.error("First name and email required");
+    if (!f.first_name || !f.email || !f.phone) return toast.error("First name, email, and phone are required");
     setBusy(true);
     const full_name = `${f.first_name} ${f.last_name}`.trim();
     const { error } = await supabase.from("coaches").insert({
       first_name: f.first_name, last_name: f.last_name || null, full_name,
-      email: f.email.toLowerCase().trim(), phone: f.phone || null, status: f.status,
+      email: f.email.toLowerCase().trim(), phone: f.phone.trim(), status: f.status,
     } as any);
     setBusy(false);
     if (error) return toast.error(error.message);
@@ -350,7 +362,7 @@ function AddCoachDialog({ open, onOpenChange, onCreated }: { open: boolean; onOp
             <div><Label>Last name</Label><Input value={f.last_name} onChange={(e) => setF({ ...f, last_name: e.target.value })} /></div>
           </div>
           <div><Label>Email *</Label><Input type="email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} /></div>
-          <div><Label>Phone</Label><Input value={f.phone} placeholder="+15551234567" onChange={(e) => setF({ ...f, phone: e.target.value })} /></div>
+          <div><Label>Phone *</Label><Input required value={f.phone} placeholder="+15551234567" onChange={(e) => setF({ ...f, phone: e.target.value })} /><p className="text-[11px] text-muted-foreground mt-1">Required — powers the team directory dial buttons.</p></div>
           <div><Label>Status</Label>
             <Select value={f.status} onValueChange={(v) => setF({ ...f, status: v })}>
               <SelectTrigger><SelectValue /></SelectTrigger>

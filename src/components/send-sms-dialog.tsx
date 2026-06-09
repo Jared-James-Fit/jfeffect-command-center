@@ -10,6 +10,7 @@ import { sendManualSms } from "@/lib/sms.functions";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { MessageSquare } from "lucide-react";
+import { Link } from "@tanstack/react-router";
 
 function render(tpl: string, vars: Record<string, string>) {
   return tpl.replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? "");
@@ -47,6 +48,9 @@ export function SendSmsDialog({
 
   const doSend = async () => {
     if (!body.trim()) return toast.error("Message is empty");
+    if (!settings?.from_phone) return toast.error("Set a Twilio From phone number in SMS settings first");
+    if (!settings?.enabled) return toast.error("SMS sending is disabled in settings");
+    if (!phone) return toast.error("This client has no phone number on file");
     setBusy(true);
     try {
       await send({ data: { client_id: clientId, body: body.trim() } });
@@ -63,6 +67,23 @@ export function SendSmsDialog({
           <DialogTitle className="flex items-center gap-2"><MessageSquare className="h-5 w-5" />Send SMS</DialogTitle>
         </DialogHeader>
         <div className="space-y-3">
+          {settings && (!settings.from_phone || !settings.enabled) && (
+            <div className="rounded border border-amber-500/40 bg-amber-500/10 p-3 text-xs">
+              <div className="font-semibold text-amber-700 dark:text-amber-400">SMS not ready to send</div>
+              <div className="mt-1 text-muted-foreground">
+                {!settings.from_phone && <div>• No Twilio From number configured.</div>}
+                {!settings.enabled && <div>• SMS sending is currently disabled.</div>}
+              </div>
+              <Link to="/admin/settings/sms" className="mt-2 inline-block font-semibold underline" onClick={() => onOpenChange(false)}>
+                Open SMS settings →
+              </Link>
+            </div>
+          )}
+          {!phone && (
+            <div className="rounded border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
+              No phone number on file for this client. Add one on their profile or in Call Access.
+            </div>
+          )}
           <div className="text-sm">
             To <span className="font-semibold">{clientName ?? "client"}</span>
             {phone && <Badge variant="outline" className="ml-2">{phone}</Badge>}
