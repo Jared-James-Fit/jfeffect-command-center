@@ -16,6 +16,8 @@ import {
   listClientMaxes, upsertClientMax, deleteClientMax, effectiveMax, buildMaxIndex,
   defaultRoundingStep, type ClientMaxRow,
 } from "@/lib/pl-maxes";
+import { movementAccent } from "@/components/program-builder";
+import { cn } from "@/lib/utils";
 
 const DEFAULT_LIFTS = ["Competition Squat", "Competition Bench Press", "Competition Deadlift"];
 const MORE_LIFTS = [
@@ -300,87 +302,110 @@ function BlockMaxesDialog({
               <div className="col-span-2 text-center">Scope</div>
               <div className="col-span-1" />
             </div>
-            {drafts.map((d, i) => (
-              <div key={`${d.lift}-${i}`} className="space-y-1 rounded-md border border-border bg-secondary/20 px-2 py-1.5">
-              <div className="grid grid-cols-12 items-center gap-1">
-                <div className="col-span-4 min-w-0">
-                  <Input
-                    className="h-7 text-xs"
-                    value={d.lift}
-                    onChange={(e) => update(i, { lift: e.target.value })}
-                  />
-                  {d.source_lift && (
-                    <div className="mt-1 flex items-center gap-1 text-[10px] text-muted-foreground">
-                      <Link2 className="h-2.5 w-2.5" />
-                      {d.variation_modifier || 100}% of {d.source_lift}
+            {drafts.map((d, i) => {
+              const accent = movementAccent(d.lift);
+              const sourceAccent = d.source_lift ? movementAccent(d.source_lift) : null;
+              return (
+                <div key={`${d.lift}-${i}`} className="relative overflow-hidden rounded-md border border-border bg-secondary/20">
+                  <div className={cn("absolute left-0 top-0 h-full w-1.5", accent)} aria-hidden />
+                  <div className="pl-3 pr-2 py-1.5 space-y-1">
+                    <div className="grid grid-cols-12 items-center gap-1">
+                      <div className="col-span-4 min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <div className={cn("h-2 w-2 rounded-full shrink-0", accent)} aria-hidden />
+                          <Input
+                            className="h-7 text-xs"
+                            value={d.lift}
+                            onChange={(e) => update(i, { lift: e.target.value })}
+                          />
+                        </div>
+                        {d.source_lift && (
+                          <div className="mt-1 flex items-center gap-1 text-[10px] text-muted-foreground">
+                            <Link2 className="h-2.5 w-2.5" />
+                            {d.variation_modifier || 100}% of {d.source_lift}
+                          </div>
+                        )}
+                      </div>
+                      <Input
+                        className="col-span-2 h-7 text-center font-mono text-xs"
+                        inputMode="decimal" placeholder="—"
+                        value={d.one_rm}
+                        onChange={(e) => update(i, { one_rm: e.target.value === "" ? "" : Number(e.target.value) })}
+                      />
+                      <Input
+                        className="col-span-2 h-7 text-center font-mono text-xs"
+                        inputMode="decimal" placeholder="—"
+                        value={d.training_max}
+                        onChange={(e) => update(i, { training_max: e.target.value === "" ? "" : Number(e.target.value) })}
+                      />
+                      <Select value={d.unit} onValueChange={(v) => changeRowUnit(i, v as "kg" | "lb")}>
+                        <SelectTrigger className="col-span-1 h-7 text-xs"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="kg">kg</SelectItem>
+                          <SelectItem value="lb">lb</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Select value={d.scope} onValueChange={(v) => update(i, { scope: v as "block" | "profile" })}>
+                        <SelectTrigger className="col-span-2 h-7 text-[11px]"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="profile">Save to profile</SelectItem>
+                          <SelectItem value="block">Block only</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <div className="col-span-1 flex justify-end">
+                        <Button size="icon" variant="ghost" className="h-6 w-6 text-destructive" onClick={() => removeRow(i)} title="Remove">
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
                     </div>
-                  )}
+                    {/* Variation mapping: "Use max from … modifier %" */}
+                    <div className="flex flex-wrap items-center gap-1.5 pt-0.5 text-[10px] text-muted-foreground">
+                      <span className="font-semibold uppercase tracking-wide">Use max from</span>
+                      <Select
+                        value={d.source_lift ?? "__none"}
+                        onValueChange={(v) => update(i, { source_lift: v === "__none" ? null : v, variation_modifier: v === "__none" ? "" : (d.variation_modifier === "" || d.variation_modifier == null ? 100 : d.variation_modifier) })}
+                      >
+                        <SelectTrigger className="h-6 w-[180px] text-[11px]">
+                          <SelectValue placeholder="— direct max —" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none">— direct max —</SelectItem>
+                          {drafts
+                            .filter((other, oi) => oi !== i && other.lift && other.lift.toLowerCase() !== d.lift.toLowerCase())
+                            .map((other) => (
+                              <SelectItem key={other.lift} value={other.lift}>
+                                <div className="flex items-center gap-1.5">
+                                  <div className={cn("h-1.5 w-1.5 rounded-full", movementAccent(other.lift))} aria-hidden />
+                                  {other.lift}
+                                </div>
+                              </SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
+                      {d.source_lift && (
+                        <>
+                          <span>· Modifier</span>
+                          <Input
+                            className="h-6 w-16 text-center font-mono text-[11px]"
+                            inputMode="decimal"
+                            placeholder="100"
+                            value={d.variation_modifier}
+                            onChange={(e) => update(i, { variation_modifier: e.target.value === "" ? "" : Number(e.target.value) })}
+                          />
+                          <span>%</span>
+                          {sourceAccent && (
+                            <div className="ml-0.5 flex items-center gap-1 text-[10px]">
+                              <div className={cn("h-1.5 w-1.5 rounded-full", sourceAccent)} aria-hidden />
+                              <span className="text-muted-foreground/70">source color</span>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </div>
                 </div>
-                <Input
-                  className="col-span-2 h-7 text-center font-mono text-xs"
-                  inputMode="decimal" placeholder="—"
-                  value={d.one_rm}
-                  onChange={(e) => update(i, { one_rm: e.target.value === "" ? "" : Number(e.target.value) })}
-                />
-                <Input
-                  className="col-span-2 h-7 text-center font-mono text-xs"
-                  inputMode="decimal" placeholder="—"
-                  value={d.training_max}
-                  onChange={(e) => update(i, { training_max: e.target.value === "" ? "" : Number(e.target.value) })}
-                />
-                <Select value={d.unit} onValueChange={(v) => changeRowUnit(i, v as "kg" | "lb")}>
-                  <SelectTrigger className="col-span-1 h-7 text-xs"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="kg">kg</SelectItem>
-                    <SelectItem value="lb">lb</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Select value={d.scope} onValueChange={(v) => update(i, { scope: v as "block" | "profile" })}>
-                  <SelectTrigger className="col-span-2 h-7 text-[11px]"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="profile">Save to profile</SelectItem>
-                    <SelectItem value="block">Block only</SelectItem>
-                  </SelectContent>
-                </Select>
-                <div className="col-span-1 flex justify-end">
-                  <Button size="icon" variant="ghost" className="h-6 w-6 text-destructive" onClick={() => removeRow(i)} title="Remove">
-                    <Trash2 className="h-3 w-3" />
-                  </Button>
-                </div>
-              </div>
-              {/* Variation mapping: "Use max from … modifier %" */}
-              <div className="flex flex-wrap items-center gap-1.5 pt-0.5 text-[10px] text-muted-foreground">
-                <span className="font-semibold uppercase tracking-wide">Use max from</span>
-                <Select
-                  value={d.source_lift ?? "__none"}
-                  onValueChange={(v) => update(i, { source_lift: v === "__none" ? null : v, variation_modifier: v === "__none" ? "" : (d.variation_modifier === "" || d.variation_modifier == null ? 100 : d.variation_modifier) })}
-                >
-                  <SelectTrigger className="h-6 w-[180px] text-[11px]"><SelectValue placeholder="— direct max —" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none">— direct max —</SelectItem>
-                    {drafts
-                      .filter((other, oi) => oi !== i && other.lift && other.lift.toLowerCase() !== d.lift.toLowerCase())
-                      .map((other) => (
-                        <SelectItem key={other.lift} value={other.lift}>{other.lift}</SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
-                {d.source_lift && (
-                  <>
-                    <span>· Modifier</span>
-                    <Input
-                      className="h-6 w-16 text-center font-mono text-[11px]"
-                      inputMode="decimal"
-                      placeholder="100"
-                      value={d.variation_modifier}
-                      onChange={(e) => update(i, { variation_modifier: e.target.value === "" ? "" : Number(e.target.value) })}
-                    />
-                    <span>%</span>
-                  </>
-                )}
-              </div>
-              </div>
-            ))}
+              );
+            })}
 
             {/* Add Exercise Max — searches the full Exercise Library */}
             <div className="flex flex-wrap items-center gap-2 pt-2">
