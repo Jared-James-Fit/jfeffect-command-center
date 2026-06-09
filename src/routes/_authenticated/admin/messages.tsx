@@ -46,7 +46,7 @@ function MessagesInbox() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("clients")
-        .select("id, full_name, first_name, last_name, email, phone, call_access_enabled, profile_picture_url, archived, status, last_active_at")
+        .select("id, full_name, first_name, last_name, email, phone, call_access_enabled, sms_opt_out, profile_picture_url, archived, status, last_active_at")
         .order("full_name");
       if (error) throw error;
       return data;
