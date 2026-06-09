@@ -235,10 +235,6 @@ function BlockMaxesDialog({
     }
   };
 
-  const availableLifts = MORE_LIFTS.filter(
-    (l) => !drafts.some((d) => d.lift.toLowerCase() === l.toLowerCase()),
-  );
-
   return (
     <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
       <DialogContent className="max-w-2xl">
