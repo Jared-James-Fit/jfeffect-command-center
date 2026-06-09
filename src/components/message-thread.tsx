@@ -936,6 +936,11 @@ export function MessageThread({
                   isDeleted && "italic opacity-70",
                   selectionMode && isSelected && "ring-2 ring-primary ring-offset-2 ring-offset-background",
                 )}
+                style={{
+                  WebkitUserSelect: "none",
+                  WebkitTouchCallout: "none",
+                  WebkitTapHighlightColor: "transparent",
+                }}
                 onContextMenu={(e) => { if (!isDeleted) e.preventDefault(); }}
                 onPointerDown={(e) => {
                   if (isEditing || isDeleted) return;
