@@ -34,6 +34,8 @@ import { cn } from "@/lib/utils";
 import { getChatSettings, DEFAULT_REACTION } from "@/lib/chat-settings";
 import { GifPicker } from "@/components/gif-picker";
 import { markRecent } from "@/lib/chat-gifs";
+import { GifThumb } from "@/components/gif-thumb";
+import { fallbackEmoji } from "@/lib/gif-fallback";
 import { markRecent as markSoundRecent } from "@/lib/chat-sounds";
 import { ChatSoundCard } from "@/components/chat-sound-card";
 import {
@@ -350,6 +352,24 @@ function AttachmentView({ att, mine, message }: { att: MessageAttachment; mine: 
         durationMs={att.duration ? Math.round(att.duration * 1000) : null}
         mine={mine}
       />
+    );
+  }
+  if (att.kind === "gif") {
+    return (
+      <a href={att.url} target="_blank" rel="noreferrer"
+        className="block w-[220px] max-w-full overflow-hidden rounded-xl border border-border bg-secondary/40">
+        <GifThumb
+          src={att.url}
+          title={att.name}
+          category={att.category}
+          fallback={att.fallback_emoji}
+          className="aspect-square w-full"
+          emojiClassName="text-7xl"
+        />
+        {att.name && (
+          <div className="truncate px-2 py-1 text-[11px] text-muted-foreground">{att.name}</div>
+        )}
+      </a>
     );
   }
   if (att.type === "image") return <ImageAttachment att={att} />;
@@ -1425,6 +1445,9 @@ export function MessageThread({
                         url: g.media_url,
                         name: g.title,
                         mime: g.media_type,
+                      kind: "gif",
+                      category: g.category,
+                      fallback_emoji: fallbackEmoji(g.title, g.category),
                       }],
                       messageType,
                       isInternalNote: role === "admin" ? internalNote : false,

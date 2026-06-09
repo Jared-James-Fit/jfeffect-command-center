@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Sparkles, Star, Search, Play, Pause, Volume2 } from "lucide-react";
+import { GifThumb } from "@/components/gif-thumb";
 import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import {
@@ -170,11 +171,12 @@ export function GifPicker({
           className="group relative aspect-square overflow-hidden rounded-md border border-border bg-secondary/40 transition hover:border-primary"
           title={g.title}
         >
-          <img
+          <GifThumb
             src={g.thumb_url || g.media_url}
-            alt={g.title}
-            loading="lazy"
-            className="h-full w-full object-cover motion-reduce:[content-visibility:auto]"
+            title={g.title}
+            category={g.category}
+            className="h-full w-full"
+            emojiClassName="text-4xl sm:text-5xl"
           />
           <button
             type="button"

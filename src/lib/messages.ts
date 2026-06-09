@@ -11,7 +11,9 @@ export type MessageAttachment = {
   duration?: number;
   storage_path?: string;
   peaks?: number[];
-  kind?: "sound";
+  kind?: "sound" | "gif";
+  fallback_emoji?: string;
+  category?: string;
 };
 
 export type Message = {
