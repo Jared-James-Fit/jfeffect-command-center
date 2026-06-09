@@ -384,21 +384,114 @@ function ClientsPage() {
         }
       />
       <div className="space-y-4 p-6 md:p-8">
-        <div className="flex flex-wrap gap-3">
-          <div className="relative flex-1 min-w-[240px]">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative flex-1 min-w-[200px]">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input className="pl-9" placeholder="Search name or email…" value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-56"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All statuses</SelectItem>
-              {STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-            </SelectContent>
-          </Select>
+          <div className="hidden md:block">
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-56"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All statuses</SelectItem>
+                {STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <Sheet open={filtersOpen} onOpenChange={setFiltersOpen}>
+            <SheetTrigger asChild>
+              <Button variant="outline" size="sm" className="md:hidden">
+                <SlidersHorizontal className="mr-1.5 h-4 w-4" /> Filters
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="bottom" className="max-h-[80vh] overflow-y-auto">
+              <SheetHeader><SheetTitle>Filters</SheetTitle></SheetHeader>
+              <div className="space-y-4 py-4">
+                <div>
+                  <Label className="mb-1.5 block text-xs uppercase tracking-widest text-muted-foreground">Status</Label>
+                  <Select value={statusFilter} onValueChange={setStatusFilter}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All statuses</SelectItem>
+                      {STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="mb-1.5 block text-xs uppercase tracking-widest text-muted-foreground">Client Type</Label>
+                  <Select value={typeFilter} onValueChange={setTypeFilter}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All types</SelectItem>
+                      {TYPES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button className="w-full" onClick={() => setFiltersOpen(false)}>Apply</Button>
+              </div>
+            </SheetContent>
+          </Sheet>
         </div>
 
-        <Card className="border-border bg-card">
+        {/* Priority chips */}
+        <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1">
+          {PRIORITY_CHIPS.map((p) => (
+            <button
+              key={p.key}
+              type="button"
+              onClick={() => setPriorityFilter(p.key)}
+              className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                priorityFilter === p.key
+                  ? "border-primary bg-primary text-primary-foreground"
+                  : "border-border bg-secondary/40 text-muted-foreground hover:bg-secondary"
+              }`}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Mobile/tablet client cards */}
+        <div className="grid gap-3 sm:grid-cols-2 lg:hidden pb-24">
+          {isLoading ? (
+            <Card className="col-span-full p-8 text-center text-sm text-muted-foreground">Loading…</Card>
+          ) : filtered.length === 0 ? (
+            <Card className="col-span-full p-8 text-center text-sm text-muted-foreground">No clients match your filters.</Card>
+          ) : filtered.map((c) => {
+            const ph = phaseByClient.get(c.id);
+            const current = ph?.current;
+            const dCur = current ? derivePhase(current) : null;
+            const nut = nutByClient.get(c.id);
+            const cardList = cardByClient.get(c.id) ?? [];
+            const card = cardList[0];
+            const dNut = nut ? deriveTarget(nut) : null;
+            const dCard = card ? deriveTarget(card) : null;
+            return (
+              <ClientMobileCard
+                key={c.id}
+                c={c}
+                trainingLabel={dCur?.label}
+                trainingTone={dCur ? toneClasses(dCur.tone) : null}
+                nutritionLabel={dNut?.label}
+                nutritionTone={dNut?.tone ?? null}
+                cardioLabel={dCard?.label}
+                cardioTone={dCard?.tone ?? null}
+                unreadCount={msgInfoByClient.unread.get(c.id) ?? 0}
+                needsResponse={msgInfoByClient.stateMap.get(c.id)?.status === "needs_response"}
+                hasActiveProduct={activeProductSet.has(c.id)}
+                setupNeeded={!!setupNeededFn(c)}
+                onAssign={() => setAssignTo({ id: c.id, name: c.full_name })}
+                onSell={() => setSellTo({ id: c.id, name: c.full_name })}
+                onSendSetup={() => sendSetup(c.id)}
+                onSendReset={() => sendReset(c.id)}
+                onToggleArchive={() => toggleArchive(c.id, c.archived)}
+                onDelete={() => setDeleteState({ id: c.id, name: c.full_name, step: 1 })}
+              />
+            );
+          })}
+        </div>
+
+        <Card className="hidden lg:block border-border bg-card">
           {isLoading ? (
             <div className="p-10 text-center text-sm text-muted-foreground">Loading…</div>
           ) : filtered.length === 0 ? (
