@@ -720,6 +720,109 @@ export type Database = {
           },
         ]
       }
+      chat_gif_favorites: {
+        Row: {
+          created_at: string
+          gif_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          gif_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          gif_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_gif_favorites_gif_id_fkey"
+            columns: ["gif_id"]
+            isOneToOne: false
+            referencedRelation: "chat_gifs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      chat_gif_recent: {
+        Row: {
+          gif_id: string
+          used_at: string
+          user_id: string
+        }
+        Insert: {
+          gif_id: string
+          used_at?: string
+          user_id: string
+        }
+        Update: {
+          gif_id?: string
+          used_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_gif_recent_gif_id_fkey"
+            columns: ["gif_id"]
+            isOneToOne: false
+            referencedRelation: "chat_gifs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      chat_gifs: {
+        Row: {
+          active: boolean
+          archived: boolean
+          category: string
+          created_at: string
+          created_by: string | null
+          id: string
+          is_featured: boolean
+          media_type: string
+          media_url: string
+          sort_order: number
+          tags: string[]
+          thumb_url: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          archived?: boolean
+          category: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_featured?: boolean
+          media_type?: string
+          media_url: string
+          sort_order?: number
+          tags?: string[]
+          thumb_url?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          archived?: boolean
+          category?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_featured?: boolean
+          media_type?: string
+          media_url?: string
+          sort_order?: number
+          tags?: string[]
+          thumb_url?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       check_in_links: {
         Row: {
           active: boolean
