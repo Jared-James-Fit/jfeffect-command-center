@@ -28,6 +28,80 @@ import { MaxEditorDialog } from "@/components/client-maxes-panel";
 import { BlockMaxesButton } from "@/components/block-maxes-panel";
 import { AlertCircle as PbAlertCircle, Calculator as PbCalculator } from "lucide-react";
 
+// ---------------- Fast local-state cell (instant typing, debounced commit) ---
+// Keeps keystrokes local so parent rows/days/blocks don't re-render per digit.
+// Commits to parent on blur, Enter, or after a short pause.
+function parseIntOrNull(s: string | null): number | null {
+  if (s == null || s === "") return null;
+  const n = parseInt(s, 10);
+  return Number.isFinite(n) ? n : null;
+}
+function parseFloatOrNull(s: string | null): number | null {
+  if (s == null || s === "") return null;
+  const n = parseFloat(s);
+  return Number.isFinite(n) ? n : null;
+}
+function RowCell({
+  value, onCommit, className, placeholder, inputMode, commitDelay = 400,
+}: {
+  value: string | number | null | undefined;
+  onCommit: (v: string | null) => void;
+  className?: string;
+  placeholder?: string;
+  inputMode?: any;
+  commitDelay?: number;
+}) {
+  const stringify = (v: string | number | null | undefined) => (v == null ? "" : String(v));
+  const [local, setLocal] = useState(() => stringify(value));
+  const focusedRef = useRef(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastCommittedRef = useRef(stringify(value));
+
+  // Pull in remote changes only when the input isn't being edited.
+  useEffect(() => {
+    const next = stringify(value);
+    if (focusedRef.current) return;
+    if (next === local) return;
+    setLocal(next);
+    lastCommittedRef.current = next;
+  }, [value]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const doCommit = (s: string) => {
+    if (s === lastCommittedRef.current) return;
+    lastCommittedRef.current = s;
+    onCommit(s === "" ? null : s);
+  };
+
+  return (
+    <Input
+      className={className}
+      placeholder={placeholder}
+      inputMode={inputMode}
+      value={local}
+      onChange={(e) => {
+        const v = e.target.value;
+        setLocal(v);
+        if (timerRef.current) clearTimeout(timerRef.current);
+        timerRef.current = setTimeout(() => doCommit(v), commitDelay);
+      }}
+      onFocus={() => { focusedRef.current = true; }}
+      onBlur={() => {
+        focusedRef.current = false;
+        if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
+        doCommit(local);
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          (e.target as HTMLInputElement).blur();
+        } else if (e.key === "Escape") {
+          setLocal(lastCommittedRef.current);
+          (e.target as HTMLInputElement).blur();
+        }
+      }}
+    />
+  );
+}
+
 // ---- Client-max context shared by RowEditor regardless of nesting depth ----
 type MaxesCtx = {
   clientId: string | null;
