@@ -21,11 +21,19 @@ import { UserAvatar } from "@/components/user-avatar";
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import {
+  Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription,
+} from "@/components/ui/sheet";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import {
   Paperclip, Send, X, FileText, Image as ImageIcon, Video, Link as LinkIcon, ExternalLink,
   Mic, Trash2, Play, Pause, Camera, File as FileIcon, Flag, AlertCircle, AlertTriangle,
   Gauge, Download, ChevronDown, ChevronUp, Square, Loader2, MoreHorizontal, Pencil, Check,
+  CheckCircle2, Circle, CheckSquare,
 } from "lucide-react";
 import { format, parseISO, isToday, isYesterday } from "date-fns";
 import { toast } from "sonner";
@@ -533,6 +541,14 @@ export function MessageThread({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingBody, setEditingBody] = useState("");
   const [actionsForId, setActionsForId] = useState<string | null>(null);
+  // Mobile/tablet long-press action sheet + iMessage-style selection mode.
+  const [sheetForId, setSheetForId] = useState<string | null>(null);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [confirmDelete, setConfirmDelete] = useState<{ ids: string[]; label: string } | null>(null);
+  // Long-press timer — fires after ~450ms hold without movement.
+  const longPressRef = useRef<{ id: string; t: any; x: number; y: number } | null>(null);
+  const suppressClickRef = useRef(false);
 
   const { data: messages = [] } = useQuery({
     queryKey: ["messages", clientId, role],
@@ -571,6 +587,57 @@ export function MessageThread({
     () => role === "admin" ? messages : messages.filter((m) => !m.is_internal_note),
     [messages, role],
   );
+
+  // ---------- Long-press + selection helpers ----------
+  const startLongPress = (id: string, x: number, y: number) => {
+    if (longPressRef.current?.t) clearTimeout(longPressRef.current.t);
+    const t = setTimeout(() => {
+      suppressClickRef.current = true;
+      // Haptic feedback when available.
+      try { (navigator as any).vibrate?.(10); } catch {}
+      if (selectionMode) toggleSelected(id);
+      else setSheetForId(id);
+    }, 450);
+    longPressRef.current = { id, t, x, y };
+  };
+  const cancelLongPress = () => {
+    if (longPressRef.current?.t) clearTimeout(longPressRef.current.t);
+    longPressRef.current = null;
+  };
+  const onPointerMoveDuringHold = (e: React.PointerEvent) => {
+    const lp = longPressRef.current;
+    if (!lp) return;
+    if (Math.hypot(e.clientX - lp.x, e.clientY - lp.y) > 10) cancelLongPress();
+  };
+  const toggleSelected = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+  const exitSelection = () => { setSelectionMode(false); setSelectedIds(new Set()); };
+  const myIds = useMemo(
+    () => new Set(visibleMessages.filter((m) => m.sender_role === role && !m.deleted_at).map((m) => m.id)),
+    [visibleMessages, role],
+  );
+  const selectedDeletable = useMemo(
+    () => Array.from(selectedIds).filter((id) => myIds.has(id)),
+    [selectedIds, myIds],
+  );
+  const allMineSelected = myIds.size > 0 && Array.from(myIds).every((id) => selectedIds.has(id));
+
+  const performBulkDelete = async (ids: string[]) => {
+    let failed = 0;
+    for (const id of ids) {
+      try { await deleteMessageForEveryone(id); }
+      catch { failed++; }
+    }
+    qc.invalidateQueries({ queryKey: ["messages", clientId, role] });
+    if (failed) toast.error(`${failed} message${failed === 1 ? "" : "s"} could not be deleted`);
+    else toast.success(`${ids.length} message${ids.length === 1 ? "" : "s"} deleted`);
+    exitSelection();
+  };
 
   const onPickFiles = async (files: FileList | null) => {
     if (!files || !files.length) return;
@@ -701,6 +768,8 @@ export function MessageThread({
           const mine = m.sender_role === role;
           const isDeleted = !!m.deleted_at;
           const isEditing = editingId === m.id;
+          const isSelected = selectedIds.has(m.id);
+          const canModify = mine && !isDeleted;
           const otherName = mine
             ? null
             : m.is_internal_note
@@ -714,7 +783,26 @@ export function MessageThread({
             ? peerAvatarPath ?? null
             : null;
           return (
-            <div key={m.id} className={cn("flex items-end gap-2", mine ? "justify-end" : "justify-start")}>
+            <div
+              key={m.id}
+              className={cn(
+                "flex items-end gap-2",
+                mine ? "justify-end" : "justify-start",
+                selectionMode && "cursor-pointer",
+              )}
+              onClick={() => { if (selectionMode && canModify) toggleSelected(m.id); }}
+            >
+              {selectionMode && (
+                <div className={cn("self-center shrink-0", mine && "order-last")}>
+                  {canModify ? (
+                    isSelected
+                      ? <CheckCircle2 className="h-5 w-5 text-primary" />
+                      : <Circle className="h-5 w-5 text-muted-foreground/60" />
+                  ) : (
+                    <Circle className="h-5 w-5 text-muted-foreground/20" />
+                  )}
+                </div>
+              )}
               {!mine && (
                 <UserAvatar
                   src={otherAvatar}
@@ -724,17 +812,37 @@ export function MessageThread({
                   className="mb-1"
                 />
               )}
-              <div className={cn(
-                "group relative",
-                "max-w-[80%] rounded-2xl px-3 py-2 text-sm shadow-sm",
-                m.is_internal_note
-                  ? "border border-warning/40 bg-warning/10"
-                  : mine
-                  ? "bg-primary text-primary-foreground rounded-br-md"
-                  : "bg-secondary text-foreground",
-                !mine && !m.is_internal_note && "rounded-bl-md",
-                isDeleted && "italic opacity-70",
-              )}>
+              <div
+                className={cn(
+                  "group relative select-none touch-manipulation",
+                  "max-w-[80%] rounded-2xl px-3 py-2 text-sm shadow-sm transition-shadow",
+                  m.is_internal_note
+                    ? "border border-warning/40 bg-warning/10"
+                    : mine
+                    ? "bg-primary text-primary-foreground rounded-br-md"
+                    : "bg-secondary text-foreground",
+                  !mine && !m.is_internal_note && "rounded-bl-md",
+                  isDeleted && "italic opacity-70",
+                  selectionMode && isSelected && "ring-2 ring-primary ring-offset-2 ring-offset-background",
+                )}
+                onContextMenu={(e) => { if (!isDeleted) e.preventDefault(); }}
+                onPointerDown={(e) => {
+                  if (isEditing || isDeleted) return;
+                  if ((e.target as HTMLElement).closest("a,button,textarea,input,audio,video")) return;
+                  startLongPress(m.id, e.clientX, e.clientY);
+                }}
+                onPointerMove={onPointerMoveDuringHold}
+                onPointerUp={cancelLongPress}
+                onPointerCancel={cancelLongPress}
+                onPointerLeave={cancelLongPress}
+                onClickCapture={(e) => {
+                  if (suppressClickRef.current) {
+                    suppressClickRef.current = false;
+                    e.stopPropagation();
+                    e.preventDefault();
+                  }
+                }}
+              >
                 {m.is_internal_note && (
                   <div className="mb-1 text-[10px] font-bold uppercase tracking-widest text-warning">Internal Coach Note</div>
                 )}
@@ -810,16 +918,16 @@ export function MessageThread({
                   {m.message_type !== "General" && <span>· {m.message_type}</span>}
                   {m.priority && <span>· {m.priority}</span>}
                 </div>
-                {mine && !isDeleted && !isEditing && (
+                {mine && !isDeleted && !isEditing && !selectionMode && (
                   <div className={cn(
-                    "absolute -top-2 right-1 opacity-0 transition-opacity group-hover:opacity-100",
+                    "absolute -top-2 right-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100",
                     actionsForId === m.id && "opacity-100",
                   )}>
                     <DropdownMenu open={actionsForId === m.id} onOpenChange={(o) => setActionsForId(o ? m.id : null)}>
                       <DropdownMenuTrigger asChild>
                         <Button type="button" size="icon" variant="secondary"
-                          className="h-6 w-6 rounded-full border border-border shadow-sm">
-                          <MoreHorizontal className="h-3 w-3" />
+                          className="h-8 w-8 rounded-full border border-border shadow-sm">
+                          <MoreHorizontal className="h-4 w-4" />
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="w-44">
@@ -828,18 +936,17 @@ export function MessageThread({
                         >
                           <Pencil className="mr-2 h-4 w-4" /> Edit
                         </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => { setActionsForId(null); setSelectionMode(true); setSelectedIds(new Set([m.id])); }}
+                        >
+                          <CheckSquare className="mr-2 h-4 w-4" /> Select
+                        </DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem
                           className="text-destructive focus:text-destructive"
-                          onClick={async () => {
+                          onClick={() => {
                             setActionsForId(null);
-                            if (!confirm("Delete this message for everyone? This cannot be undone.")) return;
-                            try {
-                              await deleteMessageForEveryone(m.id);
-                              qc.invalidateQueries({ queryKey: ["messages", clientId, role] });
-                            } catch (err: any) {
-                              toast.error(err?.message ?? "Failed to delete");
-                            }
+                            setConfirmDelete({ ids: [m.id], label: "Delete this message for everyone?" });
                           }}
                         >
                           <Trash2 className="mr-2 h-4 w-4" /> Delete for everyone
@@ -995,6 +1102,159 @@ export function MessageThread({
 
         {/* Message-type + internal-note row removed for simplicity. */}
       </div>
+
+      {/* iMessage-style selection action bar — pinned above the composer on mobile/tablet/desktop. */}
+      {selectionMode && (
+        <div
+          className="fixed inset-x-0 z-40 flex items-center gap-2 border-t border-border bg-background/95 px-3 py-2 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-background/85"
+          style={{
+            bottom: 0,
+            paddingBottom: "calc(max(env(safe-area-inset-bottom), 0.5rem))",
+          }}
+        >
+          <Button type="button" variant="ghost" size="sm" className="h-9" onClick={exitSelection}>
+            Cancel
+          </Button>
+          <div className="flex-1 text-center text-sm font-semibold">
+            {selectedIds.size} selected
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-9"
+            onClick={() => {
+              if (allMineSelected) setSelectedIds(new Set());
+              else setSelectedIds(new Set(myIds));
+            }}
+            disabled={myIds.size === 0}
+          >
+            {allMineSelected ? "Deselect all" : "Select all"}
+          </Button>
+          <Button
+            type="button"
+            variant="destructive"
+            size="sm"
+            className="h-9 gap-1"
+            disabled={selectedDeletable.length === 0}
+            onClick={() => {
+              const blocked = selectedIds.size - selectedDeletable.length;
+              if (blocked > 0) toast.message(`Skipping ${blocked} message${blocked === 1 ? "" : "s"} you can't delete`);
+              setConfirmDelete({
+                ids: selectedDeletable,
+                label: `Delete ${selectedDeletable.length} message${selectedDeletable.length === 1 ? "" : "s"} for everyone?`,
+              });
+            }}
+          >
+            <Trash2 className="h-4 w-4" /> Delete ({selectedDeletable.length})
+          </Button>
+        </div>
+      )}
+
+      {/* Mobile/tablet long-press action sheet. */}
+      <Sheet open={!!sheetForId} onOpenChange={(o) => { if (!o) setSheetForId(null); }}>
+        <SheetContent
+          side="bottom"
+          className="rounded-t-2xl pb-[calc(max(env(safe-area-inset-bottom),0.75rem))]"
+        >
+          {(() => {
+            const m = visibleMessages.find((x) => x.id === sheetForId);
+            if (!m) return null;
+            const canEdit = m.sender_role === role && !m.deleted_at && (m.body?.length ?? 0) > 0;
+            const canDelete = m.sender_role === role && !m.deleted_at;
+            return (
+              <>
+                <SheetHeader className="text-left">
+                  <SheetTitle>Message actions</SheetTitle>
+                  <SheetDescription className="line-clamp-2">
+                    {m.deleted_at ? "This message was deleted." : m.body || (m.attachments?.length ? "Attachment" : "")}
+                  </SheetDescription>
+                </SheetHeader>
+                <div className="mt-3 grid gap-1">
+                  {canEdit && (
+                    <Button
+                      type="button" variant="ghost" className="h-12 justify-start text-base"
+                      onClick={() => {
+                        setEditingId(m.id); setEditingBody(m.body); setSheetForId(null);
+                      }}
+                    >
+                      <Pencil className="mr-3 h-5 w-5" /> Edit
+                    </Button>
+                  )}
+                  <Button
+                    type="button" variant="ghost" className="h-12 justify-start text-base"
+                    onClick={() => {
+                      setSheetForId(null);
+                      setSelectionMode(true);
+                      setSelectedIds(new Set(m.sender_role === role && !m.deleted_at ? [m.id] : []));
+                    }}
+                  >
+                    <CheckSquare className="mr-3 h-5 w-5" /> Select
+                  </Button>
+                  {canDelete && (
+                    <Button
+                      type="button" variant="ghost"
+                      className="h-12 justify-start text-base text-destructive hover:text-destructive"
+                      onClick={() => {
+                        setSheetForId(null);
+                        setConfirmDelete({ ids: [m.id], label: "Delete this message for everyone?" });
+                      }}
+                    >
+                      <Trash2 className="mr-3 h-5 w-5" /> Delete for everyone
+                    </Button>
+                  )}
+                  {!canEdit && !canDelete && (
+                    <div className="rounded-md bg-secondary/40 p-3 text-center text-xs text-muted-foreground">
+                      No actions available for this message.
+                    </div>
+                  )}
+                  <Button
+                    type="button" variant="outline" className="mt-2 h-11"
+                    onClick={() => setSheetForId(null)}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </>
+            );
+          })()}
+        </SheetContent>
+      </Sheet>
+
+      {/* Single/bulk delete confirmation. */}
+      <AlertDialog open={!!confirmDelete} onOpenChange={(o) => { if (!o) setConfirmDelete(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{confirmDelete?.label ?? "Delete?"}</AlertDialogTitle>
+            <AlertDialogDescription>
+              This cannot be undone. Both sides will see a "This message was deleted" placeholder.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={async () => {
+                const ids = confirmDelete?.ids ?? [];
+                setConfirmDelete(null);
+                if (ids.length === 1) {
+                  try {
+                    await deleteMessageForEveryone(ids[0]);
+                    qc.invalidateQueries({ queryKey: ["messages", clientId, role] });
+                    toast.success("Message deleted");
+                  } catch (err: any) {
+                    toast.error(err?.message ?? "Failed to delete");
+                  }
+                  return;
+                }
+                await performBulkDelete(ids);
+              }}
+            >
+              Delete for everyone
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
