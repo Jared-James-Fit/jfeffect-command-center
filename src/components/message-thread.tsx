@@ -958,7 +958,7 @@ export function MessageThread({
       <div
         ref={scrollerRef}
         className={cn(
-          "flex-1 min-h-0 space-y-3 overflow-y-auto",
+          "flex-1 min-h-0 space-y-3 overflow-y-auto overflow-x-hidden overscroll-contain [-webkit-overflow-scrolling:touch]",
           fullBleed ? "px-3 py-4 sm:px-6" : "p-3 sm:p-4",
         )}
         onTouchStart={onSwipeTouchStart}
