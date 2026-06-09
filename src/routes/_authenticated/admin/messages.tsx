@@ -354,6 +354,17 @@ function MessagesInbox() {
                   </a>
                 </Button>
               ) : null}
+              {(selected as any).phone && !(selected as any).sms_opt_out ? (
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-9 w-9 shrink-0 border-primary/40 bg-primary/10 text-primary hover:bg-primary/20"
+                  title={`Send SMS to ${selected.full_name ?? "client"}`}
+                  onClick={() => setSmsOpen(true)}
+                >
+                  <MessageSquare className="h-4 w-4" />
+                </Button>
+              ) : null}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0">
