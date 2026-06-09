@@ -16,6 +16,7 @@ import {
   StructureCanvas,
   appendRowToFirstDay,
 } from "@/routes/_authenticated/admin/program-library_.$templateId";
+import { BlockMaxesButton } from "@/components/block-maxes-panel";
 
 export const Route = createFileRoute("/_authenticated/admin/blocks/$blockId")({ component: BlockEditor });
 
@@ -351,6 +352,8 @@ function BlockEditor() {
         canUndo={canUndo}
         canRedo={canRedo}
         clientId={clientId}
+        blockId={blockId}
+        toolbarExtras={<BlockMaxesButton clientId={clientId} blockId={blockId} />}
       />
     </div>
   );

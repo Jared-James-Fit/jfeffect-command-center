@@ -40,6 +40,16 @@ function WorkoutDay() {
     queryFn: async () => (await sb.from("pl_days").select("*").eq("id", dayId).maybeSingle()).data,
   });
 
+  // Resolve which block this day belongs to so block-scoped maxes apply.
+  const { data: blockId = null } = useQuery({
+    queryKey: ["pl-day-block", day?.week_id],
+    enabled: !!day?.week_id,
+    queryFn: async () => {
+      const { data } = await sb.from("pl_weeks").select("block_id").eq("id", day.week_id).maybeSingle();
+      return (data?.block_id as string | null) ?? null;
+    },
+  });
+
   const { data: rows = [] } = useQuery({
     queryKey: ["pl-day-rows", dayId],
     queryFn: async () => (await sb.from("pl_exercise_rows").select("*, exercises(id,name,video_url,vimeo_embed_url,thumbnail_url,cues,common_mistakes,muscle_group,category)").eq("day_id", dayId).order("sort_order")).data ?? [],
@@ -202,6 +212,7 @@ function WorkoutDay() {
               dayId={dayId}
               dayTitle={day.title || `Day ${day.day_index}`}
               clientId={client?.id}
+              blockId={blockId}
               existingResults={(results as any[]).filter((x) => x.row_id === r.id)}
               existingNote={notesByRowId.get(r.id)}
               onChange={refresh}
@@ -275,7 +286,7 @@ function WorkoutDay() {
   );
 }
 
-function ExerciseBlock({ row, dayId, dayTitle, clientId, existingResults, existingNote, onChange, onNoteChange }: { row: any; dayId: string; dayTitle: string; clientId: string | undefined; existingResults: any[]; existingNote?: any; onChange: () => void; onNoteChange: () => void }) {
+function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResults, existingNote, onChange, onNoteChange }: { row: any; dayId: string; dayTitle: string; clientId: string | undefined; blockId?: string | null; existingResults: any[]; existingNote?: any; onChange: () => void; onNoteChange: () => void }) {
   const name = row.exercises?.name ?? row.exercise_name_override ?? "Exercise";
   const exercise = row.exercises ?? null;
   const exerciseId = exercise?.id ?? null;
@@ -289,9 +300,9 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, existingResults, existi
   const hasNote = Boolean(existingNote?.id);
 
   const { data: maxes = [] } = useQuery({
-    queryKey: ["pl-client-maxes", clientId],
+    queryKey: ["pl-client-maxes", clientId, blockId ?? null],
     enabled: !!clientId && !!row.percentage && row.percentage_basis !== "manual",
-    queryFn: () => listClientMaxes(clientId as string),
+    queryFn: () => listClientMaxes(clientId as string, blockId ?? null),
   });
   const computed = useMemo(() => {
     if (!row.percentage || !row.percentage_basis || row.percentage_basis === "manual") return null;

@@ -30,11 +30,12 @@ import { AlertCircle as PbAlertCircle, Calculator as PbCalculator } from "lucide
 // ---- Client-max context shared by RowEditor regardless of nesting depth ----
 type MaxesCtx = {
   clientId: string | null;
+  blockId: string | null;
   maxes: ClientMaxRow[];
   index: Map<string, ClientMaxRow>;
   refresh: () => void;
 };
-const MaxesContext = createContext<MaxesCtx>({ clientId: null, maxes: [], index: new Map(), refresh: () => {} });
+const MaxesContext = createContext<MaxesCtx>({ clientId: null, blockId: null, maxes: [], index: new Map(), refresh: () => {} });
 export function useClientMaxesCtx() { return useContext(MaxesContext); }
 
 // ---- Editor preferences (compact mode, zoom, sidebar) ----
@@ -331,12 +332,16 @@ function EditorChrome({ meta, summary, typeLabel, autosave, save, dirty, childre
   );
 }
 
-export function StructureCanvas({ type, payload, setP, exercises, appendRowToFirstDay, undo, redo, canUndo, canRedo, clientId }: {
+export function StructureCanvas({ type, payload, setP, exercises, appendRowToFirstDay, undo, redo, canUndo, canRedo, clientId, blockId, toolbarExtras }: {
   type: string; payload: any; setP: (p: any, opts?: { skipHistory?: boolean }) => void; exercises: any[];
   appendRowToFirstDay: (payload: any, type: string, row: any) => void;
   undo: () => void; redo: () => void; canUndo: boolean; canRedo: boolean;
   /** Optional — when present, RowEditor will display computed loads & "no max" warnings. */
   clientId?: string | null;
+  /** Optional — when set, maxes are loaded with block-scoped overrides applied. */
+  blockId?: string | null;
+  /** Optional — rendered in the canvas toolbar (e.g. "Block Maxes" button). */
+  toolbarExtras?: React.ReactNode;
 }) {
   const [prefs, setPrefsState] = useState<EditorPrefs>(() => readPrefs());
   const setPrefs = (patch: Partial<EditorPrefs>) => {
@@ -368,16 +373,17 @@ export function StructureCanvas({ type, payload, setP, exercises, appendRowToFir
   }, [undo, redo]);
 
   const maxesQuery = useQuery({
-    queryKey: ["pl-client-maxes", clientId],
-    queryFn: () => listClientMaxes(clientId as string),
+    queryKey: ["pl-client-maxes", clientId, blockId ?? null],
+    queryFn: () => listClientMaxes(clientId as string, blockId ?? null),
     enabled: !!clientId,
   });
   const maxesCtx: MaxesCtx = useMemo(() => ({
     clientId: clientId ?? null,
+    blockId: blockId ?? null,
     maxes: maxesQuery.data ?? [],
     index: buildMaxIndex(maxesQuery.data ?? []),
     refresh: () => maxesQuery.refetch(),
-  }), [clientId, maxesQuery.data]);
+  }), [clientId, blockId, maxesQuery.data]);
 
   return (
     <MaxesContext.Provider value={maxesCtx}>
@@ -420,6 +426,7 @@ export function StructureCanvas({ type, payload, setP, exercises, appendRowToFir
             <Maximize2 className="h-3 w-3" />
           </Button>
         </div>
+        {toolbarExtras && <div className="ml-auto inline-flex items-center gap-1.5">{toolbarExtras}</div>}
       </div>
 
       <div className="flex h-[calc(100vh-150px)] gap-0 overflow-hidden">
@@ -865,7 +872,7 @@ function RowEditor({ row, setRow, onDelete, exercises, compact }: { row: any; se
   const [expanded, setExpanded] = useState(!compact);
   useEffect(() => { if (!compact) setExpanded(true); }, [compact]);
   const h = compact ? "h-7" : "h-8";
-  const { clientId, index: maxesIndex, maxes, refresh } = useClientMaxesCtx();
+  const { clientId, blockId, index: maxesIndex, maxes, refresh } = useClientMaxesCtx();
   const [maxEditor, setMaxEditor] = useState<any>(null);
   const computed = useMemo(() => {
     if (!clientId) return null;
@@ -946,6 +953,7 @@ function RowEditor({ row, setRow, onDelete, exercises, compact }: { row: any; se
                 onClick={() => setMaxEditor({
                   client_id: clientId, lift: exName, unit: "kg",
                   source: "manual", active: true, rounding_mode: "nearest", rounding_step: 2.5,
+                  block_id: blockId ?? null,
                 })}
               >
                 <Plus className="mr-0.5 h-3 w-3" /> Set Max
