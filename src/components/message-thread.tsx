@@ -1349,6 +1349,7 @@ export function MessageThread({
                 )}
               </div>
             </div>
+            </Fragment>
           );
         })}
       </div>
