@@ -19,6 +19,7 @@ import { toast } from "sonner";
 import {
   listTemplates, createTemplate, applyTemplateToClient, duplicateTemplate, updateTemplate,
   setTemplateArchived, deleteTemplate, summarizeTemplatePayload,
+  getTemplateWeeks, computeEndDateFromStart,
   listTemplateAssignments,
   type TemplateType, type TrainingStyle, type TemplatePlacement,
 } from "@/lib/pl-programs";
