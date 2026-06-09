@@ -35,7 +35,7 @@ import {
   Paperclip, Send, X, FileText, Image as ImageIcon, Video, Link as LinkIcon, ExternalLink,
   Mic, Trash2, Play, Pause, Camera, File as FileIcon, Flag, AlertCircle, AlertTriangle,
   Gauge, Download, ChevronDown, ChevronUp, Square, Loader2, MoreHorizontal, Pencil, Check,
-  CheckCircle2, Circle, CheckSquare,
+  CheckCircle2, Circle, CheckSquare, Copy,
 } from "lucide-react";
 import { format, parseISO, isToday, isYesterday } from "date-fns";
 import { toast } from "sonner";
@@ -551,6 +551,9 @@ export function MessageThread({
   // Long-press timer — fires after ~450ms hold without movement.
   const longPressRef = useRef<{ id: string; t: any; x: number; y: number } | null>(null);
   const suppressClickRef = useRef(false);
+  // iMessage-style swipe-left to reveal exact per-message timestamps.
+  const [swipeX, setSwipeX] = useState(0);
+  const swipeRef = useRef<{ x: number; y: number; decided: boolean; horizontal: boolean } | null>(null);
 
   const { data: messages = [] } = useQuery({
     queryKey: ["messages", clientId, role],
@@ -663,6 +666,39 @@ export function MessageThread({
     });
   };
   const exitSelection = () => { setSelectionMode(false); setSelectedIds(new Set()); };
+
+  // Horizontal-swipe gesture: when user drags left, slide bubbles to reveal
+  // exact timestamps on the right edge. Vertical scroll wins ties so the
+  // chat keeps scrolling naturally; back-gesture (right-edge swipe) is left
+  // alone because we only react to leftward dx.
+  const onSwipeTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length !== 1) return;
+    const t = e.touches[0];
+    swipeRef.current = { x: t.clientX, y: t.clientY, decided: false, horizontal: false };
+  };
+  const onSwipeTouchMove = (e: React.TouchEvent) => {
+    const s = swipeRef.current;
+    if (!s || e.touches.length !== 1) return;
+    const t = e.touches[0];
+    const dx = t.clientX - s.x;
+    const dy = t.clientY - s.y;
+    if (!s.decided) {
+      if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
+      // Only activate for a clear leftward horizontal drag.
+      s.horizontal = dx < -6 && Math.abs(dx) > Math.abs(dy) * 1.4;
+      s.decided = true;
+      if (s.horizontal) cancelLongPress();
+    }
+    if (s.horizontal) {
+      const clamped = Math.max(-72, Math.min(0, dx));
+      setSwipeX(clamped);
+    }
+  };
+  const onSwipeTouchEnd = () => {
+    swipeRef.current = null;
+    setSwipeX(0);
+  };
+
   const myIds = useMemo(
     () => new Set(visibleMessages.filter((m) => m.sender_role === role && !m.deleted_at).map((m) => m.id)),
     [visibleMessages, role],
@@ -805,6 +841,10 @@ export function MessageThread({
           "flex-1 min-h-0 space-y-3 overflow-y-auto",
           fullBleed ? "px-3 py-4 sm:px-6" : "p-3 sm:p-4",
         )}
+        onTouchStart={onSwipeTouchStart}
+        onTouchMove={onSwipeTouchMove}
+        onTouchEnd={onSwipeTouchEnd}
+        onTouchCancel={onSwipeTouchEnd}
       >
         {visibleMessages.length === 0 ? (
           <div className="grid h-full place-items-center text-sm text-muted-foreground">
@@ -832,7 +872,7 @@ export function MessageThread({
             <div
               key={m.id}
               className={cn(
-                "flex items-end gap-2",
+                "relative flex items-end gap-2 will-change-transform",
                 mine ? "justify-end" : "justify-start",
                 selectionMode && "cursor-pointer",
                 (() => {
@@ -844,8 +884,25 @@ export function MessageThread({
                   return "";
                 })(),
               )}
+              style={{
+                transform: swipeX !== 0 ? `translate3d(${swipeX}px,0,0)` : undefined,
+                transition: swipeX === 0 ? "transform 220ms cubic-bezier(.2,.8,.2,1)" : "none",
+              }}
               onClick={() => { if (selectionMode && canModify) toggleSelected(m.id); }}
             >
+              {/* iMessage-style exact timestamp revealed by swiping left */}
+              <div
+                aria-hidden
+                className="pointer-events-none absolute top-1/2 -translate-y-1/2 text-[10px] tabular-nums text-muted-foreground"
+                style={{
+                  right: -64,
+                  width: 56,
+                  opacity: Math.min(1, Math.abs(swipeX) / 48),
+                  transition: swipeX === 0 ? "opacity 220ms ease" : "none",
+                }}
+              >
+                {fmtTime(m.created_at)}
+              </div>
               {selectionMode && (
                 <div className={cn("self-center shrink-0", mine && "order-last")}>
                   {canModify ? (
@@ -879,6 +936,11 @@ export function MessageThread({
                   isDeleted && "italic opacity-70",
                   selectionMode && isSelected && "ring-2 ring-primary ring-offset-2 ring-offset-background",
                 )}
+                style={{
+                  WebkitUserSelect: "none",
+                  WebkitTouchCallout: "none",
+                  WebkitTapHighlightColor: "transparent",
+                }}
                 onContextMenu={(e) => { if (!isDeleted) e.preventDefault(); }}
                 onPointerDown={(e) => {
                   if (isEditing || isDeleted) return;
@@ -1356,6 +1418,22 @@ export function MessageThread({
                       }}
                     >
                       <Pencil className="mr-3 h-5 w-5" /> Edit
+                    </Button>
+                  )}
+                  {!m.deleted_at && (m.body?.length ?? 0) > 0 && (
+                    <Button
+                      type="button" variant="ghost" className="h-12 justify-start text-base"
+                      onClick={async () => {
+                        try {
+                          await navigator.clipboard.writeText(m.body || "");
+                          toast.success("Copied to clipboard");
+                        } catch {
+                          toast.error("Couldn't copy");
+                        }
+                        setSheetForId(null);
+                      }}
+                    >
+                      <Copy className="mr-3 h-5 w-5" /> Copy Text
                     </Button>
                   )}
                   <Button
