@@ -1,8 +1,11 @@
-import { createFileRoute, Outlet, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useEffect, useMemo } from "react";
 import { useAuth } from "@/lib/auth";
 import { AppShell } from "@/components/app-shell";
-import { adminNav, coachNav } from "@/lib/admin-nav";
+import { coachingAdminNav, coachNav } from "@/lib/admin-nav";
+import { membershipNav } from "@/lib/membership-nav";
+import { useDashboardMode, setDashboardMode } from "@/lib/dashboard-mode";
+import { DashboardModeSwitcher } from "@/components/dashboard-mode-switcher";
 import { PovQuickToggle } from "@/components/pov-quick-toggle";
 import { TaskPopupGate } from "@/components/tasks/task-popup-gate";
 import { ClipboardList } from "lucide-react";
@@ -15,6 +18,13 @@ export const Route = createFileRoute("/_authenticated/admin")({
 function AdminLayout() {
   const { role, loading } = useAuth();
   const navigate = useNavigate();
+  const pathname = useRouterState({ select: (r) => r.location.pathname });
+  const [mode] = useDashboardMode();
+  // If user lands on /admin/membership, force membership mode; conversely auto-switch back when leaving.
+  useEffect(() => {
+    const inMembership = pathname.startsWith("/admin/membership");
+    if (inMembership && mode !== "membership") setDashboardMode("membership");
+  }, [pathname, mode]);
   useEffect(() => {
     if (loading || !role) return;
     if (role === "admin" || role === "coach") return;
@@ -27,12 +37,13 @@ function AdminLayout() {
   }, [role, loading, navigate]);
 
   const isCoach = role === "coach";
-  const nav = isCoach ? coachNav : adminNav;
-  const title = isCoach ? "Coach" : "Admin";
+  const isMembership = !isCoach && mode === "membership";
+  const nav = isCoach ? coachNav : isMembership ? membershipNav : coachingAdminNav;
+  const title = isCoach ? "Coach" : isMembership ? "Membership Admin" : "Admin";
   const customLayout = useBarLayout(isCoach ? "coach" : "admin");
 
   const defaultBottom = useMemo(() => {
-    const source = isCoach ? coachNav : adminNav;
+    const source = isCoach ? coachNav : coachingAdminNav;
     const pick = (to: string) => source.find((i) => i.to === to)!;
     if (isCoach) {
       return [
@@ -80,6 +91,7 @@ function AdminLayout() {
 
   return (
     <AppShell items={nav} bottomItems={bottomItems} title={title}>
+      {!isCoach && <DashboardModeSwitcher />}
       <PovQuickToggle variant="banner" />
       <Outlet />
       <TaskPopupGate />

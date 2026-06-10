@@ -70,6 +70,7 @@ import { Route as AuthenticatedAdminOffersRouteImport } from './routes/_authenti
 import { Route as AuthenticatedAdminNutritionTargetsRouteImport } from './routes/_authenticated/admin/nutrition-targets'
 import { Route as AuthenticatedAdminNativeFormsRouteImport } from './routes/_authenticated/admin/native-forms'
 import { Route as AuthenticatedAdminMessagesRouteImport } from './routes/_authenticated/admin/messages'
+import { Route as AuthenticatedAdminMembershipRouteImport } from './routes/_authenticated/admin/membership'
 import { Route as AuthenticatedAdminMediaReviewRouteImport } from './routes/_authenticated/admin/media-review'
 import { Route as AuthenticatedAdminMediaArchivesRouteImport } from './routes/_authenticated/admin/media-archives'
 import { Route as AuthenticatedAdminLiftVideosRouteImport } from './routes/_authenticated/admin/lift-videos'
@@ -99,6 +100,7 @@ import { Route as AuthenticatedAdminAppointmentsRouteImport } from './routes/_au
 import { Route as AuthenticatedAdminAccountRouteImport } from './routes/_authenticated/admin/account'
 import { Route as AuthenticatedPortalWorkoutsIndexRouteImport } from './routes/_authenticated/portal/workouts.index'
 import { Route as AuthenticatedPortalAgreementsIndexRouteImport } from './routes/_authenticated/portal/agreements.index'
+import { Route as AuthenticatedAdminMembershipIndexRouteImport } from './routes/_authenticated/admin/membership.index'
 import { Route as AuthenticatedAdminMembersIndexRouteImport } from './routes/_authenticated/admin/members.index'
 import { Route as AuthenticatedAdminMemberResourcesIndexRouteImport } from './routes/_authenticated/admin/member-resources.index'
 import { Route as AuthenticatedAdminMemberPlansIndexRouteImport } from './routes/_authenticated/admin/member-plans.index'
@@ -126,6 +128,20 @@ import { Route as AuthenticatedAdminSettingsSmsRouteImport } from './routes/_aut
 import { Route as AuthenticatedAdminSettingsChatRouteImport } from './routes/_authenticated/admin/settings_.chat'
 import { Route as AuthenticatedAdminPurchasesIdRouteImport } from './routes/_authenticated/admin/purchases.$id'
 import { Route as AuthenticatedAdminProgramLibraryTemplateIdRouteImport } from './routes/_authenticated/admin/program-library_.$templateId'
+import { Route as AuthenticatedAdminMembershipWelcomeMessagesRouteImport } from './routes/_authenticated/admin/membership.welcome-messages'
+import { Route as AuthenticatedAdminMembershipStripeSyncRouteImport } from './routes/_authenticated/admin/membership.stripe-sync'
+import { Route as AuthenticatedAdminMembershipSmsEmailRouteImport } from './routes/_authenticated/admin/membership.sms-email'
+import { Route as AuthenticatedAdminMembershipSignupStatsRouteImport } from './routes/_authenticated/admin/membership.signup-stats'
+import { Route as AuthenticatedAdminMembershipSignupLinkRouteImport } from './routes/_authenticated/admin/membership.signup-link'
+import { Route as AuthenticatedAdminMembershipSetupLinksRouteImport } from './routes/_authenticated/admin/membership.setup-links'
+import { Route as AuthenticatedAdminMembershipSalesPageRouteImport } from './routes/_authenticated/admin/membership.sales-page'
+import { Route as AuthenticatedAdminMembershipResetLinksRouteImport } from './routes/_authenticated/admin/membership.reset-links'
+import { Route as AuthenticatedAdminMembershipRefundPolicyRouteImport } from './routes/_authenticated/admin/membership.refund-policy'
+import { Route as AuthenticatedAdminMembershipPromoToolsRouteImport } from './routes/_authenticated/admin/membership.promo-tools'
+import { Route as AuthenticatedAdminMembershipChallengesRouteImport } from './routes/_authenticated/admin/membership.challenges'
+import { Route as AuthenticatedAdminMembershipBillingRouteImport } from './routes/_authenticated/admin/membership.billing'
+import { Route as AuthenticatedAdminMembershipActionNeededRouteImport } from './routes/_authenticated/admin/membership.action-needed'
+import { Route as AuthenticatedAdminMembershipAccessChecklistRouteImport } from './routes/_authenticated/admin/membership.access-checklist'
 import { Route as AuthenticatedAdminMembersNewRouteImport } from './routes/_authenticated/admin/members.new'
 import { Route as AuthenticatedAdminMembersMemberIdRouteImport } from './routes/_authenticated/admin/members.$memberId'
 import { Route as AuthenticatedAdminMemberResourcesNewRouteImport } from './routes/_authenticated/admin/member-resources.new'
@@ -484,6 +500,12 @@ const AuthenticatedAdminMessagesRoute =
     path: '/messages',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
+const AuthenticatedAdminMembershipRoute =
+  AuthenticatedAdminMembershipRouteImport.update({
+    id: '/membership',
+    path: '/membership',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
 const AuthenticatedAdminMediaReviewRoute =
   AuthenticatedAdminMediaReviewRouteImport.update({
     id: '/media-review',
@@ -655,6 +677,12 @@ const AuthenticatedPortalAgreementsIndexRoute =
     path: '/agreements/',
     getParentRoute: () => AuthenticatedPortalRouteRoute,
   } as any)
+const AuthenticatedAdminMembershipIndexRoute =
+  AuthenticatedAdminMembershipIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => AuthenticatedAdminMembershipRoute,
+  } as any)
 const AuthenticatedAdminMembersIndexRoute =
   AuthenticatedAdminMembersIndexRouteImport.update({
     id: '/members/',
@@ -814,6 +842,90 @@ const AuthenticatedAdminProgramLibraryTemplateIdRoute =
     path: '/program-library/$templateId',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
+const AuthenticatedAdminMembershipWelcomeMessagesRoute =
+  AuthenticatedAdminMembershipWelcomeMessagesRouteImport.update({
+    id: '/welcome-messages',
+    path: '/welcome-messages',
+    getParentRoute: () => AuthenticatedAdminMembershipRoute,
+  } as any)
+const AuthenticatedAdminMembershipStripeSyncRoute =
+  AuthenticatedAdminMembershipStripeSyncRouteImport.update({
+    id: '/stripe-sync',
+    path: '/stripe-sync',
+    getParentRoute: () => AuthenticatedAdminMembershipRoute,
+  } as any)
+const AuthenticatedAdminMembershipSmsEmailRoute =
+  AuthenticatedAdminMembershipSmsEmailRouteImport.update({
+    id: '/sms-email',
+    path: '/sms-email',
+    getParentRoute: () => AuthenticatedAdminMembershipRoute,
+  } as any)
+const AuthenticatedAdminMembershipSignupStatsRoute =
+  AuthenticatedAdminMembershipSignupStatsRouteImport.update({
+    id: '/signup-stats',
+    path: '/signup-stats',
+    getParentRoute: () => AuthenticatedAdminMembershipRoute,
+  } as any)
+const AuthenticatedAdminMembershipSignupLinkRoute =
+  AuthenticatedAdminMembershipSignupLinkRouteImport.update({
+    id: '/signup-link',
+    path: '/signup-link',
+    getParentRoute: () => AuthenticatedAdminMembershipRoute,
+  } as any)
+const AuthenticatedAdminMembershipSetupLinksRoute =
+  AuthenticatedAdminMembershipSetupLinksRouteImport.update({
+    id: '/setup-links',
+    path: '/setup-links',
+    getParentRoute: () => AuthenticatedAdminMembershipRoute,
+  } as any)
+const AuthenticatedAdminMembershipSalesPageRoute =
+  AuthenticatedAdminMembershipSalesPageRouteImport.update({
+    id: '/sales-page',
+    path: '/sales-page',
+    getParentRoute: () => AuthenticatedAdminMembershipRoute,
+  } as any)
+const AuthenticatedAdminMembershipResetLinksRoute =
+  AuthenticatedAdminMembershipResetLinksRouteImport.update({
+    id: '/reset-links',
+    path: '/reset-links',
+    getParentRoute: () => AuthenticatedAdminMembershipRoute,
+  } as any)
+const AuthenticatedAdminMembershipRefundPolicyRoute =
+  AuthenticatedAdminMembershipRefundPolicyRouteImport.update({
+    id: '/refund-policy',
+    path: '/refund-policy',
+    getParentRoute: () => AuthenticatedAdminMembershipRoute,
+  } as any)
+const AuthenticatedAdminMembershipPromoToolsRoute =
+  AuthenticatedAdminMembershipPromoToolsRouteImport.update({
+    id: '/promo-tools',
+    path: '/promo-tools',
+    getParentRoute: () => AuthenticatedAdminMembershipRoute,
+  } as any)
+const AuthenticatedAdminMembershipChallengesRoute =
+  AuthenticatedAdminMembershipChallengesRouteImport.update({
+    id: '/challenges',
+    path: '/challenges',
+    getParentRoute: () => AuthenticatedAdminMembershipRoute,
+  } as any)
+const AuthenticatedAdminMembershipBillingRoute =
+  AuthenticatedAdminMembershipBillingRouteImport.update({
+    id: '/billing',
+    path: '/billing',
+    getParentRoute: () => AuthenticatedAdminMembershipRoute,
+  } as any)
+const AuthenticatedAdminMembershipActionNeededRoute =
+  AuthenticatedAdminMembershipActionNeededRouteImport.update({
+    id: '/action-needed',
+    path: '/action-needed',
+    getParentRoute: () => AuthenticatedAdminMembershipRoute,
+  } as any)
+const AuthenticatedAdminMembershipAccessChecklistRoute =
+  AuthenticatedAdminMembershipAccessChecklistRouteImport.update({
+    id: '/access-checklist',
+    path: '/access-checklist',
+    getParentRoute: () => AuthenticatedAdminMembershipRoute,
+  } as any)
 const AuthenticatedAdminMembersNewRoute =
   AuthenticatedAdminMembersNewRouteImport.update({
     id: '/members/new',
@@ -963,6 +1075,7 @@ export interface FileRoutesByFullPath {
   '/admin/lift-videos': typeof AuthenticatedAdminLiftVideosRoute
   '/admin/media-archives': typeof AuthenticatedAdminMediaArchivesRoute
   '/admin/media-review': typeof AuthenticatedAdminMediaReviewRoute
+  '/admin/membership': typeof AuthenticatedAdminMembershipRouteWithChildren
   '/admin/messages': typeof AuthenticatedAdminMessagesRoute
   '/admin/native-forms': typeof AuthenticatedAdminNativeFormsRoute
   '/admin/nutrition-targets': typeof AuthenticatedAdminNutritionTargetsRoute
@@ -1025,6 +1138,20 @@ export interface FileRoutesByFullPath {
   '/admin/member-resources/new': typeof AuthenticatedAdminMemberResourcesNewRoute
   '/admin/members/$memberId': typeof AuthenticatedAdminMembersMemberIdRoute
   '/admin/members/new': typeof AuthenticatedAdminMembersNewRoute
+  '/admin/membership/access-checklist': typeof AuthenticatedAdminMembershipAccessChecklistRoute
+  '/admin/membership/action-needed': typeof AuthenticatedAdminMembershipActionNeededRoute
+  '/admin/membership/billing': typeof AuthenticatedAdminMembershipBillingRoute
+  '/admin/membership/challenges': typeof AuthenticatedAdminMembershipChallengesRoute
+  '/admin/membership/promo-tools': typeof AuthenticatedAdminMembershipPromoToolsRoute
+  '/admin/membership/refund-policy': typeof AuthenticatedAdminMembershipRefundPolicyRoute
+  '/admin/membership/reset-links': typeof AuthenticatedAdminMembershipResetLinksRoute
+  '/admin/membership/sales-page': typeof AuthenticatedAdminMembershipSalesPageRoute
+  '/admin/membership/setup-links': typeof AuthenticatedAdminMembershipSetupLinksRoute
+  '/admin/membership/signup-link': typeof AuthenticatedAdminMembershipSignupLinkRoute
+  '/admin/membership/signup-stats': typeof AuthenticatedAdminMembershipSignupStatsRoute
+  '/admin/membership/sms-email': typeof AuthenticatedAdminMembershipSmsEmailRoute
+  '/admin/membership/stripe-sync': typeof AuthenticatedAdminMembershipStripeSyncRoute
+  '/admin/membership/welcome-messages': typeof AuthenticatedAdminMembershipWelcomeMessagesRoute
   '/admin/program-library/$templateId': typeof AuthenticatedAdminProgramLibraryTemplateIdRoute
   '/admin/purchases/$id': typeof AuthenticatedAdminPurchasesIdRoute
   '/admin/settings/chat': typeof AuthenticatedAdminSettingsChatRoute
@@ -1052,6 +1179,7 @@ export interface FileRoutesByFullPath {
   '/admin/member-plans/': typeof AuthenticatedAdminMemberPlansIndexRoute
   '/admin/member-resources/': typeof AuthenticatedAdminMemberResourcesIndexRoute
   '/admin/members/': typeof AuthenticatedAdminMembersIndexRoute
+  '/admin/membership/': typeof AuthenticatedAdminMembershipIndexRoute
   '/portal/agreements/': typeof AuthenticatedPortalAgreementsIndexRoute
   '/portal/workouts/': typeof AuthenticatedPortalWorkoutsIndexRoute
   '/admin/client-programs/$clientId/analytics': typeof AuthenticatedAdminClientProgramsClientIdAnalyticsRoute
@@ -1158,6 +1286,20 @@ export interface FileRoutesByTo {
   '/admin/member-resources/new': typeof AuthenticatedAdminMemberResourcesNewRoute
   '/admin/members/$memberId': typeof AuthenticatedAdminMembersMemberIdRoute
   '/admin/members/new': typeof AuthenticatedAdminMembersNewRoute
+  '/admin/membership/access-checklist': typeof AuthenticatedAdminMembershipAccessChecklistRoute
+  '/admin/membership/action-needed': typeof AuthenticatedAdminMembershipActionNeededRoute
+  '/admin/membership/billing': typeof AuthenticatedAdminMembershipBillingRoute
+  '/admin/membership/challenges': typeof AuthenticatedAdminMembershipChallengesRoute
+  '/admin/membership/promo-tools': typeof AuthenticatedAdminMembershipPromoToolsRoute
+  '/admin/membership/refund-policy': typeof AuthenticatedAdminMembershipRefundPolicyRoute
+  '/admin/membership/reset-links': typeof AuthenticatedAdminMembershipResetLinksRoute
+  '/admin/membership/sales-page': typeof AuthenticatedAdminMembershipSalesPageRoute
+  '/admin/membership/setup-links': typeof AuthenticatedAdminMembershipSetupLinksRoute
+  '/admin/membership/signup-link': typeof AuthenticatedAdminMembershipSignupLinkRoute
+  '/admin/membership/signup-stats': typeof AuthenticatedAdminMembershipSignupStatsRoute
+  '/admin/membership/sms-email': typeof AuthenticatedAdminMembershipSmsEmailRoute
+  '/admin/membership/stripe-sync': typeof AuthenticatedAdminMembershipStripeSyncRoute
+  '/admin/membership/welcome-messages': typeof AuthenticatedAdminMembershipWelcomeMessagesRoute
   '/admin/program-library/$templateId': typeof AuthenticatedAdminProgramLibraryTemplateIdRoute
   '/admin/purchases/$id': typeof AuthenticatedAdminPurchasesIdRoute
   '/admin/settings/chat': typeof AuthenticatedAdminSettingsChatRoute
@@ -1185,6 +1327,7 @@ export interface FileRoutesByTo {
   '/admin/member-plans': typeof AuthenticatedAdminMemberPlansIndexRoute
   '/admin/member-resources': typeof AuthenticatedAdminMemberResourcesIndexRoute
   '/admin/members': typeof AuthenticatedAdminMembersIndexRoute
+  '/admin/membership': typeof AuthenticatedAdminMembershipIndexRoute
   '/portal/agreements': typeof AuthenticatedPortalAgreementsIndexRoute
   '/portal/workouts': typeof AuthenticatedPortalWorkoutsIndexRoute
   '/admin/client-programs/$clientId/analytics': typeof AuthenticatedAdminClientProgramsClientIdAnalyticsRoute
@@ -1234,6 +1377,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/lift-videos': typeof AuthenticatedAdminLiftVideosRoute
   '/_authenticated/admin/media-archives': typeof AuthenticatedAdminMediaArchivesRoute
   '/_authenticated/admin/media-review': typeof AuthenticatedAdminMediaReviewRoute
+  '/_authenticated/admin/membership': typeof AuthenticatedAdminMembershipRouteWithChildren
   '/_authenticated/admin/messages': typeof AuthenticatedAdminMessagesRoute
   '/_authenticated/admin/native-forms': typeof AuthenticatedAdminNativeFormsRoute
   '/_authenticated/admin/nutrition-targets': typeof AuthenticatedAdminNutritionTargetsRoute
@@ -1296,6 +1440,20 @@ export interface FileRoutesById {
   '/_authenticated/admin/member-resources/new': typeof AuthenticatedAdminMemberResourcesNewRoute
   '/_authenticated/admin/members/$memberId': typeof AuthenticatedAdminMembersMemberIdRoute
   '/_authenticated/admin/members/new': typeof AuthenticatedAdminMembersNewRoute
+  '/_authenticated/admin/membership/access-checklist': typeof AuthenticatedAdminMembershipAccessChecklistRoute
+  '/_authenticated/admin/membership/action-needed': typeof AuthenticatedAdminMembershipActionNeededRoute
+  '/_authenticated/admin/membership/billing': typeof AuthenticatedAdminMembershipBillingRoute
+  '/_authenticated/admin/membership/challenges': typeof AuthenticatedAdminMembershipChallengesRoute
+  '/_authenticated/admin/membership/promo-tools': typeof AuthenticatedAdminMembershipPromoToolsRoute
+  '/_authenticated/admin/membership/refund-policy': typeof AuthenticatedAdminMembershipRefundPolicyRoute
+  '/_authenticated/admin/membership/reset-links': typeof AuthenticatedAdminMembershipResetLinksRoute
+  '/_authenticated/admin/membership/sales-page': typeof AuthenticatedAdminMembershipSalesPageRoute
+  '/_authenticated/admin/membership/setup-links': typeof AuthenticatedAdminMembershipSetupLinksRoute
+  '/_authenticated/admin/membership/signup-link': typeof AuthenticatedAdminMembershipSignupLinkRoute
+  '/_authenticated/admin/membership/signup-stats': typeof AuthenticatedAdminMembershipSignupStatsRoute
+  '/_authenticated/admin/membership/sms-email': typeof AuthenticatedAdminMembershipSmsEmailRoute
+  '/_authenticated/admin/membership/stripe-sync': typeof AuthenticatedAdminMembershipStripeSyncRoute
+  '/_authenticated/admin/membership/welcome-messages': typeof AuthenticatedAdminMembershipWelcomeMessagesRoute
   '/_authenticated/admin/program-library_/$templateId': typeof AuthenticatedAdminProgramLibraryTemplateIdRoute
   '/_authenticated/admin/purchases/$id': typeof AuthenticatedAdminPurchasesIdRoute
   '/_authenticated/admin/settings_/chat': typeof AuthenticatedAdminSettingsChatRoute
@@ -1323,6 +1481,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/member-plans/': typeof AuthenticatedAdminMemberPlansIndexRoute
   '/_authenticated/admin/member-resources/': typeof AuthenticatedAdminMemberResourcesIndexRoute
   '/_authenticated/admin/members/': typeof AuthenticatedAdminMembersIndexRoute
+  '/_authenticated/admin/membership/': typeof AuthenticatedAdminMembershipIndexRoute
   '/_authenticated/portal/agreements/': typeof AuthenticatedPortalAgreementsIndexRoute
   '/_authenticated/portal/workouts/': typeof AuthenticatedPortalWorkoutsIndexRoute
   '/_authenticated/admin/client-programs/$clientId/analytics': typeof AuthenticatedAdminClientProgramsClientIdAnalyticsRoute
@@ -1372,6 +1531,7 @@ export interface FileRouteTypes {
     | '/admin/lift-videos'
     | '/admin/media-archives'
     | '/admin/media-review'
+    | '/admin/membership'
     | '/admin/messages'
     | '/admin/native-forms'
     | '/admin/nutrition-targets'
@@ -1434,6 +1594,20 @@ export interface FileRouteTypes {
     | '/admin/member-resources/new'
     | '/admin/members/$memberId'
     | '/admin/members/new'
+    | '/admin/membership/access-checklist'
+    | '/admin/membership/action-needed'
+    | '/admin/membership/billing'
+    | '/admin/membership/challenges'
+    | '/admin/membership/promo-tools'
+    | '/admin/membership/refund-policy'
+    | '/admin/membership/reset-links'
+    | '/admin/membership/sales-page'
+    | '/admin/membership/setup-links'
+    | '/admin/membership/signup-link'
+    | '/admin/membership/signup-stats'
+    | '/admin/membership/sms-email'
+    | '/admin/membership/stripe-sync'
+    | '/admin/membership/welcome-messages'
     | '/admin/program-library/$templateId'
     | '/admin/purchases/$id'
     | '/admin/settings/chat'
@@ -1461,6 +1635,7 @@ export interface FileRouteTypes {
     | '/admin/member-plans/'
     | '/admin/member-resources/'
     | '/admin/members/'
+    | '/admin/membership/'
     | '/portal/agreements/'
     | '/portal/workouts/'
     | '/admin/client-programs/$clientId/analytics'
@@ -1567,6 +1742,20 @@ export interface FileRouteTypes {
     | '/admin/member-resources/new'
     | '/admin/members/$memberId'
     | '/admin/members/new'
+    | '/admin/membership/access-checklist'
+    | '/admin/membership/action-needed'
+    | '/admin/membership/billing'
+    | '/admin/membership/challenges'
+    | '/admin/membership/promo-tools'
+    | '/admin/membership/refund-policy'
+    | '/admin/membership/reset-links'
+    | '/admin/membership/sales-page'
+    | '/admin/membership/setup-links'
+    | '/admin/membership/signup-link'
+    | '/admin/membership/signup-stats'
+    | '/admin/membership/sms-email'
+    | '/admin/membership/stripe-sync'
+    | '/admin/membership/welcome-messages'
     | '/admin/program-library/$templateId'
     | '/admin/purchases/$id'
     | '/admin/settings/chat'
@@ -1594,6 +1783,7 @@ export interface FileRouteTypes {
     | '/admin/member-plans'
     | '/admin/member-resources'
     | '/admin/members'
+    | '/admin/membership'
     | '/portal/agreements'
     | '/portal/workouts'
     | '/admin/client-programs/$clientId/analytics'
@@ -1642,6 +1832,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/lift-videos'
     | '/_authenticated/admin/media-archives'
     | '/_authenticated/admin/media-review'
+    | '/_authenticated/admin/membership'
     | '/_authenticated/admin/messages'
     | '/_authenticated/admin/native-forms'
     | '/_authenticated/admin/nutrition-targets'
@@ -1704,6 +1895,20 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/member-resources/new'
     | '/_authenticated/admin/members/$memberId'
     | '/_authenticated/admin/members/new'
+    | '/_authenticated/admin/membership/access-checklist'
+    | '/_authenticated/admin/membership/action-needed'
+    | '/_authenticated/admin/membership/billing'
+    | '/_authenticated/admin/membership/challenges'
+    | '/_authenticated/admin/membership/promo-tools'
+    | '/_authenticated/admin/membership/refund-policy'
+    | '/_authenticated/admin/membership/reset-links'
+    | '/_authenticated/admin/membership/sales-page'
+    | '/_authenticated/admin/membership/setup-links'
+    | '/_authenticated/admin/membership/signup-link'
+    | '/_authenticated/admin/membership/signup-stats'
+    | '/_authenticated/admin/membership/sms-email'
+    | '/_authenticated/admin/membership/stripe-sync'
+    | '/_authenticated/admin/membership/welcome-messages'
     | '/_authenticated/admin/program-library_/$templateId'
     | '/_authenticated/admin/purchases/$id'
     | '/_authenticated/admin/settings_/chat'
@@ -1731,6 +1936,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/member-plans/'
     | '/_authenticated/admin/member-resources/'
     | '/_authenticated/admin/members/'
+    | '/_authenticated/admin/membership/'
     | '/_authenticated/portal/agreements/'
     | '/_authenticated/portal/workouts/'
     | '/_authenticated/admin/client-programs/$clientId/analytics'
@@ -2192,6 +2398,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminMessagesRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
+    '/_authenticated/admin/membership': {
+      id: '/_authenticated/admin/membership'
+      path: '/membership'
+      fullPath: '/admin/membership'
+      preLoaderRoute: typeof AuthenticatedAdminMembershipRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
     '/_authenticated/admin/media-review': {
       id: '/_authenticated/admin/media-review'
       path: '/media-review'
@@ -2395,6 +2608,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedPortalAgreementsIndexRouteImport
       parentRoute: typeof AuthenticatedPortalRouteRoute
     }
+    '/_authenticated/admin/membership/': {
+      id: '/_authenticated/admin/membership/'
+      path: '/'
+      fullPath: '/admin/membership/'
+      preLoaderRoute: typeof AuthenticatedAdminMembershipIndexRouteImport
+      parentRoute: typeof AuthenticatedAdminMembershipRoute
+    }
     '/_authenticated/admin/members/': {
       id: '/_authenticated/admin/members/'
       path: '/members'
@@ -2584,6 +2804,104 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminProgramLibraryTemplateIdRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
+    '/_authenticated/admin/membership/welcome-messages': {
+      id: '/_authenticated/admin/membership/welcome-messages'
+      path: '/welcome-messages'
+      fullPath: '/admin/membership/welcome-messages'
+      preLoaderRoute: typeof AuthenticatedAdminMembershipWelcomeMessagesRouteImport
+      parentRoute: typeof AuthenticatedAdminMembershipRoute
+    }
+    '/_authenticated/admin/membership/stripe-sync': {
+      id: '/_authenticated/admin/membership/stripe-sync'
+      path: '/stripe-sync'
+      fullPath: '/admin/membership/stripe-sync'
+      preLoaderRoute: typeof AuthenticatedAdminMembershipStripeSyncRouteImport
+      parentRoute: typeof AuthenticatedAdminMembershipRoute
+    }
+    '/_authenticated/admin/membership/sms-email': {
+      id: '/_authenticated/admin/membership/sms-email'
+      path: '/sms-email'
+      fullPath: '/admin/membership/sms-email'
+      preLoaderRoute: typeof AuthenticatedAdminMembershipSmsEmailRouteImport
+      parentRoute: typeof AuthenticatedAdminMembershipRoute
+    }
+    '/_authenticated/admin/membership/signup-stats': {
+      id: '/_authenticated/admin/membership/signup-stats'
+      path: '/signup-stats'
+      fullPath: '/admin/membership/signup-stats'
+      preLoaderRoute: typeof AuthenticatedAdminMembershipSignupStatsRouteImport
+      parentRoute: typeof AuthenticatedAdminMembershipRoute
+    }
+    '/_authenticated/admin/membership/signup-link': {
+      id: '/_authenticated/admin/membership/signup-link'
+      path: '/signup-link'
+      fullPath: '/admin/membership/signup-link'
+      preLoaderRoute: typeof AuthenticatedAdminMembershipSignupLinkRouteImport
+      parentRoute: typeof AuthenticatedAdminMembershipRoute
+    }
+    '/_authenticated/admin/membership/setup-links': {
+      id: '/_authenticated/admin/membership/setup-links'
+      path: '/setup-links'
+      fullPath: '/admin/membership/setup-links'
+      preLoaderRoute: typeof AuthenticatedAdminMembershipSetupLinksRouteImport
+      parentRoute: typeof AuthenticatedAdminMembershipRoute
+    }
+    '/_authenticated/admin/membership/sales-page': {
+      id: '/_authenticated/admin/membership/sales-page'
+      path: '/sales-page'
+      fullPath: '/admin/membership/sales-page'
+      preLoaderRoute: typeof AuthenticatedAdminMembershipSalesPageRouteImport
+      parentRoute: typeof AuthenticatedAdminMembershipRoute
+    }
+    '/_authenticated/admin/membership/reset-links': {
+      id: '/_authenticated/admin/membership/reset-links'
+      path: '/reset-links'
+      fullPath: '/admin/membership/reset-links'
+      preLoaderRoute: typeof AuthenticatedAdminMembershipResetLinksRouteImport
+      parentRoute: typeof AuthenticatedAdminMembershipRoute
+    }
+    '/_authenticated/admin/membership/refund-policy': {
+      id: '/_authenticated/admin/membership/refund-policy'
+      path: '/refund-policy'
+      fullPath: '/admin/membership/refund-policy'
+      preLoaderRoute: typeof AuthenticatedAdminMembershipRefundPolicyRouteImport
+      parentRoute: typeof AuthenticatedAdminMembershipRoute
+    }
+    '/_authenticated/admin/membership/promo-tools': {
+      id: '/_authenticated/admin/membership/promo-tools'
+      path: '/promo-tools'
+      fullPath: '/admin/membership/promo-tools'
+      preLoaderRoute: typeof AuthenticatedAdminMembershipPromoToolsRouteImport
+      parentRoute: typeof AuthenticatedAdminMembershipRoute
+    }
+    '/_authenticated/admin/membership/challenges': {
+      id: '/_authenticated/admin/membership/challenges'
+      path: '/challenges'
+      fullPath: '/admin/membership/challenges'
+      preLoaderRoute: typeof AuthenticatedAdminMembershipChallengesRouteImport
+      parentRoute: typeof AuthenticatedAdminMembershipRoute
+    }
+    '/_authenticated/admin/membership/billing': {
+      id: '/_authenticated/admin/membership/billing'
+      path: '/billing'
+      fullPath: '/admin/membership/billing'
+      preLoaderRoute: typeof AuthenticatedAdminMembershipBillingRouteImport
+      parentRoute: typeof AuthenticatedAdminMembershipRoute
+    }
+    '/_authenticated/admin/membership/action-needed': {
+      id: '/_authenticated/admin/membership/action-needed'
+      path: '/action-needed'
+      fullPath: '/admin/membership/action-needed'
+      preLoaderRoute: typeof AuthenticatedAdminMembershipActionNeededRouteImport
+      parentRoute: typeof AuthenticatedAdminMembershipRoute
+    }
+    '/_authenticated/admin/membership/access-checklist': {
+      id: '/_authenticated/admin/membership/access-checklist'
+      path: '/access-checklist'
+      fullPath: '/admin/membership/access-checklist'
+      preLoaderRoute: typeof AuthenticatedAdminMembershipAccessChecklistRouteImport
+      parentRoute: typeof AuthenticatedAdminMembershipRoute
+    }
     '/_authenticated/admin/members/new': {
       id: '/_authenticated/admin/members/new'
       path: '/members/new'
@@ -2728,6 +3046,63 @@ const AuthenticatedAdminBroadcastsRouteWithChildren =
     AuthenticatedAdminBroadcastsRouteChildren,
   )
 
+interface AuthenticatedAdminMembershipRouteChildren {
+  AuthenticatedAdminMembershipAccessChecklistRoute: typeof AuthenticatedAdminMembershipAccessChecklistRoute
+  AuthenticatedAdminMembershipActionNeededRoute: typeof AuthenticatedAdminMembershipActionNeededRoute
+  AuthenticatedAdminMembershipBillingRoute: typeof AuthenticatedAdminMembershipBillingRoute
+  AuthenticatedAdminMembershipChallengesRoute: typeof AuthenticatedAdminMembershipChallengesRoute
+  AuthenticatedAdminMembershipPromoToolsRoute: typeof AuthenticatedAdminMembershipPromoToolsRoute
+  AuthenticatedAdminMembershipRefundPolicyRoute: typeof AuthenticatedAdminMembershipRefundPolicyRoute
+  AuthenticatedAdminMembershipResetLinksRoute: typeof AuthenticatedAdminMembershipResetLinksRoute
+  AuthenticatedAdminMembershipSalesPageRoute: typeof AuthenticatedAdminMembershipSalesPageRoute
+  AuthenticatedAdminMembershipSetupLinksRoute: typeof AuthenticatedAdminMembershipSetupLinksRoute
+  AuthenticatedAdminMembershipSignupLinkRoute: typeof AuthenticatedAdminMembershipSignupLinkRoute
+  AuthenticatedAdminMembershipSignupStatsRoute: typeof AuthenticatedAdminMembershipSignupStatsRoute
+  AuthenticatedAdminMembershipSmsEmailRoute: typeof AuthenticatedAdminMembershipSmsEmailRoute
+  AuthenticatedAdminMembershipStripeSyncRoute: typeof AuthenticatedAdminMembershipStripeSyncRoute
+  AuthenticatedAdminMembershipWelcomeMessagesRoute: typeof AuthenticatedAdminMembershipWelcomeMessagesRoute
+  AuthenticatedAdminMembershipIndexRoute: typeof AuthenticatedAdminMembershipIndexRoute
+}
+
+const AuthenticatedAdminMembershipRouteChildren: AuthenticatedAdminMembershipRouteChildren =
+  {
+    AuthenticatedAdminMembershipAccessChecklistRoute:
+      AuthenticatedAdminMembershipAccessChecklistRoute,
+    AuthenticatedAdminMembershipActionNeededRoute:
+      AuthenticatedAdminMembershipActionNeededRoute,
+    AuthenticatedAdminMembershipBillingRoute:
+      AuthenticatedAdminMembershipBillingRoute,
+    AuthenticatedAdminMembershipChallengesRoute:
+      AuthenticatedAdminMembershipChallengesRoute,
+    AuthenticatedAdminMembershipPromoToolsRoute:
+      AuthenticatedAdminMembershipPromoToolsRoute,
+    AuthenticatedAdminMembershipRefundPolicyRoute:
+      AuthenticatedAdminMembershipRefundPolicyRoute,
+    AuthenticatedAdminMembershipResetLinksRoute:
+      AuthenticatedAdminMembershipResetLinksRoute,
+    AuthenticatedAdminMembershipSalesPageRoute:
+      AuthenticatedAdminMembershipSalesPageRoute,
+    AuthenticatedAdminMembershipSetupLinksRoute:
+      AuthenticatedAdminMembershipSetupLinksRoute,
+    AuthenticatedAdminMembershipSignupLinkRoute:
+      AuthenticatedAdminMembershipSignupLinkRoute,
+    AuthenticatedAdminMembershipSignupStatsRoute:
+      AuthenticatedAdminMembershipSignupStatsRoute,
+    AuthenticatedAdminMembershipSmsEmailRoute:
+      AuthenticatedAdminMembershipSmsEmailRoute,
+    AuthenticatedAdminMembershipStripeSyncRoute:
+      AuthenticatedAdminMembershipStripeSyncRoute,
+    AuthenticatedAdminMembershipWelcomeMessagesRoute:
+      AuthenticatedAdminMembershipWelcomeMessagesRoute,
+    AuthenticatedAdminMembershipIndexRoute:
+      AuthenticatedAdminMembershipIndexRoute,
+  }
+
+const AuthenticatedAdminMembershipRouteWithChildren =
+  AuthenticatedAdminMembershipRoute._addFileChildren(
+    AuthenticatedAdminMembershipRouteChildren,
+  )
+
 interface AuthenticatedAdminPurchasesRouteChildren {
   AuthenticatedAdminPurchasesIdRoute: typeof AuthenticatedAdminPurchasesIdRoute
 }
@@ -2788,6 +3163,7 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminLiftVideosRoute: typeof AuthenticatedAdminLiftVideosRoute
   AuthenticatedAdminMediaArchivesRoute: typeof AuthenticatedAdminMediaArchivesRoute
   AuthenticatedAdminMediaReviewRoute: typeof AuthenticatedAdminMediaReviewRoute
+  AuthenticatedAdminMembershipRoute: typeof AuthenticatedAdminMembershipRouteWithChildren
   AuthenticatedAdminMessagesRoute: typeof AuthenticatedAdminMessagesRoute
   AuthenticatedAdminNativeFormsRoute: typeof AuthenticatedAdminNativeFormsRoute
   AuthenticatedAdminNutritionTargetsRoute: typeof AuthenticatedAdminNutritionTargetsRoute
@@ -2866,6 +3242,8 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
     AuthenticatedAdminLiftVideosRoute: AuthenticatedAdminLiftVideosRoute,
     AuthenticatedAdminMediaArchivesRoute: AuthenticatedAdminMediaArchivesRoute,
     AuthenticatedAdminMediaReviewRoute: AuthenticatedAdminMediaReviewRoute,
+    AuthenticatedAdminMembershipRoute:
+      AuthenticatedAdminMembershipRouteWithChildren,
     AuthenticatedAdminMessagesRoute: AuthenticatedAdminMessagesRoute,
     AuthenticatedAdminNativeFormsRoute: AuthenticatedAdminNativeFormsRoute,
     AuthenticatedAdminNutritionTargetsRoute:
