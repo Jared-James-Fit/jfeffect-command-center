@@ -15,6 +15,11 @@ import { Plus, Search, MoreHorizontal, Mail, Archive, Trash2, KeyRound, Dumbbell
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import { inviteClient, archiveClient, deleteClient, sendPasswordReset } from "@/lib/clients.functions";
+import { sendAuthLinkBySms, sendPaymentLinkBySms } from "@/lib/sms-links.functions";
+import { sendPaymentLinkEmail } from "@/lib/payments.functions";
+import { createCheckoutSessionForAssignment } from "@/lib/stripe-checkout.functions";
+import { snapshotOfferForPurchase } from "@/lib/offers";
+import { Switch } from "@/components/ui/switch";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator, DropdownMenuLabel } from "@/components/ui/dropdown-menu";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Checkbox } from "@/components/ui/checkbox";
