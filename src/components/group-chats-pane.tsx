@@ -50,19 +50,30 @@ export function GroupChatsPane({ asAdmin }: { asAdmin: boolean }) {
   );
 
   // Unread counts per group
-  const { data: lastMsgByGroup = new Map() } = useQuery({
+  const { data: lastMsgByGroup = {} as Record<string, any> } = useQuery({
     queryKey: ["group-last-messages", groups.map((g) => g.id).join(",")],
     enabled: groups.length > 0,
     queryFn: async () => {
       const ids = groups.map((g) => g.id);
-      const { data } = await (supabase.from("group_messages") as any)
-        .select("group_id, created_at, body, sender_id")
-        .in("group_id", ids)
-        .order("created_at", { ascending: false })
-        .limit(1000);
-      const m = new Map<string, any>();
-      for (const row of (data ?? [])) if (!m.has(row.group_id)) m.set(row.group_id, row);
-      return m;
+      try {
+        const { data, error } = await (supabase.from("group_messages") as any)
+          .select("group_id, created_at, body, sender_id")
+          .in("group_id", ids)
+          .order("created_at", { ascending: false })
+          .limit(1000);
+        if (error) {
+          // eslint-disable-next-line no-console
+          console.warn("[GroupChat] last-messages query failed", error);
+          return {} as Record<string, any>;
+        }
+        const m: Record<string, any> = {};
+        for (const row of (data ?? [])) if (!m[row.group_id]) m[row.group_id] = row;
+        return m;
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.warn("[GroupChat] last-messages threw", e);
+        return {} as Record<string, any>;
+      }
     },
     refetchInterval: 30_000,
   });
@@ -89,7 +100,7 @@ export function GroupChatsPane({ asAdmin }: { asAdmin: boolean }) {
   const visibleGroups = useMemo(() => {
     return groups
       .map((g) => {
-        const last = lastMsgByGroup.get(g.id);
+        const last = (lastMsgByGroup as Record<string, any>)?.[g.id];
         const lastReadStr = lastReadByGroup.get(g.id) ?? null;
         const lastRead = lastReadStr ? new Date(lastReadStr).getTime() : 0;
         const unread = last && new Date(last.created_at).getTime() > lastRead && last.sender_id !== user?.id ? 1 : 0;
