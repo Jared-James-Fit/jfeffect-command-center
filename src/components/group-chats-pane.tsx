@@ -19,6 +19,7 @@ import { deleteGroupChats } from "@/lib/group-chats.functions";
 import { GroupMessageThread } from "@/components/group-message-thread";
 import { CreateGroupDialog } from "@/components/create-group-dialog";
 import { ManageGroupDialog } from "@/components/manage-group-dialog";
+import { GroupChatErrorBoundary } from "@/components/group-chat-error-boundary";
 import { useGroupPresence } from "@/hooks/use-group-presence";
 import { LiveDot } from "@/hooks/use-chat-presence";
 
@@ -271,12 +272,14 @@ export function GroupChatsPane({ asAdmin }: { asAdmin: boolean }) {
                 </Button>
               )}
             </header>
-            <GroupMessageThread
-              groupId={selected.id}
-              groupName={selected.name}
-              canPost={canPost}
-              canManage={asAdmin || isAdminOfGroup}
-            />
+            <GroupChatErrorBoundary key={`thread-${selected.id}`}>
+              <GroupMessageThread
+                groupId={selected.id}
+                groupName={selected.name}
+                canPost={canPost}
+                canManage={asAdmin || isAdminOfGroup}
+              />
+            </GroupChatErrorBoundary>
           </>
         ) : (
           <div className="grid flex-1 place-items-center text-sm text-muted-foreground">
