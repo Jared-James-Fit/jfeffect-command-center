@@ -225,9 +225,9 @@ function AdminLiftVideos() {
     <>
       <PageHeader title="Lift Video Review" subtitle="Coaching review inbox — tap a submission to review." />
 
-      <div className="mx-auto w-full max-w-[1600px] p-3 sm:p-4 md:p-6">
+      <div className="mx-auto w-full max-w-7xl min-w-0 px-4 py-4 sm:px-5 md:px-6">
         {/* Mobile: show detail full-screen when a submission is open */}
-        <div className={cn("lg:hidden mx-auto w-full max-w-2xl", openSub ? "block" : "hidden")}>
+        <div className={cn("mx-auto w-full max-w-2xl min-w-0 lg:hidden", openSub ? "block" : "hidden")}>
           {openSub && activeClip && (
             <ReviewDetail
               sub={openSub}
@@ -243,9 +243,9 @@ function AdminLiftVideos() {
         </div>
 
         {/* Inbox + (desktop) detail split */}
-        <div className={cn("grid gap-6 lg:grid-cols-[minmax(0,420px)_minmax(0,1fr)]", openSub && "max-lg:hidden")}>
+        <div className={cn("grid min-w-0 gap-4 xl:gap-6 lg:grid-cols-[minmax(320px,400px)_minmax(0,1fr)]", openSub && "max-lg:hidden")}>
           {/* Inbox column */}
-          <div className="space-y-3">
+          <div className="min-w-0 space-y-3">
             <Card className="border-border bg-card p-3 space-y-3">
               <Input
                 placeholder="Search client, lift, or day"
@@ -253,7 +253,7 @@ function AdminLiftVideos() {
                 onChange={(e) => setSearch(e.target.value)}
                 className="h-10"
               />
-              <div className="flex gap-1.5 overflow-x-auto pb-1 -mx-1 px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <div className="flex flex-wrap gap-1.5 pb-1">
                 {FILTERS.map((f) => (
                   <button
                     key={f.key}
@@ -344,7 +344,7 @@ function AdminLiftVideos() {
           </div>
 
           {/* Desktop detail panel */}
-          <div className="hidden lg:block">
+          <div className="hidden min-w-0 lg:block">
             {openSub && activeClip ? (
               <div className="sticky top-4">
                 <ReviewDetail
