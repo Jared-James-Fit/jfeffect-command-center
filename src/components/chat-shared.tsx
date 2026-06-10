@@ -614,6 +614,15 @@ export function AttachmentView({
   if (att.kind === "payment_request") {
     return <PaymentRequestCard att={att} mine={mine} />;
   }
+  if (att.kind === "form_request") {
+    return <FormRequestCard att={att} mine={mine} />;
+  }
+  if (att.kind === "signature_request") {
+    return <SignatureRequestCard att={att} mine={mine} />;
+  }
+  if (att.kind === "recipe_share") {
+    return <RecipeShareCard att={att} mine={mine} />;
+  }
   if (att.kind === "sound") {
     return (
       <ChatSoundCard
