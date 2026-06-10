@@ -71,12 +71,12 @@ function DriveSetupBanner() {
 
 function SectionHeader({ title, icon: Icon, viewAll }: { title: string; icon?: any; viewAll?: { to: string; label?: string; search?: any; params?: any } }) {
   return (
-    <div className="mb-3 flex items-center justify-between">
-      <h2 className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">
+    <div className="mb-3 flex items-center justify-between gap-2 flex-wrap">
+      <h2 className="flex min-w-0 items-center gap-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">
         {Icon && <Icon className="h-3.5 w-3.5" />}{title}
       </h2>
       {viewAll && (
-        <Link to={viewAll.to as any} search={viewAll.search} params={viewAll.params} className="text-[11px] font-semibold text-primary hover:underline">
+        <Link to={viewAll.to as any} search={viewAll.search} params={viewAll.params} className="shrink-0 text-[11px] font-semibold text-primary hover:underline">
           {viewAll.label ?? "View all"} →
         </Link>
       )}
