@@ -95,6 +95,16 @@ function EmptyMini({ children }: { children: React.ReactNode }) {
 function AdminDashboard() {
   const [sellTo, setSellTo] = useState<{ id: string; name: string } | null>(null);
 
+  const [commandCollapsed, setCommandCollapsed] = useState(() => {
+    const saved = typeof window !== "undefined" ? localStorage.getItem("admin-command-collapsed") : null;
+    if (saved !== null) return saved === "true";
+    return window.innerWidth < 1024; // collapsed on tablet/mobile by default
+  });
+
+  useEffect(() => {
+    localStorage.setItem("admin-command-collapsed", String(commandCollapsed));
+  }, [commandCollapsed]);
+
   const { data: clients = [] } = useQuery({
     queryKey: ["admin-clients"],
     queryFn: async () => {
