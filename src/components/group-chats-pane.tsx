@@ -1,17 +1,21 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
-import { ChevronLeft, Plus, Settings2, Users, Archive } from "lucide-react";
+import { ChevronLeft, Plus, Settings2, Users, Archive, Trash2, CheckSquare, X } from "lucide-react";
+import { toast } from "sonner";
 import {
   listMyGroups, listAllGroupsForAdmin, listMyGroupMemberships,
   listGroupMemberProfiles, type GroupMemberProfile,
   type ChatGroup,
 } from "@/lib/group-chats";
+import { deleteGroupChats } from "@/lib/group-chats.functions";
 import { GroupMessageThread } from "@/components/group-message-thread";
 import { CreateGroupDialog } from "@/components/create-group-dialog";
 import { ManageGroupDialog } from "@/components/manage-group-dialog";
@@ -24,6 +28,10 @@ export function GroupChatsPane({ asAdmin }: { asAdmin: boolean }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [manageOpen, setManageOpen] = useState(false);
+  const [selectMode, setSelectMode] = useState(false);
+  const [checked, setChecked] = useState<Record<string, true>>({});
+  const deleteGroupsFn = useServerFn(deleteGroupChats);
+  const isAdmin = role === "admin";
 
   const { data: groups = [] } = useQuery({
     queryKey: ["chat-groups", asAdmin],
