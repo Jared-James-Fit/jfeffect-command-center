@@ -49,12 +49,17 @@ function AdminEventsPage() {
   }, [events, search, importance, type]);
 
   async function createDraft() {
+    const tid = toast.loading("Creating event…");
     try {
-      const data = await createDraftFn();
+      const data = await createDraftFn({ data: undefined as any });
+      toast.dismiss(tid);
+      if (!data?.id) throw new Error("Server did not return an event id");
       qc.invalidateQueries({ queryKey: ["admin-events"] });
       nav({ to: "/admin/events/$id", params: { id: data.id } });
     } catch (e: any) {
-      toast.error(e?.message ?? "Could not create event");
+      toast.dismiss(tid);
+      console.error("[events] createDraft failed", e);
+      toast.error(e?.message ?? e?.toString?.() ?? "Could not create event");
     }
   }
 
