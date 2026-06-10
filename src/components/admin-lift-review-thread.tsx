@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -10,7 +9,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
-  Eye, ThumbsUp, CheckCircle2, AlertCircle, Archive, Zap, Send, Loader2,
+  Eye, ThumbsUp, CheckCircle2, AlertCircle, Archive, Zap,
   ExternalLink, AlertTriangle, MessageSquare,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -24,6 +23,8 @@ import {
 } from "@/lib/lift-videos";
 import { format, parseISO } from "date-fns";
 import { cn } from "@/lib/utils";
+import { LiftCommentComposer } from "@/components/lift-comment-composer";
+import { LiftCommentAttachments } from "@/components/lift-comment-attachments";
 
 type Props = {
   video: LiftVideo;
@@ -35,9 +36,8 @@ type Props = {
 
 export function AdminLiftReviewThread({ video, userId, clientName, clientAvatarPath, onChanged }: Props) {
   const [comments, setComments] = useState<LiftVideoComment[]>([]);
-  const [body, setBody] = useState("");
   const [isInternal, setIsInternal] = useState(false);
-  const [posting, setPosting] = useState(false);
+  const [quickReplyText, setQuickReplyText] = useState<string | null>(null);
   const [signedUrl, setSignedUrl] = useState<string | null>(null);
   const [embedUrl, setEmbedUrl] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -76,27 +76,19 @@ export function AdminLiftReviewThread({ video, userId, clientName, clientAvatarP
     scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [comments.length]);
 
-  const send = async () => {
-    if (!body.trim()) return;
-    setPosting(true);
-    try {
-      await addComment({
-        videoId: video.id,
-        clientId: video.client_id,
-        authorId: userId,
-        authorRole: "admin",
-        body: body.trim(),
-        isInternalNote: isInternal,
-      });
-      setBody("");
-      setIsInternal(false);
-      await loadComments();
-      onChanged?.();
-    } catch (e: any) {
-      toast.error(e?.message ?? "Failed to send");
-    } finally {
-      setPosting(false);
-    }
+  const handleSend = async (body: string, attachments: any[]) => {
+    await addComment({
+      videoId: video.id,
+      clientId: video.client_id,
+      authorId: userId,
+      authorRole: "admin",
+      body,
+      isInternalNote: isInternal,
+      attachments,
+    });
+    setIsInternal(false);
+    await loadComments();
+    onChanged?.();
   };
 
   const act = async (fn: () => Promise<void>, success: string) => {
@@ -160,15 +152,24 @@ export function AdminLiftReviewThread({ video, userId, clientName, clientAvatarP
       </div>
 
       {/* Quick actions */}
-      <div className="flex flex-wrap items-center gap-1.5 border-b border-border px-3 py-2">
+      <div className="space-y-2 border-b border-border px-3 py-2">
+        {/* Big Reviewed button */}
+        <Button
+          onClick={() => act(() => markReviewed(video.id, userId), video.reviewed_at ? "Updated" : "Marked reviewed")}
+          className={cn(
+            "h-11 w-full text-sm font-semibold",
+            video.reviewed_at && "bg-emerald-600 hover:bg-emerald-600/90 text-white",
+          )}
+        >
+          <CheckCircle2 className="mr-2 h-4 w-4" />
+          {video.reviewed_at ? "Reviewed" : "Mark Reviewed"}
+        </Button>
+        <div className="flex flex-wrap items-center gap-1.5">
         <PillButton onClick={() => act(() => markWatched(video.id, userId), "Marked watched")} active={!!video.watched_at} icon={<Eye className="h-3 w-3" />}>
           Watched
         </PillButton>
         <PillButton onClick={() => act(() => toggleLike(video.id, userId, !video.liked_at), video.liked_at ? "Unliked" : "Liked")} active={!!video.liked_at} icon={<ThumbsUp className="h-3 w-3" />}>
           {video.liked_at ? "Liked" : "Like"}
-        </PillButton>
-        <PillButton onClick={() => act(() => markReviewed(video.id, userId), "Marked reviewed")} active={!!video.reviewed_at} icon={<CheckCircle2 className="h-3 w-3" />}>
-          Reviewed
         </PillButton>
         <PillButton onClick={() => act(() => setStatus(video.id, "Needs Follow-Up"), "Marked needs follow-up")} icon={<AlertCircle className="h-3 w-3" />}>
           Follow-up
@@ -183,6 +184,7 @@ export function AdminLiftReviewThread({ video, userId, clientName, clientAvatarP
               {LIFT_VIDEO_STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
             </SelectContent>
           </Select>
+        </div>
         </div>
       </div>
 
@@ -219,7 +221,8 @@ export function AdminLiftReviewThread({ video, userId, clientName, clientAvatarP
               time={format(parseISO(c.created_at), "MMM d, h:mm a")}
               internal={c.is_internal_note}
             >
-              <div className="whitespace-pre-wrap">{c.body}</div>
+              {c.body && <div className="whitespace-pre-wrap">{c.body}</div>}
+              <LiftCommentAttachments list={c.attachments} />
             </Bubble>
           );
         })}
@@ -227,48 +230,36 @@ export function AdminLiftReviewThread({ video, userId, clientName, clientAvatarP
 
       {/* Composer */}
       <div className="border-t border-border bg-card p-3">
-        <div className="flex items-end gap-2 rounded-2xl border border-border bg-background px-2 py-1.5">
-          <Textarea
-            rows={1}
-            placeholder="Reply to client…"
-            value={body}
-            onChange={(e) => setBody(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-                e.preventDefault();
-                send();
-              }
-            }}
-            className="min-h-[36px] max-h-32 resize-none border-0 bg-transparent px-2 py-1.5 text-sm shadow-none focus-visible:ring-0"
-          />
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button size="icon" variant="ghost" className="h-9 w-9 shrink-0" title="Quick reply">
-                <Zap className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-72">
-              {LIFT_VIDEO_QUICK_REPLIES.map((q) => (
-                <DropdownMenuItem key={q} onClick={() => setBody((b) => (b ? `${b}\n${q}` : q))}>
-                  <span className="text-xs">{q}</span>
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <Button
-            size="icon"
-            onClick={send}
-            disabled={posting || !body.trim()}
-            className="h-9 w-9 shrink-0 rounded-full"
-            title="Send"
-          >
-            {posting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-          </Button>
-        </div>
+        <LiftCommentComposer
+          clientId={video.client_id}
+          placeholder="Reply to client…"
+          onSend={handleSend}
+          trailing={
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button size="icon" variant="ghost" className="h-9 w-9 shrink-0 rounded-full" title="Quick reply" type="button">
+                  <Zap className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-72">
+                {LIFT_VIDEO_QUICK_REPLIES.map((q) => (
+                  <DropdownMenuItem key={q} onClick={() => setQuickReplyText(q)}>
+                    <span className="text-xs">{q}</span>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          }
+        />
         <label className="mt-2 flex items-center gap-2 text-[11px] text-muted-foreground">
           <Switch checked={isInternal} onCheckedChange={setIsInternal} />
           Internal note (not visible to client)
         </label>
+        {quickReplyText && (
+          <div className="mt-1 text-[10px] text-muted-foreground">
+            Tip: paste quick reply manually — selected: "{quickReplyText.slice(0, 40)}…"
+          </div>
+        )}
       </div>
     </div>
   );
