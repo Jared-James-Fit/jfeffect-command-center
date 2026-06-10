@@ -491,6 +491,318 @@ export type Database = {
         }
         Relationships: []
       }
+      appointment_audit_log: {
+        Row: {
+          action: string
+          actor_user_id: string | null
+          appointment_id: string
+          created_at: string
+          details: Json
+          id: string
+        }
+        Insert: {
+          action: string
+          actor_user_id?: string | null
+          appointment_id: string
+          created_at?: string
+          details?: Json
+          id?: string
+        }
+        Update: {
+          action?: string
+          actor_user_id?: string | null
+          appointment_id?: string
+          created_at?: string
+          details?: Json
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "appointment_audit_log_appointment_id_fkey"
+            columns: ["appointment_id"]
+            isOneToOne: false
+            referencedRelation: "appointments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      appointment_reminders: {
+        Row: {
+          appointment_id: string
+          audience: Database["public"]["Enums"]["reminder_audience"]
+          created_at: string
+          error: string | null
+          id: string
+          offset_minutes: number
+          scheduled_for: string
+          sent_at: string | null
+          status: Database["public"]["Enums"]["reminder_status"]
+        }
+        Insert: {
+          appointment_id: string
+          audience: Database["public"]["Enums"]["reminder_audience"]
+          created_at?: string
+          error?: string | null
+          id?: string
+          offset_minutes: number
+          scheduled_for: string
+          sent_at?: string | null
+          status?: Database["public"]["Enums"]["reminder_status"]
+        }
+        Update: {
+          appointment_id?: string
+          audience?: Database["public"]["Enums"]["reminder_audience"]
+          created_at?: string
+          error?: string | null
+          id?: string
+          offset_minutes?: number
+          scheduled_for?: string
+          sent_at?: string | null
+          status?: Database["public"]["Enums"]["reminder_status"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "appointment_reminders_appointment_id_fkey"
+            columns: ["appointment_id"]
+            isOneToOne: false
+            referencedRelation: "appointments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      appointments: {
+        Row: {
+          appointment_type: Database["public"]["Enums"]["appointment_type"]
+          attendee_notes: string | null
+          booking_link_id: string | null
+          cancelled_at: string | null
+          cancelled_reason: string | null
+          client_id: string | null
+          created_at: string
+          created_by: string | null
+          ends_at: string
+          external_email: string | null
+          external_name: string | null
+          external_phone: string | null
+          google_calendar_id: string | null
+          google_event_id: string | null
+          host_coach_id: string
+          id: string
+          internal_notes: string | null
+          location: string | null
+          meet_link: string | null
+          sms_reminders_enabled: boolean
+          source: Database["public"]["Enums"]["appointment_source"]
+          starts_at: string
+          status: Database["public"]["Enums"]["appointment_status"]
+          timezone: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          appointment_type?: Database["public"]["Enums"]["appointment_type"]
+          attendee_notes?: string | null
+          booking_link_id?: string | null
+          cancelled_at?: string | null
+          cancelled_reason?: string | null
+          client_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          ends_at: string
+          external_email?: string | null
+          external_name?: string | null
+          external_phone?: string | null
+          google_calendar_id?: string | null
+          google_event_id?: string | null
+          host_coach_id: string
+          id?: string
+          internal_notes?: string | null
+          location?: string | null
+          meet_link?: string | null
+          sms_reminders_enabled?: boolean
+          source?: Database["public"]["Enums"]["appointment_source"]
+          starts_at: string
+          status?: Database["public"]["Enums"]["appointment_status"]
+          timezone?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          appointment_type?: Database["public"]["Enums"]["appointment_type"]
+          attendee_notes?: string | null
+          booking_link_id?: string | null
+          cancelled_at?: string | null
+          cancelled_reason?: string | null
+          client_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          ends_at?: string
+          external_email?: string | null
+          external_name?: string | null
+          external_phone?: string | null
+          google_calendar_id?: string | null
+          google_event_id?: string | null
+          host_coach_id?: string
+          id?: string
+          internal_notes?: string | null
+          location?: string | null
+          meet_link?: string | null
+          sms_reminders_enabled?: boolean
+          source?: Database["public"]["Enums"]["appointment_source"]
+          starts_at?: string
+          status?: Database["public"]["Enums"]["appointment_status"]
+          timezone?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "appointments_booking_link_id_fkey"
+            columns: ["booking_link_id"]
+            isOneToOne: false
+            referencedRelation: "booking_links"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "appointments_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "appointments_host_coach_id_fkey"
+            columns: ["host_coach_id"]
+            isOneToOne: false
+            referencedRelation: "coaches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      booking_link_availability: {
+        Row: {
+          booking_link_id: string
+          created_at: string
+          day_of_week: number
+          end_time: string
+          id: string
+          start_time: string
+        }
+        Insert: {
+          booking_link_id: string
+          created_at?: string
+          day_of_week: number
+          end_time: string
+          id?: string
+          start_time: string
+        }
+        Update: {
+          booking_link_id?: string
+          created_at?: string
+          day_of_week?: number
+          end_time?: string
+          id?: string
+          start_time?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "booking_link_availability_booking_link_id_fkey"
+            columns: ["booking_link_id"]
+            isOneToOne: false
+            referencedRelation: "booking_links"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      booking_links: {
+        Row: {
+          active: boolean
+          allow_cancel: boolean
+          allow_reschedule: boolean
+          appointment_type: Database["public"]["Enums"]["appointment_type"]
+          buffer_after_minutes: number
+          buffer_before_minutes: number
+          collect_notes: boolean
+          collect_phone: boolean
+          created_at: string
+          created_by: string | null
+          description: string | null
+          duration_minutes: number
+          host_coach_id: string
+          id: string
+          max_advance_days: number
+          max_per_day: number | null
+          meet_enabled: boolean
+          min_notice_hours: number
+          name: string
+          reminder_offsets_minutes: number[]
+          slug: string
+          sms_reminders_enabled: boolean
+          timezone: string
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          allow_cancel?: boolean
+          allow_reschedule?: boolean
+          appointment_type?: Database["public"]["Enums"]["appointment_type"]
+          buffer_after_minutes?: number
+          buffer_before_minutes?: number
+          collect_notes?: boolean
+          collect_phone?: boolean
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          duration_minutes?: number
+          host_coach_id: string
+          id?: string
+          max_advance_days?: number
+          max_per_day?: number | null
+          meet_enabled?: boolean
+          min_notice_hours?: number
+          name: string
+          reminder_offsets_minutes?: number[]
+          slug: string
+          sms_reminders_enabled?: boolean
+          timezone?: string
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          allow_cancel?: boolean
+          allow_reschedule?: boolean
+          appointment_type?: Database["public"]["Enums"]["appointment_type"]
+          buffer_after_minutes?: number
+          buffer_before_minutes?: number
+          collect_notes?: boolean
+          collect_phone?: boolean
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          duration_minutes?: number
+          host_coach_id?: string
+          id?: string
+          max_advance_days?: number
+          max_per_day?: number | null
+          meet_enabled?: boolean
+          min_notice_hours?: number
+          name?: string
+          reminder_offsets_minutes?: number[]
+          slug?: string
+          sms_reminders_enabled?: boolean
+          timezone?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "booking_links_host_coach_id_fkey"
+            columns: ["host_coach_id"]
+            isOneToOne: false
+            referencedRelation: "coaches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       broadcast_recipients: {
         Row: {
           broadcast_id: string
@@ -3092,6 +3404,68 @@ export type Database = {
           visible_to_client?: boolean
         }
         Relationships: []
+      }
+      google_calendar_connections: {
+        Row: {
+          access_token: string | null
+          coach_id: string
+          created_at: string
+          google_account_email: string | null
+          id: string
+          last_error: string | null
+          last_synced_at: string | null
+          refresh_token: string | null
+          scopes: string | null
+          selected_calendar_id: string | null
+          selected_calendar_name: string | null
+          status: Database["public"]["Enums"]["gcal_connection_status"]
+          token_expires_at: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          access_token?: string | null
+          coach_id: string
+          created_at?: string
+          google_account_email?: string | null
+          id?: string
+          last_error?: string | null
+          last_synced_at?: string | null
+          refresh_token?: string | null
+          scopes?: string | null
+          selected_calendar_id?: string | null
+          selected_calendar_name?: string | null
+          status?: Database["public"]["Enums"]["gcal_connection_status"]
+          token_expires_at?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          access_token?: string | null
+          coach_id?: string
+          created_at?: string
+          google_account_email?: string | null
+          id?: string
+          last_error?: string | null
+          last_synced_at?: string | null
+          refresh_token?: string | null
+          scopes?: string | null
+          selected_calendar_id?: string | null
+          selected_calendar_name?: string | null
+          status?: Database["public"]["Enums"]["gcal_connection_status"]
+          token_expires_at?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "google_calendar_connections_coach_id_fkey"
+            columns: ["coach_id"]
+            isOneToOne: true
+            referencedRelation: "coaches"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       group_message_reactions: {
         Row: {
@@ -6965,6 +7339,19 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "client" | "coach"
+      appointment_source: "manual" | "booking_link" | "external"
+      appointment_status: "Scheduled" | "Completed" | "Cancelled" | "NoShow"
+      appointment_type:
+        | "Coaching Call"
+        | "Check-In Call"
+        | "Onboarding Call"
+        | "Strategy Call"
+        | "Consultation"
+        | "In-Person Session"
+        | "Assessment"
+        | "Nutrition Review"
+        | "Program Review"
+        | "Custom"
       event_audience_scope:
         | "selected_clients"
         | "all_coaching"
@@ -7007,8 +7394,14 @@ export type Database = {
         | "Deadline"
         | "Gym Event"
         | "Custom"
+      gcal_connection_status:
+        | "connected"
+        | "reconnect_required"
+        | "disconnected"
       group_member_role: "admin" | "member"
       group_permission_mode: "everyone" | "admins_only" | "read_only"
+      reminder_audience: "attendee" | "host"
+      reminder_status: "pending" | "sent" | "failed" | "skipped"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -7137,6 +7530,20 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "client", "coach"],
+      appointment_source: ["manual", "booking_link", "external"],
+      appointment_status: ["Scheduled", "Completed", "Cancelled", "NoShow"],
+      appointment_type: [
+        "Coaching Call",
+        "Check-In Call",
+        "Onboarding Call",
+        "Strategy Call",
+        "Consultation",
+        "In-Person Session",
+        "Assessment",
+        "Nutrition Review",
+        "Program Review",
+        "Custom",
+      ],
       event_audience_scope: [
         "selected_clients",
         "all_coaching",
@@ -7183,8 +7590,15 @@ export const Constants = {
         "Gym Event",
         "Custom",
       ],
+      gcal_connection_status: [
+        "connected",
+        "reconnect_required",
+        "disconnected",
+      ],
       group_member_role: ["admin", "member"],
       group_permission_mode: ["everyone", "admins_only", "read_only"],
+      reminder_audience: ["attendee", "host"],
+      reminder_status: ["pending", "sent", "failed", "skipped"],
     },
   },
 } as const

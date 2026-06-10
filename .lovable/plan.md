@@ -1,106 +1,106 @@
-# Events System
+# Google Calendar Appointments & Booking System
 
-A full Events module for admin/coaches to plan and broadcast key client dates (meets, shoots, weigh-ins, calls, deadlines, etc.) with assignment, quick links, deadlines, reminders, countdowns, and a polished client view.
+A full appointment, booking-link, and SMS-reminder system for coaches/admin, with per-coach Google Calendar OAuth, public booking pages, and client/coach dashboards.
 
-## 1. Data model (new migration)
+## Scope summary
+- Per-coach Google OAuth (each coach connects their own calendar).
+- In-app calendar (today/upcoming, week, month-lite).
+- Create/edit/reschedule/cancel appointments — synced both ways to Google Calendar.
+- Optional Google Meet link on each appointment.
+- Booking links (private/public) with availability windows, buffers, duration, daily caps.
+- Public booking page (no app account required).
+- Client-portal booking + upcoming appointment card.
+- SMS reminders to attendee + host with configurable timings (uses existing Twilio).
+- Bell notifications + dashboard cards on both admin and client side.
+- Sidebar entry: **Calendar** (admin/coach) and **Appointments** (client).
 
-Tables (all `public`, with GRANTs + RLS):
+---
 
-- `events`
-  - id, name, event_type (enum), event_date (date), start_time, end_time, timezone, location, description, client_facing_notes, internal_notes, importance (Low/Medium/High/Critical), status (Draft/Active/Completed/Archived), audience_scope (selected_clients / all_coaching / app_members / program_only), created_by, created_at, updated_at, archived_at
-- `event_quick_links` — event_id, title, url, link_type, visible_to_client, internal_note, sort_order
-- `event_deadlines` — event_id, title, due_date, notes, visible_to_client, sort_order
-- `event_reminders` — event_id, offset_key ('w12','w8','w4','w2','w1','d3','d1','day_of'), enabled, message, visible_to_client
-- `event_assignments` — event_id, client_id (FK clients), assigned_at, unique(event_id, client_id)
-- `event_popup_acks` — event_id, client_id, offset_key, acknowledged_at
-- `event_format_prompt` — singleton row per admin user storing customizable ChatGPT prompt
+## PART A — Google OAuth (per-coach)
 
-Enums: `event_type`, `event_importance`, `event_status`, `event_link_type`, `event_audience_scope`.
+The existing `google_calendar` connector authenticates ONE workspace account, so it can't represent each coach individually. We'll add a per-user OAuth flow:
 
-RLS:
-- Admins & active coaches: full read/write.
-- Clients: read events only if assigned (or via audience scope) AND status='Active' or 'Completed'. Only see `client_facing_notes`, links/deadlines/reminders where `visible_to_client=true`. Internal fields hidden via column-level select via a `client_event_view` view or filtered server-side in fetch functions.
+- New secrets: `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET` (user provides from Google Cloud Console — I'll request them when we get here).
+- New table `google_calendar_connections` (per coach: tokens, refresh_token, selected_calendar_id, status, expiry).
+- Server routes: `/api/public/google/oauth/start` (signed state → redirect to Google) and `/api/public/google/oauth/callback` (exchange code, store tokens).
+- Server fns: `connectGoogle`, `disconnectGoogle`, `listCalendars`, `setSelectedCalendar`, `refreshSync`, `getConnectionStatus`.
+- A small helper `googleClient.ts` that auto-refreshes tokens.
 
-## 2. Admin/Coach UI
+Status surfaced as: Connected / Not Connected / Reconnect Required.
 
-New route: `src/routes/_authenticated/admin/events.tsx` (list) and `events.$id.tsx` (editor).
+## PART B — Data model (new tables)
 
-- Events list: filter by status, importance, type, date, assigned client. Cards show name, type, date, countdown, importance badge, assignee chips, link chips. Quick actions: View, Edit, Duplicate, Archive, Assign, Preview as client, Message assigned.
-- Editor (single page, tabbed or stacked sections):
-  - Details (name, type, date, times, location, importance, status, description)
-  - Notes (client-facing + internal)
-  - Quick Links (inline add row, paste URL → auto-draft with type guess from domain, drag-reorder, visibility toggle)
-  - Deadlines (inline rows, visibility toggle)
-  - Reminders (8 toggle rows w/ editable message + client-visible toggle)
-  - Assign Clients (search + multi-select + audience scope)
-  - Preview as Client (modal renders client detail page)
-- Format Guide tab: textarea with default prompt, Copy / Save / Reset buttons.
-- Parse Event: textarea + "Parse" button → fills form locally; admin reviews before save.
+- `appointments` — id, host_coach_id, client_id (nullable), external_name/email/phone, type (enum), title, starts_at, ends_at, timezone, location, meet_link, google_event_id, status (Scheduled/Completed/Cancelled/NoShow), attendee_notes, internal_notes, source (manual/booking_link), booking_link_id, sms_enabled, created_by, timestamps.
+- `appointment_reminders` — id, appointment_id, audience (attendee/host), offset_minutes, status (pending/sent/failed), scheduled_for, sent_at.
+- `booking_links` — id, slug (unique), name, type, host_coach_id, duration_minutes, buffer_before, buffer_after, max_per_day, timezone, meet_enabled, collect_phone, collect_notes, allow_reschedule, sms_enabled, active, created_at.
+- `booking_link_availability` — id, booking_link_id, day_of_week (0-6), start_time, end_time.
+- `appointment_audit_log` — basic action log (created, rescheduled, cancelled, sync_failed).
 
-Admin dashboard widget: `UpcomingEventsPanel` injected into existing `src/routes/_authenticated/admin/index.tsx` showing next ~5 events with countdown, importance, quick actions.
+All with proper GRANTs + RLS:
+- Coaches/admin: see/manage own hosted appointments; admin sees all.
+- Clients: see appointments where `client_id = self`.
+- Public booking page calls server fn with admin client to read only `booking_links` (active) + computed free slots.
 
-## 3. Client UI
+## PART C — Server functions / routes
 
-- New route `src/routes/_authenticated/portal/events.tsx` (list) and `events.$id.tsx` (detail).
-- Detail page shows: name, type, date/time, countdown, location, importance, description, client notes, client-visible deadlines, client-visible links (as button cards), client-visible reminder notes, status, Add-to-Calendar (.ics download), Message Coach button.
-- Portal dashboard (`portal/index.tsx`): Upcoming Event card with countdown + "View Event Details".
-- Program page: small countdown chip if event linked (event_type in competition-ish set & active).
-- Notification bell: feed entries for new event assignments + reminder firings + popups.
-- Popup component: triggers on app open for High/Critical events at threshold milestones (w12,w8,w4,w1,tomorrow,today) — only once per offset_key (uses `event_popup_acks`).
+`src/lib/appointments.functions.ts`, `src/lib/booking.functions.ts`, `src/lib/google-cal.functions.ts`:
+- `listAppointments({ range })`, `getAppointment`, `createAppointment`, `updateAppointment`, `cancelAppointment`, `markStatus`.
+- `listBookingLinks`, `upsertBookingLink`, `deleteBookingLink`, `getBookingLinkPublic(slug)`, `computeAvailableSlots(slug, date)`, `bookSlotPublic(slug, payload)`.
+- All Google sync goes through the host coach's stored tokens — create/update/delete events; if Meet enabled, request `conferenceData` with `createRequest`.
+- `sendBookingLinkSms(clientId, linkId, msg)` and `sendBookingLinkChat(...)` reusing existing Twilio + chat infra.
 
-## 4. Reminders / countdown
+Public route: `src/routes/api/public/book/$slug.ts` (booking page render uses an unauthenticated SSR route + public server fn).
 
-- Pure client-side `computeCountdown(eventDate)` util → label ("12 weeks out", "Tomorrow", "Today", "Completed").
-- Server cron (pg_cron daily 09:00 UTC) calls `/api/public/hooks/event-reminders` which:
-  - For each active event whose offset matches today's distance and reminder.enabled, inserts a notification row (uses existing notification surface) per assigned client.
-  - Marks event Completed when date passed.
-- Coach planning reminders shown on admin dashboard from same data.
+Cron: `src/routes/api/public/hooks/appointment-reminders.ts` runs every 5 min via `pg_cron`, queries due `appointment_reminders`, sends SMS via Twilio, marks sent/failed.
 
-## 5. Server functions
+## PART D — UI
 
-`src/lib/events.functions.ts` (auth-protected via `requireSupabaseAuth`):
-- listEvents, getEvent, upsertEvent, duplicateEvent, archiveEvent, deleteEvent
-- upsertQuickLink, deleteQuickLink, reorderLinks
-- upsertDeadline, deleteDeadline
-- upsertReminder
-- assignClients, unassignClient, listAssignments
-- listClientEvents, getClientEvent (filters internal fields)
-- ackEventPopup
-- parseFormattedEvent (pure text parser; can also live client-side)
-- getFormatPrompt, saveFormatPrompt, resetFormatPrompt
+**Admin/Coach** (sidebar entry "Calendar"):
+- `/admin/calendar` — Today + Upcoming list, week grid, simple month, filter by coach (admin only).
+- `/admin/calendar/new` — appointment form (all fields from spec).
+- `/admin/calendar/$id` — detail/edit, reschedule, cancel, status, join Meet, notes (split client-visible vs internal).
+- `/admin/calendar/connections` — Google connect/disconnect, choose calendar, refresh.
+- `/admin/booking-links` — list + create/edit, copy link, send via SMS/chat, preview.
+- Dashboard card: **Upcoming Appointments** (today + next 3, Join Meet button, quick actions).
+- Bell notifications: new booking, starting soon, cancelled, SMS failed.
 
-## 6. Design
+**Client portal** (sidebar entry "Appointments"):
+- `/portal/appointments` — upcoming + past.
+- Dashboard card: upcoming appointment with Join Meet + View Details.
+- Booking page link (if coach sends one) opens public booker.
+- Reschedule/cancel button when allowed.
 
-Reuses existing JF Effect tokens (red for High/Critical). Tailwind + shadcn cards, badges, dialogs. Subtle Framer Motion / CSS transitions (120–250 ms), `prefers-reduced-motion` respected. Skeleton loaders for lists.
+**Public booking page** (no auth):
+- `/book/$slug` — coach name/photo, type, duration, date picker, slot list (free only), attendee form, confirmation screen.
 
-## 7. Out of scope (v1)
+**Quick send hooks**:
+- Messages composer: "Send Booking Link" action.
+- Client profile: "Send Booking Link" button.
+- SMS builder: `{{booking_link}}` variable.
 
-- Google Calendar two-way sync (Add to Calendar = .ics download only).
-- SMS reminder channel (in-app + dashboard only; SMS hookup deferred).
-- OCR of screenshots (workflow is: screenshot → ChatGPT with saved prompt → paste → Parse).
+## PART E — Performance, design, security
 
-## 8. Files (high level)
+- Today/upcoming loaded first (single small query); week/month lazy-loaded on tab switch.
+- Skeleton loaders, subtle transitions (respects `prefers-reduced-motion`), reuses existing JF Effect tokens, shadcn cards + small status badges.
+- RLS enforces visibility; public booking fn returns only free/busy + coach display name (never event titles/notes).
+- Double-book prevention: before insert, re-query Google + local appointments in the slot window inside a single transaction; surface clear error if Google sync fails.
 
-New:
-- `supabase/migrations/<ts>_events_system.sql`
-- `src/lib/events.functions.ts`, `src/lib/events-utils.ts` (countdown, parser, ics)
-- `src/components/events/*` (EventCard, EventEditor, QuickLinksEditor, DeadlinesEditor, RemindersEditor, AssignClientsDialog, ClientEventDetail, EventPopup, UpcomingEventsPanel, FormatGuideTab)
-- `src/routes/_authenticated/admin/events.tsx`, `events.$id.tsx`
-- `src/routes/_authenticated/portal/events.tsx`, `events.$id.tsx`
-- `src/routes/api/public/hooks/event-reminders.ts`
+## Out of scope (v1)
+- Multi-host round-robin booking.
+- Payment-on-booking (Stripe checkout for paid slots) — can layer on later using existing Stripe integration.
+- Two-way realtime push from Google (we'll poll + manual refresh; webhooks deferred).
+- ICS download (easy follow-up).
 
-Edited:
-- `src/routes/_authenticated/admin/index.tsx` (UpcomingEventsPanel)
-- `src/routes/_authenticated/portal/index.tsx` (upcoming event card + popup mount)
-- `src/components/app-shell.tsx` or sidebar (add "Events" nav for admin + client)
-- `src/components/notification-bell.tsx` (event notification kinds)
+## Build order
+1. Migration (tables + RLS + GRANTs).
+2. Google OAuth secrets + connection flow.
+3. Server fns + cron route.
+4. Admin Calendar pages + sidebar entry.
+5. Booking links admin + public booking page.
+6. Client portal appointment views + dashboard cards.
+7. Notifications + SMS reminders wiring.
+8. Polish + mobile pass.
 
-## 9. Build order
+---
 
-1. Migration + enums + RLS + GRANTs
-2. Server fns + countdown/parser utils
-3. Admin list + editor (incl. quick links, deadlines, reminders, assign, preview)
-4. Client list + detail + popup + dashboard card + nav entries
-5. Notification integration + cron endpoint
-6. Format Guide + Parser UI
-7. Polish: animations, reduced-motion, skeletons, mobile QA
+**Heads-up before I start:** I'll need you to create an OAuth Client in Google Cloud Console (Web application, with the `/api/public/google/oauth/callback` redirect URI I'll give you) and paste the Client ID + Client Secret when I prompt — that's the only blocker for per-coach Google Calendar. Everything else I'll wire up from here. Approve the plan and I'll begin with the migration.
