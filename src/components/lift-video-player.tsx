@@ -32,7 +32,10 @@ export function LiftVideoPlayer({
   const [useEmbedFallback, setUseEmbedFallback] = useState(false);
   const [retryKey, setRetryKey] = useState(0);
   const [orientation, setOrientation] = useState<"portrait" | "landscape" | "unknown">(
-    initialOrientation ?? "unknown"
+    // Default to portrait (9:16) so the canvas is reserved instantly and the
+    // UI doesn't visually "jump" while metadata loads. Real dimensions
+    // (in onLoadedMetadata) refine this once known.
+    initialOrientation ?? "portrait"
   );
 
   useEffect(() => {
@@ -80,10 +83,11 @@ export function LiftVideoPlayer({
   };
 
   // Stable container aspect, capped height so it never dominates mobile.
+  // Portrait clamps width too so it stays nicely centered on phones/tablets.
   const aspectClass =
-    orientation === "portrait"
-      ? "aspect-[9/16] max-h-[60vh] mx-auto w-auto"
-      : "aspect-video w-full";
+    orientation === "landscape"
+      ? "aspect-video w-full"
+      : "aspect-[9/16] max-h-[70vh] w-auto max-w-[min(100%,calc(70vh*9/16))] mx-auto";
 
   return (
     <div className="space-y-2">
