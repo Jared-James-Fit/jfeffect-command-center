@@ -5524,6 +5524,7 @@ export type Database = {
           email: string | null
           full_name: string | null
           id: string
+          phone: string | null
           profile_picture_source: string | null
           profile_picture_updated_at: string | null
           updated_at: string
@@ -5534,6 +5535,7 @@ export type Database = {
           email?: string | null
           full_name?: string | null
           id: string
+          phone?: string | null
           profile_picture_source?: string | null
           profile_picture_updated_at?: string | null
           updated_at?: string
@@ -5544,6 +5546,7 @@ export type Database = {
           email?: string | null
           full_name?: string | null
           id?: string
+          phone?: string | null
           profile_picture_source?: string | null
           profile_picture_updated_at?: string | null
           updated_at?: string
