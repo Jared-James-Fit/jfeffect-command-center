@@ -175,8 +175,8 @@ export const createCheckoutSession = createServerFn({ method: "POST" })
       "line_items[0][price]": product.stripe_price_id,
       "line_items[0][quantity]": "1",
       mode: checkoutMode,
-      success_url: `${data.origin}/portal/purchases?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${data.origin}/portal/purchases`,
+      success_url: `${assertAllowedOrigin(data.origin)}/portal/purchases?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${assertAllowedOrigin(data.origin)}/portal/purchases`,
       allow_promotion_codes: "true",
     };
 
@@ -248,7 +248,7 @@ export const createCustomerPortalSession = createServerFn({ method: "POST" })
       method: "POST",
       body: formEncode({
         customer: stripeCustomerId,
-        return_url: `${data.origin}/portal/account`,
+        return_url: `${assertAllowedOrigin(data.origin)}/portal/account`,
       }),
     });
 
@@ -361,8 +361,8 @@ export const createCheckoutSessionForAssignment = createServerFn({ method: "POST
       "line_items[0][price]": priceId,
       "line_items[0][quantity]": "1",
       mode: checkoutMode,
-      success_url: `${data.origin}/portal/purchases?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${data.origin}/portal/purchases`,
+      success_url: `${assertAllowedOrigin(data.origin)}/portal/purchases?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${assertAllowedOrigin(data.origin)}/portal/purchases`,
       allow_promotion_codes: "true",
       "metadata[purchase_record_id]": purchase.id,
       "metadata[client_id]": client.id,
@@ -449,8 +449,8 @@ export const createPreviewCheckoutSession = createServerFn({ method: "POST" })
         "line_items[0][price]": product.stripe_price_id,
         "line_items[0][quantity]": "1",
         mode: checkoutMode,
-        success_url: `${data.origin}/admin/payment-links?preview=success`,
-        cancel_url: `${data.origin}/admin/payment-links?preview=cancel`,
+        success_url: `${assertAllowedOrigin(data.origin)}/admin/payment-links?preview=success`,
+        cancel_url: `${assertAllowedOrigin(data.origin)}/admin/payment-links?preview=cancel`,
         allow_promotion_codes: "true",
         "metadata[preview]": "true",
         "metadata[previewed_by]": userId,
