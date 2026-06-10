@@ -40,6 +40,7 @@ import { Route as AuthenticatedPortalDocumentsRouteImport } from './routes/_auth
 import { Route as AuthenticatedPortalCheckInsRouteImport } from './routes/_authenticated/portal/check-ins'
 import { Route as AuthenticatedPortalCheckInRouteImport } from './routes/_authenticated/portal/check-in'
 import { Route as AuthenticatedPortalCalendarRouteImport } from './routes/_authenticated/portal/calendar'
+import { Route as AuthenticatedPortalAppointmentsRouteImport } from './routes/_authenticated/portal/appointments'
 import { Route as AuthenticatedPortalAnnouncementsRouteImport } from './routes/_authenticated/portal/announcements'
 import { Route as AuthenticatedPortalAccountRouteImport } from './routes/_authenticated/portal/account'
 import { Route as AuthenticatedMUpgradeRouteImport } from './routes/_authenticated/m/upgrade'
@@ -305,6 +306,12 @@ const AuthenticatedPortalCalendarRoute =
   AuthenticatedPortalCalendarRouteImport.update({
     id: '/calendar',
     path: '/calendar',
+    getParentRoute: () => AuthenticatedPortalRouteRoute,
+  } as any)
+const AuthenticatedPortalAppointmentsRoute =
+  AuthenticatedPortalAppointmentsRouteImport.update({
+    id: '/appointments',
+    path: '/appointments',
     getParentRoute: () => AuthenticatedPortalRouteRoute,
   } as any)
 const AuthenticatedPortalAnnouncementsRoute =
@@ -935,6 +942,7 @@ export interface FileRoutesByFullPath {
   '/m/upgrade': typeof AuthenticatedMUpgradeRoute
   '/portal/account': typeof AuthenticatedPortalAccountRoute
   '/portal/announcements': typeof AuthenticatedPortalAnnouncementsRoute
+  '/portal/appointments': typeof AuthenticatedPortalAppointmentsRoute
   '/portal/calendar': typeof AuthenticatedPortalCalendarRoute
   '/portal/check-in': typeof AuthenticatedPortalCheckInRoute
   '/portal/check-ins': typeof AuthenticatedPortalCheckInsRouteWithChildren
@@ -1060,6 +1068,7 @@ export interface FileRoutesByTo {
   '/m/upgrade': typeof AuthenticatedMUpgradeRoute
   '/portal/account': typeof AuthenticatedPortalAccountRoute
   '/portal/announcements': typeof AuthenticatedPortalAnnouncementsRoute
+  '/portal/appointments': typeof AuthenticatedPortalAppointmentsRoute
   '/portal/calendar': typeof AuthenticatedPortalCalendarRoute
   '/portal/check-in': typeof AuthenticatedPortalCheckInRoute
   '/portal/check-ins': typeof AuthenticatedPortalCheckInsRouteWithChildren
@@ -1190,6 +1199,7 @@ export interface FileRoutesById {
   '/_authenticated/m/upgrade': typeof AuthenticatedMUpgradeRoute
   '/_authenticated/portal/account': typeof AuthenticatedPortalAccountRoute
   '/_authenticated/portal/announcements': typeof AuthenticatedPortalAnnouncementsRoute
+  '/_authenticated/portal/appointments': typeof AuthenticatedPortalAppointmentsRoute
   '/_authenticated/portal/calendar': typeof AuthenticatedPortalCalendarRoute
   '/_authenticated/portal/check-in': typeof AuthenticatedPortalCheckInRoute
   '/_authenticated/portal/check-ins': typeof AuthenticatedPortalCheckInsRouteWithChildren
@@ -1320,6 +1330,7 @@ export interface FileRouteTypes {
     | '/m/upgrade'
     | '/portal/account'
     | '/portal/announcements'
+    | '/portal/appointments'
     | '/portal/calendar'
     | '/portal/check-in'
     | '/portal/check-ins'
@@ -1445,6 +1456,7 @@ export interface FileRouteTypes {
     | '/m/upgrade'
     | '/portal/account'
     | '/portal/announcements'
+    | '/portal/appointments'
     | '/portal/calendar'
     | '/portal/check-in'
     | '/portal/check-ins'
@@ -1574,6 +1586,7 @@ export interface FileRouteTypes {
     | '/_authenticated/m/upgrade'
     | '/_authenticated/portal/account'
     | '/_authenticated/portal/announcements'
+    | '/_authenticated/portal/appointments'
     | '/_authenticated/portal/calendar'
     | '/_authenticated/portal/check-in'
     | '/_authenticated/portal/check-ins'
@@ -1879,6 +1892,13 @@ declare module '@tanstack/react-router' {
       path: '/calendar'
       fullPath: '/portal/calendar'
       preLoaderRoute: typeof AuthenticatedPortalCalendarRouteImport
+      parentRoute: typeof AuthenticatedPortalRouteRoute
+    }
+    '/_authenticated/portal/appointments': {
+      id: '/_authenticated/portal/appointments'
+      path: '/appointments'
+      fullPath: '/portal/appointments'
+      preLoaderRoute: typeof AuthenticatedPortalAppointmentsRouteImport
       parentRoute: typeof AuthenticatedPortalRouteRoute
     }
     '/_authenticated/portal/announcements': {
@@ -2907,6 +2927,7 @@ const AuthenticatedPortalRecipesRouteWithChildren =
 interface AuthenticatedPortalRouteRouteChildren {
   AuthenticatedPortalAccountRoute: typeof AuthenticatedPortalAccountRoute
   AuthenticatedPortalAnnouncementsRoute: typeof AuthenticatedPortalAnnouncementsRoute
+  AuthenticatedPortalAppointmentsRoute: typeof AuthenticatedPortalAppointmentsRoute
   AuthenticatedPortalCalendarRoute: typeof AuthenticatedPortalCalendarRoute
   AuthenticatedPortalCheckInRoute: typeof AuthenticatedPortalCheckInRoute
   AuthenticatedPortalCheckInsRoute: typeof AuthenticatedPortalCheckInsRouteWithChildren
@@ -2932,6 +2953,7 @@ const AuthenticatedPortalRouteRouteChildren: AuthenticatedPortalRouteRouteChildr
     AuthenticatedPortalAccountRoute: AuthenticatedPortalAccountRoute,
     AuthenticatedPortalAnnouncementsRoute:
       AuthenticatedPortalAnnouncementsRoute,
+    AuthenticatedPortalAppointmentsRoute: AuthenticatedPortalAppointmentsRoute,
     AuthenticatedPortalCalendarRoute: AuthenticatedPortalCalendarRoute,
     AuthenticatedPortalCheckInRoute: AuthenticatedPortalCheckInRoute,
     AuthenticatedPortalCheckInsRoute:
