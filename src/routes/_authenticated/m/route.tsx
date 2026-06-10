@@ -5,11 +5,14 @@ import { AppShell } from "@/components/app-shell";
 import { memberNav } from "@/lib/admin-nav";
 import { PovBanner, getPovFlag } from "@/components/admin-pov";
 import { BroadcastPopupGate } from "@/components/broadcast-popup-gate";
+import { SubscriptionRestrictedBanner } from "@/components/subscription-restricted-banner";
+import { useMemberAccess } from "@/lib/member-access";
 
 function MemberLayout() {
   const { role, loading } = useAuth();
   const navigate = useNavigate();
   const pov = getPovFlag();
+  const { status, subscriptionActive } = useMemberAccess();
   useEffect(() => {
     if (loading) return;
     if (role === "client") navigate({ to: "/portal", replace: true });
@@ -24,6 +27,11 @@ function MemberLayout() {
   return (
     <AppShell items={memberNav} title="Member">
       <PovBanner />
+      {!subscriptionActive && status && (
+        <div className="px-4 pt-4 md:px-6 md:pt-6">
+          <SubscriptionRestrictedBanner status={status} />
+        </div>
+      )}
       <Outlet />
       <BroadcastPopupGate />
     </AppShell>
