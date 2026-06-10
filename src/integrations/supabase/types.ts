@@ -382,18 +382,31 @@ export type Database = {
           account_type: string
           admin_notes: string | null
           avatar_url: string | null
+          cancel_at: string | null
+          cancelled_at: string | null
           created_at: string
+          current_period_end: string | null
           email: string
           full_name: string | null
+          hold_plan_started_at: string | null
           id: string
           is_admin_sandbox: boolean
           last_active_at: string | null
+          last_billing_event_at: string | null
+          last_invoice_status: string | null
           last_signed_in_at: string | null
           messaging_permission: string
+          paused_until: string | null
           setup_token: string | null
           setup_token_expires_at: string | null
+          signup_ip: string | null
+          signup_user_agent: string | null
           status: string
           stripe_customer_id: string | null
+          stripe_price_id: string | null
+          stripe_subscription_id: string | null
+          subscription_status: string | null
+          trial_end_at: string | null
           updated_at: string
           user_id: string | null
         }
@@ -401,18 +414,31 @@ export type Database = {
           account_type?: string
           admin_notes?: string | null
           avatar_url?: string | null
+          cancel_at?: string | null
+          cancelled_at?: string | null
           created_at?: string
+          current_period_end?: string | null
           email: string
           full_name?: string | null
+          hold_plan_started_at?: string | null
           id?: string
           is_admin_sandbox?: boolean
           last_active_at?: string | null
+          last_billing_event_at?: string | null
+          last_invoice_status?: string | null
           last_signed_in_at?: string | null
           messaging_permission?: string
+          paused_until?: string | null
           setup_token?: string | null
           setup_token_expires_at?: string | null
+          signup_ip?: string | null
+          signup_user_agent?: string | null
           status?: string
           stripe_customer_id?: string | null
+          stripe_price_id?: string | null
+          stripe_subscription_id?: string | null
+          subscription_status?: string | null
+          trial_end_at?: string | null
           updated_at?: string
           user_id?: string | null
         }
@@ -420,18 +446,31 @@ export type Database = {
           account_type?: string
           admin_notes?: string | null
           avatar_url?: string | null
+          cancel_at?: string | null
+          cancelled_at?: string | null
           created_at?: string
+          current_period_end?: string | null
           email?: string
           full_name?: string | null
+          hold_plan_started_at?: string | null
           id?: string
           is_admin_sandbox?: boolean
           last_active_at?: string | null
+          last_billing_event_at?: string | null
+          last_invoice_status?: string | null
           last_signed_in_at?: string | null
           messaging_permission?: string
+          paused_until?: string | null
           setup_token?: string | null
           setup_token_expires_at?: string | null
+          signup_ip?: string | null
+          signup_user_agent?: string | null
           status?: string
           stripe_customer_id?: string | null
+          stripe_price_id?: string | null
+          stripe_subscription_id?: string | null
+          subscription_status?: string | null
+          trial_end_at?: string | null
           updated_at?: string
           user_id?: string | null
         }
@@ -3615,6 +3654,172 @@ export type Database = {
           title?: string
           updated_at?: string
           visible_to_client?: boolean
+        }
+        Relationships: []
+      }
+      jf_billing_events: {
+        Row: {
+          customer_id: string | null
+          id: string
+          member_id: string | null
+          payload: Json | null
+          processed_at: string
+          stripe_event_id: string
+          subscription_id: string | null
+          type: string
+        }
+        Insert: {
+          customer_id?: string | null
+          id?: string
+          member_id?: string | null
+          payload?: Json | null
+          processed_at?: string
+          stripe_event_id: string
+          subscription_id?: string | null
+          type: string
+        }
+        Update: {
+          customer_id?: string | null
+          id?: string
+          member_id?: string | null
+          payload?: Json | null
+          processed_at?: string
+          stripe_event_id?: string
+          subscription_id?: string | null
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "jf_billing_events_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "app_members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      jf_cancellation_feedback: {
+        Row: {
+          created_at: string
+          details: string | null
+          id: string
+          member_id: string
+          reason: string | null
+        }
+        Insert: {
+          created_at?: string
+          details?: string | null
+          id?: string
+          member_id: string
+          reason?: string | null
+        }
+        Update: {
+          created_at?: string
+          details?: string | null
+          id?: string
+          member_id?: string
+          reason?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "jf_cancellation_feedback_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "app_members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      jf_membership_settings: {
+        Row: {
+          hold_price_display: string
+          hold_price_id: string | null
+          id: boolean
+          monthly_price_display: string
+          monthly_price_id: string | null
+          refund_policy: string
+          support_email: string | null
+          trial_days: number
+          updated_at: string
+          upgrade_coaching_url: string | null
+        }
+        Insert: {
+          hold_price_display?: string
+          hold_price_id?: string | null
+          id?: boolean
+          monthly_price_display?: string
+          monthly_price_id?: string | null
+          refund_policy?: string
+          support_email?: string | null
+          trial_days?: number
+          updated_at?: string
+          upgrade_coaching_url?: string | null
+        }
+        Update: {
+          hold_price_display?: string
+          hold_price_id?: string | null
+          id?: boolean
+          monthly_price_display?: string
+          monthly_price_id?: string | null
+          refund_policy?: string
+          support_email?: string | null
+          trial_days?: number
+          updated_at?: string
+          upgrade_coaching_url?: string | null
+        }
+        Relationships: []
+      }
+      jf_pending_signups: {
+        Row: {
+          created_at: string
+          email: string
+          expires_at: string
+          full_name: string
+          id: string
+          password_hash: string
+          phone: string | null
+          session_id: string
+          sms_consent: boolean
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          expires_at?: string
+          full_name: string
+          id?: string
+          password_hash: string
+          phone?: string | null
+          session_id: string
+          sms_consent?: boolean
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          expires_at?: string
+          full_name?: string
+          id?: string
+          password_hash?: string
+          phone?: string | null
+          session_id?: string
+          sms_consent?: boolean
+        }
+        Relationships: []
+      }
+      jf_trial_emails: {
+        Row: {
+          email_lc: string
+          first_trial_at: string
+          stripe_customer_id: string | null
+        }
+        Insert: {
+          email_lc: string
+          first_trial_at?: string
+          stripe_customer_id?: string | null
+        }
+        Update: {
+          email_lc?: string
+          first_trial_at?: string
+          stripe_customer_id?: string | null
         }
         Relationships: []
       }
@@ -7420,6 +7625,10 @@ export type Database = {
       }
       is_group_member: {
         Args: { _group_id: string; _user_id: string }
+        Returns: boolean
+      }
+      jf_member_has_full_access: {
+        Args: { _user_id: string }
         Returns: boolean
       }
       mark_client_signed_in: { Args: never; Returns: undefined }

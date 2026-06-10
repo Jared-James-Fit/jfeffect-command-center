@@ -1,4 +1,4 @@
-import { createFileRoute, Outlet, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Outlet, useNavigate, useLocation } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { useAuth } from "@/lib/auth";
 import { AppShell } from "@/components/app-shell";
@@ -12,7 +12,10 @@ function MemberLayout() {
   const { role, loading } = useAuth();
   const navigate = useNavigate();
   const pov = getPovFlag();
-  const { status, subscriptionActive } = useMemberAccess();
+  const { status, subscriptionActive, hasAccess, loading: accessLoading, accountType } = useMemberAccess();
+  const location = useLocation();
+  const allowList = ["/m/billing", "/m/welcome", "/m/account"];
+  const isAllowed = allowList.some((p) => location.pathname.startsWith(p));
   useEffect(() => {
     if (loading) return;
     if (role === "client") navigate({ to: "/portal", replace: true });
@@ -21,6 +24,15 @@ function MemberLayout() {
       navigate({ to: "/admin", replace: true });
     }
   }, [role, loading, navigate, pov.active]);
+
+  // Hard gate: JF members without active subscription get sent to billing for paid routes.
+  useEffect(() => {
+    if (loading || accessLoading) return;
+    if (accountType === "jf_member" && !hasAccess("app_membership") && !isAllowed) {
+      navigate({ to: "/m/billing", replace: true });
+    }
+  }, [loading, accessLoading, accountType, hasAccess, isAllowed, navigate]);
+
   if (loading || !role) {
     return <div className="grid min-h-screen place-items-center text-muted-foreground">Loading…</div>;
   }
