@@ -6106,6 +6106,69 @@ export type Database = {
         }
         Relationships: []
       }
+      sms_automations: {
+        Row: {
+          active: boolean
+          audience_config: Json
+          audience_type: string
+          body: string
+          category: string
+          created_at: string
+          created_by: string | null
+          delay_minutes: number
+          id: string
+          internal_note: string | null
+          max_per_client_per_day: number
+          name: string
+          quiet_hours_end: string
+          quiet_hours_start: string
+          respect_quiet_hours: boolean
+          trigger_config: Json
+          trigger_type: string
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          audience_config?: Json
+          audience_type?: string
+          body: string
+          category?: string
+          created_at?: string
+          created_by?: string | null
+          delay_minutes?: number
+          id?: string
+          internal_note?: string | null
+          max_per_client_per_day?: number
+          name: string
+          quiet_hours_end?: string
+          quiet_hours_start?: string
+          respect_quiet_hours?: boolean
+          trigger_config?: Json
+          trigger_type: string
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          audience_config?: Json
+          audience_type?: string
+          body?: string
+          category?: string
+          created_at?: string
+          created_by?: string | null
+          delay_minutes?: number
+          id?: string
+          internal_note?: string | null
+          max_per_client_per_day?: number
+          name?: string
+          quiet_hours_end?: string
+          quiet_hours_start?: string
+          respect_quiet_hours?: boolean
+          trigger_config?: Json
+          trigger_type?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       sms_log: {
         Row: {
           body: string
