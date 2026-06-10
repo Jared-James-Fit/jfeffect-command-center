@@ -32,7 +32,7 @@ export type GroupAttachment = {
   storage_path?: string;
   duration?: number;
   peaks?: number[];
-  kind?: "sound" | "gif" | "payment_request";
+  kind?: "sound" | "gif" | "payment_request" | "form_request" | "signature_request" | "recipe_share";
   fallback_emoji?: string;
   category?: string;
   purchase_id?: string;
@@ -42,6 +42,14 @@ export type GroupAttachment = {
   title?: string;
   payment_structure?: string;
   status?: string;
+  form_id?: string;
+  template_id?: string;
+  recipe_id?: string;
+  agreement_ids?: string[];
+  assignment_client_ids?: string[];
+  agreement_client_map?: { client_id: string; agreement_id: string }[];
+  request_title?: string;
+  request_note?: string;
 };
 
 export type GroupMessage = {
