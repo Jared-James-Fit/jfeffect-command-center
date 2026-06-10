@@ -648,23 +648,89 @@ export interface Crumb {
 }
 
 // ------- Mobile bottom-nav helpers (grouped item + long-press) -------
-function useLongPress(onLong: () => void, ms = 380) {
+/**
+ * Hold-to-open + drag-to-select gesture for the floating bar.
+ *
+ * - Long-press (~260ms) opens the popover.
+ * - While still pressed, the option directly under the finger is highlighted
+ *   live and selected on release.
+ * - Short tap is treated as a normal click (caller decides what that does).
+ * - The trigger button itself never gets a press highlight — we suppress
+ *   the OS tap-highlight and don't toggle classes during the press.
+ */
+function useHoldDragSelect({
+  enabled, onOpen, onSelect, onShortTap, longMs = 260,
+}: {
+  enabled: boolean;
+  onOpen: () => void;
+  onSelect: (id: string) => void;
+  onShortTap: () => void;
+  longMs?: number;
+}) {
   const timer = useRef<number | null>(null);
-  const fired = useRef(false);
-  const clear = () => {
-    if (timer.current) { window.clearTimeout(timer.current); timer.current = null; }
+  const pressed = useRef(false);
+  const dragging = useRef(false);
+  const highlightRef = useRef<string | null>(null);
+  const [highlight, setHighlight] = useState<string | null>(null);
+
+  const elementToOption = (x: number, y: number): string | null => {
+    const el = document.elementFromPoint(x, y) as HTMLElement | null;
+    const opt = el?.closest("[data-bar-option]") as HTMLElement | null;
+    return opt?.dataset.barOption ?? null;
   };
-  return {
-    onPointerDown: () => {
-      fired.current = false;
-      clear();
-      timer.current = window.setTimeout(() => { fired.current = true; onLong(); }, ms);
-    },
-    onPointerUp: () => { clear(); },
-    onPointerLeave: () => { clear(); },
-    onPointerCancel: () => { clear(); },
-    didFire: () => fired.current,
+
+  const cleanup = () => {
+    if (timer.current) { clearTimeout(timer.current); timer.current = null; }
+    pressed.current = false;
+    dragging.current = false;
+    highlightRef.current = null;
+    setHighlight(null);
+    window.removeEventListener("pointermove", onMove);
+    window.removeEventListener("pointerup", onUp);
+    window.removeEventListener("pointercancel", onCancel);
   };
+
+  const onMove = (e: PointerEvent) => {
+    if (!dragging.current) return;
+    const id = elementToOption(e.clientX, e.clientY);
+    if (id !== highlightRef.current) {
+      highlightRef.current = id;
+      setHighlight(id);
+    }
+  };
+  const onUp = (e: PointerEvent) => {
+    const wasDragging = dragging.current;
+    const id = wasDragging ? elementToOption(e.clientX, e.clientY) : null;
+    cleanup();
+    if (wasDragging && id) onSelect(id);
+  };
+  const onCancel = () => cleanup();
+
+  const onPointerDown = (e: React.PointerEvent) => {
+    if (!enabled) return;
+    pressed.current = true;
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = window.setTimeout(() => {
+      if (!pressed.current) return;
+      dragging.current = true;
+      onOpen();
+      // Seed highlight with whatever's under the finger right now (could be the trigger).
+      const id = elementToOption(e.clientX, e.clientY);
+      highlightRef.current = id;
+      setHighlight(id);
+    }, longMs);
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp, { once: true });
+    window.addEventListener("pointercancel", onCancel, { once: true });
+  };
+
+  const onClick = (e: React.MouseEvent) => {
+    if (dragging.current) { e.preventDefault(); return; }
+    if (timer.current) { clearTimeout(timer.current); timer.current = null; }
+    onShortTap();
+  };
+
+  return { onPointerDown, onClick, highlight };
 }
 
 function navBadgeFor(item: NavItem, navBadges: Record<string, { count?: number; dot?: boolean }>) {
@@ -702,6 +768,7 @@ function BottomNavSlot({ item, pathname, navBadges, onNavigate }: {
   onNavigate: (to: string) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const navigate = useNavigate();
   const Icon = item.icon;
   const badge = navBadgeFor(item, navBadges);
 
@@ -711,8 +778,9 @@ function BottomNavSlot({ item, pathname, navBadges, onNavigate }: {
       <Link
         to={item.to}
         onClick={() => onNavigate(item.to)}
+        style={{ WebkitTapHighlightColor: "transparent" }}
         className={cn(
-          "relative flex min-h-[64px] flex-col items-center justify-center gap-0.5 px-0.5 pt-2 pb-2 text-[10px] font-medium transition-colors",
+          "relative flex min-h-[64px] flex-col items-center justify-center gap-0.5 px-0.5 pt-2 pb-2 text-[10px] font-medium transition-colors touch-manipulation select-none",
           active ? "text-primary" : "text-muted-foreground hover:text-foreground",
         )}
       >
@@ -727,51 +795,74 @@ function BottomNavSlot({ item, pathname, navBadges, onNavigate }: {
   }
 
   const childActive = item.children.some((c) => pathname === c.to || pathname.startsWith(c.to + "/"));
-  const lp = useLongPress(() => setOpen(true));
+  const childCount = item.children.length;
+  const gesture = useHoldDragSelect({
+    enabled: true,
+    onOpen: () => setOpen(true),
+    onSelect: (id) => {
+      setOpen(false);
+      onNavigate(id);
+      navigate({ to: id });
+    },
+    onShortTap: () => setOpen((o) => !o),
+  });
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <button
           type="button"
-          onPointerDown={lp.onPointerDown}
-          onPointerUp={lp.onPointerUp}
-          onPointerLeave={lp.onPointerLeave}
-          onPointerCancel={lp.onPointerCancel}
-          onClick={(e) => {
-            // If long-press already fired, suppress the click navigation.
-            if (lp.didFire()) { e.preventDefault(); return; }
-            setOpen(true);
-          }}
+          onPointerDown={gesture.onPointerDown}
+          onClick={gesture.onClick}
+          onContextMenu={(e) => e.preventDefault()}
+          style={{ WebkitTapHighlightColor: "transparent" }}
           className={cn(
-            "relative flex min-h-[64px] flex-col items-center justify-center gap-0.5 px-0.5 pt-2 pb-2 text-[10px] font-medium transition-colors",
-            childActive || open ? "text-primary" : "text-muted-foreground hover:text-foreground",
+            "relative flex min-h-[64px] flex-col items-center justify-center gap-0.5 px-0.5 pt-2 pb-2 text-[10px] font-medium select-none touch-manipulation",
+            childActive ? "text-primary" : "text-muted-foreground",
           )}
           aria-label={item.label}
         >
           <div className="relative">
-            <Icon className={cn("h-5 w-5", (childActive || open) && "drop-shadow-[0_0_6px_hsl(var(--primary)/0.6)]")} />
+            <Icon className={cn("h-5 w-5", childActive && "drop-shadow-[0_0_6px_hsl(var(--primary)/0.6)]")} />
             <BottomNavBadge badge={badge} />
+            {/* multi-option indicator dots */}
+            <span className="pointer-events-none absolute -top-1 left-1/2 flex -translate-x-1/2 gap-[2px]">
+              {Array.from({ length: Math.min(3, childCount) }).map((_, i) => (
+                <span key={i} className={cn("h-[3px] w-[3px] rounded-full", childActive ? "bg-primary/80" : "bg-muted-foreground/60")} />
+              ))}
+            </span>
           </div>
           <span className="w-full px-0.5 text-center text-[9.5px] leading-tight tracking-tight">{item.label}</span>
           {childActive && <span className="mt-0.5 h-0.5 w-5 rounded-full bg-primary" />}
         </button>
       </PopoverTrigger>
-      <PopoverContent side="top" align="center" className="w-52 p-1.5">
+      <PopoverContent
+        side="top"
+        align="center"
+        className="w-52 p-1.5"
+        onOpenAutoFocus={(e) => e.preventDefault()}
+      >
         <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{item.label}</div>
         <ul className="flex flex-col gap-0.5">
           {item.children.map((c) => {
             const CIcon = c.icon;
             const active = pathname === c.to || pathname.startsWith(c.to + "/");
             const cb = navBadges[c.to];
+            const highlighted = gesture.highlight === c.to;
             return (
               <li key={c.to}>
                 <Link
                   to={c.to}
+                  data-bar-option={c.to}
                   onClick={() => { onNavigate(c.to); setOpen(false); }}
+                  style={{ WebkitTapHighlightColor: "transparent" }}
                   className={cn(
-                    "flex items-center gap-2.5 rounded-md px-2.5 py-2.5 text-sm font-medium",
-                    active ? "bg-primary/15 text-primary" : "hover:bg-accent",
+                    "flex items-center gap-2.5 rounded-md px-2.5 py-2.5 text-sm font-medium transition-colors select-none",
+                    active
+                      ? "bg-primary/15 text-primary"
+                      : highlighted
+                      ? "bg-accent text-accent-foreground scale-[1.01]"
+                      : "hover:bg-accent",
                   )}
                 >
                   <div className="relative">
@@ -789,59 +880,21 @@ function BottomNavSlot({ item, pathname, navBadges, onNavigate }: {
   );
 }
 
-function MoreNavSlot({ active, onOpenMore, onOpenSearch }: { active: boolean; onOpenMore: () => void; onOpenSearch: () => void }) {
-  const [open, setOpen] = useState(false);
-  const lp = useLongPress(() => setOpen(true));
+function MoreNavSlot({ active, onOpenMore }: { active: boolean; onOpenMore: () => void }) {
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          onPointerDown={lp.onPointerDown}
-          onPointerUp={lp.onPointerUp}
-          onPointerLeave={lp.onPointerLeave}
-          onPointerCancel={lp.onPointerCancel}
-          onClick={(e) => {
-            if (lp.didFire()) { e.preventDefault(); return; }
-            onOpenMore();
-          }}
-          className={cn(
-            "relative flex min-h-[64px] flex-col items-center justify-center gap-0.5 px-0.5 pt-2 pb-2 text-[10px] font-medium transition-colors",
-            active || open ? "text-primary" : "text-muted-foreground hover:text-foreground",
-          )}
-          aria-label="More — hold for search"
-        >
-          <MoreHorizontal className="h-5 w-5" />
-          <span className="w-full px-0.5 text-center text-[9.5px] leading-tight tracking-tight">More</span>
-        </button>
-      </PopoverTrigger>
-      <PopoverContent side="top" align="end" className="w-52 p-1.5">
-        <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Quick</div>
-        <ul className="flex flex-col gap-0.5">
-          <li>
-            <button
-              type="button"
-              onClick={() => { setOpen(false); onOpenSearch(); }}
-              className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2.5 text-sm font-medium hover:bg-accent"
-            >
-              <Search className="h-4 w-4 text-primary" />
-              <span className="flex-1 text-left">Search keywords</span>
-              <kbd className="rounded border border-border bg-card px-1 py-0.5 text-[9px] font-mono">⌘K</kbd>
-            </button>
-          </li>
-          <li>
-            <button
-              type="button"
-              onClick={() => { setOpen(false); onOpenMore(); }}
-              className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2.5 text-sm font-medium hover:bg-accent"
-            >
-              <Layers className="h-4 w-4" />
-              <span className="flex-1 text-left">All sections</span>
-            </button>
-          </li>
-        </ul>
-      </PopoverContent>
-    </Popover>
+    <button
+      type="button"
+      onClick={onOpenMore}
+      style={{ WebkitTapHighlightColor: "transparent" }}
+      className={cn(
+        "relative flex min-h-[64px] flex-col items-center justify-center gap-0.5 px-0.5 pt-2 pb-2 text-[10px] font-medium transition-colors touch-manipulation select-none",
+        active ? "text-primary" : "text-muted-foreground hover:text-foreground",
+      )}
+      aria-label="More"
+    >
+      <MoreHorizontal className="h-5 w-5" />
+      <span className="w-full px-0.5 text-center text-[9.5px] leading-tight tracking-tight">More</span>
+    </button>
   );
 }
 
