@@ -78,6 +78,22 @@ export async function listGroupMembers(groupId: string): Promise<ChatGroupMember
   return data ?? [];
 }
 
+export type GroupMemberProfile = {
+  user_id: string;
+  full_name: string | null;
+  avatar_url: string | null;
+  role: string;
+};
+
+/** Display info (name + avatar) for everyone in a group the caller can see. */
+export async function listGroupMemberProfiles(groupId: string): Promise<GroupMemberProfile[]> {
+  const { data, error } = await (supabase as any).rpc("get_group_member_profiles", {
+    _group_id: groupId,
+  });
+  if (error) throw error;
+  return (data ?? []) as GroupMemberProfile[];
+}
+
 export async function listMyGroupMemberships(userId: string): Promise<ChatGroupMember[]> {
   const { data, error } = await db.from("chat_group_members").select("*").eq("user_id", userId);
   if (error) throw error;

@@ -19,8 +19,9 @@ import {
   listGroupMessages, listGroupReactions, listGroupMembers,
   sendGroupMessage, editGroupMessage, deleteGroupMessageForEveryone,
   toggleGroupReaction, markGroupRead, uploadGroupAttachment, signedAttachmentUrl,
-  GROUP_REACTION_EMOJIS,
+  GROUP_REACTION_EMOJIS, listGroupMemberProfiles,
 } from "@/lib/group-chats";
+import { useGroupPresence } from "@/hooks/use-group-presence";
 import {
   Paperclip, Send, Loader2, MoreHorizontal, Pencil, Trash2, Check, X,
   Image as ImageIcon, FileText, Video as VideoIcon, Download, File as FileIcon,
@@ -74,7 +75,7 @@ export function GroupMessageThread({
   canManage: boolean;
   groupName: string;
 }) {
-  const { user } = useAuth();
+  const { user, role: authRole } = useAuth();
   const qc = useQueryClient();
   const [body, setBody] = useState("");
   const [files, setFiles] = useState<File[]>([]);
@@ -102,6 +103,17 @@ export function GroupMessageThread({
     queryKey: ["group-members", groupId],
     queryFn: () => listGroupMembers(groupId),
   });
+
+  const { data: memberProfiles = [] } = useQuery({
+    queryKey: ["group-member-profiles", groupId],
+    queryFn: () => listGroupMemberProfiles(groupId),
+    staleTime: 5 * 60_000,
+  });
+
+  const myPresenceRole: "admin" | "coach" | "client" | "member" =
+    authRole === "admin" ? "admin" : authRole === "coach" ? "coach" : "client";
+  const { others: livePeers } = useGroupPresence(groupId, myPresenceRole);
+  const liveUserIds = useMemo(() => new Set(livePeers.map((p) => p.user_id)), [livePeers]);
 
   // realtime
   useEffect(() => {
@@ -137,6 +149,12 @@ export function GroupMessageThread({
     const m = new Map(members.map((mb) => [mb.user_id, mb]));
     return m;
   }, [members]);
+
+  const profileById = useMemo(() => {
+    const m = new Map<string, { full_name: string | null; avatar_url: string | null; role: string }>();
+    for (const p of memberProfiles) m.set(p.user_id, { full_name: p.full_name, avatar_url: p.avatar_url, role: p.role });
+    return m;
+  }, [memberProfiles]);
 
   const reactionsByMsg = useMemo(() => {
     const m = new Map<string, GroupReaction[]>();
@@ -229,12 +247,33 @@ export function GroupMessageThread({
               return (
                 <li key={m.id} className={cn("flex gap-2", mine ? "justify-end" : "justify-start")}>
                   {!mine && (
-                    <UserAvatar size={32} name={mem?.user_id ?? ""} src={null} ring />
+                    <div className="relative shrink-0">
+                      <UserAvatar
+                        size={32}
+                        name={profileById.get(m.sender_id ?? "")?.full_name ?? (isManagerSender ? "Coach" : "Member")}
+                        src={profileById.get(m.sender_id ?? "")?.avatar_url ?? null}
+                        ring
+                      />
+                      {m.sender_id && liveUserIds.has(m.sender_id) && (
+                        <span
+                          aria-label="Active now"
+                          className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-card"
+                        />
+                      )}
+                    </div>
                   )}
                   <div className={cn("group max-w-[78%] min-w-0", mine && "items-end")}>
                     {!mine && (
                       <div className="mb-0.5 flex items-center gap-1.5 text-[10px] text-muted-foreground">
-                        <span className="font-semibold">{isManagerSender ? "Coach" : "Member"}</span>
+                        <span className="font-semibold">
+                          {profileById.get(m.sender_id ?? "")?.full_name
+                            ?? (isManagerSender ? "Coach" : "Member")}
+                          {isManagerSender && (
+                            <span className="ml-1 rounded bg-primary/10 px-1 py-px text-[9px] font-bold uppercase tracking-wide text-primary">
+                              Coach
+                            </span>
+                          )}
+                        </span>
                         <span>· {fmtTime(m.created_at)}</span>
                       </div>
                     )}
