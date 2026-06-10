@@ -15,7 +15,7 @@ export class GroupChatErrorBoundary extends Component<{ children: ReactNode }, S
 
   componentDidCatch(error: Error, info: unknown) {
     // eslint-disable-next-line no-console
-    console.error("[GroupChat] crashed", error, info);
+    console.error("[GroupChat] crashed", { message: error?.message, stack: error?.stack, info });
   }
 
   reset = () => this.setState({ error: null });
@@ -34,7 +34,7 @@ export class GroupChatErrorBoundary extends Component<{ children: ReactNode }, S
             happening, let your coach know.
           </p>
           <pre className="mt-3 max-h-32 overflow-auto rounded bg-secondary/40 p-2 text-[10px] text-muted-foreground">
-            {this.state.error.message}
+            {this.state.error.message}{"\n"}{this.state.error.stack?.split("\n").slice(0,4).join("\n")}
           </pre>
           <div className="mt-3 flex justify-end">
             <Button size="sm" onClick={this.reset}>Try again</Button>
