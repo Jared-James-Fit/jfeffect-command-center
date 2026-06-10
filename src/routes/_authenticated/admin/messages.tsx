@@ -21,6 +21,9 @@ import { SendSmsDialog } from "@/components/send-sms-dialog";
 import { formatDistanceToNow, parseISO } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useChatPresence, LiveDot } from "@/hooks/use-chat-presence";
+import { GroupChatsPane } from "@/components/group-chats-pane";
+import { MassMessageDialog } from "@/components/mass-message-dialog";
+import { Megaphone, Users as UsersIcon } from "lucide-react";
 
 const FILTERS = ["All", "Unread", "Needs Response", "High Priority", "Important", "Resolved", "Archived"] as const;
 type Filter = typeof FILTERS[number];
@@ -38,6 +41,8 @@ function MessagesInbox() {
   const [filter, setFilter] = useState<Filter>("All");
   const [selectedId, setSelectedId] = useState<string | null>(selectedFromUrl ?? null);
   const [smsOpen, setSmsOpen] = useState(false);
+  const [tab, setTab] = useState<"chats" | "groups">("chats");
+  const [massOpen, setMassOpen] = useState(false);
 
   useEffect(() => { if (selectedFromUrl) setSelectedId(selectedFromUrl); }, [selectedFromUrl]);
 
@@ -183,6 +188,18 @@ function MessagesInbox() {
       className="fixed inset-x-0 top-0 z-30 flex bg-background md:static md:inset-auto md:z-auto md:h-full md:flex-1"
       style={{ height: "calc(100dvh - var(--bottom-nav-clearance, 0px))" }}
     >
+      {tab === "groups" ? (
+        <div className="flex w-full flex-col">
+          <TabsHeader tab={tab} setTab={setTab} onMass={() => setMassOpen(true)} />
+          <div className="min-h-0 flex-1">
+            <GroupChatsPane asAdmin />
+          </div>
+          <MassMessageDialog open={massOpen} onOpenChange={setMassOpen} />
+        </div>
+      ) : (
+      <div className="flex w-full flex-col">
+        <TabsHeader tab={tab} setTab={setTab} onMass={() => setMassOpen(true)} />
+        <div className="flex min-h-0 flex-1">
       {/* Inbox sidebar */}
       <aside
         className={cn(
@@ -418,6 +435,43 @@ function MessagesInbox() {
           </div>
         )}
       </section>
+        </div>
+        <MassMessageDialog open={massOpen} onOpenChange={setMassOpen} />
+      </div>
+      )}
+    </div>
+  );
+}
+
+function TabsHeader({
+  tab, setTab, onMass,
+}: { tab: "chats" | "groups"; setTab: (t: "chats" | "groups") => void; onMass: () => void }) {
+  return (
+    <div className="flex items-center gap-2 border-b border-border bg-card/80 px-3 py-2 md:px-4">
+      <div className="inline-flex rounded-full bg-secondary/60 p-0.5 text-xs">
+        <button
+          onClick={() => setTab("chats")}
+          className={cn(
+            "rounded-full px-3 py-1 font-semibold transition",
+            tab === "chats" ? "bg-primary text-primary-foreground" : "text-muted-foreground",
+          )}
+        >
+          1:1 Chats
+        </button>
+        <button
+          onClick={() => setTab("groups")}
+          className={cn(
+            "rounded-full px-3 py-1 font-semibold transition",
+            tab === "groups" ? "bg-primary text-primary-foreground" : "text-muted-foreground",
+          )}
+        >
+          <UsersIcon className="mr-1 inline h-3 w-3" /> Groups
+        </button>
+      </div>
+      <div className="flex-1" />
+      <Button size="sm" variant="outline" onClick={onMass}>
+        <Megaphone className="mr-1 h-3 w-3" /> Mass Message
+      </Button>
     </div>
   );
 }
