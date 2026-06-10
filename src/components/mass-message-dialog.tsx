@@ -17,6 +17,7 @@ import { Search, Send, AlertTriangle, Megaphone } from "lucide-react";
 import { toast } from "sonner";
 import { sendMassMessage } from "@/lib/group-chats.functions";
 import { listAllGroupsForAdmin } from "@/lib/group-chats";
+import { MeetQuickAction } from "@/components/meet-quick-action";
 
 type Audience = "selected" | "all_active_clients";
 
@@ -162,7 +163,17 @@ export function MassMessageDialog({ open, onOpenChange }: { open: boolean; onOpe
             )}
 
             <div className="space-y-1">
-              <Label>Message</Label>
+              <div className="flex items-center justify-between">
+                <Label>Message</Label>
+                <MeetQuickAction
+                  size="sm"
+                  variant="outline"
+                  buttonClassName="h-7 gap-1.5 px-2 text-xs"
+                  onInsert={(text) =>
+                    setBody((b) => (b ? `${b.replace(/\s+$/, "")} ${text}` : text))
+                  }
+                />
+              </div>
               <Textarea rows={6} value={body} onChange={(e) => setBody(e.target.value)} maxLength={4000}
                 placeholder="Write your message…" />
               <div className="text-right text-[11px] text-muted-foreground">{body.length}/4000</div>
