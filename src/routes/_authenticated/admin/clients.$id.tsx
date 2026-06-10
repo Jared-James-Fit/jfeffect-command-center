@@ -12,6 +12,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, ExternalLink, Save, Trash2, Mail, Archive, KeyRound, Copy, CheckCircle2, AlertCircle, BellRing, Tag, Dumbbell, MessageSquare } from "lucide-react";
+import { Link2 } from "lucide-react";
+import { SendBookingLinkDialog } from "@/components/appointments/send-booking-link-dialog";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import { inviteClient, deleteClient, getSetupLink, getPasswordResetLink, sendPasswordReset, markSetupComplete, setNeedsAdminHelp, setClientPassword } from "@/lib/clients.functions";
@@ -99,6 +101,7 @@ function ClientDetail() {
   const [form, setForm] = useState<any>(null);
   const [deleteStep, setDeleteStep] = useState<0 | 1 | 2>(0);
   const [priceCardOpen, setPriceCardOpen] = useState(false);
+  const [bookingLinkOpen, setBookingLinkOpen] = useState(false);
   const inviteFn = useServerFn(inviteClient);
   const deleteFn = useServerFn(deleteClient);
   const getSetupLinkFn = useServerFn(getSetupLink);
