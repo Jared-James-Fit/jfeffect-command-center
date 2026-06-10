@@ -7237,6 +7237,144 @@ export type Database = {
         }
         Relationships: []
       }
+      resource_comments: {
+        Row: {
+          body: string
+          created_at: string
+          id: string
+          resource_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          id?: string
+          resource_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          id?: string
+          resource_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "resource_comments_resource_id_fkey"
+            columns: ["resource_id"]
+            isOneToOne: false
+            referencedRelation: "resources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      resource_folders: {
+        Row: {
+          color: string | null
+          created_at: string
+          created_by: string | null
+          icon: string | null
+          id: string
+          name: string
+          parent_id: string | null
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string
+          created_by?: string | null
+          icon?: string | null
+          id?: string
+          name: string
+          parent_id?: string | null
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          color?: string | null
+          created_at?: string
+          created_by?: string | null
+          icon?: string | null
+          id?: string
+          name?: string
+          parent_id?: string | null
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "resource_folders_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "resource_folders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      resources: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          description: string | null
+          external_url: string | null
+          file_size: number | null
+          folder_id: string | null
+          id: string
+          mime_type: string | null
+          name: string
+          search_text: unknown
+          storage_path: string | null
+          tags: string[]
+          thumbnail_path: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          external_url?: string | null
+          file_size?: number | null
+          folder_id?: string | null
+          id?: string
+          mime_type?: string | null
+          name: string
+          search_text?: unknown
+          storage_path?: string | null
+          tags?: string[]
+          thumbnail_path?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          external_url?: string | null
+          file_size?: number | null
+          folder_id?: string | null
+          id?: string
+          mime_type?: string | null
+          name?: string
+          search_text?: unknown
+          storage_path?: string | null
+          tags?: string[]
+          thumbnail_path?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "resources_folder_id_fkey"
+            columns: ["folder_id"]
+            isOneToOne: false
+            referencedRelation: "resource_folders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       signnow_settings: {
         Row: {
           access_token_expires_at: string | null
