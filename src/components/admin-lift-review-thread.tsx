@@ -101,9 +101,9 @@ export function AdminLiftReviewThread({ video, userId, clientName, clientAvatarP
   const question = video.question_for_coach?.trim();
 
   return (
-    <div className="flex h-full flex-col overflow-hidden rounded-2xl border border-border bg-card">
+    <div className="flex h-full min-w-0 flex-col overflow-hidden rounded-2xl border border-border bg-card">
       {/* Video */}
-      <div className="border-b border-border bg-black">
+      <div className="min-w-0 border-b border-border bg-black">
         {signedUrl ? (
           <LiftVideoPlayer
             src={signedUrl}
@@ -130,8 +130,8 @@ export function AdminLiftReviewThread({ video, userId, clientName, clientAvatarP
       </div>
 
       {/* Meta strip */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-border px-3 py-2 text-xs">
-        <span className="font-semibold">{video.exercise || "Lift"}</span>
+      <div className="flex min-w-0 flex-wrap items-center gap-2 border-b border-border px-3 py-2 text-xs">
+        <span className="min-w-0 truncate font-semibold">{video.exercise || "Lift"}</span>
         {dayLabel && <Badge variant="outline" className="h-5 px-1.5 text-[10px]">{dayLabel}</Badge>}
         {video.is_urgent && (
           <Badge variant="outline" className="h-5 border-destructive/40 bg-destructive/10 px-1.5 text-[10px] text-destructive">
