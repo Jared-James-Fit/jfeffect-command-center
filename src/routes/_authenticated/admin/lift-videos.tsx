@@ -34,6 +34,9 @@ import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/admin/lift-videos")({
   component: AdminLiftVideos,
+  validateSearch: (s: Record<string, unknown>) => ({
+    open: typeof s.open === "string" ? s.open : undefined,
+  }),
 });
 
 type FilterKey = "all" | "new" | "in-review" | "reviewed" | "follow-up" | "urgent" | "archived";
@@ -102,6 +105,8 @@ function groupSubmissions(videos: LiftVideo[]): Submission[] {
 function AdminLiftVideos() {
   const { user } = useAuth();
   const qc = useQueryClient();
+  const search_ = Route.useSearch();
+  const navigate = Route.useNavigate();
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<FilterKey>("new");
   const [openKey, setOpenKey] = useState<string | null>(null);
@@ -146,6 +151,25 @@ function AdminLiftVideos() {
     });
     return groupSubmissions(filtered);
   }, [videos, filter, search, clientMap]);
+
+  // Deep-link: ?open=<videoId> from dashboard / notifications.
+  // Auto-select that submission and clear the param.
+  useEffect(() => {
+    const target = search_.open;
+    if (!target || videos.length === 0) return;
+    const v = videos.find((x) => x.id === target);
+    if (!v) return;
+    // Make sure the matching submission is visible regardless of filter.
+    if (!matchesFilter(v, filter)) setFilter("all");
+    // Recompute submission key the same way groupSubmissions does.
+    const day = v.training_day === "Custom" ? v.custom_training_day : v.training_day;
+    const key = v.batch_id
+      ? `b:${v.batch_id}`
+      : `c:${v.client_id}|${day ?? ""}|${v.date_performed ?? v.created_at.slice(0, 10)}`;
+    setOpenKey(key);
+    setActiveClipId(v.id);
+    navigate({ search: { open: undefined }, replace: true }).catch(() => {});
+  }, [search_.open, videos]);
 
   const openSub = openKey ? submissions.find((s) => s.key === openKey) ?? null : null;
   const activeClip: LiftVideo | null =
