@@ -228,101 +228,8 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
           )}
         </div>
 
-        {/* Search / Cmd+K trigger */}
+        {/* Account / Sign out / Density (moved up from footer) */}
         <div className={cn("border-b border-sidebar-border", isCollapsed ? "p-1.5" : "p-2")}>
-          {isCollapsed ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  onClick={() => setPaletteOpen(true)}
-                  className="mx-auto flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-foreground"
-                  aria-label="Search"
-                >
-                  <Search className="h-4 w-4" />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="right">Search (⌘K)</TooltipContent>
-            </Tooltip>
-          ) : (
-            <button
-              onClick={() => setPaletteOpen(true)}
-              className="flex w-full items-center gap-2 rounded-md border border-sidebar-border bg-background/40 px-2.5 py-1.5 text-left text-xs text-muted-foreground hover:bg-sidebar-accent hover:text-foreground"
-            >
-              <Search className="h-3.5 w-3.5" />
-              <span className="flex-1">Search…</span>
-              <kbd className="rounded border border-sidebar-border bg-card px-1 py-0.5 text-[9px] font-mono">⌘K</kbd>
-            </button>
-          )}
-        </div>
-
-        <nav className={cn("flex-1 overflow-y-auto", isCollapsed ? "p-1.5" : "p-2")}>
-          <div className={isCollapsed ? "space-y-2" : "space-y-2.5"}>
-            {grouped.map((group) => {
-              const containsActive = group.label === activeGroupLabel;
-              const sectionCollapsed = group.label
-                ? collapsedSections.has(group.label) && !containsActive
-                : false;
-              return (
-                <div key={group.label ?? "default"}>
-                  {group.label && !isCollapsed && (
-                    <button
-                      onClick={() => toggleSection(group.label!)}
-                      className="group flex w-full items-center justify-between rounded px-2.5 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground"
-                    >
-                      <span>{group.label}</span>
-                      <ChevronDown
-                        className={cn(
-                          "h-3 w-3 transition-transform",
-                          sectionCollapsed && "-rotate-90",
-                        )}
-                      />
-                    </button>
-                  )}
-                  {group.label && isCollapsed && (
-                    <div className="my-1 mx-2 h-px bg-sidebar-border/60" />
-                  )}
-                  {(!sectionCollapsed || isCollapsed) && (
-                    <ul className="space-y-0.5">
-                      {group.items.map((item) => {
-                        const active = item.to === activeTo;
-                        const Icon = item.icon;
-                        const link = (
-                          <Link
-                            to={item.to}
-                            className={cn(
-                              "flex items-center rounded-md transition-colors",
-                              rowPadding,
-                              rowText,
-                              active
-                                ? "bg-primary/15 text-primary font-semibold border-l-2 border-primary"
-                                : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground border-l-2 border-transparent",
-                            )}
-                          >
-                            <Icon className="h-4 w-4 shrink-0" />
-                            {!isCollapsed && <span className="truncate">{item.label}</span>}
-                          </Link>
-                        );
-                        return (
-                          <li key={item.to}>
-                            {isCollapsed ? (
-                              <Tooltip>
-                                <TooltipTrigger asChild>{link}</TooltipTrigger>
-                                <TooltipContent side="right">{item.label}</TooltipContent>
-                              </Tooltip>
-                            ) : link}
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </nav>
-
-        {/* Footer */}
-        <div className={cn("border-t border-sidebar-border", isCollapsed ? "p-1.5" : "p-2")}>
           {isCollapsed ? (
             <div className="flex flex-col items-center gap-1">
               <SettingsMenu
@@ -411,6 +318,100 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
             </div>
           )}
         </div>
+
+        {/* Keyword search / Cmd+K trigger */}
+        <div className={cn("border-b border-sidebar-border", isCollapsed ? "p-1.5" : "p-2")}>
+          {isCollapsed ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={() => setPaletteOpen(true)}
+                  className="mx-auto flex h-8 w-8 items-center justify-center rounded-md text-primary ring-1 ring-primary/40 hover:bg-primary/10"
+                  aria-label="Search keywords"
+                >
+                  <Search className="h-4 w-4" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="right">Search keywords (⌘K)</TooltipContent>
+            </Tooltip>
+          ) : (
+            <button
+              onClick={() => setPaletteOpen(true)}
+              className="flex w-full items-center gap-2 rounded-md border border-primary/40 bg-primary/5 px-2.5 py-2 text-left text-xs font-semibold text-foreground shadow-sm hover:bg-primary/10"
+            >
+              <Search className="h-3.5 w-3.5 text-primary" />
+              <span className="flex-1 truncate">Search keywords…</span>
+              <kbd className="rounded border border-primary/40 bg-card px-1 py-0.5 text-[9px] font-mono text-primary">⌘K</kbd>
+            </button>
+          )}
+        </div>
+
+        <nav className={cn("flex-1 overflow-y-auto", isCollapsed ? "p-1.5" : "p-2")}>
+          <div className={isCollapsed ? "space-y-2" : "space-y-2.5"}>
+            {grouped.map((group) => {
+              const containsActive = group.label === activeGroupLabel;
+              const sectionCollapsed = group.label
+                ? collapsedSections.has(group.label) && !containsActive
+                : false;
+              return (
+                <div key={group.label ?? "default"}>
+                  {group.label && !isCollapsed && (
+                    <button
+                      onClick={() => toggleSection(group.label!)}
+                      className="group flex w-full items-center justify-between rounded px-2.5 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground"
+                    >
+                      <span>{group.label}</span>
+                      <ChevronDown
+                        className={cn(
+                          "h-3 w-3 transition-transform",
+                          sectionCollapsed && "-rotate-90",
+                        )}
+                      />
+                    </button>
+                  )}
+                  {group.label && isCollapsed && (
+                    <div className="my-1 mx-2 h-px bg-sidebar-border/60" />
+                  )}
+                  {(!sectionCollapsed || isCollapsed) && (
+                    <ul className="space-y-0.5">
+                      {group.items.map((item) => {
+                        const active = item.to === activeTo;
+                        const Icon = item.icon;
+                        const link = (
+                          <Link
+                            to={item.to}
+                            className={cn(
+                              "flex items-center rounded-md transition-colors",
+                              rowPadding,
+                              rowText,
+                              active
+                                ? "bg-primary/15 text-primary font-semibold border-l-2 border-primary"
+                                : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground border-l-2 border-transparent",
+                            )}
+                          >
+                            <Icon className="h-4 w-4 shrink-0" />
+                            {!isCollapsed && <span className="truncate">{item.label}</span>}
+                          </Link>
+                        );
+                        return (
+                          <li key={item.to}>
+                            {isCollapsed ? (
+                              <Tooltip>
+                                <TooltipTrigger asChild>{link}</TooltipTrigger>
+                                <TooltipContent side="right">{item.label}</TooltipContent>
+                              </Tooltip>
+                            ) : link}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </nav>
+
       </aside>
 
       {/* Mobile top bar */}
@@ -421,8 +422,15 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
             <span className="text-sm font-black tracking-tight">{title}</span>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={() => setPaletteOpen(true)} aria-label="Search">
-              <Search className="h-4 w-4" />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPaletteOpen(true)}
+              aria-label="Search keywords"
+              className="h-8 gap-1.5 border-primary/40 bg-primary/5 px-2 text-xs font-semibold text-foreground hover:bg-primary/10"
+            >
+              <Search className="h-3.5 w-3.5 text-primary" />
+              Search
             </Button>
             <SettingsMenu
               items={items}
@@ -454,12 +462,20 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
         </main>
 
         {/* Mobile bottom nav — fixed, app-like tab bar */}
+        {(() => {
+          const visible = bottomItems.slice(0, 5);
+          const cols = visible.length + 1; // + More
+          const gridCols = cols === 6 ? "grid-cols-6" : cols === 5 ? "grid-cols-5" : "grid-cols-4";
+          return (
         <nav
           data-mobile-bottom-nav
-          className="fixed left-3 right-3 z-50 grid grid-cols-5 overflow-hidden rounded-2xl border border-border bg-card/95 px-1 py-1 backdrop-blur supports-[backdrop-filter]:bg-card/80 shadow-[0_8px_24px_-6px_rgba(0,0,0,0.55)] md:hidden"
+          className={cn(
+            "fixed left-3 right-3 z-50 grid overflow-hidden rounded-2xl border border-border bg-card/95 px-1 py-1 backdrop-blur supports-[backdrop-filter]:bg-card/80 shadow-[0_8px_24px_-6px_rgba(0,0,0,0.55)] md:hidden",
+            gridCols,
+          )}
           style={{ bottom: "calc(env(safe-area-inset-bottom) + 10px)" }}
         >
-          {bottomItems.slice(0, 4).map((item) => {
+          {visible.map((item) => {
             const active = pathname === item.to;
             const Icon = item.icon;
             const badge = navBadges[item.to];
@@ -469,14 +485,14 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
                 to={item.to}
                 onClick={() => markNavSeen(user?.id, item.to)}
                 className={cn(
-                  "relative flex min-h-[68px] flex-col items-center justify-center gap-1 px-1 pt-2 pb-2 text-[10px] font-medium transition-colors",
+                  "relative flex min-h-[64px] flex-col items-center justify-center gap-0.5 px-0.5 pt-2 pb-2 text-[10px] font-medium transition-colors",
                   active
                     ? "text-primary"
                     : "text-muted-foreground hover:text-foreground"
                 )}
               >
                 <div className="relative">
-                  <Icon className={cn("h-6 w-6", active && "drop-shadow-[0_0_6px_hsl(var(--primary)/0.6)]")} />
+                  <Icon className={cn("h-5 w-5", active && "drop-shadow-[0_0_6px_hsl(var(--primary)/0.6)]")} />
                   {badge?.count != null && badge.count > 0 && (
                     <span className="absolute -right-2 -top-1.5 grid h-[16px] min-w-[16px] place-items-center rounded-full bg-destructive px-1 text-[9px] font-bold leading-none text-destructive-foreground ring-2 ring-card">
                       {badge.count > 9 ? "9+" : badge.count}
@@ -486,7 +502,7 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
                     <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-destructive ring-2 ring-card" />
                   )}
                 </div>
-                <span className="w-full px-0.5 text-center text-[10px] leading-tight tracking-tight">{item.label}</span>
+                <span className="w-full px-0.5 text-center text-[9.5px] leading-tight tracking-tight">{item.label}</span>
                 {active && <span className="mt-0.5 h-0.5 w-5 rounded-full bg-primary" />}
               </Link>
             );
@@ -495,15 +511,17 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
             type="button"
             onClick={() => setMoreOpen(true)}
             className={cn(
-              "relative flex min-h-[68px] flex-col items-center justify-center gap-1 px-1 pt-2 pb-2 text-[10px] font-medium transition-colors",
+              "relative flex min-h-[64px] flex-col items-center justify-center gap-0.5 px-0.5 pt-2 pb-2 text-[10px] font-medium transition-colors",
               moreOpen ? "text-primary" : "text-muted-foreground hover:text-foreground",
             )}
             aria-label="More"
           >
-            <MoreHorizontal className="h-6 w-6" />
-            <span className="w-full px-0.5 text-center text-[10px] leading-tight tracking-tight">More</span>
+            <MoreHorizontal className="h-5 w-5" />
+            <span className="w-full px-0.5 text-center text-[9.5px] leading-tight tracking-tight">More</span>
           </button>
         </nav>
+          );
+        })()}
       </div>
 
       {/* Mobile "More" sheet — full grouped menu + search */}
@@ -536,12 +554,12 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
                       <Link
                         to={item.to}
                         onClick={() => { setMoreOpen(false); setMoreQuery(""); }}
-                        className="flex items-center gap-3 rounded-md px-3 py-2.5 text-sm hover:bg-sidebar-accent"
+                        className="flex min-h-[52px] items-center gap-3 rounded-md px-3 py-3.5 text-base hover:bg-sidebar-accent"
                       >
-                        <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
+                        <Icon className="h-5 w-5 shrink-0 text-muted-foreground" />
                         <div className="min-w-0 flex-1">
-                          <div className="truncate font-medium">{item.label}</div>
-                          {group && <div className="truncate text-[11px] text-muted-foreground">{group}</div>}
+                          <div className="truncate font-semibold">{item.label}</div>
+                          {group && <div className="truncate text-[12px] text-muted-foreground">{group}</div>}
                         </div>
                       </Link>
                     </li>
@@ -574,13 +592,13 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
                                   to={item.to}
                                   onClick={() => setMoreOpen(false)}
                                   className={cn(
-                                    "flex items-center gap-3 rounded-md px-3 py-2.5 text-sm",
+                                    "flex min-h-[52px] items-center gap-3 rounded-md px-3 py-3.5 text-base font-medium",
                                     active
                                       ? "bg-primary/15 font-semibold text-primary"
                                       : "hover:bg-sidebar-accent",
                                   )}
                                 >
-                                  <Icon className="h-4 w-4 shrink-0" />
+                                  <Icon className="h-5 w-5 shrink-0" />
                                   <span className="truncate">{item.label}</span>
                                 </Link>
                               </li>
@@ -599,7 +617,7 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
 
       {/* Command palette */}
       <CommandDialog open={paletteOpen} onOpenChange={setPaletteOpen}>
-        <CommandInput placeholder="Jump to a page…" />
+        <CommandInput placeholder="Search keywords — type to jump to any page…" />
         <CommandList>
           <CommandEmpty>No matches.</CommandEmpty>
           {grouped.map((group) => (

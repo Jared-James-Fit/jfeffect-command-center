@@ -4,6 +4,7 @@ import { useAuth } from "@/lib/auth";
 import { AppShell } from "@/components/app-shell";
 import { adminNav, coachNav } from "@/lib/admin-nav";
 import { AdminPovMenu } from "@/components/admin-pov";
+import { TaskPopupGate } from "@/components/tasks/task-popup-gate";
 
 export const Route = createFileRoute("/_authenticated/admin")({
   component: AdminLayout,
@@ -36,6 +37,7 @@ function AdminLayout() {
         { ...pick("/admin/clients"), label: "Clients" },
         pick("/admin/messages"),
         { ...pick("/admin/lift-videos"), label: "Lifts" },
+        { ...pick("/admin/tasks"), label: "Tasks" },
       ].filter(Boolean);
     }
     return [
@@ -44,6 +46,7 @@ function AdminLayout() {
       pick("/admin/messages"),
       { ...pick("/admin/check-in-reviews"), label: "Reviews" },
       { ...pick("/admin/lift-videos"), label: "Lifts" },
+      { ...pick("/admin/tasks"), label: "Tasks" },
     ];
   }, [isCoach]);
 
@@ -65,6 +68,7 @@ function AdminLayout() {
         </div>
       )}
       <Outlet />
+      <TaskPopupGate />
     </AppShell>
   );
 }
