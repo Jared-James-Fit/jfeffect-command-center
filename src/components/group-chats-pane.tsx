@@ -139,9 +139,7 @@ export function GroupChatsPane({ asAdmin }: { asAdmin: boolean }) {
                 group.archived && "opacity-60",
               )}
             >
-              <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
-                <Users className="h-4 w-4" />
-              </div>
+              <GroupCover groupId={group.id} myRole={myPresenceRole} />
               <div className="min-w-0 flex-1">
                 <div className="flex items-center justify-between gap-2">
                   <span className={cn("truncate text-sm", unread ? "font-bold" : "font-semibold")}>
