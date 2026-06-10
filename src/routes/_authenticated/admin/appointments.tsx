@@ -17,6 +17,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Calendar as CalendarIcon, Plus, Video, MapPin, Phone, X, CheckCircle2, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
+import { AppointmentCalendarGrid } from "@/components/appointments/appointment-week-grid";
+import { SendBookingLinkDialog } from "@/components/appointments/send-booking-link-dialog";
+import { Link2 } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/admin/appointments")({ component: AppointmentsPage });
 
@@ -27,13 +30,15 @@ const APPT_TYPES = [
 ] as const;
 
 function AppointmentsPage() {
-  const [tab, setTab] = useState<"today" | "upcoming" | "past">("upcoming");
+  const [tab, setTab] = useState<"today" | "upcoming" | "past" | "calendar">("upcoming");
   const [open, setOpen] = useState(false);
+  const [sendOpen, setSendOpen] = useState(false);
   const list = useServerFn(listAppointments);
   const qc = useQueryClient();
   const { data = [], isLoading } = useQuery({
     queryKey: ["appointments", tab],
     queryFn: () => list({ data: { range: tab } as any }),
+    enabled: tab !== "calendar",
   });
 
   return (
@@ -43,6 +48,7 @@ function AppointmentsPage() {
         subtitle="Calls, sessions, and bookings synced with Google Calendar."
         actions={
           <div className="flex gap-2">
+            <Button size="sm" variant="outline" onClick={() => setSendOpen(true)}><Link2 className="mr-2 h-4 w-4" /> Send Booking Link</Button>
             <Link to="/admin/google-calendar"><Button size="sm" variant="outline">Google Calendar</Button></Link>
             <Link to="/admin/booking-links"><Button size="sm" variant="outline">Booking Links</Button></Link>
             <Button size="sm" className="bg-gradient-primary font-bold uppercase" onClick={() => setOpen(true)}>
@@ -57,9 +63,12 @@ function AppointmentsPage() {
             <TabsTrigger value="today">Today</TabsTrigger>
             <TabsTrigger value="upcoming">Upcoming</TabsTrigger>
             <TabsTrigger value="past">Past</TabsTrigger>
+            <TabsTrigger value="calendar">Calendar</TabsTrigger>
           </TabsList>
           <TabsContent value={tab} className="mt-4">
-            {isLoading ? (
+            {tab === "calendar" ? (
+              <AppointmentCalendarGrid />
+            ) : isLoading ? (
               <Card className="border-border bg-card p-6 text-sm text-muted-foreground">Loading…</Card>
             ) : data.length === 0 ? (
               <Card className="border-border bg-card p-10 text-center text-sm text-muted-foreground">
@@ -75,6 +84,7 @@ function AppointmentsPage() {
         </Tabs>
       </div>
       <NewAppointmentDialog open={open} onOpenChange={setOpen} onCreated={() => qc.invalidateQueries({ queryKey: ["appointments"] })} />
+      <SendBookingLinkDialog open={sendOpen} onOpenChange={setSendOpen} />
     </>
   );
 }
