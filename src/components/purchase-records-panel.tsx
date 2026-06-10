@@ -197,6 +197,11 @@ export function PurchaseRecordsPanel({ clientId }: { clientId: string }) {
                     <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => emailLink(r.id)}><Send className="mr-1 h-3 w-3" />Email request</Button>
                   </>
                 )}
+                {r.stripe_payment_link && (
+                  <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setPayDlg({ open: true, purchaseId: r.id, hasLink: true })}>
+                    <CreditCard className="mr-1 h-3 w-3" />SMS / Post in chat
+                  </Button>
+                )}
                 {r.stripe_receipt_url && (
                   <a href={r.stripe_receipt_url} target="_blank" rel="noreferrer"><Button size="sm" variant="ghost" className="h-7 text-xs">Receipt</Button></a>
                 )}
