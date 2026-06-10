@@ -89,6 +89,18 @@ export type LiftVideoComment = {
   is_internal_note: boolean;
   created_at: string;
   updated_at: string;
+  attachments?: LiftCommentAttachment[] | null;
+};
+
+export type LiftCommentAttachment = {
+  type: "image" | "video" | "audio" | "pdf" | "file";
+  url?: string;
+  storage_path?: string;
+  name?: string;
+  size?: number;
+  mime?: string;
+  duration?: number;
+  kind?: "gif" | "voice";
 };
 
 export const TRAINING_DAY_OPTIONS = [
@@ -201,6 +213,7 @@ export async function addComment(input: {
   body: string;
   isInternalNote?: boolean;
   videoTimestampSeconds?: number | null;
+  attachments?: LiftCommentAttachment[] | null;
 }) {
   const row: any = {
     video_id: input.videoId,
@@ -210,6 +223,7 @@ export async function addComment(input: {
     body: input.body,
     is_internal_note: input.isInternalNote ?? false,
     video_timestamp_seconds: input.videoTimestampSeconds ?? null,
+    attachments: input.attachments && input.attachments.length ? input.attachments : null,
   };
   const { data, error } = await db.from("lift_video_comments").insert(row).select().single();
   if (error) throw error;
