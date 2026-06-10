@@ -10,12 +10,16 @@ import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { updateSmsSettings, sendTestSms, runReminderSweepNow } from "@/lib/sms.functions";
-import { useState, useEffect, useMemo } from "react";
+import { updateSmsSettings, sendTestSms, runReminderSweepNow, deleteSmsAutomation } from "@/lib/sms.functions";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { toast } from "sonner";
-import { Plus, Trash2, Send, RefreshCw, Search, UserPlus } from "lucide-react";
+import { Plus, Trash2, Send, RefreshCw, Search, UserPlus, Zap, MessageSquare, Pencil } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Link } from "@tanstack/react-router";
+import { useAutosave } from "@/hooks/use-autosave";
+import { SaveStatus } from "@/components/save-status";
+import { SmsPersonalDialog } from "@/components/sms-personal-dialog";
+import { SmsAutomationDialog, type AutomationRow } from "@/components/sms-automation-dialog";
 
 export const Route = createFileRoute("/_authenticated/admin/settings_/sms")({ component: SmsSettings });
 
@@ -26,10 +30,14 @@ function SmsSettings() {
   const update = useServerFn(updateSmsSettings);
   const test = useServerFn(sendTestSms);
   const sweep = useServerFn(runReminderSweepNow);
+  const removeAuto = useServerFn(deleteSmsAutomation);
   const [recipSearch, setRecipSearch] = useState("");
   const [addOpen, setAddOpen] = useState(false);
   const [testTo, setTestTo] = useState("");
   const [busy, setBusy] = useState(false);
+  const [personalOpen, setPersonalOpen] = useState(false);
+  const [autoOpen, setAutoOpen] = useState(false);
+  const [autoEditing, setAutoEditing] = useState<AutomationRow | null>(null);
 
   const { data: settings } = useQuery({
     queryKey: ["sms-settings"],
@@ -83,26 +91,39 @@ function SmsSettings() {
     );
   }, [recipients, recipSearch]);
 
+  const { data: automations } = useQuery({
+    queryKey: ["sms-automations"],
+    queryFn: async () => (await supabase.from("sms_automations").select("*").order("created_at", { ascending: false })).data ?? [],
+  });
+
+  const autosaveValue = useMemo(() => f ? ({
+    enabled: !!f.enabled,
+    from_phone: f.from_phone ?? null,
+    brand_name: f.brand_name ?? "",
+    manual_default_template: f.manual_default_template ?? "",
+    rate_limit_per_hour: Number(f.rate_limit_per_hour) || 3,
+    reminder_steps: Array.isArray(f.reminder_steps) ? f.reminder_steps : [],
+  }) : null, [f]);
+
+  const saveFn = useCallback(async (v: any) => {
+    if (!v) return;
+    await update({ data: v });
+    qc.invalidateQueries({ queryKey: ["sms-settings"] });
+  }, [update, qc]);
+
+  const autosave = useAutosave({
+    key: "sms-settings",
+    value: autosaveValue,
+    enabled: !!autosaveValue,
+    onSave: saveFn,
+    delay: 900,
+  });
+
   if (!f) return <div className="p-6 text-sm text-muted-foreground">Loading…</div>;
 
   const setVal = (k: string, v: any) => setForm({ ...f, [k]: v });
   const steps: Step[] = Array.isArray(f.reminder_steps) ? f.reminder_steps : [];
   const setSteps = (s: Step[]) => setVal("reminder_steps", s);
-
-  const save = async () => {
-    try {
-      await update({ data: {
-        enabled: !!f.enabled,
-        from_phone: f.from_phone ?? null,
-        brand_name: f.brand_name,
-        manual_default_template: f.manual_default_template,
-        rate_limit_per_hour: Number(f.rate_limit_per_hour) || 3,
-        reminder_steps: steps,
-      }});
-      toast.success("SMS settings saved");
-      qc.invalidateQueries({ queryKey: ["sms-settings"] });
-    } catch (e: any) { toast.error(e?.message ?? "Failed to save"); }
-  };
 
   const doTest = async () => {
     if (!testTo) return toast.error("Enter a phone number");
@@ -120,7 +141,18 @@ function SmsSettings() {
 
   return (
     <div className="p-4 md:p-6 space-y-6 max-w-5xl">
-      <PageHeader title="SMS Notifications" subtitle="Twilio-powered text alerts for unread messages." />
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <PageHeader title="SMS Notifications" subtitle="Twilio-powered text alerts, personal messages, and custom automations." />
+        <div className="flex items-center gap-2 flex-wrap">
+          <SaveStatus state={autosave.state} savedAt={autosave.savedAt} />
+          <Button size="sm" variant="outline" onClick={() => setPersonalOpen(true)}>
+            <MessageSquare className="mr-1 h-4 w-4" />Create Personal SMS
+          </Button>
+          <Button size="sm" onClick={() => { setAutoEditing(null); setAutoOpen(true); }}>
+            <Zap className="mr-1 h-4 w-4" />Create SMS Automation
+          </Button>
+        </div>
+      </div>
 
       <Card className="p-5 space-y-4">
         <div className="flex items-center justify-between">
@@ -184,9 +216,53 @@ function SmsSettings() {
       </Card>
 
       <div className="flex gap-2">
-        <Button onClick={save}>Save settings</Button>
         <Button variant="outline" onClick={doSweep} disabled={busy}><RefreshCw className="mr-1 h-4 w-4" />Run reminder sweep now</Button>
       </div>
+
+      <Card className="p-5 space-y-3">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div>
+            <div className="font-bold flex items-center gap-2"><Zap className="h-4 w-4" />Custom SMS automations</div>
+            <div className="text-xs text-muted-foreground">Build SMS automations for any trigger. Toggle active to start sending.</div>
+          </div>
+          <Button size="sm" onClick={() => { setAutoEditing(null); setAutoOpen(true); }}>
+            <Plus className="mr-1 h-4 w-4" />New automation
+          </Button>
+        </div>
+        <div className="space-y-2">
+          {(automations ?? []).length === 0 && (
+            <div className="text-sm text-muted-foreground">No custom automations yet. Click "New automation" to create one.</div>
+          )}
+          {(automations ?? []).map((a: any) => (
+            <div key={a.id} className="flex items-start gap-3 rounded-lg border border-border p-3 flex-wrap">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <div className="font-semibold truncate">{a.name}</div>
+                  <Badge variant="outline">{a.category}</Badge>
+                  <Badge variant="outline">{a.trigger_type}</Badge>
+                  {!a.active && <Badge variant="outline" className="border-amber-500/40 text-amber-600">Paused</Badge>}
+                </div>
+                <div className="text-xs text-muted-foreground mt-1 line-clamp-2">{a.body}</div>
+                <div className="text-[11px] text-muted-foreground mt-1">
+                  Audience: {a.audience_type} · Delay: {a.delay_minutes}m · Max/day: {a.max_per_client_per_day}
+                </div>
+              </div>
+              <div className="flex items-center gap-1 shrink-0">
+                <Button size="icon" variant="ghost" onClick={() => { setAutoEditing(a as AutomationRow); setAutoOpen(true); }}>
+                  <Pencil className="h-4 w-4" />
+                </Button>
+                <Button size="icon" variant="ghost" onClick={async () => {
+                  if (!confirm(`Delete automation "${a.name}"?`)) return;
+                  try { await removeAuto({ data: { id: a.id } }); toast.success("Deleted"); qc.invalidateQueries({ queryKey: ["sms-automations"] }); }
+                  catch (e: any) { toast.error(e?.message ?? "Failed"); }
+                }}>
+                  <Trash2 className="h-4 w-4 text-destructive" />
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </Card>
 
       <Card className="p-5 space-y-3">
         <div className="font-bold">Send a test SMS</div>
@@ -285,6 +361,9 @@ function SmsSettings() {
       </Card>
 
       <AddSmsContact open={addOpen} onOpenChange={setAddOpen} onCreated={() => qc.invalidateQueries({ queryKey: ["sms-recipients"] })} />
+      <SmsPersonalDialog open={personalOpen} onOpenChange={setPersonalOpen} />
+      <SmsAutomationDialog open={autoOpen} onOpenChange={setAutoOpen} initial={autoEditing}
+        onSaved={() => qc.invalidateQueries({ queryKey: ["sms-automations"] })} />
     </div>
   );
 }
