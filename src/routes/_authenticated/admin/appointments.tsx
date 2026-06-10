@@ -37,6 +37,7 @@ const APPT_TYPES = [
 function AppointmentsPage() {
   const [tab, setTab] = useState<"today" | "upcoming" | "past" | "calendar">("upcoming");
   const [open, setOpen] = useState(false);
+  const [presetDate, setPresetDate] = useState<string | undefined>(undefined);
   const [sendOpen, setSendOpen] = useState(false);
   const list = useServerFn(listAppointments);
   const qc = useQueryClient();
@@ -72,7 +73,15 @@ function AppointmentsPage() {
           </TabsList>
           <TabsContent value={tab} className="mt-4">
             {tab === "calendar" ? (
-              <AppointmentCalendarGrid />
+              <AppointmentCalendarGrid
+                onPickDate={(d) => {
+                  const y = d.getFullYear();
+                  const m = String(d.getMonth() + 1).padStart(2, "0");
+                  const day = String(d.getDate()).padStart(2, "0");
+                  setPresetDate(`${y}-${m}-${day}`);
+                  setOpen(true);
+                }}
+              />
             ) : isLoading ? (
               <Card className="border-border bg-card p-6 text-sm text-muted-foreground">Loading…</Card>
             ) : data.length === 0 ? (
@@ -88,7 +97,12 @@ function AppointmentsPage() {
           </TabsContent>
         </Tabs>
       </div>
-      <NewAppointmentDialog open={open} onOpenChange={setOpen} onCreated={() => qc.invalidateQueries({ queryKey: ["appointments"] })} />
+      <NewAppointmentDialog
+        open={open}
+        onOpenChange={(v) => { setOpen(v); if (!v) setPresetDate(undefined); }}
+        presetDate={presetDate}
+        onCreated={() => qc.invalidateQueries({ queryKey: ["appointments"] })}
+      />
       <SendBookingLinkDialog open={sendOpen} onOpenChange={setSendOpen} />
     </>
   );
