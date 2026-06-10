@@ -52,8 +52,9 @@ export const getMember = createServerFn({ method: "GET" })
 const CreateMemberInput = z.object({
   email: z.string().email(),
   full_name: z.string().min(1).max(200),
-  account_type: z.enum(["app_member", "program_only"]).default("app_member"),
+  account_type: z.enum(["app_member", "program_only", "jf_member"]).default("app_member"),
   initial_access_keys: z.array(z.string()).optional(),
+  apply_defaults: z.boolean().optional().default(true),
 });
 
 export const createAppMember = createServerFn({ method: "POST" })
@@ -86,6 +87,9 @@ export const createAppMember = createServerFn({ method: "POST" })
         })),
       );
     }
+    if (data.apply_defaults !== false) {
+      await supabaseAdmin.rpc("apply_default_member_access", { _member_id: row.id });
+    }
     return { member: row };
   });
 
@@ -93,7 +97,7 @@ const UpdateMemberInput = z.object({
   memberId: z.string().uuid(),
   full_name: z.string().optional(),
   status: z.enum(["Active","Trial","Past Due","Cancelled","Expired","Deactivated","Archived"]).optional(),
-  account_type: z.enum(["app_member","program_only"]).optional(),
+  account_type: z.enum(["app_member","program_only","jf_member"]).optional(),
   messaging_permission: z.enum(["none","support_only","upgrade_only"]).optional(),
   admin_notes: z.string().nullable().optional(),
 });
@@ -105,9 +109,39 @@ export const updateAppMember = createServerFn({ method: "POST" })
     await assertAdmin(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { memberId, ...patch } = data;
+    const { data: prev } = await supabaseAdmin.from("app_members").select("account_type").eq("id", memberId).maybeSingle();
     const { error } = await supabaseAdmin.from("app_members").update(patch).eq("id", memberId);
     if (error) throw new Error(error.message);
+    if (patch.account_type && prev?.account_type !== patch.account_type) {
+      await supabaseAdmin.rpc("apply_default_member_access", { _member_id: memberId });
+    }
     return { ok: true };
+  });
+
+/* ---------- defaults ---------- */
+
+export const applyDefaultMemberAccess = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i: { memberId: string }) => z.object({ memberId: z.string().uuid() }).parse(i))
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: inserted, error } = await supabaseAdmin.rpc("apply_default_member_access", { _member_id: data.memberId });
+    if (error) throw new Error(error.message);
+    return { inserted: (inserted as number) ?? 0 };
+  });
+
+export const listMemberDefaults = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i: { accountType: string }) => z.object({ accountType: z.string() }).parse(i))
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: rows } = await supabaseAdmin
+      .from("member_access_defaults")
+      .select("access_level_key, enabled")
+      .eq("account_type", data.accountType);
+    return { keys: (rows ?? []).filter((r: any) => r.enabled).map((r: any) => r.access_level_key) };
   });
 
 /* ---------- setup / reset links ---------- */
