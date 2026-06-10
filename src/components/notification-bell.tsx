@@ -230,6 +230,28 @@ export function NotificationBell() {
         // Group chat unreads (admin sees all groups they can read)
         const groupItems = await fetchUnreadGroupItems(user!.id);
         for (const gi of groupItems) items.push(gi);
+        // Upcoming appointments (next 24h)
+        try {
+          const upcoming: any[] = await adminUpcoming();
+          for (const a of upcoming) {
+            const mins = Math.round((new Date(a.starts_at).getTime() - Date.now()) / 60000);
+            if (mins < -5) continue;
+            const when = mins <= 60
+              ? (mins <= 0 ? "now" : `in ${mins}m`)
+              : new Date(a.starts_at).toLocaleString(undefined, { weekday: "short", hour: "numeric", minute: "2-digit" });
+            const who = a.client?.full_name || "external attendee";
+            items.push({
+              kind: "appointment",
+              clientId: "",
+              appointmentId: a.id,
+              meetLink: a.meet_link,
+              name: who,
+              title: `Upcoming: ${a.title} (${when})`,
+              body: `With ${who}`,
+              created_at: a.starts_at,
+            });
+          }
+        } catch { /* ignore */ }
         items.sort((a, b) => +new Date(b.created_at) - +new Date(a.created_at));
         return { count: items.length, items };
       } else {
