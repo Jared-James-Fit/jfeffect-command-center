@@ -99,6 +99,26 @@ export const removeGroupMember = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+/* ---------------- Delete groups (admin only) ---------------- */
+const DeleteGroupsSchema = z.object({
+  group_ids: z.array(z.string().uuid()).min(1).max(200),
+});
+
+export const deleteGroupChats = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => DeleteGroupsSchema.parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context as any;
+    // Admin-only
+    const { data: roles } = await supabase.from("user_roles").select("role").eq("user_id", userId);
+    const isAdmin = (roles ?? []).some((r: any) => r.role === "admin");
+    if (!isAdmin) throw new Error("Only admins can delete group chats");
+
+    const { error } = await supabase.from("chat_groups").delete().in("id", data.group_ids);
+    if (error) throw new Error(error.message);
+    return { deleted: data.group_ids.length };
+  });
+
 /* ---------------- Mass message ---------------- */
 const MassMessageSchema = z.object({
   mode: z.enum(["individual", "group"]),

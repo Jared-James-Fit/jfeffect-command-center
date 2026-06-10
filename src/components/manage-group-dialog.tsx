@@ -16,9 +16,11 @@ import { Search, Trash2, Archive } from "lucide-react";
 import { toast } from "sonner";
 import {
   updateGroupChat, addGroupMembers, removeGroupMember,
+  deleteGroupChats,
 } from "@/lib/group-chats.functions";
 import type { ChatGroup } from "@/lib/group-chats";
 import { listGroupMembers } from "@/lib/group-chats";
+import { useAuth } from "@/lib/auth";
 
 export function ManageGroupDialog({
   open, onOpenChange, group,
@@ -27,6 +29,9 @@ export function ManageGroupDialog({
   const update = useServerFn(updateGroupChat);
   const addMembers = useServerFn(addGroupMembers);
   const removeMember = useServerFn(removeGroupMember);
+  const deleteGroups = useServerFn(deleteGroupChats);
+  const { role } = useAuth();
+  const isAdmin = role === "admin";
 
   const [name, setName] = useState(group.name);
   const [description, setDescription] = useState(group.description ?? "");
@@ -108,6 +113,17 @@ export function ManageGroupDialog({
     } catch (e: any) { toast.error(e?.message ?? "Failed"); }
   };
 
+  const doDelete = async () => {
+    if (!isAdmin) return;
+    if (!window.confirm(`Permanently delete "${group.name}" and all its messages? This can't be undone.`)) return;
+    try {
+      await deleteGroups({ data: { group_ids: [group.id] } as any });
+      toast.success("Group deleted");
+      qc.invalidateQueries({ queryKey: ["chat-groups"] });
+      onOpenChange(false);
+    } catch (e: any) { toast.error(e?.message ?? "Failed"); }
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl">
@@ -142,6 +158,11 @@ export function ManageGroupDialog({
               <Button variant="outline" onClick={archive}>
                 <Archive className="mr-1 h-4 w-4" />{group.archived ? "Unarchive" : "Archive"}
               </Button>
+              {isAdmin && (
+                <Button variant="destructive" onClick={doDelete}>
+                  <Trash2 className="mr-1 h-4 w-4" /> Delete group
+                </Button>
+              )}
             </div>
           </div>
 
