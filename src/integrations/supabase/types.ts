@@ -398,6 +398,7 @@ export type Database = {
           messaging_permission: string
           paused_until: string | null
           phone: string | null
+          profile_picture_required: boolean
           setup_token: string | null
           setup_token_expires_at: string | null
           signup_ip: string | null
@@ -432,6 +433,7 @@ export type Database = {
           messaging_permission?: string
           paused_until?: string | null
           phone?: string | null
+          profile_picture_required?: boolean
           setup_token?: string | null
           setup_token_expires_at?: string | null
           signup_ip?: string | null
@@ -466,6 +468,7 @@ export type Database = {
           messaging_permission?: string
           paused_until?: string | null
           phone?: string | null
+          profile_picture_required?: boolean
           setup_token?: string | null
           setup_token_expires_at?: string | null
           signup_ip?: string | null
@@ -7804,18 +7807,21 @@ export type Database = {
         Row: {
           created_at: string
           id: string
+          is_primary: boolean
           role: Database["public"]["Enums"]["app_role"]
           user_id: string
         }
         Insert: {
           created_at?: string
           id?: string
+          is_primary?: boolean
           role: Database["public"]["Enums"]["app_role"]
           user_id: string
         }
         Update: {
           created_at?: string
           id?: string
+          is_primary?: boolean
           role?: Database["public"]["Enums"]["app_role"]
           user_id?: string
         }
@@ -7836,6 +7842,7 @@ export type Database = {
         Args: { _group_id: string; _user_id: string }
         Returns: boolean
       }
+      count_active_admins: { Args: never; Returns: number }
       current_coach_id: { Args: never; Returns: string }
       current_member_id: { Args: never; Returns: string }
       delete_email: {
