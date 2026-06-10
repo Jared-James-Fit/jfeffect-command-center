@@ -15,11 +15,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Calendar as CalendarIcon, Plus, Video, MapPin, Phone, X, CheckCircle2, AlertTriangle } from "lucide-react";
+import { Calendar as CalendarIcon, Plus, Video, MapPin, Phone, X, CheckCircle2, AlertTriangle, Link2, Download, CalendarClock } from "lucide-react";
 import { toast } from "sonner";
 import { AppointmentCalendarGrid } from "@/components/appointments/appointment-week-grid";
 import { SendBookingLinkDialog } from "@/components/appointments/send-booking-link-dialog";
-import { Link2, Download, CalendarClock } from "lucide-react";
 import { RescheduleDialog } from "@/components/appointments/reschedule-dialog";
 import { buildAppointmentIcs, downloadIcs } from "@/lib/appointments-ics";
 
