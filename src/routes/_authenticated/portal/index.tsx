@@ -24,6 +24,7 @@ import { HomeScreenSetupCard } from "@/components/home-screen-setup-card";
 import { listFormsForClient } from "@/lib/native-forms";
 import { ManualCheckInReviewModal } from "@/components/manual-check-in-review-modal";
 import { ClientActionRequestModal } from "@/components/client-action-request-modal";
+import { UpcomingEventsPanel } from "@/components/events/upcoming-events-panel";
 
 export const Route = createFileRoute("/_authenticated/portal/")({ component: PortalHome });
 
