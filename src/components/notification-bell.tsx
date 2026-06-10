@@ -53,6 +53,12 @@ export function NotificationBell() {
       .on("postgres_changes", { event: "*", schema: "public", table: "pl_exercise_notes" }, () => {
         qc.invalidateQueries({ queryKey: ["unread-counts"] });
       })
+      .on("postgres_changes", { event: "*", schema: "public", table: "group_messages" }, () => {
+        qc.invalidateQueries({ queryKey: ["unread-counts"] });
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "chat_group_members" }, () => {
+        qc.invalidateQueries({ queryKey: ["unread-counts"] });
+      })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [user, qc]);
