@@ -76,6 +76,7 @@ import { Route as AuthenticatedAdminLiftVideosRouteImport } from './routes/_auth
 import { Route as AuthenticatedAdminGoogleCalendarRouteImport } from './routes/_authenticated/admin/google-calendar'
 import { Route as AuthenticatedAdminFormsRouteImport } from './routes/_authenticated/admin/forms'
 import { Route as AuthenticatedAdminFloatingBarRouteImport } from './routes/_authenticated/admin/floating-bar'
+import { Route as AuthenticatedAdminFilloutSubmissionsRouteImport } from './routes/_authenticated/admin/fillout-submissions'
 import { Route as AuthenticatedAdminFaqsRouteImport } from './routes/_authenticated/admin/faqs'
 import { Route as AuthenticatedAdminExercisesRouteImport } from './routes/_authenticated/admin/exercises'
 import { Route as AuthenticatedAdminEventsRouteImport } from './routes/_authenticated/admin/events'
@@ -111,6 +112,7 @@ import { Route as LovableEmailAuthPreviewRouteImport } from './routes/lovable/em
 import { Route as ApiPublicHooksSmsRemindersRouteImport } from './routes/api/public/hooks/sms-reminders'
 import { Route as ApiPublicHooksMediaArchiveRouteImport } from './routes/api/public/hooks/media-archive'
 import { Route as ApiPublicHooksLiftArchiveTickRouteImport } from './routes/api/public/hooks/lift-archive-tick'
+import { Route as ApiPublicHooksFilloutRouteImport } from './routes/api/public/hooks/fillout'
 import { Route as ApiPublicHooksAppointmentRemindersRouteImport } from './routes/api/public/hooks/appointment-reminders'
 import { Route as AuthenticatedPortalWorkoutsDayIdRouteImport } from './routes/_authenticated/portal/workouts.$dayId'
 import { Route as AuthenticatedPortalRecipesRecipeIdRouteImport } from './routes/_authenticated/portal/recipes.$recipeId'
@@ -517,6 +519,12 @@ const AuthenticatedAdminFloatingBarRoute =
     path: '/floating-bar',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
+const AuthenticatedAdminFilloutSubmissionsRoute =
+  AuthenticatedAdminFilloutSubmissionsRouteImport.update({
+    id: '/fillout-submissions',
+    path: '/fillout-submissions',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
 const AuthenticatedAdminFaqsRoute = AuthenticatedAdminFaqsRouteImport.update({
   id: '/faqs',
   path: '/faqs',
@@ -723,6 +731,11 @@ const ApiPublicHooksLiftArchiveTickRoute =
     path: '/api/public/hooks/lift-archive-tick',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicHooksFilloutRoute = ApiPublicHooksFilloutRouteImport.update({
+  id: '/api/public/hooks/fillout',
+  path: '/api/public/hooks/fillout',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicHooksAppointmentRemindersRoute =
   ApiPublicHooksAppointmentRemindersRouteImport.update({
     id: '/api/public/hooks/appointment-reminders',
@@ -944,6 +957,7 @@ export interface FileRoutesByFullPath {
   '/admin/events': typeof AuthenticatedAdminEventsRouteWithChildren
   '/admin/exercises': typeof AuthenticatedAdminExercisesRoute
   '/admin/faqs': typeof AuthenticatedAdminFaqsRoute
+  '/admin/fillout-submissions': typeof AuthenticatedAdminFilloutSubmissionsRoute
   '/admin/floating-bar': typeof AuthenticatedAdminFloatingBarRoute
   '/admin/forms': typeof AuthenticatedAdminFormsRoute
   '/admin/google-calendar': typeof AuthenticatedAdminGoogleCalendarRoute
@@ -1025,6 +1039,7 @@ export interface FileRoutesByFullPath {
   '/portal/recipes/$recipeId': typeof AuthenticatedPortalRecipesRecipeIdRoute
   '/portal/workouts/$dayId': typeof AuthenticatedPortalWorkoutsDayIdRoute
   '/api/public/hooks/appointment-reminders': typeof ApiPublicHooksAppointmentRemindersRoute
+  '/api/public/hooks/fillout': typeof ApiPublicHooksFilloutRoute
   '/api/public/hooks/lift-archive-tick': typeof ApiPublicHooksLiftArchiveTickRoute
   '/api/public/hooks/media-archive': typeof ApiPublicHooksMediaArchiveRoute
   '/api/public/hooks/sms-reminders': typeof ApiPublicHooksSmsRemindersRoute
@@ -1075,6 +1090,7 @@ export interface FileRoutesByTo {
   '/admin/events': typeof AuthenticatedAdminEventsRouteWithChildren
   '/admin/exercises': typeof AuthenticatedAdminExercisesRoute
   '/admin/faqs': typeof AuthenticatedAdminFaqsRoute
+  '/admin/fillout-submissions': typeof AuthenticatedAdminFilloutSubmissionsRoute
   '/admin/floating-bar': typeof AuthenticatedAdminFloatingBarRoute
   '/admin/forms': typeof AuthenticatedAdminFormsRoute
   '/admin/google-calendar': typeof AuthenticatedAdminGoogleCalendarRoute
@@ -1156,6 +1172,7 @@ export interface FileRoutesByTo {
   '/portal/recipes/$recipeId': typeof AuthenticatedPortalRecipesRecipeIdRoute
   '/portal/workouts/$dayId': typeof AuthenticatedPortalWorkoutsDayIdRoute
   '/api/public/hooks/appointment-reminders': typeof ApiPublicHooksAppointmentRemindersRoute
+  '/api/public/hooks/fillout': typeof ApiPublicHooksFilloutRoute
   '/api/public/hooks/lift-archive-tick': typeof ApiPublicHooksLiftArchiveTickRoute
   '/api/public/hooks/media-archive': typeof ApiPublicHooksMediaArchiveRoute
   '/api/public/hooks/sms-reminders': typeof ApiPublicHooksSmsRemindersRoute
@@ -1211,6 +1228,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/events': typeof AuthenticatedAdminEventsRouteWithChildren
   '/_authenticated/admin/exercises': typeof AuthenticatedAdminExercisesRoute
   '/_authenticated/admin/faqs': typeof AuthenticatedAdminFaqsRoute
+  '/_authenticated/admin/fillout-submissions': typeof AuthenticatedAdminFilloutSubmissionsRoute
   '/_authenticated/admin/floating-bar': typeof AuthenticatedAdminFloatingBarRoute
   '/_authenticated/admin/forms': typeof AuthenticatedAdminFormsRoute
   '/_authenticated/admin/google-calendar': typeof AuthenticatedAdminGoogleCalendarRoute
@@ -1292,6 +1310,7 @@ export interface FileRoutesById {
   '/_authenticated/portal/recipes/$recipeId': typeof AuthenticatedPortalRecipesRecipeIdRoute
   '/_authenticated/portal/workouts/$dayId': typeof AuthenticatedPortalWorkoutsDayIdRoute
   '/api/public/hooks/appointment-reminders': typeof ApiPublicHooksAppointmentRemindersRoute
+  '/api/public/hooks/fillout': typeof ApiPublicHooksFilloutRoute
   '/api/public/hooks/lift-archive-tick': typeof ApiPublicHooksLiftArchiveTickRoute
   '/api/public/hooks/media-archive': typeof ApiPublicHooksMediaArchiveRoute
   '/api/public/hooks/sms-reminders': typeof ApiPublicHooksSmsRemindersRoute
@@ -1347,6 +1366,7 @@ export interface FileRouteTypes {
     | '/admin/events'
     | '/admin/exercises'
     | '/admin/faqs'
+    | '/admin/fillout-submissions'
     | '/admin/floating-bar'
     | '/admin/forms'
     | '/admin/google-calendar'
@@ -1428,6 +1448,7 @@ export interface FileRouteTypes {
     | '/portal/recipes/$recipeId'
     | '/portal/workouts/$dayId'
     | '/api/public/hooks/appointment-reminders'
+    | '/api/public/hooks/fillout'
     | '/api/public/hooks/lift-archive-tick'
     | '/api/public/hooks/media-archive'
     | '/api/public/hooks/sms-reminders'
@@ -1478,6 +1499,7 @@ export interface FileRouteTypes {
     | '/admin/events'
     | '/admin/exercises'
     | '/admin/faqs'
+    | '/admin/fillout-submissions'
     | '/admin/floating-bar'
     | '/admin/forms'
     | '/admin/google-calendar'
@@ -1559,6 +1581,7 @@ export interface FileRouteTypes {
     | '/portal/recipes/$recipeId'
     | '/portal/workouts/$dayId'
     | '/api/public/hooks/appointment-reminders'
+    | '/api/public/hooks/fillout'
     | '/api/public/hooks/lift-archive-tick'
     | '/api/public/hooks/media-archive'
     | '/api/public/hooks/sms-reminders'
@@ -1613,6 +1636,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/events'
     | '/_authenticated/admin/exercises'
     | '/_authenticated/admin/faqs'
+    | '/_authenticated/admin/fillout-submissions'
     | '/_authenticated/admin/floating-bar'
     | '/_authenticated/admin/forms'
     | '/_authenticated/admin/google-calendar'
@@ -1694,6 +1718,7 @@ export interface FileRouteTypes {
     | '/_authenticated/portal/recipes/$recipeId'
     | '/_authenticated/portal/workouts/$dayId'
     | '/api/public/hooks/appointment-reminders'
+    | '/api/public/hooks/fillout'
     | '/api/public/hooks/lift-archive-tick'
     | '/api/public/hooks/media-archive'
     | '/api/public/hooks/sms-reminders'
@@ -1728,6 +1753,7 @@ export interface RootRouteChildren {
   ApiPublicSignnowWebhookRoute: typeof ApiPublicSignnowWebhookRoute
   ApiPublicStripeWebhookRoute: typeof ApiPublicStripeWebhookRoute
   ApiPublicHooksAppointmentRemindersRoute: typeof ApiPublicHooksAppointmentRemindersRoute
+  ApiPublicHooksFilloutRoute: typeof ApiPublicHooksFilloutRoute
   ApiPublicHooksLiftArchiveTickRoute: typeof ApiPublicHooksLiftArchiveTickRoute
   ApiPublicHooksMediaArchiveRoute: typeof ApiPublicHooksMediaArchiveRoute
   ApiPublicHooksSmsRemindersRoute: typeof ApiPublicHooksSmsRemindersRoute
@@ -2208,6 +2234,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminFloatingBarRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
+    '/_authenticated/admin/fillout-submissions': {
+      id: '/_authenticated/admin/fillout-submissions'
+      path: '/fillout-submissions'
+      fullPath: '/admin/fillout-submissions'
+      preLoaderRoute: typeof AuthenticatedAdminFilloutSubmissionsRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
     '/_authenticated/admin/faqs': {
       id: '/_authenticated/admin/faqs'
       path: '/faqs'
@@ -2451,6 +2484,13 @@ declare module '@tanstack/react-router' {
       path: '/api/public/hooks/lift-archive-tick'
       fullPath: '/api/public/hooks/lift-archive-tick'
       preLoaderRoute: typeof ApiPublicHooksLiftArchiveTickRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/hooks/fillout': {
+      id: '/api/public/hooks/fillout'
+      path: '/api/public/hooks/fillout'
+      fullPath: '/api/public/hooks/fillout'
+      preLoaderRoute: typeof ApiPublicHooksFilloutRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/public/hooks/appointment-reminders': {
@@ -2759,6 +2799,7 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminEventsRoute: typeof AuthenticatedAdminEventsRouteWithChildren
   AuthenticatedAdminExercisesRoute: typeof AuthenticatedAdminExercisesRoute
   AuthenticatedAdminFaqsRoute: typeof AuthenticatedAdminFaqsRoute
+  AuthenticatedAdminFilloutSubmissionsRoute: typeof AuthenticatedAdminFilloutSubmissionsRoute
   AuthenticatedAdminFloatingBarRoute: typeof AuthenticatedAdminFloatingBarRoute
   AuthenticatedAdminFormsRoute: typeof AuthenticatedAdminFormsRoute
   AuthenticatedAdminGoogleCalendarRoute: typeof AuthenticatedAdminGoogleCalendarRoute
@@ -2832,6 +2873,8 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
     AuthenticatedAdminEventsRoute: AuthenticatedAdminEventsRouteWithChildren,
     AuthenticatedAdminExercisesRoute: AuthenticatedAdminExercisesRoute,
     AuthenticatedAdminFaqsRoute: AuthenticatedAdminFaqsRoute,
+    AuthenticatedAdminFilloutSubmissionsRoute:
+      AuthenticatedAdminFilloutSubmissionsRoute,
     AuthenticatedAdminFloatingBarRoute: AuthenticatedAdminFloatingBarRoute,
     AuthenticatedAdminFormsRoute: AuthenticatedAdminFormsRoute,
     AuthenticatedAdminGoogleCalendarRoute:
@@ -3122,6 +3165,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicStripeWebhookRoute: ApiPublicStripeWebhookRoute,
   ApiPublicHooksAppointmentRemindersRoute:
     ApiPublicHooksAppointmentRemindersRoute,
+  ApiPublicHooksFilloutRoute: ApiPublicHooksFilloutRoute,
   ApiPublicHooksLiftArchiveTickRoute: ApiPublicHooksLiftArchiveTickRoute,
   ApiPublicHooksMediaArchiveRoute: ApiPublicHooksMediaArchiveRoute,
   ApiPublicHooksSmsRemindersRoute: ApiPublicHooksSmsRemindersRoute,

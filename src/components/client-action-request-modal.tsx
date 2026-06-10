@@ -15,9 +15,24 @@ import {
 import { CheckCircle2, ClipboardList, ExternalLink, FileText, Loader2 } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
+import { buildFilloutUrl } from "@/lib/fillout";
 
 export function ClientActionRequestModal({ clientId }: { clientId: string | null | undefined }) {
   const qc = useQueryClient();
+
+  const { data: client } = useQuery({
+    queryKey: ["client-identity-for-fillout", clientId],
+    enabled: !!clientId,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("clients")
+        .select("id, full_name, first_name, last_name, email")
+        .eq("id", clientId!)
+        .maybeSingle();
+      return data;
+    },
+  });
 
   const { data: open = [] } = useQuery({
     queryKey: ["client-actions-for-client", clientId, "open"],
@@ -101,14 +116,14 @@ export function ClientActionRequestModal({ clientId }: { clientId: string | null
             </Link>
           )}
           {current.external_form_url && (
-            <a href={current.external_form_url} target="_blank" rel="noreferrer">
+            <a href={buildFilloutUrl(current.external_form_url, client)} target="_blank" rel="noreferrer">
               <Button variant="outline" className="w-full justify-start">
                 <ExternalLink className="mr-2 h-4 w-4" /> Open form
               </Button>
             </a>
           )}
           {current.link_url && (
-            <a href={current.link_url} target="_blank" rel="noreferrer">
+            <a href={buildFilloutUrl(current.link_url, client)} target="_blank" rel="noreferrer">
               <Button variant="outline" className="w-full justify-start">
                 <ExternalLink className="mr-2 h-4 w-4" /> {current.link_label || "Open link"}
               </Button>

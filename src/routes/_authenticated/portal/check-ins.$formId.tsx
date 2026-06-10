@@ -33,6 +33,7 @@ import {
   type NfAnswer,
   type NfQuestion,
 } from "@/lib/native-forms";
+import { buildFilloutUrl } from "@/lib/fillout";
 
 export const Route = createFileRoute("/_authenticated/portal/check-ins/$formId")({
   component: ClientFormRenderer,
@@ -48,7 +49,11 @@ function ClientFormRenderer() {
     queryKey: ["my-client", portalUserId],
     enabled: !!portalUserId,
     queryFn: async () => {
-      const { data } = await supabase.from("clients").select("id, full_name").eq("user_id", portalUserId!).maybeSingle();
+      const { data } = await supabase
+        .from("clients")
+        .select("id, full_name, first_name, last_name, email")
+        .eq("user_id", portalUserId!)
+        .maybeSingle();
       return data;
     },
   });
@@ -188,6 +193,7 @@ function ClientFormRenderer() {
     return (
       <ExternalFormView
         form={form}
+        client={client}
         submission={submission}
         onMarkSubmitted={async () => {
           await submitSubmission(submission.id);
@@ -398,17 +404,22 @@ function QuestionInput({
 
 function ExternalFormView({
   form,
+  client,
   submission,
   onMarkSubmitted,
   onBack,
 }: {
   form: any;
+  client: any;
   submission: any;
   onMarkSubmitted: () => Promise<void> | void;
   onBack: () => void;
 }) {
   const [iframeFailed, setIframeFailed] = useState(false);
-  const url = form.external_url as string | null;
+  const rawUrl = form.external_url as string | null;
+  const url = rawUrl && form.requires_client_identity !== false
+    ? buildFilloutUrl(rawUrl, client)
+    : rawUrl;
   const openStyle = (form.open_style ?? "embed") as "embed" | "modal" | "new_tab";
   const submitted = submission.status !== "in_progress";
   const canEmbed = !!url && openStyle !== "new_tab" && !iframeFailed;

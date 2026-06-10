@@ -54,6 +54,7 @@ export type NfForm = {
   open_style: NfOpenStyle;
   visibility: NfVisibility;
   auto_assign_new_clients: boolean;
+  requires_client_identity: boolean;
 };
 
 export type NfConditionalRule = {
