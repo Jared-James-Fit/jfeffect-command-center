@@ -6,6 +6,7 @@ import { adminNav, coachNav } from "@/lib/admin-nav";
 import { PovQuickToggle } from "@/components/pov-quick-toggle";
 import { TaskPopupGate } from "@/components/tasks/task-popup-gate";
 import { ClipboardList } from "lucide-react";
+import { useBarLayout, resolveLayout } from "@/lib/floating-bar";
 
 export const Route = createFileRoute("/_authenticated/admin")({
   component: AdminLayout,
@@ -28,8 +29,9 @@ function AdminLayout() {
   const isCoach = role === "coach";
   const nav = isCoach ? coachNav : adminNav;
   const title = isCoach ? "Coach" : "Admin";
+  const customLayout = useBarLayout(isCoach ? "coach" : "admin");
 
-  const bottomItems = useMemo(() => {
+  const defaultBottom = useMemo(() => {
     const source = isCoach ? coachNav : adminNav;
     const pick = (to: string) => source.find((i) => i.to === to)!;
     if (isCoach) {
@@ -41,8 +43,6 @@ function AdminLayout() {
         { ...pick("/admin/tasks"), label: "Tasks" },
       ].filter(Boolean);
     }
-    // Combine Check-In Reviews + Lift Reviews under a single "Reviews" slot
-    // (tap or long-press to reveal a vertical stack), freeing a slot for Tasks.
     return [
       pick("/admin"),
       { ...pick("/admin/clients"), label: "Clients" },
@@ -59,6 +59,14 @@ function AdminLayout() {
       { ...pick("/admin/tasks"), label: "Tasks" },
     ];
   }, [isCoach]);
+
+  const bottomItems = useMemo(() => {
+    if (customLayout && customLayout.slots.length > 0) {
+      const resolved = resolveLayout(customLayout, nav);
+      if (resolved.length) return resolved;
+    }
+    return defaultBottom;
+  }, [customLayout, nav, defaultBottom]);
 
   if (loading || !role) {
     return <div className="grid min-h-screen place-items-center text-muted-foreground">Loading…</div>;
