@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, Users, CreditCard, AlertCircle, FolderOpen, Calendar, Megaphone,
-  UserPlus, Library, HelpCircle, ChefHat, BookOpen, Settings, ListChecks, Camera, Phone, MessageCircle, KeyRound,
+  HelpCircle, ChefHat, BookOpen, Settings, ListChecks, KeyRound,
   Link2 as LinkIcon, BarChart3, RefreshCw, ShoppingBag, Tag, MessagesSquare, Trophy, ShieldCheck,
 } from "lucide-react";
 import type { NavItem } from "@/components/app-shell";
@@ -16,17 +16,8 @@ export const membershipNav: NavItem[] = [
   { to: "/admin/membership/promo-tools", label: "Promo Tools", icon: Tag, group: "Sales" },
   // MEMBERS
   { to: "/admin/members", label: "Members", icon: Users, group: "Members" },
-  { to: "/admin/members?filter=incomplete", label: "Incomplete Setup", icon: ListChecks, group: "Members" },
-  { to: "/admin/members?filter=no_pfp", label: "Missing Profile Pictures", icon: Camera, group: "Members" },
-  { to: "/admin/members?filter=no_phone", label: "Missing Phone Numbers", icon: Phone, group: "Members" },
-  { to: "/admin/members?filter=no_sms", label: "SMS Consent Missing", icon: MessageCircle, group: "Members" },
   // BILLING
-  { to: "/admin/members?filter=subscriptions", label: "Subscriptions", icon: CreditCard, group: "Billing" },
-  { to: "/admin/members?filter=trial", label: "Trials", icon: ListChecks, group: "Billing" },
-  { to: "/admin/members?filter=past_due", label: "Past Due", icon: AlertCircle, group: "Billing" },
-  { to: "/admin/members?filter=hold", label: "Hold Plan", icon: ListChecks, group: "Billing" },
-  { to: "/admin/members?filter=paused", label: "Paused Members", icon: ListChecks, group: "Billing" },
-  { to: "/admin/members?filter=cancelled", label: "Cancelled Members", icon: ListChecks, group: "Billing" },
+  { to: "/admin/membership/billing", label: "Subscriptions & Billing", icon: CreditCard, group: "Billing" },
   { to: "/admin/membership/stripe-sync", label: "Stripe Sync", icon: RefreshCw, group: "Billing" },
   // SETUP TOOLS
   { to: "/admin/membership/setup-links", label: "Setup Links", icon: LinkIcon, group: "Setup Tools" },
