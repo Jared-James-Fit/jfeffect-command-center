@@ -1,31 +1,36 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { listMyPortalAppointments } from "@/lib/appointments.functions";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Calendar as CalendarIcon, Video, MapPin } from "lucide-react";
+import { Calendar as CalendarIcon, Video, MapPin, Download, CalendarClock } from "lucide-react";
+import { buildAppointmentIcs, downloadIcs } from "@/lib/appointments-ics";
+import { RescheduleDialog } from "@/components/appointments/reschedule-dialog";
+import { useState } from "react";
 
 export const Route = createFileRoute("/_authenticated/portal/appointments")({ component: PortalAppointments });
 
 function PortalAppointments() {
   const fn = useServerFn(listMyPortalAppointments);
+  const qc = useQueryClient();
   const { data, isLoading } = useQuery({ queryKey: ["portal-appointments"], queryFn: () => fn() });
 
   return (
     <>
       <PageHeader title="Appointments" subtitle="Your upcoming calls and sessions." />
       <div className="p-6 md:p-8 space-y-6">
-        <Section title="Upcoming" rows={data?.upcoming ?? []} isLoading={isLoading} />
+        <Section title="Upcoming" rows={data?.upcoming ?? []} isLoading={isLoading} canReschedule onChanged={() => qc.invalidateQueries({ queryKey: ["portal-appointments"] })} />
         <Section title="Past" rows={data?.past ?? []} isLoading={isLoading} />
       </div>
     </>
   );
 }
 
-function Section({ title, rows, isLoading }: any) {
+function Section({ title, rows, isLoading, canReschedule, onChanged }: any) {
+  const [reFor, setReFor] = useState<any>(null);
   return (
     <div>
       <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground mb-2">{title}</h2>
@@ -54,15 +59,26 @@ function Section({ title, rows, isLoading }: any) {
                     {a.location && <div className="text-xs text-muted-foreground mt-1 inline-flex items-center gap-1"><MapPin className="h-3 w-3" /> {a.location}</div>}
                     {a.attendee_notes && <div className="text-xs text-muted-foreground mt-2">{a.attendee_notes}</div>}
                   </div>
-                  {a.meet_link && (
-                    <a href={a.meet_link} target="_blank" rel="noreferrer">
-                      <Button size="sm" className="bg-gradient-primary"><Video className="mr-2 h-3 w-3" /> Join Meet</Button>
-                    </a>
-                  )}
+                  <div className="flex flex-wrap items-center gap-2">
+                    {a.meet_link && (
+                      <a href={a.meet_link} target="_blank" rel="noreferrer">
+                        <Button size="sm" className="bg-gradient-primary"><Video className="mr-2 h-3 w-3" /> Join Meet</Button>
+                      </a>
+                    )}
+                    <Button size="sm" variant="outline" onClick={() => downloadIcs(`${a.title || "appointment"}.ics`, buildAppointmentIcs(a))}>
+                      <Download className="mr-1 h-3 w-3" /> .ics
+                    </Button>
+                    {canReschedule && a.status === "Scheduled" && (
+                      <Button size="sm" variant="outline" onClick={() => setReFor(a)}>
+                        <CalendarClock className="mr-1 h-3 w-3" /> Reschedule
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </Card>
             );
           })}
+          <RescheduleDialog open={!!reFor} onOpenChange={(b) => { if (!b) setReFor(null); }} appointment={reFor} onChanged={onChanged} />
         </div>
       )}
     </div>
