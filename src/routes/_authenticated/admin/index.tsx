@@ -548,6 +548,14 @@ function AdminDashboard() {
                           <Badge variant="outline" className={`text-[10px] max-w-full truncate ${n.tone}`}>{n.reason}</Badge>
                           {n.time && <span className="text-[10px] text-muted-foreground">{n.time}</span>}
                         </div>
+                        {n.preview && (
+                          <div className="mt-1 line-clamp-2 text-[11px] text-muted-foreground">
+                            <span className="font-semibold text-foreground/80">
+                              {n.previewFromClient ? `${n.name.split(" ")[0]}:` : "You:"}
+                            </span>{" "}
+                            {n.preview}
+                          </div>
+                        )}
                       </div>
                       <Link to={n.href as any} params={n.params as any} search={n.search} className="shrink-0">
                         <Button variant="outline" size="sm" className="h-8 text-[11px] shrink-0">{n.action}</Button>
