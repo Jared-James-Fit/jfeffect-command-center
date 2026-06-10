@@ -14,6 +14,7 @@ import { Route as SetupRouteImport } from './routes/setup'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as MembershipRouteImport } from './routes/membership'
 import { Route as MemberSetupRouteImport } from './routes/member-setup'
+import { Route as JoinRouteImport } from './routes/join'
 import { Route as CoachingRouteImport } from './routes/coaching'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as ApplyRouteImport } from './routes/apply'
@@ -188,6 +189,11 @@ const MembershipRoute = MembershipRouteImport.update({
 const MemberSetupRoute = MemberSetupRouteImport.update({
   id: '/member-setup',
   path: '/member-setup',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const JoinRoute = JoinRouteImport.update({
+  id: '/join',
+  path: '/join',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CoachingRoute = CoachingRouteImport.update({
@@ -1064,6 +1070,7 @@ export interface FileRoutesByFullPath {
   '/apply': typeof ApplyRoute
   '/auth': typeof AuthRoute
   '/coaching': typeof CoachingRouteWithChildren
+  '/join': typeof JoinRoute
   '/member-setup': typeof MemberSetupRoute
   '/membership': typeof MembershipRoute
   '/reset-password': typeof ResetPasswordRoute
@@ -1220,6 +1227,7 @@ export interface FileRoutesByTo {
   '/apply': typeof ApplyRoute
   '/auth': typeof AuthRoute
   '/coaching': typeof CoachingRouteWithChildren
+  '/join': typeof JoinRoute
   '/member-setup': typeof MemberSetupRoute
   '/membership': typeof MembershipRoute
   '/reset-password': typeof ResetPasswordRoute
@@ -1374,6 +1382,7 @@ export interface FileRoutesById {
   '/apply': typeof ApplyRoute
   '/auth': typeof AuthRoute
   '/coaching': typeof CoachingRouteWithChildren
+  '/join': typeof JoinRoute
   '/member-setup': typeof MemberSetupRoute
   '/membership': typeof MembershipRoute
   '/reset-password': typeof ResetPasswordRoute
@@ -1532,6 +1541,7 @@ export interface FileRouteTypes {
     | '/apply'
     | '/auth'
     | '/coaching'
+    | '/join'
     | '/member-setup'
     | '/membership'
     | '/reset-password'
@@ -1688,6 +1698,7 @@ export interface FileRouteTypes {
     | '/apply'
     | '/auth'
     | '/coaching'
+    | '/join'
     | '/member-setup'
     | '/membership'
     | '/reset-password'
@@ -1841,6 +1852,7 @@ export interface FileRouteTypes {
     | '/apply'
     | '/auth'
     | '/coaching'
+    | '/join'
     | '/member-setup'
     | '/membership'
     | '/reset-password'
@@ -1999,6 +2011,7 @@ export interface RootRouteChildren {
   ApplyRoute: typeof ApplyRoute
   AuthRoute: typeof AuthRoute
   CoachingRoute: typeof CoachingRouteWithChildren
+  JoinRoute: typeof JoinRoute
   MemberSetupRoute: typeof MemberSetupRoute
   MembershipRoute: typeof MembershipRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
@@ -2055,6 +2068,13 @@ declare module '@tanstack/react-router' {
       path: '/member-setup'
       fullPath: '/member-setup'
       preLoaderRoute: typeof MemberSetupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/join': {
+      id: '/join'
+      path: '/join'
+      fullPath: '/join'
+      preLoaderRoute: typeof JoinRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/coaching': {
@@ -3613,6 +3633,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApplyRoute: ApplyRoute,
   AuthRoute: AuthRoute,
   CoachingRoute: CoachingRouteWithChildren,
+  JoinRoute: JoinRoute,
   MemberSetupRoute: MemberSetupRoute,
   MembershipRoute: MembershipRoute,
   ResetPasswordRoute: ResetPasswordRoute,
@@ -3637,13 +3658,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
