@@ -521,6 +521,13 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
                   if (member) {
                     await applyJfSubToMember(supabase, member, sub);
                     await supabase.from("app_members").update({ last_invoice_status: "paid" }).eq("id", member.id);
+                    // Fire payment-succeeded SMS only on actual paid renewals
+                    // (skip the $0 trial-start invoice).
+                    if ((obj.amount_paid ?? 0) > 0) {
+                      await fireJfSms(member.id, "subscription_payment_succeeded", {
+                        amount: obj.amount_paid ? `$${(obj.amount_paid / 100).toFixed(2)}` : "",
+                      });
+                    }
                   }
                   break;
                 }
@@ -552,6 +559,9 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
                   if (member) {
                     await applyJfSubToMember(supabase, member, sub);
                     await supabase.from("app_members").update({ last_invoice_status: "failed" }).eq("id", member.id);
+                    await fireJfSms(member.id, "subscription_payment_failed", {
+                      amount: obj.amount_due ? `$${(obj.amount_due / 100).toFixed(2)}` : "",
+                    });
                   }
                   break;
                 }
