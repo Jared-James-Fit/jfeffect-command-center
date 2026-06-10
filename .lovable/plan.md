@@ -1,56 +1,58 @@
-## What you'll get
 
-A single **+** button in every chat composer (1:1 client messenger, group chats, coach-internal DMs) opens a menu with:
+# Membership Admin Dashboard — Implementation Plan
 
-- **Form request** — pick a Native Form, sends to that client (or every client in a group). The bubble shows their name and a live chip: *Sent → Opened → Submitted*.
-- **Signature request** — pick an agreement template, sends via SignNow. Chip: *Sent → Opened → Signed → Verified*.
-- **Recipe** — pick a recipe, grants access, drops a recipe card in chat.
-- **Client action request** — your existing "Action Needed" composer, now reachable from the same menu.
+This is a large change. I want to confirm scope before writing code, because much of what you listed (Members list, JF settings, billing, resources, etc.) already exists scattered across the coaching admin. The plan is to **reorganize and add a switcher**, not rebuild every tool from scratch.
 
-In group chats the request fans out: every client member gets their own assignment/agreement/access, and the bubble shows a roll-up ("3 of 5 submitted") that expands to per-client status.
+## Approach in plain English
 
-## How it works
+1. **Add a "Dashboard Mode" switcher** at the top of the admin shell with two options: **Coaching** and **Membership**. The choice is remembered per-admin in localStorage. Default = Coaching.
+2. **Two admin nav configs** instead of one. The current `adminNav` becomes `coachingAdminNav` (membership-only entries stripped out, plus one shortcut row "JF Membership Dashboard" that flips the switcher). A new `membershipAdminNav` is grouped exactly as you described (Overview / Sales / Members / Billing / Setup Tools / Content / Community / Settings).
+3. **New Membership Dashboard landing page** at `/admin/membership` with the stats grid (active / trialing / past due / cancelled / hold / paused / incomplete setup / missing pfp / missing phone / missing SMS consent / recent signups / upcoming trial endings) and an **Action Needed** panel.
+4. **Reuse existing pages wherever possible.** The existing routes (`/admin/members`, `/admin/members/$memberId`, `/admin/member-plans`, `/admin/member-resources`, etc.) already implement most of what you listed — I just re-group them under the membership nav rather than duplicating them. New filtered views (Incomplete Setup, Missing Profile Picture, Missing Phone, SMS Consent Missing, Trials, Past Due, Hold Plan, Paused, Cancelled) are thin filter presets over the existing members list.
+5. **New small pages** that don't exist yet: Signup Stats, Action Needed, Stripe Sync, Setup Links bulk page, SMS/Email Tools page, Access Checklist editor, Sales Page admin (wraps existing JF settings card + public link copy/preview), Welcome Messages.
+6. **Member profile picture requirement** for JF members — surfaced as a flag on the dashboard + member profile banner. Not blocking sign-in; visible as "Setup incomplete — profile picture required."
+7. **Admin account protection (Parts 12–14)** — server-side checks in member/role mutation server fns: refuse to delete/deactivate/demote when it would leave 0 active admins. Add a `is_primary_admin` flag (migration) and protect that account from normal-UI destructive actions.
 
-```text
-[+]──▶ Form request   ─▶ pick form    ─▶ assign to client(s)  ─▶ chat card (live)
-       Signature      ─▶ pick template─▶ create agreement     ─▶ chat card (live)
-       Recipe         ─▶ pick recipe  ─▶ grant access         ─▶ chat card
-       Action request ─▶ existing composer prefilled w/ client
+## Out of scope for this pass (call out so we agree)
+
+- **Challenges** (community sub-item) — no existing system; I'll add a placeholder route with "Coming soon" rather than build it.
+- **Promo Tools** under Sales — same, placeholder.
+- **Public "Forgot login → Send reset link"** on the sales/login page — small addition, included.
+- **SMS-based password reset** — Supabase Auth doesn't support SMS recovery natively; I'll wire email reset everywhere and stub the SMS button as disabled with a tooltip.
+- I will **not** rewrite already-working tools (member edit, resources CRUD, programs CRUD, group chats). They get re-linked under membership nav.
+
+## Technical sketch
+
+```
+src/lib/admin-nav.ts          → split into coachingAdminNav + membershipAdminNav
+src/lib/dashboard-mode.ts     → new: localStorage hook, "coaching" | "membership"
+src/components/dashboard-mode-switcher.tsx → segmented toggle in admin header
+src/components/app-shell.tsx  → read mode, swap nav items
+
+src/routes/_authenticated/admin/membership/route.tsx      → layout guard
+src/routes/_authenticated/admin/membership/index.tsx      → dashboard + stats
+src/routes/_authenticated/admin/membership/action-needed.tsx
+src/routes/_authenticated/admin/membership/signup-stats.tsx
+src/routes/_authenticated/admin/membership/sales-page.tsx
+src/routes/_authenticated/admin/membership/setup-links.tsx
+src/routes/_authenticated/admin/membership/sms-email.tsx
+src/routes/_authenticated/admin/membership/stripe-sync.tsx
+src/routes/_authenticated/admin/membership/access-checklist.tsx
+src/routes/_authenticated/admin/membership/members.tsx        (filter presets: ?filter=trial|past_due|hold|paused|cancelled|incomplete|no_pfp|no_phone|no_sms)
+
+src/lib/membership-admin.functions.ts → getMembershipStats, getActionNeeded, bulkSendSetupLink, bulkStripeSync, requireProfilePicture flag
+src/lib/admin-protection.functions.ts → assertNotLastAdmin, setPrimaryAdmin, protected delete/deactivate/role-change wrappers
 ```
 
-The card itself is just a new chat attachment `kind`, so it flows through your existing message + realtime pipeline.
+### Migration
+- `app_members.profile_picture_required boolean default true` (or read from settings)
+- `user_roles` → add `is_primary boolean default false`; seed the first existing admin as primary
+- Helper `public.count_active_admins()` SECURITY DEFINER
+- Triggers on `user_roles` + `app_members` that refuse to drop the last active admin or demote/deactivate the primary
 
-## Build steps
+## What I need from you
 
-1. **Shared attachment kinds** — extend `SharedAttachment` in `src/components/chat-shared.tsx` with `kind: "form_request" | "signature_request" | "recipe_share"` and the IDs they need (form_id / assignment_ids, agreement_id(s), recipe_id, target_client_ids, sender_role).
-2. **Send menu component** — new `src/components/chat-send-menu.tsx` (the **+** button + dropdown). Three picker dialogs:
-   - `FormRequestPicker` — lists `nf_forms` (active, not archived) with search.
-   - `SignatureRequestPicker` — lists `agreement_templates`.
-   - `RecipePicker` — lists `recipes` you can share.
-3. **Server functions** in new `src/lib/chat-requests.functions.ts` (auth-gated to coach/admin):
-   - `sendFormRequest({ form_id, client_ids })` → upserts `nf_assignments`, returns assignment IDs.
-   - `sendSignatureRequest({ template_id, client_ids })` → creates draft `agreements` rows + kicks off SignNow via existing `signnow.server.ts` helper.
-   - `sendRecipeShare({ recipe_id, client_ids })` → inserts `recipe_client_access` (sets `access_scope='selected_clients'` if needed).
-   Each returns the IDs needed for the chat attachment payload.
-4. **Wire into composers** — `message-thread.tsx` (1:1) and `group-message-thread.tsx` (group). Group chat resolves "client members" via `chat_group_members` → `clients.user_id`; non-client members are skipped with a toast count.
-5. **Status cards + live updates** — render in `chat-shared.tsx`'s `AttachmentView`:
-   - `FormRequestCard` — subscribes to `nf_submissions` for its assignment IDs; chip Sent/Opened/Submitted; click opens form (client) or submission (coach).
-   - `SignatureRequestCard` — subscribes to `agreements` row(s); chip Sent/Opened/Signed/Verified; click opens signing URL or PDF.
-   - `RecipeShareCard` — recipe thumb, title, "Open recipe" CTA.
-   - Group roll-up: "n of m" + expandable list of `{client name, status}`.
-6. **Coach-to-coach DMs** — same menu shows up; "Recipe" and the three request types still work because target picker lets you choose any client (not just chat participants) when the conversation isn't with a client.
-7. **Permissions** — RLS already gates `nf_assignments`, `agreements`, `recipe_client_access`. The new server fns use `requireSupabaseAuth` + `has_role('admin'|'coach')` check before writing. No new tables, no migration needed.
+Two quick decisions before I start:
 
-## Technical notes
-
-- No DB migration: reuses `nf_forms`/`nf_assignments`/`nf_submissions`, `agreement_templates`/`agreements`, `recipes`/`recipe_client_access`, and the existing `messages.attachments` JSONB.
-- Realtime: subscribe per visible card via `supabase.channel('chat-req:'+id).on('postgres_changes', { table: 'nf_submissions' | 'agreements', filter: 'id=in.(...)' })`. Unsubscribe on unmount.
-- SignNow send reuses `src/lib/signnow.server.ts` (already configured); no new secrets.
-- For group fan-out we store the full `client_ids[]` and `assignment_ids[]` on the attachment so the card can render the roll-up without re-querying chat membership.
-- "Client name & info" tracking: form/agreement records already carry `client_id`; the card shows `clients.full_name` resolved via a small `useQuery` keyed on the ID list.
-
-## Out of scope (say the word if you want them)
-
-- A separate "Requests Sent" inbox view (per-coach dashboard of every request sent from chat).
-- SMS / email nudge when a request goes unanswered for N days.
-- Re-send / cancel actions on the chat card (would just call the same server fn).
+1. **Build all 19 parts in this single batch?** It's a large change (~15–20 files, 1 migration). I can do it, but I want to confirm you're OK with one big push vs. shipping the switcher + dashboard + nav reorg first and then layering the rest.
+2. **Profile picture requirement** — should it actually **block portal access** for JF members until uploaded, or just show a banner? Your spec says "mandatory" but also just shows a message. I'll default to **banner + dashboard flag, not a hard gate**, unless you say otherwise.
