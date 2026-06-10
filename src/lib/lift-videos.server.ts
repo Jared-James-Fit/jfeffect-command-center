@@ -118,9 +118,15 @@ export async function updateOwnedClientLiftVideo(
     "original_drive_file_id", "original_drive_url", "drive_embed_url",
     "file_type", "file_size_bytes",
     "upload_status", "playback_error", "status",
+    "video_storage_path", "preview_status",
   ];
   for (const k of keys) {
     if (k in patch) allowed[k as string] = (patch as any)[k];
+  }
+  // Archive-tracking fields written by the client upload queue when an
+  // upload completes (so the cron worker picks the row up).
+  for (const k of ["archive_status", "archive_next_attempt_at"] as const) {
+    if (k in (patch as any)) allowed[k] = (patch as any)[k];
   }
   if (Object.keys(allowed).length === 0) return existing;
 
