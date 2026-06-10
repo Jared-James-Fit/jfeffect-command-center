@@ -110,7 +110,7 @@ export function GroupMessageThread({
     staleTime: 5 * 60_000,
   });
 
-  const { role: authRole } = _useAuth();
+  const { role: authRole } = useAuth();
   const myPresenceRole: "admin" | "coach" | "client" | "member" =
     authRole === "admin" ? "admin" : authRole === "coach" ? "coach" : "client";
   const { others: livePeers } = useGroupPresence(groupId, myPresenceRole);
