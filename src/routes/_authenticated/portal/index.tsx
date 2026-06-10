@@ -321,6 +321,7 @@ function PortalHome() {
       <div className="space-y-6 p-6 md:p-8">
         {client?.id && <ManualCheckInReviewModal clientId={client.id} />}
         {client?.id && <ClientActionRequestModal clientId={client.id} />}
+        <UpcomingEventsPanel audience="client" />
         {client?.id && (
           <HomeScreenSetupCard
             clientId={client.id}
