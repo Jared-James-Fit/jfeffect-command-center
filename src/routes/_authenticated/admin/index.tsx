@@ -491,20 +491,34 @@ function AdminDashboard() {
               ) : (
                 <ul className="divide-y divide-border">
                   {needsTop.map((n) => (
-                    <li key={n.id} className="flex flex-wrap items-start justify-between gap-2 py-2.5">
-                      <div className="min-w-0 flex-1 basis-full sm:basis-auto">
+                    <li key={n.id} className="flex items-center gap-3 py-2.5">
+                      <UserAvatar src={n.avatarUrl ?? undefined} name={n.name} size={36} />
+                      {n.thumbnailUrl && (
+                        <div
+                          className="relative hidden h-12 w-16 shrink-0 overflow-hidden rounded-md border border-border bg-secondary/60 sm:block"
+                          style={{ backgroundImage: `url(${n.thumbnailUrl})`, backgroundSize: "cover", backgroundPosition: "center" }}
+                          aria-hidden
+                        >
+                          <div className="absolute inset-0 grid place-items-center">
+                            <Video className="h-4 w-4 text-white/90 drop-shadow" />
+                          </div>
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2 flex-wrap min-w-0">
-                          <Badge variant="outline" className={`text-[10px] max-w-full truncate ${n.tone}`}>{n.reason}</Badge>
                           {n.clientId ? (
                             <Link to="/admin/clients/$id" params={{ id: n.clientId }} className="text-sm font-semibold hover:underline truncate min-w-0 max-w-full">{n.name}</Link>
                           ) : (
                             <span className="text-sm font-semibold truncate min-w-0 max-w-full">{n.name}</span>
                           )}
                         </div>
-                        {n.time && <div className="text-[10px] text-muted-foreground mt-0.5">{n.time}</div>}
+                        <div className="mt-0.5 flex items-center gap-2 flex-wrap">
+                          <Badge variant="outline" className={`text-[10px] max-w-full truncate ${n.tone}`}>{n.reason}</Badge>
+                          {n.time && <span className="text-[10px] text-muted-foreground">{n.time}</span>}
+                        </div>
                       </div>
                       <Link to={n.href as any} params={n.params as any} search={n.search} className="shrink-0">
-                        <Button variant="outline" size="sm" className="h-7 text-[11px] shrink-0">{n.action}</Button>
+                        <Button variant="outline" size="sm" className="h-8 text-[11px] shrink-0">{n.action}</Button>
                       </Link>
                     </li>
                   ))}
