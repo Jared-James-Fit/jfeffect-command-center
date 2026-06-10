@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
@@ -11,7 +11,7 @@ import {
   Users, UserPlus, AlertTriangle, Calendar, DollarSign, Plus, ExternalLink,
   Activity, Eye, ClipboardCheck, MessageCircle, Video, Timer, ShoppingCart,
   HardDrive, Mail, Apple, ChefHat, FileText, Megaphone, Zap, ClipboardList,
-  ArrowRight,
+  ArrowRight, ChevronUp, ChevronDown,
 } from "lucide-react";
 import { derivePhase, displayTitle, toneClasses, type TrainingPhase } from "@/lib/training-phases";
 import type { ConversationState, Message } from "@/lib/messages";
@@ -94,6 +94,16 @@ function EmptyMini({ children }: { children: React.ReactNode }) {
 
 function AdminDashboard() {
   const [sellTo, setSellTo] = useState<{ id: string; name: string } | null>(null);
+
+  const [commandCollapsed, setCommandCollapsed] = useState(() => {
+    const saved = typeof window !== "undefined" ? localStorage.getItem("admin-command-collapsed") : null;
+    if (saved !== null) return saved === "true";
+    return window.innerWidth < 1024; // collapsed on tablet/mobile by default
+  });
+
+  useEffect(() => {
+    localStorage.setItem("admin-command-collapsed", String(commandCollapsed));
+  }, [commandCollapsed]);
 
   const { data: clients = [] } = useQuery({
     queryKey: ["admin-clients"],
@@ -377,26 +387,57 @@ function AdminDashboard() {
             <h2 className="flex min-w-0 items-center gap-2 text-sm font-black uppercase tracking-widest">
               <Zap className="h-4 w-4 text-primary" /> Today's Command Center
             </h2>
-            <span className="shrink-0 text-[10px] uppercase tracking-widest text-muted-foreground">{format(today, "EEE MMM d")}</span>
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="text-[10px] uppercase tracking-widest text-muted-foreground">{format(today, "EEE MMM d")}</span>
+              <button
+                onClick={() => setCommandCollapsed((v) => !v)}
+                className="grid h-7 w-7 place-items-center rounded-md border border-border bg-secondary text-foreground transition hover:bg-secondary/80"
+                aria-label={commandCollapsed ? "Expand" : "Collapse"}
+                title={commandCollapsed ? "Expand" : "Collapse"}
+              >
+                {commandCollapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
+              </button>
+            </div>
           </div>
-          <ul className="space-y-1.5 text-sm">
-            {cc.checkIns > 0 && <CcLine label="check-ins to review" count={cc.checkIns} to="/admin/check-in-reviews" />}
-            {cc.lifts > 0 && <CcLine label="lift videos pending" count={cc.lifts} to="/admin/lift-videos" />}
-            {cc.unread > 0 && <CcLine label={cc.unread === 1 ? "unread client message" : "unread client messages"} count={cc.unread} to="/admin/messages" />}
-            {cc.actions > 0 && <CcLine label={cc.actions === 1 ? "action request" : "action requests"} count={cc.actions} to="/admin/client-action-requests" />}
-            {cc.payments > 0 && <CcLine label="payments need attention" count={cc.payments} to="/admin/payments" />}
-            {cc.setup > 0 && <CcLine label={cc.setup === 1 ? "client needs setup" : "clients need setup"} count={cc.setup} to="/admin/clients" />}
-            {cc.birthdays > 0 && <CcLine label={cc.birthdays === 1 ? "birthday today" : "birthdays today"} count={cc.birthdays} to="/admin/clients" />}
-            {cc.checkIns + cc.lifts + cc.unread + cc.actions + cc.payments + cc.setup + cc.birthdays === 0 && (
-              <li className="rounded-md border border-dashed border-border px-3 py-4 text-center text-xs text-muted-foreground">Inbox zero. You're all caught up.</li>
-            )}
-          </ul>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <Link to="/admin/check-in-reviews"><Button size="sm" variant="outline" className="h-8 text-xs">Review Check-Ins</Button></Link>
-            <Link to="/admin/lift-videos"><Button size="sm" variant="outline" className="h-8 text-xs">Review Lift Videos</Button></Link>
-            <Link to="/admin/messages"><Button size="sm" variant="outline" className="h-8 text-xs">Open Messages</Button></Link>
-            {cc.setup > 0 && <Link to="/admin/clients"><Button size="sm" variant="outline" className="h-8 text-xs">Fix Setup</Button></Link>}
-          </div>
+
+          {commandCollapsed ? (
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+              {cc.checkIns > 0 && <span className="whitespace-nowrap"><span className="font-bold text-foreground">{cc.checkIns}</span> check-ins pending</span>}
+              {cc.lifts > 0 && <span className="whitespace-nowrap"><span className="font-bold text-foreground">{cc.lifts}</span> lift videos pending</span>}
+              {cc.unread > 0 && <span className="whitespace-nowrap"><span className="font-bold text-foreground">{cc.unread}</span> unread messages</span>}
+              {cc.actions > 0 && <span className="whitespace-nowrap"><span className="font-bold text-foreground">{cc.actions}</span> action requests</span>}
+              {cc.payments > 0 && <span className="whitespace-nowrap"><span className="font-bold text-foreground">{cc.payments}</span> payments need attention</span>}
+              {cc.setup > 0 && <span className="whitespace-nowrap"><span className="font-bold text-foreground">{cc.setup}</span> clients need setup</span>}
+              {cc.birthdays > 0 && <span className="whitespace-nowrap"><span className="font-bold text-foreground">{cc.birthdays}</span> birthdays today</span>}
+              {cc.checkIns + cc.lifts + cc.unread + cc.actions + cc.payments + cc.setup + cc.birthdays === 0 && (
+                <span>Inbox zero. You're all caught up.</span>
+              )}
+              <button onClick={() => setCommandCollapsed(false)} className="ml-auto text-[11px] font-semibold text-primary hover:underline whitespace-nowrap">
+                Open →
+              </button>
+            </div>
+          ) : (
+            <>
+              <ul className="space-y-1.5 text-sm">
+                {cc.checkIns > 0 && <CcLine label="check-ins to review" count={cc.checkIns} to="/admin/check-in-reviews" />}
+                {cc.lifts > 0 && <CcLine label="lift videos pending" count={cc.lifts} to="/admin/lift-videos" />}
+                {cc.unread > 0 && <CcLine label={cc.unread === 1 ? "unread client message" : "unread client messages"} count={cc.unread} to="/admin/messages" />}
+                {cc.actions > 0 && <CcLine label={cc.actions === 1 ? "action request" : "action requests"} count={cc.actions} to="/admin/client-action-requests" />}
+                {cc.payments > 0 && <CcLine label="payments need attention" count={cc.payments} to="/admin/payments" />}
+                {cc.setup > 0 && <CcLine label={cc.setup === 1 ? "client needs setup" : "clients need setup"} count={cc.setup} to="/admin/clients" />}
+                {cc.birthdays > 0 && <CcLine label={cc.birthdays === 1 ? "birthday today" : "birthdays today"} count={cc.birthdays} to="/admin/clients" />}
+                {cc.checkIns + cc.lifts + cc.unread + cc.actions + cc.payments + cc.setup + cc.birthdays === 0 && (
+                  <li className="rounded-md border border-dashed border-border px-3 py-4 text-center text-xs text-muted-foreground">Inbox zero. You're all caught up.</li>
+                )}
+              </ul>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Link to="/admin/check-in-reviews"><Button size="sm" variant="outline" className="h-8 text-xs">Review Check-Ins</Button></Link>
+                <Link to="/admin/lift-videos"><Button size="sm" variant="outline" className="h-8 text-xs">Review Lift Videos</Button></Link>
+                <Link to="/admin/messages"><Button size="sm" variant="outline" className="h-8 text-xs">Open Messages</Button></Link>
+                {cc.setup > 0 && <Link to="/admin/clients"><Button size="sm" variant="outline" className="h-8 text-xs">Fix Setup</Button></Link>}
+              </div>
+            </>
+          )}
         </Card>
 
         {/* QUICK STATS */}
