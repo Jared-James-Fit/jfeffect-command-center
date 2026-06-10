@@ -11,7 +11,7 @@ export const membershipNav: NavItem[] = [
   { to: "/admin/membership/signup-stats", label: "Signup Stats", icon: BarChart3, group: "Overview" },
   { to: "/admin/membership/action-needed", label: "Action Needed", icon: AlertCircle, group: "Overview" },
   // SALES
-  { to: "/admin/membership/sales-page", label: "Sales Page", icon: ShoppingBag, group: "Sales" },
+  { to: "/admin/sales/membership", label: "Sales Page", icon: ShoppingBag, group: "Sales" },
   { to: "/admin/membership/signup-link", label: "Signup Link", icon: LinkIcon, group: "Sales" },
   { to: "/admin/membership/promo-tools", label: "Promo Tools", icon: Tag, group: "Sales" },
   // MEMBERS
