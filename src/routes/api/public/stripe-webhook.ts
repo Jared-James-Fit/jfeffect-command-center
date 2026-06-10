@@ -272,6 +272,17 @@ async function applyJfSubToMember(supabase: any, member: any, sub: any) {
   await supabase.from("member_access").update({ active: grants }).eq("member_id", member.id);
 }
 
+/** Fire a JF SMS automation; swallow errors so the webhook still returns 200. */
+async function fireJfSms(memberId: string, trigger: string, vars: Record<string, string> = {}) {
+  try {
+    const { fireAutomationTrigger } = await import("@/lib/sms-trigger.server");
+    const supabase = admin();
+    await fireAutomationTrigger(supabase, { trigger, memberId, vars });
+  } catch (e) {
+    console.error(`[stripe-webhook] sms ${trigger} failed`, e);
+  }
+}
+
 export const Route = createFileRoute("/api/public/stripe-webhook")({
   server: {
     handlers: {
