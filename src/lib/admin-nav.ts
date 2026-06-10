@@ -7,7 +7,7 @@ import {
   Scale, BookOpen, Activity, Archive,
   UserPlus, Library, Wrench, HelpCircle,
   ChefHat, Megaphone, Phone, Link2 as LinkIcon,
-  ListChecks,
+  ListChecks, LayoutGrid,
 } from "lucide-react";
 import { Sparkles } from "lucide-react";
 import type { NavItem } from "@/components/app-shell";
@@ -62,6 +62,7 @@ export const adminNav: NavItem[] = [
   // ACCOUNT
   { to: "/admin/account", label: "Account", icon: UserCog, group: "Account" },
   { to: "/admin/settings", label: "Settings", icon: Settings, group: "Account" },
+  { to: "/admin/floating-bar", label: "Floating Bar", icon: LayoutGrid, group: "Account" },
 ];
 
 // Coach navigation: same client-coaching tools as admin, without business/admin sections.
@@ -85,6 +86,7 @@ export const coachNav: NavItem[] = [
   { to: "/admin/program-library", label: "Program Library", icon: BookOpen },
   { to: "/admin/resources", label: "Resources", icon: FolderOpen },
   { to: "/admin/account", label: "My Account", icon: UserCog },
+  { to: "/admin/floating-bar", label: "Floating Bar", icon: LayoutGrid },
 ];
 
 export const clientNav: NavItem[] = [
