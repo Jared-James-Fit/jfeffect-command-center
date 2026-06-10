@@ -373,11 +373,11 @@ function AdminDashboard() {
 
         {/* TODAY'S COMMAND CENTER */}
         <Card className="border-primary/30 bg-gradient-to-br from-primary/5 via-card to-card p-4 md:p-5">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="flex items-center gap-2 text-sm font-black uppercase tracking-widest">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <h2 className="flex min-w-0 items-center gap-2 text-sm font-black uppercase tracking-widest">
               <Zap className="h-4 w-4 text-primary" /> Today's Command Center
             </h2>
-            <span className="text-[10px] uppercase tracking-widest text-muted-foreground">{format(today, "EEE MMM d")}</span>
+            <span className="shrink-0 text-[10px] uppercase tracking-widest text-muted-foreground">{format(today, "EEE MMM d")}</span>
           </div>
           <ul className="space-y-1.5 text-sm">
             {cc.checkIns > 0 && <CcLine label="check-ins to review" count={cc.checkIns} to="/admin/check-in-reviews" />}
