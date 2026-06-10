@@ -19,6 +19,7 @@ import { listLiftVideos } from "@/lib/lift-videos";
 import { formatDistanceToNow, parseISO, format, startOfWeek, endOfWeek, isToday } from "date-fns";
 import { UpcomingBirthdaysWidget } from "@/components/upcoming-birthdays-widget";
 import { UpcomingEventsPanel } from "@/components/events/upcoming-events-panel";
+import { UpcomingAppointmentsCard } from "@/components/appointments/upcoming-appointments-card";
 import { PriceCardPickerDialog } from "@/components/price-card-picker-dialog";
 import { UserAvatar } from "@/components/user-avatar";
 import { getCoachIntel, filterIntel, LABEL_META } from "@/lib/coach-intel";
@@ -549,6 +550,9 @@ function AdminDashboard() {
             ))}
           </div>
         </Card>
+
+        {/* UPCOMING APPOINTMENTS */}
+        <UpcomingAppointmentsCard mode="admin" />
 
         {/* DESKTOP 2-COL GRID below */}
         <div className="grid gap-4 lg:grid-cols-3">
