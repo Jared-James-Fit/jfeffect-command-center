@@ -76,6 +76,20 @@ async function findMemberByUser(userId: string) {
   return data;
 }
 
+/**
+ * Best-effort SMS automation fire for a JF membership lifecycle event.
+ * Never throws — billing actions must succeed even if SMS is misconfigured.
+ */
+async function fireMemberSms(memberId: string, trigger: string, vars: Record<string, string> = {}) {
+  try {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { fireAutomationTrigger } = await import("@/lib/sms-trigger.server");
+    await fireAutomationTrigger(supabaseAdmin, { trigger, memberId, vars });
+  } catch (e) {
+    console.error(`[jf-billing] sms ${trigger} failed`, e);
+  }
+}
+
 /* ───── PUBLIC ───── */
 
 export const getJfPublicSettings = createServerFn({ method: "GET" }).handler(async () => {
@@ -334,7 +348,11 @@ export const cancelJfMembership = createServerFn({ method: "POST" })
         member_id: member.id, reason: data.reason ?? null, details: data.details ?? null,
       });
     }
-    return { ok: true, cancel_at: nowIsoFromUnix(sub.cancel_at) ?? nowIsoFromUnix(sub.current_period_end) };
+    const cancel_at = nowIsoFromUnix(sub.cancel_at) ?? nowIsoFromUnix(sub.current_period_end);
+    await fireMemberSms(member.id, "subscription_cancelled", {
+      cancel_at: cancel_at ? new Date(cancel_at).toLocaleDateString() : "",
+    });
+    return { ok: true, cancel_at };
   });
 
 export const freezeJfMembership = createServerFn({ method: "POST" })
@@ -352,6 +370,9 @@ export const freezeJfMembership = createServerFn({ method: "POST" })
       }),
     });
     await applyStripeStateToMember(member.id, sub, s.hold_price_id);
+    await fireMemberSms(member.id, "subscription_frozen", {
+      resumes_on: new Date(resumesAt * 1000).toLocaleDateString(),
+    });
     return { ok: true, paused_until: nowIsoFromUnix(resumesAt) };
   });
 
@@ -377,6 +398,9 @@ export const switchToHoldPlan = createServerFn({ method: "POST" })
       }),
     });
     await applyStripeStateToMember(member.id, sub, s.hold_price_id);
+    await fireMemberSms(member.id, "subscription_hold_plan", {
+      hold_price: s.hold_price_display ?? "$9/month",
+    });
     return { ok: true };
   });
 
@@ -401,6 +425,9 @@ export const reactivateFullMembership = createServerFn({ method: "POST" })
       }),
     });
     await applyStripeStateToMember(member.id, sub, s.hold_price_id);
+    await fireMemberSms(member.id, "subscription_reactivated", {
+      price: s.monthly_price_display ?? "$29/month",
+    });
     return { ok: true };
   });
 
