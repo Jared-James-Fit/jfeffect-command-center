@@ -36,9 +36,10 @@ function MemberLayout() {
   if (loading || !role) {
     return <div className="grid min-h-screen place-items-center text-muted-foreground">Loading…</div>;
   }
+  const showToggle = role === "admin" || role === "coach";
   return (
     <AppShell items={memberNav} title="Member">
-      <PovQuickToggle variant="banner" />
+      {showToggle && <PovQuickToggle variant="banner" />}
       {!subscriptionActive && status && (
         <div className="px-4 pt-4 md:px-6 md:pt-6">
           <SubscriptionRestrictedBanner status={status} />
