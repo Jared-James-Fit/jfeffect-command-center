@@ -53,7 +53,7 @@ export function PovQuickToggle({
   const pov = getPovFlag();
   const isMemberView = pov.active || location.pathname.startsWith("/m");
 
-  const goAdmin = async () => {
+  const goAdmin = useCallback(async () => {
     if (busy) return;
     setBusy(true);
     try {
@@ -66,9 +66,9 @@ export function PovQuickToggle({
     } finally {
       setBusy(false);
     }
-  };
+  }, [busy, qc, navigate]);
 
-  const goMember = async () => {
+  const goMember = useCallback(async () => {
     if (busy) return;
     setBusy(true);
     try {
@@ -82,7 +82,7 @@ export function PovQuickToggle({
     } finally {
       setBusy(false);
     }
-  };
+  }, [busy, qc, setPersona, navigate]);
 
   // Keyboard shortcut: Cmd/Ctrl + Shift + M
   useEffect(() => {
