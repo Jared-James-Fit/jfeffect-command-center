@@ -33,6 +33,7 @@ import {
   type NfAnswer,
   type NfQuestion,
 } from "@/lib/native-forms";
+import { buildFilloutUrl } from "@/lib/fillout";
 
 export const Route = createFileRoute("/_authenticated/portal/check-ins/$formId")({
   component: ClientFormRenderer,
@@ -48,7 +49,11 @@ function ClientFormRenderer() {
     queryKey: ["my-client", portalUserId],
     enabled: !!portalUserId,
     queryFn: async () => {
-      const { data } = await supabase.from("clients").select("id, full_name").eq("user_id", portalUserId!).maybeSingle();
+      const { data } = await supabase
+        .from("clients")
+        .select("id, full_name, first_name, last_name, email")
+        .eq("user_id", portalUserId!)
+        .maybeSingle();
       return data;
     },
   });
@@ -188,6 +193,7 @@ function ClientFormRenderer() {
     return (
       <ExternalFormView
         form={form}
+        client={client}
         submission={submission}
         onMarkSubmitted={async () => {
           await submitSubmission(submission.id);
