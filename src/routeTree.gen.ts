@@ -59,7 +59,6 @@ import { Route as AuthenticatedAdminTestimonialsRouteImport } from './routes/_au
 import { Route as AuthenticatedAdminTasksRouteImport } from './routes/_authenticated/admin/tasks'
 import { Route as AuthenticatedAdminSopsRouteImport } from './routes/_authenticated/admin/sops'
 import { Route as AuthenticatedAdminSettingsRouteImport } from './routes/_authenticated/admin/settings'
-import { Route as AuthenticatedAdminResourcesRouteImport } from './routes/_authenticated/admin/resources'
 import { Route as AuthenticatedAdminRecipesRouteImport } from './routes/_authenticated/admin/recipes'
 import { Route as AuthenticatedAdminPurchasesRouteImport } from './routes/_authenticated/admin/purchases'
 import { Route as AuthenticatedAdminProgramsRouteImport } from './routes/_authenticated/admin/programs'
@@ -416,12 +415,6 @@ const AuthenticatedAdminSettingsRoute =
   AuthenticatedAdminSettingsRouteImport.update({
     id: '/settings',
     path: '/settings',
-    getParentRoute: () => AuthenticatedAdminRouteRoute,
-  } as any)
-const AuthenticatedAdminResourcesRoute =
-  AuthenticatedAdminResourcesRouteImport.update({
-    id: '/resources',
-    path: '/resources',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
 const AuthenticatedAdminRecipesRoute =
@@ -974,7 +967,6 @@ export interface FileRoutesByFullPath {
   '/admin/programs': typeof AuthenticatedAdminProgramsRoute
   '/admin/purchases': typeof AuthenticatedAdminPurchasesRouteWithChildren
   '/admin/recipes': typeof AuthenticatedAdminRecipesRoute
-  '/admin/resources': typeof AuthenticatedAdminResourcesRoute
   '/admin/settings': typeof AuthenticatedAdminSettingsRoute
   '/admin/sops': typeof AuthenticatedAdminSopsRoute
   '/admin/tasks': typeof AuthenticatedAdminTasksRoute
@@ -1107,7 +1099,6 @@ export interface FileRoutesByTo {
   '/admin/programs': typeof AuthenticatedAdminProgramsRoute
   '/admin/purchases': typeof AuthenticatedAdminPurchasesRouteWithChildren
   '/admin/recipes': typeof AuthenticatedAdminRecipesRoute
-  '/admin/resources': typeof AuthenticatedAdminResourcesRoute
   '/admin/settings': typeof AuthenticatedAdminSettingsRoute
   '/admin/sops': typeof AuthenticatedAdminSopsRoute
   '/admin/tasks': typeof AuthenticatedAdminTasksRoute
@@ -1245,7 +1236,6 @@ export interface FileRoutesById {
   '/_authenticated/admin/programs': typeof AuthenticatedAdminProgramsRoute
   '/_authenticated/admin/purchases': typeof AuthenticatedAdminPurchasesRouteWithChildren
   '/_authenticated/admin/recipes': typeof AuthenticatedAdminRecipesRoute
-  '/_authenticated/admin/resources': typeof AuthenticatedAdminResourcesRoute
   '/_authenticated/admin/settings': typeof AuthenticatedAdminSettingsRoute
   '/_authenticated/admin/sops': typeof AuthenticatedAdminSopsRoute
   '/_authenticated/admin/tasks': typeof AuthenticatedAdminTasksRoute
@@ -1383,7 +1373,6 @@ export interface FileRouteTypes {
     | '/admin/programs'
     | '/admin/purchases'
     | '/admin/recipes'
-    | '/admin/resources'
     | '/admin/settings'
     | '/admin/sops'
     | '/admin/tasks'
@@ -1516,7 +1505,6 @@ export interface FileRouteTypes {
     | '/admin/programs'
     | '/admin/purchases'
     | '/admin/recipes'
-    | '/admin/resources'
     | '/admin/settings'
     | '/admin/sops'
     | '/admin/tasks'
@@ -1653,7 +1641,6 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/programs'
     | '/_authenticated/admin/purchases'
     | '/_authenticated/admin/recipes'
-    | '/_authenticated/admin/resources'
     | '/_authenticated/admin/settings'
     | '/_authenticated/admin/sops'
     | '/_authenticated/admin/tasks'
@@ -2113,13 +2100,6 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/admin/settings'
       preLoaderRoute: typeof AuthenticatedAdminSettingsRouteImport
-      parentRoute: typeof AuthenticatedAdminRouteRoute
-    }
-    '/_authenticated/admin/resources': {
-      id: '/_authenticated/admin/resources'
-      path: '/resources'
-      fullPath: '/admin/resources'
-      preLoaderRoute: typeof AuthenticatedAdminResourcesRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
     '/_authenticated/admin/recipes': {
@@ -2816,7 +2796,6 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminProgramsRoute: typeof AuthenticatedAdminProgramsRoute
   AuthenticatedAdminPurchasesRoute: typeof AuthenticatedAdminPurchasesRouteWithChildren
   AuthenticatedAdminRecipesRoute: typeof AuthenticatedAdminRecipesRoute
-  AuthenticatedAdminResourcesRoute: typeof AuthenticatedAdminResourcesRoute
   AuthenticatedAdminSettingsRoute: typeof AuthenticatedAdminSettingsRoute
   AuthenticatedAdminSopsRoute: typeof AuthenticatedAdminSopsRoute
   AuthenticatedAdminTasksRoute: typeof AuthenticatedAdminTasksRoute
@@ -2895,7 +2874,6 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
     AuthenticatedAdminPurchasesRoute:
       AuthenticatedAdminPurchasesRouteWithChildren,
     AuthenticatedAdminRecipesRoute: AuthenticatedAdminRecipesRoute,
-    AuthenticatedAdminResourcesRoute: AuthenticatedAdminResourcesRoute,
     AuthenticatedAdminSettingsRoute: AuthenticatedAdminSettingsRoute,
     AuthenticatedAdminSopsRoute: AuthenticatedAdminSopsRoute,
     AuthenticatedAdminTasksRoute: AuthenticatedAdminTasksRoute,
