@@ -48,6 +48,97 @@ export function fmtTime(iso: string) {
 
 export const LINK_RE = /\bhttps?:\/\/[^\s)]+/gi;
 
+/** Matches Google Meet links (meet.google.com/abc-defg-hij or stream.meet.google.com/…). */
+export const MEET_RE = /\bhttps?:\/\/(?:[a-z0-9-]+\.)*meet\.google\.com\/[A-Za-z0-9_\-?=&./]+/gi;
+
+/** Strip trailing punctuation that often follows a pasted URL inside prose. */
+function trimUrl(u: string) {
+  return u.replace(/[)\].,;:!?]+$/, "");
+}
+
+/** Standalone Google Meet call card. */
+export function MeetCallCard({ url, mine }: { url: string; mine: boolean }) {
+  const code = (() => {
+    try {
+      const p = new URL(url).pathname.replace(/^\/+/, "").split("/")[0];
+      return p || "";
+    } catch { return ""; }
+  })();
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noreferrer"
+      className={cn(
+        "mt-1 flex w-full max-w-[280px] items-center gap-3 rounded-2xl border p-3 transition hover:opacity-95",
+        mine
+          ? "border-primary-foreground/25 bg-primary-foreground/10"
+          : "border-border bg-background/70",
+      )}
+    >
+      <div className={cn(
+        "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl",
+        mine ? "bg-primary-foreground/20" : "bg-primary/10",
+      )}>
+        <Video className={cn("h-5 w-5", mine ? "text-primary-foreground" : "text-primary")} />
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="text-[13px] font-semibold leading-tight">Google Meet Call</div>
+        <div className={cn(
+          "truncate text-[11px]",
+          mine ? "text-primary-foreground/75" : "text-muted-foreground",
+        )}>
+          {code || "Join the video call"}
+        </div>
+        <div className={cn(
+          "mt-1.5 inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-semibold",
+          mine ? "bg-primary-foreground text-primary" : "bg-primary text-primary-foreground",
+        )}>
+          <Video className="h-3 w-3" />
+          Join Google Meet
+        </div>
+      </div>
+    </a>
+  );
+}
+
+/**
+ * Renders a message body, replacing any Google Meet URL with a clean call card
+ * while preserving surrounding text.
+ */
+export function renderBodyWithMeet(body: string, mine: boolean) {
+  if (!body) return null;
+  const parts: Array<{ type: "text" | "meet"; value: string }> = [];
+  let lastIdx = 0;
+  const re = new RegExp(MEET_RE.source, MEET_RE.flags);
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(body)) !== null) {
+    if (m.index > lastIdx) parts.push({ type: "text", value: body.slice(lastIdx, m.index) });
+    parts.push({ type: "meet", value: trimUrl(m[0]) });
+    lastIdx = m.index + m[0].length;
+  }
+  if (lastIdx < body.length) parts.push({ type: "text", value: body.slice(lastIdx) });
+
+  if (parts.length === 0 || !parts.some((p) => p.type === "meet")) {
+    return <div className="whitespace-pre-wrap break-words">{body}</div>;
+  }
+
+  return (
+    <div className="space-y-1.5">
+      {parts.map((p, i) => {
+        if (p.type === "text") {
+          const trimmed = p.value.replace(/^\s+|\s+$/g, "");
+          if (!trimmed) return null;
+          return (
+            <div key={i} className="whitespace-pre-wrap break-words">{trimmed}</div>
+          );
+        }
+        return <MeetCallCard key={i} url={p.value} mine={mine} />;
+      })}
+    </div>
+  );
+}
+
 export function fmtBytes(n?: number) {
   if (!n) return "";
   if (n < 1024) return `${n} B`;
