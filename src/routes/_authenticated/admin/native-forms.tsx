@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
-import { Plus, Trash2, Copy, GripVertical, FileEdit, ChevronUp, ChevronDown, Archive, ExternalLink, Search, Eye } from "lucide-react";
+import { Plus, Trash2, Copy, GripVertical, FileEdit, ChevronUp, ChevronDown, Archive, ExternalLink, Search, Eye, Send } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import {
   listForms, upsertForm, duplicateForm, archiveForm,
@@ -38,6 +38,7 @@ export const Route = createFileRoute("/_authenticated/admin/native-forms")({
 function AdminNativeForms() {
   const qc = useQueryClient();
   const [editing, setEditing] = useState<NfForm | null>(null);
+  const [editTab, setEditTab] = useState<"settings" | "questions" | "assign">("settings");
   const [creating, setCreating] = useState<NfKind | null>(null);
   const deleteFormsFn = useServerFn(deleteNativeForms);
   const syncFilloutFn = useServerFn(syncFilloutForms);
@@ -136,12 +137,21 @@ function AdminNativeForms() {
           </Card>
         )}
         {forms.map((f) => {
-          return <FormRow key={f.id} form={f} selected={formSelection.isSelected(f.id)} onSelect={(checked) => formSelection.setOne(f.id, checked)} onEdit={() => setEditing(f)} />;
+          return (
+            <FormRow
+              key={f.id}
+              form={f}
+              selected={formSelection.isSelected(f.id)}
+              onSelect={(checked) => formSelection.setOne(f.id, checked)}
+              onEdit={() => { setEditTab("settings"); setEditing(f); }}
+              onSend={() => { setEditTab("assign"); setEditing(f); }}
+            />
+          );
         })}
       </div>
 
       {editing && (
-        <FormEditorDialog form={editing} open onClose={() => setEditing(null)} />
+        <FormEditorDialog form={editing} open onClose={() => setEditing(null)} initialTab={editTab} />
       )}
 
       <NewFormDialog open={!!creating} onPick={handleCreate} onClose={() => setCreating(null)} />
@@ -176,11 +186,13 @@ function FormRow({
   selected,
   onSelect,
   onEdit,
+  onSend,
 }: {
   form: NfForm;
   selected: boolean;
   onSelect: (checked: boolean) => void;
   onEdit: () => void;
+  onSend: () => void;
 }) {
   const qc = useQueryClient();
   const { data: questions = [] } = useQuery({
@@ -225,6 +237,9 @@ function FormRow({
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Button size="sm" onClick={onSend} className="bg-gradient-primary font-bold">
+            <Send className="mr-1 h-4 w-4" /> Send / Assign
+          </Button>
           <Button variant="outline" size="sm" onClick={onEdit}><FileEdit className="mr-1 h-4 w-4" /> Edit</Button>
           <Button variant="outline" size="sm" onClick={async () => {
             await duplicateForm(form.id);
@@ -241,10 +256,10 @@ function FormRow({
   );
 }
 
-function FormEditorDialog({ form, open, onClose }: { form: NfForm; open: boolean; onClose: () => void }) {
+function FormEditorDialog({ form, open, onClose, initialTab = "settings" }: { form: NfForm; open: boolean; onClose: () => void; initialTab?: "settings" | "questions" | "assign" }) {
   const qc = useQueryClient();
   const [local, setLocal] = useState<NfForm>(form);
-  const [activeTab, setActiveTab] = useState<"settings" | "questions" | "assign">("settings");
+  const [activeTab, setActiveTab] = useState<"settings" | "questions" | "assign">(initialTab);
 
   const { data: questions = [] } = useQuery({
     queryKey: ["nf-questions", form.id],
