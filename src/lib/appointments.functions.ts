@@ -322,8 +322,6 @@ export const rescheduleAppointment = createServerFn({ method: "POST" })
     const { data: updated, error } = await supabase.from("appointments").update({
       starts_at: data.starts_at,
       ends_at: data.ends_at,
-      rescheduled_at: new Date().toISOString(),
-      rescheduled_by: userId,
     }).eq("id", data.id).select("*").single();
     if (error) throw new Error(error.message);
 
