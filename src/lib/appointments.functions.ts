@@ -298,3 +298,82 @@ export const listMyPortalAppointments = createServerFn({ method: "GET" })
   });
 
 export { APPT_TYPES };
+
+export const rescheduleAppointment = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({
+    id: z.string().uuid(),
+    starts_at: z.string(),
+    ends_at: z.string(),
+  }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context as any;
+    const { data: existing } = await supabase.from("appointments").select("*").eq("id", data.id).maybeSingle();
+    if (!existing) throw new Error("Appointment not found");
+
+    // Permission: host coach, admin, or the client themselves (RLS will catch others, but be explicit)
+    const { data: client } = await supabase.from("clients").select("id").eq("user_id", userId).maybeSingle();
+    const isClientOwner = client && existing.client_id === client.id;
+    const { data: coach } = await supabase.from("coaches").select("id").eq("user_id", userId).maybeSingle();
+    const isCoach = coach && existing.host_coach_id === coach.id;
+    const adminFlag = await isAdmin(supabase, userId);
+    if (!isClientOwner && !isCoach && !adminFlag) throw new Error("Not allowed");
+
+    const { data: updated, error } = await supabase.from("appointments").update({
+      starts_at: data.starts_at,
+      ends_at: data.ends_at,
+      rescheduled_at: new Date().toISOString(),
+      rescheduled_by: userId,
+    }).eq("id", data.id).select("*").single();
+    if (error) throw new Error(error.message);
+
+    if (existing.google_event_id) {
+      try {
+        const { gcalUpdateEvent } = await import("./google-cal.server");
+        await gcalUpdateEvent(existing.host_coach_id, existing.google_event_id, {
+          start: { dateTime: data.starts_at, timeZone: existing.timezone },
+          end: { dateTime: data.ends_at, timeZone: existing.timezone },
+        });
+      } catch (e: any) {
+        const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+        await supabaseAdmin.from("appointment_audit_log").insert({
+          appointment_id: data.id, actor_user_id: userId, action: "google_sync_failed",
+          details: { phase: "reschedule", error: String(e?.message ?? e) },
+        });
+      }
+    }
+
+    await clearPendingReminders(data.id);
+    if (updated.sms_reminders_enabled) {
+      await scheduleReminders({
+        appointmentId: data.id,
+        startsAt: data.starts_at,
+        offsetsMinutes: defaultReminderOffsets(!!updated.meet_link),
+        hasAttendee: !!(updated.external_phone || updated.client_id),
+        hasHostPhone: true,
+      });
+    }
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    await supabaseAdmin.from("appointment_audit_log").insert({
+      appointment_id: data.id, actor_user_id: userId, action: "rescheduled",
+      details: { from: existing.starts_at, to: data.starts_at, by_role: isClientOwner ? "client" : isCoach ? "coach" : "admin" },
+    });
+    return updated;
+  });
+
+/** Upcoming appointments for the bell (next 24h). */
+export const listUpcomingForBell = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { supabase } = context as any;
+    const now = new Date();
+    const end = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+    const { data } = await supabase.from("appointments")
+      .select("id, title, starts_at, meet_link, status, host_coach:coaches!appointments_host_coach_id_fkey(full_name), client:clients(full_name)")
+      .gte("starts_at", now.toISOString())
+      .lte("starts_at", end.toISOString())
+      .neq("status", "Cancelled")
+      .order("starts_at")
+      .limit(10);
+    return data ?? [];
+  });
