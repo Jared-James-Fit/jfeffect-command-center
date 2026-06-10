@@ -5,7 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Link } from "@tanstack/react-router";
-import { ShoppingBag, Plus, CheckCircle2, Copy, ExternalLink, Send, AlertTriangle, Ban, Trash2 } from "lucide-react";
+import { ShoppingBag, Plus, CheckCircle2, Copy, ExternalLink, Send, AlertTriangle, Ban, Trash2, CreditCard } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   AlertDialog,
@@ -29,6 +29,7 @@ import {
 } from "@/lib/payments.functions";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { SendPaymentRequestDialog } from "@/components/send-payment-request-dialog";
 
 function statusTone(s?: string | null) {
   switch (s) {
@@ -64,7 +65,13 @@ function requestLabel(s?: string | null) {
 export function PurchaseRecordsPanel({ clientId }: { clientId: string }) {
   const [picker, setPicker] = useState(false);
   const [chosenOffer, setChosenOffer] = useState<any | null>(null);
+  const [payDlg, setPayDlg] = useState<{ open: boolean; purchaseId: string; hasLink?: boolean }>({ open: false, purchaseId: "" });
   const qc = useQueryClient();
+
+  const { data: clientLite } = useQuery({
+    queryKey: ["client-lite", clientId],
+    queryFn: async () => (await supabase.from("clients").select("full_name, phone").eq("id", clientId).maybeSingle()).data,
+  });
   const updateFn = useServerFn(updatePurchasePayment);
   const sendFn = useServerFn(sendPaymentLinkEmail);
   const cancelFn = useServerFn(cancelPurchaseRequest);
