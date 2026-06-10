@@ -38,6 +38,8 @@ import { GifThumb } from "@/components/gif-thumb";
 import { fallbackEmoji } from "@/lib/gif-fallback";
 import { markRecent as markSoundRecent } from "@/lib/chat-sounds";
 import { ChatSoundCard } from "@/components/chat-sound-card";
+import { renderBodyWithMeet } from "@/components/chat-shared";
+import { MeetQuickAction } from "@/components/meet-quick-action";
 import {
   Paperclip, Send, X, FileText, Image as ImageIcon, Video, Link as LinkIcon, ExternalLink,
   Mic, Trash2, Play, Pause, Camera, File as FileIcon, Flag, AlertCircle, AlertTriangle,
@@ -1198,7 +1200,7 @@ export function MessageThread({
                     </div>
                   </div>
                 ) : (
-                  m.body && <div className="whitespace-pre-wrap break-words">{m.body}</div>
+                  m.body && renderBodyWithMeet(m.body, mine)
                 )}
                 {!isDeleted && !isEditing && m.attachments?.length > 0 && (
                   <div className={cn("mt-2 space-y-2", m.body ? "" : "")}>
@@ -1516,6 +1518,15 @@ export function MessageThread({
             )}
 
             {/* Priority selector removed for simplicity. */}
+
+            {role === "admin" && (
+              <MeetQuickAction
+                disabled={sending || uploading}
+                onInsert={(text) =>
+                  setBody((b) => (b ? `${b.replace(/\s+$/, "")} ${text}` : text))
+                }
+              />
+            )}
 
             {/* Textarea */}
             <Textarea
