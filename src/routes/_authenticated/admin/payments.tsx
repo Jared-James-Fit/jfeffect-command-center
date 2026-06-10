@@ -9,10 +9,11 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CheckCircle2, Copy, ExternalLink, Download, AlertTriangle, Send, DollarSign } from "lucide-react";
+import { CheckCircle2, Copy, ExternalLink, Download, AlertTriangle, Send, DollarSign, CreditCard } from "lucide-react";
 import { toast } from "sonner";
 import { updatePurchasePayment, sendPaymentLinkEmail } from "@/lib/payments.functions";
 import { PAYMENT_STATUS_DETAILED } from "@/lib/offers";
+import { SendPaymentRequestDialog } from "@/components/send-payment-request-dialog";
 
 export const Route = createFileRoute("/_authenticated/admin/payments")({ component: PaymentsPage });
 
@@ -42,6 +43,7 @@ function PaymentsPage() {
 
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [q, setQ] = useState("");
+  const [payDlg, setPayDlg] = useState<{ open: boolean; purchaseId: string; clientName?: string | null; hasPhone?: boolean; hasLink?: boolean }>({ open: false, purchaseId: "" });
 
   const { data: records = [] } = useQuery({
     queryKey: ["all-payments"],
