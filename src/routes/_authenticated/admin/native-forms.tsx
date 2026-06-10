@@ -24,6 +24,7 @@ import {
   type NfForm, type NfQuestion, type NfQuestionType, type NfRecurrence, type NfKind, type NfOpenStyle,
 } from "@/lib/native-forms";
 import { deleteNativeForms, replaceNativeFormAssignments, updateNativeFormAccess } from "@/lib/native-forms.functions";
+import { syncFilloutForms } from "@/lib/fillout-sync.functions";
 import { useBulkSelection } from "@/hooks/use-bulk-selection";
 import { useClientImpersonation } from "@/lib/client-impersonation";
 import { ActionButton } from "@/components/action-button";
@@ -39,6 +40,25 @@ function AdminNativeForms() {
   const [editing, setEditing] = useState<NfForm | null>(null);
   const [creating, setCreating] = useState<NfKind | null>(null);
   const deleteFormsFn = useServerFn(deleteNativeForms);
+  const syncFilloutFn = useServerFn(syncFilloutForms);
+  const [syncing, setSyncing] = useState(false);
+
+  async function handleSyncFillout() {
+    setSyncing(true);
+    try {
+      const r = await syncFilloutFn();
+      if (!r.ok) {
+        toast.error(r.error ?? "Fillout sync failed");
+        return;
+      }
+      await qc.invalidateQueries({ queryKey: ["nf-forms"] });
+      toast.success(`Fillout: ${r.fetched} forms · ${r.created} new · ${r.updated} updated`);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Fillout sync failed");
+    } finally {
+      setSyncing(false);
+    }
+  }
 
   const { data: forms = [] } = useQuery({ queryKey: ["nf-forms"], queryFn: () => listForms({ includeArchived: true }) });
   const formSelection = useBulkSelection(useMemo(() => forms.map((form) => form.id), [forms]));
@@ -80,7 +100,12 @@ function AdminNativeForms() {
   return (
     <>
       <PageHeader title="Check-Ins & Form Builder" subtitle="Build native forms or embed external check-ins, then assign them to clients." actions={
-        <Button onClick={() => setCreating("native")} className="bg-gradient-primary font-bold"><Plus className="mr-2 h-4 w-4" /> New Form</Button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={handleSyncFillout} disabled={syncing}>
+            <ExternalLink className="mr-2 h-4 w-4" /> {syncing ? "Syncing…" : "Sync from Fillout"}
+          </Button>
+          <Button onClick={() => setCreating("native")} className="bg-gradient-primary font-bold"><Plus className="mr-2 h-4 w-4" /> New Form</Button>
+        </div>
       } />
       <div className="space-y-3 p-4 md:p-6">
         {forms.length > 0 && (
