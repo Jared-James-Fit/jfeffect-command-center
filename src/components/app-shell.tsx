@@ -182,6 +182,38 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
   const grouped = useMemo(() => groupNavItems(items), [items]);
   const allGroupLabels = useMemo(() => grouped.map((g) => g.label).filter(Boolean) as string[], [grouped]);
   const bottomItems = customBottomItems ?? items.slice(0, 5);
+
+  // ── Sidebar pinned shortcuts (per-role) ───────────────────────────────
+  const pinScope: PinScope = useMemo(() => {
+    const t = (title || "").toLowerCase();
+    if (t.includes("admin")) return "admin";
+    if (t.includes("coach")) return "coach";
+    if (t.includes("member")) return "member";
+    if (t.includes("client") || t.includes("portal")) return "client";
+    return "admin";
+  }, [title]);
+  const { pins, isPinned, toggle: togglePin, count: pinCount } = useSidebarPins(pinScope);
+  const navByTo = useMemo(() => {
+    const m = new Map<string, NavItem>();
+    for (const it of items) m.set(it.to, it);
+    return m;
+  }, [items]);
+  const pinnedItems = useMemo(
+    () => pins.map((to) => navByTo.get(to)).filter(Boolean) as NavItem[],
+    [pins, navByTo],
+  );
+  const onTogglePin = (it: NavItem) => {
+    const r = togglePin(it.to);
+    if (r.full) toast.error(`Pinned shortcuts are full (${MAX_PINS} max)`);
+    else if (r.pinned) toast.success(`Pinned ${it.label}`);
+    else toast.message(`Unpinned ${it.label}`);
+  };
+  const onRestoreDefaults = () => {
+    restoreSidebarDefaults(pinScope);
+    setMode("expanded");
+    toast.success("Sidebar restored to defaults");
+  };
+
   // Sections that contain the currently active route should auto-open.
   const activeGroupLabel = useMemo(() => {
     for (const g of grouped) {
