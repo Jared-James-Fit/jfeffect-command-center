@@ -3,7 +3,7 @@ import { Link, useRouterState, useNavigate } from "@tanstack/react-router";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import {
-  LogOut, ChevronLeft, ChevronRight, ChevronDown, Search, Settings as SettingsIcon, ArrowLeft, MoreHorizontal,
+  LogOut, ChevronLeft, ChevronRight, ChevronDown, Search, Settings as SettingsIcon, ArrowLeft, MoreHorizontal, Layers,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { NotificationBell } from "@/components/notification-bell";
@@ -21,12 +21,15 @@ import {
 } from "@/components/ui/command";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
+import { useRef } from "react";
 
 export interface NavItem {
   to: string;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
   group?: string;
+  /** Optional grouped sub-items shown on tap/long-press in the mobile bottom bar. */
+  children?: NavItem[];
 }
 
 function groupNavItems(items: NavItem[]) {
