@@ -265,6 +265,14 @@ export function PurchaseRecordsPanel({ clientId }: { clientId: string }) {
       </Dialog>
 
       <AssignOfferDialog offer={chosenOffer} fixedClientId={clientId} onClose={() => setChosenOffer(null)} />
+      <SendPaymentRequestDialog
+        open={payDlg.open}
+        onOpenChange={(o) => setPayDlg((p) => ({ ...p, open: o }))}
+        purchaseId={payDlg.purchaseId}
+        clientName={clientLite?.full_name}
+        hasPhone={!!clientLite?.phone}
+        hasLink={payDlg.hasLink}
+      />
     </Card>
   );
 }
