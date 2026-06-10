@@ -31,7 +31,7 @@ function StatCard({ label, value, icon: Icon, tone = "default" }: { label: strin
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="text-[10px] uppercase tracking-widest text-muted-foreground">{label}</div>
-          <div className="mt-1 text-2xl font-black tracking-tight md:text-3xl">{value}</div>
+          <div className="mt-1 text-xl font-black tracking-tight sm:text-2xl md:text-3xl">{value}</div>
         </div>
         <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-md ${
           tone === "primary" ? "bg-gradient-primary text-primary-foreground" :
