@@ -53,6 +53,14 @@ export type LiftVideo = {
   file_size_bytes?: number | null;
   upload_status?: string | null;
   playback_error?: string | null;
+  archive_status?: "not_archived" | "pending" | "archiving" | "archived" | "failed" | string | null;
+  archive_error?: string | null;
+  archive_attempts?: number | null;
+  archive_next_attempt_at?: string | null;
+  archive_last_attempt_at?: string | null;
+  drive_file_id?: string | null;
+  drive_url?: string | null;
+  drive_folder_id?: string | null;
   status: LiftVideoStatus;
   watched_at: string | null;
   watched_by: string | null;
