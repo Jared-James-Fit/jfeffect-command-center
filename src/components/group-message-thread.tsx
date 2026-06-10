@@ -32,8 +32,8 @@ import { markRecent } from "@/lib/chat-gifs";
 import { markRecent as markSoundRecent } from "@/lib/chat-sounds";
 import { fallbackEmoji } from "@/lib/gif-fallback";
 import {
-  AttachmentView, LiveWaveform, WaveformBars, useVoiceRecorder, useSignedUrl,
-  attachIcon, fakePeaks, fmtBytes, fmtDuration, fmtTime, fileToAttachmentType,
+  AttachmentView, LiveWaveform, WaveformBars, useVoiceRecorder,
+  attachIcon, fakePeaks, fmtDuration, fmtTime,
   uploadAttachmentToPath, LINK_RE, type SharedAttachment,
 } from "@/components/chat-shared";
 import {
@@ -41,7 +41,6 @@ import {
   Mic, Trash2, Play, Pause, Square, Loader2, MoreHorizontal, Pencil, Check,
   CheckCircle2, Circle, CheckSquare, Copy,
 } from "lucide-react";
-import { format, parseISO } from "date-fns";
 import { toast } from "sonner";
 
 async function uploadGroupFile(groupId: string, file: File): Promise<GroupAttachment> {
