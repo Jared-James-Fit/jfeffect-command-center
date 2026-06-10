@@ -446,43 +446,38 @@ export function LiftVideoCard({ video, role, userId, onChanged, onEdit, clientNa
                 {c.is_internal_note && <Badge variant="outline" className="border-warning/40 bg-warning/10 text-warning">Internal</Badge>}
                 <span>· {format(parseISO(c.created_at), "MMM d, h:mm a")}</span>
               </div>
-              <div className="whitespace-pre-wrap text-foreground">{c.body}</div>
+              {c.body && <div className="whitespace-pre-wrap text-foreground">{c.body}</div>}
+              <LiftCommentAttachments list={c.attachments} />
             </div>
           ))}
         </div>
-        <Textarea
-          rows={2}
+        <LiftCommentComposer
+          clientId={video.client_id}
           placeholder={role === "admin" ? "Reply to client…" : "Reply to Coach Jared…"}
-          value={commentBody}
-          onChange={(e) => setCommentBody(e.target.value)}
+          appendText={quickReply}
+          onSend={handleSend}
+          trailing={role === "admin" ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button size="icon" variant="ghost" type="button" className="h-9 w-9 shrink-0 rounded-full" title="Quick reply">
+                  <Zap className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-72">
+                {LIFT_VIDEO_QUICK_REPLIES.map((q) => (
+                  <DropdownMenuItem key={q} onClick={() => setQuickReply({ text: q, nonce: Date.now() })}>
+                    <span className="text-xs">{q}</span>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : undefined}
         />
-        <div className="flex items-center justify-between gap-2">
-          {role === "admin" ? (
-            <div className="flex items-center gap-3">
-              <label className="flex items-center gap-2 text-xs text-muted-foreground">
-                <Switch checked={isInternal} onCheckedChange={setIsInternal} /> Internal note
-              </label>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button size="sm" variant="outline" type="button">
-                    <Zap className="mr-1 h-3 w-3" /> Quick reply
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-72">
-                  {LIFT_VIDEO_QUICK_REPLIES.map((q) => (
-                    <DropdownMenuItem key={q} onClick={() => setCommentBody((b) => (b ? `${b}\n${q}` : q))}>
-                      <span className="text-xs">{q}</span>
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-          ) : <div />}
-          <Button size="sm" onClick={post} disabled={posting || !commentBody.trim()}>
-            {posting ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : null}
-            {role === "admin" ? "Send Feedback" : "Send Reply"}
-          </Button>
-        </div>
+        {role === "admin" && (
+          <label className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Switch checked={isInternal} onCheckedChange={setIsInternal} /> Internal note
+          </label>
+        )}
       </div>
     </Card>
   );
