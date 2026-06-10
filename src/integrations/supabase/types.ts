@@ -2585,6 +2585,57 @@ export type Database = {
         }
         Relationships: []
       }
+      coaching_applications: {
+        Row: {
+          budget_range: string | null
+          created_at: string
+          email: string
+          full_name: string
+          goals: string | null
+          id: string
+          notes_admin: string | null
+          phone: string | null
+          schedule: string | null
+          source: string
+          status: string
+          timeline: string | null
+          training_history: string | null
+          updated_at: string
+        }
+        Insert: {
+          budget_range?: string | null
+          created_at?: string
+          email: string
+          full_name: string
+          goals?: string | null
+          id?: string
+          notes_admin?: string | null
+          phone?: string | null
+          schedule?: string | null
+          source?: string
+          status?: string
+          timeline?: string | null
+          training_history?: string | null
+          updated_at?: string
+        }
+        Update: {
+          budget_range?: string | null
+          created_at?: string
+          email?: string
+          full_name?: string
+          goals?: string | null
+          id?: string
+          notes_admin?: string | null
+          phone?: string | null
+          schedule?: string | null
+          source?: string
+          status?: string
+          timeline?: string | null
+          training_history?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       coaching_products: {
         Row: {
           active: boolean
@@ -7377,6 +7428,66 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      sales_pages: {
+        Row: {
+          created_at: string
+          hero_headline: string
+          hero_image_url: string | null
+          hero_subheadline: string
+          page_key: string
+          primary_cta_kind: string
+          primary_cta_label: string
+          primary_cta_url: string | null
+          promo_message: string | null
+          published: boolean
+          secondary_cta_href: string | null
+          secondary_cta_label: string | null
+          sections: Json
+          testimonials: Json
+          updated_at: string
+          updated_by: string | null
+          visuals: Json
+        }
+        Insert: {
+          created_at?: string
+          hero_headline?: string
+          hero_image_url?: string | null
+          hero_subheadline?: string
+          page_key: string
+          primary_cta_kind?: string
+          primary_cta_label?: string
+          primary_cta_url?: string | null
+          promo_message?: string | null
+          published?: boolean
+          secondary_cta_href?: string | null
+          secondary_cta_label?: string | null
+          sections?: Json
+          testimonials?: Json
+          updated_at?: string
+          updated_by?: string | null
+          visuals?: Json
+        }
+        Update: {
+          created_at?: string
+          hero_headline?: string
+          hero_image_url?: string | null
+          hero_subheadline?: string
+          page_key?: string
+          primary_cta_kind?: string
+          primary_cta_label?: string
+          primary_cta_url?: string | null
+          promo_message?: string | null
+          published?: boolean
+          secondary_cta_href?: string | null
+          secondary_cta_label?: string | null
+          sections?: Json
+          testimonials?: Json
+          updated_at?: string
+          updated_by?: string | null
+          visuals?: Json
+        }
+        Relationships: []
       }
       signnow_settings: {
         Row: {
