@@ -49,7 +49,7 @@ function PaymentsPage() {
     queryKey: ["all-payments"],
     queryFn: async () => (await supabase
       .from("purchase_records")
-      .select("*, clients(id, full_name, email)")
+      .select("*, clients(id, full_name, email, phone)")
       .order("purchased_at", { ascending: false })).data ?? [],
   });
 
@@ -186,6 +186,15 @@ function PaymentsPage() {
                   {r.stripe_payment_link && r.clients?.email && (
                     <Button size="sm" variant="ghost" onClick={() => sendEmail(r.id)}><Send className="mr-1 h-3 w-3" />Email link</Button>
                   )}
+                  {r.stripe_payment_link && (
+                    <Button size="sm" variant="outline" onClick={() => setPayDlg({
+                      open: true,
+                      purchaseId: r.id,
+                      clientName: r.clients?.full_name,
+                      hasPhone: !!r.clients?.phone,
+                      hasLink: !!r.stripe_payment_link,
+                    })}><CreditCard className="mr-1 h-3 w-3" />Send request</Button>
+                  )}
                   {r.stripe_receipt_url && (
                     <a href={r.stripe_receipt_url} target="_blank" rel="noreferrer"><Button size="sm" variant="ghost">Receipt</Button></a>
                   )}
@@ -195,6 +204,14 @@ function PaymentsPage() {
           </div>
         )}
       </div>
+      <SendPaymentRequestDialog
+        open={payDlg.open}
+        onOpenChange={(o) => setPayDlg((p) => ({ ...p, open: o }))}
+        purchaseId={payDlg.purchaseId}
+        clientName={payDlg.clientName}
+        hasPhone={payDlg.hasPhone}
+        hasLink={payDlg.hasLink}
+      />
     </>
   );
 }
