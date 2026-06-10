@@ -165,7 +165,7 @@ function ClientCheckInsList() {
                     f.external_url ? (
                       <Button asChild className="bg-gradient-primary font-bold">
                         <a
-                          href={buildFilloutUrl(f.external_url, client)}
+                          href={(f as any).requires_client_identity === false ? f.external_url : buildFilloutUrl(f.external_url, client)}
                           target="_blank"
                           rel="noreferrer"
                           onClick={() => {
