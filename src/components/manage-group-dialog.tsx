@@ -16,9 +16,11 @@ import { Search, Trash2, Archive } from "lucide-react";
 import { toast } from "sonner";
 import {
   updateGroupChat, addGroupMembers, removeGroupMember,
+  deleteGroupChats,
 } from "@/lib/group-chats.functions";
 import type { ChatGroup } from "@/lib/group-chats";
 import { listGroupMembers } from "@/lib/group-chats";
+import { useAuth } from "@/lib/auth";
 
 export function ManageGroupDialog({
   open, onOpenChange, group,
@@ -27,6 +29,9 @@ export function ManageGroupDialog({
   const update = useServerFn(updateGroupChat);
   const addMembers = useServerFn(addGroupMembers);
   const removeMember = useServerFn(removeGroupMember);
+  const deleteGroups = useServerFn(deleteGroupChats);
+  const { role } = useAuth();
+  const isAdmin = role === "admin";
 
   const [name, setName] = useState(group.name);
   const [description, setDescription] = useState(group.description ?? "");
@@ -103,6 +108,17 @@ export function ManageGroupDialog({
     try {
       await update({ data: { group_id: group.id, archived: !group.archived } as any });
       toast.success(group.archived ? "Unarchived" : "Archived");
+      qc.invalidateQueries({ queryKey: ["chat-groups"] });
+      onOpenChange(false);
+    } catch (e: any) { toast.error(e?.message ?? "Failed"); }
+  };
+
+  const doDelete = async () => {
+    if (!isAdmin) return;
+    if (!window.confirm(`Permanently delete "${group.name}" and all its messages? This can't be undone.`)) return;
+    try {
+      await deleteGroups({ data: { group_ids: [group.id] } as any });
+      toast.success("Group deleted");
       qc.invalidateQueries({ queryKey: ["chat-groups"] });
       onOpenChange(false);
     } catch (e: any) { toast.error(e?.message ?? "Failed"); }
