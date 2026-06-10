@@ -931,6 +931,12 @@ function ClientDetail() {
         </AlertDialogContent>
       </AlertDialog>
       <PriceCardPickerDialog open={priceCardOpen} onClose={() => setPriceCardOpen(false)} fixedClientId={id} />
+      <SendBookingLinkDialog
+        open={bookingLinkOpen}
+        onOpenChange={setBookingLinkOpen}
+        defaultPhone={form.phone}
+        defaultEmail={form.email}
+      />
 
       <AlertDialog open={pwOpen} onOpenChange={(o) => !pwSaving && setPwOpen(o)}>
         <AlertDialogContent>
