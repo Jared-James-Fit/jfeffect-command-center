@@ -128,6 +128,7 @@ import { Route as AuthenticatedAdminSettingsSmsRouteImport } from './routes/_aut
 import { Route as AuthenticatedAdminSettingsChatRouteImport } from './routes/_authenticated/admin/settings_.chat'
 import { Route as AuthenticatedAdminPurchasesIdRouteImport } from './routes/_authenticated/admin/purchases.$id'
 import { Route as AuthenticatedAdminProgramLibraryTemplateIdRouteImport } from './routes/_authenticated/admin/program-library_.$templateId'
+import { Route as AuthenticatedAdminMembershipSalesPageRouteImport } from './routes/_authenticated/admin/membership.sales-page'
 import { Route as AuthenticatedAdminMembershipActionNeededRouteImport } from './routes/_authenticated/admin/membership.action-needed'
 import { Route as AuthenticatedAdminMembersNewRouteImport } from './routes/_authenticated/admin/members.new'
 import { Route as AuthenticatedAdminMembersMemberIdRouteImport } from './routes/_authenticated/admin/members.$memberId'
@@ -829,6 +830,12 @@ const AuthenticatedAdminProgramLibraryTemplateIdRoute =
     path: '/program-library/$templateId',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
+const AuthenticatedAdminMembershipSalesPageRoute =
+  AuthenticatedAdminMembershipSalesPageRouteImport.update({
+    id: '/sales-page',
+    path: '/sales-page',
+    getParentRoute: () => AuthenticatedAdminMembershipRoute,
+  } as any)
 const AuthenticatedAdminMembershipActionNeededRoute =
   AuthenticatedAdminMembershipActionNeededRouteImport.update({
     id: '/action-needed',
@@ -1048,6 +1055,7 @@ export interface FileRoutesByFullPath {
   '/admin/members/$memberId': typeof AuthenticatedAdminMembersMemberIdRoute
   '/admin/members/new': typeof AuthenticatedAdminMembersNewRoute
   '/admin/membership/action-needed': typeof AuthenticatedAdminMembershipActionNeededRoute
+  '/admin/membership/sales-page': typeof AuthenticatedAdminMembershipSalesPageRoute
   '/admin/program-library/$templateId': typeof AuthenticatedAdminProgramLibraryTemplateIdRoute
   '/admin/purchases/$id': typeof AuthenticatedAdminPurchasesIdRoute
   '/admin/settings/chat': typeof AuthenticatedAdminSettingsChatRoute
@@ -1183,6 +1191,7 @@ export interface FileRoutesByTo {
   '/admin/members/$memberId': typeof AuthenticatedAdminMembersMemberIdRoute
   '/admin/members/new': typeof AuthenticatedAdminMembersNewRoute
   '/admin/membership/action-needed': typeof AuthenticatedAdminMembershipActionNeededRoute
+  '/admin/membership/sales-page': typeof AuthenticatedAdminMembershipSalesPageRoute
   '/admin/program-library/$templateId': typeof AuthenticatedAdminProgramLibraryTemplateIdRoute
   '/admin/purchases/$id': typeof AuthenticatedAdminPurchasesIdRoute
   '/admin/settings/chat': typeof AuthenticatedAdminSettingsChatRoute
@@ -1324,6 +1333,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/members/$memberId': typeof AuthenticatedAdminMembersMemberIdRoute
   '/_authenticated/admin/members/new': typeof AuthenticatedAdminMembersNewRoute
   '/_authenticated/admin/membership/action-needed': typeof AuthenticatedAdminMembershipActionNeededRoute
+  '/_authenticated/admin/membership/sales-page': typeof AuthenticatedAdminMembershipSalesPageRoute
   '/_authenticated/admin/program-library_/$templateId': typeof AuthenticatedAdminProgramLibraryTemplateIdRoute
   '/_authenticated/admin/purchases/$id': typeof AuthenticatedAdminPurchasesIdRoute
   '/_authenticated/admin/settings_/chat': typeof AuthenticatedAdminSettingsChatRoute
@@ -1465,6 +1475,7 @@ export interface FileRouteTypes {
     | '/admin/members/$memberId'
     | '/admin/members/new'
     | '/admin/membership/action-needed'
+    | '/admin/membership/sales-page'
     | '/admin/program-library/$templateId'
     | '/admin/purchases/$id'
     | '/admin/settings/chat'
@@ -1600,6 +1611,7 @@ export interface FileRouteTypes {
     | '/admin/members/$memberId'
     | '/admin/members/new'
     | '/admin/membership/action-needed'
+    | '/admin/membership/sales-page'
     | '/admin/program-library/$templateId'
     | '/admin/purchases/$id'
     | '/admin/settings/chat'
@@ -1740,6 +1752,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/members/$memberId'
     | '/_authenticated/admin/members/new'
     | '/_authenticated/admin/membership/action-needed'
+    | '/_authenticated/admin/membership/sales-page'
     | '/_authenticated/admin/program-library_/$templateId'
     | '/_authenticated/admin/purchases/$id'
     | '/_authenticated/admin/settings_/chat'
@@ -2635,6 +2648,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminProgramLibraryTemplateIdRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
+    '/_authenticated/admin/membership/sales-page': {
+      id: '/_authenticated/admin/membership/sales-page'
+      path: '/sales-page'
+      fullPath: '/admin/membership/sales-page'
+      preLoaderRoute: typeof AuthenticatedAdminMembershipSalesPageRouteImport
+      parentRoute: typeof AuthenticatedAdminMembershipRoute
+    }
     '/_authenticated/admin/membership/action-needed': {
       id: '/_authenticated/admin/membership/action-needed'
       path: '/action-needed'
@@ -2788,6 +2808,7 @@ const AuthenticatedAdminBroadcastsRouteWithChildren =
 
 interface AuthenticatedAdminMembershipRouteChildren {
   AuthenticatedAdminMembershipActionNeededRoute: typeof AuthenticatedAdminMembershipActionNeededRoute
+  AuthenticatedAdminMembershipSalesPageRoute: typeof AuthenticatedAdminMembershipSalesPageRoute
   AuthenticatedAdminMembershipIndexRoute: typeof AuthenticatedAdminMembershipIndexRoute
 }
 
@@ -2795,6 +2816,8 @@ const AuthenticatedAdminMembershipRouteChildren: AuthenticatedAdminMembershipRou
   {
     AuthenticatedAdminMembershipActionNeededRoute:
       AuthenticatedAdminMembershipActionNeededRoute,
+    AuthenticatedAdminMembershipSalesPageRoute:
+      AuthenticatedAdminMembershipSalesPageRoute,
     AuthenticatedAdminMembershipIndexRoute:
       AuthenticatedAdminMembershipIndexRoute,
   }
