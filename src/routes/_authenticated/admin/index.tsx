@@ -599,6 +599,9 @@ function AdminDashboard() {
               </div>
             </Card>
 
+            {/* TRAINING INTELLIGENCE */}
+            <TrainingIntelDashboardCard />
+
             {/* TRAINING DEADLINES */}
             <Card className="border-border bg-card p-4 md:p-5">
               <SectionHeader title="Training Deadlines" icon={Timer} viewAll={{ to: "/admin/training-phases" }} />
