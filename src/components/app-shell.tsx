@@ -137,6 +137,13 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  // Allow other components (e.g. the dashboard search card) to open the palette.
+  useEffect(() => {
+    const onOpen = () => setPaletteOpen(true);
+    window.addEventListener("open-command-palette", onOpen as EventListener);
+    return () => window.removeEventListener("open-command-palette", onOpen as EventListener);
+  }, []);
+
   const { data: me } = useQuery({
     queryKey: ["app-shell-me", user?.id],
     enabled: !!user?.id,
