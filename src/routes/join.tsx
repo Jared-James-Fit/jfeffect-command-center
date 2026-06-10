@@ -11,7 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { CheckCircle2, XCircle, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 
-export const Route = createFileRoute("/signup/jf")({
+export const Route = createFileRoute("/join")({
   component: SignupJf,
   head: () => ({
     meta: [
