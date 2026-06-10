@@ -23,16 +23,6 @@ function AdminLayout() {
     navigate({ to: "/portal", replace: true });
   }, [role, loading, navigate]);
 
-  if (loading || !role) {
-    return <div className="grid min-h-screen place-items-center text-muted-foreground">Loading…</div>;
-  }
-
-  // While the effect-driven redirect is in flight, render nothing for non-admin/coach
-  // so admin UI never flashes to members/clients.
-  if (role !== "admin" && role !== "coach") {
-    return <div className="grid min-h-screen place-items-center text-muted-foreground">Redirecting…</div>;
-  }
-
   const isCoach = role === "coach";
   const nav = isCoach ? coachNav : adminNav;
   const title = isCoach ? "Coach" : "Admin";
@@ -47,6 +37,16 @@ function AdminLayout() {
       { ...pick("/admin/check-in-reviews"), label: "Reviews" },
     ];
   }, [isCoach]);
+
+  if (loading || !role) {
+    return <div className="grid min-h-screen place-items-center text-muted-foreground">Loading…</div>;
+  }
+
+  // While the effect-driven redirect is in flight, render nothing for non-admin/coach
+  // so admin UI never flashes to members/clients.
+  if (role !== "admin" && role !== "coach") {
+    return <div className="grid min-h-screen place-items-center text-muted-foreground">Redirecting…</div>;
+  }
 
   return (
     <AppShell items={nav} bottomItems={bottomItems} title={title}>
