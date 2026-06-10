@@ -132,6 +132,7 @@ import { Route as AuthenticatedAdminMembershipSignupStatsRouteImport } from './r
 import { Route as AuthenticatedAdminMembershipSignupLinkRouteImport } from './routes/_authenticated/admin/membership.signup-link'
 import { Route as AuthenticatedAdminMembershipSalesPageRouteImport } from './routes/_authenticated/admin/membership.sales-page'
 import { Route as AuthenticatedAdminMembershipPromoToolsRouteImport } from './routes/_authenticated/admin/membership.promo-tools'
+import { Route as AuthenticatedAdminMembershipChallengesRouteImport } from './routes/_authenticated/admin/membership.challenges'
 import { Route as AuthenticatedAdminMembershipActionNeededRouteImport } from './routes/_authenticated/admin/membership.action-needed'
 import { Route as AuthenticatedAdminMembersNewRouteImport } from './routes/_authenticated/admin/members.new'
 import { Route as AuthenticatedAdminMembersMemberIdRouteImport } from './routes/_authenticated/admin/members.$memberId'
@@ -857,6 +858,12 @@ const AuthenticatedAdminMembershipPromoToolsRoute =
     path: '/promo-tools',
     getParentRoute: () => AuthenticatedAdminMembershipRoute,
   } as any)
+const AuthenticatedAdminMembershipChallengesRoute =
+  AuthenticatedAdminMembershipChallengesRouteImport.update({
+    id: '/challenges',
+    path: '/challenges',
+    getParentRoute: () => AuthenticatedAdminMembershipRoute,
+  } as any)
 const AuthenticatedAdminMembershipActionNeededRoute =
   AuthenticatedAdminMembershipActionNeededRouteImport.update({
     id: '/action-needed',
@@ -1076,6 +1083,7 @@ export interface FileRoutesByFullPath {
   '/admin/members/$memberId': typeof AuthenticatedAdminMembersMemberIdRoute
   '/admin/members/new': typeof AuthenticatedAdminMembersNewRoute
   '/admin/membership/action-needed': typeof AuthenticatedAdminMembershipActionNeededRoute
+  '/admin/membership/challenges': typeof AuthenticatedAdminMembershipChallengesRoute
   '/admin/membership/promo-tools': typeof AuthenticatedAdminMembershipPromoToolsRoute
   '/admin/membership/sales-page': typeof AuthenticatedAdminMembershipSalesPageRoute
   '/admin/membership/signup-link': typeof AuthenticatedAdminMembershipSignupLinkRoute
@@ -1215,6 +1223,7 @@ export interface FileRoutesByTo {
   '/admin/members/$memberId': typeof AuthenticatedAdminMembersMemberIdRoute
   '/admin/members/new': typeof AuthenticatedAdminMembersNewRoute
   '/admin/membership/action-needed': typeof AuthenticatedAdminMembershipActionNeededRoute
+  '/admin/membership/challenges': typeof AuthenticatedAdminMembershipChallengesRoute
   '/admin/membership/promo-tools': typeof AuthenticatedAdminMembershipPromoToolsRoute
   '/admin/membership/sales-page': typeof AuthenticatedAdminMembershipSalesPageRoute
   '/admin/membership/signup-link': typeof AuthenticatedAdminMembershipSignupLinkRoute
@@ -1360,6 +1369,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/members/$memberId': typeof AuthenticatedAdminMembersMemberIdRoute
   '/_authenticated/admin/members/new': typeof AuthenticatedAdminMembersNewRoute
   '/_authenticated/admin/membership/action-needed': typeof AuthenticatedAdminMembershipActionNeededRoute
+  '/_authenticated/admin/membership/challenges': typeof AuthenticatedAdminMembershipChallengesRoute
   '/_authenticated/admin/membership/promo-tools': typeof AuthenticatedAdminMembershipPromoToolsRoute
   '/_authenticated/admin/membership/sales-page': typeof AuthenticatedAdminMembershipSalesPageRoute
   '/_authenticated/admin/membership/signup-link': typeof AuthenticatedAdminMembershipSignupLinkRoute
@@ -1505,6 +1515,7 @@ export interface FileRouteTypes {
     | '/admin/members/$memberId'
     | '/admin/members/new'
     | '/admin/membership/action-needed'
+    | '/admin/membership/challenges'
     | '/admin/membership/promo-tools'
     | '/admin/membership/sales-page'
     | '/admin/membership/signup-link'
@@ -1644,6 +1655,7 @@ export interface FileRouteTypes {
     | '/admin/members/$memberId'
     | '/admin/members/new'
     | '/admin/membership/action-needed'
+    | '/admin/membership/challenges'
     | '/admin/membership/promo-tools'
     | '/admin/membership/sales-page'
     | '/admin/membership/signup-link'
@@ -1788,6 +1800,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/members/$memberId'
     | '/_authenticated/admin/members/new'
     | '/_authenticated/admin/membership/action-needed'
+    | '/_authenticated/admin/membership/challenges'
     | '/_authenticated/admin/membership/promo-tools'
     | '/_authenticated/admin/membership/sales-page'
     | '/_authenticated/admin/membership/signup-link'
@@ -2715,6 +2728,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminMembershipPromoToolsRouteImport
       parentRoute: typeof AuthenticatedAdminMembershipRoute
     }
+    '/_authenticated/admin/membership/challenges': {
+      id: '/_authenticated/admin/membership/challenges'
+      path: '/challenges'
+      fullPath: '/admin/membership/challenges'
+      preLoaderRoute: typeof AuthenticatedAdminMembershipChallengesRouteImport
+      parentRoute: typeof AuthenticatedAdminMembershipRoute
+    }
     '/_authenticated/admin/membership/action-needed': {
       id: '/_authenticated/admin/membership/action-needed'
       path: '/action-needed'
@@ -2868,6 +2888,7 @@ const AuthenticatedAdminBroadcastsRouteWithChildren =
 
 interface AuthenticatedAdminMembershipRouteChildren {
   AuthenticatedAdminMembershipActionNeededRoute: typeof AuthenticatedAdminMembershipActionNeededRoute
+  AuthenticatedAdminMembershipChallengesRoute: typeof AuthenticatedAdminMembershipChallengesRoute
   AuthenticatedAdminMembershipPromoToolsRoute: typeof AuthenticatedAdminMembershipPromoToolsRoute
   AuthenticatedAdminMembershipSalesPageRoute: typeof AuthenticatedAdminMembershipSalesPageRoute
   AuthenticatedAdminMembershipSignupLinkRoute: typeof AuthenticatedAdminMembershipSignupLinkRoute
@@ -2879,6 +2900,8 @@ const AuthenticatedAdminMembershipRouteChildren: AuthenticatedAdminMembershipRou
   {
     AuthenticatedAdminMembershipActionNeededRoute:
       AuthenticatedAdminMembershipActionNeededRoute,
+    AuthenticatedAdminMembershipChallengesRoute:
+      AuthenticatedAdminMembershipChallengesRoute,
     AuthenticatedAdminMembershipPromoToolsRoute:
       AuthenticatedAdminMembershipPromoToolsRoute,
     AuthenticatedAdminMembershipSalesPageRoute:
