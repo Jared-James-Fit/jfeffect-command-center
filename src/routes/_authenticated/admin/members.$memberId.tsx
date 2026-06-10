@@ -74,6 +74,11 @@ function MemberProfile() {
 
   return (
     <div className="space-y-5">
+      {member.account_type === "jf_member" && member.profile_picture_required && !member.avatar_url && (
+        <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-300">
+          Setup incomplete — profile picture required.
+        </div>
+      )}
       <PageHeader
         backTo="/admin/members"
         backLabel="Back to Members"
