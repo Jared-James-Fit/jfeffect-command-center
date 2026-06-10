@@ -215,6 +215,50 @@ export function GroupChatsPane({ asAdmin }: { asAdmin: boolean }) {
   );
 }
 
+/** Stacked member avatars with a green live-now dot if anyone is present. */
+function GroupCover({ groupId, myRole }: { groupId: string; myRole: "admin" | "coach" | "client" | "member" }) {
+  const { data: members = [] } = useQuery({
+    queryKey: ["group-member-profiles", groupId],
+    queryFn: () => listGroupMemberProfiles(groupId),
+    staleTime: 60_000,
+  });
+  const { others } = useGroupPresence(groupId, myRole);
+  const liveIds = new Set(others.map((p) => p.user_id));
+  const visible = (members as GroupMemberProfile[]).slice(0, 3);
+  const extra = Math.max(0, members.length - visible.length);
+
+  if (visible.length === 0) {
+    return (
+      <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
+        <Users className="h-4 w-4" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative flex h-9 w-9 shrink-0 items-center">
+      <div className="flex -space-x-2">
+        {visible.map((m) => (
+          <div key={m.user_id} className="relative">
+            <Avatar className="h-7 w-7 border-2 border-card">
+              <AvatarImage src={m.avatar_url ?? undefined} alt={m.full_name ?? "Member"} />
+              <AvatarFallback className="text-[10px]">
+                {(m.full_name ?? "?").slice(0, 1).toUpperCase()}
+              </AvatarFallback>
+            </Avatar>
+            {liveIds.has(m.user_id) && (
+              <span className="absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full bg-emerald-500 ring-2 ring-card" />
+            )}
+          </div>
+        ))}
+      </div>
+      {extra > 0 && (
+        <span className="ml-1 text-[10px] font-semibold text-muted-foreground">+{extra}</span>
+      )}
+    </div>
+  );
+}
+
 /** Hook used by client portal toggle to show "do they have any groups?" + unread badge. */
 export function useMyGroupSummary() {
   const { user } = useAuth();
