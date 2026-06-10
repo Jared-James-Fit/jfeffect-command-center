@@ -505,7 +505,6 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
           <MoreNavSlot
             active={moreOpen}
             onOpenMore={() => setMoreOpen(true)}
-            onOpenSearch={() => setPaletteOpen(true)}
           />
         </nav>
           );
