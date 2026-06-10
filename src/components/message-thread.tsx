@@ -364,6 +364,11 @@ function LinkAttachment({ att, mine }: { att: MessageAttachment; mine: boolean }
 }
 
 function AttachmentView({ att, mine, message }: { att: MessageAttachment; mine: boolean; message?: Message }) {
+  if (att.kind === "payment_request") {
+    // Lazy require to avoid circular import at top
+    const { PaymentRequestCard } = require("@/components/payment-request-card");
+    return <PaymentRequestCard att={att} mine={mine} />;
+  }
   if (att.kind === "sound") {
     return (
       <ChatSoundCard
