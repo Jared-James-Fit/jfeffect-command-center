@@ -148,7 +148,7 @@ export const createJfSignupCheckout = createServerFn({ method: "POST" })
       "line_items[0][price]": s.monthly_price_id,
       "line_items[0][quantity]": 1,
       success_url: `${data.origin}/m/welcome?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${data.origin}/signup/jf?cancelled=1`,
+      cancel_url: `${data.origin}/join?cancelled=1`,
       allow_promotion_codes: "true",
       "metadata[kind]": "jf_membership",
       "metadata[full_name]": fullName,

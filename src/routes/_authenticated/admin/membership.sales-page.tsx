@@ -11,19 +11,22 @@ export const Route = createFileRoute("/_authenticated/admin/membership/sales-pag
 });
 
 function SalesPage() {
-  const url = (typeof window !== "undefined" ? window.location.origin : "") + "/signup/jf";
+  // Always promote the branded public URL — never the Lovable preview origin.
+  const url = "https://jfeffect.com/join";
+  const display = "jfeffect.com/join";
   const copy = () => { navigator.clipboard.writeText(url); toast.success("Public signup link copied"); };
   return (
     <MembershipLeaf title="Sales Page" subtitle="Manage the public JF Membership signup page and pricing.">
       <Card className="p-4">
         <div className="mb-3 text-xs font-bold uppercase tracking-widest text-muted-foreground">Public link</div>
         <div className="flex flex-wrap items-center gap-2">
-          <code className="rounded bg-muted px-2 py-1 text-xs">{url}</code>
+          <code className="rounded bg-muted px-2 py-1 text-xs">{display}</code>
           <Button size="sm" variant="outline" onClick={copy}><Copy className="mr-1 h-3 w-3" />Copy</Button>
-          <a href="/signup/jf" target="_blank" rel="noreferrer"><Button size="sm" variant="outline"><ExternalLink className="mr-1 h-3 w-3" />Open live page</Button></a>
+          <a href="/join" target="_blank" rel="noreferrer"><Button size="sm" variant="outline"><ExternalLink className="mr-1 h-3 w-3" />Open live page</Button></a>
           <a href={`mailto:?subject=Join%20JF%20Membership&body=${encodeURIComponent(url)}`}><Button size="sm" variant="outline"><Mail className="mr-1 h-3 w-3" />Email</Button></a>
           <a href={`sms:?&body=${encodeURIComponent("Join JF Membership: " + url)}`}><Button size="sm" variant="outline"><MessageCircle className="mr-1 h-3 w-3" />SMS</Button></a>
         </div>
+        <p className="mt-2 text-[11px] text-muted-foreground">Use this branded link in Instagram bio, ads, SMS, DMs, and email.</p>
       </Card>
       <div className="grid gap-4 md:grid-cols-2">
         <JfMembershipSettingsCard />

@@ -81,7 +81,7 @@ export function JfMembershipSettingsCard() {
       </div>
       <Button onClick={() => save.mutate()} disabled={save.isPending}>{save.isPending ? "Saving…" : "Save settings"}</Button>
       <p className="text-[11px] text-muted-foreground">
-        Public signup link: <code>/signup/jf</code>. Webhook endpoint is the same Stripe webhook you already configured.
+        Public signup link: <code>/join</code>. Webhook endpoint is the same Stripe webhook you already configured.
       </p>
     </Card>
   );
