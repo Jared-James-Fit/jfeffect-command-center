@@ -39,10 +39,16 @@ export function CreateGroupDialog({ open, onOpenChange }: { open: boolean; onOpe
       const seen = new Set<string>();
       const out: Person[] = [];
       for (const c of clients ?? []) {
-        if (c.user_id && !seen.has(c.user_id)) { seen.add(c.user_id); out.push({ ...c, kind: "client" }); }
+        if (c.user_id && !seen.has(c.user_id)) {
+          seen.add(c.user_id);
+          out.push({ user_id: c.user_id, full_name: c.full_name, email: c.email, kind: "client" });
+        }
       }
       for (const m of members ?? []) {
-        if (m.user_id && !seen.has(m.user_id)) { seen.add(m.user_id); out.push({ ...m, kind: "member" }); }
+        if (m.user_id && !seen.has(m.user_id)) {
+          seen.add(m.user_id);
+          out.push({ user_id: m.user_id, full_name: m.full_name, email: m.email, kind: "member" });
+        }
       }
       return out.sort((a, b) => (a.full_name ?? "").localeCompare(b.full_name ?? ""));
     },
