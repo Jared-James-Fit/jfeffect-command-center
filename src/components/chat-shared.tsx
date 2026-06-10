@@ -24,7 +24,7 @@ export type SharedAttachment = {
   duration?: number;
   storage_path?: string;
   peaks?: number[];
-  kind?: "sound" | "gif" | "payment_request";
+  kind?: "sound" | "gif" | "payment_request" | "form_request" | "signature_request" | "recipe_share";
   fallback_emoji?: string;
   category?: string;
   // payment_request fields (used when kind === "payment_request")
@@ -35,6 +35,15 @@ export type SharedAttachment = {
   title?: string;
   payment_structure?: string;
   status?: string;
+  // chat request kinds:
+  form_id?: string;
+  template_id?: string;
+  recipe_id?: string;
+  agreement_ids?: string[];
+  assignment_client_ids?: string[];
+  agreement_client_map?: { client_id: string; agreement_id: string }[];
+  request_title?: string;
+  request_note?: string;
 };
 
 /* ------------------------------- Helpers ------------------------------- */
