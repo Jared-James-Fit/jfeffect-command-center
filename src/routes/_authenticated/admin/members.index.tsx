@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Plus, UserPlus } from "lucide-react";
 import { useState } from "react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { ACCOUNT_TYPES } from "@/lib/membership";
 
 export const Route = createFileRoute("/_authenticated/admin/members/")({ component: MembersList });
 
@@ -18,6 +19,7 @@ function MembersList() {
 
   const { data: all } = useQuery({ queryKey: ["admin-members", tab], queryFn: () => {
     if (tab === "all") return fetch({ data: {} });
+    if (tab === "jf_member") return fetch({ data: { accountType: "jf_member" } });
     if (tab === "app_member") return fetch({ data: { accountType: "app_member" } });
     if (tab === "program_only") return fetch({ data: { accountType: "program_only" } });
     if (tab === "deactivated") return fetch({ data: { status: "Deactivated" } });
@@ -39,6 +41,7 @@ function MembersList() {
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList>
           <TabsTrigger value="all">All</TabsTrigger>
+          <TabsTrigger value="jf_member">JF Membership</TabsTrigger>
           <TabsTrigger value="app_member">App Members</TabsTrigger>
           <TabsTrigger value="program_only">Program-Only</TabsTrigger>
           <TabsTrigger value="deactivated">Deactivated</TabsTrigger>
@@ -55,7 +58,9 @@ function MembersList() {
                     <div className="truncate text-xs text-muted-foreground">{m.email}</div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Badge variant="outline">{m.account_type}</Badge>
+                    <Badge variant="outline" className={(ACCOUNT_TYPES as any)[m.account_type]?.tone}>
+                      {(ACCOUNT_TYPES as any)[m.account_type]?.label ?? m.account_type}
+                    </Badge>
                     <Badge variant={m.status === "Active" ? "default" : "secondary"}>{m.status}</Badge>
                     {!m.user_id && <Badge variant="outline">Setup pending</Badge>}
                   </div>
