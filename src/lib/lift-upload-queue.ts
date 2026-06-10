@@ -1,15 +1,16 @@
 // Singleton in-memory upload queue for lift videos.
 //
 // Goal: make Send Video feel instant. The lift_videos DB row is created
-// immediately (with upload_status="Uploading"), the Drive upload then runs
-// in the background here. The portal list subscribes to this store to show
-// per-row progress and final state.
+// immediately (with upload_status="Uploading"), and the actual file is
+// uploaded straight to Supabase Storage (the primary, fast, resumable
+// destination). Google Drive is no longer in the client upload path — a
+// background server job archives the file to Drive afterwards.
 //
 // Concurrency: 1 (sequential). iPhone Safari/PWA can't be trusted to keep a
 // real background upload going if the user navigates away — we surface that
 // via the active() helper so the page can fire a beforeunload warning.
 
-import { uploadLiftClipToDrive } from "@/lib/lift-video-drive-upload";
+import { uploadLiftFileToStorage } from "@/lib/lift-video-storage-upload";
 import { useSyncExternalStore } from "react";
 
 type ServerFn = (args: { data: any }) => Promise<any>;
@@ -31,10 +32,7 @@ export type LiftUploadJob = {
   perClipNote: string | null;
   urgent: boolean;
   painNote: string | null;
-  submissionId: string | null;
-  initFn: ServerFn;
-  finalizeFn: ServerFn;
-  createSubFn: ServerFn;
+  userId: string;
   updateFn: ServerFn;
 };
 
@@ -72,35 +70,23 @@ async function runQueue() {
 async function processJob(job: LiftUploadJob) {
   setState(job.videoId, { status: "uploading", progress: 0, fileName: job.file.name });
   try {
-    const res = await uploadLiftClipToDrive({
-      clientId: job.clientId,
-      clientName: job.clientName,
+    const res = await uploadLiftFileToStorage({
       file: job.file,
-      index: job.index,
-      total: job.total,
-      batchNote: job.batchNote,
-      perClipNote: job.perClipNote,
-      urgent: job.urgent,
-      painNote: job.painNote,
-      submissionId: job.submissionId,
-      initFn: job.initFn,
-      finalizeFn: job.finalizeFn,
-      createSubFn: job.createSubFn,
-      onProgress: (pct) => setState(job.videoId, { status: "uploading", progress: Math.max(1, Math.min(99, Math.round(pct))), fileName: job.file.name }),
+      userId: job.userId,
+      onProgress: (pct) =>
+        setState(job.videoId, { status: "uploading", progress: pct, fileName: job.file.name }),
     });
     await job.updateFn({ data: {
       id: job.videoId,
-      video_url: res.driveUrl ?? res.url,
+      video_storage_path: res.path,
       video_source: "upload",
-      thumbnail_url: res.thumbnailUrl,
-      original_drive_file_id: res.driveFileId,
-      original_drive_url: res.driveUrl,
-      drive_embed_url: res.driveEmbedUrl,
       file_type: res.mimeType,
       file_size_bytes: res.sizeBytes,
-      upload_status: "Drive uploaded",
+      upload_status: "Uploaded",
       playback_error: null,
       status: "Awaiting Review",
+      archive_status: "pending",
+      archive_next_attempt_at: new Date().toISOString(),
     }});
     setState(job.videoId, { status: "done", progress: 100, fileName: job.file.name });
     // Clear after a moment so the UI falls back to row.upload_status.
