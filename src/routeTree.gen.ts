@@ -98,6 +98,7 @@ import { Route as LovableEmailAuthWebhookRouteImport } from './routes/lovable/em
 import { Route as LovableEmailAuthPreviewRouteImport } from './routes/lovable/email/auth/preview'
 import { Route as ApiPublicHooksSmsRemindersRouteImport } from './routes/api/public/hooks/sms-reminders'
 import { Route as ApiPublicHooksMediaArchiveRouteImport } from './routes/api/public/hooks/media-archive'
+import { Route as ApiPublicHooksLiftArchiveTickRouteImport } from './routes/api/public/hooks/lift-archive-tick'
 import { Route as AuthenticatedPortalWorkoutsDayIdRouteImport } from './routes/_authenticated/portal/workouts.$dayId'
 import { Route as AuthenticatedPortalRecipesRecipeIdRouteImport } from './routes/_authenticated/portal/recipes.$recipeId'
 import { Route as AuthenticatedPortalPurchasesIdRouteImport } from './routes/_authenticated/portal/purchases.$id'
@@ -632,6 +633,12 @@ const ApiPublicHooksMediaArchiveRoute =
     path: '/api/public/hooks/media-archive',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicHooksLiftArchiveTickRoute =
+  ApiPublicHooksLiftArchiveTickRouteImport.update({
+    id: '/api/public/hooks/lift-archive-tick',
+    path: '/api/public/hooks/lift-archive-tick',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const AuthenticatedPortalWorkoutsDayIdRoute =
   AuthenticatedPortalWorkoutsDayIdRouteImport.update({
     id: '/workouts/$dayId',
@@ -888,6 +895,7 @@ export interface FileRoutesByFullPath {
   '/portal/purchases/$id': typeof AuthenticatedPortalPurchasesIdRoute
   '/portal/recipes/$recipeId': typeof AuthenticatedPortalRecipesRecipeIdRoute
   '/portal/workouts/$dayId': typeof AuthenticatedPortalWorkoutsDayIdRoute
+  '/api/public/hooks/lift-archive-tick': typeof ApiPublicHooksLiftArchiveTickRoute
   '/api/public/hooks/media-archive': typeof ApiPublicHooksMediaArchiveRoute
   '/api/public/hooks/sms-reminders': typeof ApiPublicHooksSmsRemindersRoute
   '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
@@ -1001,6 +1009,7 @@ export interface FileRoutesByTo {
   '/portal/purchases/$id': typeof AuthenticatedPortalPurchasesIdRoute
   '/portal/recipes/$recipeId': typeof AuthenticatedPortalRecipesRecipeIdRoute
   '/portal/workouts/$dayId': typeof AuthenticatedPortalWorkoutsDayIdRoute
+  '/api/public/hooks/lift-archive-tick': typeof ApiPublicHooksLiftArchiveTickRoute
   '/api/public/hooks/media-archive': typeof ApiPublicHooksMediaArchiveRoute
   '/api/public/hooks/sms-reminders': typeof ApiPublicHooksSmsRemindersRoute
   '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
@@ -1119,6 +1128,7 @@ export interface FileRoutesById {
   '/_authenticated/portal/purchases/$id': typeof AuthenticatedPortalPurchasesIdRoute
   '/_authenticated/portal/recipes/$recipeId': typeof AuthenticatedPortalRecipesRecipeIdRoute
   '/_authenticated/portal/workouts/$dayId': typeof AuthenticatedPortalWorkoutsDayIdRoute
+  '/api/public/hooks/lift-archive-tick': typeof ApiPublicHooksLiftArchiveTickRoute
   '/api/public/hooks/media-archive': typeof ApiPublicHooksMediaArchiveRoute
   '/api/public/hooks/sms-reminders': typeof ApiPublicHooksSmsRemindersRoute
   '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
@@ -1237,6 +1247,7 @@ export interface FileRouteTypes {
     | '/portal/purchases/$id'
     | '/portal/recipes/$recipeId'
     | '/portal/workouts/$dayId'
+    | '/api/public/hooks/lift-archive-tick'
     | '/api/public/hooks/media-archive'
     | '/api/public/hooks/sms-reminders'
     | '/lovable/email/auth/preview'
@@ -1350,6 +1361,7 @@ export interface FileRouteTypes {
     | '/portal/purchases/$id'
     | '/portal/recipes/$recipeId'
     | '/portal/workouts/$dayId'
+    | '/api/public/hooks/lift-archive-tick'
     | '/api/public/hooks/media-archive'
     | '/api/public/hooks/sms-reminders'
     | '/lovable/email/auth/preview'
@@ -1467,6 +1479,7 @@ export interface FileRouteTypes {
     | '/_authenticated/portal/purchases/$id'
     | '/_authenticated/portal/recipes/$recipeId'
     | '/_authenticated/portal/workouts/$dayId'
+    | '/api/public/hooks/lift-archive-tick'
     | '/api/public/hooks/media-archive'
     | '/api/public/hooks/sms-reminders'
     | '/lovable/email/auth/preview'
@@ -1496,6 +1509,7 @@ export interface RootRouteChildren {
   ApiDriveUploadRoute: typeof ApiDriveUploadRoute
   ApiPublicSignnowWebhookRoute: typeof ApiPublicSignnowWebhookRoute
   ApiPublicStripeWebhookRoute: typeof ApiPublicStripeWebhookRoute
+  ApiPublicHooksLiftArchiveTickRoute: typeof ApiPublicHooksLiftArchiveTickRoute
   ApiPublicHooksMediaArchiveRoute: typeof ApiPublicHooksMediaArchiveRoute
   ApiPublicHooksSmsRemindersRoute: typeof ApiPublicHooksSmsRemindersRoute
   LovableEmailAuthPreviewRoute: typeof LovableEmailAuthPreviewRoute
@@ -2128,6 +2142,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksMediaArchiveRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/lift-archive-tick': {
+      id: '/api/public/hooks/lift-archive-tick'
+      path: '/api/public/hooks/lift-archive-tick'
+      fullPath: '/api/public/hooks/lift-archive-tick'
+      preLoaderRoute: typeof ApiPublicHooksLiftArchiveTickRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_authenticated/portal/workouts/$dayId': {
       id: '/_authenticated/portal/workouts/$dayId'
       path: '/workouts/$dayId'
@@ -2706,6 +2727,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiDriveUploadRoute: ApiDriveUploadRoute,
   ApiPublicSignnowWebhookRoute: ApiPublicSignnowWebhookRoute,
   ApiPublicStripeWebhookRoute: ApiPublicStripeWebhookRoute,
+  ApiPublicHooksLiftArchiveTickRoute: ApiPublicHooksLiftArchiveTickRoute,
   ApiPublicHooksMediaArchiveRoute: ApiPublicHooksMediaArchiveRoute,
   ApiPublicHooksSmsRemindersRoute: ApiPublicHooksSmsRemindersRoute,
   LovableEmailAuthPreviewRoute: LovableEmailAuthPreviewRoute,

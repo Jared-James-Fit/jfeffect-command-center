@@ -55,6 +55,7 @@ export const createClientLiftVideo = createServerFn({ method: "POST" })
 const ClientLiftVideoUpdateInput = z.object({
   id: z.string().uuid(),
   video_url: z.string().max(1000).nullable().optional(),
+  video_storage_path: z.string().max(500).nullable().optional(),
   video_source: z.enum(["link", "upload"]).optional(),
   thumbnail_url: z.string().max(1000).nullable().optional(),
   original_drive_file_id: z.string().max(200).nullable().optional(),
@@ -65,6 +66,9 @@ const ClientLiftVideoUpdateInput = z.object({
   upload_status: z.string().max(100).nullable().optional(),
   playback_error: z.string().max(2000).nullable().optional(),
   status: z.string().max(100).optional(),
+  archive_status: z.enum(["not_archived", "pending", "archiving", "archived", "failed"]).optional(),
+  archive_next_attempt_at: z.string().nullable().optional(),
+  preview_status: z.string().max(100).nullable().optional(),
 });
 
 export const updateClientLiftVideoUpload = createServerFn({ method: "POST" })
@@ -178,62 +182,28 @@ export const copyLiftVideoStorageToDrive = createServerFn({ method: "POST" })
   .inputValidator((data) => z.object({ videoId: z.string().uuid() }).parse(data))
   .handler(async ({ data, context }) => {
     await requireAdmin(context);
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { driveShareAnyoneReader, driveEmbedUrl, driveViewUrl } = await import("./drive.server");
-    const { data: video, error } = await (supabaseAdmin as any)
-      .from("lift_videos")
-      .select("id, client_id, video_storage_path, original_drive_file_id, file_type")
-      .eq("id", data.videoId)
-      .single();
-    if (error) throw error;
-    if (video.original_drive_file_id) return { ok: true, fileId: video.original_drive_file_id, alreadyInDrive: true };
-    if (!video.video_storage_path) throw new Error("No app-storage video exists to copy into Drive.");
+    const { archiveLiftVideoToDrive } = await import("./lift-archive.server");
+    const res = await archiveLiftVideoToDrive(data.videoId);
+    if (!res.ok) throw new Error(res.reason ?? "Drive archive failed.");
+    return { ok: true, fileId: res.driveFileId, alreadyInDrive: res.alreadyArchived ?? false };
+  });
 
-    const { data: bytes, error: downloadError } = await supabaseAdmin.storage.from("lift-videos").download(video.video_storage_path);
-    if (downloadError) throw downloadError;
-    const folderId = await ensureDriveLiftFolder(supabaseAdmin, video.client_id);
-    const fileName = video.video_storage_path.split("/").pop() ?? `lift-video-${video.id}.mp4`;
-    const mimeType = video.file_type || bytes.type || "video/mp4";
-    const url = "https://connector-gateway.lovable.dev/google_drive/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true&fields=id,webViewLink,thumbnailLink,mimeType,size";
-    const metadata = { name: fileName, parents: [folderId], mimeType };
-    const form = new FormData();
-    form.append("metadata", new Blob([JSON.stringify(metadata)], { type: "application/json" }));
-    form.append("file", bytes, fileName);
-    const res = await fetch(url, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${process.env.LOVABLE_API_KEY}`,
-        "X-Connection-Api-Key": process.env.GOOGLE_DRIVE_API_KEY ?? "",
-      },
-      body: form,
-    });
-    if (!res.ok) throw new Error(`Drive copy failed ${res.status}: ${(await res.text()).slice(0, 300)}`);
-    const uploaded = await res.json();
-    await driveShareAnyoneReader(uploaded.id);
-    await (supabaseAdmin as any).from("media_items").insert({
-      client_id: video.client_id,
-      media_type: "Lift Videos",
-      drive_file_id: uploaded.id,
-      drive_url: uploaded.webViewLink ?? driveViewUrl(uploaded.id),
-      drive_embed_url: driveEmbedUrl(uploaded.id),
-      drive_folder_id: folderId,
-      file_name: fileName,
-      mime_type: uploaded.mimeType ?? mimeType,
-      size_bytes: uploaded.size ? Number(uploaded.size) : bytes.size,
-      thumbnail_url: uploaded.thumbnailLink ?? null,
-      uploaded_by: context.userId,
-      uploaded_by_role: "admin",
-      status: "Pending Review",
-    });
+/**
+ * Admin retry: forces a pending/failed archive back to the front of the queue
+ * and runs it inline so the admin sees immediate success/failure feedback.
+ */
+export const retryLiftVideoArchive = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data) => z.object({ videoId: z.string().uuid() }).parse(data))
+  .handler(async ({ data, context }) => {
+    await requireAdmin(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { archiveLiftVideoToDrive } = await import("./lift-archive.server");
     await (supabaseAdmin as any).from("lift_videos").update({
-      original_drive_file_id: uploaded.id,
-      original_drive_url: uploaded.webViewLink ?? driveViewUrl(uploaded.id),
-      drive_embed_url: driveEmbedUrl(uploaded.id),
-      thumbnail_url: uploaded.thumbnailLink ?? null,
-      file_type: uploaded.mimeType ?? mimeType,
-      file_size_bytes: uploaded.size ? Number(uploaded.size) : bytes.size,
-      upload_status: "Drive copied",
-      playback_error: null,
+      archive_status: "pending",
+      archive_attempts: 0,
+      archive_next_attempt_at: new Date().toISOString(),
+      archive_error: null,
     }).eq("id", data.videoId);
-    return { ok: true, fileId: uploaded.id, driveUrl: uploaded.webViewLink ?? driveViewUrl(uploaded.id) };
+    return archiveLiftVideoToDrive(data.videoId);
   });
