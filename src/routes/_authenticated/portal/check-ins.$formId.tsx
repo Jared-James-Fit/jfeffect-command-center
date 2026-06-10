@@ -404,17 +404,20 @@ function QuestionInput({
 
 function ExternalFormView({
   form,
+  client,
   submission,
   onMarkSubmitted,
   onBack,
 }: {
   form: any;
+  client: any;
   submission: any;
   onMarkSubmitted: () => Promise<void> | void;
   onBack: () => void;
 }) {
   const [iframeFailed, setIframeFailed] = useState(false);
-  const url = form.external_url as string | null;
+  const rawUrl = form.external_url as string | null;
+  const url = rawUrl ? buildFilloutUrl(rawUrl, client) : rawUrl;
   const openStyle = (form.open_style ?? "embed") as "embed" | "modal" | "new_tab";
   const submitted = submission.status !== "in_progress";
   const canEmbed = !!url && openStyle !== "new_tab" && !iframeFailed;
