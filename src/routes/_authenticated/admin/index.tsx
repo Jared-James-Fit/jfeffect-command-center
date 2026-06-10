@@ -276,7 +276,10 @@ function AdminDashboard() {
   const need: NeedItem[] = [];
   for (const v of liftNeedReview.slice(0, 10)) {
     const c: any = clientById.get(v.client_id);
+    const latest = liftPreviewByVideoId.get(v.id);
     const note = (v as any).client_notes?.trim?.() || (v as any).question_for_coach?.trim?.() || null;
+    const preview = latest?.body ?? note ?? null;
+    const previewFromClient = latest ? latest.from === "client" : true;
     need.push({
       id: `lift-${v.id}`,
       clientId: v.client_id,
@@ -290,8 +293,8 @@ function AdminDashboard() {
       action: "Open Review",
       avatarUrl: c?.profile_picture_url ?? null,
       thumbnailUrl: v.thumbnail_url ?? null,
-      preview: note,
-      previewFromClient: true,
+      preview,
+      previewFromClient,
     });
   }
   for (const s of checkInSubmissions.slice(0, 10)) {
