@@ -823,7 +823,7 @@ function FormRequestCard({ att, mine }: { att: SharedAttachment; mine: boolean }
       subtitle={att.request_note || `Form to fill${form?.title ? `: ${form.title}` : ""}`}
       chip={{ label: rollup }}
       mine={mine}
-      onOpen={() => formId && window.open(`/admin/native-forms/${formId}`, "_blank")}
+      onOpen={() => formId && window.open(`/admin/native-forms`, "_blank")}
     >
       <PerClientRows clientIds={clientIds} rowFor={(cid) => statusFor(cid)} />
     </RequestShell>
@@ -919,7 +919,7 @@ function RecipeShareCard({ att, mine }: { att: SharedAttachment; mine: boolean }
       subtitle={recipe?.category ?? "Shared recipe"}
       chip={{ label: "Shared" }}
       mine={mine}
-      onOpen={() => id && window.open(`/recipes/${id}`, "_blank")}
+      onOpen={() => id && window.open(`/portal/recipes/${id}`, "_blank")}
     />
   );
 }
