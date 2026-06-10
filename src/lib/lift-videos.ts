@@ -263,7 +263,7 @@ export async function uploadVideoFile(file: File, userId: string) {
     upsert: false,
   });
   if (error) throw error;
-  const { data } = await supabase.storage.from("lift-videos").createSignedUrl(path, 60 * 60 * 24 * 7);
+  const { data } = await supabase.storage.from("lift-videos").createSignedUrl(path, 60 * 60 * 24 * 365);
   return { path, url: data?.signedUrl ?? null };
 }
 

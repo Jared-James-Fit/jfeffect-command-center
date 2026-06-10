@@ -56,25 +56,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!user) return;
     let cancelled = false;
     (async () => {
-      try {
-        const [rolesRes, memberRes] = await Promise.all([
-          supabase.from("user_roles").select("role").eq("user_id", user.id),
-          supabase.from("app_members").select("id").eq("user_id", user.id).maybeSingle(),
-        ]);
-        if (cancelled) return;
-        const roles = (rolesRes.data ?? []).map((r: any) => r.role as AppRole);
-        const memberRow = memberRes.data;
-        setRole(
-          roles.includes("admin") ? "admin"
-          : roles.includes("coach") ? "coach"
-          : memberRow ? "member"
-          : roles.includes("client") ? "client"
-          : "client",
-        );
-      } catch (e) {
-        console.error("role resolution failed", e);
-        if (!cancelled) setRole("client");
-      }
+      const [{ data: roleRows }, { data: memberRow }] = await Promise.all([
+        supabase.from("user_roles").select("role").eq("user_id", user.id),
+        supabase.from("app_members").select("id").eq("user_id", user.id).maybeSingle(),
+      ]);
+      if (cancelled) return;
+      const roles = (roleRows ?? []).map((r: any) => r.role as AppRole);
+      // Admin/coach take priority. Otherwise: if the user has an app_members
+      // row, they're a member; else fall back to client.
+      setRole(
+        roles.includes("admin") ? "admin"
+        : roles.includes("coach") ? "coach"
+        : memberRow ? "member"
+        : roles.includes("client") ? "client"
+        : null,
+      );
     })();
     return () => {
       cancelled = true;

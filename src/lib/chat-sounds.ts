@@ -78,7 +78,7 @@ export async function uploadSoundFile(file: File): Promise<{ url: string; mime: 
   });
   if (error) throw error;
   const { data: signed, error: sErr } = await db.storage
-    .from(SOUND_BUCKET).createSignedUrl(path, 60 * 60 * 24 * 7);
+    .from(SOUND_BUCKET).createSignedUrl(path, 60 * 60 * 24 * 365 * 5);
   if (sErr) throw sErr;
   return { url: signed.signedUrl, mime: file.type || "audio/mpeg" };
 }

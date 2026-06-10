@@ -536,7 +536,7 @@ function ConfirmSignedDialog({
     });
     if (up.error) throw up.error;
     const { data: signed } = await supabase.storage.from("agreements")
-      .createSignedUrl(path, 60 * 60 * 24 * 7);
+      .createSignedUrl(path, 60 * 60 * 24 * 365);
     return { url: signed?.signedUrl ?? signedLink.trim() ?? null, path };
   }
 
@@ -656,7 +656,7 @@ function UploadSignedCopyDialog({
         });
         if (up.error) throw up.error;
         const { data: signed } = await supabase.storage.from("agreements")
-          .createSignedUrl(path, 60 * 60 * 24 * 7);
+          .createSignedUrl(path, 60 * 60 * 24 * 365);
         url = signed?.signedUrl ?? url;
       }
       if (!url && !path) {

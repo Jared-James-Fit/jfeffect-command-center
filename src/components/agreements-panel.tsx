@@ -870,7 +870,7 @@ function ApproveSignedDialog({
         if (up.error) throw up.error;
         signedPath = path;
         const { data: signed } = await supabase.storage.from("agreements")
-          .createSignedUrl(path, 60 * 60 * 24 * 7);
+          .createSignedUrl(path, 60 * 60 * 24 * 365);
         signedUrl = signed?.signedUrl ?? signedUrl;
       }
       await onSubmit({
@@ -965,7 +965,7 @@ function UploadSignedDialog({
         });
         if (up.error) throw up.error;
         signedPath = path;
-        const { data: pub } = await supabase.storage.from("agreements").createSignedUrl(path, 60 * 60 * 24 * 7);
+        const { data: pub } = await supabase.storage.from("agreements").createSignedUrl(path, 60 * 60 * 24 * 365);
         signedUrl = pub?.signedUrl ?? null;
       }
       await onSubmit({
