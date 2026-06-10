@@ -521,3 +521,40 @@ function formatBytes(value: number | null | undefined) {
   if (mb < 1024) return `${mb.toFixed(1)} MB`;
   return `${(mb / 1024).toFixed(2)} GB`;
 }
+
+function ArchiveStatusBadge({
+  status, onRetry, retrying, error,
+}: {
+  status: string;
+  onRetry: () => void;
+  retrying: boolean;
+  error: string | null;
+}) {
+  const label =
+    status === "archived" ? "Archived to Drive"
+    : status === "archiving" ? "Archiving to Drive…"
+    : status === "pending" ? "Drive archive pending"
+    : status === "failed" ? "Drive archive failed"
+    : "Not archived";
+  const tone =
+    status === "archived" ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-600"
+    : status === "archiving" ? "border-blue-500/40 bg-blue-500/10 text-blue-600"
+    : status === "pending" ? "border-warning/40 bg-warning/10 text-warning"
+    : status === "failed" ? "border-destructive/40 bg-destructive/10 text-destructive"
+    : "border-border text-muted-foreground";
+  const canRetry = status === "failed" || status === "pending" || status === "not_archived";
+  return (
+    <span className="inline-flex items-center gap-1">
+      <Badge variant="outline" className={tone} title={error ?? undefined}>
+        <Archive className="mr-1 h-3 w-3" />
+        {label}
+      </Badge>
+      {canRetry && (
+        <Button size="sm" variant="ghost" className="h-6 px-2 text-[11px]" onClick={onRetry} disabled={retrying}>
+          {retrying ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <RefreshCw className="mr-1 h-3 w-3" />}
+          Retry archive
+        </Button>
+      )}
+    </span>
+  );
+}
