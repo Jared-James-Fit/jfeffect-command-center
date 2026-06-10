@@ -617,7 +617,7 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
 
       {/* Command palette */}
       <CommandDialog open={paletteOpen} onOpenChange={setPaletteOpen}>
-        <CommandInput placeholder="Jump to a page…" />
+        <CommandInput placeholder="Search keywords — type to jump to any page…" />
         <CommandList>
           <CommandEmpty>No matches.</CommandEmpty>
           {grouped.map((group) => (
