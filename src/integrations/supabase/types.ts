@@ -6584,6 +6584,7 @@ export type Database = {
     }
     Functions: {
       can_access_chat_presence: { Args: { _topic: string }; Returns: boolean }
+      can_access_group_presence: { Args: { _topic: string }; Returns: boolean }
       can_manage_group: {
         Args: { _group_id: string; _user_id: string }
         Returns: boolean
@@ -6597,6 +6598,15 @@ export type Database = {
       enqueue_email: {
         Args: { payload: Json; queue_name: string }
         Returns: number
+      }
+      get_group_member_profiles: {
+        Args: { _group_id: string }
+        Returns: {
+          avatar_url: string
+          full_name: string
+          role: string
+          user_id: string
+        }[]
       }
       has_role: {
         Args: {
