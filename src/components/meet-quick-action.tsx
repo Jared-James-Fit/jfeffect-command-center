@@ -79,7 +79,8 @@ export function MeetQuickAction({
           title="Send Google Meet link"
           className={buttonClassName ?? (size === "icon" ? "h-10 w-10 shrink-0 rounded-full" : "")}
         >
-          <Video className="h-5 w-5" />
+          <Video className={size === "icon" ? "h-5 w-5" : "h-3.5 w-3.5"} />
+          {size !== "icon" && <span>Meet</span>}
         </Button>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-72 p-3">
