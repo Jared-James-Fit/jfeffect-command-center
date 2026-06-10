@@ -196,6 +196,7 @@ function AdminDashboard() {
   const liftNeedReview = liftVideos.filter((v) => !v.reviewed_at && v.status !== "Archived");
 
   const clientNameById = useMemo(() => new Map(clients.map((c) => [c.id, c.full_name])), [clients]);
+  const clientById = useMemo(() => new Map(clients.map((c) => [c.id, c])), [clients]);
   const stateMap = useMemo(() => new Map(convStates.map((s) => [s.client_id, s])), [convStates]);
 
   const seenC = new Set<string>();
@@ -245,22 +246,27 @@ function AdminDashboard() {
   });
 
   // Build Needs Attention unified feed
-  type NeedItem = { id: string; clientId?: string; name: string; reason: string; time?: string; tone: string; priority: number; href: string; search?: any; params?: any; action: string };
+  type NeedItem = { id: string; clientId?: string; name: string; reason: string; time?: string; tone: string; priority: number; href: string; search?: any; params?: any; action: string; avatarUrl?: string | null; thumbnailUrl?: string | null };
   const need: NeedItem[] = [];
   for (const v of liftNeedReview.slice(0, 10)) {
+    const c: any = clientById.get(v.client_id);
     need.push({
       id: `lift-${v.id}`,
       clientId: v.client_id,
       name: clientNameById.get(v.client_id) ?? "Client",
-      reason: `Lift video · ${v.exercise}`,
+      reason: `Lift video${v.exercise ? ` · ${v.exercise}` : ""}`,
       time: formatDistanceToNow(parseISO(v.created_at), { addSuffix: true }),
       tone: v.is_urgent ? "border-destructive/40 bg-destructive/10 text-destructive" : "border-primary/40 bg-primary/10 text-primary",
       priority: v.is_urgent ? 1 : 4,
       href: "/admin/lift-videos",
-      action: "Review",
+      search: { open: v.id },
+      action: "Open Review",
+      avatarUrl: c?.profile_picture_url ?? null,
+      thumbnailUrl: v.thumbnail_url ?? null,
     });
   }
   for (const s of checkInSubmissions.slice(0, 10)) {
+    const c: any = clientById.get((s as any).client_id);
     need.push({
       id: `ci-${(s as any).id}`,
       clientId: (s as any).client_id,
@@ -271,10 +277,12 @@ function AdminDashboard() {
       priority: 3,
       href: "/admin/check-in-reviews",
       action: "Review",
+      avatarUrl: c?.profile_picture_url ?? null,
     });
   }
   for (const m of messagesNeedingResponse.slice(0, 10)) {
     const st = stateMap.get(m.client_id);
+    const c: any = clientById.get(m.client_id);
     need.push({
       id: `msg-${m.client_id}`,
       clientId: m.client_id,
@@ -286,9 +294,11 @@ function AdminDashboard() {
       href: "/admin/messages",
       search: { client: m.client_id },
       action: "Reply",
+      avatarUrl: c?.profile_picture_url ?? null,
     });
   }
   for (const p of (paymentsAttention as any[]).slice(0, 5)) {
+    const c: any = clientById.get(p.client_id);
     need.push({
       id: `pay-${p.id}`,
       clientId: p.client_id,
@@ -299,6 +309,7 @@ function AdminDashboard() {
       href: "/admin/purchases/$id",
       params: { id: p.id },
       action: "Open",
+      avatarUrl: c?.profile_picture_url ?? null,
     });
   }
   for (const c of setupAlerts.slice(0, 5)) {
@@ -312,9 +323,11 @@ function AdminDashboard() {
       href: "/admin/clients/$id",
       params: { id: c.id },
       action: "Fix Setup",
+      avatarUrl: (c as any).profile_picture_url ?? null,
     });
   }
   for (const a of (actionRequests as any[]).slice(0, 5)) {
+    const c: any = clientById.get(a.client_id);
     need.push({
       id: `ar-${a.id}`,
       clientId: a.client_id,
@@ -324,6 +337,7 @@ function AdminDashboard() {
       priority: 4,
       href: "/admin/client-action-requests",
       action: "Open",
+      avatarUrl: c?.profile_picture_url ?? null,
     });
   }
   need.sort((a, b) => a.priority - b.priority);
