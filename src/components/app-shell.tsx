@@ -455,12 +455,20 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
         </main>
 
         {/* Mobile bottom nav — fixed, app-like tab bar */}
+        {(() => {
+          const visible = bottomItems.slice(0, 5);
+          const cols = visible.length + 1; // + More
+          const gridCols = cols === 6 ? "grid-cols-6" : cols === 5 ? "grid-cols-5" : "grid-cols-4";
+          return (
         <nav
           data-mobile-bottom-nav
-          className="fixed left-3 right-3 z-50 grid grid-cols-5 overflow-hidden rounded-2xl border border-border bg-card/95 px-1 py-1 backdrop-blur supports-[backdrop-filter]:bg-card/80 shadow-[0_8px_24px_-6px_rgba(0,0,0,0.55)] md:hidden"
+          className={cn(
+            "fixed left-3 right-3 z-50 grid overflow-hidden rounded-2xl border border-border bg-card/95 px-1 py-1 backdrop-blur supports-[backdrop-filter]:bg-card/80 shadow-[0_8px_24px_-6px_rgba(0,0,0,0.55)] md:hidden",
+            gridCols,
+          )}
           style={{ bottom: "calc(env(safe-area-inset-bottom) + 10px)" }}
         >
-          {bottomItems.slice(0, 4).map((item) => {
+          {visible.map((item) => {
             const active = pathname === item.to;
             const Icon = item.icon;
             const badge = navBadges[item.to];
@@ -470,14 +478,14 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
                 to={item.to}
                 onClick={() => markNavSeen(user?.id, item.to)}
                 className={cn(
-                  "relative flex min-h-[68px] flex-col items-center justify-center gap-1 px-1 pt-2 pb-2 text-[10px] font-medium transition-colors",
+                  "relative flex min-h-[64px] flex-col items-center justify-center gap-0.5 px-0.5 pt-2 pb-2 text-[10px] font-medium transition-colors",
                   active
                     ? "text-primary"
                     : "text-muted-foreground hover:text-foreground"
                 )}
               >
                 <div className="relative">
-                  <Icon className={cn("h-6 w-6", active && "drop-shadow-[0_0_6px_hsl(var(--primary)/0.6)]")} />
+                  <Icon className={cn("h-5 w-5", active && "drop-shadow-[0_0_6px_hsl(var(--primary)/0.6)]")} />
                   {badge?.count != null && badge.count > 0 && (
                     <span className="absolute -right-2 -top-1.5 grid h-[16px] min-w-[16px] place-items-center rounded-full bg-destructive px-1 text-[9px] font-bold leading-none text-destructive-foreground ring-2 ring-card">
                       {badge.count > 9 ? "9+" : badge.count}
@@ -487,7 +495,7 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
                     <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-destructive ring-2 ring-card" />
                   )}
                 </div>
-                <span className="w-full px-0.5 text-center text-[10px] leading-tight tracking-tight">{item.label}</span>
+                <span className="w-full px-0.5 text-center text-[9.5px] leading-tight tracking-tight">{item.label}</span>
                 {active && <span className="mt-0.5 h-0.5 w-5 rounded-full bg-primary" />}
               </Link>
             );
@@ -496,15 +504,17 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
             type="button"
             onClick={() => setMoreOpen(true)}
             className={cn(
-              "relative flex min-h-[68px] flex-col items-center justify-center gap-1 px-1 pt-2 pb-2 text-[10px] font-medium transition-colors",
+              "relative flex min-h-[64px] flex-col items-center justify-center gap-0.5 px-0.5 pt-2 pb-2 text-[10px] font-medium transition-colors",
               moreOpen ? "text-primary" : "text-muted-foreground hover:text-foreground",
             )}
             aria-label="More"
           >
-            <MoreHorizontal className="h-6 w-6" />
-            <span className="w-full px-0.5 text-center text-[10px] leading-tight tracking-tight">More</span>
+            <MoreHorizontal className="h-5 w-5" />
+            <span className="w-full px-0.5 text-center text-[9.5px] leading-tight tracking-tight">More</span>
           </button>
         </nav>
+          );
+        })()}
       </div>
 
       {/* Mobile "More" sheet — full grouped menu + search */}
