@@ -1519,6 +1519,15 @@ export function MessageThread({
 
             {/* Priority selector removed for simplicity. */}
 
+            {(role === "admin" || role === "coach") && (
+              <MeetQuickAction
+                disabled={sending || uploading}
+                onInsert={(text) =>
+                  setBody((b) => (b ? `${b.replace(/\s+$/, "")} ${text}` : text))
+                }
+              />
+            )}
+
             {/* Textarea */}
             <Textarea
               value={body}
