@@ -218,7 +218,7 @@ export function GroupChatsPane({ asAdmin }: { asAdmin: boolean }) {
                 />
               )}
               <GroupCover groupId={group.id} myRole={myPresenceRole} />
-              <div className="min-w-0 flex-1">
+              <div className="min-w-0 flex-1 overflow-hidden">
                 <div className="flex items-center justify-between gap-2">
                   <span className={cn("truncate text-sm", unread ? "font-bold" : "font-semibold")}>
                     {group.name}
@@ -303,38 +303,43 @@ function GroupCover({ groupId, myRole }: { groupId: string; myRole: "admin" | "c
   const { others } = useGroupPresence(groupId, myRole);
   const members = Array.isArray(rawMembers) ? rawMembers : [];
   const liveIds = new Set(others.map((p) => p.user_id));
-  const visible = (members as GroupMemberProfile[]).slice(0, 3);
+  const visible = (members as GroupMemberProfile[]).slice(0, 2);
   const extra = Math.max(0, members.length - visible.length);
+  const anyLive = visible.some((m) => liveIds.has(m.user_id));
 
   if (visible.length === 0) {
     return (
-      <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
+      <div className="pointer-events-none grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
         <Users className="h-4 w-4" />
       </div>
     );
   }
 
   return (
-    <div className="relative flex h-9 w-9 shrink-0 items-center">
-      <div className="flex -space-x-2">
+    <div
+      className="pointer-events-none relative flex h-10 shrink-0 items-center"
+      style={{ width: visible.length === 1 ? 36 : 50 }}
+    >
+      <div className="flex -space-x-2.5">
         {visible.map((m) => (
-          <div key={m.user_id} className="relative">
-            <UserAvatar
-              src={m.avatar_url}
-              name={m.full_name ?? "Member"}
-              size={28}
-              tone="neutral"
-              expandable={false}
-              className="border-2 border-card"
-            />
-            {liveIds.has(m.user_id) && (
-              <span className="absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full bg-emerald-500 ring-2 ring-card" />
-            )}
-          </div>
+          <UserAvatar
+            key={m.user_id}
+            src={m.avatar_url}
+            name={m.full_name ?? "Member"}
+            size={32}
+            tone="neutral"
+            expandable={false}
+            className="border-2 border-card"
+          />
         ))}
       </div>
+      {anyLive && (
+        <span className="absolute -bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-card" />
+      )}
       {extra > 0 && (
-        <span className="ml-1 text-[10px] font-semibold text-muted-foreground">+{extra}</span>
+        <span className="absolute -bottom-1 -right-1 grid h-4 min-w-[16px] place-items-center rounded-full bg-secondary px-1 text-[9px] font-bold leading-none text-foreground ring-2 ring-card">
+          +{extra}
+        </span>
       )}
     </div>
   );
