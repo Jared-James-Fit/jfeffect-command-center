@@ -1,11 +1,15 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { usePortalUserId } from "@/lib/client-impersonation";
 import { Card } from "@/components/ui/card";
 import { MessageThread } from "@/components/message-thread";
 import { NotificationBell } from "@/components/notification-bell";
 import { useChatPresence, LiveDot } from "@/hooks/use-chat-presence";
+import { GroupChatsPane, useMyGroupSummary } from "@/components/group-chats-pane";
+import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/portal/messages")({
   component: ClientMessages,
@@ -13,6 +17,8 @@ export const Route = createFileRoute("/_authenticated/portal/messages")({
 
 function ClientMessages() {
   const portalUserId = usePortalUserId();
+  const [tab, setTab] = useState<"coach" | "groups">("coach");
+  const groupSummary = useMyGroupSummary();
 
   const { data: client } = useQuery({
     queryKey: ["my-client-id", portalUserId],
@@ -62,7 +68,42 @@ function ClientMessages() {
         <NotificationBell />
       </header>
 
-      {!client ? (
+      {/* Coach Chat | Group Chats toggle — only when the client has groups */}
+      {groupSummary.hasGroups && (
+        <div className="flex items-center justify-center gap-2 border-b border-border bg-card/60 px-3 py-2">
+          <div className="inline-flex rounded-full bg-secondary/60 p-0.5 text-xs">
+            <button
+              onClick={() => setTab("coach")}
+              className={cn(
+                "rounded-full px-3 py-1 font-semibold transition",
+                tab === "coach" ? "bg-primary text-primary-foreground" : "text-muted-foreground",
+              )}
+            >
+              Coach Chat
+            </button>
+            <button
+              onClick={() => setTab("groups")}
+              className={cn(
+                "relative rounded-full px-3 py-1 font-semibold transition",
+                tab === "groups" ? "bg-primary text-primary-foreground" : "text-muted-foreground",
+              )}
+            >
+              Group Chats
+              {groupSummary.unread > 0 && (
+                <Badge className="ml-1 h-4 min-w-[16px] rounded-full px-1 text-[10px]">
+                  {groupSummary.unread}
+                </Badge>
+              )}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {tab === "groups" ? (
+        <div className="min-h-0 flex-1">
+          <GroupChatsPane asAdmin={false} />
+        </div>
+      ) : !client ? (
         <div className="p-6">
           <Card className="border-border bg-card p-6 text-sm text-muted-foreground">
             Your coach hasn't set up your profile yet. Messaging will be available once they do.
