@@ -21,6 +21,7 @@ import { UpcomingBirthdaysWidget } from "@/components/upcoming-birthdays-widget"
 import { UpcomingEventsPanel } from "@/components/events/upcoming-events-panel";
 import { PriceCardPickerDialog } from "@/components/price-card-picker-dialog";
 import { UserAvatar } from "@/components/user-avatar";
+import { getCoachIntel, filterIntel, LABEL_META } from "@/lib/coach-intel";
 
 export const Route = createFileRoute("/_authenticated/admin/")({
   component: AdminDashboard,
