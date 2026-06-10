@@ -379,6 +379,14 @@ export function LiftVideoCard({ video, role, userId, onChanged, onEdit, clientNa
         {video.watched_at && <Badge variant="outline" className="border-blue-500/40 bg-blue-500/10 text-blue-600"><Eye className="mr-1 h-3 w-3" />Coach Jared watched · {formatDistanceToNow(parseISO(video.watched_at), { addSuffix: true })}</Badge>}
         {video.liked_at && <Badge variant="outline" className="border-pink-500/40 bg-pink-500/10 text-pink-600"><ThumbsUp className="mr-1 h-3 w-3" />Coach Jared liked</Badge>}
         {video.reviewed_at && <Badge variant="outline" className="border-emerald-500/40 bg-emerald-500/10 text-emerald-600"><CheckCircle2 className="mr-1 h-3 w-3" />Reviewed</Badge>}
+        {role === "admin" && video.video_storage_path && (
+          <ArchiveStatusBadge
+            status={video.archive_status ?? "not_archived"}
+            onRetry={handleRetryArchive}
+            retrying={retryingArchive}
+            error={video.archive_error ?? null}
+          />
+        )}
       </div>
 
       {/* Admin actions */}
