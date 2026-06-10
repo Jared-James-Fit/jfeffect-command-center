@@ -22,6 +22,7 @@ import { formatDistanceToNow, parseISO } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useChatPresence, LiveDot } from "@/hooks/use-chat-presence";
 import { GroupChatsPane } from "@/components/group-chats-pane";
+import { GroupChatErrorBoundary } from "@/components/group-chat-error-boundary";
 import { MassMessageDialog } from "@/components/mass-message-dialog";
 import { Megaphone, Users as UsersIcon } from "lucide-react";
 
@@ -192,7 +193,9 @@ function MessagesInbox() {
         <div className="flex min-h-0 flex-1 w-full flex-col">
           <TabsHeader tab={tab} setTab={setTab} onMass={() => setMassOpen(true)} />
           <div className="min-h-0 flex-1">
-            <GroupChatsPane asAdmin />
+            <GroupChatErrorBoundary>
+              <GroupChatsPane asAdmin />
+            </GroupChatErrorBoundary>
           </div>
           <MassMessageDialog open={massOpen} onOpenChange={setMassOpen} />
         </div>

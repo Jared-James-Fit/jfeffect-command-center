@@ -8,6 +8,7 @@ import { MessageThread } from "@/components/message-thread";
 import { NotificationBell } from "@/components/notification-bell";
 import { useChatPresence, LiveDot } from "@/hooks/use-chat-presence";
 import { GroupChatsPane, useMyGroupSummary } from "@/components/group-chats-pane";
+import { GroupChatErrorBoundary } from "@/components/group-chat-error-boundary";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
@@ -101,7 +102,9 @@ function ClientMessages() {
 
       {tab === "groups" ? (
         <div className="min-h-0 flex-1">
-          <GroupChatsPane asAdmin={false} />
+          <GroupChatErrorBoundary>
+            <GroupChatsPane asAdmin={false} />
+          </GroupChatErrorBoundary>
         </div>
       ) : !client ? (
         <div className="p-6">
