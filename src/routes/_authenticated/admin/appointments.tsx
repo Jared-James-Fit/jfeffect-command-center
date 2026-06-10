@@ -21,6 +21,9 @@ import { toast } from "sonner";
 import { AppointmentCalendarGrid } from "@/components/appointments/appointment-week-grid";
 import { SendBookingLinkDialog } from "@/components/appointments/send-booking-link-dialog";
 import { RescheduleDialog } from "@/components/appointments/reschedule-dialog";
+import { CancelAppointmentDialog } from "@/components/appointments/cancel-dialog";
+import { SlotPicker } from "@/components/appointments/slot-picker";
+import { tzWallToUtcISO } from "@/lib/tz";
 import { buildAppointmentIcs, downloadIcs } from "@/lib/appointments-ics";
 
 export const Route = createFileRoute("/_authenticated/admin/appointments")({ component: AppointmentsPage });
@@ -101,14 +104,9 @@ function statusTone(s: string) {
 }
 
 function ApptRow({ a, onChange }: { a: any; onChange: () => void }) {
-  const cancelFn = useServerFn(cancelAppointment);
   const markFn = useServerFn(markAppointmentStatus);
   const [reOpen, setReOpen] = useState(false);
-  const cancel = useMutation({
-    mutationFn: () => cancelFn({ data: { id: a.id } }),
-    onSuccess: () => { toast.success("Cancelled"); onChange(); },
-    onError: (e: any) => toast.error(e.message),
-  });
+  const [cancelOpen, setCancelOpen] = useState(false);
   const mark = useMutation({
     mutationFn: (s: any) => markFn({ data: { id: a.id, status: s } }),
     onSuccess: () => { toast.success("Updated"); onChange(); },
@@ -146,12 +144,13 @@ function ApptRow({ a, onChange }: { a: any; onChange: () => void }) {
               <Button size="sm" variant="outline" onClick={() => setReOpen(true)}><CalendarClock className="mr-1 h-3 w-3" /> Reschedule</Button>
               <Button size="sm" variant="outline" onClick={() => mark.mutate("Completed")}><CheckCircle2 className="mr-1 h-3 w-3" /> Complete</Button>
               <Button size="sm" variant="outline" onClick={() => mark.mutate("NoShow")}><AlertTriangle className="mr-1 h-3 w-3" /> No-show</Button>
-              <Button size="sm" variant="ghost" onClick={() => cancel.mutate()}><X className="mr-1 h-3 w-3" /> Cancel</Button>
+              <Button size="sm" variant="ghost" onClick={() => setCancelOpen(true)}><X className="mr-1 h-3 w-3" /> Cancel</Button>
             </>
           )}
         </div>
       </div>
       <RescheduleDialog open={reOpen} onOpenChange={setReOpen} appointment={a} onChanged={onChange} />
+      <CancelAppointmentDialog open={cancelOpen} onOpenChange={setCancelOpen} appointment={a} onCancelled={onChange} />
     </Card>
   );
 }
