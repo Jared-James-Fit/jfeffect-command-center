@@ -11,6 +11,7 @@ import {
   FileText, Image as ImageIcon, Video, Link as LinkIcon, ExternalLink,
   Mic, File as FileIcon, Download, ChevronDown, ChevronUp, Play, Pause, Gauge,
 } from "lucide-react";
+import { ClipboardList, FileSignature, UtensilsCrossed, ChevronRight } from "lucide-react";
 import { format, parseISO, isToday, isYesterday } from "date-fns";
 
 /* ------------------------------- Attachment Types (shared shape) ------------------------------- */
