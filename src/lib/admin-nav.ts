@@ -66,6 +66,60 @@ export const adminNav: NavItem[] = [
   { to: "/admin/floating-bar", label: "Floating Bar", icon: LayoutGrid, group: "Account" },
 ];
 
+// Coaching-focused admin nav (the same as adminNav minus membership-only items,
+// with a single shortcut to the Membership Admin Dashboard at the top).
+export const coachingAdminNav: NavItem[] = [
+  // SHORTCUT to membership mode
+  { to: "/admin/membership", label: "JF Membership Dashboard", icon: Sparkles, group: "Core" },
+  // CORE
+  { to: "/admin", label: "Dashboard", icon: LayoutDashboard, group: "Core" },
+  { to: "/admin/clients", label: "Coaching Clients", icon: Users, group: "Core" },
+  { to: "/admin/tasks", label: "Tasks", icon: ListChecks, group: "Core" },
+  { to: "/admin/messages", label: "Messages", icon: MessageCircle, group: "Core" },
+  { to: "/admin/check-in-reviews", label: "Check-In Reviews", icon: ClipboardList, group: "Core" },
+  { to: "/admin/lift-videos", label: "Lift Reviews", icon: Video, group: "Core" },
+  { to: "/admin/training-intelligence", label: "Training Intel", icon: Activity, group: "Core" },
+  { to: "/admin/client-action-requests", label: "Action Requests", icon: ClipboardCheck, group: "Core" },
+  // COMMUNICATION
+  { to: "/admin/broadcasts", label: "Broadcasts", icon: Megaphone, group: "Communication" },
+  { to: "/admin/call-access", label: "Call Access", icon: Phone, group: "Communication" },
+  { to: "/admin/settings/sms", label: "SMS Access", icon: MessageCircle, group: "Communication" },
+  { to: "/admin/settings/chat", label: "Chat Settings", icon: MessageCircle, group: "Communication" },
+  { to: "/admin/chat-gifs", label: "Chat GIF Library", icon: Sparkles, group: "Communication" },
+  { to: "/admin/chat-sounds", label: "Chat Sound Library", icon: Sparkles, group: "Communication" },
+  // PROGRAMMING (coaching)
+  { to: "/admin/program-library", label: "Program Library", icon: BookOpen, group: "Programming" },
+  { to: "/admin/exercises", label: "Exercise Library", icon: Dumbbell, group: "Programming" },
+  { to: "/admin/recipes", label: "Recipe Library", icon: ChefHat, group: "Programming" },
+  { to: "/admin/native-forms", label: "Check-Ins & Forms", icon: FileEdit, group: "Programming" },
+  { to: "/admin/fillout-submissions", label: "Fillout Submissions", icon: ClipboardList, group: "Programming" },
+  { to: "/admin/faqs", label: "FAQ Manager", icon: HelpCircle, group: "Programming" },
+  // BUSINESS
+  { to: "/admin/payment-links", label: "Products", icon: CreditCard, group: "Business" },
+  { to: "/admin/payments", label: "Payments", icon: DollarSign, group: "Business" },
+  { to: "/admin/purchases", label: "Purchases", icon: ClipboardCheck, group: "Business" },
+  { to: "/admin/calendar", label: "PT Calendar", icon: Calendar, group: "Business" },
+  { to: "/admin/appointments", label: "Appointments", icon: Calendar, group: "Business" },
+  { to: "/admin/booking-links", label: "Booking Links", icon: LinkIcon, group: "Business" },
+  { to: "/admin/google-calendar", label: "Google Calendar", icon: Calendar, group: "Business" },
+  { to: "/admin/events", label: "Events", icon: Calendar, group: "Business" },
+  // DOCUMENTS
+  { to: "/admin/agreements", label: "Agreements", icon: FileSignature, group: "Documents" },
+  { to: "/admin/forms", label: "Forms", icon: FileEdit, group: "Documents" },
+  { to: "/admin/resources", label: "Resources", icon: FolderOpen, group: "Documents" },
+  // TEAM / OPS
+  { to: "/admin/coaches", label: "Coaches", icon: UserCheck, group: "Team / Ops" },
+  { to: "/admin/media-review", label: "Media Inbox", icon: Film, group: "Team / Ops" },
+  { to: "/admin/media-archives", label: "Media Archives", icon: FolderOpen, group: "Team / Ops" },
+  { to: "/admin/apps", label: "Integrations", icon: Layers, group: "Team / Ops" },
+  { to: "/admin/business-systems", label: "Operations", icon: Briefcase, group: "Team / Ops" },
+  { to: "/admin/archives", label: "Archive Manager", icon: Archive, group: "Team / Ops" },
+  // ACCOUNT
+  { to: "/admin/account", label: "Account", icon: UserCog, group: "Account" },
+  { to: "/admin/settings", label: "Settings", icon: Settings, group: "Account" },
+  { to: "/admin/floating-bar", label: "Floating Bar", icon: LayoutGrid, group: "Account" },
+];
+
 // Coach navigation: same client-coaching tools as admin, without business/admin sections.
 export const coachNav: NavItem[] = [
   { to: "/admin", label: "Dashboard", icon: LayoutDashboard },
