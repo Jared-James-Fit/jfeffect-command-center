@@ -19,7 +19,9 @@ import { Calendar as CalendarIcon, Plus, Video, MapPin, Phone, X, CheckCircle2, 
 import { toast } from "sonner";
 import { AppointmentCalendarGrid } from "@/components/appointments/appointment-week-grid";
 import { SendBookingLinkDialog } from "@/components/appointments/send-booking-link-dialog";
-import { Link2 } from "lucide-react";
+import { Link2, Download, CalendarClock } from "lucide-react";
+import { RescheduleDialog } from "@/components/appointments/reschedule-dialog";
+import { buildAppointmentIcs, downloadIcs } from "@/lib/appointments-ics";
 
 export const Route = createFileRoute("/_authenticated/admin/appointments")({ component: AppointmentsPage });
 
@@ -101,6 +103,7 @@ function statusTone(s: string) {
 function ApptRow({ a, onChange }: { a: any; onChange: () => void }) {
   const cancelFn = useServerFn(cancelAppointment);
   const markFn = useServerFn(markAppointmentStatus);
+  const [reOpen, setReOpen] = useState(false);
   const cancel = useMutation({
     mutationFn: () => cancelFn({ data: { id: a.id } }),
     onSuccess: () => { toast.success("Cancelled"); onChange(); },
@@ -113,6 +116,7 @@ function ApptRow({ a, onChange }: { a: any; onChange: () => void }) {
   });
   const when = new Date(a.starts_at).toLocaleString(undefined, { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
   const attendeeName = a.client?.full_name || a.external_name || "—";
+  function ics() { downloadIcs(`${a.title || "appointment"}.ics`, buildAppointmentIcs(a)); }
   return (
     <Card className="border-border bg-card p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -136,8 +140,10 @@ function ApptRow({ a, onChange }: { a: any; onChange: () => void }) {
               <Button size="sm" variant="outline"><Video className="mr-2 h-3 w-3" /> Join Meet</Button>
             </a>
           )}
+          <Button size="sm" variant="outline" onClick={ics}><Download className="mr-1 h-3 w-3" /> .ics</Button>
           {a.status === "Scheduled" && (
             <>
+              <Button size="sm" variant="outline" onClick={() => setReOpen(true)}><CalendarClock className="mr-1 h-3 w-3" /> Reschedule</Button>
               <Button size="sm" variant="outline" onClick={() => mark.mutate("Completed")}><CheckCircle2 className="mr-1 h-3 w-3" /> Complete</Button>
               <Button size="sm" variant="outline" onClick={() => mark.mutate("NoShow")}><AlertTriangle className="mr-1 h-3 w-3" /> No-show</Button>
               <Button size="sm" variant="ghost" onClick={() => cancel.mutate()}><X className="mr-1 h-3 w-3" /> Cancel</Button>
@@ -145,6 +151,7 @@ function ApptRow({ a, onChange }: { a: any; onChange: () => void }) {
           )}
         </div>
       </div>
+      <RescheduleDialog open={reOpen} onOpenChange={setReOpen} appointment={a} onChanged={onChange} />
     </Card>
   );
 }
