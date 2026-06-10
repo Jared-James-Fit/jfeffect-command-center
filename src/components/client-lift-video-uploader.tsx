@@ -612,7 +612,7 @@ export function ClientLiftVideoUploader({ clientId, clientName, userId, onSaved 
                         </div>
                       </div>
                     </button>
-                    {clip.kind === "file" && clip.previewUrl && (
+                    {clip.kind === "file" && !clip.isImage && (
                       <button
                         type="button"
                         onClick={(e) => { e.stopPropagation(); setPreviewClip(clip); }}
