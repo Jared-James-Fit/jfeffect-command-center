@@ -278,3 +278,115 @@ export const setClientSmsOptOut = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return { ok: true };
   });
+
+/** Bulk personal SMS — same body (template-rendered per client) to a list of clients. */
+const SendBulkSchema = z.object({
+  client_ids: z.array(z.string().uuid()).min(1).max(500),
+  body: z.string().trim().min(1).max(1000),
+  kind: z.enum(["manual", "bulk"]).optional(),
+});
+export const sendBulkSms = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => SendBulkSchema.parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context as any;
+    const { data: roles } = await supabase.from("user_roles").select("role").eq("user_id", userId);
+    const isAdmin = (roles ?? []).some((r: any) => r.role === "admin");
+
+    const { data: settings } = await supabase.from("sms_settings").select("*").eq("singleton", true).maybeSingle();
+    if (!settings) throw new Error("SMS settings not configured");
+    if (!settings.enabled) throw new Error("SMS sending is disabled in settings");
+    if (!settings.from_phone) throw new Error("Set a Twilio From phone number in SMS settings first");
+
+    const { data: clients, error: cErr } = await supabase
+      .from("clients")
+      .select("id, first_name, full_name, phone, sms_opt_out")
+      .in("id", data.client_ids);
+    if (cErr) throw new Error(cErr.message);
+
+    let sent = 0, skipped = 0, failed = 0;
+    const results: Array<{ client_id: string; status: string; reason?: string }> = [];
+    const kind = data.kind ?? "bulk";
+
+    for (const c of clients ?? []) {
+      if (!isAdmin) {
+        try { await assertCanMessage(supabase, userId, c.id); }
+        catch { skipped++; results.push({ client_id: c.id, status: "skipped", reason: "forbidden" }); continue; }
+      }
+      if (c.sms_opt_out) { skipped++; results.push({ client_id: c.id, status: "skipped", reason: "opted_out" }); continue; }
+      const toPhone = normalizePhone(c.phone);
+      if (!toPhone) { skipped++; results.push({ client_id: c.id, status: "skipped", reason: "no_phone" }); continue; }
+
+      const body = renderTemplate(data.body, {
+        first_name: c.first_name ?? c.full_name?.split(" ")[0] ?? "there",
+        full_name: c.full_name ?? "",
+        brand: settings.brand_name,
+      });
+
+      try {
+        const { sid } = await sendViaTwilio(toPhone, settings.from_phone, body);
+        await supabase.from("sms_log").insert({
+          client_id: c.id, to_phone: toPhone, body, kind,
+          status: "sent", twilio_sid: sid, sender_user_id: userId,
+        });
+        sent++; results.push({ client_id: c.id, status: "sent" });
+      } catch (e: any) {
+        await supabase.from("sms_log").insert({
+          client_id: c.id, to_phone: toPhone, body, kind,
+          status: "failed", error: e?.message ?? String(e), sender_user_id: userId,
+        });
+        failed++; results.push({ client_id: c.id, status: "failed", reason: e?.message });
+      }
+    }
+    return { sent, skipped, failed, total: (clients ?? []).length, results };
+  });
+
+/** Save (insert or update) a custom SMS automation. */
+const AutomationSchema = z.object({
+  id: z.string().uuid().optional(),
+  name: z.string().trim().min(1).max(120),
+  category: z.string().trim().min(1).max(60).default("Custom"),
+  trigger_type: z.string().trim().min(1).max(60),
+  trigger_config: z.record(z.any()).default({}),
+  delay_minutes: z.number().int().min(0).max(60 * 24 * 60).default(0),
+  audience_type: z.string().trim().min(1).max(60).default("all_active"),
+  audience_config: z.record(z.any()).default({}),
+  body: z.string().trim().min(1).max(1000),
+  active: z.boolean().default(true),
+  max_per_client_per_day: z.number().int().min(1).max(20).default(1),
+  quiet_hours_start: z.string().default("21:00"),
+  quiet_hours_end: z.string().default("08:00"),
+  respect_quiet_hours: z.boolean().default(true),
+  internal_note: z.string().max(500).nullable().optional(),
+});
+export const upsertSmsAutomation = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => AutomationSchema.parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context as any;
+    const { data: roles } = await supabase.from("user_roles").select("role").eq("user_id", userId);
+    if (!(roles ?? []).some((r: any) => r.role === "admin")) throw new Error("Admin only");
+    if (data.id) {
+      const { id, ...patch } = data;
+      const { error } = await supabase.from("sms_automations").update(patch).eq("id", id);
+      if (error) throw new Error(error.message);
+      return { ok: true, id };
+    }
+    const { data: row, error } = await supabase.from("sms_automations")
+      .insert({ ...data, created_by: userId }).select("id").maybeSingle();
+    if (error) throw new Error(error.message);
+    return { ok: true, id: row?.id };
+  });
+
+const DeleteAutomation = z.object({ id: z.string().uuid() });
+export const deleteSmsAutomation = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => DeleteAutomation.parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context as any;
+    const { data: roles } = await supabase.from("user_roles").select("role").eq("user_id", userId);
+    if (!(roles ?? []).some((r: any) => r.role === "admin")) throw new Error("Admin only");
+    const { error } = await supabase.from("sms_automations").delete().eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
