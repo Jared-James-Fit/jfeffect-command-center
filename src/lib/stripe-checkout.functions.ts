@@ -14,6 +14,35 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 const STRIPE_API = "https://api.stripe.com/v1";
 
+/**
+ * Allowlist of origins we will use to build Stripe success/cancel/return URLs.
+ * Prevents an open redirect via a client-supplied `origin` parameter.
+ */
+const ALLOWED_ORIGIN_HOSTS = new Set<string>([
+  "jfeffect.com",
+  "www.jfeffect.com",
+  "jfeffect-command-center.lovable.app",
+]);
+
+function assertAllowedOrigin(origin: string): string {
+  let url: URL;
+  try {
+    url = new URL(origin);
+  } catch {
+    throw new Error("Invalid origin");
+  }
+  if (url.protocol !== "https:" && url.protocol !== "http:") {
+    throw new Error("Invalid origin protocol");
+  }
+  const host = url.host.toLowerCase();
+  const ok =
+    ALLOWED_ORIGIN_HOSTS.has(host) ||
+    host.endsWith(".lovable.app") ||
+    host.endsWith(".lovable.dev");
+  if (!ok) throw new Error("Origin not allowed");
+  return `${url.protocol}//${url.host}`;
+}
+
 function getStripeKey(): string {
   const key = process.env.STRIPE_SECRET_KEY;
   if (!key) throw new Error("Stripe is not configured. Add STRIPE_SECRET_KEY in project secrets.");
