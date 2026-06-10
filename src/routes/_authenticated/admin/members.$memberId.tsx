@@ -6,7 +6,7 @@ import {
   grantAccess, revokeAccess,
 } from "@/lib/members.functions";
 import { copyPovFromMember } from "@/lib/pov.functions";
-import { setPovFlag } from "@/components/admin-pov";
+import { setPovFlag } from "@/components/pov-quick-toggle";
 import { useNavigate } from "@tanstack/react-router";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
