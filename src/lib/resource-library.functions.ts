@@ -76,7 +76,8 @@ export const listResources = createServerFn({ method: "POST" })
   }).parse(i))
   .handler(async ({ data, context }) => {
     await assertCoachOrAdmin(context);
-    let q = context.supabase.from("resources").select("*").order("created_at", { ascending: false });
+    const cols = "id,folder_id,name,description,tags,storage_path,external_url,mime_type,file_size,thumbnail_path,created_by,created_at,updated_at";
+    let q = context.supabase.from("resources").select(cols).order("created_at", { ascending: false });
     const term = (data.search ?? "").trim();
     if (term) {
       // Use ilike across name, description, and tags for forgiving search
@@ -93,7 +94,7 @@ export const listResources = createServerFn({ method: "POST" })
     if (term) {
       const lower = term.toLowerCase();
       const tagMatches = (await context.supabase
-        .from("resources").select("*").contains("tags", [lower])).data ?? [];
+        .from("resources").select(cols).contains("tags", [lower])).data ?? [];
       const ids = new Set(items.map((r: any) => r.id));
       for (const r of tagMatches) if (!ids.has(r.id)) items.push(r);
     }
@@ -154,7 +155,8 @@ export const createResource = createServerFn({ method: "POST" })
       created_by: context.userId,
     };
     const { data: row, error } = await context.supabase
-      .from("resources").insert(payload).select("*").single();
+      .from("resources").insert(payload)
+      .select("id,folder_id,name,description,tags,storage_path,external_url,mime_type,file_size,thumbnail_path,created_by,created_at,updated_at").single();
     if (error) throw new Error(error.message);
     return { resource: row };
   });
