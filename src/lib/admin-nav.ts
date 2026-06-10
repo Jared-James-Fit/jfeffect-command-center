@@ -38,6 +38,7 @@ export const adminNav: NavItem[] = [
   { to: "/admin/exercises", label: "Exercise Library", icon: Dumbbell, group: "Programming" },
   { to: "/admin/recipes", label: "Recipe Library", icon: ChefHat, group: "Programming" },
   { to: "/admin/native-forms", label: "Check-Ins & Forms", icon: FileEdit, group: "Programming" },
+  { to: "/admin/fillout-submissions", label: "Fillout Submissions", icon: ClipboardList, group: "Programming" },
   { to: "/admin/faqs", label: "FAQ Manager", icon: HelpCircle, group: "Programming" },
   // BUSINESS
   { to: "/admin/payment-links", label: "Products", icon: CreditCard, group: "Business" },
