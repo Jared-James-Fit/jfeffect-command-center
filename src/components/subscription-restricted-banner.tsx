@@ -18,7 +18,7 @@ export function SubscriptionRestrictedBanner({ status }: { status: string | null
         <div className="font-semibold">{reason}</div>
         <div className="text-xs opacity-80">Your account data and history are saved. Reactivate billing to restore membership access.</div>
       </div>
-      <Link to={"/portal/billing" as any}>
+      <Link to={"/m/account" as any}>
         <Button size="sm" variant="outline" className="border-amber-500/50">Manage billing</Button>
       </Link>
     </div>
