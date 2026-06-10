@@ -92,8 +92,15 @@ function useCollapsedSections() {
       if (raw) setCollapsed(new Set(JSON.parse(raw)));
     } catch {}
   }, []);
-  const toggle = (label: string) => {
+  const toggle = (label: string, allLabels?: string[]) => {
     setCollapsed((prev) => {
+      const isCollapsed = prev.has(label);
+      if (allLabels && isCollapsed) {
+        // Accordion: open this section, collapse all others
+        const next = new Set(allLabels.filter((l) => l !== label));
+        try { localStorage.setItem(SIDEBAR_COLLAPSED_SECTIONS_KEY, JSON.stringify(Array.from(next))); } catch {}
+        return next;
+      }
       const next = new Set(prev);
       if (next.has(label)) next.delete(label); else next.add(label);
       try { localStorage.setItem(SIDEBAR_COLLAPSED_SECTIONS_KEY, JSON.stringify(Array.from(next))); } catch {}
@@ -160,6 +167,7 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
   };
 
   const grouped = useMemo(() => groupNavItems(items), [items]);
+  const allGroupLabels = useMemo(() => grouped.map((g) => g.label).filter(Boolean) as string[], [grouped]);
   const bottomItems = customBottomItems ?? items.slice(0, 5);
   // Sections that contain the currently active route should auto-open.
   const activeGroupLabel = useMemo(() => {
@@ -357,7 +365,7 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
                 <div key={group.label ?? "default"}>
                   {group.label && !isCollapsed && (
                     <button
-                      onClick={() => toggleSection(group.label!)}
+                      onClick={() => toggleSection(group.label!, allGroupLabels)}
                       className="group flex w-full items-center justify-between rounded px-2.5 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground"
                     >
                       <span>{group.label}</span>
