@@ -126,16 +126,17 @@ export function AccountProfileSettings({
         await supabase.from("coaches").update({ phone: trimmed } as any).eq("id", coachId);
       } else {
         // Create a coach row so call routing works (only if user is a coach/admin viewing this card)
-        await supabase.from("coaches").insert({
-          user_id: user.id,
-          email: (user.email ?? "").toLowerCase(),
-          full_name: fullName || user.email || "Coach",
-          phone: trimmed,
-          status: "Active",
-        } as any).then(async () => {
+        try {
+          await supabase.from("coaches").insert({
+            user_id: user.id,
+            email: (user.email ?? "").toLowerCase(),
+            full_name: fullName || user.email || "Coach",
+            phone: trimmed,
+            status: "Active",
+          } as any);
           const { data } = await supabase.from("coaches").select("id").eq("user_id", user.id).maybeSingle();
           if (data?.id) setCoachId(data.id);
-        }).catch(() => {});
+        } catch { /* non-coach users — profile phone is enough */ }
       }
       setOriginalPhone(trimmed);
     },
