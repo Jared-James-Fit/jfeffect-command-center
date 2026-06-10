@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { listAppointments, createAppointment, cancelAppointment, markAppointmentStatus } from "@/lib/appointments.functions";
+import { listAppointments, createAppointment, markAppointmentStatus } from "@/lib/appointments.functions";
 import { getGoogleBusy } from "@/lib/google-cal.functions";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
@@ -174,8 +174,16 @@ function NewAppointmentDialog({ open, onOpenChange, onCreated }: { open: boolean
   });
 
   const [form, setForm] = useState<any>(() => defaultForm());
-  const startsAtISO = (() => { try { return new Date(`${form.date}T${form.startTime}:00`).toISOString(); } catch { return null; } })();
-  const endsAtISO = (() => { try { return new Date(`${form.date}T${form.endTime}:00`).toISOString(); } catch { return null; } })();
+  const durationMin = (() => {
+    try {
+      const [sh, sm] = form.startTime.split(":").map(Number);
+      const [eh, em] = form.endTime.split(":").map(Number);
+      const d = (eh * 60 + em) - (sh * 60 + sm);
+      return d > 0 ? d : 30;
+    } catch { return 30; }
+  })();
+  const startsAtISO = (() => { try { return tzWallToUtcISO(form.date, form.startTime, form.timezone); } catch { return null; } })();
+  const endsAtISO = (() => { try { return tzWallToUtcISO(form.date, form.endTime, form.timezone); } catch { return null; } })();
   const { data: busy = [] } = useQuery({
     queryKey: ["gcal-busy", form.host_coach_id || "me", startsAtISO, endsAtISO],
     enabled: open && !!startsAtISO && !!endsAtISO,
@@ -209,8 +217,8 @@ function NewAppointmentDialog({ open, onOpenChange, onCreated }: { open: boolean
 
   const mut = useMutation({
     mutationFn: async () => {
-      const startsAt = new Date(`${form.date}T${form.startTime}:00`).toISOString();
-      const endsAt = new Date(`${form.date}T${form.endTime}:00`).toISOString();
+      const startsAt = tzWallToUtcISO(form.date, form.startTime, form.timezone);
+      const endsAt = tzWallToUtcISO(form.date, form.endTime, form.timezone);
       return create({ data: {
         host_coach_id: form.host_coach_id || undefined,
         client_id: form.client_id || null,
@@ -275,9 +283,33 @@ function NewAppointmentDialog({ open, onOpenChange, onCreated }: { open: boolean
           )}
           <div><Label>Date</Label><Input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} /></div>
           <div className="grid grid-cols-2 gap-2">
-            <div><Label>Start</Label><Input type="time" value={form.startTime} onChange={(e) => setForm({ ...form, startTime: e.target.value })} /></div>
-            <div><Label>End</Label><Input type="time" value={form.endTime} onChange={(e) => setForm({ ...form, endTime: e.target.value })} /></div>
+            <div><Label>Start</Label><Input type="time" step={900} value={form.startTime} onChange={(e) => setForm({ ...form, startTime: e.target.value })} /></div>
+            <div><Label>End</Label><Input type="time" step={900} value={form.endTime} onChange={(e) => setForm({ ...form, endTime: e.target.value })} /></div>
           </div>
+          <SlotPicker
+            date={form.date}
+            tz={form.timezone}
+            durationMin={durationMin}
+            coachId={form.host_coach_id || undefined}
+            selectedTime={form.startTime}
+            customTime={form.startTime}
+            onPick={(t) => {
+              const [h, m] = t.split(":").map(Number);
+              const endMin = h * 60 + m + durationMin;
+              const eh = String(Math.floor(endMin / 60) % 24).padStart(2, "0");
+              const em = String(endMin % 60).padStart(2, "0");
+              setForm({ ...form, startTime: t, endTime: `${eh}:${em}` });
+            }}
+            onCustomTimeChange={(t) => setForm({ ...form, startTime: t })}
+            onTzChange={(tz) => setForm({ ...form, timezone: tz })}
+            onDurationChange={(d) => {
+              const [h, m] = form.startTime.split(":").map(Number);
+              const endMin = h * 60 + m + d;
+              const eh = String(Math.floor(endMin / 60) % 24).padStart(2, "0");
+              const em = String(endMin % 60).padStart(2, "0");
+              setForm({ ...form, endTime: `${eh}:${em}` });
+            }}
+          />
           {hasConflict && (
             <div className="md:col-span-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-200">
               <div className="font-semibold mb-1 flex items-center gap-1"><AlertTriangle className="h-3.5 w-3.5" /> Conflicts on Google Calendar</div>
