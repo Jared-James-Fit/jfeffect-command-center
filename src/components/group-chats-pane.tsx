@@ -86,8 +86,8 @@ export function GroupChatsPane({ asAdmin }: { asAdmin: boolean }) {
         return { group: g, last, unread };
       })
       .sort((a, b) => {
-        const at = a.last?.created_at ?? a.group.updated_at;
-        const bt = b.last?.created_at ?? b.group.updated_at;
+        const at = a.last?.created_at ?? a.group.updated_at ?? "";
+        const bt = b.last?.created_at ?? b.group.updated_at ?? "";
         return bt.localeCompare(at);
       });
   }, [groups, lastMsgByGroup, lastReadByGroup, user?.id]);
