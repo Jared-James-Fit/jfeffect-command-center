@@ -158,6 +158,11 @@ export function ManageGroupDialog({
               <Button variant="outline" onClick={archive}>
                 <Archive className="mr-1 h-4 w-4" />{group.archived ? "Unarchive" : "Archive"}
               </Button>
+              {isAdmin && (
+                <Button variant="destructive" onClick={doDelete}>
+                  <Trash2 className="mr-1 h-4 w-4" /> Delete group
+                </Button>
+              )}
             </div>
           </div>
 
