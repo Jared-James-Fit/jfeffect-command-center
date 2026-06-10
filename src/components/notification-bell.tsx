@@ -14,8 +14,9 @@ import { formatDistanceToNow, parseISO } from "date-fns";
 import type { ConversationState, Message, MessageAttachment } from "@/lib/messages";
 
 type BellItem = {
-  kind: "message" | "lift_video" | "agreement" | "exercise_note";
+  kind: "message" | "lift_video" | "agreement" | "exercise_note" | "group_message";
   clientId: string;
+  groupId?: string;
   videoId?: string;
   agreementId?: string;
   noteId?: string;
