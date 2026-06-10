@@ -3,7 +3,6 @@ import { useServerFn } from "@tanstack/react-start";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
@@ -31,6 +30,8 @@ import { UserAvatar } from "@/components/user-avatar";
 import { copyLiftVideoStorageToDrive, refreshLiftVideoDriveDiagnostics, retryLiftVideoArchive } from "@/lib/lift-videos.functions";
 import { useLiftUploadState } from "@/lib/lift-upload-queue";
 import { Progress } from "@/components/ui/progress";
+import { LiftCommentComposer } from "@/components/lift-comment-composer";
+import { LiftCommentAttachments } from "@/components/lift-comment-attachments";
 
 type Props = {
   video: LiftVideo;
@@ -45,9 +46,8 @@ type Props = {
 
 export function LiftVideoCard({ video, role, userId, onChanged, onEdit, clientName, clientAvatarPath }: Props) {
   const [comments, setComments] = useState<LiftVideoComment[]>([]);
-  const [commentBody, setCommentBody] = useState("");
   const [isInternal, setIsInternal] = useState(false);
-  const [posting, setPosting] = useState(false);
+  const [quickReply, setQuickReply] = useState<{ text: string; nonce: number } | null>(null);
   const [embedUrl, setEmbedUrl] = useState<string | null>(null);
   const [signedUrl, setSignedUrl] = useState<string | null>(null);
   const [embedStatus, setEmbedStatus] = useState<"idle" | "loading" | "ready" | "slow" | "error">("idle");
@@ -102,27 +102,19 @@ export function LiftVideoCard({ video, role, userId, onChanged, onEdit, clientNa
     };
   }, [embedUrl, embedRetry]);
 
-  const post = async () => {
-    if (!commentBody.trim()) return;
-    setPosting(true);
-    try {
-      await addComment({
-        videoId: video.id,
-        clientId: video.client_id,
-        authorId: userId,
-        authorRole: role,
-        body: commentBody.trim(),
-        isInternalNote: role === "admin" ? isInternal : false,
-      });
-      setCommentBody("");
-      setIsInternal(false);
-      await loadComments();
-      onChanged?.();
-    } catch (e: any) {
-      toast.error(e.message ?? "Failed to post");
-    } finally {
-      setPosting(false);
-    }
+  const handleSend = async (body: string, attachments: any[]) => {
+    await addComment({
+      videoId: video.id,
+      clientId: video.client_id,
+      authorId: userId,
+      authorRole: role,
+      body,
+      isInternalNote: role === "admin" ? isInternal : false,
+      attachments,
+    });
+    setIsInternal(false);
+    await loadComments();
+    onChanged?.();
   };
 
   const act = async (fn: () => Promise<void>, success: string) => {
