@@ -12,15 +12,19 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { formatDistanceToNow, parseISO } from "date-fns";
 import type { ConversationState, Message, MessageAttachment } from "@/lib/messages";
+import { useServerFn } from "@tanstack/react-start";
+import { listUpcomingForBell, listMyPortalAppointments } from "@/lib/appointments.functions";
 
 type BellItem = {
-  kind: "message" | "lift_video" | "agreement" | "exercise_note" | "group_message" | "check_in_review";
+  kind: "message" | "lift_video" | "agreement" | "exercise_note" | "group_message" | "check_in_review" | "appointment";
   clientId: string;
   groupId?: string;
   videoId?: string;
   agreementId?: string;
   noteId?: string;
   reviewId?: string;
+  appointmentId?: string;
+  meetLink?: string | null;
   name: string;
   title: string;
   body: string;
