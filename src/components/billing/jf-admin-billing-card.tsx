@@ -26,12 +26,6 @@ export function JfAdminBillingCard({ member }: { member: any }) {
   const qc = useQueryClient();
   const invalidate = () => qc.invalidateQueries({ queryKey: ["admin-member", member.id] });
 
-  const wrap = (fn: any, msg = "Done") => useMutation({
-    mutationFn: () => fn({ data: { member_id: member.id } }),
-    onSuccess: () => { toast.success(msg); invalidate(); },
-    onError: (e: any) => toast.error(e.message),
-  });
-
   const syncFn = useServerFn(adminSyncMemberStripe);
   const cancelFn = useServerFn(adminCancelMember);
   const freezeFn = useServerFn(adminFreezeMember);
@@ -39,11 +33,31 @@ export function JfAdminBillingCard({ member }: { member: any }) {
   const reactFn = useServerFn(adminReactivateMember);
   const compFn = useServerFn(adminCompAccess);
 
-  const sync = wrap(syncFn, "Synced from Stripe");
-  const cancel = wrap(cancelFn, "Cancelled");
-  const freeze = wrap(freezeFn, "Frozen 30 days");
-  const hold = wrap(holdFn, "Switched to Hold Plan");
-  const react = wrap(reactFn, "Reactivated");
+  const sync = useMutation({
+    mutationFn: () => syncFn({ data: { member_id: member.id } }),
+    onSuccess: () => { toast.success("Synced from Stripe"); invalidate(); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const cancel = useMutation({
+    mutationFn: () => cancelFn({ data: { member_id: member.id } }),
+    onSuccess: () => { toast.success("Cancelled"); invalidate(); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const freeze = useMutation({
+    mutationFn: () => freezeFn({ data: { member_id: member.id } }),
+    onSuccess: () => { toast.success("Frozen 30 days"); invalidate(); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const hold = useMutation({
+    mutationFn: () => holdFn({ data: { member_id: member.id } }),
+    onSuccess: () => { toast.success("Switched to Hold Plan"); invalidate(); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const react = useMutation({
+    mutationFn: () => reactFn({ data: { member_id: member.id } }),
+    onSuccess: () => { toast.success("Reactivated"); invalidate(); },
+    onError: (e: any) => toast.error(e.message),
+  });
   const comp = useMutation({
     mutationFn: () => compFn({ data: { member_id: member.id, months: 1 } }),
     onSuccess: () => { toast.success("Comp month granted"); invalidate(); },
