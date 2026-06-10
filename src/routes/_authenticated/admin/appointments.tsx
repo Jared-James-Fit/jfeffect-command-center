@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { listAppointments, createAppointment, markAppointmentStatus } from "@/lib/appointments.functions";
 import { getGoogleBusy } from "@/lib/google-cal.functions";
@@ -188,10 +188,9 @@ function NewAppointmentDialog({ open, onOpenChange, onCreated, presetDate }: { o
   });
 
   const [form, setForm] = useState<any>(() => defaultForm());
-  // When opened from the calendar with a preset date, hydrate the date field.
-  // Using a ref-ish effect via useState updater inside an effect.
-  // eslint-disable-next-line react-hooks/rules-of-hooks
-  useEffectOnOpen(open, presetDate, (d) => setForm((f: any) => ({ ...f, date: d })));
+  useEffect(() => {
+    if (open && presetDate) setForm((f: any) => ({ ...f, date: presetDate }));
+  }, [open, presetDate]);
   const durationMin = (() => {
     try {
       const [sh, sm] = form.startTime.split(":").map(Number);
