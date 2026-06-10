@@ -1200,7 +1200,7 @@ export function MessageThread({
                     </div>
                   </div>
                 ) : (
-                  m.body && <div className="whitespace-pre-wrap break-words">{m.body}</div>
+                  m.body && renderBodyWithMeet(m.body, mine)
                 )}
                 {!isDeleted && !isEditing && m.attachments?.length > 0 && (
                   <div className={cn("mt-2 space-y-2", m.body ? "" : "")}>
