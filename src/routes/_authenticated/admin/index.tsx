@@ -11,7 +11,7 @@ import {
   Users, UserPlus, AlertTriangle, Calendar, DollarSign, Plus, ExternalLink,
   Activity, Eye, ClipboardCheck, MessageCircle, Video, Timer, ShoppingCart,
   HardDrive, Mail, Apple, ChefHat, FileText, Megaphone, Zap, ClipboardList,
-  ArrowRight, ChevronUp, ChevronDown, Search, LayoutGrid,
+  ArrowRight, ChevronUp, ChevronDown, LayoutGrid,
 } from "lucide-react";
 import { derivePhase, displayTitle, toneClasses, type TrainingPhase } from "@/lib/training-phases";
 import type { ConversationState, Message } from "@/lib/messages";
@@ -468,24 +468,8 @@ function AdminDashboard() {
           <DriveSetupBanner />
         </div>
 
-        {/* SEARCH + FLOATING BAR CUSTOMIZE */}
-        <div className="grid gap-3 md:grid-cols-2">
-          <button
-            type="button"
-            onClick={() => {
-              try { window.dispatchEvent(new CustomEvent("open-command-palette")); } catch {}
-            }}
-            className="group flex items-center gap-3 rounded-lg border border-primary/40 bg-primary/5 p-3 text-left transition hover:bg-primary/10"
-          >
-            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-primary/15 text-primary">
-              <Search className="h-5 w-5" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="text-sm font-bold">Search keywords</div>
-              <div className="truncate text-xs text-muted-foreground">Jump to any page — type to filter.</div>
-            </div>
-            <kbd className="hidden rounded border border-primary/40 bg-card px-1.5 py-0.5 text-[10px] font-mono text-primary sm:inline">⌘K</kbd>
-          </button>
+        {/* FLOATING BAR CUSTOMIZE */}
+        <div className="grid gap-3">
           <Link to="/admin/floating-bar" className="block">
             <div className="flex h-full items-center gap-3 rounded-lg border border-border bg-card p-3 transition hover:bg-accent">
               <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-secondary text-foreground">
@@ -493,7 +477,7 @@ function AdminDashboard() {
               </div>
               <div className="min-w-0 flex-1">
                 <div className="text-sm font-bold">Customize Floating Bar</div>
-                <div className="truncate text-xs text-muted-foreground">Add, reorder, and stack mobile toggles.</div>
+                <div className="truncate text-xs text-muted-foreground">Add toggles (including a Search shortcut), reorder, stack hold-to-open options.</div>
               </div>
               <ArrowRight className="h-4 w-4 text-muted-foreground" />
             </div>

@@ -894,6 +894,22 @@ function BottomNavSlot({ item, pathname, navBadges, onNavigate }: {
   const badge = navBadgeFor(item, navBadges);
 
   if (!item.children) {
+    if (item.to === "__search__") {
+      return (
+        <button
+          type="button"
+          onClick={() => { try { window.dispatchEvent(new CustomEvent("open-command-palette")); } catch {} }}
+          style={{ WebkitTapHighlightColor: "transparent" }}
+          className="relative flex min-h-[64px] flex-col items-center justify-center gap-0.5 px-0.5 pt-2 pb-2 text-[10px] font-medium text-muted-foreground hover:text-foreground touch-manipulation select-none"
+          aria-label="Search keywords"
+        >
+          <div className="relative">
+            <Icon className="h-5 w-5" />
+          </div>
+          <span className="w-full px-0.5 text-center text-[9.5px] leading-tight tracking-tight">{item.label}</span>
+        </button>
+      );
+    }
     const active = pathname === item.to;
     return (
       <Link
@@ -923,7 +939,11 @@ function BottomNavSlot({ item, pathname, navBadges, onNavigate }: {
     onSelect: (id) => {
       setOpen(false);
       onNavigate(id);
-      navigate({ to: id });
+      if (id === "__search__") {
+        try { window.dispatchEvent(new CustomEvent("open-command-palette")); } catch {}
+      } else {
+        navigate({ to: id });
+      }
     },
     onShortTap: () => setOpen((o) => !o),
   });
@@ -970,6 +990,30 @@ function BottomNavSlot({ item, pathname, navBadges, onNavigate }: {
             const active = pathname === c.to || pathname.startsWith(c.to + "/");
             const cb = navBadges[c.to];
             const highlighted = gesture.highlight === c.to;
+            if (c.to === "__search__") {
+              return (
+                <li key={c.to}>
+                  <button
+                    type="button"
+                    data-bar-option={c.to}
+                    onClick={() => {
+                      setOpen(false);
+                      try { window.dispatchEvent(new CustomEvent("open-command-palette")); } catch {}
+                    }}
+                    style={{ WebkitTapHighlightColor: "transparent" }}
+                    className={cn(
+                      "flex w-full items-center gap-2.5 rounded-md px-2.5 py-2.5 text-sm font-medium transition-colors select-none text-left",
+                      highlighted ? "bg-accent text-accent-foreground scale-[1.01]" : "hover:bg-accent",
+                    )}
+                  >
+                    <div className="relative">
+                      <CIcon className="h-4 w-4" />
+                    </div>
+                    <span className="flex-1 truncate">{c.label}</span>
+                  </button>
+                </li>
+              );
+            }
             return (
               <li key={c.to}>
                 <Link

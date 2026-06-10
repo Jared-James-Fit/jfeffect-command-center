@@ -3,6 +3,7 @@ import { useAuth } from "@/lib/auth";
 import { PageHeader } from "@/components/app-shell";
 import { FloatingBarCustomizer } from "@/components/floating-bar-customizer";
 import { adminNav, coachNav } from "@/lib/admin-nav";
+import { withBarActionItems } from "@/lib/floating-bar";
 import { ClipboardList } from "lucide-react";
 import type { NavItem } from "@/components/app-shell";
 
@@ -13,7 +14,7 @@ export const Route = createFileRoute("/_authenticated/admin/floating-bar")({
 function FloatingBarPage() {
   const { role } = useAuth();
   const isCoach = role === "coach";
-  const nav = isCoach ? coachNav : adminNav;
+  const nav = withBarActionItems(isCoach ? coachNav : adminNav);
   const scope = isCoach ? "coach" : "admin";
 
   const defaults: NavItem[] = (() => {

@@ -1,8 +1,26 @@
 import { useEffect, useState } from "react";
 import type { NavItem } from "@/components/app-shell";
+import { Search } from "lucide-react";
 
 const KEY = "jf-floating-bar-v2";
 const EVT = "floating-bar-updated";
+
+/**
+ * Synthetic nav item — not a route. When activated in the floating bar it
+ * opens the keyword command palette instead of navigating.
+ */
+export const SEARCH_BAR_ITEM: NavItem = {
+  to: "__search__",
+  label: "Search",
+  icon: Search,
+  group: "Actions",
+};
+
+/** Returns nav plus any synthetic action items the bar can use. */
+export function withBarActionItems(nav: NavItem[]): NavItem[] {
+  if (nav.some((n) => n.to === SEARCH_BAR_ITEM.to)) return nav;
+  return [...nav, SEARCH_BAR_ITEM];
+}
 
 export type BarScope = "admin" | "coach";
 

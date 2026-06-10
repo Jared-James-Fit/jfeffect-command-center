@@ -6,7 +6,7 @@ import { adminNav, coachNav } from "@/lib/admin-nav";
 import { PovQuickToggle } from "@/components/pov-quick-toggle";
 import { TaskPopupGate } from "@/components/tasks/task-popup-gate";
 import { ClipboardList } from "lucide-react";
-import { useBarLayout, resolveLayout } from "@/lib/floating-bar";
+import { useBarLayout, resolveLayout, withBarActionItems } from "@/lib/floating-bar";
 
 export const Route = createFileRoute("/_authenticated/admin")({
   component: AdminLayout,
@@ -62,7 +62,7 @@ function AdminLayout() {
 
   const bottomItems = useMemo(() => {
     if (customLayout && customLayout.slots.length > 0) {
-      const resolved = resolveLayout(customLayout, nav);
+      const resolved = resolveLayout(customLayout, withBarActionItems(nav));
       if (resolved.length) return resolved;
     }
     return defaultBottom;
