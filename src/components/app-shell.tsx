@@ -422,8 +422,15 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
             <span className="text-sm font-black tracking-tight">{title}</span>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={() => setPaletteOpen(true)} aria-label="Search">
-              <Search className="h-4 w-4" />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPaletteOpen(true)}
+              aria-label="Search keywords"
+              className="h-8 gap-1.5 border-primary/40 bg-primary/5 px-2 text-xs font-semibold text-foreground hover:bg-primary/10"
+            >
+              <Search className="h-3.5 w-3.5 text-primary" />
+              Search
             </Button>
             <SettingsMenu
               items={items}
