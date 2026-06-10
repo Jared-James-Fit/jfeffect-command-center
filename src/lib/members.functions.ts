@@ -113,6 +113,8 @@ const UpdateMemberInput = z.object({
   account_type: z.enum(["app_member","program_only","jf_member"]).optional(),
   messaging_permission: z.enum(["none","support_only","upgrade_only"]).optional(),
   admin_notes: z.string().nullable().optional(),
+  phone: z.string().nullable().optional(),
+  sms_opt_out: z.boolean().optional(),
 });
 
 export const updateAppMember = createServerFn({ method: "POST" })
