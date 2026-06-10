@@ -119,6 +119,7 @@ import { Route as AuthenticatedAdminMemberResourcesNewRouteImport } from './rout
 import { Route as AuthenticatedAdminMemberResourcesResourceIdRouteImport } from './routes/_authenticated/admin/member-resources.$resourceId'
 import { Route as AuthenticatedAdminMemberPlansNewRouteImport } from './routes/_authenticated/admin/member-plans.new'
 import { Route as AuthenticatedAdminMemberPlansPlanIdRouteImport } from './routes/_authenticated/admin/member-plans.$planId'
+import { Route as AuthenticatedAdminEventsFormatGuideRouteImport } from './routes/_authenticated/admin/events.format-guide'
 import { Route as AuthenticatedAdminEventsIdRouteImport } from './routes/_authenticated/admin/events.$id'
 import { Route as AuthenticatedAdminCoachesIdRouteImport } from './routes/_authenticated/admin/coaches.$id'
 import { Route as AuthenticatedAdminClientsIdRouteImport } from './routes/_authenticated/admin/clients.$id'
@@ -763,6 +764,12 @@ const AuthenticatedAdminMemberPlansPlanIdRoute =
     path: '/member-plans/$planId',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
+const AuthenticatedAdminEventsFormatGuideRoute =
+  AuthenticatedAdminEventsFormatGuideRouteImport.update({
+    id: '/format-guide',
+    path: '/format-guide',
+    getParentRoute: () => AuthenticatedAdminEventsRoute,
+  } as any)
 const AuthenticatedAdminEventsIdRoute =
   AuthenticatedAdminEventsIdRouteImport.update({
     id: '/$id',
@@ -909,6 +916,7 @@ export interface FileRoutesByFullPath {
   '/admin/clients/$id': typeof AuthenticatedAdminClientsIdRoute
   '/admin/coaches/$id': typeof AuthenticatedAdminCoachesIdRoute
   '/admin/events/$id': typeof AuthenticatedAdminEventsIdRoute
+  '/admin/events/format-guide': typeof AuthenticatedAdminEventsFormatGuideRoute
   '/admin/member-plans/$planId': typeof AuthenticatedAdminMemberPlansPlanIdRoute
   '/admin/member-plans/new': typeof AuthenticatedAdminMemberPlansNewRoute
   '/admin/member-resources/$resourceId': typeof AuthenticatedAdminMemberResourcesResourceIdRoute
@@ -1027,6 +1035,7 @@ export interface FileRoutesByTo {
   '/admin/clients/$id': typeof AuthenticatedAdminClientsIdRoute
   '/admin/coaches/$id': typeof AuthenticatedAdminCoachesIdRoute
   '/admin/events/$id': typeof AuthenticatedAdminEventsIdRoute
+  '/admin/events/format-guide': typeof AuthenticatedAdminEventsFormatGuideRoute
   '/admin/member-plans/$planId': typeof AuthenticatedAdminMemberPlansPlanIdRoute
   '/admin/member-plans/new': typeof AuthenticatedAdminMemberPlansNewRoute
   '/admin/member-resources/$resourceId': typeof AuthenticatedAdminMemberResourcesResourceIdRoute
@@ -1150,6 +1159,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/clients/$id': typeof AuthenticatedAdminClientsIdRoute
   '/_authenticated/admin/coaches/$id': typeof AuthenticatedAdminCoachesIdRoute
   '/_authenticated/admin/events/$id': typeof AuthenticatedAdminEventsIdRoute
+  '/_authenticated/admin/events/format-guide': typeof AuthenticatedAdminEventsFormatGuideRoute
   '/_authenticated/admin/member-plans/$planId': typeof AuthenticatedAdminMemberPlansPlanIdRoute
   '/_authenticated/admin/member-plans/new': typeof AuthenticatedAdminMemberPlansNewRoute
   '/_authenticated/admin/member-resources/$resourceId': typeof AuthenticatedAdminMemberResourcesResourceIdRoute
@@ -1273,6 +1283,7 @@ export interface FileRouteTypes {
     | '/admin/clients/$id'
     | '/admin/coaches/$id'
     | '/admin/events/$id'
+    | '/admin/events/format-guide'
     | '/admin/member-plans/$planId'
     | '/admin/member-plans/new'
     | '/admin/member-resources/$resourceId'
@@ -1391,6 +1402,7 @@ export interface FileRouteTypes {
     | '/admin/clients/$id'
     | '/admin/coaches/$id'
     | '/admin/events/$id'
+    | '/admin/events/format-guide'
     | '/admin/member-plans/$planId'
     | '/admin/member-plans/new'
     | '/admin/member-resources/$resourceId'
@@ -1513,6 +1525,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/clients/$id'
     | '/_authenticated/admin/coaches/$id'
     | '/_authenticated/admin/events/$id'
+    | '/_authenticated/admin/events/format-guide'
     | '/_authenticated/admin/member-plans/$planId'
     | '/_authenticated/admin/member-plans/new'
     | '/_authenticated/admin/member-resources/$resourceId'
@@ -2341,6 +2354,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminMemberPlansPlanIdRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
+    '/_authenticated/admin/events/format-guide': {
+      id: '/_authenticated/admin/events/format-guide'
+      path: '/format-guide'
+      fullPath: '/admin/events/format-guide'
+      preLoaderRoute: typeof AuthenticatedAdminEventsFormatGuideRouteImport
+      parentRoute: typeof AuthenticatedAdminEventsRoute
+    }
     '/_authenticated/admin/events/$id': {
       id: '/_authenticated/admin/events/$id'
       path: '/$id'
@@ -2431,11 +2451,14 @@ const AuthenticatedAdminBroadcastsRouteWithChildren =
 
 interface AuthenticatedAdminEventsRouteChildren {
   AuthenticatedAdminEventsIdRoute: typeof AuthenticatedAdminEventsIdRoute
+  AuthenticatedAdminEventsFormatGuideRoute: typeof AuthenticatedAdminEventsFormatGuideRoute
 }
 
 const AuthenticatedAdminEventsRouteChildren: AuthenticatedAdminEventsRouteChildren =
   {
     AuthenticatedAdminEventsIdRoute: AuthenticatedAdminEventsIdRoute,
+    AuthenticatedAdminEventsFormatGuideRoute:
+      AuthenticatedAdminEventsFormatGuideRoute,
   }
 
 const AuthenticatedAdminEventsRouteWithChildren =
