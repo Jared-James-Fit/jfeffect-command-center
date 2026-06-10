@@ -14,12 +14,13 @@ import { formatDistanceToNow, parseISO } from "date-fns";
 import type { ConversationState, Message, MessageAttachment } from "@/lib/messages";
 
 type BellItem = {
-  kind: "message" | "lift_video" | "agreement" | "exercise_note" | "group_message";
+  kind: "message" | "lift_video" | "agreement" | "exercise_note" | "group_message" | "check_in_review";
   clientId: string;
   groupId?: string;
   videoId?: string;
   agreementId?: string;
   noteId?: string;
+  reviewId?: string;
   name: string;
   title: string;
   body: string;
@@ -118,6 +119,9 @@ export function NotificationBell() {
         qc.invalidateQueries({ queryKey: ["unread-counts"] });
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "chat_group_members" }, () => {
+        qc.invalidateQueries({ queryKey: ["unread-counts"] });
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "manual_check_in_reviews" }, () => {
         qc.invalidateQueries({ queryKey: ["unread-counts"] });
       })
       .subscribe();
