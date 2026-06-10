@@ -195,6 +195,32 @@ function AdminDashboard() {
 
   const liftNeedReview = liftVideos.filter((v) => !v.reviewed_at && v.status !== "Archived");
 
+  // Latest comment per lift video shown in Needs Attention (for preview line).
+  const liftIdsForPreview = liftNeedReview.slice(0, 10).map((v) => v.id);
+  const { data: liftLatestComments = [] } = useQuery({
+    queryKey: ["lift-latest-comments-dash", liftIdsForPreview.sort().join(",")],
+    enabled: liftIdsForPreview.length > 0,
+    queryFn: async () => {
+      const { data } = await (supabase.from("lift_video_comments") as any)
+        .select("video_id, body, author_role, created_at, is_internal_note")
+        .in("video_id", liftIdsForPreview)
+        .eq("is_internal_note", false)
+        .order("created_at", { ascending: false })
+        .limit(200);
+      return (data ?? []) as Array<{ video_id: string; body: string | null; author_role: string; created_at: string; is_internal_note: boolean }>;
+    },
+  });
+  const liftPreviewByVideoId = useMemo(() => {
+    const m = new Map<string, { body: string; from: "admin" | "client" }>();
+    for (const c of liftLatestComments) {
+      if (m.has(c.video_id)) continue;
+      const body = (c.body ?? "").trim();
+      if (!body) continue;
+      m.set(c.video_id, { body, from: c.author_role === "admin" ? "admin" : "client" });
+    }
+    return m;
+  }, [liftLatestComments]);
+
   const clientNameById = useMemo(() => new Map(clients.map((c) => [c.id, c.full_name])), [clients]);
   const clientById = useMemo(() => new Map(clients.map((c) => [c.id, c])), [clients]);
   const stateMap = useMemo(() => new Map(convStates.map((s) => [s.client_id, s])), [convStates]);
