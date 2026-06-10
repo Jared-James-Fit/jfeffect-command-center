@@ -84,6 +84,19 @@ export function PovQuickToggle({
     }
   };
 
+  // Keyboard shortcut: Cmd/Ctrl + Shift + M
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === "m") {
+        e.preventDefault();
+        if (isMemberView) goAdmin();
+        else goMember();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [isMemberView, goAdmin, goMember]);
+
   if (variant === "floating") {
     return (
       <div
