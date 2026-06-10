@@ -228,29 +228,120 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
           )}
         </div>
 
-        {/* Search / Cmd+K trigger */}
+        {/* Account / Sign out / Density (moved up from footer) */}
+        <div className={cn("border-b border-sidebar-border", isCollapsed ? "p-1.5" : "p-2")}>
+          {isCollapsed ? (
+            <div className="flex flex-col items-center gap-1">
+              <SettingsMenu
+                items={items}
+                meName={me?.name ?? user?.email ?? ""}
+                mePic={me?.pic ?? null}
+                onSignOut={handleSignOut}
+                align="start"
+                trigger={
+                  <button type="button" className="rounded-full" aria-label="Account menu">
+                    <UserAvatar src={me?.pic ?? null} name={me?.name ?? user?.email ?? ""} size={28} ring expandable={false} />
+                  </button>
+                }
+              />
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={handleSignOut}
+                    className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-destructive"
+                    aria-label="Sign out"
+                  >
+                    <LogOut className="h-3.5 w-3.5" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="right">Sign out</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={cycleMode}
+                    className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-foreground"
+                    aria-label="Expand sidebar"
+                  >
+                    <ChevronRight className="h-3.5 w-3.5" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="right">Expand sidebar</TooltipContent>
+              </Tooltip>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <SettingsMenu
+                items={items}
+                meName={me?.name ?? user?.email ?? ""}
+                mePic={me?.pic ?? null}
+                onSignOut={handleSignOut}
+                align="start"
+                trigger={
+                  <button type="button" className="shrink-0 rounded-full" aria-label="Account menu">
+                    <UserAvatar src={me?.pic ?? null} name={me?.name ?? user?.email ?? ""} size={28} ring expandable={false} />
+                  </button>
+                }
+              />
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-[11px] font-semibold leading-tight">{me?.name || user?.email}</div>
+                {!isCompact && (
+                  <div className="truncate text-[9px] text-muted-foreground leading-tight">{user?.email}</div>
+                )}
+              </div>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={cycleMode}
+                    className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-foreground"
+                    aria-label="Toggle sidebar density"
+                  >
+                    <ChevronLeft className="h-3.5 w-3.5" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="top">
+                  {mode === "expanded" ? "Compact" : mode === "compact" ? "Collapse" : "Expand"}
+                </TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={handleSignOut}
+                    className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-destructive"
+                    aria-label="Sign out"
+                  >
+                    <LogOut className="h-3.5 w-3.5" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="top">Sign out</TooltipContent>
+              </Tooltip>
+            </div>
+          )}
+        </div>
+
+        {/* Keyword search / Cmd+K trigger */}
         <div className={cn("border-b border-sidebar-border", isCollapsed ? "p-1.5" : "p-2")}>
           {isCollapsed ? (
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
                   onClick={() => setPaletteOpen(true)}
-                  className="mx-auto flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-foreground"
-                  aria-label="Search"
+                  className="mx-auto flex h-8 w-8 items-center justify-center rounded-md text-primary ring-1 ring-primary/40 hover:bg-primary/10"
+                  aria-label="Search keywords"
                 >
                   <Search className="h-4 w-4" />
                 </button>
               </TooltipTrigger>
-              <TooltipContent side="right">Search (⌘K)</TooltipContent>
+              <TooltipContent side="right">Search keywords (⌘K)</TooltipContent>
             </Tooltip>
           ) : (
             <button
               onClick={() => setPaletteOpen(true)}
-              className="flex w-full items-center gap-2 rounded-md border border-sidebar-border bg-background/40 px-2.5 py-1.5 text-left text-xs text-muted-foreground hover:bg-sidebar-accent hover:text-foreground"
+              className="flex w-full items-center gap-2 rounded-md border border-primary/40 bg-primary/5 px-2.5 py-2 text-left text-xs font-semibold text-foreground shadow-sm hover:bg-primary/10"
             >
-              <Search className="h-3.5 w-3.5" />
-              <span className="flex-1">Search…</span>
-              <kbd className="rounded border border-sidebar-border bg-card px-1 py-0.5 text-[9px] font-mono">⌘K</kbd>
+              <Search className="h-3.5 w-3.5 text-primary" />
+              <span className="flex-1 truncate">Search keywords…</span>
+              <kbd className="rounded border border-primary/40 bg-card px-1 py-0.5 text-[9px] font-mono text-primary">⌘K</kbd>
             </button>
           )}
         </div>
