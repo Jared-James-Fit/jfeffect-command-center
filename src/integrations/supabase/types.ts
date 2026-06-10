@@ -4393,6 +4393,44 @@ export type Database = {
           },
         ]
       }
+      member_access_defaults: {
+        Row: {
+          access_level_key: string
+          account_type: string
+          created_at: string
+          enabled: boolean
+          id: string
+          notes: string | null
+          updated_at: string
+        }
+        Insert: {
+          access_level_key: string
+          account_type: string
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          notes?: string | null
+          updated_at?: string
+        }
+        Update: {
+          access_level_key?: string
+          account_type?: string
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          notes?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "member_access_defaults_access_level_key_fkey"
+            columns: ["access_level_key"]
+            isOneToOne: false
+            referencedRelation: "access_levels"
+            referencedColumns: ["key"]
+          },
+        ]
+      }
       member_plan_enrollments: {
         Row: {
           completed_at: string | null
@@ -7338,6 +7376,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      apply_default_member_access: {
+        Args: { _member_id: string }
+        Returns: number
+      }
       can_access_chat_presence: { Args: { _topic: string }; Returns: boolean }
       can_access_group_presence: { Args: { _topic: string }; Returns: boolean }
       can_manage_group: {
