@@ -149,16 +149,19 @@ export async function gcalListCalendars(_accessToken?: string) {
 }
 
 export async function gcalCreateEvent(
-  coachId: string,
+  coachId: string | null,
   payload: {
     summary: string;
     description?: string;
-    startISO: string;
-    endISO: string;
-    timezone: string;
+    startISO?: string;
+    endISO?: string;
+    startDate?: string;
+    endDate?: string;
+    timezone?: string;
     location?: string;
     attendees?: Array<{ email: string; displayName?: string }>;
     meet?: boolean;
+    transparency?: "opaque" | "transparent";
   },
 ): Promise<{ id: string; htmlLink?: string; meetLink?: string } | null> {
   if (!workspaceCalendarConfigured()) return null;
@@ -167,9 +170,14 @@ export async function gcalCreateEvent(
     summary: payload.summary,
     description: payload.description,
     location: payload.location,
-    start: { dateTime: payload.startISO, timeZone: payload.timezone },
-    end: { dateTime: payload.endISO, timeZone: payload.timezone },
+    start: payload.startISO
+      ? { dateTime: payload.startISO, timeZone: payload.timezone }
+      : { date: payload.startDate },
+    end: payload.endISO
+      ? { dateTime: payload.endISO, timeZone: payload.timezone }
+      : { date: payload.endDate },
     attendees: payload.attendees,
+    transparency: payload.transparency ?? "opaque",
   };
   if (payload.meet) {
     body.conferenceData = {
@@ -190,14 +198,26 @@ export async function gcalCreateEvent(
   return { id: data.id, htmlLink: data.htmlLink, meetLink };
 }
 
-export async function gcalUpdateEvent(coachId: string, eventId: string, patch: Record<string, unknown>) {
+function normalizeEventPatch(patch: Record<string, unknown>) {
+  if (patch.startISO || patch.endISO || patch.startDate || patch.endDate) {
+    const { startISO, endISO, startDate, endDate, timezone, ...rest } = patch as any;
+    return {
+      ...rest,
+      start: startISO ? { dateTime: startISO, timeZone: timezone } : { date: startDate },
+      end: endISO ? { dateTime: endISO, timeZone: timezone } : { date: endDate },
+    };
+  }
+  return patch;
+}
+
+export async function gcalUpdateEvent(coachId: string | null, eventId: string, patch: Record<string, unknown>) {
   if (!workspaceCalendarConfigured()) return null;
   const calendarId = await selectedCalendarIdForCoach(coachId);
   const url = `${GATEWAY_BASE}/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}?sendUpdates=all`;
   const res = await fetch(url, {
     method: "PATCH",
     headers: gatewayHeaders({ "Content-Type": "application/json" }),
-    body: JSON.stringify(patch),
+    body: JSON.stringify(normalizeEventPatch(patch)),
   });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
@@ -206,7 +226,7 @@ export async function gcalUpdateEvent(coachId: string, eventId: string, patch: R
   return await res.json();
 }
 
-export async function gcalDeleteEvent(coachId: string, eventId: string) {
+export async function gcalDeleteEvent(coachId: string | null, eventId: string) {
   if (!workspaceCalendarConfigured()) return null;
   const calendarId = await selectedCalendarIdForCoach(coachId);
   const url = `${GATEWAY_BASE}/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}?sendUpdates=all`;

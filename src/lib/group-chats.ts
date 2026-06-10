@@ -66,6 +66,27 @@ export type GroupReaction = {
 
 const db = supabase as any;
 
+function normalizeAttachments(value: unknown): GroupAttachment[] {
+  if (Array.isArray(value)) return value.filter(Boolean) as GroupAttachment[];
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed.filter(Boolean) as GroupAttachment[] : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
+function normalizeGroupMessage(row: any): GroupMessage {
+  return {
+    ...row,
+    body: typeof row?.body === "string" ? row.body : "",
+    attachments: normalizeAttachments(row?.attachments),
+  } as GroupMessage;
+}
+
 export async function listMyGroups(): Promise<ChatGroup[]> {
   const { data, error } = await db.from("chat_groups").select("*").eq("archived", false).order("updated_at", { ascending: false });
   if (error) throw error;
@@ -81,7 +102,7 @@ export async function listAllGroupsForAdmin(): Promise<ChatGroup[]> {
 export async function listGroupMessages(groupId: string): Promise<GroupMessage[]> {
   const { data, error } = await db.from("group_messages").select("*").eq("group_id", groupId).order("created_at", { ascending: true });
   if (error) throw error;
-  return data ?? [];
+  return Array.isArray(data) ? data.map(normalizeGroupMessage) : [];
 }
 
 export async function listGroupMembers(groupId: string): Promise<ChatGroupMember[]> {

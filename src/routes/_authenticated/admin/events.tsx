@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { useMemo, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,7 @@ import {
   EVENT_IMPORTANCE, EVENT_STATUSES, EVENT_TYPES,
   listAdminEvents, type EventStatus, type EventImportance, type EventType,
 } from "@/lib/events";
+import { createEventDraft } from "@/lib/events.functions";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/admin/events")({
@@ -25,6 +26,7 @@ export const Route = createFileRoute("/_authenticated/admin/events")({
 function AdminEventsPage() {
   const nav = useNavigate();
   const qc = useQueryClient();
+  const createDraftFn = useServerFn(createEventDraft);
   const [status, setStatus] = useState<EventStatus | "All">("Active");
   const [search, setSearch] = useState("");
   const [importance, setImportance] = useState<EventImportance | "All">("All");
@@ -47,14 +49,13 @@ function AdminEventsPage() {
   }, [events, search, importance, type]);
 
   async function createDraft() {
-    const today = new Date().toISOString().slice(0, 10);
-    const { data: u } = await supabase.auth.getUser();
-    const { data, error } = await (supabase.from("events") as any)
-      .insert({ name: "New Event", event_date: today, status: "Draft", created_by: u.user?.id })
-      .select("id").single();
-    if (error) { toast.error(error.message); return; }
-    qc.invalidateQueries({ queryKey: ["admin-events"] });
-    nav({ to: "/admin/events/$id", params: { id: data.id } });
+    try {
+      const data = await createDraftFn();
+      qc.invalidateQueries({ queryKey: ["admin-events"] });
+      nav({ to: "/admin/events/$id", params: { id: data.id } });
+    } catch (e: any) {
+      toast.error(e?.message ?? "Could not create event");
+    }
   }
 
   return (

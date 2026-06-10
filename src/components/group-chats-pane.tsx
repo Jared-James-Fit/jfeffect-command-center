@@ -5,8 +5,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Checkbox } from "@/components/ui/checkbox";
+import { UserAvatar } from "@/components/user-avatar";
 import { cn } from "@/lib/utils";
 import { ChevronLeft, Plus, Settings2, Users, Archive, Trash2, CheckSquare, X } from "lucide-react";
 import { toast } from "sonner";
@@ -43,18 +43,20 @@ export function GroupChatsPane({ asAdmin }: { asAdmin: boolean }) {
     enabled: !!user,
     queryFn: () => listMyGroupMemberships(user!.id),
   });
+  const groupRows = Array.isArray(groups) ? groups : [];
+  const membershipRows = Array.isArray(memberships) ? memberships : [];
 
   const lastReadByGroup = useMemo(
-    () => new Map(memberships.map((m) => [m.group_id, m.last_read_at])),
-    [memberships],
+    () => new Map(membershipRows.map((m) => [m.group_id, m.last_read_at])),
+    [membershipRows],
   );
 
   // Unread counts per group
   const { data: lastMsgByGroup = {} as Record<string, any> } = useQuery({
-    queryKey: ["group-last-messages", groups.map((g) => g.id).join(",")],
-    enabled: groups.length > 0,
+    queryKey: ["group-last-messages", groupRows.map((g) => g.id).join(",")],
+    enabled: groupRows.length > 0,
     queryFn: async () => {
-      const ids = groups.map((g) => g.id);
+      const ids = groupRows.map((g) => g.id);
       try {
         const { data, error } = await (supabase.from("group_messages") as any)
           .select("group_id, created_at, body, sender_id")
@@ -98,7 +100,7 @@ export function GroupChatsPane({ asAdmin }: { asAdmin: boolean }) {
   }, [qc]);
 
   const visibleGroups = useMemo(() => {
-    return groups
+    return groupRows
       .map((g) => {
         const last = (lastMsgByGroup as Record<string, any>)?.[g.id];
         const lastReadStr = lastReadByGroup.get(g.id) ?? null;
@@ -111,10 +113,10 @@ export function GroupChatsPane({ asAdmin }: { asAdmin: boolean }) {
         const bt = b.last?.created_at ?? b.group.updated_at ?? "";
         return bt.localeCompare(at);
       });
-  }, [groups, lastMsgByGroup, lastReadByGroup, user?.id]);
+  }, [groupRows, lastMsgByGroup, lastReadByGroup, user?.id]);
 
-  const selected = groups.find((g) => g.id === selectedId);
-  const myMembership = selected ? memberships.find((m) => m.group_id === selected.id) : undefined;
+  const selected = groupRows.find((g) => g.id === selectedId);
+  const myMembership = selected ? membershipRows.find((m) => m.group_id === selected.id) : undefined;
   const isAdminOfGroup = asAdmin || myMembership?.role === "admin";
   const canPost = (() => {
     if (!selected) return false;
@@ -293,12 +295,13 @@ export function GroupChatsPane({ asAdmin }: { asAdmin: boolean }) {
 
 /** Stacked member avatars with a green live-now dot if anyone is present. */
 function GroupCover({ groupId, myRole }: { groupId: string; myRole: "admin" | "coach" | "client" | "member" }) {
-  const { data: members = [] } = useQuery({
+  const { data: rawMembers = [] } = useQuery({
     queryKey: ["group-member-profiles", groupId],
     queryFn: () => listGroupMemberProfiles(groupId),
     staleTime: 60_000,
   });
   const { others } = useGroupPresence(groupId, myRole);
+  const members = Array.isArray(rawMembers) ? rawMembers : [];
   const liveIds = new Set(others.map((p) => p.user_id));
   const visible = (members as GroupMemberProfile[]).slice(0, 3);
   const extra = Math.max(0, members.length - visible.length);
@@ -316,12 +319,14 @@ function GroupCover({ groupId, myRole }: { groupId: string; myRole: "admin" | "c
       <div className="flex -space-x-2">
         {visible.map((m) => (
           <div key={m.user_id} className="relative">
-            <Avatar className="h-7 w-7 border-2 border-card">
-              <AvatarImage src={m.avatar_url ?? undefined} alt={m.full_name ?? "Member"} />
-              <AvatarFallback className="text-[10px]">
-                {(m.full_name ?? "?").slice(0, 1).toUpperCase()}
-              </AvatarFallback>
-            </Avatar>
+            <UserAvatar
+              src={m.avatar_url}
+              name={m.full_name ?? "Member"}
+              size={28}
+              tone="neutral"
+              expandable={false}
+              className="border-2 border-card"
+            />
             {liveIds.has(m.user_id) && (
               <span className="absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full bg-emerald-500 ring-2 ring-card" />
             )}
@@ -338,17 +343,19 @@ function GroupCover({ groupId, myRole }: { groupId: string; myRole: "admin" | "c
 /** Hook used by client portal toggle to show "do they have any groups?" + unread badge. */
 export function useMyGroupSummary() {
   const { user } = useAuth();
-  const { data: groups = [] } = useQuery({
+  const { data: rawGroups = [] } = useQuery({
     queryKey: ["chat-groups", false],
     queryFn: listMyGroups,
     enabled: !!user,
   });
-  const { data: memberships = [] } = useQuery({
+  const groups = Array.isArray(rawGroups) ? rawGroups : [];
+  const { data: rawMemberships = [] } = useQuery({
     queryKey: ["group-memberships", user?.id],
     enabled: !!user,
     queryFn: () => listMyGroupMemberships(user!.id),
   });
-  const { data: lastMsgs = [] } = useQuery({
+  const memberships = Array.isArray(rawMemberships) ? rawMemberships : [];
+  const { data: rawLastMsgs = [] } = useQuery({
     queryKey: ["group-unread", user?.id],
     enabled: !!user && groups.length > 0,
     queryFn: async () => {
@@ -362,6 +369,7 @@ export function useMyGroupSummary() {
     },
     refetchInterval: 45_000,
   });
+  const lastMsgs = Array.isArray(rawLastMsgs) ? rawLastMsgs : [];
 
   const lastReadByGroup = new Map(memberships.map((m) => [m.group_id, m.last_read_at]));
   let unread = 0;

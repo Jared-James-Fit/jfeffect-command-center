@@ -106,28 +106,32 @@ export function GroupMessageThread({
 
   /* ---------------- Data ---------------- */
 
-  const { data: messages = [] } = useQuery({
+  const { data: rawMessages = [] } = useQuery({
     queryKey: ["group-messages", groupId],
     queryFn: () => listGroupMessages(groupId),
     refetchInterval: 30_000,
   });
 
-  const { data: reactions = [] } = useQuery({
+  const { data: rawReactions = [] } = useQuery({
     queryKey: ["group-reactions", groupId],
     queryFn: () => listGroupReactions(groupId),
     refetchInterval: 45_000,
   });
 
-  const { data: members = [] } = useQuery({
+  const { data: rawMembers = [] } = useQuery({
     queryKey: ["group-members", groupId],
     queryFn: () => listGroupMembers(groupId),
   });
 
-  const { data: memberProfiles = [] } = useQuery({
+  const { data: rawMemberProfiles = [] } = useQuery({
     queryKey: ["group-member-profiles", groupId],
     queryFn: () => listGroupMemberProfiles(groupId),
     staleTime: 5 * 60_000,
   });
+  const messages = Array.isArray(rawMessages) ? rawMessages : [];
+  const reactions = Array.isArray(rawReactions) ? rawReactions : [];
+  const members = Array.isArray(rawMembers) ? rawMembers : [];
+  const memberProfiles = Array.isArray(rawMemberProfiles) ? rawMemberProfiles : [];
 
   const { data: chatSettings } = useQuery({
     queryKey: ["chat-settings"],
