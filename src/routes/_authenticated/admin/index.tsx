@@ -94,6 +94,43 @@ function EmptyMini({ children }: { children: React.ReactNode }) {
   );
 }
 
+function TrainingIntelDashboardCard() {
+  const { data: intel = [] } = useQuery({
+    queryKey: ["coach-intel"],
+    queryFn: () => getCoachIntel(),
+  });
+  const attention = filterIntel(intel, "attention").slice(0, 5);
+  return (
+    <Card className="border-border bg-card p-4 md:p-5">
+      <SectionHeader title="Training Intelligence" icon={Activity} viewAll={{ to: "/admin/training-intelligence" }} />
+      {attention.length === 0 ? (
+        <EmptyMini>No training flags right now.</EmptyMini>
+      ) : (
+        <ul className="divide-y divide-border">
+          {attention.map((c: any) => (
+            <li key={c.client_id} className="flex items-start gap-3 py-2.5">
+              <UserAvatar src={c.profile_picture_url ?? undefined} name={c.full_name ?? "Client"} size={32} />
+              <div className="min-w-0 flex-1">
+                <Link to="/admin/clients/$id" params={{ id: c.client_id }} className="text-sm font-semibold hover:underline truncate block">
+                  {c.full_name}
+                </Link>
+                <div className="mt-1 flex flex-wrap gap-1">
+                  {(c.labels ?? []).slice(0, 4).map((l: string) => {
+                    const meta = (LABEL_META as any)[l];
+                    if (!meta) return null;
+                    return <Badge key={l} variant="outline" className={`text-[10px] ${meta.cls}`}>{meta.label}</Badge>;
+                  })}
+                </div>
+              </div>
+              <Link to="/admin/training-intelligence" className="shrink-0 text-[11px] font-semibold text-primary hover:underline">Open</Link>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
+  );
+}
+
 function AdminDashboard() {
   const [sellTo, setSellTo] = useState<{ id: string; name: string } | null>(null);
 
