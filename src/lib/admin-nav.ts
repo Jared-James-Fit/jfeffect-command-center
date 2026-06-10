@@ -42,6 +42,7 @@ export const adminNav: NavItem[] = [
   { to: "/admin/payments", label: "Payments", icon: DollarSign, group: "Business" },
   { to: "/admin/purchases", label: "Purchases", icon: ClipboardCheck, group: "Business" },
   { to: "/admin/calendar", label: "Calendar", icon: Calendar, group: "Business" },
+  { to: "/admin/events", label: "Events", icon: Calendar, group: "Business" },
   // DOCUMENTS
   { to: "/admin/agreements", label: "Agreements", icon: FileSignature, group: "Documents" },
   { to: "/admin/forms", label: "Forms", icon: FileEdit, group: "Documents" },
@@ -92,6 +93,7 @@ export const clientNav: NavItem[] = [
   { to: "/portal/agreements", label: "Agreements", icon: FileSignature },
   { to: "/portal/resources", label: "Resources", icon: FolderOpen },
   { to: "/portal/calendar", label: "Calendar", icon: Calendar },
+  { to: "/portal/events", label: "Events", icon: Calendar },
   { to: "/portal/documents", label: "Documents", icon: FileText },
   { to: "/portal/account", label: "Account Settings", icon: Settings },
 ];

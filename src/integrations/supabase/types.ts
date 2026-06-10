@@ -2564,6 +2564,296 @@ export type Database = {
         }
         Relationships: []
       }
+      event_assignments: {
+        Row: {
+          assigned_at: string
+          assigned_by: string | null
+          client_id: string
+          event_id: string
+          id: string
+        }
+        Insert: {
+          assigned_at?: string
+          assigned_by?: string | null
+          client_id: string
+          event_id: string
+          id?: string
+        }
+        Update: {
+          assigned_at?: string
+          assigned_by?: string | null
+          client_id?: string
+          event_id?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_assignments_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "event_assignments_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      event_deadlines: {
+        Row: {
+          created_at: string
+          due_date: string | null
+          event_id: string
+          id: string
+          notes: string | null
+          sort_order: number
+          title: string
+          updated_at: string
+          visible_to_client: boolean
+        }
+        Insert: {
+          created_at?: string
+          due_date?: string | null
+          event_id: string
+          id?: string
+          notes?: string | null
+          sort_order?: number
+          title: string
+          updated_at?: string
+          visible_to_client?: boolean
+        }
+        Update: {
+          created_at?: string
+          due_date?: string | null
+          event_id?: string
+          id?: string
+          notes?: string | null
+          sort_order?: number
+          title?: string
+          updated_at?: string
+          visible_to_client?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_deadlines_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      event_format_prompts: {
+        Row: {
+          prompt: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          prompt: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          prompt?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      event_popup_acks: {
+        Row: {
+          acknowledged_at: string
+          event_id: string
+          id: string
+          offset_key: Database["public"]["Enums"]["event_reminder_offset"]
+          user_id: string
+        }
+        Insert: {
+          acknowledged_at?: string
+          event_id: string
+          id?: string
+          offset_key: Database["public"]["Enums"]["event_reminder_offset"]
+          user_id: string
+        }
+        Update: {
+          acknowledged_at?: string
+          event_id?: string
+          id?: string
+          offset_key?: Database["public"]["Enums"]["event_reminder_offset"]
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_popup_acks_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      event_quick_links: {
+        Row: {
+          created_at: string
+          event_id: string
+          id: string
+          internal_note: string | null
+          link_type: Database["public"]["Enums"]["event_link_type"]
+          sort_order: number
+          title: string
+          updated_at: string
+          url: string
+          visible_to_client: boolean
+        }
+        Insert: {
+          created_at?: string
+          event_id: string
+          id?: string
+          internal_note?: string | null
+          link_type?: Database["public"]["Enums"]["event_link_type"]
+          sort_order?: number
+          title: string
+          updated_at?: string
+          url: string
+          visible_to_client?: boolean
+        }
+        Update: {
+          created_at?: string
+          event_id?: string
+          id?: string
+          internal_note?: string | null
+          link_type?: Database["public"]["Enums"]["event_link_type"]
+          sort_order?: number
+          title?: string
+          updated_at?: string
+          url?: string
+          visible_to_client?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_quick_links_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      event_reminders: {
+        Row: {
+          created_at: string
+          enabled: boolean
+          event_id: string
+          id: string
+          last_fired_on: string | null
+          message: string | null
+          offset_key: Database["public"]["Enums"]["event_reminder_offset"]
+          updated_at: string
+          visible_to_client: boolean
+        }
+        Insert: {
+          created_at?: string
+          enabled?: boolean
+          event_id: string
+          id?: string
+          last_fired_on?: string | null
+          message?: string | null
+          offset_key: Database["public"]["Enums"]["event_reminder_offset"]
+          updated_at?: string
+          visible_to_client?: boolean
+        }
+        Update: {
+          created_at?: string
+          enabled?: boolean
+          event_id?: string
+          id?: string
+          last_fired_on?: string | null
+          message?: string | null
+          offset_key?: Database["public"]["Enums"]["event_reminder_offset"]
+          updated_at?: string
+          visible_to_client?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_reminders_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      events: {
+        Row: {
+          archived_at: string | null
+          audience_scope: Database["public"]["Enums"]["event_audience_scope"]
+          client_facing_notes: string | null
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          end_time: string | null
+          event_date: string
+          event_type: Database["public"]["Enums"]["event_type"]
+          id: string
+          importance: Database["public"]["Enums"]["event_importance"]
+          internal_notes: string | null
+          location: string | null
+          name: string
+          start_time: string | null
+          status: Database["public"]["Enums"]["event_status"]
+          timezone: string | null
+          updated_at: string
+        }
+        Insert: {
+          archived_at?: string | null
+          audience_scope?: Database["public"]["Enums"]["event_audience_scope"]
+          client_facing_notes?: string | null
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          end_time?: string | null
+          event_date: string
+          event_type?: Database["public"]["Enums"]["event_type"]
+          id?: string
+          importance?: Database["public"]["Enums"]["event_importance"]
+          internal_notes?: string | null
+          location?: string | null
+          name: string
+          start_time?: string | null
+          status?: Database["public"]["Enums"]["event_status"]
+          timezone?: string | null
+          updated_at?: string
+        }
+        Update: {
+          archived_at?: string | null
+          audience_scope?: Database["public"]["Enums"]["event_audience_scope"]
+          client_facing_notes?: string | null
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          end_time?: string | null
+          event_date?: string
+          event_type?: Database["public"]["Enums"]["event_type"]
+          id?: string
+          importance?: Database["public"]["Enums"]["event_importance"]
+          internal_notes?: string | null
+          location?: string | null
+          name?: string
+          start_time?: string | null
+          status?: Database["public"]["Enums"]["event_status"]
+          timezone?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       exercises: {
         Row: {
           archived: boolean
@@ -6675,6 +6965,48 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "client" | "coach"
+      event_audience_scope:
+        | "selected_clients"
+        | "all_coaching"
+        | "app_members"
+        | "program_only"
+      event_importance: "Low" | "Medium" | "High" | "Critical"
+      event_link_type:
+        | "Event Website"
+        | "Registration Link"
+        | "Schedule"
+        | "Rules / Info Package"
+        | "Athlete Roster"
+        | "Livestream"
+        | "Location / Map"
+        | "Hotel / Travel"
+        | "Weigh-In Info"
+        | "Payment Link"
+        | "Google Meet"
+        | "Custom"
+      event_reminder_offset:
+        | "w12"
+        | "w8"
+        | "w4"
+        | "w2"
+        | "w1"
+        | "d3"
+        | "d1"
+        | "day_of"
+      event_status: "Draft" | "Active" | "Completed" | "Archived"
+      event_type:
+        | "Competition"
+        | "Powerlifting Meet"
+        | "Bodybuilding Show"
+        | "Photoshoot"
+        | "Testing Day"
+        | "Weigh-In"
+        | "Travel"
+        | "Appointment"
+        | "Coaching Call"
+        | "Deadline"
+        | "Gym Event"
+        | "Custom"
       group_member_role: "admin" | "member"
       group_permission_mode: "everyone" | "admins_only" | "read_only"
     }
@@ -6805,6 +7137,52 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "client", "coach"],
+      event_audience_scope: [
+        "selected_clients",
+        "all_coaching",
+        "app_members",
+        "program_only",
+      ],
+      event_importance: ["Low", "Medium", "High", "Critical"],
+      event_link_type: [
+        "Event Website",
+        "Registration Link",
+        "Schedule",
+        "Rules / Info Package",
+        "Athlete Roster",
+        "Livestream",
+        "Location / Map",
+        "Hotel / Travel",
+        "Weigh-In Info",
+        "Payment Link",
+        "Google Meet",
+        "Custom",
+      ],
+      event_reminder_offset: [
+        "w12",
+        "w8",
+        "w4",
+        "w2",
+        "w1",
+        "d3",
+        "d1",
+        "day_of",
+      ],
+      event_status: ["Draft", "Active", "Completed", "Archived"],
+      event_type: [
+        "Competition",
+        "Powerlifting Meet",
+        "Bodybuilding Show",
+        "Photoshoot",
+        "Testing Day",
+        "Weigh-In",
+        "Travel",
+        "Appointment",
+        "Coaching Call",
+        "Deadline",
+        "Gym Event",
+        "Custom",
+      ],
       group_member_role: ["admin", "member"],
       group_permission_mode: ["everyone", "admins_only", "read_only"],
     },

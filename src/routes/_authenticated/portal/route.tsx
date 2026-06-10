@@ -8,6 +8,7 @@ import { ClientTrainingScheduleGate } from "@/components/client-training-schedul
 import { useActivityHeartbeat } from "@/hooks/use-activity-heartbeat";
 import { BroadcastPopupGate } from "@/components/broadcast-popup-gate";
 import { ClientBirthdayCard } from "@/components/client-birthday-card";
+import { EventPopupGate } from "@/components/events/event-popup-gate";
 
 function PortalLayout() {
   useActivityHeartbeat();
@@ -21,6 +22,7 @@ function PortalLayout() {
               <Outlet />
               <BroadcastPopupGate />
               <ClientBirthdayCard />
+              <EventPopupGate />
             </ClientTrainingScheduleGate>
           </ClientBasicInfoGate>
         </ClientProfilePictureGate>
