@@ -8,7 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { UserAvatar } from "@/components/user-avatar";
 import { ProfilePictureCapture } from "@/components/profile-picture-capture";
-import { Camera, Trash2, X } from "lucide-react";
+import { Camera, Trash2, X, Phone as PhoneIcon, AlertTriangle } from "lucide-react";
 import { useAutosave } from "@/hooks/use-autosave";
 import { SavedIndicator } from "@/components/saved-indicator";
 
@@ -30,6 +30,8 @@ export function AccountProfileSettings({
   const [path, setPath] = useState<string | null>(null);
   const [fullName, setFullName] = useState("");
   const [originalName, setOriginalName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [originalPhone, setOriginalPhone] = useState("");
   const [coachId, setCoachId] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [removing, setRemoving] = useState(false);
@@ -37,14 +39,17 @@ export function AccountProfileSettings({
   const refresh = async () => {
     if (!user) return;
     const [{ data: profile }, { data: coach }] = await Promise.all([
-      supabase.from("profiles").select("full_name").eq("id", user.id).maybeSingle(),
-      supabase.from("coaches").select("id, profile_picture_url, full_name").eq("user_id", user.id).maybeSingle(),
+      supabase.from("profiles").select("full_name, phone").eq("id", user.id).maybeSingle(),
+      supabase.from("coaches").select("id, profile_picture_url, full_name, phone").eq("user_id", user.id).maybeSingle(),
     ]);
     const pic = coach?.profile_picture_url ?? null;
     const name = coach?.full_name || profile?.full_name || user.email || "";
+    const ph = (coach?.phone ?? (profile as any)?.phone ?? "") as string;
     setPath(pic);
     setFullName(name);
     setOriginalName(name);
+    setPhone(ph);
+    setOriginalPhone(ph);
     setCoachId(coach?.id ?? null);
   };
 
@@ -105,6 +110,34 @@ export function AccountProfileSettings({
         await supabase.from("coaches").update({ full_name: trimmed }).eq("id", coachId);
       }
       setOriginalName(trimmed);
+    },
+  });
+
+  const phoneValid = (v: string) => /^\+?[1-9]\d{7,14}$/.test(v.replace(/[\s\-()]/g, ""));
+  const { state: phoneSaveState } = useAutosave({
+    key: user ? `acct-phone-${user.id}` : null,
+    value: phone,
+    enabled: !!user && phone.trim() !== originalPhone.trim() && phoneValid(phone.trim()),
+    onSave: async (next) => {
+      if (!user) return;
+      const trimmed = next.trim();
+      await supabase.from("profiles").update({ phone: trimmed } as any).eq("id", user.id);
+      if (coachId) {
+        await supabase.from("coaches").update({ phone: trimmed } as any).eq("id", coachId);
+      } else {
+        // Create a coach row so call routing works (only if user is a coach/admin viewing this card)
+        await supabase.from("coaches").insert({
+          user_id: user.id,
+          email: (user.email ?? "").toLowerCase(),
+          full_name: fullName || user.email || "Coach",
+          phone: trimmed,
+          status: "Active",
+        } as any).then(async () => {
+          const { data } = await supabase.from("coaches").select("id").eq("user_id", user.id).maybeSingle();
+          if (data?.id) setCoachId(data.id);
+        }).catch(() => {});
+      }
+      setOriginalPhone(trimmed);
     },
   });
 
@@ -172,6 +205,37 @@ export function AccountProfileSettings({
         <p className="text-[11px] text-muted-foreground">
           Saves automatically. Shown in messages, feedback, reviews and account areas.
         </p>
+      </div>
+
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <Label htmlFor="acct-phone" className="flex items-center gap-1.5">
+            <PhoneIcon className="h-3.5 w-3.5" />
+            Phone number <span className="text-destructive">*</span>
+          </Label>
+          <SavedIndicator state={phoneSaveState} />
+        </div>
+        <Input
+          id="acct-phone"
+          type="tel"
+          inputMode="tel"
+          value={phone}
+          onChange={(e) => setPhone(e.target.value)}
+          placeholder="+12042907443"
+          aria-invalid={!phone.trim() || !phoneValid(phone.trim())}
+        />
+        {!phone.trim() ? (
+          <div className="flex items-start gap-1.5 rounded-md border border-destructive/40 bg-destructive/10 p-2 text-[11px] text-destructive">
+            <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+            <span>Required. Clients tap "Call coach" and this is the number they reach.</span>
+          </div>
+        ) : !phoneValid(phone.trim()) ? (
+          <p className="text-[11px] text-destructive">Use E.164 format, e.g. +12042907443</p>
+        ) : (
+          <p className="text-[11px] text-muted-foreground">
+            Saves automatically. Synced to your coach profile and Call Access.
+          </p>
+        )}
       </div>
     </Card>
   );
