@@ -62,60 +62,74 @@ type Clip = {
 // inside a <video preload="metadata"> tag in a small thumbnail, so we bake
 // an <img>-friendly data URL instead.
 async function generateVideoThumbnail(file: File): Promise<string | null> {
-  return new Promise((resolve) => {
-    try {
-      const url = URL.createObjectURL(file);
-      const video = document.createElement("video");
-      video.preload = "auto";
-      video.muted = true;
-      video.playsInline = true;
-      video.crossOrigin = "anonymous";
-      video.src = url;
-      let done = false;
-      const cleanup = () => {
-        try { URL.revokeObjectURL(url); } catch { /* noop */ }
-      };
-      const finish = (result: string | null) => {
-        if (done) return;
-        done = true;
-        cleanup();
-        resolve(result);
-      };
-      const capture = () => {
-        try {
-          const w = video.videoWidth;
-          const h = video.videoHeight;
-          if (!w || !h) return finish(null);
-          const maxSide = 320;
-          const scale = Math.min(1, maxSide / Math.max(w, h));
-          const canvas = document.createElement("canvas");
-          canvas.width = Math.round(w * scale);
-          canvas.height = Math.round(h * scale);
-          const ctx = canvas.getContext("2d");
-          if (!ctx) return finish(null);
-          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-          finish(canvas.toDataURL("image/jpeg", 0.75));
-        } catch {
-          finish(null);
-        }
-      };
-      video.addEventListener("loadeddata", () => {
-        try {
-          // Seek slightly in to skip black first-frames.
-          const target = Math.min(0.1, (video.duration || 0.2) / 2);
-          video.currentTime = target;
-        } catch {
-          capture();
-        }
-      });
-      video.addEventListener("seeked", capture);
-      video.addEventListener("error", () => finish(null));
-      // Hard timeout — never block UI.
-      setTimeout(() => finish(null), 8000);
-    } catch {
-      resolve(null);
-    }
-  });
+  const url = URL.createObjectURL(file);
+  const video = document.createElement("video");
+  video.preload = "auto";
+  video.muted = true;
+  (video as HTMLVideoElement & { playsInline?: boolean }).playsInline = true;
+  video.setAttribute("playsinline", "");
+  video.setAttribute("muted", "");
+  video.setAttribute("crossorigin", "anonymous");
+  video.src = url;
+  // iOS Safari requires the element to be in the DOM and actively playing
+  // before a frame is decoded. Park it offscreen.
+  video.style.position = "fixed";
+  video.style.left = "-9999px";
+  video.style.top = "0";
+  video.style.width = "2px";
+  video.style.height = "2px";
+  video.style.opacity = "0";
+  video.style.pointerEvents = "none";
+  document.body.appendChild(video);
+
+  const cleanup = () => {
+    try { URL.revokeObjectURL(url); } catch { /* noop */ }
+    try { video.remove(); } catch { /* noop */ }
+  };
+
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const onMeta = () => { video.removeEventListener("error", onErr); resolve(); };
+      const onErr = () => { video.removeEventListener("loadedmetadata", onMeta); reject(new Error("metadata")); };
+      video.addEventListener("loadedmetadata", onMeta, { once: true });
+      video.addEventListener("error", onErr, { once: true });
+      setTimeout(() => reject(new Error("metadata-timeout")), 6000);
+    });
+
+    // Force frame decode on iOS by briefly playing.
+    try { await video.play(); } catch { /* autoplay may reject, ignore */ }
+    video.pause();
+
+    await new Promise<void>((resolve) => {
+      const onSeeked = () => resolve();
+      video.addEventListener("seeked", onSeeked, { once: true });
+      try {
+        const target = Math.min(0.1, (video.duration || 0.2) / 2);
+        video.currentTime = target;
+      } catch {
+        resolve();
+      }
+      setTimeout(() => resolve(), 3000);
+    });
+
+    const w = video.videoWidth;
+    const h = video.videoHeight;
+    if (!w || !h) { cleanup(); return null; }
+    const maxSide = 320;
+    const scale = Math.min(1, maxSide / Math.max(w, h));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(w * scale);
+    canvas.height = Math.round(h * scale);
+    const ctx = canvas.getContext("2d");
+    if (!ctx) { cleanup(); return null; }
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const data = canvas.toDataURL("image/jpeg", 0.75);
+    cleanup();
+    return data;
+  } catch {
+    cleanup();
+    return null;
+  }
 }
 
 type Props = {
