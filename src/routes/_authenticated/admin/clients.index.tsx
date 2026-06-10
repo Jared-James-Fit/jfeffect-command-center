@@ -380,9 +380,8 @@ function ClientsPage() {
             </DialogTrigger>
             <NewClientDialog
               onClose={() => setOpen(false)}
-              onCreated={(newId, email, sendInvite) => {
+              onCreated={() => {
                 qc.invalidateQueries({ queryKey: ["clients"] });
-                if (email && sendInvite) sendSetup(newId);
               }}
             />
           </Dialog>
