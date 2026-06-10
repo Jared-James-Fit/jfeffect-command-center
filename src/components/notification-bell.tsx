@@ -242,6 +242,14 @@ export function NotificationBell() {
             .order("created_at", { ascending: false })
             .limit(30),
         ]);
+        const { data: reviews } = await (supabase.from("manual_check_in_reviews") as any)
+          .select("id, title, message, created_at, read_at, dismissed_at, notify_client")
+          .eq("client_id", client.id)
+          .eq("notify_client", true)
+          .is("read_at", null)
+          .is("dismissed_at", null)
+          .order("created_at", { ascending: false })
+          .limit(10);
         const lastRead = state?.client_last_read_at;
         const unread = (msgs ?? []).filter((m: any) => !lastRead || new Date(m.created_at).getTime() > new Date(lastRead).getTime());
         const items: BellItem[] = unread.map((m: any) => {
@@ -282,6 +290,14 @@ export function NotificationBell() {
             kind: "lift_video", clientId: client.id, videoId: c.video_id, name: "Coach Jared",
             title: "Coach Jared commented on your lift video",
             body: c.body, created_at: c.created_at,
+          });
+        }
+        for (const r of (reviews ?? []) as any[]) {
+          items.push({
+            kind: "check_in_review", clientId: client.id, reviewId: r.id, name: "Coach Jared",
+            title: `Coach Jared sent: ${r.title || "Check-In Review"}`,
+            body: r.message || "New check-in review from your coach.",
+            created_at: r.created_at,
           });
         }
         items.sort((a, b) => +new Date(b.created_at) - +new Date(a.created_at));
