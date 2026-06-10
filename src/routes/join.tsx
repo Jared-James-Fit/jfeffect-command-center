@@ -1,15 +1,25 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { createJfSignupCheckout, getJfPublicSettings } from "@/lib/jf-billing.functions";
+import { getPublicSalesPage } from "@/lib/sales-pages.functions";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { CheckCircle2, XCircle, Sparkles } from "lucide-react";
+import { Sparkles } from "lucide-react";
 import { toast } from "sonner";
+import { SalesPageShell, Section } from "@/components/sales/sales-page-shell";
+import { SalesHero, HeroCta, HeroCtaGhost } from "@/components/sales/sales-hero";
+import { AppPreviewGrid } from "@/components/sales/app-preview-grid";
+import { FeatureGrid } from "@/components/sales/feature-grid";
+import { IncludedNotIncluded } from "@/components/sales/included-not-included";
+import { ComparisonCard } from "@/components/sales/comparison";
+import { ProofWall } from "@/components/sales/proof-wall";
+import { FaqAccordion } from "@/components/sales/faq-accordion";
+import { StickyMobileCta } from "@/components/sales/sticky-mobile-cta";
 
 export const Route = createFileRoute("/join")({
   component: SignupJf,

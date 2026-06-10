@@ -12,12 +12,16 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as SitemapRouteImport } from './routes/sitemap'
 import { Route as SetupRouteImport } from './routes/setup'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
+import { Route as MembershipRouteImport } from './routes/membership'
 import { Route as MemberSetupRouteImport } from './routes/member-setup'
 import { Route as JoinRouteImport } from './routes/join'
+import { Route as CoachingRouteImport } from './routes/coaching'
 import { Route as AuthRouteImport } from './routes/auth'
+import { Route as ApplyRouteImport } from './routes/apply'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SignupJfRouteImport } from './routes/signup.jf'
+import { Route as CoachingApplyRouteImport } from './routes/coaching.apply'
 import { Route as BookSlugRouteImport } from './routes/book.$slug'
 import { Route as ApiDriveUploadRouteImport } from './routes/api/drive-upload'
 import { Route as AuthenticatedPortalRouteRouteImport } from './routes/_authenticated/portal/route'
@@ -177,6 +181,11 @@ const ResetPasswordRoute = ResetPasswordRouteImport.update({
   path: '/reset-password',
   getParentRoute: () => rootRouteImport,
 } as any)
+const MembershipRoute = MembershipRouteImport.update({
+  id: '/membership',
+  path: '/membership',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const MemberSetupRoute = MemberSetupRouteImport.update({
   id: '/member-setup',
   path: '/member-setup',
@@ -187,9 +196,19 @@ const JoinRoute = JoinRouteImport.update({
   path: '/join',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CoachingRoute = CoachingRouteImport.update({
+  id: '/coaching',
+  path: '/coaching',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
   path: '/auth',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApplyRoute = ApplyRouteImport.update({
+  id: '/apply',
+  path: '/apply',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
@@ -205,6 +224,11 @@ const SignupJfRoute = SignupJfRouteImport.update({
   id: '/signup/jf',
   path: '/signup/jf',
   getParentRoute: () => rootRouteImport,
+} as any)
+const CoachingApplyRoute = CoachingApplyRouteImport.update({
+  id: '/apply',
+  path: '/apply',
+  getParentRoute: () => CoachingRoute,
 } as any)
 const BookSlugRoute = BookSlugRouteImport.update({
   id: '/book/$slug',
@@ -1043,9 +1067,12 @@ const AuthenticatedMWorkoutsEnrollmentIdWeekDayRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/apply': typeof ApplyRoute
   '/auth': typeof AuthRoute
+  '/coaching': typeof CoachingRouteWithChildren
   '/join': typeof JoinRoute
   '/member-setup': typeof MemberSetupRoute
+  '/membership': typeof MembershipRoute
   '/reset-password': typeof ResetPasswordRoute
   '/setup': typeof SetupRoute
   '/sitemap': typeof SitemapRoute
@@ -1054,6 +1081,7 @@ export interface FileRoutesByFullPath {
   '/portal': typeof AuthenticatedPortalRouteRouteWithChildren
   '/api/drive-upload': typeof ApiDriveUploadRoute
   '/book/$slug': typeof BookSlugRoute
+  '/coaching/apply': typeof CoachingApplyRoute
   '/signup/jf': typeof SignupJfRoute
   '/admin/account': typeof AuthenticatedAdminAccountRoute
   '/admin/appointments': typeof AuthenticatedAdminAppointmentsRoute
@@ -1196,14 +1224,18 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/apply': typeof ApplyRoute
   '/auth': typeof AuthRoute
+  '/coaching': typeof CoachingRouteWithChildren
   '/join': typeof JoinRoute
   '/member-setup': typeof MemberSetupRoute
+  '/membership': typeof MembershipRoute
   '/reset-password': typeof ResetPasswordRoute
   '/setup': typeof SetupRoute
   '/sitemap': typeof SitemapRoute
   '/api/drive-upload': typeof ApiDriveUploadRoute
   '/book/$slug': typeof BookSlugRoute
+  '/coaching/apply': typeof CoachingApplyRoute
   '/signup/jf': typeof SignupJfRoute
   '/admin/account': typeof AuthenticatedAdminAccountRoute
   '/admin/appointments': typeof AuthenticatedAdminAppointmentsRoute
@@ -1347,9 +1379,12 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
+  '/apply': typeof ApplyRoute
   '/auth': typeof AuthRoute
+  '/coaching': typeof CoachingRouteWithChildren
   '/join': typeof JoinRoute
   '/member-setup': typeof MemberSetupRoute
+  '/membership': typeof MembershipRoute
   '/reset-password': typeof ResetPasswordRoute
   '/setup': typeof SetupRoute
   '/sitemap': typeof SitemapRoute
@@ -1358,6 +1393,7 @@ export interface FileRoutesById {
   '/_authenticated/portal': typeof AuthenticatedPortalRouteRouteWithChildren
   '/api/drive-upload': typeof ApiDriveUploadRoute
   '/book/$slug': typeof BookSlugRoute
+  '/coaching/apply': typeof CoachingApplyRoute
   '/signup/jf': typeof SignupJfRoute
   '/_authenticated/admin/account': typeof AuthenticatedAdminAccountRoute
   '/_authenticated/admin/appointments': typeof AuthenticatedAdminAppointmentsRoute
@@ -1502,9 +1538,12 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/apply'
     | '/auth'
+    | '/coaching'
     | '/join'
     | '/member-setup'
+    | '/membership'
     | '/reset-password'
     | '/setup'
     | '/sitemap'
@@ -1513,6 +1552,7 @@ export interface FileRouteTypes {
     | '/portal'
     | '/api/drive-upload'
     | '/book/$slug'
+    | '/coaching/apply'
     | '/signup/jf'
     | '/admin/account'
     | '/admin/appointments'
@@ -1655,14 +1695,18 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/apply'
     | '/auth'
+    | '/coaching'
     | '/join'
     | '/member-setup'
+    | '/membership'
     | '/reset-password'
     | '/setup'
     | '/sitemap'
     | '/api/drive-upload'
     | '/book/$slug'
+    | '/coaching/apply'
     | '/signup/jf'
     | '/admin/account'
     | '/admin/appointments'
@@ -1805,9 +1849,12 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/_authenticated'
+    | '/apply'
     | '/auth'
+    | '/coaching'
     | '/join'
     | '/member-setup'
+    | '/membership'
     | '/reset-password'
     | '/setup'
     | '/sitemap'
@@ -1816,6 +1863,7 @@ export interface FileRouteTypes {
     | '/_authenticated/portal'
     | '/api/drive-upload'
     | '/book/$slug'
+    | '/coaching/apply'
     | '/signup/jf'
     | '/_authenticated/admin/account'
     | '/_authenticated/admin/appointments'
@@ -1960,9 +2008,12 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
+  ApplyRoute: typeof ApplyRoute
   AuthRoute: typeof AuthRoute
+  CoachingRoute: typeof CoachingRouteWithChildren
   JoinRoute: typeof JoinRoute
   MemberSetupRoute: typeof MemberSetupRoute
+  MembershipRoute: typeof MembershipRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   SetupRoute: typeof SetupRoute
   SitemapRoute: typeof SitemapRoute
@@ -2005,6 +2056,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ResetPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/membership': {
+      id: '/membership'
+      path: '/membership'
+      fullPath: '/membership'
+      preLoaderRoute: typeof MembershipRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/member-setup': {
       id: '/member-setup'
       path: '/member-setup'
@@ -2019,11 +2077,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof JoinRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/coaching': {
+      id: '/coaching'
+      path: '/coaching'
+      fullPath: '/coaching'
+      preLoaderRoute: typeof CoachingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/auth': {
       id: '/auth'
       path: '/auth'
       fullPath: '/auth'
       preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/apply': {
+      id: '/apply'
+      path: '/apply'
+      fullPath: '/apply'
+      preLoaderRoute: typeof ApplyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated': {
@@ -2046,6 +2118,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/signup/jf'
       preLoaderRoute: typeof SignupJfRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/coaching/apply': {
+      id: '/coaching/apply'
+      path: '/apply'
+      fullPath: '/coaching/apply'
+      preLoaderRoute: typeof CoachingApplyRouteImport
+      parentRoute: typeof CoachingRoute
     }
     '/book/$slug': {
       id: '/book/$slug'
@@ -3536,12 +3615,27 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
 const AuthenticatedRouteRouteWithChildren =
   AuthenticatedRouteRoute._addFileChildren(AuthenticatedRouteRouteChildren)
 
+interface CoachingRouteChildren {
+  CoachingApplyRoute: typeof CoachingApplyRoute
+}
+
+const CoachingRouteChildren: CoachingRouteChildren = {
+  CoachingApplyRoute: CoachingApplyRoute,
+}
+
+const CoachingRouteWithChildren = CoachingRoute._addFileChildren(
+  CoachingRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
+  ApplyRoute: ApplyRoute,
   AuthRoute: AuthRoute,
+  CoachingRoute: CoachingRouteWithChildren,
   JoinRoute: JoinRoute,
   MemberSetupRoute: MemberSetupRoute,
+  MembershipRoute: MembershipRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   SetupRoute: SetupRoute,
   SitemapRoute: SitemapRoute,
