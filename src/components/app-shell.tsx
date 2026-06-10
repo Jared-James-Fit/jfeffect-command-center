@@ -48,12 +48,20 @@ function groupNavItems(items: NavItem[]) {
   }
   const order = [
     "Core",
+    "Overview",
+    "Sales",
+    "Members",
+    "Billing",
+    "Setup Tools",
+    "Content",
+    "Community",
     "Communication",
     "Membership",
     "Programming",
     "Business",
     "Documents",
     "Team / Ops",
+    "Settings",
     "Account",
   ];
   const result: { label: string | undefined; items: NavItem[] }[] = [];
