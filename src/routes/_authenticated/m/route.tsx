@@ -3,7 +3,7 @@ import { useEffect } from "react";
 import { useAuth } from "@/lib/auth";
 import { AppShell } from "@/components/app-shell";
 import { memberNav } from "@/lib/admin-nav";
-import { PovBanner, getPovFlag } from "@/components/admin-pov";
+import { PovQuickToggle, getPovFlag } from "@/components/pov-quick-toggle";
 import { BroadcastPopupGate } from "@/components/broadcast-popup-gate";
 import { SubscriptionRestrictedBanner } from "@/components/subscription-restricted-banner";
 import { useMemberAccess } from "@/lib/member-access";
@@ -38,7 +38,7 @@ function MemberLayout() {
   }
   return (
     <AppShell items={memberNav} title="Member">
-      <PovBanner />
+      <PovQuickToggle variant="banner" />
       {!subscriptionActive && status && (
         <div className="px-4 pt-4 md:px-6 md:pt-6">
           <SubscriptionRestrictedBanner status={status} />
