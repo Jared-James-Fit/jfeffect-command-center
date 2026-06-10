@@ -129,10 +129,12 @@ import { Route as AuthenticatedAdminSettingsChatRouteImport } from './routes/_au
 import { Route as AuthenticatedAdminPurchasesIdRouteImport } from './routes/_authenticated/admin/purchases.$id'
 import { Route as AuthenticatedAdminProgramLibraryTemplateIdRouteImport } from './routes/_authenticated/admin/program-library_.$templateId'
 import { Route as AuthenticatedAdminMembershipWelcomeMessagesRouteImport } from './routes/_authenticated/admin/membership.welcome-messages'
+import { Route as AuthenticatedAdminMembershipSmsEmailRouteImport } from './routes/_authenticated/admin/membership.sms-email'
 import { Route as AuthenticatedAdminMembershipSignupStatsRouteImport } from './routes/_authenticated/admin/membership.signup-stats'
 import { Route as AuthenticatedAdminMembershipSignupLinkRouteImport } from './routes/_authenticated/admin/membership.signup-link'
 import { Route as AuthenticatedAdminMembershipSetupLinksRouteImport } from './routes/_authenticated/admin/membership.setup-links'
 import { Route as AuthenticatedAdminMembershipSalesPageRouteImport } from './routes/_authenticated/admin/membership.sales-page'
+import { Route as AuthenticatedAdminMembershipResetLinksRouteImport } from './routes/_authenticated/admin/membership.reset-links'
 import { Route as AuthenticatedAdminMembershipPromoToolsRouteImport } from './routes/_authenticated/admin/membership.promo-tools'
 import { Route as AuthenticatedAdminMembershipChallengesRouteImport } from './routes/_authenticated/admin/membership.challenges'
 import { Route as AuthenticatedAdminMembershipActionNeededRouteImport } from './routes/_authenticated/admin/membership.action-needed'
@@ -842,6 +844,12 @@ const AuthenticatedAdminMembershipWelcomeMessagesRoute =
     path: '/welcome-messages',
     getParentRoute: () => AuthenticatedAdminMembershipRoute,
   } as any)
+const AuthenticatedAdminMembershipSmsEmailRoute =
+  AuthenticatedAdminMembershipSmsEmailRouteImport.update({
+    id: '/sms-email',
+    path: '/sms-email',
+    getParentRoute: () => AuthenticatedAdminMembershipRoute,
+  } as any)
 const AuthenticatedAdminMembershipSignupStatsRoute =
   AuthenticatedAdminMembershipSignupStatsRouteImport.update({
     id: '/signup-stats',
@@ -864,6 +872,12 @@ const AuthenticatedAdminMembershipSalesPageRoute =
   AuthenticatedAdminMembershipSalesPageRouteImport.update({
     id: '/sales-page',
     path: '/sales-page',
+    getParentRoute: () => AuthenticatedAdminMembershipRoute,
+  } as any)
+const AuthenticatedAdminMembershipResetLinksRoute =
+  AuthenticatedAdminMembershipResetLinksRouteImport.update({
+    id: '/reset-links',
+    path: '/reset-links',
     getParentRoute: () => AuthenticatedAdminMembershipRoute,
   } as any)
 const AuthenticatedAdminMembershipPromoToolsRoute =
@@ -1099,10 +1113,12 @@ export interface FileRoutesByFullPath {
   '/admin/membership/action-needed': typeof AuthenticatedAdminMembershipActionNeededRoute
   '/admin/membership/challenges': typeof AuthenticatedAdminMembershipChallengesRoute
   '/admin/membership/promo-tools': typeof AuthenticatedAdminMembershipPromoToolsRoute
+  '/admin/membership/reset-links': typeof AuthenticatedAdminMembershipResetLinksRoute
   '/admin/membership/sales-page': typeof AuthenticatedAdminMembershipSalesPageRoute
   '/admin/membership/setup-links': typeof AuthenticatedAdminMembershipSetupLinksRoute
   '/admin/membership/signup-link': typeof AuthenticatedAdminMembershipSignupLinkRoute
   '/admin/membership/signup-stats': typeof AuthenticatedAdminMembershipSignupStatsRoute
+  '/admin/membership/sms-email': typeof AuthenticatedAdminMembershipSmsEmailRoute
   '/admin/membership/welcome-messages': typeof AuthenticatedAdminMembershipWelcomeMessagesRoute
   '/admin/program-library/$templateId': typeof AuthenticatedAdminProgramLibraryTemplateIdRoute
   '/admin/purchases/$id': typeof AuthenticatedAdminPurchasesIdRoute
@@ -1241,10 +1257,12 @@ export interface FileRoutesByTo {
   '/admin/membership/action-needed': typeof AuthenticatedAdminMembershipActionNeededRoute
   '/admin/membership/challenges': typeof AuthenticatedAdminMembershipChallengesRoute
   '/admin/membership/promo-tools': typeof AuthenticatedAdminMembershipPromoToolsRoute
+  '/admin/membership/reset-links': typeof AuthenticatedAdminMembershipResetLinksRoute
   '/admin/membership/sales-page': typeof AuthenticatedAdminMembershipSalesPageRoute
   '/admin/membership/setup-links': typeof AuthenticatedAdminMembershipSetupLinksRoute
   '/admin/membership/signup-link': typeof AuthenticatedAdminMembershipSignupLinkRoute
   '/admin/membership/signup-stats': typeof AuthenticatedAdminMembershipSignupStatsRoute
+  '/admin/membership/sms-email': typeof AuthenticatedAdminMembershipSmsEmailRoute
   '/admin/membership/welcome-messages': typeof AuthenticatedAdminMembershipWelcomeMessagesRoute
   '/admin/program-library/$templateId': typeof AuthenticatedAdminProgramLibraryTemplateIdRoute
   '/admin/purchases/$id': typeof AuthenticatedAdminPurchasesIdRoute
@@ -1389,10 +1407,12 @@ export interface FileRoutesById {
   '/_authenticated/admin/membership/action-needed': typeof AuthenticatedAdminMembershipActionNeededRoute
   '/_authenticated/admin/membership/challenges': typeof AuthenticatedAdminMembershipChallengesRoute
   '/_authenticated/admin/membership/promo-tools': typeof AuthenticatedAdminMembershipPromoToolsRoute
+  '/_authenticated/admin/membership/reset-links': typeof AuthenticatedAdminMembershipResetLinksRoute
   '/_authenticated/admin/membership/sales-page': typeof AuthenticatedAdminMembershipSalesPageRoute
   '/_authenticated/admin/membership/setup-links': typeof AuthenticatedAdminMembershipSetupLinksRoute
   '/_authenticated/admin/membership/signup-link': typeof AuthenticatedAdminMembershipSignupLinkRoute
   '/_authenticated/admin/membership/signup-stats': typeof AuthenticatedAdminMembershipSignupStatsRoute
+  '/_authenticated/admin/membership/sms-email': typeof AuthenticatedAdminMembershipSmsEmailRoute
   '/_authenticated/admin/membership/welcome-messages': typeof AuthenticatedAdminMembershipWelcomeMessagesRoute
   '/_authenticated/admin/program-library_/$templateId': typeof AuthenticatedAdminProgramLibraryTemplateIdRoute
   '/_authenticated/admin/purchases/$id': typeof AuthenticatedAdminPurchasesIdRoute
@@ -1537,10 +1557,12 @@ export interface FileRouteTypes {
     | '/admin/membership/action-needed'
     | '/admin/membership/challenges'
     | '/admin/membership/promo-tools'
+    | '/admin/membership/reset-links'
     | '/admin/membership/sales-page'
     | '/admin/membership/setup-links'
     | '/admin/membership/signup-link'
     | '/admin/membership/signup-stats'
+    | '/admin/membership/sms-email'
     | '/admin/membership/welcome-messages'
     | '/admin/program-library/$templateId'
     | '/admin/purchases/$id'
@@ -1679,10 +1701,12 @@ export interface FileRouteTypes {
     | '/admin/membership/action-needed'
     | '/admin/membership/challenges'
     | '/admin/membership/promo-tools'
+    | '/admin/membership/reset-links'
     | '/admin/membership/sales-page'
     | '/admin/membership/setup-links'
     | '/admin/membership/signup-link'
     | '/admin/membership/signup-stats'
+    | '/admin/membership/sms-email'
     | '/admin/membership/welcome-messages'
     | '/admin/program-library/$templateId'
     | '/admin/purchases/$id'
@@ -1826,10 +1850,12 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/membership/action-needed'
     | '/_authenticated/admin/membership/challenges'
     | '/_authenticated/admin/membership/promo-tools'
+    | '/_authenticated/admin/membership/reset-links'
     | '/_authenticated/admin/membership/sales-page'
     | '/_authenticated/admin/membership/setup-links'
     | '/_authenticated/admin/membership/signup-link'
     | '/_authenticated/admin/membership/signup-stats'
+    | '/_authenticated/admin/membership/sms-email'
     | '/_authenticated/admin/membership/welcome-messages'
     | '/_authenticated/admin/program-library_/$templateId'
     | '/_authenticated/admin/purchases/$id'
@@ -2733,6 +2759,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminMembershipWelcomeMessagesRouteImport
       parentRoute: typeof AuthenticatedAdminMembershipRoute
     }
+    '/_authenticated/admin/membership/sms-email': {
+      id: '/_authenticated/admin/membership/sms-email'
+      path: '/sms-email'
+      fullPath: '/admin/membership/sms-email'
+      preLoaderRoute: typeof AuthenticatedAdminMembershipSmsEmailRouteImport
+      parentRoute: typeof AuthenticatedAdminMembershipRoute
+    }
     '/_authenticated/admin/membership/signup-stats': {
       id: '/_authenticated/admin/membership/signup-stats'
       path: '/signup-stats'
@@ -2759,6 +2792,13 @@ declare module '@tanstack/react-router' {
       path: '/sales-page'
       fullPath: '/admin/membership/sales-page'
       preLoaderRoute: typeof AuthenticatedAdminMembershipSalesPageRouteImport
+      parentRoute: typeof AuthenticatedAdminMembershipRoute
+    }
+    '/_authenticated/admin/membership/reset-links': {
+      id: '/_authenticated/admin/membership/reset-links'
+      path: '/reset-links'
+      fullPath: '/admin/membership/reset-links'
+      preLoaderRoute: typeof AuthenticatedAdminMembershipResetLinksRouteImport
       parentRoute: typeof AuthenticatedAdminMembershipRoute
     }
     '/_authenticated/admin/membership/promo-tools': {
@@ -2930,10 +2970,12 @@ interface AuthenticatedAdminMembershipRouteChildren {
   AuthenticatedAdminMembershipActionNeededRoute: typeof AuthenticatedAdminMembershipActionNeededRoute
   AuthenticatedAdminMembershipChallengesRoute: typeof AuthenticatedAdminMembershipChallengesRoute
   AuthenticatedAdminMembershipPromoToolsRoute: typeof AuthenticatedAdminMembershipPromoToolsRoute
+  AuthenticatedAdminMembershipResetLinksRoute: typeof AuthenticatedAdminMembershipResetLinksRoute
   AuthenticatedAdminMembershipSalesPageRoute: typeof AuthenticatedAdminMembershipSalesPageRoute
   AuthenticatedAdminMembershipSetupLinksRoute: typeof AuthenticatedAdminMembershipSetupLinksRoute
   AuthenticatedAdminMembershipSignupLinkRoute: typeof AuthenticatedAdminMembershipSignupLinkRoute
   AuthenticatedAdminMembershipSignupStatsRoute: typeof AuthenticatedAdminMembershipSignupStatsRoute
+  AuthenticatedAdminMembershipSmsEmailRoute: typeof AuthenticatedAdminMembershipSmsEmailRoute
   AuthenticatedAdminMembershipWelcomeMessagesRoute: typeof AuthenticatedAdminMembershipWelcomeMessagesRoute
   AuthenticatedAdminMembershipIndexRoute: typeof AuthenticatedAdminMembershipIndexRoute
 }
@@ -2946,6 +2988,8 @@ const AuthenticatedAdminMembershipRouteChildren: AuthenticatedAdminMembershipRou
       AuthenticatedAdminMembershipChallengesRoute,
     AuthenticatedAdminMembershipPromoToolsRoute:
       AuthenticatedAdminMembershipPromoToolsRoute,
+    AuthenticatedAdminMembershipResetLinksRoute:
+      AuthenticatedAdminMembershipResetLinksRoute,
     AuthenticatedAdminMembershipSalesPageRoute:
       AuthenticatedAdminMembershipSalesPageRoute,
     AuthenticatedAdminMembershipSetupLinksRoute:
@@ -2954,6 +2998,8 @@ const AuthenticatedAdminMembershipRouteChildren: AuthenticatedAdminMembershipRou
       AuthenticatedAdminMembershipSignupLinkRoute,
     AuthenticatedAdminMembershipSignupStatsRoute:
       AuthenticatedAdminMembershipSignupStatsRoute,
+    AuthenticatedAdminMembershipSmsEmailRoute:
+      AuthenticatedAdminMembershipSmsEmailRoute,
     AuthenticatedAdminMembershipWelcomeMessagesRoute:
       AuthenticatedAdminMembershipWelcomeMessagesRoute,
     AuthenticatedAdminMembershipIndexRoute:
@@ -3405,3 +3451,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
