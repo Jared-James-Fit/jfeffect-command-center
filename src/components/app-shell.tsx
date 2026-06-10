@@ -92,8 +92,15 @@ function useCollapsedSections() {
       if (raw) setCollapsed(new Set(JSON.parse(raw)));
     } catch {}
   }, []);
-  const toggle = (label: string) => {
+  const toggle = (label: string, allLabels?: string[]) => {
     setCollapsed((prev) => {
+      const isCollapsed = prev.has(label);
+      if (allLabels && isCollapsed) {
+        // Accordion: open this section, collapse all others
+        const next = new Set(allLabels.filter((l) => l !== label));
+        try { localStorage.setItem(SIDEBAR_COLLAPSED_SECTIONS_KEY, JSON.stringify(Array.from(next))); } catch {}
+        return next;
+      }
       const next = new Set(prev);
       if (next.has(label)) next.delete(label); else next.add(label);
       try { localStorage.setItem(SIDEBAR_COLLAPSED_SECTIONS_KEY, JSON.stringify(Array.from(next))); } catch {}
