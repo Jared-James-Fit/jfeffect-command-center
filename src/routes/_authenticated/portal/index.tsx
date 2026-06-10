@@ -254,6 +254,56 @@ function PortalHome() {
     }
   }
 
+  // Coach response cards — surface so it's obvious when coach has replied.
+  const unreadMsgs = coachUpdates?.unreadMessages ?? [];
+  if (unreadMsgs.length > 0) {
+    const latest = unreadMsgs[0];
+    const atts = (latest?.attachments ?? []) as any[];
+    const hasVoice = atts.some((a) => a?.type === "audio");
+    const hasMedia = atts.some((a) => a?.type === "image" || a?.type === "video");
+    const preview = hasVoice ? "🎙️ Voice message"
+      : hasMedia ? "📎 Photo / video"
+      : atts.length ? "📎 Attachment"
+      : (latest?.body || "New message");
+    updates.push({
+      key: "coach-messages",
+      icon: MessageCircle,
+      tone: "primary",
+      title: unreadMsgs.length > 1 ? `${unreadMsgs.length} new from Coach Jared` : "New from Coach Jared",
+      message: preview,
+      primary: { label: "Open Chat", to: "/portal/messages" },
+    });
+  }
+  for (const p of (coachUpdates?.liftPings ?? []).slice(0, 5)) {
+    updates.push({
+      key: `lift-${p.videoId}`,
+      icon: Dumbbell,
+      tone: "primary",
+      title: `Coach feedback on ${p.exercise}`,
+      message: p.preview,
+      primary: { label: "Open Lift Review", to: "/portal/lift-videos" },
+    });
+  }
+  for (const r of coachUpdates?.checkInReviews ?? []) {
+    updates.push({
+      key: `review-${r.id}`,
+      icon: ClipboardCheck,
+      tone: "primary",
+      title: r.title || "New Check-In Review",
+      message: r.message || "Open to read your coach's review.",
+      primary: {
+        label: "Open Review",
+        onClick: async () => {
+          await (supabase.from("manual_check_in_reviews") as any)
+            .update({ read_at: new Date().toISOString() })
+            .eq("id", r.id);
+          qc.invalidateQueries({ queryKey: ["portal-coach-updates", client?.id] });
+          qc.invalidateQueries({ queryKey: ["unread-counts"] });
+        },
+      },
+    });
+  }
+
   return (
     <>
       <PageHeader
