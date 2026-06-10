@@ -15,9 +15,13 @@ import { Plus, Search, MoreHorizontal, Mail, Archive, Trash2, KeyRound, Dumbbell
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import { inviteClient, archiveClient, deleteClient, sendPasswordReset } from "@/lib/clients.functions";
+import { sendAuthLinkBySms, sendPaymentLinkBySms } from "@/lib/sms-links.functions";
+import { sendPaymentLinkEmail } from "@/lib/payments.functions";
+import { createCheckoutSessionForAssignment } from "@/lib/stripe-checkout.functions";
+import { snapshotOfferForPurchase } from "@/lib/offers";
+import { Switch } from "@/components/ui/switch";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator, DropdownMenuLabel } from "@/components/ui/dropdown-menu";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Checkbox } from "@/components/ui/checkbox";
 import { derivePhase, displayTitle, toneClasses, type TrainingPhase } from "@/lib/training-phases";
 import { deriveTarget } from "@/lib/nutrition-cardio";
 import { PowerlifterBadge } from "@/components/powerlifter-badge";
@@ -375,9 +379,8 @@ function ClientsPage() {
             </DialogTrigger>
             <NewClientDialog
               onClose={() => setOpen(false)}
-              onCreated={(newId, email, sendInvite) => {
+              onCreated={() => {
                 qc.invalidateQueries({ queryKey: ["clients"] });
-                if (email && sendInvite) sendSetup(newId);
               }}
             />
           </Dialog>
@@ -823,27 +826,116 @@ function ClientsPage() {
   );
 }
 
-function NewClientDialog({ onClose, onCreated }: { onClose: () => void; onCreated: (id: string, email: string, sendInvite: boolean) => void }) {
+function NewClientDialog({ onClose, onCreated }: { onClose: () => void; onCreated: (id: string) => void }) {
   const [form, setForm] = useState({
     full_name: "", email: "", phone: "", instagram: "",
     coaching_type: TYPES[0], status: "New Client", coaching_package: "",
   });
-  const [sendInvite, setSendInvite] = useState(true);
+  const [setupEmail, setSetupEmail] = useState(true);
+  const [setupSms, setSetupSms] = useState(true);
+  const [offerId, setOfferId] = useState<string>("");
+  const [payEmail, setPayEmail] = useState(true);
+  const [paySms, setPaySms] = useState(true);
   const [busy, setBusy] = useState(false);
+
+  const inviteFn = useServerFn(inviteClient);
+  const smsAuthFn = useServerFn(sendAuthLinkBySms);
+  const smsPayFn = useServerFn(sendPaymentLinkBySms);
+  const emailPayFn = useServerFn(sendPaymentLinkEmail);
+  const checkoutFn = useServerFn(createCheckoutSessionForAssignment);
+
+  const { data: offers = [] } = useQuery({
+    queryKey: ["offers-for-new-client"],
+    queryFn: async () =>
+      (await supabase
+        .from("offers")
+        .select("*")
+        .eq("archived", false)
+        .in("status", ["Active", "Private", "Testing"])
+        .order("name")).data ?? [],
+  });
+
+  const hasEmail = !!form.email.trim();
+  const hasPhone = !!form.phone.trim();
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setBusy(true);
-    const { data, error } = await supabase.from("clients").insert(form).select("id").single();
-    setBusy(false);
-    if (error) return toast.error(error.message);
+    const { data: created, error } = await supabase.from("clients").insert(form).select("id, timezone").single();
+    if (error) { setBusy(false); return toast.error(error.message); }
+    const clientId = created!.id as string;
     toast.success("Client created");
-    onCreated(data!.id, form.email, sendInvite);
+
+    // Setup links
+    const origin = window.location.origin;
+    if (hasEmail && setupEmail) {
+      try {
+        await inviteFn({ data: { clientId, redirectTo: `${origin}/setup` } });
+        toast.success("Setup link emailed");
+      } catch (e: any) { toast.error(`Email setup link: ${e?.message ?? "failed"}`); }
+    }
+    if (hasPhone && setupSms) {
+      try {
+        await smsAuthFn({ data: { clientId, redirectTo: `${origin}/setup`, kind: "setup" } });
+        toast.success("Setup link texted");
+      } catch (e: any) { toast.error(`SMS setup link: ${e?.message ?? "failed"}`); }
+    }
+
+    // Optional product / payment link
+    if (offerId) {
+      const offer = offers.find((o: any) => o.id === offerId);
+      if (offer) {
+        try {
+          const { data: u } = await supabase.auth.getUser();
+          const snap = snapshotOfferForPurchase(offer, {
+            clientId, assignedBy: u.user?.id ?? null, timezone: created?.timezone ?? null,
+          });
+          const { data: purchase, error: pErr } = await supabase
+            .from("purchase_records").insert({ ...snap, payment_status: "Pending" } as any)
+            .select("id").single();
+          if (pErr) throw new Error(pErr.message);
+          const purchaseId = purchase!.id as string;
+
+          // Generate a per-client Stripe checkout link (preferred) or fall back
+          // to the offer's legacy payment_link snapshot already stored on the purchase.
+          if (offer.stripe_price_id) {
+            try {
+              const res = await checkoutFn({ data: { purchaseRecordId: purchaseId, origin } });
+              if (res?.url) {
+                await supabase.from("purchase_records")
+                  .update({ stripe_payment_link: res.url }).eq("id", purchaseId);
+              }
+            } catch (e: any) {
+              toast.error(`Couldn't generate checkout link: ${e?.message ?? "unknown"}`);
+            }
+          }
+
+          if (hasEmail && payEmail) {
+            try {
+              const r = await emailPayFn({ data: { id: purchaseId } });
+              if ((r as any)?.sent === false) toast.message((r as any)?.reason ?? "Email not sent");
+              else toast.success("Payment link emailed");
+            } catch (e: any) { toast.error(`Email payment link: ${e?.message ?? "failed"}`); }
+          }
+          if (hasPhone && paySms) {
+            try {
+              await smsPayFn({ data: { purchaseId } });
+              toast.success("Payment link texted");
+            } catch (e: any) { toast.error(`SMS payment link: ${e?.message ?? "failed"}`); }
+          }
+        } catch (e: any) {
+          toast.error(`Couldn't attach offer: ${e?.message ?? "failed"}`);
+        }
+      }
+    }
+
+    setBusy(false);
+    onCreated(clientId);
     onClose();
   };
 
   return (
-    <DialogContent className="max-w-lg">
+    <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
       <DialogHeader><DialogTitle>New client</DialogTitle></DialogHeader>
       <form onSubmit={submit} className="space-y-3">
         <div className="grid grid-cols-2 gap-3">
@@ -852,7 +944,7 @@ function NewClientDialog({ onClose, onCreated }: { onClose: () => void; onCreate
             <Input required value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} />
           </div>
           <div><Label>Email</Label><Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
-          <div><Label>Phone</Label><Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></div>
+          <div><Label>Phone</Label><Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="+1…" /></div>
           <div><Label>Instagram</Label><Input value={form.instagram} onChange={(e) => setForm({ ...form, instagram: e.target.value })} /></div>
           <div>
             <Label>Coaching type</Label>
@@ -870,11 +962,49 @@ function NewClientDialog({ onClose, onCreated }: { onClose: () => void; onCreate
           </div>
           <div className="col-span-2"><Label>Coaching package</Label><Input value={form.coaching_package} onChange={(e) => setForm({ ...form, coaching_package: e.target.value })} /></div>
         </div>
-        <label className="flex items-center gap-2 rounded-md border border-border bg-secondary/30 px-3 py-2.5 text-sm">
-          <Checkbox checked={sendInvite} onCheckedChange={(v) => setSendInvite(v === true)} />
-          <span className="font-medium">Send account setup email now</span>
-          <span className="ml-auto text-xs text-muted-foreground">Requires email</span>
-        </label>
+
+        <div className="rounded-md border border-border bg-secondary/30 p-3 space-y-2">
+          <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Send setup link</div>
+          <div className="flex items-center justify-between gap-3">
+            <Label className="font-normal">Email setup link <span className="text-xs text-muted-foreground">{hasEmail ? "" : "· needs email"}</span></Label>
+            <Switch checked={setupEmail && hasEmail} onCheckedChange={setSetupEmail} disabled={!hasEmail} />
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <Label className="font-normal">SMS setup link <span className="text-xs text-muted-foreground">{hasPhone ? "" : "· needs phone"}</span></Label>
+            <Switch checked={setupSms && hasPhone} onCheckedChange={setSetupSms} disabled={!hasPhone} />
+          </div>
+        </div>
+
+        <div className="rounded-md border border-border bg-secondary/30 p-3 space-y-2">
+          <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Send a payment link (optional)</div>
+          <div>
+            <Label className="text-xs">Product / offer</Label>
+            <Select value={offerId || "_none"} onValueChange={(v) => setOfferId(v === "_none" ? "" : v)}>
+              <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="_none">None</SelectItem>
+                {offers.map((o: any) => (
+                  <SelectItem key={o.id} value={o.id}>
+                    {o.name} · {(o.currency ?? "USD")} {Number(o.full_payable_amount ?? o.price ?? 0).toLocaleString()}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          {offerId && (
+            <>
+              <div className="flex items-center justify-between gap-3">
+                <Label className="font-normal">Email payment link <span className="text-xs text-muted-foreground">{hasEmail ? "" : "· needs email"}</span></Label>
+                <Switch checked={payEmail && hasEmail} onCheckedChange={setPayEmail} disabled={!hasEmail} />
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <Label className="font-normal">SMS payment link <span className="text-xs text-muted-foreground">{hasPhone ? "" : "· needs phone"}</span></Label>
+                <Switch checked={paySms && hasPhone} onCheckedChange={setPaySms} disabled={!hasPhone} />
+              </div>
+            </>
+          )}
+        </div>
+
         <DialogFooter>
           <Button type="button" variant="ghost" onClick={onClose}>Cancel</Button>
           <Button type="submit" disabled={busy} className="bg-gradient-primary font-bold uppercase">{busy ? "Saving…" : "Create"}</Button>
