@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useRouterState, useNavigate } from "@tanstack/react-router";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import {
-  LogOut, ChevronLeft, ChevronRight, ChevronDown, Search, Settings as SettingsIcon, ArrowLeft, MoreHorizontal,
+  LogOut, ChevronLeft, ChevronRight, ChevronDown, Search, Settings as SettingsIcon, ArrowLeft, MoreHorizontal, Layers,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { NotificationBell } from "@/components/notification-bell";
@@ -21,12 +21,15 @@ import {
 } from "@/components/ui/command";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 export interface NavItem {
   to: string;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
   group?: string;
+  /** Optional grouped sub-items shown on tap/long-press in the mobile bottom bar. */
+  children?: NavItem[];
 }
 
 function groupNavItems(items: NavItem[]) {
@@ -483,50 +486,20 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
           )}
           style={{ bottom: "calc(env(safe-area-inset-bottom) + 10px)" }}
         >
-          {visible.map((item) => {
-            const active = pathname === item.to;
-            const Icon = item.icon;
-            const badge = navBadges[item.to];
-            return (
-              <Link
-                key={item.to}
-                to={item.to}
-                onClick={() => markNavSeen(user?.id, item.to)}
-                className={cn(
-                  "relative flex min-h-[64px] flex-col items-center justify-center gap-0.5 px-0.5 pt-2 pb-2 text-[10px] font-medium transition-colors",
-                  active
-                    ? "text-primary"
-                    : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                <div className="relative">
-                  <Icon className={cn("h-5 w-5", active && "drop-shadow-[0_0_6px_hsl(var(--primary)/0.6)]")} />
-                  {badge?.count != null && badge.count > 0 && (
-                    <span className="absolute -right-2 -top-1.5 grid h-[16px] min-w-[16px] place-items-center rounded-full bg-destructive px-1 text-[9px] font-bold leading-none text-destructive-foreground ring-2 ring-card">
-                      {badge.count > 9 ? "9+" : badge.count}
-                    </span>
-                  )}
-                  {badge?.dot && badge.count == null && (
-                    <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-destructive ring-2 ring-card" />
-                  )}
-                </div>
-                <span className="w-full px-0.5 text-center text-[9.5px] leading-tight tracking-tight">{item.label}</span>
-                {active && <span className="mt-0.5 h-0.5 w-5 rounded-full bg-primary" />}
-              </Link>
-            );
-          })}
-          <button
-            type="button"
-            onClick={() => setMoreOpen(true)}
-            className={cn(
-              "relative flex min-h-[64px] flex-col items-center justify-center gap-0.5 px-0.5 pt-2 pb-2 text-[10px] font-medium transition-colors",
-              moreOpen ? "text-primary" : "text-muted-foreground hover:text-foreground",
-            )}
-            aria-label="More"
-          >
-            <MoreHorizontal className="h-5 w-5" />
-            <span className="w-full px-0.5 text-center text-[9.5px] leading-tight tracking-tight">More</span>
-          </button>
+          {visible.map((item) => (
+            <BottomNavSlot
+              key={(item.children ? "g:" : "") + item.to + ":" + item.label}
+              item={item}
+              pathname={pathname}
+              navBadges={navBadges}
+              onNavigate={(to) => markNavSeen(user?.id, to)}
+            />
+          ))}
+          <MoreNavSlot
+            active={moreOpen}
+            onOpenMore={() => setMoreOpen(true)}
+            onOpenSearch={() => setPaletteOpen(true)}
+          />
         </nav>
           );
         })()}
@@ -666,6 +639,204 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
 export interface Crumb {
   label: ReactNode;
   to?: string;
+}
+
+// ------- Mobile bottom-nav helpers (grouped item + long-press) -------
+function useLongPress(onLong: () => void, ms = 380) {
+  const timer = useRef<number | null>(null);
+  const fired = useRef(false);
+  const clear = () => {
+    if (timer.current) { window.clearTimeout(timer.current); timer.current = null; }
+  };
+  return {
+    onPointerDown: () => {
+      fired.current = false;
+      clear();
+      timer.current = window.setTimeout(() => { fired.current = true; onLong(); }, ms);
+    },
+    onPointerUp: () => { clear(); },
+    onPointerLeave: () => { clear(); },
+    onPointerCancel: () => { clear(); },
+    didFire: () => fired.current,
+  };
+}
+
+function navBadgeFor(item: NavItem, navBadges: Record<string, { count?: number; dot?: boolean }>) {
+  if (!item.children) return navBadges[item.to];
+  let count = 0;
+  let dot = false;
+  for (const c of item.children) {
+    const b = navBadges[c.to];
+    if (!b) continue;
+    if (b.count) count += b.count;
+    if (b.dot) dot = true;
+  }
+  return count > 0 ? { count } : dot ? { dot: true } : undefined;
+}
+
+function BottomNavBadge({ badge }: { badge?: { count?: number; dot?: boolean } }) {
+  if (!badge) return null;
+  if (badge.count != null && badge.count > 0) {
+    return (
+      <span className="absolute -right-2 -top-1.5 grid h-[16px] min-w-[16px] place-items-center rounded-full bg-destructive px-1 text-[9px] font-bold leading-none text-destructive-foreground ring-2 ring-card">
+        {badge.count > 9 ? "9+" : badge.count}
+      </span>
+    );
+  }
+  if (badge.dot) {
+    return <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-destructive ring-2 ring-card" />;
+  }
+  return null;
+}
+
+function BottomNavSlot({ item, pathname, navBadges, onNavigate }: {
+  item: NavItem;
+  pathname: string;
+  navBadges: Record<string, { count?: number; dot?: boolean }>;
+  onNavigate: (to: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const Icon = item.icon;
+  const badge = navBadgeFor(item, navBadges);
+
+  if (!item.children) {
+    const active = pathname === item.to;
+    return (
+      <Link
+        to={item.to}
+        onClick={() => onNavigate(item.to)}
+        className={cn(
+          "relative flex min-h-[64px] flex-col items-center justify-center gap-0.5 px-0.5 pt-2 pb-2 text-[10px] font-medium transition-colors",
+          active ? "text-primary" : "text-muted-foreground hover:text-foreground",
+        )}
+      >
+        <div className="relative">
+          <Icon className={cn("h-5 w-5", active && "drop-shadow-[0_0_6px_hsl(var(--primary)/0.6)]")} />
+          <BottomNavBadge badge={badge} />
+        </div>
+        <span className="w-full px-0.5 text-center text-[9.5px] leading-tight tracking-tight">{item.label}</span>
+        {active && <span className="mt-0.5 h-0.5 w-5 rounded-full bg-primary" />}
+      </Link>
+    );
+  }
+
+  const childActive = item.children.some((c) => pathname === c.to || pathname.startsWith(c.to + "/"));
+  const lp = useLongPress(() => setOpen(true));
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          onPointerDown={lp.onPointerDown}
+          onPointerUp={lp.onPointerUp}
+          onPointerLeave={lp.onPointerLeave}
+          onPointerCancel={lp.onPointerCancel}
+          onClick={(e) => {
+            // If long-press already fired, suppress the click navigation.
+            if (lp.didFire()) { e.preventDefault(); return; }
+            setOpen(true);
+          }}
+          className={cn(
+            "relative flex min-h-[64px] flex-col items-center justify-center gap-0.5 px-0.5 pt-2 pb-2 text-[10px] font-medium transition-colors",
+            childActive || open ? "text-primary" : "text-muted-foreground hover:text-foreground",
+          )}
+          aria-label={item.label}
+        >
+          <div className="relative">
+            <Icon className={cn("h-5 w-5", (childActive || open) && "drop-shadow-[0_0_6px_hsl(var(--primary)/0.6)]")} />
+            <BottomNavBadge badge={badge} />
+          </div>
+          <span className="w-full px-0.5 text-center text-[9.5px] leading-tight tracking-tight">{item.label}</span>
+          {childActive && <span className="mt-0.5 h-0.5 w-5 rounded-full bg-primary" />}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent side="top" align="center" className="w-52 p-1.5">
+        <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{item.label}</div>
+        <ul className="flex flex-col gap-0.5">
+          {item.children.map((c) => {
+            const CIcon = c.icon;
+            const active = pathname === c.to || pathname.startsWith(c.to + "/");
+            const cb = navBadges[c.to];
+            return (
+              <li key={c.to}>
+                <Link
+                  to={c.to}
+                  onClick={() => { onNavigate(c.to); setOpen(false); }}
+                  className={cn(
+                    "flex items-center gap-2.5 rounded-md px-2.5 py-2.5 text-sm font-medium",
+                    active ? "bg-primary/15 text-primary" : "hover:bg-accent",
+                  )}
+                >
+                  <div className="relative">
+                    <CIcon className="h-4 w-4" />
+                    <BottomNavBadge badge={cb} />
+                  </div>
+                  <span className="flex-1 truncate">{c.label}</span>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function MoreNavSlot({ active, onOpenMore, onOpenSearch }: { active: boolean; onOpenMore: () => void; onOpenSearch: () => void }) {
+  const [open, setOpen] = useState(false);
+  const lp = useLongPress(() => setOpen(true));
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          onPointerDown={lp.onPointerDown}
+          onPointerUp={lp.onPointerUp}
+          onPointerLeave={lp.onPointerLeave}
+          onPointerCancel={lp.onPointerCancel}
+          onClick={(e) => {
+            if (lp.didFire()) { e.preventDefault(); return; }
+            onOpenMore();
+          }}
+          className={cn(
+            "relative flex min-h-[64px] flex-col items-center justify-center gap-0.5 px-0.5 pt-2 pb-2 text-[10px] font-medium transition-colors",
+            active || open ? "text-primary" : "text-muted-foreground hover:text-foreground",
+          )}
+          aria-label="More — hold for search"
+        >
+          <MoreHorizontal className="h-5 w-5" />
+          <span className="w-full px-0.5 text-center text-[9.5px] leading-tight tracking-tight">More</span>
+        </button>
+      </PopoverTrigger>
+      <PopoverContent side="top" align="end" className="w-52 p-1.5">
+        <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Quick</div>
+        <ul className="flex flex-col gap-0.5">
+          <li>
+            <button
+              type="button"
+              onClick={() => { setOpen(false); onOpenSearch(); }}
+              className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2.5 text-sm font-medium hover:bg-accent"
+            >
+              <Search className="h-4 w-4 text-primary" />
+              <span className="flex-1 text-left">Search keywords</span>
+              <kbd className="rounded border border-border bg-card px-1 py-0.5 text-[9px] font-mono">⌘K</kbd>
+            </button>
+          </li>
+          <li>
+            <button
+              type="button"
+              onClick={() => { setOpen(false); onOpenMore(); }}
+              className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2.5 text-sm font-medium hover:bg-accent"
+            >
+              <Layers className="h-4 w-4" />
+              <span className="flex-1 text-left">All sections</span>
+            </button>
+          </li>
+        </ul>
+      </PopoverContent>
+    </Popover>
+  );
 }
 
 export function PageHeader({

@@ -5,6 +5,7 @@ import { AppShell } from "@/components/app-shell";
 import { adminNav, coachNav } from "@/lib/admin-nav";
 import { PovQuickToggle } from "@/components/pov-quick-toggle";
 import { TaskPopupGate } from "@/components/tasks/task-popup-gate";
+import { ClipboardList } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/admin")({
   component: AdminLayout,
@@ -40,12 +41,21 @@ function AdminLayout() {
         { ...pick("/admin/tasks"), label: "Tasks" },
       ].filter(Boolean);
     }
+    // Combine Check-In Reviews + Lift Reviews under a single "Reviews" slot
+    // (tap or long-press to reveal a vertical stack), freeing a slot for Tasks.
     return [
       pick("/admin"),
       { ...pick("/admin/clients"), label: "Clients" },
       pick("/admin/messages"),
-      { ...pick("/admin/check-in-reviews"), label: "Reviews" },
-      { ...pick("/admin/lift-videos"), label: "Lifts" },
+      {
+        to: "/admin/check-in-reviews",
+        label: "Reviews",
+        icon: ClipboardList,
+        children: [
+          { ...pick("/admin/check-in-reviews"), label: "Check-Ins" },
+          { ...pick("/admin/lift-videos"), label: "Lifts" },
+        ],
+      },
       { ...pick("/admin/tasks"), label: "Tasks" },
     ];
   }, [isCoach]);
