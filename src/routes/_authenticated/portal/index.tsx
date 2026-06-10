@@ -83,6 +83,76 @@ function PortalHome() {
       return (data ?? []) as TrainingPhase[];
     },
   });
+
+  // Coach response surfaces — power "Today / This Week" cards so clients see
+  // when their coach has replied to anything (messages, lift reviews, check-ins).
+  const { data: coachUpdates } = useQuery({
+    queryKey: ["portal-coach-updates", client?.id],
+    enabled: !!client?.id,
+    queryFn: async () => {
+      const [{ data: msgs }, { data: state }, { data: vids }, { data: vcomments }, { data: reviews }] = await Promise.all([
+        (supabase.from("messages") as any)
+          .select("body, attachments, created_at, sender_role, is_internal_note")
+          .eq("client_id", client!.id)
+          .eq("sender_role", "admin")
+          .eq("is_internal_note", false)
+          .order("created_at", { ascending: false })
+          .limit(10),
+        (supabase.from("conversation_state") as any)
+          .select("client_last_read_at").eq("client_id", client!.id).maybeSingle(),
+        (supabase.from("lift_videos") as any)
+          .select("id, exercise, watched_at, liked_at, reviewed_at, status, client_last_viewed_at, updated_at")
+          .eq("client_id", client!.id)
+          .order("updated_at", { ascending: false })
+          .limit(20),
+        (supabase.from("lift_video_comments") as any)
+          .select("video_id, body, created_at, author_role, is_internal_note")
+          .eq("client_id", client!.id)
+          .eq("author_role", "admin")
+          .eq("is_internal_note", false)
+          .order("created_at", { ascending: false })
+          .limit(20),
+        (supabase.from("manual_check_in_reviews") as any)
+          .select("id, title, message, created_at, read_at, dismissed_at, notify_client")
+          .eq("client_id", client!.id)
+          .eq("notify_client", true)
+          .is("read_at", null)
+          .is("dismissed_at", null)
+          .order("created_at", { ascending: false })
+          .limit(10),
+      ]);
+      const lastRead = (state as any)?.client_last_read_at;
+      const unreadMsgs = (msgs ?? []).filter((m: any) => !lastRead || new Date(m.created_at).getTime() > new Date(lastRead).getTime());
+      const vidMap = new Map<string, any>();
+      for (const v of (vids ?? []) as any[]) vidMap.set(v.id, v);
+      const liftPings: { videoId: string; exercise: string; preview: string; at: string }[] = [];
+      for (const c of (vcomments ?? []) as any[]) {
+        const v = vidMap.get(c.video_id);
+        const seen = v?.client_last_viewed_at ? new Date(v.client_last_viewed_at).getTime() : 0;
+        if (new Date(c.created_at).getTime() <= seen) continue;
+        liftPings.push({ videoId: c.video_id, exercise: v?.exercise || "Lift video", preview: c.body || "New coach reply", at: c.created_at });
+      }
+      for (const v of (vids ?? []) as any[]) {
+        const seen = v.client_last_viewed_at ? new Date(v.client_last_viewed_at).getTime() : 0;
+        const ev = v.reviewed_at && new Date(v.reviewed_at).getTime() > seen
+          ? { verb: "reviewed", at: v.reviewed_at }
+          : v.status === "Needs Follow-Up" && (!v.client_last_viewed_at || new Date(v.updated_at).getTime() > seen)
+          ? { verb: "requested a follow-up on", at: v.updated_at }
+          : null;
+        if (ev) liftPings.push({ videoId: v.id, exercise: v.exercise || "Lift video", preview: `Coach Jared ${ev.verb} your video.`, at: ev.at });
+      }
+      // newest first, one per video
+      liftPings.sort((a, b) => +new Date(b.at) - +new Date(a.at));
+      const seenIds = new Set<string>();
+      const liftDeduped = liftPings.filter((p) => (seenIds.has(p.videoId) ? false : (seenIds.add(p.videoId), true)));
+      return {
+        unreadMessages: unreadMsgs as any[],
+        liftPings: liftDeduped,
+        checkInReviews: (reviews ?? []) as any[],
+      };
+    },
+  });
+
   const activePhase = phases.find((p) => {
     const s = derivePhase(p).state;
     return s === "active" || s === "ending-soon" || s === "due-today";
