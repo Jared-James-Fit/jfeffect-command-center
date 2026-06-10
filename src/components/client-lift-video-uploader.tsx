@@ -557,6 +557,15 @@ export function ClientLiftVideoUploader({ clientId, clientName, userId, onSaved 
                             setClips((cs) => cs.map((k) => k.id === clip.id ? { ...k, previewStatus: "failed" } : k));
                           }}
                         />
+                      ) : clip.kind === "file" && clip.thumbnailUrl ? (
+                        <img
+                          src={clip.thumbnailUrl}
+                          alt={clip.file?.name || `Clip ${idx + 1}`}
+                          className="h-full w-full object-cover"
+                          loading="lazy"
+                          decoding="async"
+                          draggable={false}
+                        />
                       ) : clip.kind === "file" && clip.previewUrl ? (
                         <video
                           src={`${clip.previewUrl}#t=0.1`}
@@ -593,10 +602,10 @@ export function ClientLiftVideoUploader({ clientId, clientName, userId, onSaved 
                       <button
                         type="button"
                         onClick={(e) => { e.stopPropagation(); setPreviewClip(clip); }}
-                        className="absolute inset-0 m-auto grid h-9 w-9 place-items-center rounded-full bg-black/45 text-white opacity-0 transition group-hover:opacity-100"
+                        className="absolute inset-0 m-auto grid h-10 w-10 place-items-center rounded-full bg-black/55 text-white shadow-lg backdrop-blur-sm transition hover:bg-black/70"
                         aria-label="Preview clip"
                       >
-                        <Play className="h-4 w-4" />
+                        <Play className="h-5 w-5 fill-current" />
                       </button>
                     )}
                     <button
