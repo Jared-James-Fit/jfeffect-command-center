@@ -50,11 +50,73 @@ type Clip = {
   file?: File;
   url?: string;
   previewUrl?: string;
+  thumbnailUrl?: string;
   previewStatus?: "pending" | "ready" | "failed";
   isImage?: boolean;
   note: string;
   duration?: number;
 };
+
+// Generate a poster image from a video file by seeking to ~0.1s and
+// painting the frame into a canvas. iOS Safari often won't render a frame
+// inside a <video preload="metadata"> tag in a small thumbnail, so we bake
+// an <img>-friendly data URL instead.
+async function generateVideoThumbnail(file: File): Promise<string | null> {
+  return new Promise((resolve) => {
+    try {
+      const url = URL.createObjectURL(file);
+      const video = document.createElement("video");
+      video.preload = "auto";
+      video.muted = true;
+      video.playsInline = true;
+      video.crossOrigin = "anonymous";
+      video.src = url;
+      let done = false;
+      const cleanup = () => {
+        try { URL.revokeObjectURL(url); } catch { /* noop */ }
+      };
+      const finish = (result: string | null) => {
+        if (done) return;
+        done = true;
+        cleanup();
+        resolve(result);
+      };
+      const capture = () => {
+        try {
+          const w = video.videoWidth;
+          const h = video.videoHeight;
+          if (!w || !h) return finish(null);
+          const maxSide = 320;
+          const scale = Math.min(1, maxSide / Math.max(w, h));
+          const canvas = document.createElement("canvas");
+          canvas.width = Math.round(w * scale);
+          canvas.height = Math.round(h * scale);
+          const ctx = canvas.getContext("2d");
+          if (!ctx) return finish(null);
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          finish(canvas.toDataURL("image/jpeg", 0.75));
+        } catch {
+          finish(null);
+        }
+      };
+      video.addEventListener("loadeddata", () => {
+        try {
+          // Seek slightly in to skip black first-frames.
+          const target = Math.min(0.1, (video.duration || 0.2) / 2);
+          video.currentTime = target;
+        } catch {
+          capture();
+        }
+      });
+      video.addEventListener("seeked", capture);
+      video.addEventListener("error", () => finish(null));
+      // Hard timeout — never block UI.
+      setTimeout(() => finish(null), 8000);
+    } catch {
+      resolve(null);
+    }
+  });
+}
 
 type Props = {
   clientId: string;
@@ -206,6 +268,17 @@ export function ClientLiftVideoUploader({ clientId, clientName, userId, onSaved 
     if (next.length === 0) return;
     setClips((c) => [...c, ...next]);
     if (!activeId) setActiveId(next[0].id);
+
+    // Kick off thumbnail generation for video clips (non-blocking).
+    for (const clip of next) {
+      if (clip.kind !== "file" || clip.isImage || !clip.file) continue;
+      const clipId = clip.id;
+      const file = clip.file;
+      void generateVideoThumbnail(file).then((thumb) => {
+        if (!thumb) return;
+        setClips((cs) => cs.map((k) => (k.id === clipId ? { ...k, thumbnailUrl: thumb, previewStatus: "ready" } : k)));
+      });
+    }
   };
 
   const addLinks = (raw: string) => {
@@ -484,6 +557,15 @@ export function ClientLiftVideoUploader({ clientId, clientName, userId, onSaved 
                             setClips((cs) => cs.map((k) => k.id === clip.id ? { ...k, previewStatus: "failed" } : k));
                           }}
                         />
+                      ) : clip.kind === "file" && clip.thumbnailUrl ? (
+                        <img
+                          src={clip.thumbnailUrl}
+                          alt={clip.file?.name || `Clip ${idx + 1}`}
+                          className="h-full w-full object-cover"
+                          loading="lazy"
+                          decoding="async"
+                          draggable={false}
+                        />
                       ) : clip.kind === "file" && clip.previewUrl ? (
                         <video
                           src={`${clip.previewUrl}#t=0.1`}
@@ -520,10 +602,10 @@ export function ClientLiftVideoUploader({ clientId, clientName, userId, onSaved 
                       <button
                         type="button"
                         onClick={(e) => { e.stopPropagation(); setPreviewClip(clip); }}
-                        className="absolute inset-0 m-auto grid h-9 w-9 place-items-center rounded-full bg-black/45 text-white opacity-0 transition group-hover:opacity-100"
+                        className="absolute inset-0 m-auto grid h-10 w-10 place-items-center rounded-full bg-black/55 text-white shadow-lg backdrop-blur-sm transition hover:bg-black/70"
                         aria-label="Preview clip"
                       >
-                        <Play className="h-4 w-4" />
+                        <Play className="h-5 w-5 fill-current" />
                       </button>
                     )}
                     <button
