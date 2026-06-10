@@ -242,6 +242,7 @@ function FormEditorDialog({ form, open, onClose }: { form: NfForm; open: boolean
       open_style: local.open_style,
       visibility: local.visibility,
       auto_assign_new_clients: local.auto_assign_new_clients,
+      requires_client_identity: local.requires_client_identity,
     };
     await upsertForm({ id: form.id, ...patch });
     qc.invalidateQueries({ queryKey: ["nf-forms"] });
@@ -315,6 +316,21 @@ function FormEditorDialog({ form, open, onClose }: { form: NfForm; open: boolean
                 <p className="text-[11px] text-muted-foreground">
                   Note: some providers (Google Forms, certain Typeform/Fillout settings) block embedding. If embed fails the app will fall back to opening the link.
                 </p>
+                <label className="flex items-start gap-2 rounded-md border border-border bg-background p-2 text-xs">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 h-4 w-4"
+                    checked={local.requires_client_identity ?? true}
+                    onChange={(e) => setLocal({ ...local, requires_client_identity: e.target.checked })}
+                  />
+                  <span>
+                    <span className="font-semibold">Auto-attach client identity</span>
+                    <span className="block text-muted-foreground">
+                      Appends <code>client_id</code>, <code>client_email</code>, <code>first_name</code>, <code>last_name</code>
+                      to Fillout URLs so submissions match the logged-in client automatically. Leave on unless this form is shared publicly.
+                    </span>
+                  </span>
+                </label>
               </div>
             )}
 
