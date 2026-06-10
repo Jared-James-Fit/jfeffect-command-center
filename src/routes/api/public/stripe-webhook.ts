@@ -512,6 +512,26 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
               break;
             }
 
+            // ── Trial ending soon (Stripe fires ~3 days before trial_end) ───
+            case "customer.subscription.trial_will_end": {
+              if (await isJfMembershipSubscription(supabase, obj)) {
+                const member = await findJfMemberBySub(supabase, obj);
+                if (member) {
+                  await fireJfSms(member.id, "subscription_trial_ending", {
+                    trial_end: obj.trial_end
+                      ? new Date(obj.trial_end * 1000).toLocaleDateString()
+                      : "",
+                  });
+                  await supabase.from("jf_billing_events").insert({
+                    stripe_event_id: event.id, type: event.type,
+                    customer_id: obj.customer ?? null, subscription_id: obj.id,
+                    member_id: member.id, payload: obj,
+                  }).then(() => {}, () => {});
+                }
+              }
+              break;
+            }
+
             // ── Invoice paid (subscription renewal) ─────────────────────────
             case "invoice.payment_succeeded": {
               if (obj.subscription) {
