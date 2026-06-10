@@ -7156,6 +7156,79 @@ export type Database = {
         }
         Relationships: []
       }
+      tasks: {
+        Row: {
+          assigned_to: string | null
+          completed_at: string | null
+          completed_by: string | null
+          created_at: string
+          created_by: string | null
+          due_at: string | null
+          id: string
+          notes: string | null
+          position: number
+          priority: number
+          quadrant: Database["public"]["Enums"]["task_quadrant"]
+          status: Database["public"]["Enums"]["task_status"]
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          assigned_to?: string | null
+          completed_at?: string | null
+          completed_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          due_at?: string | null
+          id?: string
+          notes?: string | null
+          position?: number
+          priority?: number
+          quadrant?: Database["public"]["Enums"]["task_quadrant"]
+          status?: Database["public"]["Enums"]["task_status"]
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          assigned_to?: string | null
+          completed_at?: string | null
+          completed_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          due_at?: string | null
+          id?: string
+          notes?: string | null
+          position?: number
+          priority?: number
+          quadrant?: Database["public"]["Enums"]["task_quadrant"]
+          status?: Database["public"]["Enums"]["task_status"]
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tasks_assigned_to_fkey"
+            columns: ["assigned_to"]
+            isOneToOne: false
+            referencedRelation: "coaches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_completed_by_fkey"
+            columns: ["completed_by"]
+            isOneToOne: false
+            referencedRelation: "coaches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "coaches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       training_phases: {
         Row: {
           client_id: string
@@ -7402,6 +7475,8 @@ export type Database = {
       group_permission_mode: "everyone" | "admins_only" | "read_only"
       reminder_audience: "attendee" | "host"
       reminder_status: "pending" | "sent" | "failed" | "skipped"
+      task_quadrant: "do" | "schedule" | "delegate" | "eliminate"
+      task_status: "open" | "done"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -7599,6 +7674,8 @@ export const Constants = {
       group_permission_mode: ["everyone", "admins_only", "read_only"],
       reminder_audience: ["attendee", "host"],
       reminder_status: ["pending", "sent", "failed", "skipped"],
+      task_quadrant: ["do", "schedule", "delegate", "eliminate"],
+      task_status: ["open", "done"],
     },
   },
 } as const
