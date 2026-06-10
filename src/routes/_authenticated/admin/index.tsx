@@ -18,6 +18,7 @@ import type { ConversationState, Message } from "@/lib/messages";
 import { listLiftVideos } from "@/lib/lift-videos";
 import { formatDistanceToNow, parseISO, format, startOfWeek, endOfWeek, isToday } from "date-fns";
 import { UpcomingBirthdaysWidget } from "@/components/upcoming-birthdays-widget";
+import { UpcomingEventsPanel } from "@/components/events/upcoming-events-panel";
 import { PriceCardPickerDialog } from "@/components/price-card-picker-dialog";
 import { UserAvatar } from "@/components/user-avatar";
 
@@ -635,6 +636,9 @@ function AdminDashboard() {
           <div className="min-w-0 space-y-4">
             {/* BIRTHDAYS */}
             <UpcomingBirthdaysWidget />
+
+            {/* EVENTS */}
+            <UpcomingEventsPanel audience="admin" />
 
             {/* PAYMENTS / PRODUCTS */}
             <Card className="border-border bg-card p-4 md:p-5">
