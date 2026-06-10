@@ -4,10 +4,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import { ChevronLeft, Plus, Settings2, Users, Archive } from "lucide-react";
 import {
   listMyGroups, listAllGroupsForAdmin, listMyGroupMemberships,
+  listGroupMemberProfiles, type GroupMemberProfile,
   type ChatGroup,
 } from "@/lib/group-chats";
 import { GroupMessageThread } from "@/components/group-message-thread";
@@ -137,9 +139,7 @@ export function GroupChatsPane({ asAdmin }: { asAdmin: boolean }) {
                 group.archived && "opacity-60",
               )}
             >
-              <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
-                <Users className="h-4 w-4" />
-              </div>
+              <GroupCover groupId={group.id} myRole={myPresenceRole} />
               <div className="min-w-0 flex-1">
                 <div className="flex items-center justify-between gap-2">
                   <span className={cn("truncate text-sm", unread ? "font-bold" : "font-semibold")}>
@@ -210,6 +210,50 @@ export function GroupChatsPane({ asAdmin }: { asAdmin: boolean }) {
       {asAdmin && <CreateGroupDialog open={createOpen} onOpenChange={setCreateOpen} />}
       {selected && (asAdmin || isAdminOfGroup) && (
         <ManageGroupDialog open={manageOpen} onOpenChange={setManageOpen} group={selected} />
+      )}
+    </div>
+  );
+}
+
+/** Stacked member avatars with a green live-now dot if anyone is present. */
+function GroupCover({ groupId, myRole }: { groupId: string; myRole: "admin" | "coach" | "client" | "member" }) {
+  const { data: members = [] } = useQuery({
+    queryKey: ["group-member-profiles", groupId],
+    queryFn: () => listGroupMemberProfiles(groupId),
+    staleTime: 60_000,
+  });
+  const { others } = useGroupPresence(groupId, myRole);
+  const liveIds = new Set(others.map((p) => p.user_id));
+  const visible = (members as GroupMemberProfile[]).slice(0, 3);
+  const extra = Math.max(0, members.length - visible.length);
+
+  if (visible.length === 0) {
+    return (
+      <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
+        <Users className="h-4 w-4" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative flex h-9 w-9 shrink-0 items-center">
+      <div className="flex -space-x-2">
+        {visible.map((m) => (
+          <div key={m.user_id} className="relative">
+            <Avatar className="h-7 w-7 border-2 border-card">
+              <AvatarImage src={m.avatar_url ?? undefined} alt={m.full_name ?? "Member"} />
+              <AvatarFallback className="text-[10px]">
+                {(m.full_name ?? "?").slice(0, 1).toUpperCase()}
+              </AvatarFallback>
+            </Avatar>
+            {liveIds.has(m.user_id) && (
+              <span className="absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full bg-emerald-500 ring-2 ring-card" />
+            )}
+          </div>
+        ))}
+      </div>
+      {extra > 0 && (
+        <span className="ml-1 text-[10px] font-semibold text-muted-foreground">+{extra}</span>
       )}
     </div>
   );
