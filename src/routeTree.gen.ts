@@ -139,6 +139,7 @@ import { Route as AuthenticatedAdminMembershipResetLinksRouteImport } from './ro
 import { Route as AuthenticatedAdminMembershipPromoToolsRouteImport } from './routes/_authenticated/admin/membership.promo-tools'
 import { Route as AuthenticatedAdminMembershipChallengesRouteImport } from './routes/_authenticated/admin/membership.challenges'
 import { Route as AuthenticatedAdminMembershipActionNeededRouteImport } from './routes/_authenticated/admin/membership.action-needed'
+import { Route as AuthenticatedAdminMembershipAccessChecklistRouteImport } from './routes/_authenticated/admin/membership.access-checklist'
 import { Route as AuthenticatedAdminMembersNewRouteImport } from './routes/_authenticated/admin/members.new'
 import { Route as AuthenticatedAdminMembersMemberIdRouteImport } from './routes/_authenticated/admin/members.$memberId'
 import { Route as AuthenticatedAdminMemberResourcesNewRouteImport } from './routes/_authenticated/admin/member-resources.new'
@@ -905,6 +906,12 @@ const AuthenticatedAdminMembershipActionNeededRoute =
     path: '/action-needed',
     getParentRoute: () => AuthenticatedAdminMembershipRoute,
   } as any)
+const AuthenticatedAdminMembershipAccessChecklistRoute =
+  AuthenticatedAdminMembershipAccessChecklistRouteImport.update({
+    id: '/access-checklist',
+    path: '/access-checklist',
+    getParentRoute: () => AuthenticatedAdminMembershipRoute,
+  } as any)
 const AuthenticatedAdminMembersNewRoute =
   AuthenticatedAdminMembersNewRouteImport.update({
     id: '/members/new',
@@ -1117,6 +1124,7 @@ export interface FileRoutesByFullPath {
   '/admin/member-resources/new': typeof AuthenticatedAdminMemberResourcesNewRoute
   '/admin/members/$memberId': typeof AuthenticatedAdminMembersMemberIdRoute
   '/admin/members/new': typeof AuthenticatedAdminMembersNewRoute
+  '/admin/membership/access-checklist': typeof AuthenticatedAdminMembershipAccessChecklistRoute
   '/admin/membership/action-needed': typeof AuthenticatedAdminMembershipActionNeededRoute
   '/admin/membership/challenges': typeof AuthenticatedAdminMembershipChallengesRoute
   '/admin/membership/promo-tools': typeof AuthenticatedAdminMembershipPromoToolsRoute
@@ -1262,6 +1270,7 @@ export interface FileRoutesByTo {
   '/admin/member-resources/new': typeof AuthenticatedAdminMemberResourcesNewRoute
   '/admin/members/$memberId': typeof AuthenticatedAdminMembersMemberIdRoute
   '/admin/members/new': typeof AuthenticatedAdminMembersNewRoute
+  '/admin/membership/access-checklist': typeof AuthenticatedAdminMembershipAccessChecklistRoute
   '/admin/membership/action-needed': typeof AuthenticatedAdminMembershipActionNeededRoute
   '/admin/membership/challenges': typeof AuthenticatedAdminMembershipChallengesRoute
   '/admin/membership/promo-tools': typeof AuthenticatedAdminMembershipPromoToolsRoute
@@ -1413,6 +1422,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/member-resources/new': typeof AuthenticatedAdminMemberResourcesNewRoute
   '/_authenticated/admin/members/$memberId': typeof AuthenticatedAdminMembersMemberIdRoute
   '/_authenticated/admin/members/new': typeof AuthenticatedAdminMembersNewRoute
+  '/_authenticated/admin/membership/access-checklist': typeof AuthenticatedAdminMembershipAccessChecklistRoute
   '/_authenticated/admin/membership/action-needed': typeof AuthenticatedAdminMembershipActionNeededRoute
   '/_authenticated/admin/membership/challenges': typeof AuthenticatedAdminMembershipChallengesRoute
   '/_authenticated/admin/membership/promo-tools': typeof AuthenticatedAdminMembershipPromoToolsRoute
@@ -1564,6 +1574,7 @@ export interface FileRouteTypes {
     | '/admin/member-resources/new'
     | '/admin/members/$memberId'
     | '/admin/members/new'
+    | '/admin/membership/access-checklist'
     | '/admin/membership/action-needed'
     | '/admin/membership/challenges'
     | '/admin/membership/promo-tools'
@@ -1709,6 +1720,7 @@ export interface FileRouteTypes {
     | '/admin/member-resources/new'
     | '/admin/members/$memberId'
     | '/admin/members/new'
+    | '/admin/membership/access-checklist'
     | '/admin/membership/action-needed'
     | '/admin/membership/challenges'
     | '/admin/membership/promo-tools'
@@ -1859,6 +1871,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/member-resources/new'
     | '/_authenticated/admin/members/$memberId'
     | '/_authenticated/admin/members/new'
+    | '/_authenticated/admin/membership/access-checklist'
     | '/_authenticated/admin/membership/action-needed'
     | '/_authenticated/admin/membership/challenges'
     | '/_authenticated/admin/membership/promo-tools'
@@ -2842,6 +2855,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminMembershipActionNeededRouteImport
       parentRoute: typeof AuthenticatedAdminMembershipRoute
     }
+    '/_authenticated/admin/membership/access-checklist': {
+      id: '/_authenticated/admin/membership/access-checklist'
+      path: '/access-checklist'
+      fullPath: '/admin/membership/access-checklist'
+      preLoaderRoute: typeof AuthenticatedAdminMembershipAccessChecklistRouteImport
+      parentRoute: typeof AuthenticatedAdminMembershipRoute
+    }
     '/_authenticated/admin/members/new': {
       id: '/_authenticated/admin/members/new'
       path: '/members/new'
@@ -2987,6 +3007,7 @@ const AuthenticatedAdminBroadcastsRouteWithChildren =
   )
 
 interface AuthenticatedAdminMembershipRouteChildren {
+  AuthenticatedAdminMembershipAccessChecklistRoute: typeof AuthenticatedAdminMembershipAccessChecklistRoute
   AuthenticatedAdminMembershipActionNeededRoute: typeof AuthenticatedAdminMembershipActionNeededRoute
   AuthenticatedAdminMembershipChallengesRoute: typeof AuthenticatedAdminMembershipChallengesRoute
   AuthenticatedAdminMembershipPromoToolsRoute: typeof AuthenticatedAdminMembershipPromoToolsRoute
@@ -3003,6 +3024,8 @@ interface AuthenticatedAdminMembershipRouteChildren {
 
 const AuthenticatedAdminMembershipRouteChildren: AuthenticatedAdminMembershipRouteChildren =
   {
+    AuthenticatedAdminMembershipAccessChecklistRoute:
+      AuthenticatedAdminMembershipAccessChecklistRoute,
     AuthenticatedAdminMembershipActionNeededRoute:
       AuthenticatedAdminMembershipActionNeededRoute,
     AuthenticatedAdminMembershipChallengesRoute:
