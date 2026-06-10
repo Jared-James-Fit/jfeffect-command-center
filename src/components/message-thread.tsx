@@ -1519,7 +1519,7 @@ export function MessageThread({
 
             {/* Priority selector removed for simplicity. */}
 
-            {(role === "admin" || role === "coach") && (
+            {role === "admin" && (
               <MeetQuickAction
                 disabled={sending || uploading}
                 onInsert={(text) =>
