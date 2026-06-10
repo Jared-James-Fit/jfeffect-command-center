@@ -14,6 +14,35 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 const STRIPE_API = "https://api.stripe.com/v1";
 
+/**
+ * Allowlist of origins we will use to build Stripe success/cancel/return URLs.
+ * Prevents an open redirect via a client-supplied `origin` parameter.
+ */
+const ALLOWED_ORIGIN_HOSTS = new Set<string>([
+  "jfeffect.com",
+  "www.jfeffect.com",
+  "jfeffect-command-center.lovable.app",
+]);
+
+function assertAllowedOrigin(origin: string): string {
+  let url: URL;
+  try {
+    url = new URL(origin);
+  } catch {
+    throw new Error("Invalid origin");
+  }
+  if (url.protocol !== "https:" && url.protocol !== "http:") {
+    throw new Error("Invalid origin protocol");
+  }
+  const host = url.host.toLowerCase();
+  const ok =
+    ALLOWED_ORIGIN_HOSTS.has(host) ||
+    host.endsWith(".lovable.app") ||
+    host.endsWith(".lovable.dev");
+  if (!ok) throw new Error("Origin not allowed");
+  return `${url.protocol}//${url.host}`;
+}
+
 function getStripeKey(): string {
   const key = process.env.STRIPE_SECRET_KEY;
   if (!key) throw new Error("Stripe is not configured. Add STRIPE_SECRET_KEY in project secrets.");
@@ -146,8 +175,8 @@ export const createCheckoutSession = createServerFn({ method: "POST" })
       "line_items[0][price]": product.stripe_price_id,
       "line_items[0][quantity]": "1",
       mode: checkoutMode,
-      success_url: `${data.origin}/portal/purchases?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${data.origin}/portal/purchases`,
+      success_url: `${assertAllowedOrigin(data.origin)}/portal/purchases?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${assertAllowedOrigin(data.origin)}/portal/purchases`,
       allow_promotion_codes: "true",
     };
 
@@ -219,7 +248,7 @@ export const createCustomerPortalSession = createServerFn({ method: "POST" })
       method: "POST",
       body: formEncode({
         customer: stripeCustomerId,
-        return_url: `${data.origin}/portal/account`,
+        return_url: `${assertAllowedOrigin(data.origin)}/portal/account`,
       }),
     });
 
@@ -332,8 +361,8 @@ export const createCheckoutSessionForAssignment = createServerFn({ method: "POST
       "line_items[0][price]": priceId,
       "line_items[0][quantity]": "1",
       mode: checkoutMode,
-      success_url: `${data.origin}/portal/purchases?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${data.origin}/portal/purchases`,
+      success_url: `${assertAllowedOrigin(data.origin)}/portal/purchases?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${assertAllowedOrigin(data.origin)}/portal/purchases`,
       allow_promotion_codes: "true",
       "metadata[purchase_record_id]": purchase.id,
       "metadata[client_id]": client.id,
@@ -420,8 +449,8 @@ export const createPreviewCheckoutSession = createServerFn({ method: "POST" })
         "line_items[0][price]": product.stripe_price_id,
         "line_items[0][quantity]": "1",
         mode: checkoutMode,
-        success_url: `${data.origin}/admin/payment-links?preview=success`,
-        cancel_url: `${data.origin}/admin/payment-links?preview=cancel`,
+        success_url: `${assertAllowedOrigin(data.origin)}/admin/payment-links?preview=success`,
+        cancel_url: `${assertAllowedOrigin(data.origin)}/admin/payment-links?preview=cancel`,
         allow_promotion_codes: "true",
         "metadata[preview]": "true",
         "metadata[previewed_by]": userId,
