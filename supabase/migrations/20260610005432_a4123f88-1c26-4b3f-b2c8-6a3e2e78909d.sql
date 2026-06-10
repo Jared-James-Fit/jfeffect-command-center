@@ -1,0 +1,10 @@
+GRANT EXECUTE ON FUNCTION public.has_role(uuid, public.app_role) TO authenticated, anon, service_role;
+GRANT EXECUTE ON FUNCTION public.current_coach_id() TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.is_assigned_coach(uuid) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.current_member_id() TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.member_has_access(uuid, text) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.user_can_see_recipe(uuid, uuid) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.user_can_see_broadcast(uuid, uuid) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.can_access_chat_presence(text) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.mark_client_signed_in() TO authenticated;
+GRANT EXECUTE ON FUNCTION public.ping_client_activity(text) TO authenticated;
