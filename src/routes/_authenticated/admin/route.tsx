@@ -28,13 +28,22 @@ function AdminLayout() {
   const title = isCoach ? "Coach" : "Admin";
 
   const bottomItems = useMemo(() => {
-    if (isCoach) return undefined;
-    const pick = (to: string) => adminNav.find((i) => i.to === to)!;
+    const source = isCoach ? coachNav : adminNav;
+    const pick = (to: string) => source.find((i) => i.to === to)!;
+    if (isCoach) {
+      return [
+        pick("/admin"),
+        { ...pick("/admin/clients"), label: "Clients" },
+        pick("/admin/messages"),
+        { ...pick("/admin/lift-videos"), label: "Lifts" },
+      ].filter(Boolean);
+    }
     return [
       pick("/admin"),
       { ...pick("/admin/clients"), label: "Clients" },
       pick("/admin/messages"),
       { ...pick("/admin/check-in-reviews"), label: "Reviews" },
+      { ...pick("/admin/lift-videos"), label: "Lifts" },
     ];
   }, [isCoach]);
 
