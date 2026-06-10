@@ -341,6 +341,8 @@ export function NotificationBell() {
                   ? (role === "admin" ? "/admin/clients/$id" : "/portal")
                   : it.kind === "exercise_note"
                   ? (role === "admin" ? "/admin/clients/$id" : "/portal")
+                  : it.kind === "check_in_review"
+                  ? "/portal"
                   : (role === "admin" ? "/admin/messages" : "/portal/messages")
               }
               params={
