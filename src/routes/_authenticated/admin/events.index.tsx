@@ -19,7 +19,7 @@ import {
 import { createEventDraft } from "@/lib/events.functions";
 import { toast } from "sonner";
 
-export const Route = createFileRoute("/_authenticated/admin/events")({
+export const Route = createFileRoute("/_authenticated/admin/events/")({
   component: AdminEventsPage,
 });
 
