@@ -417,7 +417,9 @@ function ExternalFormView({
 }) {
   const [iframeFailed, setIframeFailed] = useState(false);
   const rawUrl = form.external_url as string | null;
-  const url = rawUrl ? buildFilloutUrl(rawUrl, client) : rawUrl;
+  const url = rawUrl && form.requires_client_identity !== false
+    ? buildFilloutUrl(rawUrl, client)
+    : rawUrl;
   const openStyle = (form.open_style ?? "embed") as "embed" | "modal" | "new_tab";
   const submitted = submission.status !== "in_progress";
   const canEmbed = !!url && openStyle !== "new_tab" && !iframeFailed;
