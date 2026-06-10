@@ -189,7 +189,7 @@ function MessagesInbox() {
       style={{ height: "calc(100dvh - var(--bottom-nav-clearance, 0px))" }}
     >
       {tab === "groups" ? (
-        <div className="flex w-full flex-col">
+        <div className="flex min-h-0 flex-1 w-full flex-col">
           <TabsHeader tab={tab} setTab={setTab} onMass={() => setMassOpen(true)} />
           <div className="min-h-0 flex-1">
             <GroupChatsPane asAdmin />
@@ -197,7 +197,7 @@ function MessagesInbox() {
           <MassMessageDialog open={massOpen} onOpenChange={setMassOpen} />
         </div>
       ) : (
-      <div className="flex w-full flex-col">
+      <div className="flex min-h-0 flex-1 w-full flex-col">
         <TabsHeader tab={tab} setTab={setTab} onMass={() => setMassOpen(true)} />
         <div className="flex min-h-0 flex-1">
       {/* Inbox sidebar */}
