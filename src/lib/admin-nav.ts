@@ -7,6 +7,7 @@ import {
   Scale, BookOpen, Activity, Archive,
   UserPlus, Library, Wrench, HelpCircle,
   ChefHat, Megaphone, Phone, Link2 as LinkIcon,
+  ListChecks,
 } from "lucide-react";
 import { Sparkles } from "lucide-react";
 import type { NavItem } from "@/components/app-shell";
@@ -15,6 +16,7 @@ export const adminNav: NavItem[] = [
   // CORE
   { to: "/admin", label: "Dashboard", icon: LayoutDashboard, group: "Core" },
   { to: "/admin/clients", label: "Coaching Clients", icon: Users, group: "Core" },
+  { to: "/admin/tasks", label: "Tasks", icon: ListChecks, group: "Core" },
   { to: "/admin/messages", label: "Messages", icon: MessageCircle, group: "Core" },
   { to: "/admin/check-in-reviews", label: "Check-In Reviews", icon: ClipboardList, group: "Core" },
   { to: "/admin/lift-videos", label: "Lift Reviews", icon: Video, group: "Core" },
@@ -66,6 +68,7 @@ export const adminNav: NavItem[] = [
 export const coachNav: NavItem[] = [
   { to: "/admin", label: "Dashboard", icon: LayoutDashboard },
   { to: "/admin/clients", label: "My Clients", icon: Users },
+  { to: "/admin/tasks", label: "Tasks", icon: ListChecks },
   { to: "/admin/training-intelligence", label: "Training Intelligence", icon: Activity },
   { to: "/admin/messages", label: "Messages", icon: MessageCircle },
   { to: "/admin/lift-videos", label: "Lift Reviews", icon: Video },
