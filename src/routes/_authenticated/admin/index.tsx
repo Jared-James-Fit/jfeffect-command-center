@@ -246,10 +246,11 @@ function AdminDashboard() {
   });
 
   // Build Needs Attention unified feed
-  type NeedItem = { id: string; clientId?: string; name: string; reason: string; time?: string; tone: string; priority: number; href: string; search?: any; params?: any; action: string; avatarUrl?: string | null; thumbnailUrl?: string | null };
+  type NeedItem = { id: string; clientId?: string; name: string; reason: string; time?: string; tone: string; priority: number; href: string; search?: any; params?: any; action: string; avatarUrl?: string | null; thumbnailUrl?: string | null; preview?: string | null; previewFromClient?: boolean };
   const need: NeedItem[] = [];
   for (const v of liftNeedReview.slice(0, 10)) {
     const c: any = clientById.get(v.client_id);
+    const note = (v as any).client_notes?.trim?.() || (v as any).question_for_coach?.trim?.() || null;
     need.push({
       id: `lift-${v.id}`,
       clientId: v.client_id,
@@ -263,6 +264,8 @@ function AdminDashboard() {
       action: "Open Review",
       avatarUrl: c?.profile_picture_url ?? null,
       thumbnailUrl: v.thumbnail_url ?? null,
+      preview: note,
+      previewFromClient: true,
     });
   }
   for (const s of checkInSubmissions.slice(0, 10)) {
