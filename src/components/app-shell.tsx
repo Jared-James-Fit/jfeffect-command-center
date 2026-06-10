@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useRouterState, useNavigate } from "@tanstack/react-router";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/command";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
-import { useRef } from "react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 export interface NavItem {
   to: string;
