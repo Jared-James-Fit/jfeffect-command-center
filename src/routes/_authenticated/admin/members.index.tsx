@@ -58,6 +58,9 @@ function MembersList() {
                     <div className="truncate text-xs text-muted-foreground">{m.email}</div>
                   </div>
                   <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="bg-emerald-500/10 text-emerald-300 border-emerald-500/30 text-[10px] font-bold uppercase tracking-wider">
+                      JF
+                    </Badge>
                     <Badge variant="outline" className={(ACCOUNT_TYPES as any)[m.account_type]?.tone}>
                       {(ACCOUNT_TYPES as any)[m.account_type]?.label ?? m.account_type}
                     </Badge>

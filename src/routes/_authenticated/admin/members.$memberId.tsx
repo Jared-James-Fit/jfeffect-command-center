@@ -22,6 +22,7 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import { MemberAccessSummary } from "@/components/admin/member-access-summary";
+import { MemberFeatureToggles } from "@/components/admin/member-feature-toggles";
 import { JfAdminBillingCard } from "@/components/billing/jf-admin-billing-card";
 import { ACCOUNT_TYPES, type AccountType } from "@/lib/membership";
 
@@ -80,6 +81,9 @@ function MemberProfile() {
         title={member.full_name || member.email}
         subtitle={member.email}
         actions={<div className="flex flex-wrap items-center gap-2">
+          <Badge variant="outline" className="bg-emerald-500/10 text-emerald-300 border-emerald-500/30 font-bold uppercase tracking-wider">
+            JF Membership
+          </Badge>
           <Badge variant="outline" className={(ACCOUNT_TYPES as any)[member.account_type]?.tone}>
             {acctLabel}
           </Badge>
@@ -228,9 +232,10 @@ function MemberProfile() {
 
         {/* ───────────── Access ───────────── */}
         <TabsContent value="access" className="space-y-5">
+          <MemberFeatureToggles memberId={memberId} levels={levels as any} access={access as any} />
           <Card className="space-y-3 p-5">
             <div className="flex items-center justify-between">
-              <div className="text-xs uppercase tracking-wider text-muted-foreground">Access grants</div>
+              <div className="text-xs uppercase tracking-wider text-muted-foreground">Manual access grants (advanced)</div>
               <div className="flex items-center gap-2">
                 <select className="h-8 rounded-md border bg-background px-2 text-sm" value={newKey} onChange={(e) => setNewKey(e.target.value)}>
                   <option value="">Select access…</option>
