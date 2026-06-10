@@ -16,6 +16,7 @@ import { Route as MemberSetupRouteImport } from './routes/member-setup'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as BookSlugRouteImport } from './routes/book.$slug'
 import { Route as ApiDriveUploadRouteImport } from './routes/api/drive-upload'
 import { Route as AuthenticatedPortalRouteRouteImport } from './routes/_authenticated/portal/route'
 import { Route as AuthenticatedMRouteRouteImport } from './routes/_authenticated/m/route'
@@ -168,6 +169,11 @@ const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BookSlugRoute = BookSlugRouteImport.update({
+  id: '/book/$slug',
+  path: '/book/$slug',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiDriveUploadRoute = ApiDriveUploadRouteImport.update({
@@ -877,6 +883,7 @@ export interface FileRoutesByFullPath {
   '/m': typeof AuthenticatedMRouteRouteWithChildren
   '/portal': typeof AuthenticatedPortalRouteRouteWithChildren
   '/api/drive-upload': typeof ApiDriveUploadRoute
+  '/book/$slug': typeof BookSlugRoute
   '/admin/account': typeof AuthenticatedAdminAccountRoute
   '/admin/appointments': typeof AuthenticatedAdminAppointmentsRoute
   '/admin/apps': typeof AuthenticatedAdminAppsRoute
@@ -1001,6 +1008,7 @@ export interface FileRoutesByTo {
   '/setup': typeof SetupRoute
   '/sitemap': typeof SitemapRoute
   '/api/drive-upload': typeof ApiDriveUploadRoute
+  '/book/$slug': typeof BookSlugRoute
   '/admin/account': typeof AuthenticatedAdminAccountRoute
   '/admin/appointments': typeof AuthenticatedAdminAppointmentsRoute
   '/admin/apps': typeof AuthenticatedAdminAppsRoute
@@ -1130,6 +1138,7 @@ export interface FileRoutesById {
   '/_authenticated/m': typeof AuthenticatedMRouteRouteWithChildren
   '/_authenticated/portal': typeof AuthenticatedPortalRouteRouteWithChildren
   '/api/drive-upload': typeof ApiDriveUploadRoute
+  '/book/$slug': typeof BookSlugRoute
   '/_authenticated/admin/account': typeof AuthenticatedAdminAccountRoute
   '/_authenticated/admin/appointments': typeof AuthenticatedAdminAppointmentsRoute
   '/_authenticated/admin/apps': typeof AuthenticatedAdminAppsRoute
@@ -1259,6 +1268,7 @@ export interface FileRouteTypes {
     | '/m'
     | '/portal'
     | '/api/drive-upload'
+    | '/book/$slug'
     | '/admin/account'
     | '/admin/appointments'
     | '/admin/apps'
@@ -1383,6 +1393,7 @@ export interface FileRouteTypes {
     | '/setup'
     | '/sitemap'
     | '/api/drive-upload'
+    | '/book/$slug'
     | '/admin/account'
     | '/admin/appointments'
     | '/admin/apps'
@@ -1511,6 +1522,7 @@ export interface FileRouteTypes {
     | '/_authenticated/m'
     | '/_authenticated/portal'
     | '/api/drive-upload'
+    | '/book/$slug'
     | '/_authenticated/admin/account'
     | '/_authenticated/admin/appointments'
     | '/_authenticated/admin/apps'
@@ -1637,6 +1649,7 @@ export interface RootRouteChildren {
   SetupRoute: typeof SetupRoute
   SitemapRoute: typeof SitemapRoute
   ApiDriveUploadRoute: typeof ApiDriveUploadRoute
+  BookSlugRoute: typeof BookSlugRoute
   ApiPublicSignnowWebhookRoute: typeof ApiPublicSignnowWebhookRoute
   ApiPublicStripeWebhookRoute: typeof ApiPublicStripeWebhookRoute
   ApiPublicHooksAppointmentRemindersRoute: typeof ApiPublicHooksAppointmentRemindersRoute
@@ -1698,6 +1711,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/book/$slug': {
+      id: '/book/$slug'
+      path: '/book/$slug'
+      fullPath: '/book/$slug'
+      preLoaderRoute: typeof BookSlugRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/drive-upload': {
@@ -2969,6 +2989,7 @@ const rootRouteChildren: RootRouteChildren = {
   SetupRoute: SetupRoute,
   SitemapRoute: SitemapRoute,
   ApiDriveUploadRoute: ApiDriveUploadRoute,
+  BookSlugRoute: BookSlugRoute,
   ApiPublicSignnowWebhookRoute: ApiPublicSignnowWebhookRoute,
   ApiPublicStripeWebhookRoute: ApiPublicStripeWebhookRoute,
   ApiPublicHooksAppointmentRemindersRoute:
