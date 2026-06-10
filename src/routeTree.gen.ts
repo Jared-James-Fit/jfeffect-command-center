@@ -117,6 +117,7 @@ import { Route as AuthenticatedAdminMemberResourcesNewRouteImport } from './rout
 import { Route as AuthenticatedAdminMemberResourcesResourceIdRouteImport } from './routes/_authenticated/admin/member-resources.$resourceId'
 import { Route as AuthenticatedAdminMemberPlansNewRouteImport } from './routes/_authenticated/admin/member-plans.new'
 import { Route as AuthenticatedAdminMemberPlansPlanIdRouteImport } from './routes/_authenticated/admin/member-plans.$planId'
+import { Route as AuthenticatedAdminEventsIdRouteImport } from './routes/_authenticated/admin/events.$id'
 import { Route as AuthenticatedAdminCoachesIdRouteImport } from './routes/_authenticated/admin/coaches.$id'
 import { Route as AuthenticatedAdminClientsIdRouteImport } from './routes/_authenticated/admin/clients.$id'
 import { Route as AuthenticatedAdminClientProgramsClientIdRouteImport } from './routes/_authenticated/admin/client-programs.$clientId'
@@ -748,6 +749,12 @@ const AuthenticatedAdminMemberPlansPlanIdRoute =
     path: '/member-plans/$planId',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
+const AuthenticatedAdminEventsIdRoute =
+  AuthenticatedAdminEventsIdRouteImport.update({
+    id: '/$id',
+    path: '/$id',
+    getParentRoute: () => AuthenticatedAdminEventsRoute,
+  } as any)
 const AuthenticatedAdminCoachesIdRoute =
   AuthenticatedAdminCoachesIdRouteImport.update({
     id: '/coaches/$id',
@@ -830,7 +837,7 @@ export interface FileRoutesByFullPath {
   '/admin/client-action-requests': typeof AuthenticatedAdminClientActionRequestsRoute
   '/admin/client-pov': typeof AuthenticatedAdminClientPovRoute
   '/admin/content-ideas': typeof AuthenticatedAdminContentIdeasRoute
-  '/admin/events': typeof AuthenticatedAdminEventsRoute
+  '/admin/events': typeof AuthenticatedAdminEventsRouteWithChildren
   '/admin/exercises': typeof AuthenticatedAdminExercisesRoute
   '/admin/faqs': typeof AuthenticatedAdminFaqsRoute
   '/admin/forms': typeof AuthenticatedAdminFormsRoute
@@ -886,6 +893,7 @@ export interface FileRoutesByFullPath {
   '/admin/client-programs/$clientId': typeof AuthenticatedAdminClientProgramsClientIdRouteWithChildren
   '/admin/clients/$id': typeof AuthenticatedAdminClientsIdRoute
   '/admin/coaches/$id': typeof AuthenticatedAdminCoachesIdRoute
+  '/admin/events/$id': typeof AuthenticatedAdminEventsIdRoute
   '/admin/member-plans/$planId': typeof AuthenticatedAdminMemberPlansPlanIdRoute
   '/admin/member-plans/new': typeof AuthenticatedAdminMemberPlansNewRoute
   '/admin/member-resources/$resourceId': typeof AuthenticatedAdminMemberResourcesResourceIdRoute
@@ -945,7 +953,7 @@ export interface FileRoutesByTo {
   '/admin/client-action-requests': typeof AuthenticatedAdminClientActionRequestsRoute
   '/admin/client-pov': typeof AuthenticatedAdminClientPovRoute
   '/admin/content-ideas': typeof AuthenticatedAdminContentIdeasRoute
-  '/admin/events': typeof AuthenticatedAdminEventsRoute
+  '/admin/events': typeof AuthenticatedAdminEventsRouteWithChildren
   '/admin/exercises': typeof AuthenticatedAdminExercisesRoute
   '/admin/faqs': typeof AuthenticatedAdminFaqsRoute
   '/admin/forms': typeof AuthenticatedAdminFormsRoute
@@ -1001,6 +1009,7 @@ export interface FileRoutesByTo {
   '/admin/client-programs/$clientId': typeof AuthenticatedAdminClientProgramsClientIdRouteWithChildren
   '/admin/clients/$id': typeof AuthenticatedAdminClientsIdRoute
   '/admin/coaches/$id': typeof AuthenticatedAdminCoachesIdRoute
+  '/admin/events/$id': typeof AuthenticatedAdminEventsIdRoute
   '/admin/member-plans/$planId': typeof AuthenticatedAdminMemberPlansPlanIdRoute
   '/admin/member-plans/new': typeof AuthenticatedAdminMemberPlansNewRoute
   '/admin/member-resources/$resourceId': typeof AuthenticatedAdminMemberResourcesResourceIdRoute
@@ -1065,7 +1074,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/client-action-requests': typeof AuthenticatedAdminClientActionRequestsRoute
   '/_authenticated/admin/client-pov': typeof AuthenticatedAdminClientPovRoute
   '/_authenticated/admin/content-ideas': typeof AuthenticatedAdminContentIdeasRoute
-  '/_authenticated/admin/events': typeof AuthenticatedAdminEventsRoute
+  '/_authenticated/admin/events': typeof AuthenticatedAdminEventsRouteWithChildren
   '/_authenticated/admin/exercises': typeof AuthenticatedAdminExercisesRoute
   '/_authenticated/admin/faqs': typeof AuthenticatedAdminFaqsRoute
   '/_authenticated/admin/forms': typeof AuthenticatedAdminFormsRoute
@@ -1121,6 +1130,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/client-programs/$clientId': typeof AuthenticatedAdminClientProgramsClientIdRouteWithChildren
   '/_authenticated/admin/clients/$id': typeof AuthenticatedAdminClientsIdRoute
   '/_authenticated/admin/coaches/$id': typeof AuthenticatedAdminCoachesIdRoute
+  '/_authenticated/admin/events/$id': typeof AuthenticatedAdminEventsIdRoute
   '/_authenticated/admin/member-plans/$planId': typeof AuthenticatedAdminMemberPlansPlanIdRoute
   '/_authenticated/admin/member-plans/new': typeof AuthenticatedAdminMemberPlansNewRoute
   '/_authenticated/admin/member-resources/$resourceId': typeof AuthenticatedAdminMemberResourcesResourceIdRoute
@@ -1241,6 +1251,7 @@ export interface FileRouteTypes {
     | '/admin/client-programs/$clientId'
     | '/admin/clients/$id'
     | '/admin/coaches/$id'
+    | '/admin/events/$id'
     | '/admin/member-plans/$planId'
     | '/admin/member-plans/new'
     | '/admin/member-resources/$resourceId'
@@ -1356,6 +1367,7 @@ export interface FileRouteTypes {
     | '/admin/client-programs/$clientId'
     | '/admin/clients/$id'
     | '/admin/coaches/$id'
+    | '/admin/events/$id'
     | '/admin/member-plans/$planId'
     | '/admin/member-plans/new'
     | '/admin/member-resources/$resourceId'
@@ -1475,6 +1487,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/client-programs/$clientId'
     | '/_authenticated/admin/clients/$id'
     | '/_authenticated/admin/coaches/$id'
+    | '/_authenticated/admin/events/$id'
     | '/_authenticated/admin/member-plans/$planId'
     | '/_authenticated/admin/member-plans/new'
     | '/_authenticated/admin/member-resources/$resourceId'
@@ -2288,6 +2301,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminMemberPlansPlanIdRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
+    '/_authenticated/admin/events/$id': {
+      id: '/_authenticated/admin/events/$id'
+      path: '/$id'
+      fullPath: '/admin/events/$id'
+      preLoaderRoute: typeof AuthenticatedAdminEventsIdRouteImport
+      parentRoute: typeof AuthenticatedAdminEventsRoute
+    }
     '/_authenticated/admin/coaches/$id': {
       id: '/_authenticated/admin/coaches/$id'
       path: '/coaches/$id'
@@ -2369,6 +2389,20 @@ const AuthenticatedAdminBroadcastsRouteWithChildren =
     AuthenticatedAdminBroadcastsRouteChildren,
   )
 
+interface AuthenticatedAdminEventsRouteChildren {
+  AuthenticatedAdminEventsIdRoute: typeof AuthenticatedAdminEventsIdRoute
+}
+
+const AuthenticatedAdminEventsRouteChildren: AuthenticatedAdminEventsRouteChildren =
+  {
+    AuthenticatedAdminEventsIdRoute: AuthenticatedAdminEventsIdRoute,
+  }
+
+const AuthenticatedAdminEventsRouteWithChildren =
+  AuthenticatedAdminEventsRoute._addFileChildren(
+    AuthenticatedAdminEventsRouteChildren,
+  )
+
 interface AuthenticatedAdminPurchasesRouteChildren {
   AuthenticatedAdminPurchasesIdRoute: typeof AuthenticatedAdminPurchasesIdRoute
 }
@@ -2418,7 +2452,7 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminClientActionRequestsRoute: typeof AuthenticatedAdminClientActionRequestsRoute
   AuthenticatedAdminClientPovRoute: typeof AuthenticatedAdminClientPovRoute
   AuthenticatedAdminContentIdeasRoute: typeof AuthenticatedAdminContentIdeasRoute
-  AuthenticatedAdminEventsRoute: typeof AuthenticatedAdminEventsRoute
+  AuthenticatedAdminEventsRoute: typeof AuthenticatedAdminEventsRouteWithChildren
   AuthenticatedAdminExercisesRoute: typeof AuthenticatedAdminExercisesRoute
   AuthenticatedAdminFaqsRoute: typeof AuthenticatedAdminFaqsRoute
   AuthenticatedAdminFormsRoute: typeof AuthenticatedAdminFormsRoute
@@ -2486,7 +2520,7 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
       AuthenticatedAdminClientActionRequestsRoute,
     AuthenticatedAdminClientPovRoute: AuthenticatedAdminClientPovRoute,
     AuthenticatedAdminContentIdeasRoute: AuthenticatedAdminContentIdeasRoute,
-    AuthenticatedAdminEventsRoute: AuthenticatedAdminEventsRoute,
+    AuthenticatedAdminEventsRoute: AuthenticatedAdminEventsRouteWithChildren,
     AuthenticatedAdminExercisesRoute: AuthenticatedAdminExercisesRoute,
     AuthenticatedAdminFaqsRoute: AuthenticatedAdminFaqsRoute,
     AuthenticatedAdminFormsRoute: AuthenticatedAdminFormsRoute,

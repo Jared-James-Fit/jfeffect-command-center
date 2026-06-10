@@ -52,6 +52,7 @@ function EventEditorPage() {
     return <div className="p-6 text-sm text-muted-foreground">Loading…</div>;
   }
 
+  const evt: EventRow = ev;
   const links = data?.links ?? [];
   const deadlines = data?.deadlines ?? [];
   const reminders = data?.reminders ?? [];
@@ -60,14 +61,14 @@ function EventEditorPage() {
   const update = (patch: Partial<EventRow>) => setEv((cur) => (cur ? { ...cur, ...patch } : cur));
 
   async function save() {
-    if (!ev) return;
+    if (!evt) return;
     const { error } = await (supabase.from("events") as any).update({
-      name: ev.name, event_type: ev.event_type, event_date: ev.event_date,
-      start_time: ev.start_time || null, end_time: ev.end_time || null,
-      location: ev.location || null, description: ev.description || null,
-      client_facing_notes: ev.client_facing_notes || null, internal_notes: ev.internal_notes || null,
-      importance: ev.importance, status: ev.status, audience_scope: ev.audience_scope,
-    }).eq("id", ev.id);
+      name: evt.name, event_type: evt.event_type, event_date: evt.event_date,
+      start_time: evt.start_time || null, end_time: evt.end_time || null,
+      location: evt.location || null, description: evt.description || null,
+      client_facing_notes: evt.client_facing_notes || null, internal_notes: evt.internal_notes || null,
+      importance: evt.importance, status: evt.status, audience_scope: evt.audience_scope,
+    }).eq("id", evt.id);
     if (error) { toast.error(error.message); return; }
     toast.success("Event saved");
     qc.invalidateQueries({ queryKey: ["admin-event", id] });
@@ -77,11 +78,11 @@ function EventEditorPage() {
   async function duplicate() {
     const { data: u } = await supabase.auth.getUser();
     const { data: ins, error } = await (supabase.from("events") as any).insert({
-      name: ev.name + " (copy)", event_type: ev.event_type, event_date: ev.event_date,
-      start_time: ev.start_time, end_time: ev.end_time, location: ev.location,
-      description: ev.description, client_facing_notes: ev.client_facing_notes,
-      internal_notes: ev.internal_notes, importance: ev.importance, status: "Draft",
-      audience_scope: ev.audience_scope, created_by: u.user?.id,
+      name: evt.name + " (copy)", event_type: evt.event_type, event_date: evt.event_date,
+      start_time: evt.start_time, end_time: evt.end_time, location: evt.location,
+      description: evt.description, client_facing_notes: evt.client_facing_notes,
+      internal_notes: evt.internal_notes, importance: evt.importance, status: "Draft",
+      audience_scope: evt.audience_scope, created_by: u.user?.id,
     }).select("id").single();
     if (error) { toast.error(error.message); return; }
     if (links.length) await (supabase.from("event_quick_links") as any).insert(
@@ -100,7 +101,7 @@ function EventEditorPage() {
   async function archive() {
     const { error } = await (supabase.from("events") as any)
       .update({ status: "Archived", archived_at: new Date().toISOString() })
-      .eq("id", ev.id);
+      .eq("id", evt.id);
     if (error) { toast.error(error.message); return; }
     toast.success("Event archived");
     qc.invalidateQueries({ queryKey: ["admin-event", id] });
@@ -109,7 +110,7 @@ function EventEditorPage() {
   }
 
   async function removeEvent() {
-    const { error } = await (supabase.from("events") as any).delete().eq("id", ev.id);
+    const { error } = await (supabase.from("events") as any).delete().eq("id", evt.id);
     if (error) { toast.error(error.message); return; }
     toast.success("Event deleted");
     nav({ to: "/admin/events" });
@@ -117,30 +118,30 @@ function EventEditorPage() {
 
   function applyParsed(p: ReturnType<typeof parseFormattedEvent>) {
     update({
-      name: p.name ?? ev.name,
-      event_type: p.event_type ?? ev.event_type,
-      event_date: p.event_date ?? ev.event_date,
-      start_time: p.start_time ?? ev.start_time,
-      end_time: p.end_time ?? ev.end_time,
-      location: p.location ?? ev.location,
-      importance: p.importance ?? ev.importance,
-      description: p.description ?? ev.description,
-      client_facing_notes: p.client_facing_notes ?? ev.client_facing_notes,
-      internal_notes: p.internal_notes ?? ev.internal_notes,
+      name: p.name ?? evt.name,
+      event_type: p.event_type ?? evt.event_type,
+      event_date: p.event_date ?? evt.event_date,
+      start_time: p.start_time ?? evt.start_time,
+      end_time: p.end_time ?? evt.end_time,
+      location: p.location ?? evt.location,
+      importance: p.importance ?? evt.importance,
+      description: p.description ?? evt.description,
+      client_facing_notes: p.client_facing_notes ?? evt.client_facing_notes,
+      internal_notes: p.internal_notes ?? evt.internal_notes,
     });
     // Insert links/deadlines/reminders
     (async () => {
       if (p.quick_links.length) {
-        const rows = p.quick_links.map((l, i) => ({ ...l, event_id: ev.id, sort_order: (links.length + i) }));
+        const rows = p.quick_links.map((l, i) => ({ ...l, event_id: evt.id, sort_order: (links.length + i) }));
         await (supabase.from("event_quick_links") as any).insert(rows);
       }
       if (p.deadlines.length) {
-        const rows = p.deadlines.map((d, i) => ({ ...d, event_id: ev.id, sort_order: (deadlines.length + i) }));
+        const rows = p.deadlines.map((d, i) => ({ ...d, event_id: evt.id, sort_order: (deadlines.length + i) }));
         await (supabase.from("event_deadlines") as any).insert(rows);
       }
       for (const [key, msg] of Object.entries(p.reminders)) {
         await (supabase.from("event_reminders") as any).upsert({
-          event_id: ev.id, offset_key: key, enabled: true, message: msg,
+          event_id: evt.id, offset_key: key, enabled: true, message: msg,
           visible_to_client: p.reminders_visible_to_client ?? true,
         }, { onConflict: "event_id,offset_key" });
       }
@@ -149,13 +150,13 @@ function EventEditorPage() {
     })();
   }
 
-  const countdown = computeCountdown(ev.event_date);
+  const countdown = computeCountdown(evt.event_date);
 
   return (
     <div className="space-y-4">
       <PageHeader
-        title={ev.name || "Untitled event"}
-        subtitle={`${ev.event_type} · ${countdown.label}`}
+        title={evt.name || "Untitled event"}
+        subtitle={`${evt.event_type} · ${countdown.label}`}
         backTo="/admin/events"
         backLabel="All events"
         actions={
@@ -184,43 +185,43 @@ function EventEditorPage() {
           <Card className="grid gap-4 p-4 md:grid-cols-2">
             <div className="md:col-span-2">
               <Label>Event name</Label>
-              <Input value={ev.name} onChange={(e) => update({ name: e.target.value })} />
+              <Input value={evt.name} onChange={(e) => update({ name: e.target.value })} />
             </div>
             <div>
               <Label>Type</Label>
-              <Select value={ev.event_type} onValueChange={(v) => update({ event_type: v as EventType })}>
+              <Select value={evt.event_type} onValueChange={(v) => update({ event_type: v as EventType })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>{EVENT_TYPES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
               </Select>
             </div>
             <div>
               <Label>Importance</Label>
-              <Select value={ev.importance} onValueChange={(v) => update({ importance: v as EventImportance })}>
+              <Select value={evt.importance} onValueChange={(v) => update({ importance: v as EventImportance })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>{EVENT_IMPORTANCE.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
               </Select>
             </div>
             <div>
               <Label>Date</Label>
-              <Input type="date" value={ev.event_date} onChange={(e) => update({ event_date: e.target.value })} />
+              <Input type="date" value={evt.event_date} onChange={(e) => update({ event_date: e.target.value })} />
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <Label>Start time</Label>
-                <Input type="time" value={ev.start_time ?? ""} onChange={(e) => update({ start_time: e.target.value || null })} />
+                <Input type="time" value={evt.start_time ?? ""} onChange={(e) => update({ start_time: e.target.value || null })} />
               </div>
               <div>
                 <Label>End time</Label>
-                <Input type="time" value={ev.end_time ?? ""} onChange={(e) => update({ end_time: e.target.value || null })} />
+                <Input type="time" value={evt.end_time ?? ""} onChange={(e) => update({ end_time: e.target.value || null })} />
               </div>
             </div>
             <div className="md:col-span-2">
               <Label>Location</Label>
-              <Input value={ev.location ?? ""} onChange={(e) => update({ location: e.target.value })} placeholder="Venue, city" />
+              <Input value={evt.location ?? ""} onChange={(e) => update({ location: e.target.value })} placeholder="Venue, city" />
             </div>
             <div>
               <Label>Status</Label>
-              <Select value={ev.status} onValueChange={(v) => update({ status: v as EventStatus })}>
+              <Select value={evt.status} onValueChange={(v) => update({ status: v as EventStatus })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>{EVENT_STATUSES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
               </Select>
@@ -228,7 +229,7 @@ function EventEditorPage() {
             </div>
             <div>
               <Label>Audience</Label>
-              <Select value={ev.audience_scope} onValueChange={(v) => update({ audience_scope: v as AudienceScope })}>
+              <Select value={evt.audience_scope} onValueChange={(v) => update({ audience_scope: v as AudienceScope })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="selected_clients">Selected clients only</SelectItem>
@@ -240,7 +241,7 @@ function EventEditorPage() {
             </div>
             <div className="md:col-span-2">
               <Label>Client-facing description</Label>
-              <Textarea rows={4} value={ev.description ?? ""} onChange={(e) => update({ description: e.target.value })} placeholder="Short description clients will see on the event page." />
+              <Textarea rows={4} value={evt.description ?? ""} onChange={(e) => update({ description: e.target.value })} placeholder="Short description clients will see on the event page." />
             </div>
           </Card>
         </TabsContent>
@@ -248,30 +249,30 @@ function EventEditorPage() {
         <TabsContent value="notes" className="space-y-4">
           <Card className="space-y-2 p-4">
             <Label>Client-facing notes</Label>
-            <Textarea rows={5} value={ev.client_facing_notes ?? ""} onChange={(e) => update({ client_facing_notes: e.target.value })} />
+            <Textarea rows={5} value={evt.client_facing_notes ?? ""} onChange={(e) => update({ client_facing_notes: e.target.value })} />
             <p className="text-xs text-muted-foreground">Visible to assigned clients on the event detail page.</p>
           </Card>
           <Card className="space-y-2 p-4">
             <Label>Internal coach notes</Label>
-            <Textarea rows={5} value={ev.internal_notes ?? ""} onChange={(e) => update({ internal_notes: e.target.value })} />
+            <Textarea rows={5} value={evt.internal_notes ?? ""} onChange={(e) => update({ internal_notes: e.target.value })} />
             <p className="text-xs text-muted-foreground">Hidden from clients. Coach/admin only.</p>
           </Card>
         </TabsContent>
 
         <TabsContent value="links">
-          <QuickLinksEditor eventId={ev.id} links={links} onChange={() => qc.invalidateQueries({ queryKey: ["admin-event", id] })} />
+          <QuickLinksEditor eventId={evt.id} links={links} onChange={() => qc.invalidateQueries({ queryKey: ["admin-event", id] })} />
         </TabsContent>
 
         <TabsContent value="deadlines">
-          <DeadlinesEditor eventId={ev.id} deadlines={deadlines} onChange={() => qc.invalidateQueries({ queryKey: ["admin-event", id] })} />
+          <DeadlinesEditor eventId={evt.id} deadlines={deadlines} onChange={() => qc.invalidateQueries({ queryKey: ["admin-event", id] })} />
         </TabsContent>
 
         <TabsContent value="reminders">
-          <RemindersEditor eventId={ev.id} reminders={reminders} onChange={() => qc.invalidateQueries({ queryKey: ["admin-event", id] })} />
+          <RemindersEditor eventId={evt.id} reminders={reminders} onChange={() => qc.invalidateQueries({ queryKey: ["admin-event", id] })} />
         </TabsContent>
 
         <TabsContent value="assign">
-          <AssignmentsEditor eventId={ev.id} assignments={assignments} onChange={() => qc.invalidateQueries({ queryKey: ["admin-event", id] })} />
+          <AssignmentsEditor eventId={evt.id} assignments={assignments} onChange={() => qc.invalidateQueries({ queryKey: ["admin-event", id] })} />
         </TabsContent>
       </Tabs>
 
@@ -280,7 +281,7 @@ function EventEditorPage() {
           <DialogHeader><DialogTitle>Preview as client</DialogTitle></DialogHeader>
           <div className="max-h-[70vh] overflow-auto">
             <ClientEventDetail
-              event={ev}
+              event={evt}
               links={links.filter((l) => l.visible_to_client)}
               deadlines={deadlines.filter((d) => d.visible_to_client)}
               reminders={reminders.filter((r) => r.visible_to_client && r.enabled)}
@@ -301,8 +302,9 @@ function EventEditorPage() {
         open={deleteOpen}
         onOpenChange={setDeleteOpen}
         title="Delete event?"
-        description="This permanently removes the event, its links, deadlines, reminders, and assignments. This cannot be undone."
-        confirmText={ev.name}
+        message="This permanently removes the event, its links, deadlines, reminders, and assignments. This cannot be undone."
+        strongWarning={`You are deleting "${evt.name}".`}
+        confirmLabel="Delete event"
         onConfirm={removeEvent}
       />
     </div>
