@@ -3379,6 +3379,81 @@ export type Database = {
           },
         ]
       }
+      fillout_submissions: {
+        Row: {
+          assigned_at: string | null
+          assigned_by: string | null
+          client_id: string | null
+          created_at: string
+          fillout_form_id: string | null
+          fillout_submission_id: string | null
+          form_id: string | null
+          form_name: string | null
+          form_type: string | null
+          id: string
+          raw_payload: Json
+          response_json: Json
+          submitted_at: string | null
+          unmatch_reason: string | null
+          unmatched: boolean
+          unread: boolean
+          updated_at: string
+        }
+        Insert: {
+          assigned_at?: string | null
+          assigned_by?: string | null
+          client_id?: string | null
+          created_at?: string
+          fillout_form_id?: string | null
+          fillout_submission_id?: string | null
+          form_id?: string | null
+          form_name?: string | null
+          form_type?: string | null
+          id?: string
+          raw_payload?: Json
+          response_json?: Json
+          submitted_at?: string | null
+          unmatch_reason?: string | null
+          unmatched?: boolean
+          unread?: boolean
+          updated_at?: string
+        }
+        Update: {
+          assigned_at?: string | null
+          assigned_by?: string | null
+          client_id?: string | null
+          created_at?: string
+          fillout_form_id?: string | null
+          fillout_submission_id?: string | null
+          form_id?: string | null
+          form_name?: string | null
+          form_type?: string | null
+          id?: string
+          raw_payload?: Json
+          response_json?: Json
+          submitted_at?: string | null
+          unmatch_reason?: string | null
+          unmatched?: boolean
+          unread?: boolean
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fillout_submissions_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fillout_submissions_form_id_fkey"
+            columns: ["form_id"]
+            isOneToOne: false
+            referencedRelation: "nf_forms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       form_client_assignments: {
         Row: {
           assigned_by: string | null
@@ -5231,6 +5306,7 @@ export type Database = {
           open_style: string
           recurrence: string
           recurrence_day: string | null
+          requires_client_identity: boolean
           title: string
           updated_at: string
           version: number
@@ -5253,6 +5329,7 @@ export type Database = {
           open_style?: string
           recurrence?: string
           recurrence_day?: string | null
+          requires_client_identity?: boolean
           title: string
           updated_at?: string
           version?: number
@@ -5275,6 +5352,7 @@ export type Database = {
           open_style?: string
           recurrence?: string
           recurrence_day?: string | null
+          requires_client_identity?: boolean
           title?: string
           updated_at?: string
           version?: number
