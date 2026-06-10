@@ -13,8 +13,7 @@ import {
   type LiftVideo,
 } from "@/lib/lift-videos";
 import { createClientLiftVideo } from "@/lib/lift-videos.functions";
-import { initMediaUpload, finalizeMediaUpload, createSubmission } from "@/lib/drive.functions";
-import { uploadLiftClipToDrive } from "@/lib/lift-video-drive-upload";
+import { uploadLiftFileToStorage } from "@/lib/lift-video-storage-upload";
 import { friendlyDriveError } from "@/lib/drive-errors";
 import { toast } from "sonner";
 import { Upload, Link as LinkIcon, Loader2, Video as VideoIcon, Send, X, AlertTriangle, CheckCircle2, ChevronDown } from "lucide-react";
@@ -32,9 +31,6 @@ type Props = {
 };
 
 export function LiftVideoDialog({ open, onOpenChange, clientId, userId, clientName, initial, onSaved, role = "admin" }: Props) {
-  const initFn = useServerFn(initMediaUpload);
-  const finalizeFn = useServerFn(finalizeMediaUpload);
-  const createSubFn = useServerFn(createSubmission);
   const createClientLiftVideoFn = useServerFn(createClientLiftVideo);
   const [tab, setTab] = useState<"link" | "upload">("upload");
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
@@ -244,37 +240,21 @@ export function LiftVideoDialog({ open, onOpenChange, clientId, userId, clientNa
       const sharedNote = noteMode === "batch" ? batchNote.trim() : "";
       const isUrgent = !!form.is_urgent;
       const urgentNote = isUrgent ? urgentText.trim() : "";
-      let driveSubmissionId: string | null = null;
-
       for (let i = 0; i < clips.length; i++) {
         const clip = clips[i];
         let videoUrl: string | null = null;
         let storagePath: string | null = null;
         let source: "link" | "upload" = "link";
+        let storageMeta: { mimeType: string; sizeBytes: number } | null = null;
 
         if (clip.kind === "file" && clip.file) {
-          // Upload the actual video to the client's Google Drive folder and
-          // mirror it into media_items so it appears in the Media Review Inbox.
-          const perClipNote = noteMode === "perClip" ? clip.note.trim() : (sharedNote || null);
-          try {
-            const res = await uploadLiftClipToDrive({
-              clientId, clientName, file: clip.file,
-              index: i + 1, total,
-              batchNote: sharedNote || null,
-              perClipNote,
-              urgent: isUrgent,
-              painNote: isUrgent ? urgentNote || null : null,
-              submissionId: driveSubmissionId,
-              initFn, finalizeFn, createSubFn,
-            });
-            driveSubmissionId = res.submissionId;
-            videoUrl = res.driveUrl ?? res.url;
-            storagePath = null;
-            (clip as any).driveMeta = res;
-          } catch (driveError) {
-            console.warn("Drive upload failed; lift video was not saved without Drive metadata", driveError);
-            throw driveError;
-          }
+          // PRIMARY upload path: stream straight into Supabase Storage. The
+          // background Drive archive picks it up later — we don't block the
+          // client on Drive succeeding.
+          if (!userId) throw new Error("Sign in to upload videos.");
+          const res = await uploadLiftFileToStorage({ file: clip.file, userId });
+          storagePath = res.path;
+          storageMeta = { mimeType: res.mimeType, sizeBytes: res.sizeBytes };
           source = "upload";
         } else if (clip.kind === "link" && clip.url) {
           videoUrl = clip.url;
@@ -286,7 +266,6 @@ export function LiftVideoDialog({ open, onOpenChange, clientId, userId, clientNa
           .filter(Boolean)
           .join("\n");
 
-        const driveMeta = (clip as any).driveMeta;
         const liftVideoPayload = {
           client_id: clientId,
           exercise: "",
@@ -297,15 +276,17 @@ export function LiftVideoDialog({ open, onOpenChange, clientId, userId, clientNa
           video_url: videoUrl,
           video_storage_path: storagePath,
           video_source: source,
-          thumbnail_url: driveMeta?.thumbnailUrl ?? null,
-          original_drive_file_id: driveMeta?.driveFileId ?? null,
-          original_drive_url: driveMeta?.driveUrl ?? null,
-          drive_embed_url: driveMeta?.driveEmbedUrl ?? null,
+          thumbnail_url: null,
+          original_drive_file_id: null,
+          original_drive_url: null,
+          drive_embed_url: null,
           preview_url: null,
-          preview_status: driveMeta ? "not_generated" : (storagePath ? "ready" : "not_generated"),
-          file_type: driveMeta?.mimeType ?? clip.file?.type ?? null,
-          file_size_bytes: driveMeta?.sizeBytes ?? clip.file?.size ?? null,
-          upload_status: driveMeta ? "Drive uploaded" : (storagePath ? "App storage fallback" : "Submitted"),
+          preview_status: storagePath ? "ready" : "not_generated",
+          file_type: storageMeta?.mimeType ?? clip.file?.type ?? null,
+          file_size_bytes: storageMeta?.sizeBytes ?? clip.file?.size ?? null,
+          upload_status: storagePath ? "Uploaded" : "Submitted",
+          archive_status: storagePath ? "pending" : "not_archived",
+          archive_next_attempt_at: storagePath ? new Date().toISOString() : null,
           status: "New Upload",
           batch_id: batchId,
           batch_note: sharedNote || null,
