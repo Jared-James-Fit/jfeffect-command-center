@@ -165,3 +165,36 @@ export const deleteEventAndCalendar = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return { ok: true };
   });
+
+export const bulkDeleteEvents = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ ids: z.array(z.string().uuid()).min(1) }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context as any;
+    const { data: rows } = await supabase.from("events").select("id, google_event_id").in("id", data.ids);
+    try {
+      const { gcalDeleteEvent } = await import("./google-cal.server");
+      const coachId = await currentCoachId(supabase, userId);
+      for (const r of rows ?? []) {
+        if (r.google_event_id) {
+          try { await gcalDeleteEvent(coachId, r.google_event_id); } catch {}
+        }
+      }
+    } catch {}
+    const { error } = await supabase.from("events").delete().in("id", data.ids);
+    if (error) throw new Error(error.message);
+    return { ok: true, count: data.ids.length };
+  });
+
+export const bulkUpdateEventStatus = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({
+    ids: z.array(z.string().uuid()).min(1),
+    status: z.enum(["Active", "Draft", "Completed", "Archived"]),
+  }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase } = context as any;
+    const { error } = await supabase.from("events").update({ status: data.status }).in("id", data.ids);
+    if (error) throw new Error(error.message);
+    return { ok: true, count: data.ids.length };
+  });
