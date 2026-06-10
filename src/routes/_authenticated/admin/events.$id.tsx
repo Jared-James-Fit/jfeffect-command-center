@@ -1,5 +1,6 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
@@ -14,11 +15,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import {
-  Trash2, Plus, ExternalLink, Copy, Eye, Archive as ArchiveIcon, Save, Users, ChevronUp, ChevronDown,
+  Trash2, Plus, ExternalLink, Copy, Eye, Archive as ArchiveIcon, Save, Users, ChevronUp, ChevronDown, CalendarClock,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
-  EVENT_TYPES, EVENT_IMPORTANCE, EVENT_STATUSES, EVENT_LINK_TYPES, AUDIENCE_SCOPES, REMINDER_OFFSETS,
+  EVENT_TYPES, EVENT_IMPORTANCE, EVENT_STATUSES, EVENT_LINK_TYPES, REMINDER_OFFSETS,
   getEvent, guessLinkType, guessLinkTitle, computeCountdown,
   type EventRow, type QuickLink, type Deadline, type Reminder, type EventType, type EventImportance,
   type EventStatus, type EventLinkType, type AudienceScope, type ReminderOffsetKey,
@@ -26,6 +27,7 @@ import {
 } from "@/lib/events";
 import { ClientEventDetail } from "@/components/events/client-event-detail";
 import { DoubleConfirmDeleteDialog } from "@/components/double-confirm-delete-dialog";
+import { deleteEventAndCalendar, saveEventAndSyncCalendar } from "@/lib/events.functions";
 
 export const Route = createFileRoute("/_authenticated/admin/events/$id")({
   component: EventEditorPage,
@@ -35,6 +37,8 @@ function EventEditorPage() {
   const { id } = Route.useParams();
   const qc = useQueryClient();
   const nav = useNavigate();
+  const saveEventFn = useServerFn(saveEventAndSyncCalendar);
+  const deleteEventFn = useServerFn(deleteEventAndCalendar);
 
   const { data, isLoading } = useQuery({
     queryKey: ["admin-event", id],
@@ -62,17 +66,22 @@ function EventEditorPage() {
 
   async function save() {
     if (!evt) return;
-    const { error } = await (supabase.from("events") as any).update({
-      name: evt.name, event_type: evt.event_type, event_date: evt.event_date,
-      start_time: evt.start_time || null, end_time: evt.end_time || null,
-      location: evt.location || null, description: evt.description || null,
-      client_facing_notes: evt.client_facing_notes || null, internal_notes: evt.internal_notes || null,
-      importance: evt.importance, status: evt.status, audience_scope: evt.audience_scope,
-    }).eq("id", evt.id);
-    if (error) { toast.error(error.message); return; }
-    toast.success("Event saved");
-    qc.invalidateQueries({ queryKey: ["admin-event", id] });
-    qc.invalidateQueries({ queryKey: ["admin-events"] });
+    try {
+      const result = await saveEventFn({ data: {
+        id: evt.id, name: evt.name, event_type: evt.event_type, event_date: evt.event_date,
+        start_time: evt.start_time || null, end_time: evt.end_time || null, timezone: evt.timezone || null,
+        location: evt.location || null, description: evt.description || null,
+        client_facing_notes: evt.client_facing_notes || null, internal_notes: evt.internal_notes || null,
+        importance: evt.importance, status: evt.status, audience_scope: evt.audience_scope,
+        google_calendar_transparency: evt.google_calendar_transparency ?? "transparent",
+      } as any });
+      toast.success(result.calendarSynced ? "Event saved and added to Google Calendar" : "Event saved");
+      if (!result.calendarSynced && result.calendarError) toast.warning(`Calendar sync skipped: ${result.calendarError}`);
+      qc.invalidateQueries({ queryKey: ["admin-event", id] });
+      qc.invalidateQueries({ queryKey: ["admin-events"] });
+    } catch (e: any) {
+      toast.error(e?.message ?? "Could not save event");
+    }
   }
 
   async function duplicate() {
@@ -110,10 +119,13 @@ function EventEditorPage() {
   }
 
   async function removeEvent() {
-    const { error } = await (supabase.from("events") as any).delete().eq("id", evt.id);
-    if (error) { toast.error(error.message); return; }
-    toast.success("Event deleted");
-    nav({ to: "/admin/events" });
+    try {
+      await deleteEventFn({ data: { id: evt.id } });
+      toast.success("Event deleted");
+      nav({ to: "/admin/events" });
+    } catch (e: any) {
+      toast.error(e?.message ?? "Could not delete event");
+    }
   }
 
   function applyParsed(p: ReturnType<typeof parseFormattedEvent>) {
@@ -238,6 +250,33 @@ function EventEditorPage() {
                   <SelectItem value="program_only">Program-only members</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+            <div className="md:col-span-2 rounded-md border border-border bg-secondary/30 p-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-start gap-2">
+                  <CalendarClock className="mt-0.5 h-4 w-4 text-muted-foreground" />
+                  <div>
+                    <Label>Google Calendar availability</Label>
+                    <p className="text-xs text-muted-foreground">
+                      This event is added to your connected calendar. Default is free so it does not block bookings.
+                    </p>
+                    {evt.google_event_link && (
+                      <a href={evt.google_event_link} target="_blank" rel="noreferrer" className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-primary">
+                        Open Google event <ExternalLink className="h-3 w-3" />
+                      </a>
+                    )}
+                    {evt.google_sync_error && <p className="mt-1 text-xs text-destructive">Last sync failed: {evt.google_sync_error}</p>}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-medium text-muted-foreground">Free</span>
+                  <Switch
+                    checked={(evt.google_calendar_transparency ?? "transparent") === "opaque"}
+                    onCheckedChange={(checked) => update({ google_calendar_transparency: checked ? "opaque" : "transparent" })}
+                  />
+                  <span className="text-xs font-medium text-muted-foreground">Busy</span>
+                </div>
+              </div>
             </div>
             <div className="md:col-span-2">
               <Label>Client-facing description</Label>

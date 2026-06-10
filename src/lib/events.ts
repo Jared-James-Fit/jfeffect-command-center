@@ -50,6 +50,11 @@ export interface EventRow {
   status: EventStatus;
   audience_scope: AudienceScope;
   created_by: string | null;
+  google_event_id?: string | null;
+  google_event_link?: string | null;
+  google_calendar_transparency?: "transparent" | "opaque";
+  google_synced_at?: string | null;
+  google_sync_error?: string | null;
   archived_at: string | null;
   completed_at: string | null;
   created_at: string;

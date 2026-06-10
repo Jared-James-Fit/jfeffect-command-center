@@ -3112,6 +3112,11 @@ export type Database = {
           end_time: string | null
           event_date: string
           event_type: Database["public"]["Enums"]["event_type"]
+          google_calendar_transparency: string
+          google_event_id: string | null
+          google_event_link: string | null
+          google_sync_error: string | null
+          google_synced_at: string | null
           id: string
           importance: Database["public"]["Enums"]["event_importance"]
           internal_notes: string | null
@@ -3133,6 +3138,11 @@ export type Database = {
           end_time?: string | null
           event_date: string
           event_type?: Database["public"]["Enums"]["event_type"]
+          google_calendar_transparency?: string
+          google_event_id?: string | null
+          google_event_link?: string | null
+          google_sync_error?: string | null
+          google_synced_at?: string | null
           id?: string
           importance?: Database["public"]["Enums"]["event_importance"]
           internal_notes?: string | null
@@ -3154,6 +3164,11 @@ export type Database = {
           end_time?: string | null
           event_date?: string
           event_type?: Database["public"]["Enums"]["event_type"]
+          google_calendar_transparency?: string
+          google_event_id?: string | null
+          google_event_link?: string | null
+          google_sync_error?: string | null
+          google_synced_at?: string | null
           id?: string
           importance?: Database["public"]["Enums"]["event_importance"]
           internal_notes?: string | null
