@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Link2, KeyRound, Trash2, Plus, Eye, Send } from "lucide-react";
+import { Link2, KeyRound, Trash2, Plus, Eye } from "lucide-react";
 import { toast } from "sonner";
 import { useState } from "react";
 import { Switch } from "@/components/ui/switch";
@@ -24,7 +24,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { MemberAccessSummary } from "@/components/admin/member-access-summary";
 import { JfAdminBillingCard } from "@/components/billing/jf-admin-billing-card";
 import { ACCOUNT_TYPES, type AccountType } from "@/lib/membership";
-import { sendBulkSms } from "@/lib/sms.functions";
 
 export const Route = createFileRoute("/_authenticated/admin/members/$memberId")({ component: MemberProfile });
 
@@ -45,7 +44,6 @@ function MemberProfile() {
   const grant = useServerFn(grantAccess);
   const revoke = useServerFn(revokeAccess);
   const copyPov = useServerFn(copyPovFromMember);
-  const sendSms = useServerFn(sendBulkSms);
   const navigate = useNavigate();
 
   const { data } = useQuery({ queryKey: ["admin-member", memberId], queryFn: () => fetch({ data: { memberId } }) });
@@ -268,7 +266,16 @@ function MemberProfile() {
 
         {/* ───────────── SMS Activity ───────────── */}
         <TabsContent value="sms" className="space-y-5">
-          <SendMemberSmsCard member={member} onSent={() => qc.invalidateQueries({ queryKey: ["member-sms-log", memberId] })} sendFn={sendSms as any} />
+          <Card className="p-5 space-y-2">
+            <div className="text-xs uppercase tracking-wider text-muted-foreground">SMS reach</div>
+            <div className="text-sm">
+              Phone on file: <span className="font-mono">{member.phone || <span className="text-muted-foreground">none</span>}</span>
+            </div>
+            <div className="text-xs text-muted-foreground">
+              Automations matching the <b>account_created</b> and <b>subscription_purchased</b> triggers send to this number automatically.
+              Manage automations in <span className="font-semibold">Admin → Settings → SMS</span>.
+            </div>
+          </Card>
 
           <Card className="p-5 space-y-3">
             <div className="text-xs uppercase tracking-wider text-muted-foreground">Recent SMS to this member</div>
@@ -315,38 +322,5 @@ function MemberProfile() {
         </TabsContent>
       </Tabs>
     </div>
-  );
-}
-
-function SendMemberSmsCard({ member, sendFn, onSent }: { member: any; sendFn: (args: any) => Promise<any>; onSent: () => void; }) {
-  const [body, setBody] = useState("");
-  const [busy, setBusy] = useState(false);
-  const noPhone = !member.phone;
-  return (
-    <Card className="p-5 space-y-3">
-      <div className="text-xs uppercase tracking-wider text-muted-foreground">Send SMS to this member</div>
-      {noPhone
-        ? <div className="text-sm text-muted-foreground">Add a mobile phone in the Summary tab to send SMS.</div>
-        : (
-          <>
-            <Textarea rows={3} value={body} onChange={(e) => setBody(e.target.value)} placeholder={`Hi ${member.full_name?.split(" ")[0] || "there"}…`} maxLength={1000} />
-            <div className="flex items-center justify-between">
-              <div className="text-[11px] text-muted-foreground">
-                Sends as a one-off SMS (logged on this profile). Tags: {"{first_name}"} {"{brand}"}
-              </div>
-              <Button size="sm" disabled={busy || !body.trim()} onClick={async () => {
-                setBusy(true);
-                try {
-                  // Members aren't clients — fall back to manual Twilio send through bulk fn only for client records.
-                  // For member-only contacts, we just write a note + use the test path; here we provide instructions instead.
-                  toast.message("Member-direct SMS sends from the SMS Automations page. Use the test send there with this member's number, or create an automation targeting members.");
-                } finally { setBusy(false); }
-              }}>
-                <Send className="mr-1 h-3.5 w-3.5" />{busy ? "Sending…" : "Send"}
-              </Button>
-            </div>
-          </>
-        )}
-    </Card>
   );
 }
