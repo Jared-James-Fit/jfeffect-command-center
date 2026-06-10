@@ -16,6 +16,7 @@ import { Route as MemberSetupRouteImport } from './routes/member-setup'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as SignupJfRouteImport } from './routes/signup.jf'
 import { Route as BookSlugRouteImport } from './routes/book.$slug'
 import { Route as ApiDriveUploadRouteImport } from './routes/api/drive-upload'
 import { Route as AuthenticatedPortalRouteRouteImport } from './routes/_authenticated/portal/route'
@@ -43,11 +44,13 @@ import { Route as AuthenticatedPortalCalendarRouteImport } from './routes/_authe
 import { Route as AuthenticatedPortalAppointmentsRouteImport } from './routes/_authenticated/portal/appointments'
 import { Route as AuthenticatedPortalAnnouncementsRouteImport } from './routes/_authenticated/portal/announcements'
 import { Route as AuthenticatedPortalAccountRouteImport } from './routes/_authenticated/portal/account'
+import { Route as AuthenticatedMWelcomeRouteImport } from './routes/_authenticated/m/welcome'
 import { Route as AuthenticatedMUpgradeRouteImport } from './routes/_authenticated/m/upgrade'
 import { Route as AuthenticatedMToolsRouteImport } from './routes/_authenticated/m/tools'
 import { Route as AuthenticatedMResourcesRouteImport } from './routes/_authenticated/m/resources'
 import { Route as AuthenticatedMPlansRouteImport } from './routes/_authenticated/m/plans'
 import { Route as AuthenticatedMMyPlansRouteImport } from './routes/_authenticated/m/my-plans'
+import { Route as AuthenticatedMBillingRouteImport } from './routes/_authenticated/m/billing'
 import { Route as AuthenticatedMAnnouncementsRouteImport } from './routes/_authenticated/m/announcements'
 import { Route as AuthenticatedMAccountRouteImport } from './routes/_authenticated/m/account'
 import { Route as AuthenticatedAdminTrainingPhasesRouteImport } from './routes/_authenticated/admin/training-phases'
@@ -171,6 +174,11 @@ const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SignupJfRoute = SignupJfRouteImport.update({
+  id: '/signup/jf',
+  path: '/signup/jf',
   getParentRoute: () => rootRouteImport,
 } as any)
 const BookSlugRoute = BookSlugRouteImport.update({
@@ -327,6 +335,11 @@ const AuthenticatedPortalAccountRoute =
     path: '/account',
     getParentRoute: () => AuthenticatedPortalRouteRoute,
   } as any)
+const AuthenticatedMWelcomeRoute = AuthenticatedMWelcomeRouteImport.update({
+  id: '/welcome',
+  path: '/welcome',
+  getParentRoute: () => AuthenticatedMRouteRoute,
+} as any)
 const AuthenticatedMUpgradeRoute = AuthenticatedMUpgradeRouteImport.update({
   id: '/upgrade',
   path: '/upgrade',
@@ -350,6 +363,11 @@ const AuthenticatedMPlansRoute = AuthenticatedMPlansRouteImport.update({
 const AuthenticatedMMyPlansRoute = AuthenticatedMMyPlansRouteImport.update({
   id: '/my-plans',
   path: '/my-plans',
+  getParentRoute: () => AuthenticatedMRouteRoute,
+} as any)
+const AuthenticatedMBillingRoute = AuthenticatedMBillingRouteImport.update({
+  id: '/billing',
+  path: '/billing',
   getParentRoute: () => AuthenticatedMRouteRoute,
 } as any)
 const AuthenticatedMAnnouncementsRoute =
@@ -897,6 +915,7 @@ export interface FileRoutesByFullPath {
   '/portal': typeof AuthenticatedPortalRouteRouteWithChildren
   '/api/drive-upload': typeof ApiDriveUploadRoute
   '/book/$slug': typeof BookSlugRoute
+  '/signup/jf': typeof SignupJfRoute
   '/admin/account': typeof AuthenticatedAdminAccountRoute
   '/admin/appointments': typeof AuthenticatedAdminAppointmentsRoute
   '/admin/apps': typeof AuthenticatedAdminAppsRoute
@@ -942,11 +961,13 @@ export interface FileRoutesByFullPath {
   '/admin/training-phases': typeof AuthenticatedAdminTrainingPhasesRoute
   '/m/account': typeof AuthenticatedMAccountRoute
   '/m/announcements': typeof AuthenticatedMAnnouncementsRoute
+  '/m/billing': typeof AuthenticatedMBillingRoute
   '/m/my-plans': typeof AuthenticatedMMyPlansRouteWithChildren
   '/m/plans': typeof AuthenticatedMPlansRouteWithChildren
   '/m/resources': typeof AuthenticatedMResourcesRouteWithChildren
   '/m/tools': typeof AuthenticatedMToolsRoute
   '/m/upgrade': typeof AuthenticatedMUpgradeRoute
+  '/m/welcome': typeof AuthenticatedMWelcomeRoute
   '/portal/account': typeof AuthenticatedPortalAccountRoute
   '/portal/announcements': typeof AuthenticatedPortalAnnouncementsRoute
   '/portal/appointments': typeof AuthenticatedPortalAppointmentsRoute
@@ -1024,6 +1045,7 @@ export interface FileRoutesByTo {
   '/sitemap': typeof SitemapRoute
   '/api/drive-upload': typeof ApiDriveUploadRoute
   '/book/$slug': typeof BookSlugRoute
+  '/signup/jf': typeof SignupJfRoute
   '/admin/account': typeof AuthenticatedAdminAccountRoute
   '/admin/appointments': typeof AuthenticatedAdminAppointmentsRoute
   '/admin/apps': typeof AuthenticatedAdminAppsRoute
@@ -1069,11 +1091,13 @@ export interface FileRoutesByTo {
   '/admin/training-phases': typeof AuthenticatedAdminTrainingPhasesRoute
   '/m/account': typeof AuthenticatedMAccountRoute
   '/m/announcements': typeof AuthenticatedMAnnouncementsRoute
+  '/m/billing': typeof AuthenticatedMBillingRoute
   '/m/my-plans': typeof AuthenticatedMMyPlansRouteWithChildren
   '/m/plans': typeof AuthenticatedMPlansRouteWithChildren
   '/m/resources': typeof AuthenticatedMResourcesRouteWithChildren
   '/m/tools': typeof AuthenticatedMToolsRoute
   '/m/upgrade': typeof AuthenticatedMUpgradeRoute
+  '/m/welcome': typeof AuthenticatedMWelcomeRoute
   '/portal/account': typeof AuthenticatedPortalAccountRoute
   '/portal/announcements': typeof AuthenticatedPortalAnnouncementsRoute
   '/portal/appointments': typeof AuthenticatedPortalAppointmentsRoute
@@ -1156,6 +1180,7 @@ export interface FileRoutesById {
   '/_authenticated/portal': typeof AuthenticatedPortalRouteRouteWithChildren
   '/api/drive-upload': typeof ApiDriveUploadRoute
   '/book/$slug': typeof BookSlugRoute
+  '/signup/jf': typeof SignupJfRoute
   '/_authenticated/admin/account': typeof AuthenticatedAdminAccountRoute
   '/_authenticated/admin/appointments': typeof AuthenticatedAdminAppointmentsRoute
   '/_authenticated/admin/apps': typeof AuthenticatedAdminAppsRoute
@@ -1201,11 +1226,13 @@ export interface FileRoutesById {
   '/_authenticated/admin/training-phases': typeof AuthenticatedAdminTrainingPhasesRoute
   '/_authenticated/m/account': typeof AuthenticatedMAccountRoute
   '/_authenticated/m/announcements': typeof AuthenticatedMAnnouncementsRoute
+  '/_authenticated/m/billing': typeof AuthenticatedMBillingRoute
   '/_authenticated/m/my-plans': typeof AuthenticatedMMyPlansRouteWithChildren
   '/_authenticated/m/plans': typeof AuthenticatedMPlansRouteWithChildren
   '/_authenticated/m/resources': typeof AuthenticatedMResourcesRouteWithChildren
   '/_authenticated/m/tools': typeof AuthenticatedMToolsRoute
   '/_authenticated/m/upgrade': typeof AuthenticatedMUpgradeRoute
+  '/_authenticated/m/welcome': typeof AuthenticatedMWelcomeRoute
   '/_authenticated/portal/account': typeof AuthenticatedPortalAccountRoute
   '/_authenticated/portal/announcements': typeof AuthenticatedPortalAnnouncementsRoute
   '/_authenticated/portal/appointments': typeof AuthenticatedPortalAppointmentsRoute
@@ -1288,6 +1315,7 @@ export interface FileRouteTypes {
     | '/portal'
     | '/api/drive-upload'
     | '/book/$slug'
+    | '/signup/jf'
     | '/admin/account'
     | '/admin/appointments'
     | '/admin/apps'
@@ -1333,11 +1361,13 @@ export interface FileRouteTypes {
     | '/admin/training-phases'
     | '/m/account'
     | '/m/announcements'
+    | '/m/billing'
     | '/m/my-plans'
     | '/m/plans'
     | '/m/resources'
     | '/m/tools'
     | '/m/upgrade'
+    | '/m/welcome'
     | '/portal/account'
     | '/portal/announcements'
     | '/portal/appointments'
@@ -1415,6 +1445,7 @@ export interface FileRouteTypes {
     | '/sitemap'
     | '/api/drive-upload'
     | '/book/$slug'
+    | '/signup/jf'
     | '/admin/account'
     | '/admin/appointments'
     | '/admin/apps'
@@ -1460,11 +1491,13 @@ export interface FileRouteTypes {
     | '/admin/training-phases'
     | '/m/account'
     | '/m/announcements'
+    | '/m/billing'
     | '/m/my-plans'
     | '/m/plans'
     | '/m/resources'
     | '/m/tools'
     | '/m/upgrade'
+    | '/m/welcome'
     | '/portal/account'
     | '/portal/announcements'
     | '/portal/appointments'
@@ -1546,6 +1579,7 @@ export interface FileRouteTypes {
     | '/_authenticated/portal'
     | '/api/drive-upload'
     | '/book/$slug'
+    | '/signup/jf'
     | '/_authenticated/admin/account'
     | '/_authenticated/admin/appointments'
     | '/_authenticated/admin/apps'
@@ -1591,11 +1625,13 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/training-phases'
     | '/_authenticated/m/account'
     | '/_authenticated/m/announcements'
+    | '/_authenticated/m/billing'
     | '/_authenticated/m/my-plans'
     | '/_authenticated/m/plans'
     | '/_authenticated/m/resources'
     | '/_authenticated/m/tools'
     | '/_authenticated/m/upgrade'
+    | '/_authenticated/m/welcome'
     | '/_authenticated/portal/account'
     | '/_authenticated/portal/announcements'
     | '/_authenticated/portal/appointments'
@@ -1675,6 +1711,7 @@ export interface RootRouteChildren {
   SitemapRoute: typeof SitemapRoute
   ApiDriveUploadRoute: typeof ApiDriveUploadRoute
   BookSlugRoute: typeof BookSlugRoute
+  SignupJfRoute: typeof SignupJfRoute
   ApiPublicSignnowWebhookRoute: typeof ApiPublicSignnowWebhookRoute
   ApiPublicStripeWebhookRoute: typeof ApiPublicStripeWebhookRoute
   ApiPublicHooksAppointmentRemindersRoute: typeof ApiPublicHooksAppointmentRemindersRoute
@@ -1736,6 +1773,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/signup/jf': {
+      id: '/signup/jf'
+      path: '/signup/jf'
+      fullPath: '/signup/jf'
+      preLoaderRoute: typeof SignupJfRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/book/$slug': {
@@ -1927,6 +1971,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedPortalAccountRouteImport
       parentRoute: typeof AuthenticatedPortalRouteRoute
     }
+    '/_authenticated/m/welcome': {
+      id: '/_authenticated/m/welcome'
+      path: '/welcome'
+      fullPath: '/m/welcome'
+      preLoaderRoute: typeof AuthenticatedMWelcomeRouteImport
+      parentRoute: typeof AuthenticatedMRouteRoute
+    }
     '/_authenticated/m/upgrade': {
       id: '/_authenticated/m/upgrade'
       path: '/upgrade'
@@ -1960,6 +2011,13 @@ declare module '@tanstack/react-router' {
       path: '/my-plans'
       fullPath: '/m/my-plans'
       preLoaderRoute: typeof AuthenticatedMMyPlansRouteImport
+      parentRoute: typeof AuthenticatedMRouteRoute
+    }
+    '/_authenticated/m/billing': {
+      id: '/_authenticated/m/billing'
+      path: '/billing'
+      fullPath: '/m/billing'
+      preLoaderRoute: typeof AuthenticatedMBillingRouteImport
       parentRoute: typeof AuthenticatedMRouteRoute
     }
     '/_authenticated/m/announcements': {
@@ -2862,11 +2920,13 @@ const AuthenticatedMResourcesRouteWithChildren =
 interface AuthenticatedMRouteRouteChildren {
   AuthenticatedMAccountRoute: typeof AuthenticatedMAccountRoute
   AuthenticatedMAnnouncementsRoute: typeof AuthenticatedMAnnouncementsRoute
+  AuthenticatedMBillingRoute: typeof AuthenticatedMBillingRoute
   AuthenticatedMMyPlansRoute: typeof AuthenticatedMMyPlansRouteWithChildren
   AuthenticatedMPlansRoute: typeof AuthenticatedMPlansRouteWithChildren
   AuthenticatedMResourcesRoute: typeof AuthenticatedMResourcesRouteWithChildren
   AuthenticatedMToolsRoute: typeof AuthenticatedMToolsRoute
   AuthenticatedMUpgradeRoute: typeof AuthenticatedMUpgradeRoute
+  AuthenticatedMWelcomeRoute: typeof AuthenticatedMWelcomeRoute
   AuthenticatedMIndexRoute: typeof AuthenticatedMIndexRoute
   AuthenticatedMWorkoutsEnrollmentIdWeekDayRoute: typeof AuthenticatedMWorkoutsEnrollmentIdWeekDayRoute
 }
@@ -2874,11 +2934,13 @@ interface AuthenticatedMRouteRouteChildren {
 const AuthenticatedMRouteRouteChildren: AuthenticatedMRouteRouteChildren = {
   AuthenticatedMAccountRoute: AuthenticatedMAccountRoute,
   AuthenticatedMAnnouncementsRoute: AuthenticatedMAnnouncementsRoute,
+  AuthenticatedMBillingRoute: AuthenticatedMBillingRoute,
   AuthenticatedMMyPlansRoute: AuthenticatedMMyPlansRouteWithChildren,
   AuthenticatedMPlansRoute: AuthenticatedMPlansRouteWithChildren,
   AuthenticatedMResourcesRoute: AuthenticatedMResourcesRouteWithChildren,
   AuthenticatedMToolsRoute: AuthenticatedMToolsRoute,
   AuthenticatedMUpgradeRoute: AuthenticatedMUpgradeRoute,
+  AuthenticatedMWelcomeRoute: AuthenticatedMWelcomeRoute,
   AuthenticatedMIndexRoute: AuthenticatedMIndexRoute,
   AuthenticatedMWorkoutsEnrollmentIdWeekDayRoute:
     AuthenticatedMWorkoutsEnrollmentIdWeekDayRoute,
@@ -3033,6 +3095,7 @@ const rootRouteChildren: RootRouteChildren = {
   SitemapRoute: SitemapRoute,
   ApiDriveUploadRoute: ApiDriveUploadRoute,
   BookSlugRoute: BookSlugRoute,
+  SignupJfRoute: SignupJfRoute,
   ApiPublicSignnowWebhookRoute: ApiPublicSignnowWebhookRoute,
   ApiPublicStripeWebhookRoute: ApiPublicStripeWebhookRoute,
   ApiPublicHooksAppointmentRemindersRoute:
