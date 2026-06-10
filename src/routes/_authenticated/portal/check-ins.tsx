@@ -16,6 +16,7 @@ import {
   type NfForm,
 } from "@/lib/native-forms";
 import { listManualReviewsForClient, sourceLabel } from "@/lib/manual-check-in-reviews";
+import { buildFilloutUrl } from "@/lib/fillout";
 
 export const Route = createFileRoute("/_authenticated/portal/check-ins")({
   component: ClientCheckInsList,
@@ -29,7 +30,11 @@ function ClientCheckInsList() {
     queryKey: ["my-client", portalUserId],
     enabled: !!portalUserId,
     queryFn: async () => {
-      const { data } = await supabase.from("clients").select("id, full_name").eq("user_id", portalUserId!).maybeSingle();
+      const { data } = await supabase
+        .from("clients")
+        .select("id, full_name, first_name, last_name, email")
+        .eq("user_id", portalUserId!)
+        .maybeSingle();
       return data;
     },
   });
@@ -160,7 +165,7 @@ function ClientCheckInsList() {
                     f.external_url ? (
                       <Button asChild className="bg-gradient-primary font-bold">
                         <a
-                          href={f.external_url}
+                          href={buildFilloutUrl(f.external_url, client)}
                           target="_blank"
                           rel="noreferrer"
                           onClick={() => {
