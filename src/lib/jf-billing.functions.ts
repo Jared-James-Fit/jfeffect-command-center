@@ -533,6 +533,7 @@ export const adminCancelMember = createServerFn({ method: "POST" })
       body: formEncode({ cancel_at_period_end: "true" }),
     });
     await applyStripeStateToMember(m.id, sub, s.hold_price_id);
+    await fireMemberSms(m.id, "subscription_cancelled");
     return { ok: true };
   });
 
@@ -550,6 +551,9 @@ export const adminFreezeMember = createServerFn({ method: "POST" })
       body: formEncode({ "pause_collection[behavior]": "void", "pause_collection[resumes_at]": String(resumesAt) }),
     });
     await applyStripeStateToMember(m.id, sub, s.hold_price_id);
+    await fireMemberSms(m.id, "subscription_frozen", {
+      resumes_on: new Date(resumesAt * 1000).toLocaleDateString(),
+    });
     return { ok: true };
   });
 
@@ -569,6 +573,9 @@ export const adminHoldPlanMember = createServerFn({ method: "POST" })
       body: formEncode({ [`items[0][id]`]: itemId, [`items[0][price]`]: s.hold_price_id, proration_behavior: "none", "pause_collection": "" }),
     });
     await applyStripeStateToMember(m.id, sub, s.hold_price_id);
+    await fireMemberSms(m.id, "subscription_hold_plan", {
+      hold_price: s.hold_price_display ?? "$9/month",
+    });
     return { ok: true };
   });
 
@@ -588,6 +595,9 @@ export const adminReactivateMember = createServerFn({ method: "POST" })
       body: formEncode({ [`items[0][id]`]: itemId, [`items[0][price]`]: s.monthly_price_id, proration_behavior: "create_prorations", cancel_at_period_end: "false", "pause_collection": "" }),
     });
     await applyStripeStateToMember(m.id, sub, s.hold_price_id);
+    await fireMemberSms(m.id, "subscription_reactivated", {
+      price: s.monthly_price_display ?? "$29/month",
+    });
     return { ok: true };
   });
 
