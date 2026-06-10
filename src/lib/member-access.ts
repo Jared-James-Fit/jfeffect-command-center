@@ -8,6 +8,7 @@ export type MemberAccessSummary = {
   member: any | null;
   accountType: AccountType | null;
   status: string | null;
+  subscriptionStatus: string | null;
   subscriptionActive: boolean;
   granted: Set<string>;
   hasAccess: (key: string) => boolean;
@@ -34,6 +35,7 @@ export function useMemberAccess(): MemberAccessSummary {
     member,
     accountType: (member?.account_type ?? null) as AccountType | null,
     status: member?.status ?? null,
+    subscriptionStatus: member?.subscription_status ?? null,
     subscriptionActive,
     granted,
     hasAccess: (key: string) => subscriptionActive && granted.has(key),

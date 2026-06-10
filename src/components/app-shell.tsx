@@ -4,6 +4,7 @@ import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import {
   LogOut, ChevronLeft, ChevronRight, ChevronDown, Search, Settings as SettingsIcon, ArrowLeft, MoreHorizontal,
+  Star, Pin, RotateCcw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { NotificationBell } from "@/components/notification-bell";
@@ -22,6 +23,8 @@ import {
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { useSidebarPins, restoreSidebarDefaults, MAX_PINS, type PinScope } from "@/lib/sidebar-pins";
+import { toast } from "sonner";
 
 export interface NavItem {
   to: string;
@@ -179,6 +182,38 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
   const grouped = useMemo(() => groupNavItems(items), [items]);
   const allGroupLabels = useMemo(() => grouped.map((g) => g.label).filter(Boolean) as string[], [grouped]);
   const bottomItems = customBottomItems ?? items.slice(0, 5);
+
+  // ── Sidebar pinned shortcuts (per-role) ───────────────────────────────
+  const pinScope: PinScope = useMemo(() => {
+    const t = (title || "").toLowerCase();
+    if (t.includes("admin")) return "admin";
+    if (t.includes("coach")) return "coach";
+    if (t.includes("member")) return "member";
+    if (t.includes("client") || t.includes("portal")) return "client";
+    return "admin";
+  }, [title]);
+  const { pins, isPinned, toggle: togglePin, count: pinCount } = useSidebarPins(pinScope);
+  const navByTo = useMemo(() => {
+    const m = new Map<string, NavItem>();
+    for (const it of items) m.set(it.to, it);
+    return m;
+  }, [items]);
+  const pinnedItems = useMemo(
+    () => pins.map((to) => navByTo.get(to)).filter(Boolean) as NavItem[],
+    [pins, navByTo],
+  );
+  const onTogglePin = (it: NavItem) => {
+    const r = togglePin(it.to);
+    if (r.full) toast.error(`Pinned shortcuts are full (${MAX_PINS} max)`);
+    else if (r.pinned) toast.success(`Pinned ${it.label}`);
+    else toast.message(`Unpinned ${it.label}`);
+  };
+  const onRestoreDefaults = () => {
+    restoreSidebarDefaults(pinScope);
+    setMode("expanded");
+    toast.success("Sidebar restored to defaults");
+  };
+
   // Sections that contain the currently active route should auto-open.
   const activeGroupLabel = useMemo(() => {
     for (const g of grouped) {
@@ -324,6 +359,18 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
+                    onClick={onRestoreDefaults}
+                    className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-foreground"
+                    aria-label="Restore sidebar defaults"
+                  >
+                    <RotateCcw className="h-3.5 w-3.5" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="top">Restore defaults</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
                     onClick={handleSignOut}
                     className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-destructive"
                     aria-label="Sign out"
@@ -366,6 +413,62 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
 
         <nav className={cn("flex-1 overflow-y-auto", isCollapsed ? "p-1.5" : "p-2")}>
           <div className={isCollapsed ? "space-y-2" : "space-y-2.5"}>
+            {/* Pinned shortcuts */}
+            {pinnedItems.length > 0 && (
+              <div>
+                {!isCollapsed && (
+                  <div className="flex items-center justify-between rounded px-2.5 pb-1 pt-1.5">
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-amber-300/80">
+                      Pinned · {pinCount}/{MAX_PINS}
+                    </span>
+                  </div>
+                )}
+                {isCollapsed && <div className="my-1 mx-2 h-px bg-amber-400/40" />}
+                <ul className="space-y-0.5">
+                  {pinnedItems.map((item) => {
+                    const active = item.to === activeTo;
+                    const Icon = item.icon;
+                    const link = (
+                      <Link
+                        to={item.to}
+                        className={cn(
+                          "group/pin flex items-center rounded-md transition-colors",
+                          rowPadding,
+                          rowText,
+                          active
+                            ? "bg-primary/15 text-primary font-semibold border-l-2 border-primary"
+                            : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground border-l-2 border-amber-400/40",
+                        )}
+                      >
+                        <Icon className="h-4 w-4 shrink-0" />
+                        {!isCollapsed && <span className="truncate flex-1">{item.label}</span>}
+                        {!isCollapsed && (
+                          <button
+                            type="button"
+                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); onTogglePin(item); }}
+                            className="ml-1 grid h-5 w-5 place-items-center rounded text-amber-300 opacity-0 transition group-hover/pin:opacity-100 hover:bg-amber-400/10"
+                            aria-label={`Unpin ${item.label}`}
+                            title="Unpin"
+                          >
+                            <Pin className="h-3 w-3 fill-current" />
+                          </button>
+                        )}
+                      </Link>
+                    );
+                    return (
+                      <li key={`pin-${item.to}`}>
+                        {isCollapsed ? (
+                          <Tooltip>
+                            <TooltipTrigger asChild>{link}</TooltipTrigger>
+                            <TooltipContent side="right">📌 {item.label}</TooltipContent>
+                          </Tooltip>
+                        ) : link}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            )}
             {grouped.map((group) => {
               const containsActive = group.label === activeGroupLabel;
               const sectionCollapsed = group.label
@@ -395,11 +498,12 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
                       {group.items.map((item) => {
                         const active = item.to === activeTo;
                         const Icon = item.icon;
+                        const pinned = isPinned(item.to);
                         const link = (
                           <Link
                             to={item.to}
                             className={cn(
-                              "flex items-center rounded-md transition-colors",
+                              "group/row flex items-center rounded-md transition-colors",
                               rowPadding,
                               rowText,
                               active
@@ -408,7 +512,24 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
                             )}
                           >
                             <Icon className="h-4 w-4 shrink-0" />
-                            {!isCollapsed && <span className="truncate">{item.label}</span>}
+                            {!isCollapsed && <span className="truncate flex-1">{item.label}</span>}
+                            {!isCollapsed && (
+                              <button
+                                type="button"
+                                onClick={(e) => { e.preventDefault(); e.stopPropagation(); onTogglePin(item); }}
+                                className={cn(
+                                  "ml-1 grid h-5 w-5 place-items-center rounded transition",
+                                  pinned
+                                    ? "text-amber-300 opacity-100"
+                                    : "text-muted-foreground opacity-0 group-hover/row:opacity-100 hover:text-amber-300",
+                                  "hover:bg-amber-400/10",
+                                )}
+                                aria-label={pinned ? `Unpin ${item.label}` : `Pin ${item.label}`}
+                                title={pinned ? "Unpin" : "Pin shortcut"}
+                              >
+                                <Star className={cn("h-3 w-3", pinned && "fill-current")} />
+                              </button>
+                            )}
                           </Link>
                         );
                         return (

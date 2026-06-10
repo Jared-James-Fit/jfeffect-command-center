@@ -272,6 +272,17 @@ async function applyJfSubToMember(supabase: any, member: any, sub: any) {
   await supabase.from("member_access").update({ active: grants }).eq("member_id", member.id);
 }
 
+/** Fire a JF SMS automation; swallow errors so the webhook still returns 200. */
+async function fireJfSms(memberId: string, trigger: string, vars: Record<string, string> = {}) {
+  try {
+    const { fireAutomationTrigger } = await import("@/lib/sms-trigger.server");
+    const supabase = admin();
+    await fireAutomationTrigger(supabase, { trigger, memberId, vars });
+  } catch (e) {
+    console.error(`[stripe-webhook] sms ${trigger} failed`, e);
+  }
+}
+
 export const Route = createFileRoute("/api/public/stripe-webhook")({
   server: {
     handlers: {
@@ -501,6 +512,26 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
               break;
             }
 
+            // ── Trial ending soon (Stripe fires ~3 days before trial_end) ───
+            case "customer.subscription.trial_will_end": {
+              if (await isJfMembershipSubscription(supabase, obj)) {
+                const member = await findJfMemberBySub(supabase, obj);
+                if (member) {
+                  await fireJfSms(member.id, "subscription_trial_ending", {
+                    trial_end: obj.trial_end
+                      ? new Date(obj.trial_end * 1000).toLocaleDateString()
+                      : "",
+                  });
+                  await supabase.from("jf_billing_events").insert({
+                    stripe_event_id: event.id, type: event.type,
+                    customer_id: obj.customer ?? null, subscription_id: obj.id,
+                    member_id: member.id, payload: obj,
+                  }).then(() => {}, () => {});
+                }
+              }
+              break;
+            }
+
             // ── Invoice paid (subscription renewal) ─────────────────────────
             case "invoice.payment_succeeded": {
               if (obj.subscription) {
@@ -510,6 +541,13 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
                   if (member) {
                     await applyJfSubToMember(supabase, member, sub);
                     await supabase.from("app_members").update({ last_invoice_status: "paid" }).eq("id", member.id);
+                    // Fire payment-succeeded SMS only on actual paid renewals
+                    // (skip the $0 trial-start invoice).
+                    if ((obj.amount_paid ?? 0) > 0) {
+                      await fireJfSms(member.id, "subscription_payment_succeeded", {
+                        amount: obj.amount_paid ? `$${(obj.amount_paid / 100).toFixed(2)}` : "",
+                      });
+                    }
                   }
                   break;
                 }
@@ -541,6 +579,9 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
                   if (member) {
                     await applyJfSubToMember(supabase, member, sub);
                     await supabase.from("app_members").update({ last_invoice_status: "failed" }).eq("id", member.id);
+                    await fireJfSms(member.id, "subscription_payment_failed", {
+                      amount: obj.amount_due ? `$${(obj.amount_due / 100).toFixed(2)}` : "",
+                    });
                   }
                   break;
                 }

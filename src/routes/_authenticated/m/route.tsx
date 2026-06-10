@@ -12,7 +12,7 @@ function MemberLayout() {
   const { role, loading } = useAuth();
   const navigate = useNavigate();
   const pov = getPovFlag();
-  const { status, subscriptionActive, hasAccess, loading: accessLoading, accountType } = useMemberAccess();
+  const { status, subscriptionStatus, subscriptionActive, hasAccess, loading: accessLoading, accountType } = useMemberAccess();
   const location = useLocation();
   const allowList = ["/m/billing", "/m/welcome", "/m/account"];
   const isAllowed = allowList.some((p) => location.pathname.startsWith(p));
@@ -40,9 +40,11 @@ function MemberLayout() {
   return (
     <AppShell items={memberNav} title="Member">
       {showToggle && <PovQuickToggle variant="banner" />}
-      {!subscriptionActive && status && (
+      {(accountType === "jf_member"
+        && (!subscriptionActive
+            || (subscriptionStatus && !["Trialing", "Active"].includes(subscriptionStatus)))) && (
         <div className="px-4 pt-4 md:px-6 md:pt-6">
-          <SubscriptionRestrictedBanner status={status} />
+          <SubscriptionRestrictedBanner status={status} subscriptionStatus={subscriptionStatus} />
         </div>
       )}
       <Outlet />
