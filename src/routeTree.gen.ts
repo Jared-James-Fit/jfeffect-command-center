@@ -131,6 +131,9 @@ import { Route as AuthenticatedMPlansPlanIdRouteImport } from './routes/_authent
 import { Route as AuthenticatedMMyPlansEnrollmentIdRouteImport } from './routes/_authenticated/m/my-plans.$enrollmentId'
 import { Route as AuthenticatedAdminSettingsSmsRouteImport } from './routes/_authenticated/admin/settings_.sms'
 import { Route as AuthenticatedAdminSettingsChatRouteImport } from './routes/_authenticated/admin/settings_.chat'
+import { Route as AuthenticatedAdminSalesMembershipRouteImport } from './routes/_authenticated/admin/sales.membership'
+import { Route as AuthenticatedAdminSalesCoachingApplicationsRouteImport } from './routes/_authenticated/admin/sales.coaching-applications'
+import { Route as AuthenticatedAdminSalesCoachingRouteImport } from './routes/_authenticated/admin/sales.coaching'
 import { Route as AuthenticatedAdminPurchasesIdRouteImport } from './routes/_authenticated/admin/purchases.$id'
 import { Route as AuthenticatedAdminProgramLibraryTemplateIdRouteImport } from './routes/_authenticated/admin/program-library_.$templateId'
 import { Route as AuthenticatedAdminMembershipWelcomeMessagesRouteImport } from './routes/_authenticated/admin/membership.welcome-messages'
@@ -860,6 +863,24 @@ const AuthenticatedAdminSettingsChatRoute =
     path: '/settings/chat',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
+const AuthenticatedAdminSalesMembershipRoute =
+  AuthenticatedAdminSalesMembershipRouteImport.update({
+    id: '/sales/membership',
+    path: '/sales/membership',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
+const AuthenticatedAdminSalesCoachingApplicationsRoute =
+  AuthenticatedAdminSalesCoachingApplicationsRouteImport.update({
+    id: '/sales/coaching-applications',
+    path: '/sales/coaching-applications',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
+const AuthenticatedAdminSalesCoachingRoute =
+  AuthenticatedAdminSalesCoachingRouteImport.update({
+    id: '/sales/coaching',
+    path: '/sales/coaching',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
 const AuthenticatedAdminPurchasesIdRoute =
   AuthenticatedAdminPurchasesIdRouteImport.update({
     id: '/$id',
@@ -1189,6 +1210,9 @@ export interface FileRoutesByFullPath {
   '/admin/membership/welcome-messages': typeof AuthenticatedAdminMembershipWelcomeMessagesRoute
   '/admin/program-library/$templateId': typeof AuthenticatedAdminProgramLibraryTemplateIdRoute
   '/admin/purchases/$id': typeof AuthenticatedAdminPurchasesIdRoute
+  '/admin/sales/coaching': typeof AuthenticatedAdminSalesCoachingRoute
+  '/admin/sales/coaching-applications': typeof AuthenticatedAdminSalesCoachingApplicationsRoute
+  '/admin/sales/membership': typeof AuthenticatedAdminSalesMembershipRoute
   '/admin/settings/chat': typeof AuthenticatedAdminSettingsChatRoute
   '/admin/settings/sms': typeof AuthenticatedAdminSettingsSmsRoute
   '/m/my-plans/$enrollmentId': typeof AuthenticatedMMyPlansEnrollmentIdRoute
@@ -1342,6 +1366,9 @@ export interface FileRoutesByTo {
   '/admin/membership/welcome-messages': typeof AuthenticatedAdminMembershipWelcomeMessagesRoute
   '/admin/program-library/$templateId': typeof AuthenticatedAdminProgramLibraryTemplateIdRoute
   '/admin/purchases/$id': typeof AuthenticatedAdminPurchasesIdRoute
+  '/admin/sales/coaching': typeof AuthenticatedAdminSalesCoachingRoute
+  '/admin/sales/coaching-applications': typeof AuthenticatedAdminSalesCoachingApplicationsRoute
+  '/admin/sales/membership': typeof AuthenticatedAdminSalesMembershipRoute
   '/admin/settings/chat': typeof AuthenticatedAdminSettingsChatRoute
   '/admin/settings/sms': typeof AuthenticatedAdminSettingsSmsRoute
   '/m/my-plans/$enrollmentId': typeof AuthenticatedMMyPlansEnrollmentIdRoute
@@ -1501,6 +1528,9 @@ export interface FileRoutesById {
   '/_authenticated/admin/membership/welcome-messages': typeof AuthenticatedAdminMembershipWelcomeMessagesRoute
   '/_authenticated/admin/program-library_/$templateId': typeof AuthenticatedAdminProgramLibraryTemplateIdRoute
   '/_authenticated/admin/purchases/$id': typeof AuthenticatedAdminPurchasesIdRoute
+  '/_authenticated/admin/sales/coaching': typeof AuthenticatedAdminSalesCoachingRoute
+  '/_authenticated/admin/sales/coaching-applications': typeof AuthenticatedAdminSalesCoachingApplicationsRoute
+  '/_authenticated/admin/sales/membership': typeof AuthenticatedAdminSalesMembershipRoute
   '/_authenticated/admin/settings_/chat': typeof AuthenticatedAdminSettingsChatRoute
   '/_authenticated/admin/settings_/sms': typeof AuthenticatedAdminSettingsSmsRoute
   '/_authenticated/m/my-plans/$enrollmentId': typeof AuthenticatedMMyPlansEnrollmentIdRoute
@@ -1660,6 +1690,9 @@ export interface FileRouteTypes {
     | '/admin/membership/welcome-messages'
     | '/admin/program-library/$templateId'
     | '/admin/purchases/$id'
+    | '/admin/sales/coaching'
+    | '/admin/sales/coaching-applications'
+    | '/admin/sales/membership'
     | '/admin/settings/chat'
     | '/admin/settings/sms'
     | '/m/my-plans/$enrollmentId'
@@ -1813,6 +1846,9 @@ export interface FileRouteTypes {
     | '/admin/membership/welcome-messages'
     | '/admin/program-library/$templateId'
     | '/admin/purchases/$id'
+    | '/admin/sales/coaching'
+    | '/admin/sales/coaching-applications'
+    | '/admin/sales/membership'
     | '/admin/settings/chat'
     | '/admin/settings/sms'
     | '/m/my-plans/$enrollmentId'
@@ -1971,6 +2007,9 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/membership/welcome-messages'
     | '/_authenticated/admin/program-library_/$templateId'
     | '/_authenticated/admin/purchases/$id'
+    | '/_authenticated/admin/sales/coaching'
+    | '/_authenticated/admin/sales/coaching-applications'
+    | '/_authenticated/admin/sales/membership'
     | '/_authenticated/admin/settings_/chat'
     | '/_authenticated/admin/settings_/sms'
     | '/_authenticated/m/my-plans/$enrollmentId'
@@ -2889,6 +2928,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminSettingsChatRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
+    '/_authenticated/admin/sales/membership': {
+      id: '/_authenticated/admin/sales/membership'
+      path: '/sales/membership'
+      fullPath: '/admin/sales/membership'
+      preLoaderRoute: typeof AuthenticatedAdminSalesMembershipRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
+    '/_authenticated/admin/sales/coaching-applications': {
+      id: '/_authenticated/admin/sales/coaching-applications'
+      path: '/sales/coaching-applications'
+      fullPath: '/admin/sales/coaching-applications'
+      preLoaderRoute: typeof AuthenticatedAdminSalesCoachingApplicationsRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
+    '/_authenticated/admin/sales/coaching': {
+      id: '/_authenticated/admin/sales/coaching'
+      path: '/sales/coaching'
+      fullPath: '/admin/sales/coaching'
+      preLoaderRoute: typeof AuthenticatedAdminSalesCoachingRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
     '/_authenticated/admin/purchases/$id': {
       id: '/_authenticated/admin/purchases/$id'
       path: '/$id'
@@ -3295,6 +3355,9 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminMembersMemberIdRoute: typeof AuthenticatedAdminMembersMemberIdRoute
   AuthenticatedAdminMembersNewRoute: typeof AuthenticatedAdminMembersNewRoute
   AuthenticatedAdminProgramLibraryTemplateIdRoute: typeof AuthenticatedAdminProgramLibraryTemplateIdRoute
+  AuthenticatedAdminSalesCoachingRoute: typeof AuthenticatedAdminSalesCoachingRoute
+  AuthenticatedAdminSalesCoachingApplicationsRoute: typeof AuthenticatedAdminSalesCoachingApplicationsRoute
+  AuthenticatedAdminSalesMembershipRoute: typeof AuthenticatedAdminSalesMembershipRoute
   AuthenticatedAdminSettingsChatRoute: typeof AuthenticatedAdminSettingsChatRoute
   AuthenticatedAdminSettingsSmsRoute: typeof AuthenticatedAdminSettingsSmsRoute
   AuthenticatedAdminAgreementsIndexRoute: typeof AuthenticatedAdminAgreementsIndexRoute
@@ -3389,6 +3452,11 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
     AuthenticatedAdminMembersNewRoute: AuthenticatedAdminMembersNewRoute,
     AuthenticatedAdminProgramLibraryTemplateIdRoute:
       AuthenticatedAdminProgramLibraryTemplateIdRoute,
+    AuthenticatedAdminSalesCoachingRoute: AuthenticatedAdminSalesCoachingRoute,
+    AuthenticatedAdminSalesCoachingApplicationsRoute:
+      AuthenticatedAdminSalesCoachingApplicationsRoute,
+    AuthenticatedAdminSalesMembershipRoute:
+      AuthenticatedAdminSalesMembershipRoute,
     AuthenticatedAdminSettingsChatRoute: AuthenticatedAdminSettingsChatRoute,
     AuthenticatedAdminSettingsSmsRoute: AuthenticatedAdminSettingsSmsRoute,
     AuthenticatedAdminAgreementsIndexRoute:
