@@ -207,7 +207,7 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
 
   return (
     <TooltipProvider delayDuration={250}>
-    <div className="flex min-h-screen w-full bg-background text-foreground">
+    <div className="flex min-h-screen w-full overflow-x-hidden bg-background text-foreground">
       <aside
         className={cn(
           "hidden shrink-0 flex-col border-r border-sidebar-border bg-sidebar md:flex transition-[width] duration-200",
@@ -414,7 +414,7 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
       </aside>
 
       {/* Mobile top bar */}
-      <div className="flex w-full flex-col">
+      <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex items-center justify-between border-b border-border px-4 py-3 md:hidden">
           <div className="flex items-center gap-2">
             <img src="/logo.png" alt="JF Effect" className="h-8 w-8 rounded-md object-cover" />
@@ -449,7 +449,7 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
           </div>
         </header>
 
-        <main className="flex-1 overflow-x-hidden pb-[calc(140px+env(safe-area-inset-bottom))] md:pb-0">
+        <main className="min-w-0 flex-1 overflow-x-hidden pb-[calc(140px+env(safe-area-inset-bottom))] md:pb-0">
           {children}
         </main>
 
