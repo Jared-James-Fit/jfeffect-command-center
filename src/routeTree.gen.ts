@@ -76,6 +76,7 @@ import { Route as AuthenticatedAdminLiftVideosRouteImport } from './routes/_auth
 import { Route as AuthenticatedAdminGoogleCalendarRouteImport } from './routes/_authenticated/admin/google-calendar'
 import { Route as AuthenticatedAdminFormsRouteImport } from './routes/_authenticated/admin/forms'
 import { Route as AuthenticatedAdminFloatingBarRouteImport } from './routes/_authenticated/admin/floating-bar'
+import { Route as AuthenticatedAdminFilloutSubmissionsRouteImport } from './routes/_authenticated/admin/fillout-submissions'
 import { Route as AuthenticatedAdminFaqsRouteImport } from './routes/_authenticated/admin/faqs'
 import { Route as AuthenticatedAdminExercisesRouteImport } from './routes/_authenticated/admin/exercises'
 import { Route as AuthenticatedAdminEventsRouteImport } from './routes/_authenticated/admin/events'
@@ -518,6 +519,12 @@ const AuthenticatedAdminFloatingBarRoute =
     path: '/floating-bar',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
+const AuthenticatedAdminFilloutSubmissionsRoute =
+  AuthenticatedAdminFilloutSubmissionsRouteImport.update({
+    id: '/fillout-submissions',
+    path: '/fillout-submissions',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
 const AuthenticatedAdminFaqsRoute = AuthenticatedAdminFaqsRouteImport.update({
   id: '/faqs',
   path: '/faqs',
@@ -950,6 +957,7 @@ export interface FileRoutesByFullPath {
   '/admin/events': typeof AuthenticatedAdminEventsRouteWithChildren
   '/admin/exercises': typeof AuthenticatedAdminExercisesRoute
   '/admin/faqs': typeof AuthenticatedAdminFaqsRoute
+  '/admin/fillout-submissions': typeof AuthenticatedAdminFilloutSubmissionsRoute
   '/admin/floating-bar': typeof AuthenticatedAdminFloatingBarRoute
   '/admin/forms': typeof AuthenticatedAdminFormsRoute
   '/admin/google-calendar': typeof AuthenticatedAdminGoogleCalendarRoute
@@ -1082,6 +1090,7 @@ export interface FileRoutesByTo {
   '/admin/events': typeof AuthenticatedAdminEventsRouteWithChildren
   '/admin/exercises': typeof AuthenticatedAdminExercisesRoute
   '/admin/faqs': typeof AuthenticatedAdminFaqsRoute
+  '/admin/fillout-submissions': typeof AuthenticatedAdminFilloutSubmissionsRoute
   '/admin/floating-bar': typeof AuthenticatedAdminFloatingBarRoute
   '/admin/forms': typeof AuthenticatedAdminFormsRoute
   '/admin/google-calendar': typeof AuthenticatedAdminGoogleCalendarRoute
@@ -1219,6 +1228,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/events': typeof AuthenticatedAdminEventsRouteWithChildren
   '/_authenticated/admin/exercises': typeof AuthenticatedAdminExercisesRoute
   '/_authenticated/admin/faqs': typeof AuthenticatedAdminFaqsRoute
+  '/_authenticated/admin/fillout-submissions': typeof AuthenticatedAdminFilloutSubmissionsRoute
   '/_authenticated/admin/floating-bar': typeof AuthenticatedAdminFloatingBarRoute
   '/_authenticated/admin/forms': typeof AuthenticatedAdminFormsRoute
   '/_authenticated/admin/google-calendar': typeof AuthenticatedAdminGoogleCalendarRoute
@@ -1356,6 +1366,7 @@ export interface FileRouteTypes {
     | '/admin/events'
     | '/admin/exercises'
     | '/admin/faqs'
+    | '/admin/fillout-submissions'
     | '/admin/floating-bar'
     | '/admin/forms'
     | '/admin/google-calendar'
@@ -1488,6 +1499,7 @@ export interface FileRouteTypes {
     | '/admin/events'
     | '/admin/exercises'
     | '/admin/faqs'
+    | '/admin/fillout-submissions'
     | '/admin/floating-bar'
     | '/admin/forms'
     | '/admin/google-calendar'
@@ -1624,6 +1636,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/events'
     | '/_authenticated/admin/exercises'
     | '/_authenticated/admin/faqs'
+    | '/_authenticated/admin/fillout-submissions'
     | '/_authenticated/admin/floating-bar'
     | '/_authenticated/admin/forms'
     | '/_authenticated/admin/google-calendar'
@@ -2221,6 +2234,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminFloatingBarRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
+    '/_authenticated/admin/fillout-submissions': {
+      id: '/_authenticated/admin/fillout-submissions'
+      path: '/fillout-submissions'
+      fullPath: '/admin/fillout-submissions'
+      preLoaderRoute: typeof AuthenticatedAdminFilloutSubmissionsRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
     '/_authenticated/admin/faqs': {
       id: '/_authenticated/admin/faqs'
       path: '/faqs'
@@ -2779,6 +2799,7 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminEventsRoute: typeof AuthenticatedAdminEventsRouteWithChildren
   AuthenticatedAdminExercisesRoute: typeof AuthenticatedAdminExercisesRoute
   AuthenticatedAdminFaqsRoute: typeof AuthenticatedAdminFaqsRoute
+  AuthenticatedAdminFilloutSubmissionsRoute: typeof AuthenticatedAdminFilloutSubmissionsRoute
   AuthenticatedAdminFloatingBarRoute: typeof AuthenticatedAdminFloatingBarRoute
   AuthenticatedAdminFormsRoute: typeof AuthenticatedAdminFormsRoute
   AuthenticatedAdminGoogleCalendarRoute: typeof AuthenticatedAdminGoogleCalendarRoute
@@ -2852,6 +2873,8 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
     AuthenticatedAdminEventsRoute: AuthenticatedAdminEventsRouteWithChildren,
     AuthenticatedAdminExercisesRoute: AuthenticatedAdminExercisesRoute,
     AuthenticatedAdminFaqsRoute: AuthenticatedAdminFaqsRoute,
+    AuthenticatedAdminFilloutSubmissionsRoute:
+      AuthenticatedAdminFilloutSubmissionsRoute,
     AuthenticatedAdminFloatingBarRoute: AuthenticatedAdminFloatingBarRoute,
     AuthenticatedAdminFormsRoute: AuthenticatedAdminFormsRoute,
     AuthenticatedAdminGoogleCalendarRoute:
