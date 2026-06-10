@@ -153,6 +153,10 @@ export function NotificationBell() {
           });
         }
         items.sort((a, b) => +new Date(b.created_at) - +new Date(a.created_at));
+        // Group chat unreads (admin sees all groups they can read)
+        const groupItems = await fetchUnreadGroupItems(user!.id);
+        for (const gi of groupItems) items.push(gi);
+        items.sort((a, b) => +new Date(b.created_at) - +new Date(a.created_at));
         return { count: items.length, items };
       } else {
         const { data: client } = await supabase.from("clients").select("id").eq("user_id", user!.id).maybeSingle();
@@ -215,6 +219,10 @@ export function NotificationBell() {
             body: c.body, created_at: c.created_at,
           });
         }
+        items.sort((a, b) => +new Date(b.created_at) - +new Date(a.created_at));
+        // Group chat unreads for this client
+        const groupItems = await fetchUnreadGroupItems(user!.id);
+        for (const gi of groupItems) items.push(gi);
         items.sort((a, b) => +new Date(b.created_at) - +new Date(a.created_at));
         return { count: items.length, items };
       }
