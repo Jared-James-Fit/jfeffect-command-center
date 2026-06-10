@@ -3,7 +3,7 @@ import { useEffect, useMemo } from "react";
 import { useAuth } from "@/lib/auth";
 import { AppShell } from "@/components/app-shell";
 import { adminNav, coachNav } from "@/lib/admin-nav";
-import { AdminPovMenu } from "@/components/admin-pov";
+import { PovQuickToggle } from "@/components/pov-quick-toggle";
 import { TaskPopupGate } from "@/components/tasks/task-popup-gate";
 
 export const Route = createFileRoute("/_authenticated/admin")({
@@ -62,11 +62,7 @@ function AdminLayout() {
 
   return (
     <AppShell items={nav} bottomItems={bottomItems} title={title}>
-      {!isCoach && (
-        <div className="flex justify-end border-b border-border bg-muted/30 px-4 py-1.5">
-          <AdminPovMenu />
-        </div>
-      )}
+      <PovQuickToggle variant="banner" />
       <Outlet />
       <TaskPopupGate />
     </AppShell>
