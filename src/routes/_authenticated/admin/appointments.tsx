@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { listAppointments, createAppointment, cancelAppointment, markAppointmentStatus } from "@/lib/appointments.functions";
+import { getGoogleBusy } from "@/lib/google-cal.functions";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
@@ -157,6 +158,7 @@ function ApptRow({ a, onChange }: { a: any; onChange: () => void }) {
 
 function NewAppointmentDialog({ open, onOpenChange, onCreated }: { open: boolean; onOpenChange: (b: boolean) => void; onCreated: () => void }) {
   const create = useServerFn(createAppointment);
+  const busyFn = useServerFn(getGoogleBusy);
   const { data: clients = [] } = useQuery({
     queryKey: ["clients-min-appts"],
     queryFn: async () => {
@@ -173,6 +175,16 @@ function NewAppointmentDialog({ open, onOpenChange, onCreated }: { open: boolean
   });
 
   const [form, setForm] = useState<any>(() => defaultForm());
+  const startsAtISO = (() => { try { return new Date(`${form.date}T${form.startTime}:00`).toISOString(); } catch { return null; } })();
+  const endsAtISO = (() => { try { return new Date(`${form.date}T${form.endTime}:00`).toISOString(); } catch { return null; } })();
+  const { data: busy = [] } = useQuery({
+    queryKey: ["gcal-busy", form.host_coach_id || "me", startsAtISO, endsAtISO],
+    enabled: open && !!startsAtISO && !!endsAtISO,
+    queryFn: () => busyFn({ data: { timeMin: startsAtISO!, timeMax: endsAtISO!, coach_id: form.host_coach_id || undefined } }),
+    staleTime: 30_000,
+  });
+  const hasConflict = Array.isArray(busy) && busy.length > 0;
+
   function defaultForm() {
     const start = new Date(Math.ceil(Date.now() / 1800000) * 1800000);
     const end = new Date(start.getTime() + 30 * 60_000);
@@ -267,6 +279,20 @@ function NewAppointmentDialog({ open, onOpenChange, onCreated }: { open: boolean
             <div><Label>Start</Label><Input type="time" value={form.startTime} onChange={(e) => setForm({ ...form, startTime: e.target.value })} /></div>
             <div><Label>End</Label><Input type="time" value={form.endTime} onChange={(e) => setForm({ ...form, endTime: e.target.value })} /></div>
           </div>
+          {hasConflict && (
+            <div className="md:col-span-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-200">
+              <div className="font-semibold mb-1 flex items-center gap-1"><AlertTriangle className="h-3.5 w-3.5" /> Conflicts on Google Calendar</div>
+              <ul className="space-y-0.5">
+                {(busy as any[]).slice(0, 4).map((b, i) => (
+                  <li key={i}>
+                    {new Date(b.start).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}
+                    {" – "}
+                    {new Date(b.end).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           <div className="md:col-span-2"><Label>Location</Label><Input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} placeholder="In-person address or empty" /></div>
           <div className="md:col-span-2 flex items-center justify-between rounded-md border border-border p-3">
             <div><div className="font-semibold text-sm">Add Google Meet link</div><div className="text-xs text-muted-foreground">Requires Google Calendar connected.</div></div>

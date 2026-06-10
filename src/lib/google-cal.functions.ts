@@ -74,3 +74,47 @@ export const setSelectedCalendar = createServerFn({ method: "POST" })
     }, { onConflict: "coach_id" });
     return { ok: true };
   });
+
+export const listGoogleEventsRange = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({
+    timeMin: z.string(),
+    timeMax: z.string(),
+    coach_id: z.string().uuid().optional().nullable(),
+  }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context as any;
+    let coachId = data.coach_id ?? null;
+    if (!coachId) {
+      const { data: c } = await supabase.from("coaches").select("id").eq("user_id", userId).maybeSingle();
+      coachId = c?.id ?? null;
+    }
+    const { gcalListEvents } = await import("./google-cal.server");
+    try {
+      return await gcalListEvents(coachId, data.timeMin, data.timeMax);
+    } catch {
+      return [];
+    }
+  });
+
+export const getGoogleBusy = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({
+    timeMin: z.string(),
+    timeMax: z.string(),
+    coach_id: z.string().uuid().optional().nullable(),
+  }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context as any;
+    let coachId = data.coach_id ?? null;
+    if (!coachId) {
+      const { data: c } = await supabase.from("coaches").select("id").eq("user_id", userId).maybeSingle();
+      coachId = c?.id ?? null;
+    }
+    const { gcalFreeBusy } = await import("./google-cal.server");
+    try {
+      return await gcalFreeBusy(coachId ?? "", data.timeMin, data.timeMax);
+    } catch {
+      return [];
+    }
+  });
