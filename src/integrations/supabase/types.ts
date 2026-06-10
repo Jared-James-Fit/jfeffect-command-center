@@ -2941,6 +2941,7 @@ export type Database = {
       }
       lift_video_comments: {
         Row: {
+          attachments: Json | null
           author_id: string | null
           author_role: string
           body: string
@@ -2953,6 +2954,7 @@ export type Database = {
           video_timestamp_seconds: number | null
         }
         Insert: {
+          attachments?: Json | null
           author_id?: string | null
           author_role: string
           body?: string
@@ -2965,6 +2967,7 @@ export type Database = {
           video_timestamp_seconds?: number | null
         }
         Update: {
+          attachments?: Json | null
           author_id?: string | null
           author_role?: string
           body?: string

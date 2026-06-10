@@ -3,7 +3,6 @@ import { useServerFn } from "@tanstack/react-start";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
@@ -31,6 +30,8 @@ import { UserAvatar } from "@/components/user-avatar";
 import { copyLiftVideoStorageToDrive, refreshLiftVideoDriveDiagnostics, retryLiftVideoArchive } from "@/lib/lift-videos.functions";
 import { useLiftUploadState } from "@/lib/lift-upload-queue";
 import { Progress } from "@/components/ui/progress";
+import { LiftCommentComposer } from "@/components/lift-comment-composer";
+import { LiftCommentAttachments } from "@/components/lift-comment-attachments";
 
 type Props = {
   video: LiftVideo;
@@ -45,9 +46,8 @@ type Props = {
 
 export function LiftVideoCard({ video, role, userId, onChanged, onEdit, clientName, clientAvatarPath }: Props) {
   const [comments, setComments] = useState<LiftVideoComment[]>([]);
-  const [commentBody, setCommentBody] = useState("");
   const [isInternal, setIsInternal] = useState(false);
-  const [posting, setPosting] = useState(false);
+  const [quickReply, setQuickReply] = useState<{ text: string; nonce: number } | null>(null);
   const [embedUrl, setEmbedUrl] = useState<string | null>(null);
   const [signedUrl, setSignedUrl] = useState<string | null>(null);
   const [embedStatus, setEmbedStatus] = useState<"idle" | "loading" | "ready" | "slow" | "error">("idle");
@@ -102,27 +102,19 @@ export function LiftVideoCard({ video, role, userId, onChanged, onEdit, clientNa
     };
   }, [embedUrl, embedRetry]);
 
-  const post = async () => {
-    if (!commentBody.trim()) return;
-    setPosting(true);
-    try {
-      await addComment({
-        videoId: video.id,
-        clientId: video.client_id,
-        authorId: userId,
-        authorRole: role,
-        body: commentBody.trim(),
-        isInternalNote: role === "admin" ? isInternal : false,
-      });
-      setCommentBody("");
-      setIsInternal(false);
-      await loadComments();
-      onChanged?.();
-    } catch (e: any) {
-      toast.error(e.message ?? "Failed to post");
-    } finally {
-      setPosting(false);
-    }
+  const handleSend = async (body: string, attachments: any[]) => {
+    await addComment({
+      videoId: video.id,
+      clientId: video.client_id,
+      authorId: userId,
+      authorRole: role,
+      body,
+      isInternalNote: role === "admin" ? isInternal : false,
+      attachments,
+    });
+    setIsInternal(false);
+    await loadComments();
+    onChanged?.();
   };
 
   const act = async (fn: () => Promise<void>, success: string) => {
@@ -454,43 +446,38 @@ export function LiftVideoCard({ video, role, userId, onChanged, onEdit, clientNa
                 {c.is_internal_note && <Badge variant="outline" className="border-warning/40 bg-warning/10 text-warning">Internal</Badge>}
                 <span>· {format(parseISO(c.created_at), "MMM d, h:mm a")}</span>
               </div>
-              <div className="whitespace-pre-wrap text-foreground">{c.body}</div>
+              {c.body && <div className="whitespace-pre-wrap text-foreground">{c.body}</div>}
+              <LiftCommentAttachments list={c.attachments} />
             </div>
           ))}
         </div>
-        <Textarea
-          rows={2}
+        <LiftCommentComposer
+          clientId={video.client_id}
           placeholder={role === "admin" ? "Reply to client…" : "Reply to Coach Jared…"}
-          value={commentBody}
-          onChange={(e) => setCommentBody(e.target.value)}
+          appendText={quickReply}
+          onSend={handleSend}
+          trailing={role === "admin" ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button size="icon" variant="ghost" type="button" className="h-9 w-9 shrink-0 rounded-full" title="Quick reply">
+                  <Zap className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-72">
+                {LIFT_VIDEO_QUICK_REPLIES.map((q) => (
+                  <DropdownMenuItem key={q} onClick={() => setQuickReply({ text: q, nonce: Date.now() })}>
+                    <span className="text-xs">{q}</span>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : undefined}
         />
-        <div className="flex items-center justify-between gap-2">
-          {role === "admin" ? (
-            <div className="flex items-center gap-3">
-              <label className="flex items-center gap-2 text-xs text-muted-foreground">
-                <Switch checked={isInternal} onCheckedChange={setIsInternal} /> Internal note
-              </label>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button size="sm" variant="outline" type="button">
-                    <Zap className="mr-1 h-3 w-3" /> Quick reply
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-72">
-                  {LIFT_VIDEO_QUICK_REPLIES.map((q) => (
-                    <DropdownMenuItem key={q} onClick={() => setCommentBody((b) => (b ? `${b}\n${q}` : q))}>
-                      <span className="text-xs">{q}</span>
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-          ) : <div />}
-          <Button size="sm" onClick={post} disabled={posting || !commentBody.trim()}>
-            {posting ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : null}
-            {role === "admin" ? "Send Feedback" : "Send Reply"}
-          </Button>
-        </div>
+        {role === "admin" && (
+          <label className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Switch checked={isInternal} onCheckedChange={setIsInternal} /> Internal note
+          </label>
+        )}
       </div>
     </Card>
   );

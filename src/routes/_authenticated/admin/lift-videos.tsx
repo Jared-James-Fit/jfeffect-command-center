@@ -361,15 +361,20 @@ function ClientAvatar({ client, size = 40 }: { client: any; size?: number }) {
   );
 }
 
-function ThumbBlock({ count, urgent }: { count: number; urgent: boolean }) {
+function ThumbBlock({ count, urgent, thumbnailUrl }: { count: number; urgent: boolean; thumbnailUrl?: string | null }) {
   return (
     <div
       className={cn(
         "relative grid h-16 w-24 shrink-0 place-items-center overflow-hidden rounded-md border bg-secondary/60",
         urgent ? "border-destructive/40" : "border-border"
       )}
+      style={
+        thumbnailUrl
+          ? { backgroundImage: `url(${thumbnailUrl})`, backgroundSize: "cover", backgroundPosition: "center" }
+          : undefined
+      }
     >
-      <Play className="h-6 w-6 text-muted-foreground" />
+      <Play className={cn("h-6 w-6 drop-shadow", thumbnailUrl ? "text-white/95" : "text-muted-foreground")} />
       <div className="absolute bottom-1 right-1 rounded bg-card/90 px-1 py-0.5 text-[9px] font-bold uppercase tracking-widest text-muted-foreground">
         {count > 1 ? `${count} clips` : "Video"}
       </div>
@@ -416,7 +421,7 @@ function SubmissionRow({
             <Checkbox checked={selected} onCheckedChange={onToggle} />
           </div>
         )}
-        <ThumbBlock count={sub.clips.length} urgent={sub.isUrgent} />
+        <ThumbBlock count={sub.clips.length} urgent={sub.isUrgent} thumbnailUrl={sub.latest.thumbnail_url} />
         <ClientAvatar client={client} size={36} />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">

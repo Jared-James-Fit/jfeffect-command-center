@@ -1,59 +1,64 @@
-This is a large 3-part redesign. Here's what I'll build, scoped to keep it reliable.
+## Goal
 
-## Part 1 — Admin/Coach Dashboard Command Center
+Make admin/coach lift video review feel like the messenger: thumbnails everywhere, instant open, prominent Reviewed action, and a composer with the same GIF, attachment, and voice tools that 1:1 messaging has.
 
-Rewrite `src/routes/_authenticated/admin/index.tsx` into a new structure:
+## 1. Thumbnails everywhere
 
-1. **Header** — compact: JF Effect logo, name, search icon, notification bell, settings/profile icon. Stacks tight on mobile.
-2. **Today's Command Center** — top card showing today's counts (unread messages, check-ins, lift videos, action requests, payment issues, missing setup, birthdays today). Each line is a button into the relevant page.
-3. **Quick Stats** — 4 stat cards (Active Clients, New This Period, Needs Attention, Payment Overdue). 4-col desktop / 2-col tablet+mobile.
-4. **Quick Actions** — chip grid: Add Client, Message Client, Review Check-Ins, Review Lift Videos, Create Program, Send Payment Link, New Broadcast, New Recipe.
-5. **Needs Attention** — unified list (max 5) merging check-in pending, lift pending, unread, payment issue, setup incomplete, expiring program. Each row: client, reason, time, priority badge, action button.
-6. **Reviews** — compact card: counts + buttons to Check-In Reviews / Lift Reviews.
-7. **Training Deadlines** — max 5, sorted past-due → due-today → ending-soon.
-8. **Upcoming Birthdays** — reuse existing widget, cap at 3, with "View all".
-9. **Payments / Products** — compact "Clients without active product: N" + 3 previews + View All / Sell Product.
-10. **Recent Clients** — 5 max.
-11. **Quick Tools** — moved to bottom, compact icon row.
+`lift_videos.thumbnail_url` already exists. Today the client uploader generates a thumbnail but the inbox row renders a generic Play icon and the detail panel waits on a signed URL before showing anything.
 
-Desktop uses 2-column main grid (Needs Attention/Reviews/Deadlines on left, the rest on right). Mobile is single column in the listed order, with `pb-24` so bottom nav doesn't cover content.
+- **Inbox `ThumbBlock`** (`src/routes/_authenticated/admin/lift-videos.tsx`): render `<img src={latest.thumbnail_url}>` when present, falling back to the existing Play placeholder. Bigger thumb on desktop (96×72), show urgent ring + clip count badge as today.
+- **Detail panel video** (`src/components/admin-lift-review-thread.tsx`): pass `thumbnail_url` as `poster` to `LiftVideoPlayer` (already supports `thumbnailUrl`) and render the poster immediately while the signed URL resolves, so the panel never shows a black box.
+- **Backfill missing thumbnails**: when a video is opened in review and has no `thumbnail_url`, generate one from the signed URL in the browser (canvas grab, same approach as `client-lift-video-uploader.tsx`) and persist via an `updateLiftVideo({ thumbnail_url })` call. One-shot, non-blocking.
 
-Data: reuse the existing queries already in admin/index.tsx (clients, messages, check-ins, lift videos, action requests, payments, birthdays). Derive Needs Attention by merging those into one sorted list. No new server functions unless a data source is missing — I'll fall back to existing hooks/lib.
+## 2. Faster, smoother detail open
 
-Skeleton loaders for each card section.
+- **Pre-warm signed URL**: kick off `getSignedVideoUrl` for the row the user hovers (desktop) and on row mount for the first 6 visible rows so opens feel instant.
+- **Optimistic mount**: render the detail card immediately with the thumbnail poster + meta strip; swap to the `<video>` element only once the signed URL arrives. Avoid the current "Preview unavailable" flash by showing a subtle skeleton over the poster.
+- **Transition**: add a small fade/slide-in on the mobile detail view (`transition-opacity`, `data-state` pattern) so the pop-up feels smooth instead of snapping.
+- **React Query**: bump `staleTime` for `lift-videos-admin` to 30s and `placeholderData: keepPreviousData` so the inbox doesn't flash empty on refetches.
 
-## Part 2 — Mobile nav label
+## 3. Prominent Reviewed button
 
-In `src/routes/_authenticated/admin/route.tsx` bottomItems, override the Clients item label to "Clients" (desktop sidebar stays "Coaching Clients" via `adminNav`).
+In the quick-actions strip (`admin-lift-review-thread.tsx`):
 
-## Part 3 — Clients page mobile/tablet
+- Pull "Reviewed" out of the small pill row into a dedicated large button: full-width on mobile, `h-11`, primary variant, check icon, label flips to "✓ Reviewed" (success styling) when `reviewed_at` is set. Re-tap unmarks.
+- Keep the other quick actions (Watched, Like, Follow-up, Archive) in the compact pill row underneath.
 
-Rewrite `src/routes/_authenticated/admin/clients.index.tsx`:
+## 4. Composer parity with messenger
 
-- Keep existing desktop table behavior intact (gated by `md:` / `useIsMobile`).
-- **Mobile/tablet (< md):** render stacked client cards instead of the table:
-  - Top: avatar, name, type, status badge
-  - Email / last activity row
-  - Status chips: Training, Nutrition, Cardio, Payment, Messages, Setup (color-coded)
-  - Actions: View, Message, More (dropdown with Add Phase, Assign from Library, Add Nutrition, Add Cardio, Sell Product, Send Setup, Archive)
-- **Filters on mobile:** Search input + Filter button that opens a Sheet drawer containing all filters.
-- **Priority chips row** at top (horizontal scroll on mobile): All / Needs Setup / Needs Review / Program Ending / Payment Issues / New Clients — wired to existing filter state where data exists, otherwise client-side filter on the already-loaded list.
-- `pb-24` bottom padding so bottom nav doesn't cover last card.
-- Tablet uses 2-column card grid (`sm:grid-cols-2 lg:hidden`).
+The 1:1 messenger composer (`src/components/message-thread.tsx`) has GIFs, attachments, and voice memos. Extract those affordances into a small reusable surface and reuse it in the lift review thread for both coach replies and (downstream) client replies.
 
-No horizontal scroll at < md.
+- **Extract** `src/components/composer-tools.tsx` exporting:
+  - `<AttachmentButton onPicked={(files)=>...}>` — wraps the existing file input + `uploadAttachment` flow.
+  - `<GifButton onPick={(gif)=>...}>` — wraps `GifPicker`.
+  - `<VoiceMemoButton onRecorded={(blob, peaks, duration)=>...}>` — wraps `useVoiceRecorder` UI.
+  Each renders the same icon button + popover used in messenger.
+- **`admin-lift-review-thread.tsx`**: replace the textarea-only composer with the same shell — left side: attachment + gif + voice buttons; right side: send. Keep the Internal note switch.
+- **Storage**: lift video comments need to carry attachments. Extend `lift_video_comments` with a nullable `jsonb` `attachments` column (array of `SharedAttachment`) via migration; render attachments inside the bubble via the existing `SharedAttachment` renderer used by chat.
+- **Client side**: update `src/components/client-lift-video-uploader.tsx` reply textarea (or wherever clients reply to a review) to use the same `composer-tools` surface so the experience is symmetric. (Confirm exact client reply entry point during implementation; if clients reply through a different component, swap it there.)
+
+## 5. Realtime + notifications
+
+No new wiring needed — the existing `lift_video_comments` channel already invalidates the inbox query. Attachments ride the same row.
+
+## Technical notes
+
+- New migration: `alter table public.lift_video_comments add column attachments jsonb`. RLS unchanged; existing policies already cover the row. No new grants needed.
+- No edge functions; everything stays in TanStack client + existing storage bucket `message-attachments` (reused for parity, or a new `lift-review-attachments` bucket if you prefer separation — say which).
+- No design system token additions required; reuse existing button/primary tones.
 
 ## Files touched
 
-- `src/routes/_authenticated/admin/index.tsx` — full rewrite
-- `src/routes/_authenticated/admin/clients.index.tsx` — full rewrite (preserves all current routes/actions, only restructures presentation + adds mobile cards & priority chips)
-- `src/routes/_authenticated/admin/route.tsx` — relabel Clients in bottomItems
-- New small helper components as needed (e.g. `src/components/dashboard/command-center-card.tsx`, `clients-mobile-card.tsx`) to keep files manageable.
+- `src/routes/_authenticated/admin/lift-videos.tsx` — thumbnail row, prewarm.
+- `src/components/admin-lift-review-thread.tsx` — poster, big Reviewed, new composer.
+- `src/components/lift-video-player.tsx` — accept poster fallback.
+- `src/components/composer-tools.tsx` *(new)* — shared GIF/attach/voice buttons.
+- `src/components/message-thread.tsx` — swap in extracted buttons (no behavior change).
+- `src/lib/lift-videos.ts` — `attachments` on comment type; `updateThumbnail` helper.
+- `src/components/client-lift-video-uploader.tsx` (or client reply entry) — use shared composer.
+- New SQL migration for `lift_video_comments.attachments`.
 
-## What I will NOT do in this pass
+## Open questions
 
-- Won't build new backend functions; if a data point (e.g. "urgent client flag") doesn't exist today, I'll omit that line rather than guess.
-- Won't change the Coach navigation set (coachNav already labels it "My Clients").
-- Won't touch the existing portal / member dashboards.
-
-Proceed?
+1. **Attachment bucket**: reuse `message-attachments` or create a separate `lift-review-attachments` bucket? Reuse is simpler; separate is cleaner for retention/archival.
+2. **Client reply UI**: confirm clients reply to a review from the same lift video card on the portal (so I extend that file), or is there a separate thread component to update?

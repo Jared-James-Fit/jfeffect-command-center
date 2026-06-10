@@ -1,0 +1,1 @@
+ALTER TABLE public.lift_video_comments ADD COLUMN IF NOT EXISTS attachments jsonb;
