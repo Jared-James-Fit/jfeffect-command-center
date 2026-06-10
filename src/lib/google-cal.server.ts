@@ -232,3 +232,38 @@ export async function gcalFreeBusy(coachId: string, timeMinISO: string, timeMaxI
   const cal = data.calendars?.[calendarId];
   return cal?.busy ?? [];
 }
+
+// Returns Google Calendar events for a range (read-only view).
+export async function gcalListEvents(
+  coachId: string | null,
+  timeMinISO: string,
+  timeMaxISO: string,
+): Promise<Array<{ id: string; summary: string; start: string; end: string; allDay: boolean; htmlLink?: string; location?: string; status?: string; hangoutLink?: string }>> {
+  if (!workspaceCalendarConfigured()) return [];
+  const calendarId = await selectedCalendarIdForCoach(coachId);
+  const params = new URLSearchParams({
+    timeMin: timeMinISO,
+    timeMax: timeMaxISO,
+    singleEvents: "true",
+    orderBy: "startTime",
+    maxResults: "250",
+  });
+  const res = await fetch(`${GATEWAY_BASE}/calendars/${encodeURIComponent(calendarId)}/events?${params.toString()}`, {
+    headers: gatewayHeaders(),
+  });
+  const data = await res.json();
+  if (!res.ok) return [];
+  return (data.items ?? [])
+    .filter((e: any) => e.status !== "cancelled" && (e.start?.dateTime || e.start?.date))
+    .map((e: any) => ({
+      id: e.id,
+      summary: e.summary || "(busy)",
+      start: e.start.dateTime || e.start.date,
+      end: e.end?.dateTime || e.end?.date,
+      allDay: !e.start.dateTime,
+      htmlLink: e.htmlLink,
+      location: e.location,
+      status: e.status,
+      hangoutLink: e.hangoutLink,
+    }));
+}
