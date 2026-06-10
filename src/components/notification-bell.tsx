@@ -95,6 +95,8 @@ async function fetchUnreadGroupItems(userId: string): Promise<BellItem[]> {
 export function NotificationBell() {
   const { role, user } = useAuth();
   const qc = useQueryClient();
+  const adminUpcoming = useServerFn(listUpcomingForBell);
+  const portalAppts = useServerFn(listMyPortalAppointments);
 
   // Realtime invalidation
   useEffect(() => {
@@ -126,6 +128,9 @@ export function NotificationBell() {
         qc.invalidateQueries({ queryKey: ["unread-counts"] });
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "manual_check_in_reviews" }, () => {
+        qc.invalidateQueries({ queryKey: ["unread-counts"] });
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "appointments" }, () => {
         qc.invalidateQueries({ queryKey: ["unread-counts"] });
       })
       .subscribe();
