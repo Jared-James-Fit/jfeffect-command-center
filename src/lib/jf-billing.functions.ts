@@ -119,10 +119,11 @@ export const createJfSignupCheckout = createServerFn({ method: "POST" })
     const { data: trialRow } = await supabaseAdmin.from("jf_trial_emails").select("email_lc").eq("email_lc", emailLc).maybeSingle();
     const useTrial = !trialRow && s.trial_days > 0;
 
-    // Hash password (basic — replace user later via service role; this is a stash)
-    const enc = new TextEncoder().encode(data.password);
-    const hashBuf = await crypto.subtle.digest("SHA-256", enc);
-    const passwordHash = Array.from(new Uint8Array(hashBuf)).map(b => b.toString(16).padStart(2, "0")).join("");
+    // Note: password_hash column actually stores the raw password temporarily.
+    // The jf_pending_signups table is service-role only (no end-user RLS policies),
+    // and the row is deleted immediately after Supabase Auth user creation.
+    // 24h expiry is enforced by expires_at + a cleanup job (admin-run).
+    const passwordHash = data.password;
 
     // Pre-store pending signup keyed by checkout session id — we'll insert AFTER session creation
     // First create the checkout session
