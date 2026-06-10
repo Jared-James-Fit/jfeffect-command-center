@@ -34,8 +34,9 @@ import { fallbackEmoji } from "@/lib/gif-fallback";
 import {
   AttachmentView, LiveWaveform, WaveformBars, useVoiceRecorder,
   attachIcon, fakePeaks, fmtDuration, fmtTime,
-  uploadAttachmentToPath, LINK_RE, type SharedAttachment,
+  uploadAttachmentToPath, LINK_RE, renderBodyWithMeet, type SharedAttachment,
 } from "@/components/chat-shared";
+import { MeetQuickAction } from "@/components/meet-quick-action";
 import {
   Paperclip, Send, X, Image as ImageIcon, Camera, File as FileIcon,
   Mic, Trash2, Play, Pause, Square, Loader2, MoreHorizontal, Pencil, Check,
@@ -669,7 +670,7 @@ export function GroupMessageThread({
                       </div>
                     </div>
                   ) : (
-                    m.body && <div className="whitespace-pre-wrap break-words">{m.body}</div>
+                    m.body && renderBodyWithMeet(m.body, mine)
                   )}
 
                   {!isDeleted && !isEditing && m.attachments?.length > 0 && (
