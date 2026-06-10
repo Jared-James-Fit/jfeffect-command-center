@@ -4,15 +4,14 @@ import { useEffect } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import {
-  getGoogleConnectionStatus, beginGoogleConnect, disconnectGoogle,
-  listMyCalendars, setSelectedCalendar,
+  getGoogleConnectionStatus, listMyCalendars, setSelectedCalendar,
 } from "@/lib/google-cal.functions";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CheckCircle2, RefreshCw, AlertCircle, Link as LinkIcon } from "lucide-react";
+import { CheckCircle2, RefreshCw, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/admin/google-calendar")({
@@ -24,8 +23,6 @@ function Page() {
   const search = useSearch({ from: "/_authenticated/admin/google-calendar" });
   const qc = useQueryClient();
   const statusFn = useServerFn(getGoogleConnectionStatus);
-  const beginFn = useServerFn(beginGoogleConnect);
-  const disFn = useServerFn(disconnectGoogle);
   const calsFn = useServerFn(listMyCalendars);
   const setCalFn = useServerFn(setSelectedCalendar);
 
@@ -41,15 +38,6 @@ function Page() {
     if (search.error) toast.error(`Google: ${search.error}`);
   }, [search.connected, search.error, refetch]);
 
-  const connect = useMutation({
-    mutationFn: async () => beginFn({ data: { origin: window.location.origin } }),
-    onSuccess: ({ url }: any) => { window.location.href = url; },
-    onError: (e: any) => toast.error(e.message),
-  });
-  const disconnect = useMutation({
-    mutationFn: () => disFn(),
-    onSuccess: () => { toast.success("Disconnected"); qc.invalidateQueries({ queryKey: ["gcal-status"] }); },
-  });
   const choose = useMutation({
     mutationFn: (cal: { id: string; name: string }) => setCalFn({ data: { calendar_id: cal.id, calendar_name: cal.name } as any }),
     onSuccess: () => { toast.success("Calendar selected"); qc.invalidateQueries({ queryKey: ["gcal-status"] }); },
@@ -69,26 +57,23 @@ function Page() {
             <div>
               <div className="flex items-center gap-2 mb-1">
                 {status.connected ? (
-                  <Badge className="bg-emerald-500/10 text-emerald-300 border-emerald-500/30 border"><CheckCircle2 className="mr-1 h-3 w-3" /> Connected</Badge>
-                ) : status.status === "reconnect_required" ? (
-                  <Badge className="bg-amber-500/10 text-amber-300 border-amber-500/30 border"><AlertCircle className="mr-1 h-3 w-3" /> Reconnect required</Badge>
+                  <Badge className="bg-emerald-500/10 text-emerald-300 border-emerald-500/30 border"><CheckCircle2 className="mr-1 h-3 w-3" /> Connected (workspace)</Badge>
                 ) : (
-                  <Badge variant="outline">Not connected</Badge>
+                  <Badge className="bg-amber-500/10 text-amber-300 border-amber-500/30 border"><AlertCircle className="mr-1 h-3 w-3" /> Not configured</Badge>
                 )}
                 {status.email && <span className="text-sm text-muted-foreground">{status.email}</span>}
               </div>
               {status.calendarName && <div className="text-xs text-muted-foreground">Calendar: {status.calendarName}</div>}
-              {status.lastError && <div className="text-xs text-rose-300 mt-1">Last error: {status.lastError}</div>}
+              {!status.connected && (
+                <div className="text-xs text-muted-foreground mt-1">
+                  Connect the Google Calendar app in Project Settings → Connectors. All coaches share this calendar.
+                </div>
+              )}
             </div>
             <div className="flex gap-2">
-              {status.connected ? (
-                <>
-                  <Button size="sm" variant="outline" onClick={() => qc.invalidateQueries({ queryKey: ["gcal-calendars"] })}><RefreshCw className="mr-2 h-3 w-3" /> Refresh</Button>
-                  <Button size="sm" variant="outline" onClick={() => disconnect.mutate()}>Disconnect</Button>
-                </>
-              ) : (
-                <Button size="sm" className="bg-gradient-primary" disabled={connect.isPending} onClick={() => connect.mutate()}>
-                  <LinkIcon className="mr-2 h-3 w-3" /> Connect Google
+              {status.connected && (
+                <Button size="sm" variant="outline" onClick={() => qc.invalidateQueries({ queryKey: ["gcal-calendars"] })}>
+                  <RefreshCw className="mr-2 h-3 w-3" /> Refresh
                 </Button>
               )}
             </div>
