@@ -13,6 +13,8 @@ import {
 import { GroupMessageThread } from "@/components/group-message-thread";
 import { CreateGroupDialog } from "@/components/create-group-dialog";
 import { ManageGroupDialog } from "@/components/manage-group-dialog";
+import { useGroupPresence } from "@/hooks/use-group-presence";
+import { LiveDot } from "@/hooks/use-chat-presence";
 
 export function GroupChatsPane({ asAdmin }: { asAdmin: boolean }) {
   const { user, role } = useAuth();
@@ -101,6 +103,10 @@ export function GroupChatsPane({ asAdmin }: { asAdmin: boolean }) {
     return false; // read_only
   })();
 
+  const myPresenceRole: "admin" | "coach" | "client" | "member" =
+    role === "admin" ? "admin" : role === "coach" ? "coach" : "client";
+  const { liveCount } = useGroupPresence(selected?.id ?? null, myPresenceRole);
+
   return (
     <div className="flex h-full min-h-0 w-full">
       {/* Sidebar list */}
@@ -169,7 +175,16 @@ export function GroupChatsPane({ asAdmin }: { asAdmin: boolean }) {
               <div className="min-w-0 flex-1">
                 <div className="truncate text-sm font-bold">{selected.name}</div>
                 <div className="truncate text-[11px] text-muted-foreground">
-                  {selected.description || (selected.permission_mode === "read_only" ? "View/react only" : selected.permission_mode === "admins_only" ? "Coach posts only" : "Everyone can post")}
+                  {liveCount > 0 ? (
+                    <span className="inline-flex items-center gap-1.5">
+                      <LiveDot />
+                      <span className="font-semibold text-emerald-600">
+                        {liveCount} active now
+                      </span>
+                    </span>
+                  ) : (
+                    selected.description || (selected.permission_mode === "read_only" ? "View/react only" : selected.permission_mode === "admins_only" ? "Coach posts only" : "Everyone can post")
+                  )}
                 </div>
               </div>
               {(asAdmin || isAdminOfGroup) && (
