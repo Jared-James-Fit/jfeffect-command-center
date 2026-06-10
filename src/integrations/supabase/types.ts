@@ -6616,6 +6616,7 @@ export type Database = {
         Returns: boolean
       }
       mark_client_signed_in: { Args: never; Returns: undefined }
+      mark_stale_lift_uploads: { Args: never; Returns: number }
       member_has_access: {
         Args: { _key: string; _member_id: string }
         Returns: boolean
