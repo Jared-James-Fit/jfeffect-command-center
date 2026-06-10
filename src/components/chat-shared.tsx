@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
@@ -695,7 +695,7 @@ function RequestShell({
 }: {
   icon: any; title: string; subtitle?: string;
   chip?: { label: string; tone?: string };
-  mine: boolean; children?: React.ReactNode; onOpen?: () => void;
+  mine: boolean; children?: ReactNode; onOpen?: () => void;
 }) {
   return (
     <div
