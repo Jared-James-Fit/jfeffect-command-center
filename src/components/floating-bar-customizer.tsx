@@ -175,7 +175,10 @@ export function FloatingBarCustomizer({
             );
           }
           const Icon = base.icon;
-          const childExclude = new Set<string>([slot.to, ...(slot.children ?? [])]);
+          // Allow the slot's own route as a hold-to-open option too (e.g. Dashboard
+          // as slot 1 can still appear in its own pop-up menu). Only exclude routes
+          // already added as children.
+          const childExclude = new Set<string>(slot.children ?? []);
           return (
             <li key={slot.to + idx} className="rounded-md border border-border bg-secondary/30 p-2.5">
               <div className="flex items-center gap-2">
