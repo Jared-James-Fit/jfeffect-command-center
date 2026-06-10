@@ -266,10 +266,13 @@ function NewAppointmentDialog({ open, onOpenChange, onCreated }: { open: boolean
           </div>
           <div className="md:col-span-2">
             <Label>Client (optional)</Label>
-            <Select value={form.client_id} onValueChange={(v) => setForm({ ...form, client_id: v })}>
+            <Select
+              value={form.client_id || "__external__"}
+              onValueChange={(v) => setForm({ ...form, client_id: v === "__external__" ? "" : v })}
+            >
               <SelectTrigger><SelectValue placeholder="Choose a client, or fill external attendee below" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="">— External attendee —</SelectItem>
+                <SelectItem value="__external__">— External attendee —</SelectItem>
                 {clients.map((c: any) => <SelectItem key={c.id} value={c.id}>{c.full_name}</SelectItem>)}
               </SelectContent>
             </Select>
