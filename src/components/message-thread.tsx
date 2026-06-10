@@ -20,6 +20,7 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { UserAvatar } from "@/components/user-avatar";
+import { PaymentRequestCard } from "@/components/payment-request-card";
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
@@ -364,6 +365,9 @@ function LinkAttachment({ att, mine }: { att: MessageAttachment; mine: boolean }
 }
 
 function AttachmentView({ att, mine, message }: { att: MessageAttachment; mine: boolean; message?: Message }) {
+  if (att.kind === "payment_request") {
+    return <PaymentRequestCard att={att} mine={mine} />;
+  }
   if (att.kind === "sound") {
     return (
       <ChatSoundCard

@@ -32,9 +32,16 @@ export type GroupAttachment = {
   storage_path?: string;
   duration?: number;
   peaks?: number[];
-  kind?: "sound" | "gif";
+  kind?: "sound" | "gif" | "payment_request";
   fallback_emoji?: string;
   category?: string;
+  purchase_id?: string;
+  payment_url?: string;
+  amount_cents?: number;
+  currency?: string;
+  title?: string;
+  payment_structure?: string;
+  status?: string;
 };
 
 export type GroupMessage = {

@@ -11,10 +11,11 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, ExternalLink, Save, Trash2, Mail, Archive, KeyRound, Copy, CheckCircle2, AlertCircle, BellRing, Tag, Dumbbell } from "lucide-react";
+import { ArrowLeft, ExternalLink, Save, Trash2, Mail, Archive, KeyRound, Copy, CheckCircle2, AlertCircle, BellRing, Tag, Dumbbell, MessageSquare } from "lucide-react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import { inviteClient, deleteClient, getSetupLink, getPasswordResetLink, sendPasswordReset, markSetupComplete, setNeedsAdminHelp, setClientPassword } from "@/lib/clients.functions";
+import { sendAuthLinkBySms } from "@/lib/sms-links.functions";
 import { deactivateClient, reactivateClient, DEACTIVATION_REASONS } from "@/lib/client-deactivation.functions";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { TrainingPhasesPanel } from "@/components/training-phases-panel";
@@ -103,6 +104,7 @@ function ClientDetail() {
   const getSetupLinkFn = useServerFn(getSetupLink);
   const sendResetFn = useServerFn(sendPasswordReset);
   const getResetLinkFn = useServerFn(getPasswordResetLink);
+  const sendLinkSmsFn = useServerFn(sendAuthLinkBySms);
   const setPasswordFn = useServerFn(setClientPassword);
   const [pwOpen, setPwOpen] = useState(false);
   const [pwValue, setPwValue] = useState("");
@@ -191,6 +193,22 @@ function ClientDetail() {
       const { url } = await getResetLinkFn({ data: { clientId: id, redirectTo: `${window.location.origin}/reset-password` } });
       await navigator.clipboard.writeText(url);
       toast.success("Reset link copied", { id: t });
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed", { id: t });
+    }
+  };
+
+  const smsLink = (kind: "setup" | "magic" | "reset") => async () => {
+    if (!form.phone) return toast.error("Add a phone number first");
+    if (!form.email) return toast.error("Add an email first (used to mint the link)");
+    const redirectTo = kind === "reset"
+      ? `${window.location.origin}/reset-password`
+      : `${window.location.origin}/setup`;
+    const t = toast.loading("Sending SMS…");
+    try {
+      await sendLinkSmsFn({ data: { clientId: id, redirectTo, kind } });
+      toast.success("SMS sent", { id: t });
+      qc.invalidateQueries({ queryKey: ["client", id] });
     } catch (e: any) {
       toast.error(e?.message ?? "Failed", { id: t });
     }
@@ -856,6 +874,9 @@ function ClientDetail() {
                 <ActionButton size="sm" variant="outline" onAction={copySetupLink} loadingLabel="Copying…" successLabel="Copied" successToast={false} errorToast={false} icon={<Copy className="h-4 w-4" />}>Copy setup link</ActionButton>
                 <ActionButton size="sm" variant="outline" onAction={sendReset} loadingLabel="Sending…" successLabel="Sent" successToast={false} errorToast={false} icon={<KeyRound className="h-4 w-4" />}>Send password reset</ActionButton>
                 <ActionButton size="sm" variant="outline" onAction={copyResetLink} loadingLabel="Copying…" successLabel="Copied" successToast={false} errorToast={false} icon={<Copy className="h-4 w-4" />}>Copy reset link</ActionButton>
+                <ActionButton size="sm" variant="outline" onAction={smsLink("setup")} loadingLabel="Sending…" successLabel="Sent" successToast={false} errorToast={false} icon={<MessageSquare className="h-4 w-4" />}>SMS setup link</ActionButton>
+                <ActionButton size="sm" variant="outline" onAction={smsLink("magic")} loadingLabel="Sending…" successLabel="Sent" successToast={false} errorToast={false} icon={<MessageSquare className="h-4 w-4" />}>SMS sign-in link</ActionButton>
+                <ActionButton size="sm" variant="outline" onAction={smsLink("reset")} loadingLabel="Sending…" successLabel="Sent" successToast={false} errorToast={false} icon={<MessageSquare className="h-4 w-4" />}>SMS reset link</ActionButton>
                 <Button size="sm" variant="outline" onClick={() => { setPwValue(""); setPwOpen(true); }}>
                   <KeyRound className="mr-2 h-4 w-4" />Set password
                 </Button>

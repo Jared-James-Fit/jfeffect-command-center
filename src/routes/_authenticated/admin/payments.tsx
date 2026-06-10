@@ -9,10 +9,11 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CheckCircle2, Copy, ExternalLink, Download, AlertTriangle, Send, DollarSign } from "lucide-react";
+import { CheckCircle2, Copy, ExternalLink, Download, AlertTriangle, Send, DollarSign, CreditCard } from "lucide-react";
 import { toast } from "sonner";
 import { updatePurchasePayment, sendPaymentLinkEmail } from "@/lib/payments.functions";
 import { PAYMENT_STATUS_DETAILED } from "@/lib/offers";
+import { SendPaymentRequestDialog } from "@/components/send-payment-request-dialog";
 
 export const Route = createFileRoute("/_authenticated/admin/payments")({ component: PaymentsPage });
 
@@ -42,12 +43,13 @@ function PaymentsPage() {
 
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [q, setQ] = useState("");
+  const [payDlg, setPayDlg] = useState<{ open: boolean; purchaseId: string; clientName?: string | null; hasPhone?: boolean; hasLink?: boolean }>({ open: false, purchaseId: "" });
 
   const { data: records = [] } = useQuery({
     queryKey: ["all-payments"],
     queryFn: async () => (await supabase
       .from("purchase_records")
-      .select("*, clients(id, full_name, email)")
+      .select("*, clients(id, full_name, email, phone)")
       .order("purchased_at", { ascending: false })).data ?? [],
   });
 
@@ -184,6 +186,15 @@ function PaymentsPage() {
                   {r.stripe_payment_link && r.clients?.email && (
                     <Button size="sm" variant="ghost" onClick={() => sendEmail(r.id)}><Send className="mr-1 h-3 w-3" />Email link</Button>
                   )}
+                  {r.stripe_payment_link && (
+                    <Button size="sm" variant="outline" onClick={() => setPayDlg({
+                      open: true,
+                      purchaseId: r.id,
+                      clientName: r.clients?.full_name,
+                      hasPhone: !!r.clients?.phone,
+                      hasLink: !!r.stripe_payment_link,
+                    })}><CreditCard className="mr-1 h-3 w-3" />Send request</Button>
+                  )}
                   {r.stripe_receipt_url && (
                     <a href={r.stripe_receipt_url} target="_blank" rel="noreferrer"><Button size="sm" variant="ghost">Receipt</Button></a>
                   )}
@@ -193,6 +204,14 @@ function PaymentsPage() {
           </div>
         )}
       </div>
+      <SendPaymentRequestDialog
+        open={payDlg.open}
+        onOpenChange={(o) => setPayDlg((p) => ({ ...p, open: o }))}
+        purchaseId={payDlg.purchaseId}
+        clientName={payDlg.clientName}
+        hasPhone={payDlg.hasPhone}
+        hasLink={payDlg.hasLink}
+      />
     </>
   );
 }

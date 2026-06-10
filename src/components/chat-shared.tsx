@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { ChatSoundCard } from "@/components/chat-sound-card";
 import { GifThumb } from "@/components/gif-thumb";
 import { fallbackEmoji } from "@/lib/gif-fallback";
+import { PaymentRequestCard } from "@/components/payment-request-card";
 import {
   FileText, Image as ImageIcon, Video, Link as LinkIcon, ExternalLink,
   Mic, File as FileIcon, Download, ChevronDown, ChevronUp, Play, Pause, Gauge,
@@ -23,9 +24,17 @@ export type SharedAttachment = {
   duration?: number;
   storage_path?: string;
   peaks?: number[];
-  kind?: "sound" | "gif";
+  kind?: "sound" | "gif" | "payment_request";
   fallback_emoji?: string;
   category?: string;
+  // payment_request fields (used when kind === "payment_request")
+  purchase_id?: string;
+  payment_url?: string;
+  amount_cents?: number;
+  currency?: string;
+  title?: string;
+  payment_structure?: string;
+  status?: string;
 };
 
 /* ------------------------------- Helpers ------------------------------- */
@@ -592,6 +601,9 @@ export function AttachmentView({
   transcript?: string | null;
   transcriptStatus?: string | null;
 }) {
+  if (att.kind === "payment_request") {
+    return <PaymentRequestCard att={att} mine={mine} />;
+  }
   if (att.kind === "sound") {
     return (
       <ChatSoundCard
