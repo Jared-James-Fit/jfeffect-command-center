@@ -127,26 +127,83 @@ export function GroupChatsPane({ asAdmin }: { asAdmin: boolean }) {
         <header className="flex items-center justify-between border-b border-border px-3 py-2">
           <div className="text-sm font-bold tracking-tight">Group chats</div>
           {asAdmin && (
-            <Button size="sm" variant="ghost" onClick={() => setCreateOpen(true)}>
-              <Plus className="mr-1 h-3 w-3" /> New
-            </Button>
+            <div className="flex items-center gap-1">
+              {isAdmin && (
+                <Button
+                  size="sm"
+                  variant={selectMode ? "secondary" : "ghost"}
+                  onClick={() => { setSelectMode((s) => !s); setChecked({}); }}
+                  title={selectMode ? "Cancel selection" : "Select multiple"}
+                >
+                  {selectMode ? <X className="mr-1 h-3 w-3" /> : <CheckSquare className="mr-1 h-3 w-3" />}
+                  {selectMode ? "Cancel" : "Select"}
+                </Button>
+              )}
+              <Button size="sm" variant="ghost" onClick={() => setCreateOpen(true)}>
+                <Plus className="mr-1 h-3 w-3" /> New
+              </Button>
+            </div>
           )}
         </header>
+        {selectMode && isAdmin && (
+          <div className="flex items-center justify-between gap-2 border-b border-border bg-secondary/40 px-3 py-1.5">
+            <span className="text-xs font-semibold">
+              {Object.keys(checked).length} selected
+            </span>
+            <Button
+              size="sm"
+              variant="destructive"
+              disabled={Object.keys(checked).length === 0}
+              onClick={async () => {
+                const ids = Object.keys(checked);
+                if (ids.length === 0) return;
+                if (!window.confirm(`Permanently delete ${ids.length} group${ids.length > 1 ? "s" : ""} and all their messages?`)) return;
+                try {
+                  await deleteGroupsFn({ data: { group_ids: ids } as any });
+                  toast.success(`Deleted ${ids.length}`);
+                  setChecked({});
+                  setSelectMode(false);
+                  if (selectedId && ids.includes(selectedId)) setSelectedId(null);
+                  qc.invalidateQueries({ queryKey: ["chat-groups"] });
+                } catch (e: any) { toast.error(e?.message ?? "Failed"); }
+              }}
+            >
+              <Trash2 className="mr-1 h-3 w-3" /> Delete
+            </Button>
+          </div>
+        )}
         <div className="flex-1 overflow-y-auto">
           {visibleGroups.length === 0 ? (
             <div className="p-6 text-center text-sm text-muted-foreground">
               {asAdmin ? "No groups yet. Create one to get started." : "No group chats yet."}
             </div>
           ) : visibleGroups.map(({ group, last, unread }) => (
-            <button
+            <div
               key={group.id}
-              onClick={() => setSelectedId(group.id)}
+              role="button"
+              tabIndex={0}
+              onClick={() => {
+                if (selectMode) {
+                  setChecked((s) => { const n = { ...s }; if (n[group.id]) delete n[group.id]; else n[group.id] = true; return n; });
+                } else {
+                  setSelectedId(group.id);
+                }
+              }}
               className={cn(
-                "flex w-full items-start gap-2 border-b border-border/60 px-3 py-2.5 text-left transition hover:bg-secondary/40",
-                selectedId === group.id && "bg-secondary/60",
+                "flex w-full cursor-pointer items-start gap-2 border-b border-border/60 px-3 py-2.5 text-left transition hover:bg-secondary/40",
+                selectedId === group.id && !selectMode && "bg-secondary/60",
+                selectMode && checked[group.id] && "bg-primary/10",
                 group.archived && "opacity-60",
               )}
             >
+              {selectMode && (
+                <Checkbox
+                  className="mt-1"
+                  checked={!!checked[group.id]}
+                  onCheckedChange={(v) => setChecked((s) => { const n = { ...s }; if (v) n[group.id] = true; else delete n[group.id]; return n; })}
+                  onClick={(e) => e.stopPropagation()}
+                />
+              )}
               <GroupCover groupId={group.id} myRole={myPresenceRole} />
               <div className="min-w-0 flex-1">
                 <div className="flex items-center justify-between gap-2">
@@ -164,7 +221,7 @@ export function GroupChatsPane({ asAdmin }: { asAdmin: boolean }) {
                   )}
                 </div>
               </div>
-            </button>
+            </div>
           ))}
         </div>
       </aside>
