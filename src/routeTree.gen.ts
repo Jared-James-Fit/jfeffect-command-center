@@ -34,6 +34,7 @@ import { Route as AuthenticatedPortalMessagesRouteImport } from './routes/_authe
 import { Route as AuthenticatedPortalMediaRouteImport } from './routes/_authenticated/portal/media'
 import { Route as AuthenticatedPortalLiftVideosRouteImport } from './routes/_authenticated/portal/lift-videos'
 import { Route as AuthenticatedPortalExercisesRouteImport } from './routes/_authenticated/portal/exercises'
+import { Route as AuthenticatedPortalEventsRouteImport } from './routes/_authenticated/portal/events'
 import { Route as AuthenticatedPortalDocumentsRouteImport } from './routes/_authenticated/portal/documents'
 import { Route as AuthenticatedPortalCheckInsRouteImport } from './routes/_authenticated/portal/check-ins'
 import { Route as AuthenticatedPortalCheckInRouteImport } from './routes/_authenticated/portal/check-in'
@@ -262,6 +263,12 @@ const AuthenticatedPortalExercisesRoute =
   AuthenticatedPortalExercisesRouteImport.update({
     id: '/exercises',
     path: '/exercises',
+    getParentRoute: () => AuthenticatedPortalRouteRoute,
+  } as any)
+const AuthenticatedPortalEventsRoute =
+  AuthenticatedPortalEventsRouteImport.update({
+    id: '/events',
+    path: '/events',
     getParentRoute: () => AuthenticatedPortalRouteRoute,
   } as any)
 const AuthenticatedPortalDocumentsRoute =
@@ -668,9 +675,9 @@ const AuthenticatedPortalPurchasesIdRoute =
   } as any)
 const AuthenticatedPortalEventsIdRoute =
   AuthenticatedPortalEventsIdRouteImport.update({
-    id: '/events/$id',
-    path: '/events/$id',
-    getParentRoute: () => AuthenticatedPortalRouteRoute,
+    id: '/$id',
+    path: '/$id',
+    getParentRoute: () => AuthenticatedPortalEventsRoute,
   } as any)
 const AuthenticatedPortalCheckInsFormIdRoute =
   AuthenticatedPortalCheckInsFormIdRouteImport.update({
@@ -880,6 +887,7 @@ export interface FileRoutesByFullPath {
   '/portal/check-in': typeof AuthenticatedPortalCheckInRoute
   '/portal/check-ins': typeof AuthenticatedPortalCheckInsRouteWithChildren
   '/portal/documents': typeof AuthenticatedPortalDocumentsRoute
+  '/portal/events': typeof AuthenticatedPortalEventsRouteWithChildren
   '/portal/exercises': typeof AuthenticatedPortalExercisesRoute
   '/portal/lift-videos': typeof AuthenticatedPortalLiftVideosRoute
   '/portal/media': typeof AuthenticatedPortalMediaRoute
@@ -997,6 +1005,7 @@ export interface FileRoutesByTo {
   '/portal/check-in': typeof AuthenticatedPortalCheckInRoute
   '/portal/check-ins': typeof AuthenticatedPortalCheckInsRouteWithChildren
   '/portal/documents': typeof AuthenticatedPortalDocumentsRoute
+  '/portal/events': typeof AuthenticatedPortalEventsRouteWithChildren
   '/portal/exercises': typeof AuthenticatedPortalExercisesRoute
   '/portal/lift-videos': typeof AuthenticatedPortalLiftVideosRoute
   '/portal/media': typeof AuthenticatedPortalMediaRoute
@@ -1119,6 +1128,7 @@ export interface FileRoutesById {
   '/_authenticated/portal/check-in': typeof AuthenticatedPortalCheckInRoute
   '/_authenticated/portal/check-ins': typeof AuthenticatedPortalCheckInsRouteWithChildren
   '/_authenticated/portal/documents': typeof AuthenticatedPortalDocumentsRoute
+  '/_authenticated/portal/events': typeof AuthenticatedPortalEventsRouteWithChildren
   '/_authenticated/portal/exercises': typeof AuthenticatedPortalExercisesRoute
   '/_authenticated/portal/lift-videos': typeof AuthenticatedPortalLiftVideosRoute
   '/_authenticated/portal/media': typeof AuthenticatedPortalMediaRoute
@@ -1241,6 +1251,7 @@ export interface FileRouteTypes {
     | '/portal/check-in'
     | '/portal/check-ins'
     | '/portal/documents'
+    | '/portal/events'
     | '/portal/exercises'
     | '/portal/lift-videos'
     | '/portal/media'
@@ -1358,6 +1369,7 @@ export interface FileRouteTypes {
     | '/portal/check-in'
     | '/portal/check-ins'
     | '/portal/documents'
+    | '/portal/events'
     | '/portal/exercises'
     | '/portal/lift-videos'
     | '/portal/media'
@@ -1479,6 +1491,7 @@ export interface FileRouteTypes {
     | '/_authenticated/portal/check-in'
     | '/_authenticated/portal/check-ins'
     | '/_authenticated/portal/documents'
+    | '/_authenticated/portal/events'
     | '/_authenticated/portal/exercises'
     | '/_authenticated/portal/lift-videos'
     | '/_authenticated/portal/media'
@@ -1731,6 +1744,13 @@ declare module '@tanstack/react-router' {
       path: '/exercises'
       fullPath: '/portal/exercises'
       preLoaderRoute: typeof AuthenticatedPortalExercisesRouteImport
+      parentRoute: typeof AuthenticatedPortalRouteRoute
+    }
+    '/_authenticated/portal/events': {
+      id: '/_authenticated/portal/events'
+      path: '/events'
+      fullPath: '/portal/events'
+      preLoaderRoute: typeof AuthenticatedPortalEventsRouteImport
       parentRoute: typeof AuthenticatedPortalRouteRoute
     }
     '/_authenticated/portal/documents': {
@@ -2218,10 +2238,10 @@ declare module '@tanstack/react-router' {
     }
     '/_authenticated/portal/events/$id': {
       id: '/_authenticated/portal/events/$id'
-      path: '/events/$id'
+      path: '/$id'
       fullPath: '/portal/events/$id'
       preLoaderRoute: typeof AuthenticatedPortalEventsIdRouteImport
-      parentRoute: typeof AuthenticatedPortalRouteRoute
+      parentRoute: typeof AuthenticatedPortalEventsRoute
     }
     '/_authenticated/portal/check-ins/$formId': {
       id: '/_authenticated/portal/check-ins/$formId'
@@ -2689,6 +2709,20 @@ const AuthenticatedPortalCheckInsRouteWithChildren =
     AuthenticatedPortalCheckInsRouteChildren,
   )
 
+interface AuthenticatedPortalEventsRouteChildren {
+  AuthenticatedPortalEventsIdRoute: typeof AuthenticatedPortalEventsIdRoute
+}
+
+const AuthenticatedPortalEventsRouteChildren: AuthenticatedPortalEventsRouteChildren =
+  {
+    AuthenticatedPortalEventsIdRoute: AuthenticatedPortalEventsIdRoute,
+  }
+
+const AuthenticatedPortalEventsRouteWithChildren =
+  AuthenticatedPortalEventsRoute._addFileChildren(
+    AuthenticatedPortalEventsRouteChildren,
+  )
+
 interface AuthenticatedPortalPurchasesRouteChildren {
   AuthenticatedPortalPurchasesIdRoute: typeof AuthenticatedPortalPurchasesIdRoute
 }
@@ -2725,6 +2759,7 @@ interface AuthenticatedPortalRouteRouteChildren {
   AuthenticatedPortalCheckInRoute: typeof AuthenticatedPortalCheckInRoute
   AuthenticatedPortalCheckInsRoute: typeof AuthenticatedPortalCheckInsRouteWithChildren
   AuthenticatedPortalDocumentsRoute: typeof AuthenticatedPortalDocumentsRoute
+  AuthenticatedPortalEventsRoute: typeof AuthenticatedPortalEventsRouteWithChildren
   AuthenticatedPortalExercisesRoute: typeof AuthenticatedPortalExercisesRoute
   AuthenticatedPortalLiftVideosRoute: typeof AuthenticatedPortalLiftVideosRoute
   AuthenticatedPortalMediaRoute: typeof AuthenticatedPortalMediaRoute
@@ -2735,7 +2770,6 @@ interface AuthenticatedPortalRouteRouteChildren {
   AuthenticatedPortalRecipesRoute: typeof AuthenticatedPortalRecipesRouteWithChildren
   AuthenticatedPortalResourcesRoute: typeof AuthenticatedPortalResourcesRoute
   AuthenticatedPortalIndexRoute: typeof AuthenticatedPortalIndexRoute
-  AuthenticatedPortalEventsIdRoute: typeof AuthenticatedPortalEventsIdRoute
   AuthenticatedPortalWorkoutsDayIdRoute: typeof AuthenticatedPortalWorkoutsDayIdRoute
   AuthenticatedPortalAgreementsIndexRoute: typeof AuthenticatedPortalAgreementsIndexRoute
   AuthenticatedPortalWorkoutsIndexRoute: typeof AuthenticatedPortalWorkoutsIndexRoute
@@ -2751,6 +2785,7 @@ const AuthenticatedPortalRouteRouteChildren: AuthenticatedPortalRouteRouteChildr
     AuthenticatedPortalCheckInsRoute:
       AuthenticatedPortalCheckInsRouteWithChildren,
     AuthenticatedPortalDocumentsRoute: AuthenticatedPortalDocumentsRoute,
+    AuthenticatedPortalEventsRoute: AuthenticatedPortalEventsRouteWithChildren,
     AuthenticatedPortalExercisesRoute: AuthenticatedPortalExercisesRoute,
     AuthenticatedPortalLiftVideosRoute: AuthenticatedPortalLiftVideosRoute,
     AuthenticatedPortalMediaRoute: AuthenticatedPortalMediaRoute,
@@ -2765,7 +2800,6 @@ const AuthenticatedPortalRouteRouteChildren: AuthenticatedPortalRouteRouteChildr
       AuthenticatedPortalRecipesRouteWithChildren,
     AuthenticatedPortalResourcesRoute: AuthenticatedPortalResourcesRoute,
     AuthenticatedPortalIndexRoute: AuthenticatedPortalIndexRoute,
-    AuthenticatedPortalEventsIdRoute: AuthenticatedPortalEventsIdRoute,
     AuthenticatedPortalWorkoutsDayIdRoute:
       AuthenticatedPortalWorkoutsDayIdRoute,
     AuthenticatedPortalAgreementsIndexRoute:
