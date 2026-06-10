@@ -70,6 +70,7 @@ import { Route as AuthenticatedAdminOffersRouteImport } from './routes/_authenti
 import { Route as AuthenticatedAdminNutritionTargetsRouteImport } from './routes/_authenticated/admin/nutrition-targets'
 import { Route as AuthenticatedAdminNativeFormsRouteImport } from './routes/_authenticated/admin/native-forms'
 import { Route as AuthenticatedAdminMessagesRouteImport } from './routes/_authenticated/admin/messages'
+import { Route as AuthenticatedAdminMembershipRouteImport } from './routes/_authenticated/admin/membership'
 import { Route as AuthenticatedAdminMediaReviewRouteImport } from './routes/_authenticated/admin/media-review'
 import { Route as AuthenticatedAdminMediaArchivesRouteImport } from './routes/_authenticated/admin/media-archives'
 import { Route as AuthenticatedAdminLiftVideosRouteImport } from './routes/_authenticated/admin/lift-videos'
@@ -482,6 +483,12 @@ const AuthenticatedAdminMessagesRoute =
   AuthenticatedAdminMessagesRouteImport.update({
     id: '/messages',
     path: '/messages',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
+const AuthenticatedAdminMembershipRoute =
+  AuthenticatedAdminMembershipRouteImport.update({
+    id: '/membership',
+    path: '/membership',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
 const AuthenticatedAdminMediaReviewRoute =
@@ -963,6 +970,7 @@ export interface FileRoutesByFullPath {
   '/admin/lift-videos': typeof AuthenticatedAdminLiftVideosRoute
   '/admin/media-archives': typeof AuthenticatedAdminMediaArchivesRoute
   '/admin/media-review': typeof AuthenticatedAdminMediaReviewRoute
+  '/admin/membership': typeof AuthenticatedAdminMembershipRoute
   '/admin/messages': typeof AuthenticatedAdminMessagesRoute
   '/admin/native-forms': typeof AuthenticatedAdminNativeFormsRoute
   '/admin/nutrition-targets': typeof AuthenticatedAdminNutritionTargetsRoute
@@ -1096,6 +1104,7 @@ export interface FileRoutesByTo {
   '/admin/lift-videos': typeof AuthenticatedAdminLiftVideosRoute
   '/admin/media-archives': typeof AuthenticatedAdminMediaArchivesRoute
   '/admin/media-review': typeof AuthenticatedAdminMediaReviewRoute
+  '/admin/membership': typeof AuthenticatedAdminMembershipRoute
   '/admin/messages': typeof AuthenticatedAdminMessagesRoute
   '/admin/native-forms': typeof AuthenticatedAdminNativeFormsRoute
   '/admin/nutrition-targets': typeof AuthenticatedAdminNutritionTargetsRoute
@@ -1234,6 +1243,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/lift-videos': typeof AuthenticatedAdminLiftVideosRoute
   '/_authenticated/admin/media-archives': typeof AuthenticatedAdminMediaArchivesRoute
   '/_authenticated/admin/media-review': typeof AuthenticatedAdminMediaReviewRoute
+  '/_authenticated/admin/membership': typeof AuthenticatedAdminMembershipRoute
   '/_authenticated/admin/messages': typeof AuthenticatedAdminMessagesRoute
   '/_authenticated/admin/native-forms': typeof AuthenticatedAdminNativeFormsRoute
   '/_authenticated/admin/nutrition-targets': typeof AuthenticatedAdminNutritionTargetsRoute
@@ -1372,6 +1382,7 @@ export interface FileRouteTypes {
     | '/admin/lift-videos'
     | '/admin/media-archives'
     | '/admin/media-review'
+    | '/admin/membership'
     | '/admin/messages'
     | '/admin/native-forms'
     | '/admin/nutrition-targets'
@@ -1505,6 +1516,7 @@ export interface FileRouteTypes {
     | '/admin/lift-videos'
     | '/admin/media-archives'
     | '/admin/media-review'
+    | '/admin/membership'
     | '/admin/messages'
     | '/admin/native-forms'
     | '/admin/nutrition-targets'
@@ -1642,6 +1654,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/lift-videos'
     | '/_authenticated/admin/media-archives'
     | '/_authenticated/admin/media-review'
+    | '/_authenticated/admin/membership'
     | '/_authenticated/admin/messages'
     | '/_authenticated/admin/native-forms'
     | '/_authenticated/admin/nutrition-targets'
@@ -2190,6 +2203,13 @@ declare module '@tanstack/react-router' {
       path: '/messages'
       fullPath: '/admin/messages'
       preLoaderRoute: typeof AuthenticatedAdminMessagesRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
+    '/_authenticated/admin/membership': {
+      id: '/_authenticated/admin/membership'
+      path: '/membership'
+      fullPath: '/admin/membership'
+      preLoaderRoute: typeof AuthenticatedAdminMembershipRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
     '/_authenticated/admin/media-review': {
@@ -2788,6 +2808,7 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminLiftVideosRoute: typeof AuthenticatedAdminLiftVideosRoute
   AuthenticatedAdminMediaArchivesRoute: typeof AuthenticatedAdminMediaArchivesRoute
   AuthenticatedAdminMediaReviewRoute: typeof AuthenticatedAdminMediaReviewRoute
+  AuthenticatedAdminMembershipRoute: typeof AuthenticatedAdminMembershipRoute
   AuthenticatedAdminMessagesRoute: typeof AuthenticatedAdminMessagesRoute
   AuthenticatedAdminNativeFormsRoute: typeof AuthenticatedAdminNativeFormsRoute
   AuthenticatedAdminNutritionTargetsRoute: typeof AuthenticatedAdminNutritionTargetsRoute
@@ -2866,6 +2887,7 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
     AuthenticatedAdminLiftVideosRoute: AuthenticatedAdminLiftVideosRoute,
     AuthenticatedAdminMediaArchivesRoute: AuthenticatedAdminMediaArchivesRoute,
     AuthenticatedAdminMediaReviewRoute: AuthenticatedAdminMediaReviewRoute,
+    AuthenticatedAdminMembershipRoute: AuthenticatedAdminMembershipRoute,
     AuthenticatedAdminMessagesRoute: AuthenticatedAdminMessagesRoute,
     AuthenticatedAdminNativeFormsRoute: AuthenticatedAdminNativeFormsRoute,
     AuthenticatedAdminNutritionTargetsRoute:
