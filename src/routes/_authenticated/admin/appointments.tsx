@@ -169,7 +169,7 @@ function ApptRow({ a, onChange }: { a: any; onChange: () => void }) {
   );
 }
 
-function NewAppointmentDialog({ open, onOpenChange, onCreated }: { open: boolean; onOpenChange: (b: boolean) => void; onCreated: () => void }) {
+function NewAppointmentDialog({ open, onOpenChange, onCreated, presetDate }: { open: boolean; onOpenChange: (b: boolean) => void; onCreated: () => void; presetDate?: string }) {
   const create = useServerFn(createAppointment);
   const busyFn = useServerFn(getGoogleBusy);
   const { data: clients = [] } = useQuery({
@@ -188,6 +188,10 @@ function NewAppointmentDialog({ open, onOpenChange, onCreated }: { open: boolean
   });
 
   const [form, setForm] = useState<any>(() => defaultForm());
+  // When opened from the calendar with a preset date, hydrate the date field.
+  // Using a ref-ish effect via useState updater inside an effect.
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  useEffectOnOpen(open, presetDate, (d) => setForm((f: any) => ({ ...f, date: d })));
   const durationMin = (() => {
     try {
       const [sh, sm] = form.startTime.split(":").map(Number);
