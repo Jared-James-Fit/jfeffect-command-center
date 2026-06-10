@@ -19,6 +19,8 @@ import { Copy, Link2, KeyRound, Trash2, Plus, Eye } from "lucide-react";
 import { toast } from "sonner";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { MemberAccessSummary } from "@/components/admin/member-access-summary";
+import { ACCOUNT_TYPES, type AccountType } from "@/lib/membership";
 
 export const Route = createFileRoute("/_authenticated/admin/members/$memberId")({ component: MemberProfile });
 
@@ -60,7 +62,9 @@ function MemberProfile() {
         title={member.full_name || member.email}
         subtitle={member.email}
         actions={<div className="flex flex-wrap items-center gap-2">
-          <Badge variant="outline">{member.account_type}</Badge>
+          <Badge variant="outline" className={(ACCOUNT_TYPES as any)[member.account_type]?.tone}>
+            {(ACCOUNT_TYPES as any)[member.account_type]?.label ?? member.account_type}
+          </Badge>
           <Badge>{member.status}</Badge>
           <Button size="sm" variant="outline" onClick={async () => {
             try {
@@ -74,6 +78,8 @@ function MemberProfile() {
           </Button>
         </div>}
       />
+
+      <MemberAccessSummary member={member} access={access} />
 
       <Card className="space-y-3 p-5">
         <div className="text-xs uppercase tracking-wider text-muted-foreground">Account setup</div>
@@ -108,8 +114,9 @@ function MemberProfile() {
             <Label>Account type</Label>
             <select className="mt-1 block h-9 w-full rounded-md border bg-background px-3 text-sm" value={member.account_type}
               onChange={async (e) => { await update({ data: { memberId, account_type: e.target.value as any } }); refresh(); }}>
-              <option value="app_member">App Member</option>
-              <option value="program_only">Program-Only</option>
+              {(Object.keys(ACCOUNT_TYPES) as AccountType[]).map((k) => (
+                <option key={k} value={k}>{ACCOUNT_TYPES[k].label}</option>
+              ))}
             </select>
           </div>
           <div>
