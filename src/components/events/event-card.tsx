@@ -1,31 +1,49 @@
 import { Link } from "@tanstack/react-router";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Calendar, MapPin } from "lucide-react";
 import { computeCountdown, formatEventWhen, importanceBadgeClass, type EventRow } from "@/lib/events";
 import { cn } from "@/lib/utils";
 
 export function EventCard({
   ev, to, params, linksCount, assignedCount,
+  selectable, selected, onSelectedChange,
 }: {
   ev: EventRow;
   to: string;
   params?: Record<string, string>;
   linksCount?: number;
   assignedCount?: number;
+  selectable?: boolean;
+  selected?: boolean;
+  onSelectedChange?: (checked: boolean) => void;
 }) {
   const c = computeCountdown(ev.event_date);
   const pulse = c.tone === "today" || c.tone === "imminent";
   const glow  = ev.importance === "High" || ev.importance === "Critical";
-  return (
-    <Link to={to} params={params as any} className="block">
+  const inner = (
       <Card
         className={cn(
-          "group p-4 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg motion-reduce:transform-none",
+          "group relative p-4 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg motion-reduce:transform-none",
           glow && "ring-1 ring-primary/40 shadow-[0_0_28px_-12px_hsl(var(--primary)/0.55)]",
+          selectable && selected && "ring-2 ring-primary",
         )}
       >
-        <div className="flex items-start justify-between gap-3">
+        {selectable && (
+          <div
+            className="absolute left-2 top-2 z-10"
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
+          >
+            <Checkbox
+              checked={!!selected}
+              onCheckedChange={(v) => onSelectedChange?.(v === true)}
+              aria-label={`Select ${ev.name}`}
+              className="bg-background"
+            />
+          </div>
+        )}
+        <div className={cn("flex items-start justify-between gap-3", selectable && "pl-7")}>
           <div className="min-w-0">
             <div className="text-base font-semibold leading-tight truncate">{ev.name}</div>
             <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
@@ -50,6 +68,21 @@ export function EventCard({
           {typeof linksCount === "number" && linksCount > 0 && <span>{linksCount} links</span>}
         </div>
       </Card>
+  );
+  if (selectable) {
+    return (
+      <button
+        type="button"
+        onClick={() => onSelectedChange?.(!selected)}
+        className="block w-full text-left"
+      >
+        {inner}
+      </button>
+    );
+  }
+  return (
+    <Link to={to} params={params as any} className="block">
+      {inner}
     </Link>
   );
 }

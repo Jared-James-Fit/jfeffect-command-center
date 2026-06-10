@@ -10,14 +10,16 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, CalendarRange, Sparkles } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Plus, CalendarRange, Sparkles, Trash2, Archive, CheckSquare, Pencil } from "lucide-react";
 import { EventCard } from "@/components/events/event-card";
 import {
   EVENT_IMPORTANCE, EVENT_STATUSES, EVENT_TYPES,
   listAdminEvents, type EventStatus, type EventImportance, type EventType,
 } from "@/lib/events";
-import { createEventDraft } from "@/lib/events.functions";
+import { createEventDraft, bulkDeleteEvents, bulkUpdateEventStatus } from "@/lib/events.functions";
 import { toast } from "sonner";
+import { useBulkSelection } from "@/hooks/use-bulk-selection";
 
 export const Route = createFileRoute("/_authenticated/admin/events/")({
   component: AdminEventsPage,
@@ -27,10 +29,13 @@ function AdminEventsPage() {
   const nav = useNavigate();
   const qc = useQueryClient();
   const createDraftFn = useServerFn(createEventDraft);
+  const bulkDeleteFn = useServerFn(bulkDeleteEvents);
+  const bulkStatusFn = useServerFn(bulkUpdateEventStatus);
   const [status, setStatus] = useState<EventStatus | "All">("Active");
   const [search, setSearch] = useState("");
   const [importance, setImportance] = useState<EventImportance | "All">("All");
   const [type, setType] = useState<EventType | "All">("All");
+  const [selectMode, setSelectMode] = useState(false);
 
   const { data: events, isLoading } = useQuery({
     queryKey: ["admin-events", status],
@@ -47,6 +52,42 @@ function AdminEventsPage() {
     if (type !== "All") rows = rows.filter((e) => e.event_type === type);
     return rows;
   }, [events, search, importance, type]);
+
+  const visibleIds = useMemo(() => filtered.map((e) => e.id), [filtered]);
+  const selection = useBulkSelection(visibleIds);
+
+  async function bulkDelete() {
+    if (selection.count === 0) return;
+    if (!confirm(`Delete ${selection.count} event${selection.count === 1 ? "" : "s"}? This cannot be undone.`)) return;
+    try {
+      await bulkDeleteFn({ data: { ids: selection.selectedIds } });
+      toast.success(`Deleted ${selection.count} event${selection.count === 1 ? "" : "s"}`);
+      selection.clear();
+      qc.invalidateQueries({ queryKey: ["admin-events"] });
+    } catch (e: any) {
+      toast.error(e?.message ?? "Delete failed");
+    }
+  }
+
+  async function bulkSetStatus(newStatus: EventStatus) {
+    if (selection.count === 0) return;
+    try {
+      await bulkStatusFn({ data: { ids: selection.selectedIds, status: newStatus } });
+      toast.success(`Updated ${selection.count} event${selection.count === 1 ? "" : "s"} → ${newStatus}`);
+      selection.clear();
+      qc.invalidateQueries({ queryKey: ["admin-events"] });
+    } catch (e: any) {
+      toast.error(e?.message ?? "Update failed");
+    }
+  }
+
+  function bulkEdit() {
+    if (selection.count !== 1) {
+      toast.info("Pick a single event to edit");
+      return;
+    }
+    nav({ to: "/admin/events/$id", params: { id: selection.selectedIds[0] } });
+  }
 
   async function createDraft() {
     const tid = toast.loading("Creating event…");
@@ -70,6 +111,13 @@ function AdminEventsPage() {
         subtitle="Plan upcoming meets, shoots, calls, and key client dates."
         actions={
           <div className="flex gap-2">
+            <Button
+              size="sm"
+              variant={selectMode ? "default" : "outline"}
+              onClick={() => { setSelectMode((v) => !v); selection.clear(); }}
+            >
+              <CheckSquare className="mr-1 h-4 w-4" />{selectMode ? "Done" : "Select"}
+            </Button>
             <Button asChild variant="outline" size="sm">
               <Link to="/admin/events/format-guide"><Sparkles className="mr-1 h-4 w-4" />Format Guide</Link>
             </Button>
@@ -111,6 +159,32 @@ function AdminEventsPage() {
         </div>
       </Card>
 
+      {selectMode && (
+        <Card className="flex flex-wrap items-center gap-2 p-3">
+          <label className="flex cursor-pointer items-center gap-2 text-sm font-semibold">
+            <Checkbox
+              checked={selection.allSelected || (selection.someSelected ? "indeterminate" : false)}
+              onCheckedChange={selection.toggleAll}
+            />
+            {selection.count > 0 ? `${selection.count} selected` : "Select all"}
+          </label>
+          <div className="ml-auto flex flex-wrap gap-2">
+            <Button size="sm" variant="outline" onClick={bulkEdit} disabled={selection.count !== 1}>
+              <Pencil className="mr-1 h-4 w-4" />Edit
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => bulkSetStatus("Archived")} disabled={selection.count === 0}>
+              <Archive className="mr-1 h-4 w-4" />Archive
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => bulkSetStatus("Active")} disabled={selection.count === 0}>
+              Restore
+            </Button>
+            <Button size="sm" variant="destructive" onClick={bulkDelete} disabled={selection.count === 0}>
+              <Trash2 className="mr-1 h-4 w-4" />Delete
+            </Button>
+          </div>
+        </Card>
+      )}
+
       {isLoading ? (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {[0,1,2,3].map((i) => <Skeleton key={i} className="h-32 w-full" />)}
@@ -129,7 +203,15 @@ function AdminEventsPage() {
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {filtered.map((ev) => (
-            <EventCard key={ev.id} ev={ev} to="/admin/events/$id" params={{ id: ev.id }} />
+            <EventCard
+              key={ev.id}
+              ev={ev}
+              to="/admin/events/$id"
+              params={{ id: ev.id }}
+              selectable={selectMode}
+              selected={selection.isSelected(ev.id)}
+              onSelectedChange={(checked) => selection.setOne(ev.id, checked)}
+            />
           ))}
         </div>
       )}
