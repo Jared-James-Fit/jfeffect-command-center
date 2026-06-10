@@ -28,7 +28,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { UserAvatar } from "@/components/user-avatar";
-import { copyLiftVideoStorageToDrive, refreshLiftVideoDriveDiagnostics } from "@/lib/lift-videos.functions";
+import { copyLiftVideoStorageToDrive, refreshLiftVideoDriveDiagnostics, retryLiftVideoArchive } from "@/lib/lift-videos.functions";
 import { useLiftUploadState } from "@/lib/lift-upload-queue";
 import { Progress } from "@/components/ui/progress";
 
@@ -57,6 +57,8 @@ export function LiftVideoCard({ video, role, userId, onChanged, onEdit, clientNa
   const [copyingToDrive, setCopyingToDrive] = useState(false);
   const refreshDiagnostics = useServerFn(refreshLiftVideoDriveDiagnostics);
   const copyToDrive = useServerFn(copyLiftVideoStorageToDrive);
+  const retryArchive = useServerFn(retryLiftVideoArchive);
+  const [retryingArchive, setRetryingArchive] = useState(false);
 
   const loadComments = async () => {
     const c = await listComments(video.id, { includeInternal: role === "admin" });
@@ -152,6 +154,20 @@ export function LiftVideoCard({ video, role, userId, onChanged, onEdit, clientNa
       toast.error(e?.message ?? "Could not copy video to Drive");
     } finally {
       setCopyingToDrive(false);
+    }
+  };
+
+  const handleRetryArchive = async () => {
+    setRetryingArchive(true);
+    try {
+      const r = await retryArchive({ data: { videoId: video.id } });
+      if (r?.ok) toast.success("Archived to Drive");
+      else toast.error(r?.reason ?? "Drive archive failed");
+      onChanged?.();
+    } catch (e: any) {
+      toast.error(e?.message ?? "Drive archive failed");
+    } finally {
+      setRetryingArchive(false);
     }
   };
 
