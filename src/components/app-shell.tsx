@@ -359,6 +359,18 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
+                    onClick={onRestoreDefaults}
+                    className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-foreground"
+                    aria-label="Restore sidebar defaults"
+                  >
+                    <RotateCcw className="h-3.5 w-3.5" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="top">Restore defaults</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
                     onClick={handleSignOut}
                     className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-destructive"
                     aria-label="Sign out"
