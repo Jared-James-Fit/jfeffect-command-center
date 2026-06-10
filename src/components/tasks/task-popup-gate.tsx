@@ -98,7 +98,7 @@ export function TaskPopupGate() {
             Open Task Manager
           </Button>
           <Button size="lg" className="text-base font-bold" onClick={skipForToday}>
-            Skip for today
+            Get First Win
           </Button>
         </DialogFooter>
       </DialogContent>
