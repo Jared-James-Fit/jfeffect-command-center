@@ -335,6 +335,27 @@ export function NotificationBell() {
         // Group chat unreads for this client
         const groupItems = await fetchUnreadGroupItems(user!.id);
         for (const gi of groupItems) items.push(gi);
+        // Upcoming appointments for the client (next 24h)
+        try {
+          const { upcoming } = await portalAppts();
+          for (const a of (upcoming ?? []) as any[]) {
+            const mins = Math.round((new Date(a.starts_at).getTime() - Date.now()) / 60000);
+            if (mins > 24 * 60 || mins < -5) continue;
+            const when = mins <= 60
+              ? (mins <= 0 ? "now" : `in ${mins}m`)
+              : new Date(a.starts_at).toLocaleString(undefined, { weekday: "short", hour: "numeric", minute: "2-digit" });
+            items.push({
+              kind: "appointment",
+              clientId: client.id,
+              appointmentId: a.id,
+              meetLink: a.meet_link,
+              name: a.host_coach?.full_name ?? "Coach",
+              title: `Upcoming: ${a.title} (${when})`,
+              body: `With ${a.host_coach?.full_name ?? "your coach"}`,
+              created_at: a.starts_at,
+            });
+          }
+        } catch { /* ignore */ }
         items.sort((a, b) => +new Date(b.created_at) - +new Date(a.created_at));
         return { count: items.length, items };
       }
