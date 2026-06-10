@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { assertMemberCanReadProtected } from "@/lib/jf-access.server";
 
 async function assertAdmin(ctx: any) {
   const { supabase, userId } = ctx;
@@ -122,6 +123,7 @@ export const memberListResources = createServerFn({ method: "GET" })
   .inputValidator((i: { kind?: "resource"|"tool" } | undefined) => i ?? {})
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
+    await assertMemberCanReadProtected(supabase, userId);
     const { data: member } = await supabase.from("app_members").select("id").eq("user_id", userId).maybeSingle();
     const memberId = member?.id ?? null;
     let accessKeys: string[] = [];
@@ -145,6 +147,7 @@ export const memberGetResource = createServerFn({ method: "GET" })
   .inputValidator((i: unknown) => z.object({ slug: z.string().min(1).max(80) }).parse(i))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
+    await assertMemberCanReadProtected(supabase, userId);
     const { data: row } = await supabase
       .from("member_resources").select("*").eq("slug", data.slug).eq("status", "Published").maybeSingle();
     if (!row) throw new Error("Not found");

@@ -145,6 +145,12 @@ function AuthPage() {
                 Private Client Access
               </span>
             </div>
+            <div className="mt-4 text-xs text-muted-foreground">
+              New here?{" "}
+              <a href="/signup/jf" className="text-primary underline-offset-2 hover:underline">
+                Join JF Membership
+              </a>
+            </div>
           </div>
         </div>
       </div>

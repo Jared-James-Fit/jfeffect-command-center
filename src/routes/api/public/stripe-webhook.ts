@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { createClient } from "@supabase/supabase-js";
+import { stripeFetch } from "@/lib/stripe.server";
 
 // Verify Stripe signature using Web Crypto (HMAC-SHA256).
 // Header format: t=timestamp,v1=sig,v1=sig...
@@ -195,6 +196,82 @@ async function revokeMemberFromPurchase(supabase: any, purchase: any) {
   }
 }
 
+/* ───────── JF Membership webhook helpers ───────── */
+
+function jfStatusFromSub(sub: any, holdPriceId: string | null): string {
+  if (!sub) return "Cancelled";
+  const priceId = sub.items?.data?.[0]?.price?.id;
+  if (holdPriceId && priceId === holdPriceId) return "Hold Plan";
+  if (sub.pause_collection) return "Paused";
+  switch (sub.status) {
+    case "trialing": return "Trialing";
+    case "active": return "Active";
+    case "past_due": return "Past Due";
+    case "unpaid": return "Payment Failed";
+    case "canceled": return "Cancelled";
+    case "incomplete":
+    case "incomplete_expired": return "Payment Failed";
+    case "paused": return "Paused";
+    default: return "Cancelled";
+  }
+}
+const fromUnix = (u?: number | null) => (u ? new Date(u * 1000).toISOString() : null);
+
+async function jfSettings(supabase: any) {
+  const { data } = await supabase.from("jf_membership_settings").select("*").eq("id", true).maybeSingle();
+  return data;
+}
+
+async function isJfMembershipSubscription(supabase: any, sub: any): Promise<boolean> {
+  if (!sub) return false;
+  if (sub.metadata?.kind === "jf_membership") return true;
+  const s = await jfSettings(supabase);
+  const priceId = sub.items?.data?.[0]?.price?.id;
+  return !!(s && priceId && (priceId === s.monthly_price_id || priceId === s.hold_price_id));
+}
+
+async function findJfMemberBySub(supabase: any, sub: any) {
+  // 1) by stripe_subscription_id
+  let { data } = await supabase.from("app_members").select("*").eq("stripe_subscription_id", sub.id).maybeSingle();
+  if (data) return data;
+  // 2) by customer
+  if (sub.customer) {
+    const r = await supabase.from("app_members").select("*").eq("stripe_customer_id", sub.customer).maybeSingle();
+    if (r.data) return r.data;
+  }
+  // 3) by metadata email (fallback for trialing where checkout->member just landed)
+  const emailLc = sub.metadata?.email_lc;
+  if (emailLc) {
+    const r = await supabase.from("app_members").select("*").ilike("email", emailLc).maybeSingle();
+    if (r.data) return r.data;
+  }
+  return null;
+}
+
+async function applyJfSubToMember(supabase: any, member: any, sub: any) {
+  const s = await jfSettings(supabase);
+  const holdId = s?.hold_price_id ?? null;
+  const status = jfStatusFromSub(sub, holdId);
+  const patch: any = {
+    subscription_status: status,
+    stripe_subscription_id: sub.id,
+    stripe_customer_id: sub.customer ?? null,
+    stripe_price_id: sub.items?.data?.[0]?.price?.id ?? null,
+    trial_end_at: fromUnix(sub.trial_end),
+    current_period_end: fromUnix(sub.current_period_end),
+    cancel_at: fromUnix(sub.cancel_at),
+    cancelled_at: fromUnix(sub.canceled_at),
+    paused_until: fromUnix(sub.pause_collection?.resumes_at),
+    last_billing_event_at: new Date().toISOString(),
+  };
+  if (status === "Hold Plan") patch.hold_plan_started_at = new Date().toISOString();
+  if (["Trialing", "Active"].includes(status)) patch.status = "Active";
+  else if (status === "Cancelled" || status === "Payment Failed") patch.status = "Cancelled";
+  await supabase.from("app_members").update(patch).eq("id", member.id);
+  const grants = status === "Trialing" || status === "Active";
+  await supabase.from("member_access").update({ active: grants }).eq("member_id", member.id);
+}
+
 export const Route = createFileRoute("/api/public/stripe-webhook")({
   server: {
     handlers: {
@@ -238,6 +315,13 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
 
             // ── One-time & subscription checkout completion ─────────────────
             case "checkout.session.completed": {
+              if (obj?.metadata?.kind === "jf_membership") {
+                await supabase.from("jf_billing_events").insert({
+                  stripe_event_id: event.id, type: event.type,
+                  customer_id: obj.customer ?? null, subscription_id: obj.subscription ?? null, payload: obj,
+                }).then(() => {}, () => {});
+                break;
+              }
               const purchase = await resolvePurchase(supabase, obj, {
                 stripe_checkout_session_id: obj.id,
               });
@@ -269,6 +353,16 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
 
             // ── Subscription created (new subscriber) ───────────────────────
             case "customer.subscription.created": {
+              if (await isJfMembershipSubscription(supabase, obj)) {
+                const member = await findJfMemberBySub(supabase, obj);
+                if (member) await applyJfSubToMember(supabase, member, obj);
+                await supabase.from("jf_billing_events").insert({
+                  stripe_event_id: event.id, type: event.type,
+                  customer_id: obj.customer ?? null, subscription_id: obj.id,
+                  member_id: member?.id ?? null, payload: obj,
+                }).then(() => {}, () => {});
+                break;
+              }
               const purchase = await resolvePurchase(supabase, obj, {
                 stripe_subscription_id: obj.id,
                 stripe_customer_id: obj.customer,
@@ -302,6 +396,16 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
 
             // ── Subscription updated (renewal, cancellation, past_due) ──────
             case "customer.subscription.updated": {
+              if (await isJfMembershipSubscription(supabase, obj)) {
+                const member = await findJfMemberBySub(supabase, obj);
+                if (member) await applyJfSubToMember(supabase, member, obj);
+                await supabase.from("jf_billing_events").insert({
+                  stripe_event_id: event.id, type: event.type,
+                  customer_id: obj.customer ?? null, subscription_id: obj.id,
+                  member_id: member?.id ?? null, payload: obj,
+                }).then(() => {}, () => {});
+                break;
+              }
               const purchase = await resolvePurchase(supabase, obj, {
                 stripe_subscription_id: obj.id,
                 stripe_customer_id: obj.customer,
@@ -359,6 +463,16 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
 
             // ── Subscription deleted (hard cancel) ──────────────────────────
             case "customer.subscription.deleted": {
+              if (await isJfMembershipSubscription(supabase, obj)) {
+                const member = await findJfMemberBySub(supabase, obj);
+                if (member) await applyJfSubToMember(supabase, member, { ...obj, status: "canceled" });
+                await supabase.from("jf_billing_events").insert({
+                  stripe_event_id: event.id, type: event.type,
+                  customer_id: obj.customer ?? null, subscription_id: obj.id,
+                  member_id: member?.id ?? null, payload: obj,
+                }).then(() => {}, () => {});
+                break;
+              }
               const purchase = await resolvePurchase(supabase, obj, { stripe_subscription_id: obj.id });
               if (purchase) {
                 await supabase.from("purchase_records").update({
@@ -374,6 +488,17 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
 
             // ── Invoice paid (subscription renewal) ─────────────────────────
             case "invoice.payment_succeeded": {
+              if (obj.subscription) {
+                const sub = await stripeFetch(`/subscriptions/${obj.subscription}`);
+                if (await isJfMembershipSubscription(supabase, sub)) {
+                  const member = await findJfMemberBySub(supabase, sub);
+                  if (member) {
+                    await applyJfSubToMember(supabase, member, sub);
+                    await supabase.from("app_members").update({ last_invoice_status: "paid" }).eq("id", member.id);
+                  }
+                  break;
+                }
+              }
               const purchase = await resolvePurchase(supabase, obj, {
                 stripe_subscription_id: obj.subscription,
                 stripe_customer_id: obj.customer,
@@ -394,6 +519,17 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
             }
             // ── Invoice failed (payment issue) ──────────────────────────────
             case "invoice.payment_failed": {
+              if (obj.subscription) {
+                const sub = await stripeFetch(`/subscriptions/${obj.subscription}`);
+                if (await isJfMembershipSubscription(supabase, sub)) {
+                  const member = await findJfMemberBySub(supabase, sub);
+                  if (member) {
+                    await applyJfSubToMember(supabase, member, sub);
+                    await supabase.from("app_members").update({ last_invoice_status: "failed" }).eq("id", member.id);
+                  }
+                  break;
+                }
+              }
               const purchase = await resolvePurchase(supabase, obj, {
                 stripe_subscription_id: obj.subscription,
                 stripe_customer_id: obj.customer,

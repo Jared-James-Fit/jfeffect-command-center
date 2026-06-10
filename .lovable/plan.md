@@ -1,129 +1,176 @@
-# JF Membership Account Type
+# JF Membership — Self-Serve Signup, Billing & Access Protection
 
-## Goal
+This is a large build. Below is the scoped plan. I'll implement it after approval.
 
-Treat **JF Membership** as a non-coaching subscription that auto-receives a standard bundle of self-guided features (programs, tracking, recipes, resources, events, announcements, community) and is automatically excluded from 1:1 coaching surfaces. Admins get a one-click setup checklist and a clear access summary on the member profile.
+## 0. What's already there (won't rebuild)
 
-## Strategy
+- `app_members`, `member_access`, `member_access_defaults`, `access_levels`, `apply_default_member_access()`, `member_has_access()` — done last turn.
+- `jf_member` account type + JF default access checklist + access summary + subscription-restricted banner + upgrade-to-coaching prompt — done last turn.
+- `src/routes/api/public/stripe-webhook.ts` — verifies signature, handles checkout/invoice/subscription events for coaching purchases.
+- `src/lib/member-checkout.functions.ts` — creates Checkout Sessions for member-facing coaching products.
+- `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` secrets present.
 
-The app already has the right primitives:
+I'll extend these, not replace them.
 
-- `app_members.account_type` — but currently limited to `app_member | program_only`. We extend the CHECK and add `jf_member`.
-- `access_levels` + `member_access` — already used to gate Plan Library, Resource Library, etc. We seed a default bundle on JF Membership creation/approval.
-- `audience_scope` on broadcasts / `access_scope` on recipes / `audience_scope` on events — already includes `app_members`. JF members satisfy that scope.
-- Subscription gating already flows through `member_access.active` + `expires_at`.
+## 1. Database (one migration)
 
-We do NOT introduce a parallel feature-flag system. We use what's there and add a default seed + admin UX + a small upgrade-prompt component for coaching-only surfaces.
+New columns on `app_members`:
+- `stripe_customer_id text`, `stripe_subscription_id text`, `stripe_price_id text`
+- `subscription_status text` (Trialing / Active / Past Due / Payment Failed / Paused / Hold Plan / Cancelled / Expired / Deactivated)
+- `trial_end_at`, `current_period_end`, `cancel_at`, `cancelled_at`, `paused_until`, `hold_plan_started_at`
+- `last_invoice_status`, `last_billing_event_at`
+- `signup_ip inet`, `signup_user_agent text` (audit)
 
-## Plan
+New table `jf_membership_settings` (single row, admin-editable):
+- `monthly_price_id`, `monthly_price_display` (default "$29/month")
+- `hold_price_id`, `hold_price_display` (default "$9/month")
+- `trial_days int default 3`
+- `upgrade_coaching_url text`, `support_email text`
 
-### 1. Database migration
+New table `jf_billing_events` (audit log of every webhook applied):
+- `stripe_event_id` (unique), `type`, `customer_id`, `subscription_id`, `member_id`, `payload jsonb`, `processed_at`.
 
-- Extend `app_members.account_type` CHECK to include `jf_member`.
-- Add two access-level rows so JF maps cleanly:
-  - `jf_membership` (label "JF Membership") — superset key checked by JF-only content.
-  - `community` (label "Community") — chats, announcements.
-  - (Reuse existing `program_library`, `resource_library`, `app_membership`, `nutrition_tools` for the rest.)
-- Add `member_access_defaults` table keyed by `account_type` listing which `access_level_key`s to auto-grant. Pre-seed JF Membership with the default bundle. Pre-seed `app_member` and `program_only` with their current de-facto defaults so we don't regress.
-- Add a SECURITY DEFINER function `apply_default_member_access(_member_id uuid)` that inserts missing rows from the defaults table for that member's `account_type`. Idempotent.
-- GRANTs + RLS as standard (admin manage, member read own).
+New table `jf_trial_emails` (trial-abuse guard):
+- `email_lc text unique`, `first_trial_at timestamptz` — set on first trial; blocks a second trial for the same email.
 
-### 2. Server: seed defaults on create / approve / type-change
+New SQL helpers (SECURITY DEFINER):
+- `jf_member_has_full_access(_user_id uuid) returns boolean` — returns true only when account_type='jf_member' AND subscription_status IN ('Trialing','Active') AND not expired/deactivated.
+- `tg_member_subscription_audit()` trigger — blocks client-side updates to `subscription_status`/`account_type`/`stripe_*` (only `service_role` or admins can write these fields; members can't self-promote).
 
-In `src/lib/members.functions.ts`:
+RLS:
+- `app_members`: members can SELECT their own row; UPDATE only allows non-billing fields (full_name, phone, prefs). Billing/status fields are service-role only.
+- `member_access`: already locked; defaults are seeded by `apply_default_member_access()`.
 
-- Accept `jf_member` in the create/update Zod enums.
-- After insert in `createAppMember`, call `apply_default_member_access(member_id)`.
-- In the update path, when `account_type` changes, call the same function.
-- New server fn `applyDefaultMemberAccess({ memberId })` for the "Apply defaults" button.
+## 2. Stripe wiring
 
-### 3. Membership defaults bundle
+`src/lib/jf-billing.functions.ts` (new) — server fns, all use `stripeFetch()` helper extracted into `src/lib/stripe.server.ts`:
 
-JF Membership grants (via `member_access` rows):
+- `getJfSettings()` — returns price IDs / display.
+- `createJfSignupCheckout({ email, fullName, phone, password })` — public (no auth middleware): creates Stripe customer with email, opens Checkout Session in `subscription` mode with `trial_period_days=3`, `success_url=/m/welcome?session_id={CHECKOUT_SESSION_ID}`, `cancel_url=/signup/jf?cancelled=1`, stores pending signup in a short-lived `jf_pending_signups` row keyed by session_id with hashed password.
+- `completeJfSignup({ sessionId })` — called from /m/welcome loader: retrieves session from Stripe, verifies `payment_status='paid' || status='complete'` or `subscription.status='trialing'`, creates auth user via `supabaseAdmin.auth.admin.createUser`, inserts `app_members` row with stripe ids + trialing status, calls `apply_default_member_access()`, deletes pending signup, signs the user in.
+- `cancelJfMembership({ reason, details })` — sets `cancel_at_period_end=true` on subscription.
+- `freezeJfMembership()` — uses Stripe `pause_collection.behavior='void'` with `resumes_at=now+30d`, sets `subscription_status='Paused'`, `paused_until=resumes_at`.
+- `switchToHoldPlan()` — Stripe subscription update: swap price item to `hold_price_id`, `proration_behavior='none'`, mark `Hold Plan`.
+- `reactivateFullMembership()` — swap price item back to `monthly_price_id`, clear pause_collection / cancel_at_period_end, mark `Active`.
+- `openBillingPortal()` — Stripe Billing Portal session for the member.
+- `syncStripeStatus({ memberId? })` — admin/self: re-fetches subscription, recomputes status, updates row.
 
-```text
-jf_membership, app_membership, program_library, resource_library,
-nutrition_tools, community
+`src/routes/api/public/stripe-webhook.ts` — extend to handle JF events (`mode='subscription'` checkout sessions with `metadata.kind='jf_membership'`):
+- `checkout.session.completed` → trial start: ensure member row exists (called by completeJfSignup, but webhook is idempotent backstop).
+- `customer.subscription.created/updated` → derive status: trialing/active/past_due/paused/canceled/hold-plan (price id == hold) → write to `app_members`.
+- `customer.subscription.deleted` → `Cancelled`/`Expired` (after period end).
+- `invoice.payment_succeeded` → `Active`, clear past_due.
+- `invoice.payment_failed` → `Past Due` then `Payment Failed`.
+- `customer.subscription.trial_will_end` → fire member notification.
+
+Every webhook write goes through `jf_billing_events` (dedupe on `stripe_event_id`).
+
+## 3. Public signup page
+
+`src/routes/signup.jf.tsx` (public, SSR, with `head()` SEO):
+- Hero, "$29/month — 3-day free trial", what's included / what's not, refund policy.
+- Form: first/last name, email, phone (optional), password+confirm, terms checkbox, SMS consent (only if phone).
+- Zod validation client+server.
+- On submit: POST to `createJfSignupCheckout` → `window.location = url`.
+
+Trial-abuse guard: before creating session, check `jf_trial_emails` table; if email already used a trial, force `trial_period_days=0` (must pay immediately) and tell the user.
+
+## 4. Welcome / onboarding
+
+`src/routes/_authenticated/m/welcome.tsx`:
+- Loader calls `completeJfSignup({ sessionId })`.
+- Shows: account created, status, trial end date, login email, access list, onboarding checklist (Complete profile / Choose plan / Browse exercises / Recipes / Notifications / Start first workout), support + refund link.
+
+## 5. Member billing page
+
+`src/routes/_authenticated/m/billing.tsx`:
+- Shows current status / plan / price / trial end / next billing / payment status.
+- Buttons: Cancel, Switch to Hold Plan, Freeze 30 Days, Reactivate (when paused/hold/cancelled).
+- Open Stripe Billing Portal link.
+
+## 6. Cancellation flow
+
+`src/components/billing/cancel-flow.tsx` — 4-step dialog:
+1. "Before you cancel" — what they'll lose; buttons Keep / Show options / Continue.
+2. Retention options — Keep / Freeze 30 days / Switch to Hold Plan / Continue to cancel.
+3. Optional reason (radio + text).
+4. Final confirm — explains period-end behavior, Keep / Confirm.
+
+Posts to the appropriate server fn per choice.
+
+## 7. Server-side access protection
+
+- `requireJfActive` middleware (new) — wraps any member-facing server fn. Calls `jf_member_has_full_access(auth.uid())`. If false → 403.
+- Apply to: `listMemberPlans`, `listMemberResources`, `listMyEnrollments`, recipe/exercise/event/announcement member fetchers, group-chat read fns, progress-metrics writers.
+- For loaders under `_authenticated/m/`: `useMemberAccess()` already gates UI; we add a server-side check in each loader-called server fn so URL-stuffing returns nothing.
+- Public Stripe-products / signup page does NOT use the gate.
+
+`src/routes/_authenticated/m/route.tsx` — already shows `SubscriptionRestrictedBanner`; extend to redirect away from protected child routes when `!hasAccess('app_membership')` (leave billing + welcome reachable).
+
+## 8. Admin
+
+`src/routes/_authenticated/admin/members.$memberId.tsx` — extend Access Summary card with:
+- Billing block: status, plan (full vs Hold), trial end, next billing, cancel-at, paused-until, Stripe customer/subscription deep links.
+- Actions: Sync Stripe Status, Switch to Hold, Freeze 30d, Reactivate, Cancel, Comp Access (manual grant), Resend setup email.
+
+`src/routes/_authenticated/admin/members.index.tsx` — add JF Members tab columns: subscription_status, trial_end, next_billing, signup_date.
+
+`src/routes/_authenticated/admin/settings.tsx` — JF Membership settings card (price IDs, trial days, display, upgrade URL).
+
+## 9. Notifications
+
+Reuse existing `email_sender_settings` queue. Templates added to `src/lib/email-templates/`:
+- jf-welcome, jf-trial-ending, jf-payment-succeeded, jf-payment-failed, jf-cancelled, jf-frozen, jf-hold-plan, jf-resuming, jf-reactivated.
+
+Admin notifications: insert a row into existing `admin_audit_log` + (if configured) send admin a digest email — non-blocking.
+
+## 10. Upgrade-to-coaching
+
+Existing `UpgradeToCoachingPrompt` component — wire its "Upgrade" button to the admin-configured `upgrade_coaching_url`, falling back to `/m/upgrade`.
+
+## 11. Files to add / edit
+
+```
+supabase/migrations/<ts>_jf_billing.sql          NEW
+src/lib/stripe.server.ts                          NEW (shared helpers)
+src/lib/jf-billing.functions.ts                   NEW
+src/lib/jf-settings.ts                            NEW (admin settings hook)
+src/routes/signup.jf.tsx                          NEW (public)
+src/routes/_authenticated/m/welcome.tsx           NEW
+src/routes/_authenticated/m/billing.tsx           NEW
+src/components/billing/cancel-flow.tsx            NEW
+src/components/billing/billing-status-card.tsx    NEW
+src/components/billing/jf-admin-billing-card.tsx  NEW
+src/routes/api/public/stripe-webhook.ts           EDIT (JF event handlers)
+src/routes/_authenticated/admin/members.$memberId.tsx EDIT (admin actions)
+src/routes/_authenticated/admin/members.index.tsx EDIT (JF columns)
+src/routes/_authenticated/admin/settings.tsx      EDIT (JF settings card)
+src/routes/_authenticated/m/route.tsx             EDIT (redirect when no full access)
+src/lib/member-plans.functions.ts                 EDIT (add requireJfActive)
+src/lib/member-resources.functions.ts             EDIT (add requireJfActive)
+src/lib/events.functions.ts                       EDIT (add requireJfActive on member fetchers)
+src/lib/email-templates/jf-*.tsx                  NEW (×9)
 ```
 
-JF Membership explicitly does NOT grant:
+## 12. Acceptance (matches your test checklist)
 
-```text
-coaching_access, premium_member  (premium stays admin-grant only)
-```
+I'll verify each item in PART 25 manually after build via `invoke-server-function` and a test Stripe customer in `sandbox` mode. The four highest-risk items I will double-check before signing off:
+1. URL-stuffing `/m/plans` while Cancelled → 403 from server fn, not just hidden.
+2. Trial-end via webhook → status flips to `Past Due` → access revoked on next request.
+3. `subscription_status` cannot be self-promoted (trigger blocks it; non-admin UPDATE rejected).
+4. Hold Plan price swap leaves history intact + revokes premium libraries.
 
-### 4. Audience scopes — JF satisfies "app_members"
+## 13. Out of scope
 
-Already true in code (JF rows live in `app_members`). The visibility helpers (`user_can_see_broadcast`, `user_can_see_recipe`, event filters) already gate on the `app_members` table, so any `app_members`-scoped broadcast/recipe/event/resource is automatically visible. No code changes needed for visibility; we only need to make sure JF members are never picked up by `coaching_clients` scope (they aren't — that scope checks `clients`).
+- Habit-tracking / challenges (no tables yet — just left in defaults so they auto-grant when shipped).
+- Migration of existing JF members to new status enum (none in prod yet — confirm before run).
+- Replacing the coaching-checkout flow (`coaching_products`) — untouched.
 
-For events specifically, `AUDIENCE_SCOPES` is `["selected_clients","all_coaching","app_members","program_only"]`. JF members are visible to `app_members`; verified.
+## 14. Open questions (please confirm before I build)
 
-### 5. Admin member-creation UX
+1. **Stripe price IDs**: Do you already have JF $29 + Hold $9 prices in Stripe sandbox, or should I have the admin paste them into the settings card (no auto-create)?
+2. **Trial gating on existing emails**: Block second trial entirely, or allow but skip trial (charge immediately)? Default in plan: skip trial, charge immediately.
+3. **Freeze approach**: OK to use Stripe `pause_collection` (recommended, simplest)? If not supported in your Stripe mode, fallback is `trial_end` extension by 30d — slight cosmetic difference in invoices.
+4. **Existing webhook**: OK to extend the same `/api/public/stripe-webhook.ts` endpoint, or do you want a separate `/api/public/jf-webhook.ts`? Default: extend (single Stripe webhook endpoint in dashboard).
 
-`src/routes/_authenticated/admin/members.new.tsx`:
-
-- Add `JF Membership` to the account-type segmented control.
-- When `jf_member` selected, render the **Default Access Checklist** card:
-  - Auto-checked items showing each access level that will be granted.
-  - Auto-disabled (greyed) items: 1:1 coaching chat, custom workout, custom nutrition, lift review, coach review queue, coach notes.
-  - "Override" toggle per row to uncheck (writes the per-row override before insert).
-- Submit calls existing create flow → server seeds defaults from the table (minus overrides).
-
-`src/routes/_authenticated/admin/members.$memberId.tsx`:
-
-- Header chip shows account type with distinct color (Coaching client / JF Membership / App Member / Program-Only).
-- **Access Summary** card listing each granted access level + subscription status (Active / Past Due / Cancelled / Expired) derived from `app_members.status`.
-- "Apply default access" button → calls `applyDefaultMemberAccess`.
-- "Manage access" → existing access editor (already exists for app_members).
-
-### 6. Subscription-state gating
-
-Already in place: `member_has_access` SQL function returns false when `active=false` or `expires_at` past. We add a small client helper `useMemberAccess()` that returns:
-
-```ts
-{ accountType, status, granted: Set<access_level_key>, hasAccess(key) }
-```
-
-When `status` is `Past Due | Cancelled | Expired | Deactivated`, `hasAccess` returns false and the portal renders a billing banner (component `<SubscriptionRestrictedBanner />`) on member-portal routes.
-
-### 7. Coaching-only upgrade prompt
-
-New component `src/components/upgrade-to-coaching-prompt.tsx`:
-
-- Shows a friendly card: "This feature is available with coaching."
-- Two buttons: "Upgrade to Coaching" (links to a configurable upgrade URL / falls back to `/portal/upgrade`) and "Message Support" (opens existing Support Chat).
-- Wrap the JF-visible-but-coaching-only routes (coach chat, lift review submission, custom nutrition page) with a guard: if `accountType === 'jf_member'`, render the prompt instead of the page.
-
-### 8. Chat labels
-
-In the member portal sidebar / page header, if `accountType === 'jf_member'` and the only available conversation is the support thread, label it **Support Chat** (not Coach Chat). This is a single string change in the portal chat component.
-
-### 9. Files added / edited
-
-```text
-supabase/migrations/<ts>_jf_membership.sql       NEW
-src/lib/members.functions.ts                     EDIT (enum + seed call + applyDefaults fn)
-src/lib/member-access.ts                         NEW (useMemberAccess hook)
-src/components/upgrade-to-coaching-prompt.tsx    NEW
-src/components/subscription-restricted-banner.tsx NEW
-src/components/admin/jf-default-access-checklist.tsx NEW
-src/components/admin/member-access-summary.tsx   NEW
-src/routes/_authenticated/admin/members.new.tsx  EDIT
-src/routes/_authenticated/admin/members.$memberId.tsx EDIT
-src/routes/_authenticated/portal/ (coach chat / lift review / nutrition pages) EDIT (guard)
-```
-
-### 10. Out of scope (call out)
-
-- **Habit tracking** and **challenges** are listed in the spec but don't exist in this codebase yet. I will wire access levels for them so they "just work" when those features ship, but I won't build the feature itself.
-- **Stripe webhook → auto-set status** already exists; I will not refactor it.
-
-## Acceptance check
-
-- Create a JF Membership account → access summary shows Programs / Recipes / Resources / Events / Community enabled, Coaching disabled.
-- Browse `/portal/plans` as a JF member → only `app_membership`-or-`jf_membership`-scoped plans appear.
-- Visit `/portal/coach` as a JF member → upgrade prompt instead of coach chat.
-- Set member status to `Past Due` → portal shows billing banner; protected content is hidden.
-- Admin profile page shows account-type chip + Access Summary + "Apply defaults" button.
-
-Approve to build?
+Approve and answer the 4 questions and I'll build it in one go.

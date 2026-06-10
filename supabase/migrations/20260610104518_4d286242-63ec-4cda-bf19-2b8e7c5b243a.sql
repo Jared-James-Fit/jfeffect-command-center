@@ -1,0 +1,1 @@
+ALTER TABLE public.app_members ALTER COLUMN signup_ip TYPE text USING signup_ip::text;

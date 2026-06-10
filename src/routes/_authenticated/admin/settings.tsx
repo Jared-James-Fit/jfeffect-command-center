@@ -20,6 +20,7 @@ import { updateSignNowSettings, testSignNowConnection } from "@/lib/agreements.f
 import { Mail, Send, FolderOpen, ExternalLink, ShieldCheck } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { AccountProfileSettings } from "@/components/account-profile-settings";
+import { JfMembershipSettingsCard } from "@/components/admin/jf-membership-settings-card";
 
 export const Route = createFileRoute("/_authenticated/admin/settings")({ component: SettingsPage });
 
@@ -106,6 +107,7 @@ function SettingsPage() {
       <PageHeader title="Settings" subtitle="Account & access" />
       <div className="grid gap-6 p-6 md:grid-cols-2 md:p-8">
         <AccountProfileSettings title="Your Profile" roleLabel="Admin / Owner" />
+        <JfMembershipSettingsCard />
 
         <Card className="border-primary/30 bg-primary/5 p-6 space-y-3">
           <h3 className="text-xs uppercase tracking-widest text-primary">Admin Access</h3>

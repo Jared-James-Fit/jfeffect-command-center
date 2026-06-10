@@ -20,6 +20,7 @@ import { toast } from "sonner";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { MemberAccessSummary } from "@/components/admin/member-access-summary";
+import { JfAdminBillingCard } from "@/components/billing/jf-admin-billing-card";
 import { ACCOUNT_TYPES, type AccountType } from "@/lib/membership";
 
 export const Route = createFileRoute("/_authenticated/admin/members/$memberId")({ component: MemberProfile });
@@ -80,6 +81,7 @@ function MemberProfile() {
       />
 
       <MemberAccessSummary member={member} access={access} />
+      {member.account_type === "jf_member" && <JfAdminBillingCard member={member} />}
 
       <Card className="space-y-3 p-5">
         <div className="text-xs uppercase tracking-wider text-muted-foreground">Account setup</div>
