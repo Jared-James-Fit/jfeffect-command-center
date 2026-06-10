@@ -185,7 +185,7 @@ function MessagesInbox() {
   // On md+: persistent inbox sidebar (320–360px) + conversation pane.
   return (
     <div
-      className="fixed inset-x-0 top-0 z-30 flex bg-background md:static md:inset-auto md:z-auto md:h-full md:flex-1"
+      className="fixed inset-x-0 top-0 z-30 flex flex-col bg-background md:static md:inset-auto md:z-auto md:h-full md:flex-1"
       style={{ height: "calc(100dvh - var(--bottom-nav-clearance, 0px))" }}
     >
       {tab === "groups" ? (
