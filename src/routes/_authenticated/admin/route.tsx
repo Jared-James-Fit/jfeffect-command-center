@@ -2,7 +2,7 @@ import { createFileRoute, Outlet, useNavigate, useRouterState } from "@tanstack/
 import { useEffect, useMemo } from "react";
 import { useAuth } from "@/lib/auth";
 import { AppShell } from "@/components/app-shell";
-import { adminNav, coachingAdminNav, coachNav } from "@/lib/admin-nav";
+import { coachingAdminNav, coachNav } from "@/lib/admin-nav";
 import { membershipNav } from "@/lib/membership-nav";
 import { useDashboardMode, setDashboardMode } from "@/lib/dashboard-mode";
 import { DashboardModeSwitcher } from "@/components/dashboard-mode-switcher";
@@ -43,7 +43,7 @@ function AdminLayout() {
   const customLayout = useBarLayout(isCoach ? "coach" : "admin");
 
   const defaultBottom = useMemo(() => {
-    const source = isCoach ? coachNav : adminNav;
+    const source = isCoach ? coachNav : coachingAdminNav;
     const pick = (to: string) => source.find((i) => i.to === to)!;
     if (isCoach) {
       return [
