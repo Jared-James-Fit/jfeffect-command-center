@@ -868,6 +868,74 @@ export type Database = {
         }
         Relationships: []
       }
+      chat_group_members: {
+        Row: {
+          added_at: string
+          added_by: string | null
+          group_id: string
+          last_read_at: string | null
+          role: Database["public"]["Enums"]["group_member_role"]
+          user_id: string
+        }
+        Insert: {
+          added_at?: string
+          added_by?: string | null
+          group_id: string
+          last_read_at?: string | null
+          role?: Database["public"]["Enums"]["group_member_role"]
+          user_id: string
+        }
+        Update: {
+          added_at?: string
+          added_by?: string | null
+          group_id?: string
+          last_read_at?: string | null
+          role?: Database["public"]["Enums"]["group_member_role"]
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_group_members_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "chat_groups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      chat_groups: {
+        Row: {
+          archived: boolean
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          name: string
+          permission_mode: Database["public"]["Enums"]["group_permission_mode"]
+          updated_at: string
+        }
+        Insert: {
+          archived?: boolean
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          name: string
+          permission_mode?: Database["public"]["Enums"]["group_permission_mode"]
+          updated_at?: string
+        }
+        Update: {
+          archived?: boolean
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          name?: string
+          permission_mode?: Database["public"]["Enums"]["group_permission_mode"]
+          updated_at?: string
+        }
+        Relationships: []
+      }
       chat_sound_favorites: {
         Row: {
           created_at: string
@@ -2735,6 +2803,82 @@ export type Database = {
         }
         Relationships: []
       }
+      group_message_reactions: {
+        Row: {
+          created_at: string
+          emoji: string
+          id: string
+          message_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          emoji: string
+          id?: string
+          message_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          emoji?: string
+          id?: string
+          message_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "group_message_reactions_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "group_messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      group_messages: {
+        Row: {
+          attachments: Json
+          body: string
+          created_at: string
+          deleted_at: string | null
+          edited_at: string | null
+          group_id: string
+          id: string
+          sender_id: string | null
+          sender_role: string
+        }
+        Insert: {
+          attachments?: Json
+          body?: string
+          created_at?: string
+          deleted_at?: string | null
+          edited_at?: string | null
+          group_id: string
+          id?: string
+          sender_id?: string | null
+          sender_role?: string
+        }
+        Update: {
+          attachments?: Json
+          body?: string
+          created_at?: string
+          deleted_at?: string | null
+          edited_at?: string | null
+          group_id?: string
+          id?: string
+          sender_id?: string | null
+          sender_role?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "group_messages_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "chat_groups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       important_dates: {
         Row: {
           approaching_soon_days: number
@@ -3072,6 +3216,47 @@ export type Database = {
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mass_message_log: {
+        Row: {
+          audience_summary: string | null
+          body: string
+          created_at: string
+          group_id: string | null
+          id: string
+          mode: string
+          recipient_count: number
+          sent_by: string | null
+        }
+        Insert: {
+          audience_summary?: string | null
+          body?: string
+          created_at?: string
+          group_id?: string | null
+          id?: string
+          mode: string
+          recipient_count?: number
+          sent_by?: string | null
+        }
+        Update: {
+          audience_summary?: string | null
+          body?: string
+          created_at?: string
+          group_id?: string | null
+          id?: string
+          mode?: string
+          recipient_count?: number
+          sent_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mass_message_log_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "chat_groups"
             referencedColumns: ["id"]
           },
         ]
@@ -6387,6 +6572,10 @@ export type Database = {
     }
     Functions: {
       can_access_chat_presence: { Args: { _topic: string }; Returns: boolean }
+      can_manage_group: {
+        Args: { _group_id: string; _user_id: string }
+        Returns: boolean
+      }
       current_coach_id: { Args: never; Returns: string }
       current_member_id: { Args: never; Returns: string }
       delete_email: {
@@ -6405,6 +6594,15 @@ export type Database = {
         Returns: boolean
       }
       is_assigned_coach: { Args: { _client_id: string }; Returns: boolean }
+      is_coach_or_admin: { Args: { _user_id: string }; Returns: boolean }
+      is_group_admin: {
+        Args: { _group_id: string; _user_id: string }
+        Returns: boolean
+      }
+      is_group_member: {
+        Args: { _group_id: string; _user_id: string }
+        Returns: boolean
+      }
       mark_client_signed_in: { Args: never; Returns: undefined }
       member_has_access: {
         Args: { _key: string; _member_id: string }
@@ -6447,9 +6645,12 @@ export type Database = {
         Args: { _recipe_id: string; _user_id: string }
         Returns: boolean
       }
+      user_is_active: { Args: { _user_id: string }; Returns: boolean }
     }
     Enums: {
       app_role: "admin" | "client" | "coach"
+      group_member_role: "admin" | "member"
+      group_permission_mode: "everyone" | "admins_only" | "read_only"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -6578,6 +6779,8 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "client", "coach"],
+      group_member_role: ["admin", "member"],
+      group_permission_mode: ["everyone", "admins_only", "read_only"],
     },
   },
 } as const
