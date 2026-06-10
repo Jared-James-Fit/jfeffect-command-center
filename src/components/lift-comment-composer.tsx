@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -21,6 +21,8 @@ type Props = {
   disabled?: boolean;
   trailing?: React.ReactNode;
   leading?: React.ReactNode;
+  /** When this string ref changes, append it to the textarea. Useful for quick replies. */
+  appendText?: { text: string; nonce: number } | null;
   onSend: (body: string, attachments: LiftCommentAttachment[]) => Promise<void>;
 };
 
@@ -50,7 +52,7 @@ async function uploadToBucket(clientId: string, file: File): Promise<LiftComment
 }
 
 export function LiftCommentComposer({
-  clientId, placeholder, disabled, trailing, leading, onSend,
+  clientId, placeholder, disabled, trailing, leading, appendText, onSend,
 }: Props) {
   const [body, setBody] = useState("");
   const [attachments, setAttachments] = useState<LiftCommentAttachment[]>([]);
@@ -73,6 +75,11 @@ export function LiftCommentComposer({
   } | null>(null);
   const previewAudioRef = useRef<HTMLAudioElement | null>(null);
   const [previewPlaying, setPreviewPlaying] = useState(false);
+
+  useEffect(() => {
+    if (!appendText?.text) return;
+    setBody((b) => (b ? `${b}\n${appendText.text}` : appendText.text));
+  }, [appendText?.nonce]);
 
   const pickFiles = async (files: FileList | null) => {
     if (!files || !files.length) return;
