@@ -101,6 +101,7 @@ import { Route as LovableEmailAuthPreviewRouteImport } from './routes/lovable/em
 import { Route as ApiPublicHooksSmsRemindersRouteImport } from './routes/api/public/hooks/sms-reminders'
 import { Route as ApiPublicHooksMediaArchiveRouteImport } from './routes/api/public/hooks/media-archive'
 import { Route as ApiPublicHooksLiftArchiveTickRouteImport } from './routes/api/public/hooks/lift-archive-tick'
+import { Route as ApiPublicHooksAppointmentRemindersRouteImport } from './routes/api/public/hooks/appointment-reminders'
 import { Route as AuthenticatedPortalWorkoutsDayIdRouteImport } from './routes/_authenticated/portal/workouts.$dayId'
 import { Route as AuthenticatedPortalRecipesRecipeIdRouteImport } from './routes/_authenticated/portal/recipes.$recipeId'
 import { Route as AuthenticatedPortalPurchasesIdRouteImport } from './routes/_authenticated/portal/purchases.$id'
@@ -657,6 +658,12 @@ const ApiPublicHooksLiftArchiveTickRoute =
     path: '/api/public/hooks/lift-archive-tick',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicHooksAppointmentRemindersRoute =
+  ApiPublicHooksAppointmentRemindersRouteImport.update({
+    id: '/api/public/hooks/appointment-reminders',
+    path: '/api/public/hooks/appointment-reminders',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const AuthenticatedPortalWorkoutsDayIdRoute =
   AuthenticatedPortalWorkoutsDayIdRouteImport.update({
     id: '/workouts/$dayId',
@@ -942,6 +949,7 @@ export interface FileRoutesByFullPath {
   '/portal/purchases/$id': typeof AuthenticatedPortalPurchasesIdRoute
   '/portal/recipes/$recipeId': typeof AuthenticatedPortalRecipesRecipeIdRoute
   '/portal/workouts/$dayId': typeof AuthenticatedPortalWorkoutsDayIdRoute
+  '/api/public/hooks/appointment-reminders': typeof ApiPublicHooksAppointmentRemindersRoute
   '/api/public/hooks/lift-archive-tick': typeof ApiPublicHooksLiftArchiveTickRoute
   '/api/public/hooks/media-archive': typeof ApiPublicHooksMediaArchiveRoute
   '/api/public/hooks/sms-reminders': typeof ApiPublicHooksSmsRemindersRoute
@@ -1062,6 +1070,7 @@ export interface FileRoutesByTo {
   '/portal/purchases/$id': typeof AuthenticatedPortalPurchasesIdRoute
   '/portal/recipes/$recipeId': typeof AuthenticatedPortalRecipesRecipeIdRoute
   '/portal/workouts/$dayId': typeof AuthenticatedPortalWorkoutsDayIdRoute
+  '/api/public/hooks/appointment-reminders': typeof ApiPublicHooksAppointmentRemindersRoute
   '/api/public/hooks/lift-archive-tick': typeof ApiPublicHooksLiftArchiveTickRoute
   '/api/public/hooks/media-archive': typeof ApiPublicHooksMediaArchiveRoute
   '/api/public/hooks/sms-reminders': typeof ApiPublicHooksSmsRemindersRoute
@@ -1187,6 +1196,7 @@ export interface FileRoutesById {
   '/_authenticated/portal/purchases/$id': typeof AuthenticatedPortalPurchasesIdRoute
   '/_authenticated/portal/recipes/$recipeId': typeof AuthenticatedPortalRecipesRecipeIdRoute
   '/_authenticated/portal/workouts/$dayId': typeof AuthenticatedPortalWorkoutsDayIdRoute
+  '/api/public/hooks/appointment-reminders': typeof ApiPublicHooksAppointmentRemindersRoute
   '/api/public/hooks/lift-archive-tick': typeof ApiPublicHooksLiftArchiveTickRoute
   '/api/public/hooks/media-archive': typeof ApiPublicHooksMediaArchiveRoute
   '/api/public/hooks/sms-reminders': typeof ApiPublicHooksSmsRemindersRoute
@@ -1312,6 +1322,7 @@ export interface FileRouteTypes {
     | '/portal/purchases/$id'
     | '/portal/recipes/$recipeId'
     | '/portal/workouts/$dayId'
+    | '/api/public/hooks/appointment-reminders'
     | '/api/public/hooks/lift-archive-tick'
     | '/api/public/hooks/media-archive'
     | '/api/public/hooks/sms-reminders'
@@ -1432,6 +1443,7 @@ export interface FileRouteTypes {
     | '/portal/purchases/$id'
     | '/portal/recipes/$recipeId'
     | '/portal/workouts/$dayId'
+    | '/api/public/hooks/appointment-reminders'
     | '/api/public/hooks/lift-archive-tick'
     | '/api/public/hooks/media-archive'
     | '/api/public/hooks/sms-reminders'
@@ -1556,6 +1568,7 @@ export interface FileRouteTypes {
     | '/_authenticated/portal/purchases/$id'
     | '/_authenticated/portal/recipes/$recipeId'
     | '/_authenticated/portal/workouts/$dayId'
+    | '/api/public/hooks/appointment-reminders'
     | '/api/public/hooks/lift-archive-tick'
     | '/api/public/hooks/media-archive'
     | '/api/public/hooks/sms-reminders'
@@ -1587,6 +1600,7 @@ export interface RootRouteChildren {
   ApiDriveUploadRoute: typeof ApiDriveUploadRoute
   ApiPublicSignnowWebhookRoute: typeof ApiPublicSignnowWebhookRoute
   ApiPublicStripeWebhookRoute: typeof ApiPublicStripeWebhookRoute
+  ApiPublicHooksAppointmentRemindersRoute: typeof ApiPublicHooksAppointmentRemindersRoute
   ApiPublicHooksLiftArchiveTickRoute: typeof ApiPublicHooksLiftArchiveTickRoute
   ApiPublicHooksMediaArchiveRoute: typeof ApiPublicHooksMediaArchiveRoute
   ApiPublicHooksSmsRemindersRoute: typeof ApiPublicHooksSmsRemindersRoute
@@ -2242,6 +2256,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksLiftArchiveTickRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/appointment-reminders': {
+      id: '/api/public/hooks/appointment-reminders'
+      path: '/api/public/hooks/appointment-reminders'
+      fullPath: '/api/public/hooks/appointment-reminders'
+      preLoaderRoute: typeof ApiPublicHooksAppointmentRemindersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_authenticated/portal/workouts/$dayId': {
       id: '/_authenticated/portal/workouts/$dayId'
       path: '/workouts/$dayId'
@@ -2883,6 +2904,8 @@ const rootRouteChildren: RootRouteChildren = {
   ApiDriveUploadRoute: ApiDriveUploadRoute,
   ApiPublicSignnowWebhookRoute: ApiPublicSignnowWebhookRoute,
   ApiPublicStripeWebhookRoute: ApiPublicStripeWebhookRoute,
+  ApiPublicHooksAppointmentRemindersRoute:
+    ApiPublicHooksAppointmentRemindersRoute,
   ApiPublicHooksLiftArchiveTickRoute: ApiPublicHooksLiftArchiveTickRoute,
   ApiPublicHooksMediaArchiveRoute: ApiPublicHooksMediaArchiveRoute,
   ApiPublicHooksSmsRemindersRoute: ApiPublicHooksSmsRemindersRoute,
