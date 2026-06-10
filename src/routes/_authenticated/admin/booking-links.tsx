@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { listBookingLinks, upsertBookingLink, deleteBookingLink } from "@/lib/booking-links.functions";
 import { supabase } from "@/integrations/supabase/client";
@@ -124,8 +124,7 @@ function EditDialog({ open, onOpenChange, editing, onSaved }: any) {
     };
   }
 
-  // Reinit when editing changes
-  useState(() => { setForm(init(editing)); });
+  useEffect(() => { setForm(init(editing)); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [editing?.id]);
 
   const save = useMutation({
     mutationFn: () => upsert({ data: form as any }),

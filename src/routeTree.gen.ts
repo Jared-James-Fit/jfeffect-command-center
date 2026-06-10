@@ -84,6 +84,7 @@ import { Route as AuthenticatedAdminCallAccessRouteImport } from './routes/_auth
 import { Route as AuthenticatedAdminCalendarRouteImport } from './routes/_authenticated/admin/calendar'
 import { Route as AuthenticatedAdminBusinessSystemsRouteImport } from './routes/_authenticated/admin/business-systems'
 import { Route as AuthenticatedAdminBroadcastsRouteImport } from './routes/_authenticated/admin/broadcasts'
+import { Route as AuthenticatedAdminBookingLinksRouteImport } from './routes/_authenticated/admin/booking-links'
 import { Route as AuthenticatedAdminAutomationsRouteImport } from './routes/_authenticated/admin/automations'
 import { Route as AuthenticatedAdminArchivesRouteImport } from './routes/_authenticated/admin/archives'
 import { Route as AuthenticatedAdminAppsRouteImport } from './routes/_authenticated/admin/apps'
@@ -561,6 +562,12 @@ const AuthenticatedAdminBroadcastsRoute =
     path: '/broadcasts',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
+const AuthenticatedAdminBookingLinksRoute =
+  AuthenticatedAdminBookingLinksRouteImport.update({
+    id: '/booking-links',
+    path: '/booking-links',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
 const AuthenticatedAdminAutomationsRoute =
   AuthenticatedAdminAutomationsRouteImport.update({
     id: '/automations',
@@ -875,6 +882,7 @@ export interface FileRoutesByFullPath {
   '/admin/apps': typeof AuthenticatedAdminAppsRoute
   '/admin/archives': typeof AuthenticatedAdminArchivesRoute
   '/admin/automations': typeof AuthenticatedAdminAutomationsRoute
+  '/admin/booking-links': typeof AuthenticatedAdminBookingLinksRoute
   '/admin/broadcasts': typeof AuthenticatedAdminBroadcastsRouteWithChildren
   '/admin/business-systems': typeof AuthenticatedAdminBusinessSystemsRoute
   '/admin/calendar': typeof AuthenticatedAdminCalendarRoute
@@ -998,6 +1006,7 @@ export interface FileRoutesByTo {
   '/admin/apps': typeof AuthenticatedAdminAppsRoute
   '/admin/archives': typeof AuthenticatedAdminArchivesRoute
   '/admin/automations': typeof AuthenticatedAdminAutomationsRoute
+  '/admin/booking-links': typeof AuthenticatedAdminBookingLinksRoute
   '/admin/broadcasts': typeof AuthenticatedAdminBroadcastsRouteWithChildren
   '/admin/business-systems': typeof AuthenticatedAdminBusinessSystemsRoute
   '/admin/calendar': typeof AuthenticatedAdminCalendarRoute
@@ -1126,6 +1135,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/apps': typeof AuthenticatedAdminAppsRoute
   '/_authenticated/admin/archives': typeof AuthenticatedAdminArchivesRoute
   '/_authenticated/admin/automations': typeof AuthenticatedAdminAutomationsRoute
+  '/_authenticated/admin/booking-links': typeof AuthenticatedAdminBookingLinksRoute
   '/_authenticated/admin/broadcasts': typeof AuthenticatedAdminBroadcastsRouteWithChildren
   '/_authenticated/admin/business-systems': typeof AuthenticatedAdminBusinessSystemsRoute
   '/_authenticated/admin/calendar': typeof AuthenticatedAdminCalendarRoute
@@ -1254,6 +1264,7 @@ export interface FileRouteTypes {
     | '/admin/apps'
     | '/admin/archives'
     | '/admin/automations'
+    | '/admin/booking-links'
     | '/admin/broadcasts'
     | '/admin/business-systems'
     | '/admin/calendar'
@@ -1377,6 +1388,7 @@ export interface FileRouteTypes {
     | '/admin/apps'
     | '/admin/archives'
     | '/admin/automations'
+    | '/admin/booking-links'
     | '/admin/broadcasts'
     | '/admin/business-systems'
     | '/admin/calendar'
@@ -1504,6 +1516,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/apps'
     | '/_authenticated/admin/archives'
     | '/_authenticated/admin/automations'
+    | '/_authenticated/admin/booking-links'
     | '/_authenticated/admin/broadcasts'
     | '/_authenticated/admin/business-systems'
     | '/_authenticated/admin/calendar'
@@ -2163,6 +2176,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminBroadcastsRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
+    '/_authenticated/admin/booking-links': {
+      id: '/_authenticated/admin/booking-links'
+      path: '/booking-links'
+      fullPath: '/admin/booking-links'
+      preLoaderRoute: typeof AuthenticatedAdminBookingLinksRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
     '/_authenticated/admin/automations': {
       id: '/_authenticated/admin/automations'
       path: '/automations'
@@ -2586,6 +2606,7 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminAppsRoute: typeof AuthenticatedAdminAppsRoute
   AuthenticatedAdminArchivesRoute: typeof AuthenticatedAdminArchivesRoute
   AuthenticatedAdminAutomationsRoute: typeof AuthenticatedAdminAutomationsRoute
+  AuthenticatedAdminBookingLinksRoute: typeof AuthenticatedAdminBookingLinksRoute
   AuthenticatedAdminBroadcastsRoute: typeof AuthenticatedAdminBroadcastsRouteWithChildren
   AuthenticatedAdminBusinessSystemsRoute: typeof AuthenticatedAdminBusinessSystemsRoute
   AuthenticatedAdminCalendarRoute: typeof AuthenticatedAdminCalendarRoute
@@ -2652,6 +2673,7 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
     AuthenticatedAdminAppsRoute: AuthenticatedAdminAppsRoute,
     AuthenticatedAdminArchivesRoute: AuthenticatedAdminArchivesRoute,
     AuthenticatedAdminAutomationsRoute: AuthenticatedAdminAutomationsRoute,
+    AuthenticatedAdminBookingLinksRoute: AuthenticatedAdminBookingLinksRoute,
     AuthenticatedAdminBroadcastsRoute:
       AuthenticatedAdminBroadcastsRouteWithChildren,
     AuthenticatedAdminBusinessSystemsRoute:
