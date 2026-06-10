@@ -90,6 +90,19 @@ export const createAppMember = createServerFn({ method: "POST" })
     if (data.apply_defaults !== false) {
       await supabaseAdmin.rpc("apply_default_member_access", { _member_id: row.id });
     }
+    // Fire SMS automations registered for the "account_created" trigger.
+    try {
+      const { fireAutomationTrigger } = await import("@/lib/sms-trigger.server");
+      const origin = getOrigin();
+      const link = `${origin}/member-setup?token=${setup_token}`;
+      await fireAutomationTrigger(supabaseAdmin, {
+        trigger: "account_created",
+        memberId: row.id,
+        vars: { setup_link: link },
+      });
+    } catch (e) {
+      console.error("[createAppMember] automation trigger failed", e);
+    }
     return { member: row };
   });
 
