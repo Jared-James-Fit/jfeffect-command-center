@@ -61,8 +61,8 @@ function AdminEventsPage() {
     <div className="space-y-4">
       <PageHeader
         title="Events"
-        description="Plan upcoming meets, shoots, calls, and key client dates."
-        right={
+        subtitle="Plan upcoming meets, shoots, calls, and key client dates."
+        actions={
           <div className="flex gap-2">
             <Button asChild variant="outline" size="sm">
               <Link to="/admin/events/format-guide"><Sparkles className="mr-1 h-4 w-4" />Format Guide</Link>

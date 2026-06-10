@@ -69,6 +69,7 @@ import { Route as AuthenticatedAdminLiftVideosRouteImport } from './routes/_auth
 import { Route as AuthenticatedAdminFormsRouteImport } from './routes/_authenticated/admin/forms'
 import { Route as AuthenticatedAdminFaqsRouteImport } from './routes/_authenticated/admin/faqs'
 import { Route as AuthenticatedAdminExercisesRouteImport } from './routes/_authenticated/admin/exercises'
+import { Route as AuthenticatedAdminEventsRouteImport } from './routes/_authenticated/admin/events'
 import { Route as AuthenticatedAdminContentIdeasRouteImport } from './routes/_authenticated/admin/content-ideas'
 import { Route as AuthenticatedAdminClientPovRouteImport } from './routes/_authenticated/admin/client-pov'
 import { Route as AuthenticatedAdminClientActionRequestsRouteImport } from './routes/_authenticated/admin/client-action-requests'
@@ -462,6 +463,12 @@ const AuthenticatedAdminExercisesRoute =
     path: '/exercises',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
+const AuthenticatedAdminEventsRoute =
+  AuthenticatedAdminEventsRouteImport.update({
+    id: '/events',
+    path: '/events',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
 const AuthenticatedAdminContentIdeasRoute =
   AuthenticatedAdminContentIdeasRouteImport.update({
     id: '/content-ideas',
@@ -823,6 +830,7 @@ export interface FileRoutesByFullPath {
   '/admin/client-action-requests': typeof AuthenticatedAdminClientActionRequestsRoute
   '/admin/client-pov': typeof AuthenticatedAdminClientPovRoute
   '/admin/content-ideas': typeof AuthenticatedAdminContentIdeasRoute
+  '/admin/events': typeof AuthenticatedAdminEventsRoute
   '/admin/exercises': typeof AuthenticatedAdminExercisesRoute
   '/admin/faqs': typeof AuthenticatedAdminFaqsRoute
   '/admin/forms': typeof AuthenticatedAdminFormsRoute
@@ -937,6 +945,7 @@ export interface FileRoutesByTo {
   '/admin/client-action-requests': typeof AuthenticatedAdminClientActionRequestsRoute
   '/admin/client-pov': typeof AuthenticatedAdminClientPovRoute
   '/admin/content-ideas': typeof AuthenticatedAdminContentIdeasRoute
+  '/admin/events': typeof AuthenticatedAdminEventsRoute
   '/admin/exercises': typeof AuthenticatedAdminExercisesRoute
   '/admin/faqs': typeof AuthenticatedAdminFaqsRoute
   '/admin/forms': typeof AuthenticatedAdminFormsRoute
@@ -1056,6 +1065,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/client-action-requests': typeof AuthenticatedAdminClientActionRequestsRoute
   '/_authenticated/admin/client-pov': typeof AuthenticatedAdminClientPovRoute
   '/_authenticated/admin/content-ideas': typeof AuthenticatedAdminContentIdeasRoute
+  '/_authenticated/admin/events': typeof AuthenticatedAdminEventsRoute
   '/_authenticated/admin/exercises': typeof AuthenticatedAdminExercisesRoute
   '/_authenticated/admin/faqs': typeof AuthenticatedAdminFaqsRoute
   '/_authenticated/admin/forms': typeof AuthenticatedAdminFormsRoute
@@ -1175,6 +1185,7 @@ export interface FileRouteTypes {
     | '/admin/client-action-requests'
     | '/admin/client-pov'
     | '/admin/content-ideas'
+    | '/admin/events'
     | '/admin/exercises'
     | '/admin/faqs'
     | '/admin/forms'
@@ -1289,6 +1300,7 @@ export interface FileRouteTypes {
     | '/admin/client-action-requests'
     | '/admin/client-pov'
     | '/admin/content-ideas'
+    | '/admin/events'
     | '/admin/exercises'
     | '/admin/faqs'
     | '/admin/forms'
@@ -1407,6 +1419,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/client-action-requests'
     | '/_authenticated/admin/client-pov'
     | '/_authenticated/admin/content-ideas'
+    | '/_authenticated/admin/events'
     | '/_authenticated/admin/exercises'
     | '/_authenticated/admin/faqs'
     | '/_authenticated/admin/forms'
@@ -1939,6 +1952,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminExercisesRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
+    '/_authenticated/admin/events': {
+      id: '/_authenticated/admin/events'
+      path: '/events'
+      fullPath: '/admin/events'
+      preLoaderRoute: typeof AuthenticatedAdminEventsRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
     '/_authenticated/admin/content-ideas': {
       id: '/_authenticated/admin/content-ideas'
       path: '/content-ideas'
@@ -2398,6 +2418,7 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminClientActionRequestsRoute: typeof AuthenticatedAdminClientActionRequestsRoute
   AuthenticatedAdminClientPovRoute: typeof AuthenticatedAdminClientPovRoute
   AuthenticatedAdminContentIdeasRoute: typeof AuthenticatedAdminContentIdeasRoute
+  AuthenticatedAdminEventsRoute: typeof AuthenticatedAdminEventsRoute
   AuthenticatedAdminExercisesRoute: typeof AuthenticatedAdminExercisesRoute
   AuthenticatedAdminFaqsRoute: typeof AuthenticatedAdminFaqsRoute
   AuthenticatedAdminFormsRoute: typeof AuthenticatedAdminFormsRoute
@@ -2465,6 +2486,7 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
       AuthenticatedAdminClientActionRequestsRoute,
     AuthenticatedAdminClientPovRoute: AuthenticatedAdminClientPovRoute,
     AuthenticatedAdminContentIdeasRoute: AuthenticatedAdminContentIdeasRoute,
+    AuthenticatedAdminEventsRoute: AuthenticatedAdminEventsRoute,
     AuthenticatedAdminExercisesRoute: AuthenticatedAdminExercisesRoute,
     AuthenticatedAdminFaqsRoute: AuthenticatedAdminFaqsRoute,
     AuthenticatedAdminFormsRoute: AuthenticatedAdminFormsRoute,
