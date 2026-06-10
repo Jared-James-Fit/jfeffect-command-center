@@ -443,7 +443,7 @@ function RecipePickerDialog({
         {
           kind: "recipe_share",
           type: "link",
-          url: `/recipes/${selectedId}`,
+          url: `/portal/recipes/${selectedId}`,
           recipe_id: selectedId,
           assignment_client_ids: clientIds,
           request_title: recipe?.title ?? "Recipe",
