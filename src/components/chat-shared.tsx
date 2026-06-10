@@ -923,4 +923,3 @@ function RecipeShareCard({ att, mine }: { att: SharedAttachment; mine: boolean }
     />
   );
 }
-}
