@@ -21,7 +21,16 @@ export function useGroupPresence(
       setPeers([]);
       return;
     }
-    const channel = supabase.channel(`group-presence:${groupId}`, {
+    const topic = `group-presence:${groupId}`;
+    // Remove any stale channel with the same topic (StrictMode remount, fast nav).
+    // Reusing an already-subscribed channel triggers:
+    // "cannot add `presence` callbacks ... after `subscribe()`".
+    for (const ch of supabase.getChannels()) {
+      if ((ch as any).topic === `realtime:${topic}` || (ch as any).topic === topic) {
+        supabase.removeChannel(ch);
+      }
+    }
+    const channel = supabase.channel(topic, {
       config: {
         private: true,
         presence: { key: `${myRole}:${user.id}` },
