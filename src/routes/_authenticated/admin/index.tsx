@@ -354,7 +354,7 @@ function AdminDashboard() {
     <>
       <PageHeader title="Command Center" subtitle="What needs your attention today." />
 
-      <div className="space-y-4 p-4 pb-24 md:p-6 md:pb-8">
+      <div className="w-full max-w-full space-y-4 overflow-x-hidden p-4 pb-32 md:p-6 md:pb-8">
         {/* POV + Drive */}
         <div className="grid gap-3 md:grid-cols-2">
           <Link to="/admin/client-pov" className="block">
@@ -425,7 +425,7 @@ function AdminDashboard() {
         {/* DESKTOP 2-COL GRID below */}
         <div className="grid gap-4 lg:grid-cols-3">
           {/* LEFT (col-span-2) */}
-          <div className="space-y-4 lg:col-span-2">
+          <div className="min-w-0 space-y-4 lg:col-span-2">
             {/* NEEDS ATTENTION */}
             <Card className="border-border bg-card p-4 md:p-5">
               <SectionHeader title="Needs Attention" icon={AlertTriangle} />
@@ -434,19 +434,19 @@ function AdminDashboard() {
               ) : (
                 <ul className="divide-y divide-border">
                   {needsTop.map((n) => (
-                    <li key={n.id} className="flex items-start justify-between gap-2 py-2.5">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <Badge variant="outline" className={`text-[10px] ${n.tone}`}>{n.reason}</Badge>
+                    <li key={n.id} className="flex flex-wrap items-start justify-between gap-2 py-2.5">
+                      <div className="min-w-0 flex-1 basis-full sm:basis-auto">
+                        <div className="flex items-center gap-2 flex-wrap min-w-0">
+                          <Badge variant="outline" className={`text-[10px] max-w-full truncate ${n.tone}`}>{n.reason}</Badge>
                           {n.clientId ? (
-                            <Link to="/admin/clients/$id" params={{ id: n.clientId }} className="text-sm font-semibold hover:underline truncate">{n.name}</Link>
+                            <Link to="/admin/clients/$id" params={{ id: n.clientId }} className="text-sm font-semibold hover:underline truncate min-w-0 max-w-full">{n.name}</Link>
                           ) : (
-                            <span className="text-sm font-semibold truncate">{n.name}</span>
+                            <span className="text-sm font-semibold truncate min-w-0 max-w-full">{n.name}</span>
                           )}
                         </div>
                         {n.time && <div className="text-[10px] text-muted-foreground mt-0.5">{n.time}</div>}
                       </div>
-                      <Link to={n.href as any} params={n.params as any} search={n.search}>
+                      <Link to={n.href as any} params={n.params as any} search={n.search} className="shrink-0">
                         <Button variant="outline" size="sm" className="h-7 text-[11px] shrink-0">{n.action}</Button>
                       </Link>
                     </li>
@@ -495,8 +495,8 @@ function AdminDashboard() {
                 <ul className="divide-y divide-border">
                   {deadlines.slice(0, 5).map((p) => (
                     <li key={p.id} className="py-2.5">
-                      <div className="flex items-center justify-between gap-2 mb-1">
-                        <div className="min-w-0">
+                      <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
+                        <div className="min-w-0 flex-1">
                           {p.clients ? (
                             <Link to="/admin/clients/$id" params={{ id: p.clients.id }} search={{ tab: "training" }} className="text-sm font-semibold hover:underline truncate block">
                               {p.clients.full_name}
@@ -504,14 +504,14 @@ function AdminDashboard() {
                           ) : <span className="text-sm text-muted-foreground">—</span>}
                           <div className="text-[11px] text-muted-foreground truncate">{displayTitle(p)} · {p.phase_type}</div>
                         </div>
-                        <Badge variant="outline" className={toneClasses(p.derived.tone)}>
+                        <Badge variant="outline" className={`shrink-0 ${toneClasses(p.derived.tone)}`}>
                           {p.derived.daysRemaining < 0 ? `${Math.abs(p.derived.daysRemaining)}d past` : p.derived.daysRemaining === 0 ? "Due today" : `${p.derived.daysRemaining}d left`}
                         </Badge>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Progress value={p.derived.percentComplete} className="h-1 flex-1" />
-                        <span className="text-[10px] text-muted-foreground">{p.derived.percentComplete}%</span>
-                        <Link to="/admin/clients/$id" params={{ id: p.client_id }} search={{ tab: "training" }} className="text-[11px] font-semibold text-primary hover:underline">Update</Link>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Progress value={p.derived.percentComplete} className="h-1 min-w-[120px] flex-1" />
+                        <span className="text-[10px] text-muted-foreground shrink-0">{p.derived.percentComplete}%</span>
+                        <Link to="/admin/clients/$id" params={{ id: p.client_id }} search={{ tab: "training" }} className="shrink-0 text-[11px] font-semibold text-primary hover:underline">Update</Link>
                       </div>
                     </li>
                   ))}
@@ -521,7 +521,7 @@ function AdminDashboard() {
           </div>
 
           {/* RIGHT */}
-          <div className="space-y-4">
+          <div className="min-w-0 space-y-4">
             {/* BIRTHDAYS */}
             <UpcomingBirthdaysWidget />
 
@@ -537,9 +537,9 @@ function AdminDashboard() {
                   </div>
                   <ul className="divide-y divide-border">
                     {clientsWithoutProduct.slice(0, 3).map((c) => (
-                      <li key={c.id} className="flex items-center justify-between gap-2 py-2">
-                        <Link to="/admin/clients/$id" params={{ id: c.id }} className="text-sm font-semibold hover:underline truncate">{c.full_name}</Link>
-                        <Button size="sm" variant="outline" className="h-7 text-[11px]" onClick={() => setSellTo({ id: c.id, name: c.full_name })}>
+                      <li key={c.id} className="flex items-center justify-between gap-2 py-2 min-w-0">
+                        <Link to="/admin/clients/$id" params={{ id: c.id }} className="text-sm font-semibold hover:underline truncate min-w-0 flex-1">{c.full_name}</Link>
+                        <Button size="sm" variant="outline" className="h-7 text-[11px] shrink-0" onClick={() => setSellTo({ id: c.id, name: c.full_name })}>
                           Sell
                         </Button>
                       </li>
@@ -562,15 +562,15 @@ function AdminDashboard() {
               ) : (
                 <ul className="divide-y divide-border">
                   {clients.slice(0, 5).map((c) => (
-                    <li key={c.id} className="flex items-center justify-between py-2">
-                      <Link to="/admin/clients/$id" params={{ id: c.id }} className="flex items-center gap-2 hover:opacity-80 min-w-0">
+                    <li key={c.id} className="flex items-center justify-between gap-2 py-2 min-w-0">
+                      <Link to="/admin/clients/$id" params={{ id: c.id }} className="flex items-center gap-2 hover:opacity-80 min-w-0 flex-1">
                         <UserAvatar src={c.profile_picture_url} name={c.full_name} size={32} />
-                        <div className="min-w-0">
+                        <div className="min-w-0 flex-1">
                           <div className="text-sm font-semibold truncate">{c.full_name}</div>
                           <div className="text-[10px] text-muted-foreground truncate">{c.coaching_type ?? "—"}</div>
                         </div>
                       </Link>
-                      <Badge variant="outline" className="text-[10px] shrink-0">{c.status}</Badge>
+                      <Badge variant="outline" className="text-[10px] shrink-0 max-w-[40%] truncate">{c.status}</Badge>
                     </li>
                   ))}
                 </ul>
