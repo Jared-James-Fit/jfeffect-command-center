@@ -6,6 +6,33 @@ import { createHmac, timingSafeEqual } from "crypto";
 const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const GOOGLE_API_BASE = "https://www.googleapis.com/calendar/v3";
+const GATEWAY_BASE = "https://connector-gateway.lovable.dev/google_calendar/calendar/v3";
+
+function gatewayHeaders(extra: Record<string, string> = {}): Record<string, string> {
+  const lov = process.env.LOVABLE_API_KEY;
+  const key = process.env.GOOGLE_CALENDAR_API_KEY;
+  if (!lov || !key) throw new Error("Google Calendar connector is not configured.");
+  return {
+    Authorization: `Bearer ${lov}`,
+    "X-Connection-Api-Key": key,
+    ...extra,
+  };
+}
+
+export function workspaceCalendarConfigured(): boolean {
+  return !!(process.env.LOVABLE_API_KEY && process.env.GOOGLE_CALENDAR_API_KEY);
+}
+
+async function selectedCalendarIdForCoach(coachId: string | null): Promise<string> {
+  if (!coachId) return "primary";
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const { data: conn } = await supabaseAdmin
+    .from("google_calendar_connections")
+    .select("selected_calendar_id")
+    .eq("coach_id", coachId)
+    .maybeSingle();
+  return (conn?.selected_calendar_id as string) || "primary";
+}
 export const GOOGLE_SCOPES = [
   "https://www.googleapis.com/auth/calendar",
   "https://www.googleapis.com/auth/calendar.events",
@@ -105,44 +132,16 @@ export { decodeIdTokenEmail };
 
 // Get a fresh access token for a coach (auto-refresh if near expiry).
 export async function getValidAccessTokenForCoach(coachId: string): Promise<{ token: string; calendarId: string } | null> {
-  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  const { data: conn } = await supabaseAdmin
-    .from("google_calendar_connections")
-    .select("*")
-    .eq("coach_id", coachId)
-    .maybeSingle();
-  if (!conn || conn.status === "disconnected") return null;
-  let token = conn.access_token as string | null;
-  const expiresAt = conn.token_expires_at ? new Date(conn.token_expires_at).getTime() : 0;
-  if (!token || Date.now() > expiresAt - 60_000) {
-    if (!conn.refresh_token) {
-      await supabaseAdmin.from("google_calendar_connections")
-        .update({ status: "reconnect_required", last_error: "missing refresh_token" })
-        .eq("id", conn.id);
-      return null;
-    }
-    try {
-      const refreshed = await refreshAccessToken(conn.refresh_token);
-      token = refreshed.access_token;
-      await supabaseAdmin.from("google_calendar_connections").update({
-        access_token: token,
-        token_expires_at: new Date(Date.now() + (refreshed.expires_in - 30) * 1000).toISOString(),
-        status: "connected",
-        last_error: null,
-      }).eq("id", conn.id);
-    } catch (e: any) {
-      await supabaseAdmin.from("google_calendar_connections")
-        .update({ status: "reconnect_required", last_error: String(e?.message ?? e) })
-        .eq("id", conn.id);
-      return null;
-    }
-  }
-  return { token: token!, calendarId: conn.selected_calendar_id || "primary" };
+  // Legacy shape kept for compatibility. Returns the shared workspace token
+  // via the Lovable connector gateway; the "token" here is the gateway key.
+  if (!workspaceCalendarConfigured()) return null;
+  const calendarId = await selectedCalendarIdForCoach(coachId);
+  return { token: "__gateway__", calendarId };
 }
 
-export async function gcalListCalendars(accessToken: string) {
-  const res = await fetch(`${GOOGLE_API_BASE}/users/me/calendarList`, {
-    headers: { Authorization: `Bearer ${accessToken}` },
+export async function gcalListCalendars(_accessToken?: string) {
+  const res = await fetch(`${GATEWAY_BASE}/users/me/calendarList`, {
+    headers: gatewayHeaders(),
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error?.message || `Google API error ${res.status}`);
@@ -162,8 +161,8 @@ export async function gcalCreateEvent(
     meet?: boolean;
   },
 ): Promise<{ id: string; htmlLink?: string; meetLink?: string } | null> {
-  const cred = await getValidAccessTokenForCoach(coachId);
-  if (!cred) return null;
+  if (!workspaceCalendarConfigured()) return null;
+  const calendarId = await selectedCalendarIdForCoach(coachId);
   const body: any = {
     summary: payload.summary,
     description: payload.description,
@@ -177,10 +176,10 @@ export async function gcalCreateEvent(
       createRequest: { requestId: `meet-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, conferenceSolutionKey: { type: "hangoutsMeet" } },
     };
   }
-  const url = `${GOOGLE_API_BASE}/calendars/${encodeURIComponent(cred.calendarId)}/events?conferenceDataVersion=1&sendUpdates=all`;
+  const url = `${GATEWAY_BASE}/calendars/${encodeURIComponent(calendarId)}/events?conferenceDataVersion=1&sendUpdates=all`;
   const res = await fetch(url, {
     method: "POST",
-    headers: { Authorization: `Bearer ${cred.token}`, "Content-Type": "application/json" },
+    headers: gatewayHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify(body),
   });
   const data = await res.json();
@@ -192,12 +191,12 @@ export async function gcalCreateEvent(
 }
 
 export async function gcalUpdateEvent(coachId: string, eventId: string, patch: Record<string, unknown>) {
-  const cred = await getValidAccessTokenForCoach(coachId);
-  if (!cred) return null;
-  const url = `${GOOGLE_API_BASE}/calendars/${encodeURIComponent(cred.calendarId)}/events/${encodeURIComponent(eventId)}?sendUpdates=all`;
+  if (!workspaceCalendarConfigured()) return null;
+  const calendarId = await selectedCalendarIdForCoach(coachId);
+  const url = `${GATEWAY_BASE}/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}?sendUpdates=all`;
   const res = await fetch(url, {
     method: "PATCH",
-    headers: { Authorization: `Bearer ${cred.token}`, "Content-Type": "application/json" },
+    headers: gatewayHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify(patch),
   });
   if (!res.ok) {
@@ -208,10 +207,10 @@ export async function gcalUpdateEvent(coachId: string, eventId: string, patch: R
 }
 
 export async function gcalDeleteEvent(coachId: string, eventId: string) {
-  const cred = await getValidAccessTokenForCoach(coachId);
-  if (!cred) return null;
-  const url = `${GOOGLE_API_BASE}/calendars/${encodeURIComponent(cred.calendarId)}/events/${encodeURIComponent(eventId)}?sendUpdates=all`;
-  const res = await fetch(url, { method: "DELETE", headers: { Authorization: `Bearer ${cred.token}` } });
+  if (!workspaceCalendarConfigured()) return null;
+  const calendarId = await selectedCalendarIdForCoach(coachId);
+  const url = `${GATEWAY_BASE}/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}?sendUpdates=all`;
+  const res = await fetch(url, { method: "DELETE", headers: gatewayHeaders() });
   if (!res.ok && res.status !== 410 && res.status !== 404) {
     const data = await res.json().catch(() => ({}));
     throw new Error(data.error?.message || `Google delete failed ${res.status}`);
@@ -221,15 +220,15 @@ export async function gcalDeleteEvent(coachId: string, eventId: string) {
 
 // Returns busy windows from Google for a coach across a range.
 export async function gcalFreeBusy(coachId: string, timeMinISO: string, timeMaxISO: string): Promise<Array<{ start: string; end: string }>> {
-  const cred = await getValidAccessTokenForCoach(coachId);
-  if (!cred) return [];
-  const res = await fetch(`${GOOGLE_API_BASE}/freeBusy`, {
+  if (!workspaceCalendarConfigured()) return [];
+  const calendarId = await selectedCalendarIdForCoach(coachId);
+  const res = await fetch(`${GATEWAY_BASE}/freeBusy`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${cred.token}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ timeMin: timeMinISO, timeMax: timeMaxISO, items: [{ id: cred.calendarId }] }),
+    headers: gatewayHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify({ timeMin: timeMinISO, timeMax: timeMaxISO, items: [{ id: calendarId }] }),
   });
   const data = await res.json();
   if (!res.ok) return [];
-  const cal = data.calendars?.[cred.calendarId];
+  const cal = data.calendars?.[calendarId];
   return cal?.busy ?? [];
 }
