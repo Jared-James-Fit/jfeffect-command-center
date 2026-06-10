@@ -136,6 +136,7 @@ import { Route as AuthenticatedAdminMembershipSignupLinkRouteImport } from './ro
 import { Route as AuthenticatedAdminMembershipSetupLinksRouteImport } from './routes/_authenticated/admin/membership.setup-links'
 import { Route as AuthenticatedAdminMembershipSalesPageRouteImport } from './routes/_authenticated/admin/membership.sales-page'
 import { Route as AuthenticatedAdminMembershipResetLinksRouteImport } from './routes/_authenticated/admin/membership.reset-links'
+import { Route as AuthenticatedAdminMembershipRefundPolicyRouteImport } from './routes/_authenticated/admin/membership.refund-policy'
 import { Route as AuthenticatedAdminMembershipPromoToolsRouteImport } from './routes/_authenticated/admin/membership.promo-tools'
 import { Route as AuthenticatedAdminMembershipChallengesRouteImport } from './routes/_authenticated/admin/membership.challenges'
 import { Route as AuthenticatedAdminMembershipActionNeededRouteImport } from './routes/_authenticated/admin/membership.action-needed'
@@ -888,6 +889,12 @@ const AuthenticatedAdminMembershipResetLinksRoute =
     path: '/reset-links',
     getParentRoute: () => AuthenticatedAdminMembershipRoute,
   } as any)
+const AuthenticatedAdminMembershipRefundPolicyRoute =
+  AuthenticatedAdminMembershipRefundPolicyRouteImport.update({
+    id: '/refund-policy',
+    path: '/refund-policy',
+    getParentRoute: () => AuthenticatedAdminMembershipRoute,
+  } as any)
 const AuthenticatedAdminMembershipPromoToolsRoute =
   AuthenticatedAdminMembershipPromoToolsRouteImport.update({
     id: '/promo-tools',
@@ -1128,6 +1135,7 @@ export interface FileRoutesByFullPath {
   '/admin/membership/action-needed': typeof AuthenticatedAdminMembershipActionNeededRoute
   '/admin/membership/challenges': typeof AuthenticatedAdminMembershipChallengesRoute
   '/admin/membership/promo-tools': typeof AuthenticatedAdminMembershipPromoToolsRoute
+  '/admin/membership/refund-policy': typeof AuthenticatedAdminMembershipRefundPolicyRoute
   '/admin/membership/reset-links': typeof AuthenticatedAdminMembershipResetLinksRoute
   '/admin/membership/sales-page': typeof AuthenticatedAdminMembershipSalesPageRoute
   '/admin/membership/setup-links': typeof AuthenticatedAdminMembershipSetupLinksRoute
@@ -1274,6 +1282,7 @@ export interface FileRoutesByTo {
   '/admin/membership/action-needed': typeof AuthenticatedAdminMembershipActionNeededRoute
   '/admin/membership/challenges': typeof AuthenticatedAdminMembershipChallengesRoute
   '/admin/membership/promo-tools': typeof AuthenticatedAdminMembershipPromoToolsRoute
+  '/admin/membership/refund-policy': typeof AuthenticatedAdminMembershipRefundPolicyRoute
   '/admin/membership/reset-links': typeof AuthenticatedAdminMembershipResetLinksRoute
   '/admin/membership/sales-page': typeof AuthenticatedAdminMembershipSalesPageRoute
   '/admin/membership/setup-links': typeof AuthenticatedAdminMembershipSetupLinksRoute
@@ -1426,6 +1435,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/membership/action-needed': typeof AuthenticatedAdminMembershipActionNeededRoute
   '/_authenticated/admin/membership/challenges': typeof AuthenticatedAdminMembershipChallengesRoute
   '/_authenticated/admin/membership/promo-tools': typeof AuthenticatedAdminMembershipPromoToolsRoute
+  '/_authenticated/admin/membership/refund-policy': typeof AuthenticatedAdminMembershipRefundPolicyRoute
   '/_authenticated/admin/membership/reset-links': typeof AuthenticatedAdminMembershipResetLinksRoute
   '/_authenticated/admin/membership/sales-page': typeof AuthenticatedAdminMembershipSalesPageRoute
   '/_authenticated/admin/membership/setup-links': typeof AuthenticatedAdminMembershipSetupLinksRoute
@@ -1578,6 +1588,7 @@ export interface FileRouteTypes {
     | '/admin/membership/action-needed'
     | '/admin/membership/challenges'
     | '/admin/membership/promo-tools'
+    | '/admin/membership/refund-policy'
     | '/admin/membership/reset-links'
     | '/admin/membership/sales-page'
     | '/admin/membership/setup-links'
@@ -1724,6 +1735,7 @@ export interface FileRouteTypes {
     | '/admin/membership/action-needed'
     | '/admin/membership/challenges'
     | '/admin/membership/promo-tools'
+    | '/admin/membership/refund-policy'
     | '/admin/membership/reset-links'
     | '/admin/membership/sales-page'
     | '/admin/membership/setup-links'
@@ -1875,6 +1887,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/membership/action-needed'
     | '/_authenticated/admin/membership/challenges'
     | '/_authenticated/admin/membership/promo-tools'
+    | '/_authenticated/admin/membership/refund-policy'
     | '/_authenticated/admin/membership/reset-links'
     | '/_authenticated/admin/membership/sales-page'
     | '/_authenticated/admin/membership/setup-links'
@@ -2834,6 +2847,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminMembershipResetLinksRouteImport
       parentRoute: typeof AuthenticatedAdminMembershipRoute
     }
+    '/_authenticated/admin/membership/refund-policy': {
+      id: '/_authenticated/admin/membership/refund-policy'
+      path: '/refund-policy'
+      fullPath: '/admin/membership/refund-policy'
+      preLoaderRoute: typeof AuthenticatedAdminMembershipRefundPolicyRouteImport
+      parentRoute: typeof AuthenticatedAdminMembershipRoute
+    }
     '/_authenticated/admin/membership/promo-tools': {
       id: '/_authenticated/admin/membership/promo-tools'
       path: '/promo-tools'
@@ -3011,6 +3031,7 @@ interface AuthenticatedAdminMembershipRouteChildren {
   AuthenticatedAdminMembershipActionNeededRoute: typeof AuthenticatedAdminMembershipActionNeededRoute
   AuthenticatedAdminMembershipChallengesRoute: typeof AuthenticatedAdminMembershipChallengesRoute
   AuthenticatedAdminMembershipPromoToolsRoute: typeof AuthenticatedAdminMembershipPromoToolsRoute
+  AuthenticatedAdminMembershipRefundPolicyRoute: typeof AuthenticatedAdminMembershipRefundPolicyRoute
   AuthenticatedAdminMembershipResetLinksRoute: typeof AuthenticatedAdminMembershipResetLinksRoute
   AuthenticatedAdminMembershipSalesPageRoute: typeof AuthenticatedAdminMembershipSalesPageRoute
   AuthenticatedAdminMembershipSetupLinksRoute: typeof AuthenticatedAdminMembershipSetupLinksRoute
@@ -3032,6 +3053,8 @@ const AuthenticatedAdminMembershipRouteChildren: AuthenticatedAdminMembershipRou
       AuthenticatedAdminMembershipChallengesRoute,
     AuthenticatedAdminMembershipPromoToolsRoute:
       AuthenticatedAdminMembershipPromoToolsRoute,
+    AuthenticatedAdminMembershipRefundPolicyRoute:
+      AuthenticatedAdminMembershipRefundPolicyRoute,
     AuthenticatedAdminMembershipResetLinksRoute:
       AuthenticatedAdminMembershipResetLinksRoute,
     AuthenticatedAdminMembershipSalesPageRoute:
