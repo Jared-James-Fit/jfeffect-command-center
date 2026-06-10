@@ -24,12 +24,17 @@ export type ChatGroupMember = {
 };
 
 export type GroupAttachment = {
-  type: "image" | "video" | "audio" | "pdf" | "file" | "link";
+  type: "image" | "video" | "audio" | "pdf" | "file" | "link" | "drive" | "sheets" | "youtube";
   url: string;
   name?: string;
   size?: number;
   mime?: string;
   storage_path?: string;
+  duration?: number;
+  peaks?: number[];
+  kind?: "sound" | "gif";
+  fallback_emoji?: string;
+  category?: string;
 };
 
 export type GroupMessage = {
