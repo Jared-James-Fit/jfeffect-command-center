@@ -103,6 +103,7 @@ import { Route as ApiPublicHooksLiftArchiveTickRouteImport } from './routes/api/
 import { Route as AuthenticatedPortalWorkoutsDayIdRouteImport } from './routes/_authenticated/portal/workouts.$dayId'
 import { Route as AuthenticatedPortalRecipesRecipeIdRouteImport } from './routes/_authenticated/portal/recipes.$recipeId'
 import { Route as AuthenticatedPortalPurchasesIdRouteImport } from './routes/_authenticated/portal/purchases.$id'
+import { Route as AuthenticatedPortalEventsIdRouteImport } from './routes/_authenticated/portal/events.$id'
 import { Route as AuthenticatedPortalCheckInsFormIdRouteImport } from './routes/_authenticated/portal/check-ins.$formId'
 import { Route as AuthenticatedMResourcesSlugRouteImport } from './routes/_authenticated/m/resources.$slug'
 import { Route as AuthenticatedMPlansPlanIdRouteImport } from './routes/_authenticated/m/plans.$planId'
@@ -665,6 +666,12 @@ const AuthenticatedPortalPurchasesIdRoute =
     path: '/$id',
     getParentRoute: () => AuthenticatedPortalPurchasesRoute,
   } as any)
+const AuthenticatedPortalEventsIdRoute =
+  AuthenticatedPortalEventsIdRouteImport.update({
+    id: '/events/$id',
+    path: '/events/$id',
+    getParentRoute: () => AuthenticatedPortalRouteRoute,
+  } as any)
 const AuthenticatedPortalCheckInsFormIdRoute =
   AuthenticatedPortalCheckInsFormIdRouteImport.update({
     id: '/$formId',
@@ -908,6 +915,7 @@ export interface FileRoutesByFullPath {
   '/m/plans/$planId': typeof AuthenticatedMPlansPlanIdRoute
   '/m/resources/$slug': typeof AuthenticatedMResourcesSlugRoute
   '/portal/check-ins/$formId': typeof AuthenticatedPortalCheckInsFormIdRoute
+  '/portal/events/$id': typeof AuthenticatedPortalEventsIdRoute
   '/portal/purchases/$id': typeof AuthenticatedPortalPurchasesIdRoute
   '/portal/recipes/$recipeId': typeof AuthenticatedPortalRecipesRecipeIdRoute
   '/portal/workouts/$dayId': typeof AuthenticatedPortalWorkoutsDayIdRoute
@@ -1024,6 +1032,7 @@ export interface FileRoutesByTo {
   '/m/plans/$planId': typeof AuthenticatedMPlansPlanIdRoute
   '/m/resources/$slug': typeof AuthenticatedMResourcesSlugRoute
   '/portal/check-ins/$formId': typeof AuthenticatedPortalCheckInsFormIdRoute
+  '/portal/events/$id': typeof AuthenticatedPortalEventsIdRoute
   '/portal/purchases/$id': typeof AuthenticatedPortalPurchasesIdRoute
   '/portal/recipes/$recipeId': typeof AuthenticatedPortalRecipesRecipeIdRoute
   '/portal/workouts/$dayId': typeof AuthenticatedPortalWorkoutsDayIdRoute
@@ -1145,6 +1154,7 @@ export interface FileRoutesById {
   '/_authenticated/m/plans/$planId': typeof AuthenticatedMPlansPlanIdRoute
   '/_authenticated/m/resources/$slug': typeof AuthenticatedMResourcesSlugRoute
   '/_authenticated/portal/check-ins/$formId': typeof AuthenticatedPortalCheckInsFormIdRoute
+  '/_authenticated/portal/events/$id': typeof AuthenticatedPortalEventsIdRoute
   '/_authenticated/portal/purchases/$id': typeof AuthenticatedPortalPurchasesIdRoute
   '/_authenticated/portal/recipes/$recipeId': typeof AuthenticatedPortalRecipesRecipeIdRoute
   '/_authenticated/portal/workouts/$dayId': typeof AuthenticatedPortalWorkoutsDayIdRoute
@@ -1266,6 +1276,7 @@ export interface FileRouteTypes {
     | '/m/plans/$planId'
     | '/m/resources/$slug'
     | '/portal/check-ins/$formId'
+    | '/portal/events/$id'
     | '/portal/purchases/$id'
     | '/portal/recipes/$recipeId'
     | '/portal/workouts/$dayId'
@@ -1382,6 +1393,7 @@ export interface FileRouteTypes {
     | '/m/plans/$planId'
     | '/m/resources/$slug'
     | '/portal/check-ins/$formId'
+    | '/portal/events/$id'
     | '/portal/purchases/$id'
     | '/portal/recipes/$recipeId'
     | '/portal/workouts/$dayId'
@@ -1502,6 +1514,7 @@ export interface FileRouteTypes {
     | '/_authenticated/m/plans/$planId'
     | '/_authenticated/m/resources/$slug'
     | '/_authenticated/portal/check-ins/$formId'
+    | '/_authenticated/portal/events/$id'
     | '/_authenticated/portal/purchases/$id'
     | '/_authenticated/portal/recipes/$recipeId'
     | '/_authenticated/portal/workouts/$dayId'
@@ -2203,6 +2216,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedPortalPurchasesIdRouteImport
       parentRoute: typeof AuthenticatedPortalPurchasesRoute
     }
+    '/_authenticated/portal/events/$id': {
+      id: '/_authenticated/portal/events/$id'
+      path: '/events/$id'
+      fullPath: '/portal/events/$id'
+      preLoaderRoute: typeof AuthenticatedPortalEventsIdRouteImport
+      parentRoute: typeof AuthenticatedPortalRouteRoute
+    }
     '/_authenticated/portal/check-ins/$formId': {
       id: '/_authenticated/portal/check-ins/$formId'
       path: '/$formId'
@@ -2715,6 +2735,7 @@ interface AuthenticatedPortalRouteRouteChildren {
   AuthenticatedPortalRecipesRoute: typeof AuthenticatedPortalRecipesRouteWithChildren
   AuthenticatedPortalResourcesRoute: typeof AuthenticatedPortalResourcesRoute
   AuthenticatedPortalIndexRoute: typeof AuthenticatedPortalIndexRoute
+  AuthenticatedPortalEventsIdRoute: typeof AuthenticatedPortalEventsIdRoute
   AuthenticatedPortalWorkoutsDayIdRoute: typeof AuthenticatedPortalWorkoutsDayIdRoute
   AuthenticatedPortalAgreementsIndexRoute: typeof AuthenticatedPortalAgreementsIndexRoute
   AuthenticatedPortalWorkoutsIndexRoute: typeof AuthenticatedPortalWorkoutsIndexRoute
@@ -2744,6 +2765,7 @@ const AuthenticatedPortalRouteRouteChildren: AuthenticatedPortalRouteRouteChildr
       AuthenticatedPortalRecipesRouteWithChildren,
     AuthenticatedPortalResourcesRoute: AuthenticatedPortalResourcesRoute,
     AuthenticatedPortalIndexRoute: AuthenticatedPortalIndexRoute,
+    AuthenticatedPortalEventsIdRoute: AuthenticatedPortalEventsIdRoute,
     AuthenticatedPortalWorkoutsDayIdRoute:
       AuthenticatedPortalWorkoutsDayIdRoute,
     AuthenticatedPortalAgreementsIndexRoute:
