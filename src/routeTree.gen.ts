@@ -128,6 +128,7 @@ import { Route as AuthenticatedAdminSettingsSmsRouteImport } from './routes/_aut
 import { Route as AuthenticatedAdminSettingsChatRouteImport } from './routes/_authenticated/admin/settings_.chat'
 import { Route as AuthenticatedAdminPurchasesIdRouteImport } from './routes/_authenticated/admin/purchases.$id'
 import { Route as AuthenticatedAdminProgramLibraryTemplateIdRouteImport } from './routes/_authenticated/admin/program-library_.$templateId'
+import { Route as AuthenticatedAdminMembershipWelcomeMessagesRouteImport } from './routes/_authenticated/admin/membership.welcome-messages'
 import { Route as AuthenticatedAdminMembershipSignupStatsRouteImport } from './routes/_authenticated/admin/membership.signup-stats'
 import { Route as AuthenticatedAdminMembershipSignupLinkRouteImport } from './routes/_authenticated/admin/membership.signup-link'
 import { Route as AuthenticatedAdminMembershipSalesPageRouteImport } from './routes/_authenticated/admin/membership.sales-page'
@@ -834,6 +835,12 @@ const AuthenticatedAdminProgramLibraryTemplateIdRoute =
     path: '/program-library/$templateId',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
+const AuthenticatedAdminMembershipWelcomeMessagesRoute =
+  AuthenticatedAdminMembershipWelcomeMessagesRouteImport.update({
+    id: '/welcome-messages',
+    path: '/welcome-messages',
+    getParentRoute: () => AuthenticatedAdminMembershipRoute,
+  } as any)
 const AuthenticatedAdminMembershipSignupStatsRoute =
   AuthenticatedAdminMembershipSignupStatsRouteImport.update({
     id: '/signup-stats',
@@ -1088,6 +1095,7 @@ export interface FileRoutesByFullPath {
   '/admin/membership/sales-page': typeof AuthenticatedAdminMembershipSalesPageRoute
   '/admin/membership/signup-link': typeof AuthenticatedAdminMembershipSignupLinkRoute
   '/admin/membership/signup-stats': typeof AuthenticatedAdminMembershipSignupStatsRoute
+  '/admin/membership/welcome-messages': typeof AuthenticatedAdminMembershipWelcomeMessagesRoute
   '/admin/program-library/$templateId': typeof AuthenticatedAdminProgramLibraryTemplateIdRoute
   '/admin/purchases/$id': typeof AuthenticatedAdminPurchasesIdRoute
   '/admin/settings/chat': typeof AuthenticatedAdminSettingsChatRoute
@@ -1228,6 +1236,7 @@ export interface FileRoutesByTo {
   '/admin/membership/sales-page': typeof AuthenticatedAdminMembershipSalesPageRoute
   '/admin/membership/signup-link': typeof AuthenticatedAdminMembershipSignupLinkRoute
   '/admin/membership/signup-stats': typeof AuthenticatedAdminMembershipSignupStatsRoute
+  '/admin/membership/welcome-messages': typeof AuthenticatedAdminMembershipWelcomeMessagesRoute
   '/admin/program-library/$templateId': typeof AuthenticatedAdminProgramLibraryTemplateIdRoute
   '/admin/purchases/$id': typeof AuthenticatedAdminPurchasesIdRoute
   '/admin/settings/chat': typeof AuthenticatedAdminSettingsChatRoute
@@ -1374,6 +1383,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/membership/sales-page': typeof AuthenticatedAdminMembershipSalesPageRoute
   '/_authenticated/admin/membership/signup-link': typeof AuthenticatedAdminMembershipSignupLinkRoute
   '/_authenticated/admin/membership/signup-stats': typeof AuthenticatedAdminMembershipSignupStatsRoute
+  '/_authenticated/admin/membership/welcome-messages': typeof AuthenticatedAdminMembershipWelcomeMessagesRoute
   '/_authenticated/admin/program-library_/$templateId': typeof AuthenticatedAdminProgramLibraryTemplateIdRoute
   '/_authenticated/admin/purchases/$id': typeof AuthenticatedAdminPurchasesIdRoute
   '/_authenticated/admin/settings_/chat': typeof AuthenticatedAdminSettingsChatRoute
@@ -1520,6 +1530,7 @@ export interface FileRouteTypes {
     | '/admin/membership/sales-page'
     | '/admin/membership/signup-link'
     | '/admin/membership/signup-stats'
+    | '/admin/membership/welcome-messages'
     | '/admin/program-library/$templateId'
     | '/admin/purchases/$id'
     | '/admin/settings/chat'
@@ -1660,6 +1671,7 @@ export interface FileRouteTypes {
     | '/admin/membership/sales-page'
     | '/admin/membership/signup-link'
     | '/admin/membership/signup-stats'
+    | '/admin/membership/welcome-messages'
     | '/admin/program-library/$templateId'
     | '/admin/purchases/$id'
     | '/admin/settings/chat'
@@ -1805,6 +1817,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/membership/sales-page'
     | '/_authenticated/admin/membership/signup-link'
     | '/_authenticated/admin/membership/signup-stats'
+    | '/_authenticated/admin/membership/welcome-messages'
     | '/_authenticated/admin/program-library_/$templateId'
     | '/_authenticated/admin/purchases/$id'
     | '/_authenticated/admin/settings_/chat'
@@ -2700,6 +2713,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminProgramLibraryTemplateIdRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
+    '/_authenticated/admin/membership/welcome-messages': {
+      id: '/_authenticated/admin/membership/welcome-messages'
+      path: '/welcome-messages'
+      fullPath: '/admin/membership/welcome-messages'
+      preLoaderRoute: typeof AuthenticatedAdminMembershipWelcomeMessagesRouteImport
+      parentRoute: typeof AuthenticatedAdminMembershipRoute
+    }
     '/_authenticated/admin/membership/signup-stats': {
       id: '/_authenticated/admin/membership/signup-stats'
       path: '/signup-stats'
@@ -2893,6 +2913,7 @@ interface AuthenticatedAdminMembershipRouteChildren {
   AuthenticatedAdminMembershipSalesPageRoute: typeof AuthenticatedAdminMembershipSalesPageRoute
   AuthenticatedAdminMembershipSignupLinkRoute: typeof AuthenticatedAdminMembershipSignupLinkRoute
   AuthenticatedAdminMembershipSignupStatsRoute: typeof AuthenticatedAdminMembershipSignupStatsRoute
+  AuthenticatedAdminMembershipWelcomeMessagesRoute: typeof AuthenticatedAdminMembershipWelcomeMessagesRoute
   AuthenticatedAdminMembershipIndexRoute: typeof AuthenticatedAdminMembershipIndexRoute
 }
 
@@ -2910,6 +2931,8 @@ const AuthenticatedAdminMembershipRouteChildren: AuthenticatedAdminMembershipRou
       AuthenticatedAdminMembershipSignupLinkRoute,
     AuthenticatedAdminMembershipSignupStatsRoute:
       AuthenticatedAdminMembershipSignupStatsRoute,
+    AuthenticatedAdminMembershipWelcomeMessagesRoute:
+      AuthenticatedAdminMembershipWelcomeMessagesRoute,
     AuthenticatedAdminMembershipIndexRoute:
       AuthenticatedAdminMembershipIndexRoute,
   }
