@@ -47,6 +47,7 @@ export function AppointmentCalendarGrid() {
       arr.push(a);
       map.set(k, arr);
     }
+    for (const arr of map.values()) arr.sort((a, b) => +new Date(a.starts_at) - +new Date(b.starts_at));
     return { days: ds, byDay: map };
   }, [rows, mode, anchor]);
 
