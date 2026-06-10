@@ -657,3 +657,270 @@ export function AttachmentView({
   if (att.type === "pdf" || att.type === "file") return <FileAttachment att={att} mine={mine} />;
   return <LinkAttachment att={att} mine={mine} />;
 }
+
+/* ============================ Chat Request Cards ============================ */
+
+function statusTone(label: string) {
+  const l = label.toLowerCase();
+  if (l.includes("submit") || l.includes("sign") || l.includes("verifi") || l.includes("complete")) {
+    return "bg-emerald-500/15 text-emerald-300 border-emerald-500/30";
+  }
+  if (l.includes("open") || l.includes("progress")) {
+    return "bg-amber-500/15 text-amber-300 border-amber-500/30";
+  }
+  if (l.includes("error") || l.includes("declin") || l.includes("expired") || l.includes("cancel")) {
+    return "bg-destructive/15 text-destructive border-destructive/30";
+  }
+  return "bg-secondary/40 text-muted-foreground border-border";
+}
+
+function useClientNames(ids: string[]) {
+  return useQuery({
+    queryKey: ["chat-req-client-names", ids.slice().sort().join(",")],
+    enabled: ids.length > 0,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("clients").select("id, full_name").in("id", ids);
+      if (error) throw error;
+      const map = new Map<string, string>();
+      for (const r of (data ?? []) as any[]) map.set(r.id as string, (r.full_name as string) ?? "Client");
+      return map;
+    },
+    staleTime: 60_000,
+  });
+}
+
+function RequestShell({
+  icon: Icon, title, subtitle, chip, mine, children, onOpen,
+}: {
+  icon: any; title: string; subtitle?: string;
+  chip?: { label: string; tone?: string };
+  mine: boolean; children?: React.ReactNode; onOpen?: () => void;
+}) {
+  return (
+    <div
+      className={cn(
+        "w-[260px] max-w-full overflow-hidden rounded-xl border bg-card text-card-foreground shadow-sm",
+        mine ? "border-primary/30" : "border-border",
+      )}
+    >
+      <button
+        type="button"
+        onClick={onOpen}
+        className="flex w-full items-start gap-2.5 p-3 text-left hover:bg-accent/40 transition-colors"
+      >
+        <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/15 text-primary">
+          <Icon className="h-4 w-4" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-sm font-medium">{title}</div>
+          {subtitle && <div className="truncate text-[11px] text-muted-foreground">{subtitle}</div>}
+          {chip && (
+            <div className={cn("mt-1.5 inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium", chip.tone ?? statusTone(chip.label))}>
+              {chip.label}
+            </div>
+          )}
+        </div>
+        {onOpen && <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" />}
+      </button>
+      {children}
+    </div>
+  );
+}
+
+function PerClientRows({
+  clientIds, rowFor,
+}: {
+  clientIds: string[];
+  rowFor: (clientId: string, name: string) => { label: string; tone?: string };
+}) {
+  const { data: names } = useClientNames(clientIds);
+  const [open, setOpen] = useState(false);
+  if (clientIds.length <= 1) return null;
+  return (
+    <div className="border-t border-border/60">
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }}
+        className="flex w-full items-center justify-between px-3 py-1.5 text-[11px] text-muted-foreground hover:bg-accent/40"
+      >
+        <span>{clientIds.length} recipients</span>
+        {open ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+      </button>
+      {open && (
+        <ul className="max-h-40 overflow-y-auto px-3 pb-2 pt-0.5 text-[11px]">
+          {clientIds.map((cid) => {
+            const name = names?.get(cid) ?? "Client";
+            const r = rowFor(cid, name);
+            return (
+              <li key={cid} className="flex items-center justify-between gap-2 py-1">
+                <span className="truncate">{name}</span>
+                <span className={cn("rounded-full border px-1.5 py-0.5 text-[10px]", r.tone ?? statusTone(r.label))}>{r.label}</span>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+/* -------- Form request -------- */
+
+function FormRequestCard({ att, mine }: { att: SharedAttachment; mine: boolean }) {
+  const formId = att.form_id;
+  const clientIds = att.assignment_client_ids ?? [];
+  const { data: form } = useQuery({
+    queryKey: ["chat-req-form", formId],
+    enabled: !!formId,
+    queryFn: async () => {
+      const { data } = await supabase.from("nf_forms").select("id, title").eq("id", formId!).maybeSingle();
+      return data as { id: string; title: string } | null;
+    },
+    staleTime: 60_000,
+  });
+  const { data: subs } = useQuery({
+    queryKey: ["chat-req-form-status", formId, clientIds.slice().sort().join(",")],
+    enabled: !!formId && clientIds.length > 0,
+    refetchInterval: 30_000,
+    refetchOnWindowFocus: true,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("nf_submissions")
+        .select("client_id, status, submitted_at, started_at, updated_at")
+        .eq("form_id", formId!)
+        .in("client_id", clientIds);
+      const map = new Map<string, any>();
+      for (const r of (data ?? []) as any[]) {
+        const prev = map.get(r.client_id);
+        if (!prev || new Date(r.updated_at) > new Date(prev.updated_at)) map.set(r.client_id, r);
+      }
+      return map;
+    },
+  });
+
+  function statusFor(cid: string): { label: string } {
+    const s = subs?.get(cid);
+    if (!s) return { label: "Sent" };
+    if (s.status === "submitted" || s.status === "reviewed" || s.status === "pending_review") return { label: "Submitted" };
+    if (s.status === "in_progress") return { label: "In progress" };
+    return { label: "Sent" };
+  }
+
+  const total = clientIds.length;
+  const done = clientIds.filter((c) => statusFor(c).label === "Submitted").length;
+  const rollup =
+    total <= 1
+      ? statusFor(clientIds[0] ?? "").label
+      : done === total
+        ? "All submitted"
+        : `${done}/${total} submitted`;
+
+  return (
+    <RequestShell
+      icon={ClipboardList}
+      title={att.request_title ?? form?.title ?? "Form request"}
+      subtitle={att.request_note || `Form to fill${form?.title ? `: ${form.title}` : ""}`}
+      chip={{ label: rollup }}
+      mine={mine}
+      onOpen={() => formId && window.open(`/admin/native-forms/${formId}`, "_blank")}
+    >
+      <PerClientRows clientIds={clientIds} rowFor={(cid) => statusFor(cid)} />
+    </RequestShell>
+  );
+}
+
+/* -------- Signature request -------- */
+
+function SignatureRequestCard({ att, mine }: { att: SharedAttachment; mine: boolean }) {
+  const map = att.agreement_client_map ?? [];
+  const ids = (att.agreement_ids ?? map.map((m) => m.agreement_id)).filter(Boolean);
+  const clientIds = map.map((m) => m.client_id);
+
+  const { data: agreements } = useQuery({
+    queryKey: ["chat-req-agreements", ids.slice().sort().join(",")],
+    enabled: ids.length > 0,
+    refetchInterval: 30_000,
+    refetchOnWindowFocus: true,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("agreements")
+        .select("id, status, verification_status, signed_at, signnow_signing_link, template_name, client_id")
+        .in("id", ids);
+      const m = new Map<string, any>();
+      for (const r of (data ?? []) as any[]) m.set(r.id as string, r);
+      return m;
+    },
+  });
+
+  function labelFor(a: any): string {
+    if (!a) return "Sent";
+    if (a.status === "Verified" || a.verification_status === "Manually Verified" || a.verification_status === "Auto-Matched") return "Verified";
+    if (a.status === "Signed" || a.status === "Completed" || !!a.signed_at) return "Signed";
+    if (a.status === "Opened") return "Opened";
+    if (a.status === "Declined" || a.status === "Expired" || a.status === "Cancelled") return a.status;
+    return "Sent";
+  }
+
+  const allAgreements = ids.map((id) => agreements?.get(id));
+  const labels = allAgreements.map(labelFor);
+  const done = labels.filter((l) => l === "Signed" || l === "Verified").length;
+  const rollup =
+    ids.length <= 1
+      ? labels[0] ?? "Sent"
+      : done === ids.length
+        ? "All signed"
+        : `${done}/${ids.length} signed`;
+
+  const first = allAgreements[0];
+  const single = ids.length === 1;
+
+  return (
+    <RequestShell
+      icon={FileSignature}
+      title={att.request_title ?? first?.template_name ?? "Signature request"}
+      subtitle={att.request_note || "Tap to open and sign"}
+      chip={{ label: rollup }}
+      mine={mine}
+      onOpen={() => {
+        if (single && first?.signnow_signing_link) window.open(first.signnow_signing_link, "_blank");
+        else if (first?.id) window.open(`/admin/agreements`, "_blank");
+      }}
+    >
+      <PerClientRows
+        clientIds={clientIds}
+        rowFor={(cid) => {
+          const a = map.find((m) => m.client_id === cid);
+          const ag = a ? agreements?.get(a.agreement_id) : null;
+          return { label: labelFor(ag) };
+        }}
+      />
+    </RequestShell>
+  );
+}
+
+/* -------- Recipe share -------- */
+
+function RecipeShareCard({ att, mine }: { att: SharedAttachment; mine: boolean }) {
+  const id = att.recipe_id;
+  const { data: recipe } = useQuery({
+    queryKey: ["chat-req-recipe", id],
+    enabled: !!id,
+    queryFn: async () => {
+      const { data } = await supabase.from("recipes").select("id, title, category").eq("id", id!).maybeSingle();
+      return data as { id: string; title: string; category: string } | null;
+    },
+    staleTime: 5 * 60_000,
+  });
+  return (
+    <RequestShell
+      icon={UtensilsCrossed}
+      title={att.request_title ?? recipe?.title ?? "Recipe"}
+      subtitle={recipe?.category ?? "Shared recipe"}
+      chip={{ label: "Shared" }}
+      mine={mine}
+      onOpen={() => id && window.open(`/recipes/${id}`, "_blank")}
+    />
+  );
+}
+}
