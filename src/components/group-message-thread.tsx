@@ -37,6 +37,7 @@ import {
   uploadAttachmentToPath, LINK_RE, renderBodyWithMeet, type SharedAttachment,
 } from "@/components/chat-shared";
 import { MeetQuickAction } from "@/components/meet-quick-action";
+import { ChatSendMenu } from "@/components/chat-send-menu";
 import {
   Paperclip, Send, X, Image as ImageIcon, Camera, File as FileIcon,
   Mic, Trash2, Play, Pause, Square, Loader2, MoreHorizontal, Pencil, Check,
