@@ -2981,6 +2981,10 @@ export type Database = {
       lift_videos: {
         Row: {
           admin_last_viewed_at: string | null
+          archive_attempts: number
+          archive_error: string | null
+          archive_last_attempt_at: string | null
+          archive_next_attempt_at: string | null
           archive_status: string | null
           archived: boolean
           archived_at: string | null
@@ -3038,6 +3042,10 @@ export type Database = {
         }
         Insert: {
           admin_last_viewed_at?: string | null
+          archive_attempts?: number
+          archive_error?: string | null
+          archive_last_attempt_at?: string | null
+          archive_next_attempt_at?: string | null
           archive_status?: string | null
           archived?: boolean
           archived_at?: string | null
@@ -3095,6 +3103,10 @@ export type Database = {
         }
         Update: {
           admin_last_viewed_at?: string | null
+          archive_attempts?: number
+          archive_error?: string | null
+          archive_last_attempt_at?: string | null
+          archive_next_attempt_at?: string | null
           archive_status?: string | null
           archived?: boolean
           archived_at?: string | null

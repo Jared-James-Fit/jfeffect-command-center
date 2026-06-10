@@ -5,9 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { createClientLiftVideo } from "@/lib/lift-videos.functions";
-import { initMediaUpload, finalizeMediaUpload, createSubmission } from "@/lib/drive.functions";
-import { updateClientLiftVideoUpload } from "@/lib/lift-videos.functions";
+import { createClientLiftVideo, updateClientLiftVideoUpload } from "@/lib/lift-videos.functions";
 import { enqueueLiftUpload } from "@/lib/lift-upload-queue";
 import { friendlyDriveError } from "@/lib/drive-errors";
 import { createLiftVideo } from "@/lib/lift-videos";
@@ -66,9 +64,6 @@ type Props = {
 };
 
 export function ClientLiftVideoUploader({ clientId, clientName, userId, onSaved }: Props) {
-  const initFn = useServerFn(initMediaUpload);
-  const finalizeFn = useServerFn(finalizeMediaUpload);
-  const createSubFn = useServerFn(createSubmission);
   const createClientLiftVideoFn = useServerFn(createClientLiftVideo);
   const updateClientLiftVideoFn = useServerFn(updateClientLiftVideoUpload);
 
@@ -326,6 +321,7 @@ export function ClientLiftVideoUploader({ clientId, clientName, userId, onSaved 
       //    each upload finishes (or marks it "Upload Failed" on error).
       for (const item of created) {
         if (item.clip.kind !== "file" || !item.clip.file) continue;
+        if (!userId) continue;
         const perClipNote = item.clip.note.trim() || sharedNote || null;
         enqueueLiftUpload({
           videoId: item.row.id,
@@ -338,8 +334,7 @@ export function ClientLiftVideoUploader({ clientId, clientName, userId, onSaved 
           perClipNote,
           urgent: isUrgent,
           painNote: isUrgent ? urgentNote || null : null,
-          submissionId: null,
-          initFn, finalizeFn, createSubFn,
+          userId,
           updateFn: updateClientLiftVideoFn,
         });
       }

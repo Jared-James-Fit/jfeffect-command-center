@@ -28,7 +28,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { UserAvatar } from "@/components/user-avatar";
-import { copyLiftVideoStorageToDrive, refreshLiftVideoDriveDiagnostics } from "@/lib/lift-videos.functions";
+import { copyLiftVideoStorageToDrive, refreshLiftVideoDriveDiagnostics, retryLiftVideoArchive } from "@/lib/lift-videos.functions";
 import { useLiftUploadState } from "@/lib/lift-upload-queue";
 import { Progress } from "@/components/ui/progress";
 
@@ -57,6 +57,8 @@ export function LiftVideoCard({ video, role, userId, onChanged, onEdit, clientNa
   const [copyingToDrive, setCopyingToDrive] = useState(false);
   const refreshDiagnostics = useServerFn(refreshLiftVideoDriveDiagnostics);
   const copyToDrive = useServerFn(copyLiftVideoStorageToDrive);
+  const retryArchive = useServerFn(retryLiftVideoArchive);
+  const [retryingArchive, setRetryingArchive] = useState(false);
 
   const loadComments = async () => {
     const c = await listComments(video.id, { includeInternal: role === "admin" });
@@ -152,6 +154,20 @@ export function LiftVideoCard({ video, role, userId, onChanged, onEdit, clientNa
       toast.error(e?.message ?? "Could not copy video to Drive");
     } finally {
       setCopyingToDrive(false);
+    }
+  };
+
+  const handleRetryArchive = async () => {
+    setRetryingArchive(true);
+    try {
+      const r = await retryArchive({ data: { videoId: video.id } });
+      if (r?.ok) toast.success("Archived to Drive");
+      else toast.error(r?.reason ?? "Drive archive failed");
+      onChanged?.();
+    } catch (e: any) {
+      toast.error(e?.message ?? "Drive archive failed");
+    } finally {
+      setRetryingArchive(false);
     }
   };
 
@@ -363,6 +379,14 @@ export function LiftVideoCard({ video, role, userId, onChanged, onEdit, clientNa
         {video.watched_at && <Badge variant="outline" className="border-blue-500/40 bg-blue-500/10 text-blue-600"><Eye className="mr-1 h-3 w-3" />Coach Jared watched · {formatDistanceToNow(parseISO(video.watched_at), { addSuffix: true })}</Badge>}
         {video.liked_at && <Badge variant="outline" className="border-pink-500/40 bg-pink-500/10 text-pink-600"><ThumbsUp className="mr-1 h-3 w-3" />Coach Jared liked</Badge>}
         {video.reviewed_at && <Badge variant="outline" className="border-emerald-500/40 bg-emerald-500/10 text-emerald-600"><CheckCircle2 className="mr-1 h-3 w-3" />Reviewed</Badge>}
+        {role === "admin" && video.video_storage_path && (
+          <ArchiveStatusBadge
+            status={video.archive_status ?? "not_archived"}
+            onRetry={handleRetryArchive}
+            retrying={retryingArchive}
+            error={video.archive_error ?? null}
+          />
+        )}
       </div>
 
       {/* Admin actions */}
@@ -496,4 +520,41 @@ function formatBytes(value: number | null | undefined) {
   const mb = value / 1024 / 1024;
   if (mb < 1024) return `${mb.toFixed(1)} MB`;
   return `${(mb / 1024).toFixed(2)} GB`;
+}
+
+function ArchiveStatusBadge({
+  status, onRetry, retrying, error,
+}: {
+  status: string;
+  onRetry: () => void;
+  retrying: boolean;
+  error: string | null;
+}) {
+  const label =
+    status === "archived" ? "Archived to Drive"
+    : status === "archiving" ? "Archiving to Drive…"
+    : status === "pending" ? "Drive archive pending"
+    : status === "failed" ? "Drive archive failed"
+    : "Not archived";
+  const tone =
+    status === "archived" ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-600"
+    : status === "archiving" ? "border-blue-500/40 bg-blue-500/10 text-blue-600"
+    : status === "pending" ? "border-warning/40 bg-warning/10 text-warning"
+    : status === "failed" ? "border-destructive/40 bg-destructive/10 text-destructive"
+    : "border-border text-muted-foreground";
+  const canRetry = status === "failed" || status === "pending" || status === "not_archived";
+  return (
+    <span className="inline-flex items-center gap-1">
+      <Badge variant="outline" className={tone} title={error ?? undefined}>
+        <Archive className="mr-1 h-3 w-3" />
+        {label}
+      </Badge>
+      {canRetry && (
+        <Button size="sm" variant="ghost" className="h-6 px-2 text-[11px]" onClick={onRetry} disabled={retrying}>
+          {retrying ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <RefreshCw className="mr-1 h-3 w-3" />}
+          Retry archive
+        </Button>
+      )}
+    </span>
+  );
 }
