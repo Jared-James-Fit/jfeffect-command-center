@@ -1456,6 +1456,18 @@ export function MessageThread({
               </DropdownMenuContent>
             </DropdownMenu>
 
+            {role === "admin" && (
+              <ChatSendMenu
+                surface="dm"
+                clientIds={[clientId]}
+                defaultClientId={clientId}
+                disabled={sending || uploading}
+                onAttach={async (att, noteBody) => {
+                  await doSend({ body: noteBody, extraAttachments: [att as unknown as MessageAttachment] });
+                }}
+              />
+            )}
+
             {canSendGifs && (
               <GifPicker
                 disabled={sending || uploading}
