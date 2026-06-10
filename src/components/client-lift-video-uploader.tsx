@@ -268,6 +268,17 @@ export function ClientLiftVideoUploader({ clientId, clientName, userId, onSaved 
     if (next.length === 0) return;
     setClips((c) => [...c, ...next]);
     if (!activeId) setActiveId(next[0].id);
+
+    // Kick off thumbnail generation for video clips (non-blocking).
+    for (const clip of next) {
+      if (clip.kind !== "file" || clip.isImage || !clip.file) continue;
+      const clipId = clip.id;
+      const file = clip.file;
+      void generateVideoThumbnail(file).then((thumb) => {
+        if (!thumb) return;
+        setClips((cs) => cs.map((k) => (k.id === clipId ? { ...k, thumbnailUrl: thumb, previewStatus: "ready" } : k)));
+      });
+    }
   };
 
   const addLinks = (raw: string) => {
