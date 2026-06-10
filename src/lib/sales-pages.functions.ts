@@ -34,7 +34,7 @@ export const getPublicSalesPage = createServerFn({ method: "GET" })
       .eq("published", true)
       .maybeSingle();
     if (error) throw new Error(error.message);
-    return (row ?? null) as SalesPageRow | null;
+    return (row ?? null) as unknown as SalesPageRow | null;
   });
 
 async function assertAdmin(ctx: any) {
@@ -52,7 +52,7 @@ export const getSalesPageAdmin = createServerFn({ method: "GET" })
     const { data: row, error } = await supabaseAdmin
       .from("sales_pages").select("*").eq("page_key", data.page_key).maybeSingle();
     if (error) throw new Error(error.message);
-    return row as SalesPageRow;
+    return row as unknown as SalesPageRow;
   });
 
 const patchSchema = z.object({
