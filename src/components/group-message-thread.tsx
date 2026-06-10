@@ -943,6 +943,15 @@ export function GroupMessageThread({
                 />
               )}
 
+              {canManage && (
+                <MeetQuickAction
+                  disabled={sending || uploading}
+                  onInsert={(text) =>
+                    setBody((b) => (b ? `${b.replace(/\s+$/, "")} ${text}` : text))
+                  }
+                />
+              )}
+
               <Textarea
                 value={body}
                 onChange={(e) => setBody(e.target.value)}
