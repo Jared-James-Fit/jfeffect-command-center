@@ -134,6 +134,11 @@ export function LiftVideoPlayer({
               if (v.videoWidth && v.videoHeight) {
                 setOrientation(v.videoHeight > v.videoWidth ? "portrait" : "landscape");
               }
+              // iOS Safari with preload="metadata" often never fires
+              // `canplay` until user interaction — flip ready as soon as
+              // metadata is decoded so the "Loading preview…" overlay
+              // clears and the poster/controls are visible immediately.
+              setStatus("ready");
             }}
             onError={(event) => {
               const media = event.currentTarget;

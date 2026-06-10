@@ -196,6 +196,7 @@ function AdminDashboard() {
   const liftNeedReview = liftVideos.filter((v) => !v.reviewed_at && v.status !== "Archived");
 
   const clientNameById = useMemo(() => new Map(clients.map((c) => [c.id, c.full_name])), [clients]);
+  const clientById = useMemo(() => new Map(clients.map((c) => [c.id, c])), [clients]);
   const stateMap = useMemo(() => new Map(convStates.map((s) => [s.client_id, s])), [convStates]);
 
   const seenC = new Set<string>();
@@ -245,22 +246,27 @@ function AdminDashboard() {
   });
 
   // Build Needs Attention unified feed
-  type NeedItem = { id: string; clientId?: string; name: string; reason: string; time?: string; tone: string; priority: number; href: string; search?: any; params?: any; action: string };
+  type NeedItem = { id: string; clientId?: string; name: string; reason: string; time?: string; tone: string; priority: number; href: string; search?: any; params?: any; action: string; avatarUrl?: string | null; thumbnailUrl?: string | null };
   const need: NeedItem[] = [];
   for (const v of liftNeedReview.slice(0, 10)) {
+    const c: any = clientById.get(v.client_id);
     need.push({
       id: `lift-${v.id}`,
       clientId: v.client_id,
       name: clientNameById.get(v.client_id) ?? "Client",
-      reason: `Lift video · ${v.exercise}`,
+      reason: `Lift video${v.exercise ? ` · ${v.exercise}` : ""}`,
       time: formatDistanceToNow(parseISO(v.created_at), { addSuffix: true }),
       tone: v.is_urgent ? "border-destructive/40 bg-destructive/10 text-destructive" : "border-primary/40 bg-primary/10 text-primary",
       priority: v.is_urgent ? 1 : 4,
       href: "/admin/lift-videos",
-      action: "Review",
+      search: { open: v.id },
+      action: "Open Review",
+      avatarUrl: c?.profile_picture_url ?? null,
+      thumbnailUrl: v.thumbnail_url ?? null,
     });
   }
   for (const s of checkInSubmissions.slice(0, 10)) {
+    const c: any = clientById.get((s as any).client_id);
     need.push({
       id: `ci-${(s as any).id}`,
       clientId: (s as any).client_id,
@@ -271,10 +277,12 @@ function AdminDashboard() {
       priority: 3,
       href: "/admin/check-in-reviews",
       action: "Review",
+      avatarUrl: c?.profile_picture_url ?? null,
     });
   }
   for (const m of messagesNeedingResponse.slice(0, 10)) {
     const st = stateMap.get(m.client_id);
+    const c: any = clientById.get(m.client_id);
     need.push({
       id: `msg-${m.client_id}`,
       clientId: m.client_id,
@@ -286,9 +294,11 @@ function AdminDashboard() {
       href: "/admin/messages",
       search: { client: m.client_id },
       action: "Reply",
+      avatarUrl: c?.profile_picture_url ?? null,
     });
   }
   for (const p of (paymentsAttention as any[]).slice(0, 5)) {
+    const c: any = clientById.get(p.client_id);
     need.push({
       id: `pay-${p.id}`,
       clientId: p.client_id,
@@ -299,6 +309,7 @@ function AdminDashboard() {
       href: "/admin/purchases/$id",
       params: { id: p.id },
       action: "Open",
+      avatarUrl: c?.profile_picture_url ?? null,
     });
   }
   for (const c of setupAlerts.slice(0, 5)) {
@@ -312,9 +323,11 @@ function AdminDashboard() {
       href: "/admin/clients/$id",
       params: { id: c.id },
       action: "Fix Setup",
+      avatarUrl: (c as any).profile_picture_url ?? null,
     });
   }
   for (const a of (actionRequests as any[]).slice(0, 5)) {
+    const c: any = clientById.get(a.client_id);
     need.push({
       id: `ar-${a.id}`,
       clientId: a.client_id,
@@ -324,6 +337,7 @@ function AdminDashboard() {
       priority: 4,
       href: "/admin/client-action-requests",
       action: "Open",
+      avatarUrl: c?.profile_picture_url ?? null,
     });
   }
   need.sort((a, b) => a.priority - b.priority);
@@ -477,20 +491,34 @@ function AdminDashboard() {
               ) : (
                 <ul className="divide-y divide-border">
                   {needsTop.map((n) => (
-                    <li key={n.id} className="flex flex-wrap items-start justify-between gap-2 py-2.5">
-                      <div className="min-w-0 flex-1 basis-full sm:basis-auto">
+                    <li key={n.id} className="flex items-center gap-3 py-2.5">
+                      <UserAvatar src={n.avatarUrl ?? undefined} name={n.name} size={36} />
+                      {n.thumbnailUrl && (
+                        <div
+                          className="relative hidden h-12 w-16 shrink-0 overflow-hidden rounded-md border border-border bg-secondary/60 sm:block"
+                          style={{ backgroundImage: `url(${n.thumbnailUrl})`, backgroundSize: "cover", backgroundPosition: "center" }}
+                          aria-hidden
+                        >
+                          <div className="absolute inset-0 grid place-items-center">
+                            <Video className="h-4 w-4 text-white/90 drop-shadow" />
+                          </div>
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2 flex-wrap min-w-0">
-                          <Badge variant="outline" className={`text-[10px] max-w-full truncate ${n.tone}`}>{n.reason}</Badge>
                           {n.clientId ? (
                             <Link to="/admin/clients/$id" params={{ id: n.clientId }} className="text-sm font-semibold hover:underline truncate min-w-0 max-w-full">{n.name}</Link>
                           ) : (
                             <span className="text-sm font-semibold truncate min-w-0 max-w-full">{n.name}</span>
                           )}
                         </div>
-                        {n.time && <div className="text-[10px] text-muted-foreground mt-0.5">{n.time}</div>}
+                        <div className="mt-0.5 flex items-center gap-2 flex-wrap">
+                          <Badge variant="outline" className={`text-[10px] max-w-full truncate ${n.tone}`}>{n.reason}</Badge>
+                          {n.time && <span className="text-[10px] text-muted-foreground">{n.time}</span>}
+                        </div>
                       </div>
                       <Link to={n.href as any} params={n.params as any} search={n.search} className="shrink-0">
-                        <Button variant="outline" size="sm" className="h-7 text-[11px] shrink-0">{n.action}</Button>
+                        <Button variant="outline" size="sm" className="h-8 text-[11px] shrink-0">{n.action}</Button>
                       </Link>
                     </li>
                   ))}
