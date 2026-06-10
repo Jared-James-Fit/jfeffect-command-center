@@ -22,7 +22,6 @@ import {
   GROUP_REACTION_EMOJIS, listGroupMemberProfiles,
 } from "@/lib/group-chats";
 import { useGroupPresence } from "@/hooks/use-group-presence";
-import { useAuth as _useAuth } from "@/lib/auth";
 import {
   Paperclip, Send, Loader2, MoreHorizontal, Pencil, Trash2, Check, X,
   Image as ImageIcon, FileText, Video as VideoIcon, Download, File as FileIcon,
