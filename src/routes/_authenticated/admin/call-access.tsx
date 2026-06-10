@@ -64,6 +64,8 @@ function CallAccessPage() {
         } as any);
         if (error) throw error;
       }
+      // Mirror into profiles so account/profile page stays in sync.
+      await supabase.from("profiles").update({ phone: v } as any).eq("id", uid);
       toast.success("Your phone number saved — clients can now call you.");
       qc.invalidateQueries({ queryKey: ["call-access-my-coach"] });
       qc.invalidateQueries({ queryKey: ["call-access-coaches"] });
