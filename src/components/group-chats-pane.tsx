@@ -4,10 +4,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import { ChevronLeft, Plus, Settings2, Users, Archive } from "lucide-react";
 import {
   listMyGroups, listAllGroupsForAdmin, listMyGroupMemberships,
+  listGroupMemberProfiles, type GroupMemberProfile,
   type ChatGroup,
 } from "@/lib/group-chats";
 import { GroupMessageThread } from "@/components/group-message-thread";
