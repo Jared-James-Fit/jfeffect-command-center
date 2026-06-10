@@ -253,7 +253,7 @@ function AdminLiftVideos() {
                 onChange={(e) => setSearch(e.target.value)}
                 className="h-10"
               />
-              <div className="flex gap-1.5 overflow-x-auto pb-1 -mx-1 px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <div className="flex flex-wrap gap-1.5 pb-1">
                 {FILTERS.map((f) => (
                   <button
                     key={f.key}
