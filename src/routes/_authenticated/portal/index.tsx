@@ -25,6 +25,7 @@ import { listFormsForClient } from "@/lib/native-forms";
 import { ManualCheckInReviewModal } from "@/components/manual-check-in-review-modal";
 import { ClientActionRequestModal } from "@/components/client-action-request-modal";
 import { UpcomingEventsPanel } from "@/components/events/upcoming-events-panel";
+import { UpcomingAppointmentsCard } from "@/components/appointments/upcoming-appointments-card";
 
 export const Route = createFileRoute("/_authenticated/portal/")({ component: PortalHome });
 
@@ -323,6 +324,7 @@ function PortalHome() {
         {client?.id && <ManualCheckInReviewModal clientId={client.id} />}
         {client?.id && <ClientActionRequestModal clientId={client.id} />}
         <UpcomingEventsPanel audience="client" />
+        <UpcomingAppointmentsCard mode="portal" />
         {client?.id && (
           <HomeScreenSetupCard
             clientId={client.id}
