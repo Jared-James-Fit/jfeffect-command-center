@@ -37,6 +37,7 @@ import {
   uploadAttachmentToPath, LINK_RE, renderBodyWithMeet, type SharedAttachment,
 } from "@/components/chat-shared";
 import { MeetQuickAction } from "@/components/meet-quick-action";
+import { ChatSendMenu } from "@/components/chat-send-menu";
 import {
   Paperclip, Send, X, Image as ImageIcon, Camera, File as FileIcon,
   Mic, Trash2, Play, Pause, Square, Loader2, MoreHorizontal, Pencil, Check,
@@ -180,6 +181,23 @@ export function GroupMessageThread({
   /* ---------------- Derived ---------------- */
 
   const memberById = useMemo(() => new Map(members.map((mb) => [mb.user_id, mb])), [members]);
+
+  // Resolve which group members map to client records (for Form/Signature/Recipe fan-out).
+  const memberUserIds = useMemo(() => members.map((m) => m.user_id).filter(Boolean), [members]);
+  const { data: memberClients = [] } = useQuery({
+    queryKey: ["group-member-clients", groupId, memberUserIds.slice().sort().join(",")],
+    enabled: canManage && memberUserIds.length > 0,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("clients")
+        .select("id, user_id, archived, status")
+        .in("user_id", memberUserIds)
+        .eq("archived", false);
+      if (error) throw error;
+      return (data ?? []).map((r: any) => r.id as string);
+    },
+    staleTime: 60_000,
+  });
 
   const profileById = useMemo(() => {
     const m = new Map<string, { full_name: string | null; avatar_url: string | null; role: string }>();
@@ -886,6 +904,29 @@ export function GroupMessageThread({
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
+
+              {canManage && (
+                <ChatSendMenu
+                  surface="group"
+                  clientIds={memberClients}
+                  disabled={sending || uploading || memberClients.length === 0}
+                  onAttach={async (att, noteBody) => {
+                    if (!user) return;
+                    try {
+                      await sendGroupMessage({
+                        groupId,
+                        senderId: user.id,
+                        senderRole: "admin",
+                        body: noteBody,
+                        attachments: [att as unknown as GroupAttachment],
+                      });
+                      qc.invalidateQueries({ queryKey: ["group-messages", groupId] });
+                    } catch (e: any) {
+                      toast.error(e?.message ?? "Failed to send");
+                    }
+                  }}
+                />
+              )}
 
               {canSendGifs && (
                 <GifPicker

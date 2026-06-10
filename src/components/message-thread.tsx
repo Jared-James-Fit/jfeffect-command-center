@@ -41,6 +41,7 @@ import { markRecent as markSoundRecent } from "@/lib/chat-sounds";
 import { ChatSoundCard } from "@/components/chat-sound-card";
 import { renderBodyWithMeet } from "@/components/chat-shared";
 import { MeetQuickAction } from "@/components/meet-quick-action";
+import { ChatSendMenu } from "@/components/chat-send-menu";
 import {
   Paperclip, Send, X, FileText, Image as ImageIcon, Video, Link as LinkIcon, ExternalLink,
   Mic, Trash2, Play, Pause, Camera, File as FileIcon, Flag, AlertCircle, AlertTriangle,
@@ -1454,6 +1455,18 @@ export function MessageThread({
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+
+            {role === "admin" && (
+              <ChatSendMenu
+                surface="dm"
+                clientIds={[clientId]}
+                defaultClientId={clientId}
+                disabled={sending || uploading}
+                onAttach={async (att, noteBody) => {
+                  await doSend({ body: noteBody, extraAttachments: [att as unknown as MessageAttachment] });
+                }}
+              />
+            )}
 
             {canSendGifs && (
               <GifPicker

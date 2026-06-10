@@ -1,52 +1,56 @@
-This is a large request, so here's the plan I'll execute. I'll start with an audit pass (read-only — no changes yet), then patch only what's actually missing. The sidebar tweak is a small side task included at the end.
+## What you'll get
 
-## Phase A — Audit (no code changes)
+A single **+** button in every chat composer (1:1 client messenger, group chats, coach-internal DMs) opens a menu with:
 
-I'll inspect what already exists across these surfaces and produce a checklist of pass/fail:
+- **Form request** — pick a Native Form, sends to that client (or every client in a group). The bubble shows their name and a live chip: *Sent → Opened → Submitted*.
+- **Signature request** — pick an agreement template, sends via SignNow. Chip: *Sent → Opened → Signed → Verified*.
+- **Recipe** — pick a recipe, grants access, drops a recipe card in chat.
+- **Client action request** — your existing "Action Needed" composer, now reachable from the same menu.
 
-1. **Subscription product wiring** — `signup.jf.tsx`, `auth.tsx`, `stripe-webhook.ts`, `stripe.server.ts`, `jf-billing.functions.ts`, `jf-access.server.ts`, `membership.ts`, `app_members` schema + RLS.
-2. **Status → access mapping** — confirm Trialing/Active/PastDue/PaymentFailed/Paused/HoldPlan/Cancelled/Expired each gate correctly through `jf_member_has_full_access` and `member_has_access`.
-3. **Server-side gating** — every `/m/*` route loader + server function for protected reads (program library, recipes, resources, events, workouts, progress, announcements). Confirm no client-only checks.
-4. **Default access checklist** — `apply_default_member_access` + `member_access_defaults` + the auto-trigger when a new JF member is created.
-5. **Billing/cancel/freeze/hold/reactivation** — `m/billing.tsx`, the cancellation flow, freeze 30-day, switch-to-Hold-Plan, reactivate. Confirm Stripe price IDs and webhooks for all paths.
-6. **Stripe webhook coverage** — `checkout.session.completed`, `customer.subscription.created/updated/deleted`, `invoice.payment_failed`, `invoice.paid`, `invoice.payment_action_required`, trial_will_end.
-7. **SMS flow** — welcome, trial-ending, payment-failed, cancel/freeze/hold/reactivate, event reminders; consent + history.
-8. **Admin dashboard** — list view + per-member actions (Sync Stripe, grant/revoke, freeze, switch hold, reactivate, cancel, send SMS, resend invite, Stripe customer link).
-9. **Anti-cheat** — RLS audit on every JF-readable table; verify `account_type='jf_member'` + status checks on the server, not in components.
-10. **Welcome/onboarding** — `/m/welcome` exists; confirm the checklist + first-run gating.
+In group chats the request fans out: every client member gets their own assignment/agreement/access, and the bubble shows a roll-up ("3 of 5 submitted") that expands to per-client status.
 
-Deliverable for Phase A: a single chat reply with an itemized pass/fail list grouped by your 15 parts. No code changes in Phase A.
+## How it works
 
-## Phase B — Fixes (only what's broken or missing)
+```text
+[+]──▶ Form request   ─▶ pick form    ─▶ assign to client(s)  ─▶ chat card (live)
+       Signature      ─▶ pick template─▶ create agreement     ─▶ chat card (live)
+       Recipe         ─▶ pick recipe  ─▶ grant access         ─▶ chat card
+       Action request ─▶ existing composer prefilled w/ client
+```
 
-For each fail from Phase A, I'll patch in the smallest possible way:
+The card itself is just a new chat attachment `kind`, so it flows through your existing message + realtime pipeline.
 
-- Missing webhook handlers → extend `stripe-webhook.ts` and the `app_members` updater.
-- Missing/weak RLS → migrations that tighten policies using `jf_member_has_full_access(auth.uid())`.
-- Missing server-side gates → wrap the affected loaders in protected server fns that throw 403 unless full access.
-- Missing billing actions (freeze / hold / reactivate) → server functions calling Stripe + an admin "Sync Stripe Status" button.
-- Missing SMS templates/triggers → rows in `sms_automations` + webhook hooks.
-- Missing admin column on members list → status, plan, next bill, trial end, quick actions.
-- Missing upgrade prompt on coaching-only surfaces → reuse `upgrade-to-coaching-prompt.tsx`.
+## Build steps
 
-I will NOT touch parts that already work. The audit gates which patches run.
-
-## Phase C — Sidebar: Defaults button + Pinned favorites (side task)
-
-Small, isolated UI changes in `src/components/app-shell.tsx` + a tiny new lib.
-
-- **Defaults button**: a new `src/lib/sidebar-defaults.ts` snapshots the current nav order/groups into localStorage on first paint (per role). A "Restore defaults" button in the sidebar density menu writes that snapshot back to whatever sidebar prefs we already store (collapsed sections, etc.). When new nav items are added in code, the snapshot self-updates on next load if the user hasn't customized.
-- **Pinned favorites (up to 5)**: long-press or a star icon on any sidebar row toggles it into a new "Pinned" section pinned to the top of the sidebar. Storage: `jf-sidebar-pins:<role>` → string[] of `to` paths, capped at 5 with a toast when the cap is hit. Star icon on hover; click to unpin. Renders above the grouped sections.
-
-No DB changes needed for Phase C.
+1. **Shared attachment kinds** — extend `SharedAttachment` in `src/components/chat-shared.tsx` with `kind: "form_request" | "signature_request" | "recipe_share"` and the IDs they need (form_id / assignment_ids, agreement_id(s), recipe_id, target_client_ids, sender_role).
+2. **Send menu component** — new `src/components/chat-send-menu.tsx` (the **+** button + dropdown). Three picker dialogs:
+   - `FormRequestPicker` — lists `nf_forms` (active, not archived) with search.
+   - `SignatureRequestPicker` — lists `agreement_templates`.
+   - `RecipePicker` — lists `recipes` you can share.
+3. **Server functions** in new `src/lib/chat-requests.functions.ts` (auth-gated to coach/admin):
+   - `sendFormRequest({ form_id, client_ids })` → upserts `nf_assignments`, returns assignment IDs.
+   - `sendSignatureRequest({ template_id, client_ids })` → creates draft `agreements` rows + kicks off SignNow via existing `signnow.server.ts` helper.
+   - `sendRecipeShare({ recipe_id, client_ids })` → inserts `recipe_client_access` (sets `access_scope='selected_clients'` if needed).
+   Each returns the IDs needed for the chat attachment payload.
+4. **Wire into composers** — `message-thread.tsx` (1:1) and `group-message-thread.tsx` (group). Group chat resolves "client members" via `chat_group_members` → `clients.user_id`; non-client members are skipped with a toast count.
+5. **Status cards + live updates** — render in `chat-shared.tsx`'s `AttachmentView`:
+   - `FormRequestCard` — subscribes to `nf_submissions` for its assignment IDs; chip Sent/Opened/Submitted; click opens form (client) or submission (coach).
+   - `SignatureRequestCard` — subscribes to `agreements` row(s); chip Sent/Opened/Signed/Verified; click opens signing URL or PDF.
+   - `RecipeShareCard` — recipe thumb, title, "Open recipe" CTA.
+   - Group roll-up: "n of m" + expandable list of `{client name, status}`.
+6. **Coach-to-coach DMs** — same menu shows up; "Recipe" and the three request types still work because target picker lets you choose any client (not just chat participants) when the conversation isn't with a client.
+7. **Permissions** — RLS already gates `nf_assignments`, `agreements`, `recipe_client_access`. The new server fns use `requireSupabaseAuth` + `has_role('admin'|'coach')` check before writing. No new tables, no migration needed.
 
 ## Technical notes
 
-- All Phase B server logic stays in `createServerFn` (auth middleware) or webhook routes. `supabaseAdmin` is loaded inside handlers, never at module scope.
-- Any new RLS uses the existing `jf_member_has_full_access(_user_id)` and `member_has_access(_member_id, _key)` helpers — no new auth primitives.
-- New migrations follow the GRANT + RLS-policy structure.
-- I'll keep the existing JF Membership badge, customizer, and POV toggle intact.
+- No DB migration: reuses `nf_forms`/`nf_assignments`/`nf_submissions`, `agreement_templates`/`agreements`, `recipes`/`recipe_client_access`, and the existing `messages.attachments` JSONB.
+- Realtime: subscribe per visible card via `supabase.channel('chat-req:'+id).on('postgres_changes', { table: 'nf_submissions' | 'agreements', filter: 'id=in.(...)' })`. Unsubscribe on unmount.
+- SignNow send reuses `src/lib/signnow.server.ts` (already configured); no new secrets.
+- For group fan-out we store the full `client_ids[]` and `assignment_ids[]` on the attachment so the card can render the roll-up without re-querying chat membership.
+- "Client name & info" tracking: form/agreement records already carry `client_id`; the card shows `clients.full_name` resolved via a small `useQuery` keyed on the ID list.
 
-## What I need from you
+## Out of scope (say the word if you want them)
 
-Approve the plan and I'll start Phase A immediately. Phase A produces a written audit; you can then tell me to proceed with Phase B in full, cherry-pick fixes, or stop. Phase C (sidebar) ships at the same time as Phase B unless you want it sooner — say "sidebar first" and I'll do that as a one-shot before the audit.
+- A separate "Requests Sent" inbox view (per-coach dashboard of every request sent from chat).
+- SMS / email nudge when a request goes unanswered for N days.
+- Re-send / cancel actions on the chat card (would just call the same server fn).

@@ -11,7 +11,7 @@ export type MessageAttachment = {
   duration?: number;
   storage_path?: string;
   peaks?: number[];
-  kind?: "sound" | "gif" | "payment_request";
+  kind?: "sound" | "gif" | "payment_request" | "form_request" | "signature_request" | "recipe_share";
   fallback_emoji?: string;
   category?: string;
   purchase_id?: string;
@@ -21,6 +21,15 @@ export type MessageAttachment = {
   title?: string;
   payment_structure?: string;
   status?: string;
+  // chat request kinds:
+  form_id?: string;
+  template_id?: string;
+  recipe_id?: string;
+  agreement_ids?: string[];
+  assignment_client_ids?: string[]; // clients the form was assigned to (group fan-out)
+  agreement_client_map?: { client_id: string; agreement_id: string }[];
+  request_title?: string;
+  request_note?: string;
 };
 
 export type Message = {
