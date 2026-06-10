@@ -35,6 +35,8 @@ type ClientLiftVideoRow = {
   batch_note?: string | null;
   batch_size?: number | null;
   batch_index?: number | null;
+  archive_status?: string | null;
+  archive_next_attempt_at?: string | null;
 };
 
 export async function createOwnedClientLiftVideo(input: ClientLiftVideoRow, userId: string) {
