@@ -182,6 +182,23 @@ export function GroupMessageThread({
 
   const memberById = useMemo(() => new Map(members.map((mb) => [mb.user_id, mb])), [members]);
 
+  // Resolve which group members map to client records (for Form/Signature/Recipe fan-out).
+  const memberUserIds = useMemo(() => members.map((m) => m.user_id).filter(Boolean), [members]);
+  const { data: memberClients = [] } = useQuery({
+    queryKey: ["group-member-clients", groupId, memberUserIds.slice().sort().join(",")],
+    enabled: canManage && memberUserIds.length > 0,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("clients")
+        .select("id, user_id, archived, status")
+        .in("user_id", memberUserIds)
+        .eq("archived", false);
+      if (error) throw error;
+      return (data ?? []).map((r: any) => r.id as string);
+    },
+    staleTime: 60_000,
+  });
+
   const profileById = useMemo(() => {
     const m = new Map<string, { full_name: string | null; avatar_url: string | null; role: string }>();
     for (const p of memberProfiles) m.set(p.user_id, { full_name: p.full_name, avatar_url: p.avatar_url, role: p.role });
