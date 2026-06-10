@@ -905,6 +905,29 @@ export function GroupMessageThread({
                 </DropdownMenuContent>
               </DropdownMenu>
 
+              {canManage && (
+                <ChatSendMenu
+                  surface="group"
+                  clientIds={memberClients}
+                  disabled={sending || uploading || memberClients.length === 0}
+                  onAttach={async (att, noteBody) => {
+                    if (!user) return;
+                    try {
+                      await sendGroupMessage({
+                        groupId,
+                        senderId: user.id,
+                        senderRole: "admin",
+                        body: noteBody,
+                        attachments: [att as unknown as GroupAttachment],
+                      });
+                      qc.invalidateQueries({ queryKey: ["group-messages", groupId] });
+                    } catch (e: any) {
+                      toast.error(e?.message ?? "Failed to send");
+                    }
+                  }}
+                />
+              )}
+
               {canSendGifs && (
                 <GifPicker
                   disabled={sending || uploading}
