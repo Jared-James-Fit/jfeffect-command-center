@@ -19,7 +19,7 @@ function startOfMonth(d: Date): Date {
 function addDays(d: Date, n: number): Date { const x = new Date(d); x.setDate(x.getDate() + n); return x; }
 function sameDay(a: Date, b: Date) { return a.toDateString() === b.toDateString(); }
 
-export function AppointmentCalendarGrid() {
+export function AppointmentCalendarGrid({ onPickDate }: { onPickDate?: (d: Date) => void } = {}) {
   const [mode, setMode] = useState<"week" | "month">("week");
   const [anchor, setAnchor] = useState<Date>(new Date());
   const [showGoogle, setShowGoogle] = useState(true);
@@ -116,8 +116,15 @@ export function AppointmentCalendarGrid() {
           return (
             <div
               key={d.toISOString()}
-              className={`rounded-md border p-1.5 min-h-[80px] md:min-h-[110px] flex flex-col gap-1 ${isToday ? "border-primary/50 bg-primary/5" : "border-border bg-background"} ${otherMonth ? "opacity-50" : ""}`}
+              role={onPickDate ? "button" : undefined}
+              tabIndex={onPickDate ? 0 : undefined}
+              onClick={onPickDate ? () => onPickDate(d) : undefined}
+              onKeyDown={onPickDate ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onPickDate(d); } } : undefined}
+              className={`group relative rounded-md border p-1.5 min-h-[80px] md:min-h-[110px] flex flex-col gap-1 ${isToday ? "border-primary/50 bg-primary/5" : "border-border bg-background"} ${otherMonth ? "opacity-50" : ""} ${onPickDate ? "cursor-pointer hover:border-primary/60 hover:bg-primary/5 transition-colors" : ""}`}
             >
+              {onPickDate && (
+                <span className="pointer-events-none absolute right-1 top-1 hidden text-[10px] font-bold uppercase tracking-wider text-primary group-hover:inline">+ Book</span>
+              )}
               <div className="flex items-center justify-between">
                 <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
                   {d.toLocaleDateString(undefined, { weekday: "short" })}

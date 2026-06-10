@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { listAppointments, createAppointment, markAppointmentStatus } from "@/lib/appointments.functions";
 import { getGoogleBusy } from "@/lib/google-cal.functions";
@@ -37,6 +37,7 @@ const APPT_TYPES = [
 function AppointmentsPage() {
   const [tab, setTab] = useState<"today" | "upcoming" | "past" | "calendar">("upcoming");
   const [open, setOpen] = useState(false);
+  const [presetDate, setPresetDate] = useState<string | undefined>(undefined);
   const [sendOpen, setSendOpen] = useState(false);
   const list = useServerFn(listAppointments);
   const qc = useQueryClient();
@@ -72,7 +73,15 @@ function AppointmentsPage() {
           </TabsList>
           <TabsContent value={tab} className="mt-4">
             {tab === "calendar" ? (
-              <AppointmentCalendarGrid />
+              <AppointmentCalendarGrid
+                onPickDate={(d) => {
+                  const y = d.getFullYear();
+                  const m = String(d.getMonth() + 1).padStart(2, "0");
+                  const day = String(d.getDate()).padStart(2, "0");
+                  setPresetDate(`${y}-${m}-${day}`);
+                  setOpen(true);
+                }}
+              />
             ) : isLoading ? (
               <Card className="border-border bg-card p-6 text-sm text-muted-foreground">Loading…</Card>
             ) : data.length === 0 ? (
@@ -88,7 +97,12 @@ function AppointmentsPage() {
           </TabsContent>
         </Tabs>
       </div>
-      <NewAppointmentDialog open={open} onOpenChange={setOpen} onCreated={() => qc.invalidateQueries({ queryKey: ["appointments"] })} />
+      <NewAppointmentDialog
+        open={open}
+        onOpenChange={(v) => { setOpen(v); if (!v) setPresetDate(undefined); }}
+        presetDate={presetDate}
+        onCreated={() => qc.invalidateQueries({ queryKey: ["appointments"] })}
+      />
       <SendBookingLinkDialog open={sendOpen} onOpenChange={setSendOpen} />
     </>
   );
@@ -155,7 +169,7 @@ function ApptRow({ a, onChange }: { a: any; onChange: () => void }) {
   );
 }
 
-function NewAppointmentDialog({ open, onOpenChange, onCreated }: { open: boolean; onOpenChange: (b: boolean) => void; onCreated: () => void }) {
+function NewAppointmentDialog({ open, onOpenChange, onCreated, presetDate }: { open: boolean; onOpenChange: (b: boolean) => void; onCreated: () => void; presetDate?: string }) {
   const create = useServerFn(createAppointment);
   const busyFn = useServerFn(getGoogleBusy);
   const { data: clients = [] } = useQuery({
@@ -174,6 +188,9 @@ function NewAppointmentDialog({ open, onOpenChange, onCreated }: { open: boolean
   });
 
   const [form, setForm] = useState<any>(() => defaultForm());
+  useEffect(() => {
+    if (open && presetDate) setForm((f: any) => ({ ...f, date: presetDate }));
+  }, [open, presetDate]);
   const durationMin = (() => {
     try {
       const [sh, sm] = form.startTime.split(":").map(Number);
