@@ -96,13 +96,14 @@ function AdminDashboard() {
   const [sellTo, setSellTo] = useState<{ id: string; name: string } | null>(null);
 
   const [commandCollapsed, setCommandCollapsed] = useState(() => {
-    const saved = typeof window !== "undefined" ? localStorage.getItem("admin-command-collapsed") : null;
+    if (typeof window === "undefined") return false;
+    const saved = localStorage.getItem("admin-command-collapsed-v2");
     if (saved !== null) return saved === "true";
-    return window.innerWidth < 1024; // collapsed on tablet/mobile by default
+    return window.innerWidth < 768; // mobile only: collapsed by default
   });
 
   useEffect(() => {
-    localStorage.setItem("admin-command-collapsed", String(commandCollapsed));
+    localStorage.setItem("admin-command-collapsed-v2", String(commandCollapsed));
   }, [commandCollapsed]);
 
   const { data: clients = [] } = useQuery({
@@ -389,14 +390,15 @@ function AdminDashboard() {
             </h2>
             <div className="flex items-center gap-2 shrink-0">
               <span className="text-[10px] uppercase tracking-widest text-muted-foreground">{format(today, "EEE MMM d")}</span>
-              <button
+              <Button
+                size="sm"
+                variant="outline"
                 onClick={() => setCommandCollapsed((v) => !v)}
-                className="grid h-7 w-7 place-items-center rounded-md border border-border bg-secondary text-foreground transition hover:bg-secondary/80"
+                className="h-7 px-2 text-[11px] font-semibold"
                 aria-label={commandCollapsed ? "Expand" : "Collapse"}
-                title={commandCollapsed ? "Expand" : "Collapse"}
               >
-                {commandCollapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
-              </button>
+                {commandCollapsed ? <><ChevronDown className="mr-1 h-3.5 w-3.5" />Expand</> : <><ChevronUp className="mr-1 h-3.5 w-3.5" />Collapse</>}
+              </Button>
             </div>
           </div>
 
