@@ -50,11 +50,73 @@ type Clip = {
   file?: File;
   url?: string;
   previewUrl?: string;
+  thumbnailUrl?: string;
   previewStatus?: "pending" | "ready" | "failed";
   isImage?: boolean;
   note: string;
   duration?: number;
 };
+
+// Generate a poster image from a video file by seeking to ~0.1s and
+// painting the frame into a canvas. iOS Safari often won't render a frame
+// inside a <video preload="metadata"> tag in a small thumbnail, so we bake
+// an <img>-friendly data URL instead.
+async function generateVideoThumbnail(file: File): Promise<string | null> {
+  return new Promise((resolve) => {
+    try {
+      const url = URL.createObjectURL(file);
+      const video = document.createElement("video");
+      video.preload = "auto";
+      video.muted = true;
+      video.playsInline = true;
+      video.crossOrigin = "anonymous";
+      video.src = url;
+      let done = false;
+      const cleanup = () => {
+        try { URL.revokeObjectURL(url); } catch { /* noop */ }
+      };
+      const finish = (result: string | null) => {
+        if (done) return;
+        done = true;
+        cleanup();
+        resolve(result);
+      };
+      const capture = () => {
+        try {
+          const w = video.videoWidth;
+          const h = video.videoHeight;
+          if (!w || !h) return finish(null);
+          const maxSide = 320;
+          const scale = Math.min(1, maxSide / Math.max(w, h));
+          const canvas = document.createElement("canvas");
+          canvas.width = Math.round(w * scale);
+          canvas.height = Math.round(h * scale);
+          const ctx = canvas.getContext("2d");
+          if (!ctx) return finish(null);
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          finish(canvas.toDataURL("image/jpeg", 0.75));
+        } catch {
+          finish(null);
+        }
+      };
+      video.addEventListener("loadeddata", () => {
+        try {
+          // Seek slightly in to skip black first-frames.
+          const target = Math.min(0.1, (video.duration || 0.2) / 2);
+          video.currentTime = target;
+        } catch {
+          capture();
+        }
+      });
+      video.addEventListener("seeked", capture);
+      video.addEventListener("error", () => finish(null));
+      // Hard timeout — never block UI.
+      setTimeout(() => finish(null), 8000);
+    } catch {
+      resolve(null);
+    }
+  });
+}
 
 type Props = {
   clientId: string;
