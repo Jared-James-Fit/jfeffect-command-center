@@ -23,9 +23,17 @@ export type SharedAttachment = {
   duration?: number;
   storage_path?: string;
   peaks?: number[];
-  kind?: "sound" | "gif";
+  kind?: "sound" | "gif" | "payment_request";
   fallback_emoji?: string;
   category?: string;
+  // payment_request fields (used when kind === "payment_request")
+  purchase_id?: string;
+  payment_url?: string;
+  amount_cents?: number;
+  currency?: string;
+  title?: string;
+  payment_structure?: string;
+  status?: string;
 };
 
 /* ------------------------------- Helpers ------------------------------- */
