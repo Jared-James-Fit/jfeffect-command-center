@@ -62,8 +62,10 @@ function groupNavItems(items: NavItem[]) {
   return result;
 }
 
-type SidebarMode = "expanded" | "compact" | "collapsed";
-const SIDEBAR_MODE_KEY = "jf-sidebar-mode";
+type SidebarMode = "expanded" | "collapsed";
+// Bumped key (v2) so users previously stuck on the icon-only default get
+// the new expanded default on next load.
+const SIDEBAR_MODE_KEY = "jf-sidebar-mode-v2";
 const SIDEBAR_COLLAPSED_SECTIONS_KEY = "jf-sidebar-collapsed-sections";
 const DEFAULT_COLLAPSED_SECTIONS = ["Documents", "Team / Ops"];
 
@@ -72,7 +74,7 @@ function useSidebarMode() {
   useEffect(() => {
     try {
       const stored = localStorage.getItem(SIDEBAR_MODE_KEY) as SidebarMode | null;
-      if (stored === "expanded" || stored === "compact" || stored === "collapsed") {
+      if (stored === "expanded" || stored === "collapsed") {
         setMode(stored);
       }
     } catch {}
@@ -173,17 +175,15 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
     "/admin/account";
 
   const isCollapsed = mode === "collapsed";
-  const isCompact = mode === "compact";
-  const sidebarWidthClass = isCollapsed ? "w-14" : isCompact ? "w-52" : "w-60";
+  const isCompact = false;
+  const sidebarWidthClass = isCollapsed ? "w-16" : "w-64";
   const rowPadding = isCollapsed
     ? "justify-center px-0 py-2"
-    : isCompact
-    ? "px-2.5 py-1.5 gap-2.5"
     : "px-3 py-2 gap-3";
-  const rowText = isCompact ? "text-[13px]" : "text-sm";
+  const rowText = "text-sm";
 
   const cycleMode = () => {
-    setMode(mode === "expanded" ? "compact" : mode === "compact" ? "collapsed" : "expanded");
+    setMode(mode === "expanded" ? "collapsed" : "expanded");
   };
 
   // Open the active group when the More sheet opens, or when route changes.
@@ -393,7 +393,7 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
                   </button>
                 </TooltipTrigger>
                 <TooltipContent side="top">
-                  {mode === "expanded" ? "Compact" : mode === "compact" ? "Collapse" : "Expand"}
+                  {mode === "expanded" ? "Collapse sidebar" : "Expand sidebar"}
                 </TooltipContent>
               </Tooltip>
               <Tooltip>
