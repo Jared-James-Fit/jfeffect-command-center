@@ -6,7 +6,7 @@ import {
   ClipboardList, FileEdit,
   Scale, BookOpen, Activity, Archive,
   UserPlus, Library, Wrench, HelpCircle,
-  ChefHat, Megaphone, Phone,
+  ChefHat, Megaphone, Phone, Link2 as LinkIcon,
 } from "lucide-react";
 import { Sparkles } from "lucide-react";
 import type { NavItem } from "@/components/app-shell";
