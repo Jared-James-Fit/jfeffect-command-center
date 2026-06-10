@@ -46,7 +46,7 @@ function AuthPage() {
 
   // Avoid flashing the login form while the session is still restoring,
   // or while an authenticated user is being routed to their dashboard.
-  if (loading || user) {
+  if (loading || (user && !role)) {
     return <AuthSplash />;
   }
 
