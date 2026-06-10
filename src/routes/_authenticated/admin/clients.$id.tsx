@@ -11,7 +11,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, ExternalLink, Save, Trash2, Mail, Archive, KeyRound, Copy, CheckCircle2, AlertCircle, BellRing, Tag, Dumbbell, MessageSquare } from "lucide-react";
+import { ArrowLeft, ExternalLink, Save, Trash2, Mail, Archive, KeyRound, Copy, CheckCircle2, AlertCircle, BellRing, Tag, Dumbbell, MessageSquare, Link2 } from "lucide-react";
+import { SendBookingLinkDialog } from "@/components/appointments/send-booking-link-dialog";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import { inviteClient, deleteClient, getSetupLink, getPasswordResetLink, sendPasswordReset, markSetupComplete, setNeedsAdminHelp, setClientPassword } from "@/lib/clients.functions";
@@ -99,6 +100,7 @@ function ClientDetail() {
   const [form, setForm] = useState<any>(null);
   const [deleteStep, setDeleteStep] = useState<0 | 1 | 2>(0);
   const [priceCardOpen, setPriceCardOpen] = useState(false);
+  const [bookingLinkOpen, setBookingLinkOpen] = useState(false);
   const inviteFn = useServerFn(inviteClient);
   const deleteFn = useServerFn(deleteClient);
   const getSetupLinkFn = useServerFn(getSetupLink);
@@ -392,6 +394,7 @@ function ClientDetail() {
               </Button>
             )}
             <Button variant="outline" size="sm" onClick={() => setPriceCardOpen(true)}><Tag className="mr-2 h-4 w-4" />Assign Offer / View Price Card</Button>
+            <Button variant="outline" size="sm" onClick={() => setBookingLinkOpen(true)}><Link2 className="mr-2 h-4 w-4" />Send Booking Link</Button>
             <ActionButton variant="outline" size="sm" onAction={sendSetup} loadingLabel="Sending…" successLabel="Sent" successToast={false} errorToast={false} icon={<Mail className="h-4 w-4" />}>Send setup link</ActionButton>
             {form.status === "Deactivated" ? (
               <Button variant="outline" size="sm" onClick={() => setReactivateOpen(true)}>
@@ -927,6 +930,12 @@ function ClientDetail() {
         </AlertDialogContent>
       </AlertDialog>
       <PriceCardPickerDialog open={priceCardOpen} onClose={() => setPriceCardOpen(false)} fixedClientId={id} />
+      <SendBookingLinkDialog
+        open={bookingLinkOpen}
+        onOpenChange={setBookingLinkOpen}
+        defaultPhone={form.phone}
+        defaultEmail={form.email}
+      />
 
       <AlertDialog open={pwOpen} onOpenChange={(o) => !pwSaving && setPwOpen(o)}>
         <AlertDialogContent>

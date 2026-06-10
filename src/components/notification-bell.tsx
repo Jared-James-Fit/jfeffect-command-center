@@ -12,15 +12,19 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { formatDistanceToNow, parseISO } from "date-fns";
 import type { ConversationState, Message, MessageAttachment } from "@/lib/messages";
+import { useServerFn } from "@tanstack/react-start";
+import { listUpcomingForBell, listMyPortalAppointments } from "@/lib/appointments.functions";
 
 type BellItem = {
-  kind: "message" | "lift_video" | "agreement" | "exercise_note" | "group_message" | "check_in_review";
+  kind: "message" | "lift_video" | "agreement" | "exercise_note" | "group_message" | "check_in_review" | "appointment";
   clientId: string;
   groupId?: string;
   videoId?: string;
   agreementId?: string;
   noteId?: string;
   reviewId?: string;
+  appointmentId?: string;
+  meetLink?: string | null;
   name: string;
   title: string;
   body: string;
@@ -91,6 +95,8 @@ async function fetchUnreadGroupItems(userId: string): Promise<BellItem[]> {
 export function NotificationBell() {
   const { role, user } = useAuth();
   const qc = useQueryClient();
+  const adminUpcoming = useServerFn(listUpcomingForBell);
+  const portalAppts = useServerFn(listMyPortalAppointments);
 
   // Realtime invalidation
   useEffect(() => {
@@ -122,6 +128,9 @@ export function NotificationBell() {
         qc.invalidateQueries({ queryKey: ["unread-counts"] });
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "manual_check_in_reviews" }, () => {
+        qc.invalidateQueries({ queryKey: ["unread-counts"] });
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "appointments" }, () => {
         qc.invalidateQueries({ queryKey: ["unread-counts"] });
       })
       .subscribe();
@@ -221,6 +230,28 @@ export function NotificationBell() {
         // Group chat unreads (admin sees all groups they can read)
         const groupItems = await fetchUnreadGroupItems(user!.id);
         for (const gi of groupItems) items.push(gi);
+        // Upcoming appointments (next 24h)
+        try {
+          const upcoming: any[] = await adminUpcoming();
+          for (const a of upcoming) {
+            const mins = Math.round((new Date(a.starts_at).getTime() - Date.now()) / 60000);
+            if (mins < -5) continue;
+            const when = mins <= 60
+              ? (mins <= 0 ? "now" : `in ${mins}m`)
+              : new Date(a.starts_at).toLocaleString(undefined, { weekday: "short", hour: "numeric", minute: "2-digit" });
+            const who = a.client?.full_name || "external attendee";
+            items.push({
+              kind: "appointment",
+              clientId: "",
+              appointmentId: a.id,
+              meetLink: a.meet_link,
+              name: who,
+              title: `Upcoming: ${a.title} (${when})`,
+              body: `With ${who}`,
+              created_at: a.starts_at,
+            });
+          }
+        } catch { /* ignore */ }
         items.sort((a, b) => +new Date(b.created_at) - +new Date(a.created_at));
         return { count: items.length, items };
       } else {
@@ -304,6 +335,27 @@ export function NotificationBell() {
         // Group chat unreads for this client
         const groupItems = await fetchUnreadGroupItems(user!.id);
         for (const gi of groupItems) items.push(gi);
+        // Upcoming appointments for the client (next 24h)
+        try {
+          const { upcoming } = await portalAppts();
+          for (const a of (upcoming ?? []) as any[]) {
+            const mins = Math.round((new Date(a.starts_at).getTime() - Date.now()) / 60000);
+            if (mins > 24 * 60 || mins < -5) continue;
+            const when = mins <= 60
+              ? (mins <= 0 ? "now" : `in ${mins}m`)
+              : new Date(a.starts_at).toLocaleString(undefined, { weekday: "short", hour: "numeric", minute: "2-digit" });
+            items.push({
+              kind: "appointment",
+              clientId: client.id,
+              appointmentId: a.id,
+              meetLink: a.meet_link,
+              name: a.host_coach?.full_name ?? "Coach",
+              title: `Upcoming: ${a.title} (${when})`,
+              body: `With ${a.host_coach?.full_name ?? "your coach"}`,
+              created_at: a.starts_at,
+            });
+          }
+        } catch { /* ignore */ }
         items.sort((a, b) => +new Date(b.created_at) - +new Date(a.created_at));
         return { count: items.length, items };
       }
@@ -343,6 +395,8 @@ export function NotificationBell() {
                   ? (role === "admin" ? "/admin/clients/$id" : "/portal")
                   : it.kind === "check_in_review"
                   ? "/portal"
+                  : it.kind === "appointment"
+                  ? (role === "admin" ? "/admin/appointments" : "/portal/appointments")
                   : (role === "admin" ? "/admin/messages" : "/portal/messages")
               }
               params={
