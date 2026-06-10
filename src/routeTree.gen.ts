@@ -16,6 +16,7 @@ import { Route as MemberSetupRouteImport } from './routes/member-setup'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as BookSlugRouteImport } from './routes/book.$slug'
 import { Route as ApiDriveUploadRouteImport } from './routes/api/drive-upload'
 import { Route as AuthenticatedPortalRouteRouteImport } from './routes/_authenticated/portal/route'
 import { Route as AuthenticatedMRouteRouteImport } from './routes/_authenticated/m/route'
@@ -39,6 +40,7 @@ import { Route as AuthenticatedPortalDocumentsRouteImport } from './routes/_auth
 import { Route as AuthenticatedPortalCheckInsRouteImport } from './routes/_authenticated/portal/check-ins'
 import { Route as AuthenticatedPortalCheckInRouteImport } from './routes/_authenticated/portal/check-in'
 import { Route as AuthenticatedPortalCalendarRouteImport } from './routes/_authenticated/portal/calendar'
+import { Route as AuthenticatedPortalAppointmentsRouteImport } from './routes/_authenticated/portal/appointments'
 import { Route as AuthenticatedPortalAnnouncementsRouteImport } from './routes/_authenticated/portal/announcements'
 import { Route as AuthenticatedPortalAccountRouteImport } from './routes/_authenticated/portal/account'
 import { Route as AuthenticatedMUpgradeRouteImport } from './routes/_authenticated/m/upgrade'
@@ -67,6 +69,7 @@ import { Route as AuthenticatedAdminMessagesRouteImport } from './routes/_authen
 import { Route as AuthenticatedAdminMediaReviewRouteImport } from './routes/_authenticated/admin/media-review'
 import { Route as AuthenticatedAdminMediaArchivesRouteImport } from './routes/_authenticated/admin/media-archives'
 import { Route as AuthenticatedAdminLiftVideosRouteImport } from './routes/_authenticated/admin/lift-videos'
+import { Route as AuthenticatedAdminGoogleCalendarRouteImport } from './routes/_authenticated/admin/google-calendar'
 import { Route as AuthenticatedAdminFormsRouteImport } from './routes/_authenticated/admin/forms'
 import { Route as AuthenticatedAdminFaqsRouteImport } from './routes/_authenticated/admin/faqs'
 import { Route as AuthenticatedAdminExercisesRouteImport } from './routes/_authenticated/admin/exercises'
@@ -83,9 +86,11 @@ import { Route as AuthenticatedAdminCallAccessRouteImport } from './routes/_auth
 import { Route as AuthenticatedAdminCalendarRouteImport } from './routes/_authenticated/admin/calendar'
 import { Route as AuthenticatedAdminBusinessSystemsRouteImport } from './routes/_authenticated/admin/business-systems'
 import { Route as AuthenticatedAdminBroadcastsRouteImport } from './routes/_authenticated/admin/broadcasts'
+import { Route as AuthenticatedAdminBookingLinksRouteImport } from './routes/_authenticated/admin/booking-links'
 import { Route as AuthenticatedAdminAutomationsRouteImport } from './routes/_authenticated/admin/automations'
 import { Route as AuthenticatedAdminArchivesRouteImport } from './routes/_authenticated/admin/archives'
 import { Route as AuthenticatedAdminAppsRouteImport } from './routes/_authenticated/admin/apps'
+import { Route as AuthenticatedAdminAppointmentsRouteImport } from './routes/_authenticated/admin/appointments'
 import { Route as AuthenticatedAdminAccountRouteImport } from './routes/_authenticated/admin/account'
 import { Route as AuthenticatedPortalWorkoutsIndexRouteImport } from './routes/_authenticated/portal/workouts.index'
 import { Route as AuthenticatedPortalAgreementsIndexRouteImport } from './routes/_authenticated/portal/agreements.index'
@@ -101,6 +106,7 @@ import { Route as LovableEmailAuthPreviewRouteImport } from './routes/lovable/em
 import { Route as ApiPublicHooksSmsRemindersRouteImport } from './routes/api/public/hooks/sms-reminders'
 import { Route as ApiPublicHooksMediaArchiveRouteImport } from './routes/api/public/hooks/media-archive'
 import { Route as ApiPublicHooksLiftArchiveTickRouteImport } from './routes/api/public/hooks/lift-archive-tick'
+import { Route as ApiPublicHooksAppointmentRemindersRouteImport } from './routes/api/public/hooks/appointment-reminders'
 import { Route as AuthenticatedPortalWorkoutsDayIdRouteImport } from './routes/_authenticated/portal/workouts.$dayId'
 import { Route as AuthenticatedPortalRecipesRecipeIdRouteImport } from './routes/_authenticated/portal/recipes.$recipeId'
 import { Route as AuthenticatedPortalPurchasesIdRouteImport } from './routes/_authenticated/portal/purchases.$id'
@@ -127,6 +133,7 @@ import { Route as AuthenticatedAdminClientProgramsClientIdRouteImport } from './
 import { Route as AuthenticatedAdminBroadcastsBroadcastIdRouteImport } from './routes/_authenticated/admin/broadcasts.$broadcastId'
 import { Route as AuthenticatedAdminBlocksBlockIdRouteImport } from './routes/_authenticated/admin/blocks.$blockId'
 import { Route as AuthenticatedAdminAgreementsSignedRouteImport } from './routes/_authenticated/admin/agreements.signed'
+import { Route as ApiPublicGoogleOauthCallbackRouteImport } from './routes/api/public/google/oauth/callback'
 import { Route as AuthenticatedAdminClientProgramsClientIdHistoryRouteImport } from './routes/_authenticated/admin/client-programs.$clientId.history'
 import { Route as AuthenticatedAdminClientProgramsClientIdAnalyticsRouteImport } from './routes/_authenticated/admin/client-programs.$clientId.analytics'
 import { Route as AuthenticatedMWorkoutsEnrollmentIdWeekDayRouteImport } from './routes/_authenticated/m/workouts.$enrollmentId.$week.$day'
@@ -163,6 +170,11 @@ const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BookSlugRoute = BookSlugRouteImport.update({
+  id: '/book/$slug',
+  path: '/book/$slug',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiDriveUploadRoute = ApiDriveUploadRouteImport.update({
@@ -294,6 +306,12 @@ const AuthenticatedPortalCalendarRoute =
   AuthenticatedPortalCalendarRouteImport.update({
     id: '/calendar',
     path: '/calendar',
+    getParentRoute: () => AuthenticatedPortalRouteRoute,
+  } as any)
+const AuthenticatedPortalAppointmentsRoute =
+  AuthenticatedPortalAppointmentsRouteImport.update({
+    id: '/appointments',
+    path: '/appointments',
     getParentRoute: () => AuthenticatedPortalRouteRoute,
   } as any)
 const AuthenticatedPortalAnnouncementsRoute =
@@ -457,6 +475,12 @@ const AuthenticatedAdminLiftVideosRoute =
     path: '/lift-videos',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
+const AuthenticatedAdminGoogleCalendarRoute =
+  AuthenticatedAdminGoogleCalendarRouteImport.update({
+    id: '/google-calendar',
+    path: '/google-calendar',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
 const AuthenticatedAdminFormsRoute = AuthenticatedAdminFormsRouteImport.update({
   id: '/forms',
   path: '/forms',
@@ -551,6 +575,12 @@ const AuthenticatedAdminBroadcastsRoute =
     path: '/broadcasts',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
+const AuthenticatedAdminBookingLinksRoute =
+  AuthenticatedAdminBookingLinksRouteImport.update({
+    id: '/booking-links',
+    path: '/booking-links',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
 const AuthenticatedAdminAutomationsRoute =
   AuthenticatedAdminAutomationsRouteImport.update({
     id: '/automations',
@@ -568,6 +598,12 @@ const AuthenticatedAdminAppsRoute = AuthenticatedAdminAppsRouteImport.update({
   path: '/apps',
   getParentRoute: () => AuthenticatedAdminRouteRoute,
 } as any)
+const AuthenticatedAdminAppointmentsRoute =
+  AuthenticatedAdminAppointmentsRouteImport.update({
+    id: '/appointments',
+    path: '/appointments',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
 const AuthenticatedAdminAccountRoute =
   AuthenticatedAdminAccountRouteImport.update({
     id: '/account',
@@ -654,6 +690,12 @@ const ApiPublicHooksLiftArchiveTickRoute =
   ApiPublicHooksLiftArchiveTickRouteImport.update({
     id: '/api/public/hooks/lift-archive-tick',
     path: '/api/public/hooks/lift-archive-tick',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPublicHooksAppointmentRemindersRoute =
+  ApiPublicHooksAppointmentRemindersRouteImport.update({
+    id: '/api/public/hooks/appointment-reminders',
+    path: '/api/public/hooks/appointment-reminders',
     getParentRoute: () => rootRouteImport,
   } as any)
 const AuthenticatedPortalWorkoutsDayIdRoute =
@@ -812,6 +854,12 @@ const AuthenticatedAdminAgreementsSignedRoute =
     path: '/agreements/signed',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
+const ApiPublicGoogleOauthCallbackRoute =
+  ApiPublicGoogleOauthCallbackRouteImport.update({
+    id: '/api/public/google/oauth/callback',
+    path: '/api/public/google/oauth/callback',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const AuthenticatedAdminClientProgramsClientIdHistoryRoute =
   AuthenticatedAdminClientProgramsClientIdHistoryRouteImport.update({
     id: '/history',
@@ -842,10 +890,13 @@ export interface FileRoutesByFullPath {
   '/m': typeof AuthenticatedMRouteRouteWithChildren
   '/portal': typeof AuthenticatedPortalRouteRouteWithChildren
   '/api/drive-upload': typeof ApiDriveUploadRoute
+  '/book/$slug': typeof BookSlugRoute
   '/admin/account': typeof AuthenticatedAdminAccountRoute
+  '/admin/appointments': typeof AuthenticatedAdminAppointmentsRoute
   '/admin/apps': typeof AuthenticatedAdminAppsRoute
   '/admin/archives': typeof AuthenticatedAdminArchivesRoute
   '/admin/automations': typeof AuthenticatedAdminAutomationsRoute
+  '/admin/booking-links': typeof AuthenticatedAdminBookingLinksRoute
   '/admin/broadcasts': typeof AuthenticatedAdminBroadcastsRouteWithChildren
   '/admin/business-systems': typeof AuthenticatedAdminBusinessSystemsRoute
   '/admin/calendar': typeof AuthenticatedAdminCalendarRoute
@@ -862,6 +913,7 @@ export interface FileRoutesByFullPath {
   '/admin/exercises': typeof AuthenticatedAdminExercisesRoute
   '/admin/faqs': typeof AuthenticatedAdminFaqsRoute
   '/admin/forms': typeof AuthenticatedAdminFormsRoute
+  '/admin/google-calendar': typeof AuthenticatedAdminGoogleCalendarRoute
   '/admin/lift-videos': typeof AuthenticatedAdminLiftVideosRoute
   '/admin/media-archives': typeof AuthenticatedAdminMediaArchivesRoute
   '/admin/media-review': typeof AuthenticatedAdminMediaReviewRoute
@@ -890,6 +942,7 @@ export interface FileRoutesByFullPath {
   '/m/upgrade': typeof AuthenticatedMUpgradeRoute
   '/portal/account': typeof AuthenticatedPortalAccountRoute
   '/portal/announcements': typeof AuthenticatedPortalAnnouncementsRoute
+  '/portal/appointments': typeof AuthenticatedPortalAppointmentsRoute
   '/portal/calendar': typeof AuthenticatedPortalCalendarRoute
   '/portal/check-in': typeof AuthenticatedPortalCheckInRoute
   '/portal/check-ins': typeof AuthenticatedPortalCheckInsRouteWithChildren
@@ -935,6 +988,7 @@ export interface FileRoutesByFullPath {
   '/portal/purchases/$id': typeof AuthenticatedPortalPurchasesIdRoute
   '/portal/recipes/$recipeId': typeof AuthenticatedPortalRecipesRecipeIdRoute
   '/portal/workouts/$dayId': typeof AuthenticatedPortalWorkoutsDayIdRoute
+  '/api/public/hooks/appointment-reminders': typeof ApiPublicHooksAppointmentRemindersRoute
   '/api/public/hooks/lift-archive-tick': typeof ApiPublicHooksLiftArchiveTickRoute
   '/api/public/hooks/media-archive': typeof ApiPublicHooksMediaArchiveRoute
   '/api/public/hooks/sms-reminders': typeof ApiPublicHooksSmsRemindersRoute
@@ -951,6 +1005,7 @@ export interface FileRoutesByFullPath {
   '/portal/workouts/': typeof AuthenticatedPortalWorkoutsIndexRoute
   '/admin/client-programs/$clientId/analytics': typeof AuthenticatedAdminClientProgramsClientIdAnalyticsRoute
   '/admin/client-programs/$clientId/history': typeof AuthenticatedAdminClientProgramsClientIdHistoryRoute
+  '/api/public/google/oauth/callback': typeof ApiPublicGoogleOauthCallbackRoute
   '/m/workouts/$enrollmentId/$week/$day': typeof AuthenticatedMWorkoutsEnrollmentIdWeekDayRoute
 }
 export interface FileRoutesByTo {
@@ -961,10 +1016,13 @@ export interface FileRoutesByTo {
   '/setup': typeof SetupRoute
   '/sitemap': typeof SitemapRoute
   '/api/drive-upload': typeof ApiDriveUploadRoute
+  '/book/$slug': typeof BookSlugRoute
   '/admin/account': typeof AuthenticatedAdminAccountRoute
+  '/admin/appointments': typeof AuthenticatedAdminAppointmentsRoute
   '/admin/apps': typeof AuthenticatedAdminAppsRoute
   '/admin/archives': typeof AuthenticatedAdminArchivesRoute
   '/admin/automations': typeof AuthenticatedAdminAutomationsRoute
+  '/admin/booking-links': typeof AuthenticatedAdminBookingLinksRoute
   '/admin/broadcasts': typeof AuthenticatedAdminBroadcastsRouteWithChildren
   '/admin/business-systems': typeof AuthenticatedAdminBusinessSystemsRoute
   '/admin/calendar': typeof AuthenticatedAdminCalendarRoute
@@ -981,6 +1039,7 @@ export interface FileRoutesByTo {
   '/admin/exercises': typeof AuthenticatedAdminExercisesRoute
   '/admin/faqs': typeof AuthenticatedAdminFaqsRoute
   '/admin/forms': typeof AuthenticatedAdminFormsRoute
+  '/admin/google-calendar': typeof AuthenticatedAdminGoogleCalendarRoute
   '/admin/lift-videos': typeof AuthenticatedAdminLiftVideosRoute
   '/admin/media-archives': typeof AuthenticatedAdminMediaArchivesRoute
   '/admin/media-review': typeof AuthenticatedAdminMediaReviewRoute
@@ -1009,6 +1068,7 @@ export interface FileRoutesByTo {
   '/m/upgrade': typeof AuthenticatedMUpgradeRoute
   '/portal/account': typeof AuthenticatedPortalAccountRoute
   '/portal/announcements': typeof AuthenticatedPortalAnnouncementsRoute
+  '/portal/appointments': typeof AuthenticatedPortalAppointmentsRoute
   '/portal/calendar': typeof AuthenticatedPortalCalendarRoute
   '/portal/check-in': typeof AuthenticatedPortalCheckInRoute
   '/portal/check-ins': typeof AuthenticatedPortalCheckInsRouteWithChildren
@@ -1054,6 +1114,7 @@ export interface FileRoutesByTo {
   '/portal/purchases/$id': typeof AuthenticatedPortalPurchasesIdRoute
   '/portal/recipes/$recipeId': typeof AuthenticatedPortalRecipesRecipeIdRoute
   '/portal/workouts/$dayId': typeof AuthenticatedPortalWorkoutsDayIdRoute
+  '/api/public/hooks/appointment-reminders': typeof ApiPublicHooksAppointmentRemindersRoute
   '/api/public/hooks/lift-archive-tick': typeof ApiPublicHooksLiftArchiveTickRoute
   '/api/public/hooks/media-archive': typeof ApiPublicHooksMediaArchiveRoute
   '/api/public/hooks/sms-reminders': typeof ApiPublicHooksSmsRemindersRoute
@@ -1070,6 +1131,7 @@ export interface FileRoutesByTo {
   '/portal/workouts': typeof AuthenticatedPortalWorkoutsIndexRoute
   '/admin/client-programs/$clientId/analytics': typeof AuthenticatedAdminClientProgramsClientIdAnalyticsRoute
   '/admin/client-programs/$clientId/history': typeof AuthenticatedAdminClientProgramsClientIdHistoryRoute
+  '/api/public/google/oauth/callback': typeof ApiPublicGoogleOauthCallbackRoute
   '/m/workouts/$enrollmentId/$week/$day': typeof AuthenticatedMWorkoutsEnrollmentIdWeekDayRoute
 }
 export interface FileRoutesById {
@@ -1085,10 +1147,13 @@ export interface FileRoutesById {
   '/_authenticated/m': typeof AuthenticatedMRouteRouteWithChildren
   '/_authenticated/portal': typeof AuthenticatedPortalRouteRouteWithChildren
   '/api/drive-upload': typeof ApiDriveUploadRoute
+  '/book/$slug': typeof BookSlugRoute
   '/_authenticated/admin/account': typeof AuthenticatedAdminAccountRoute
+  '/_authenticated/admin/appointments': typeof AuthenticatedAdminAppointmentsRoute
   '/_authenticated/admin/apps': typeof AuthenticatedAdminAppsRoute
   '/_authenticated/admin/archives': typeof AuthenticatedAdminArchivesRoute
   '/_authenticated/admin/automations': typeof AuthenticatedAdminAutomationsRoute
+  '/_authenticated/admin/booking-links': typeof AuthenticatedAdminBookingLinksRoute
   '/_authenticated/admin/broadcasts': typeof AuthenticatedAdminBroadcastsRouteWithChildren
   '/_authenticated/admin/business-systems': typeof AuthenticatedAdminBusinessSystemsRoute
   '/_authenticated/admin/calendar': typeof AuthenticatedAdminCalendarRoute
@@ -1105,6 +1170,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/exercises': typeof AuthenticatedAdminExercisesRoute
   '/_authenticated/admin/faqs': typeof AuthenticatedAdminFaqsRoute
   '/_authenticated/admin/forms': typeof AuthenticatedAdminFormsRoute
+  '/_authenticated/admin/google-calendar': typeof AuthenticatedAdminGoogleCalendarRoute
   '/_authenticated/admin/lift-videos': typeof AuthenticatedAdminLiftVideosRoute
   '/_authenticated/admin/media-archives': typeof AuthenticatedAdminMediaArchivesRoute
   '/_authenticated/admin/media-review': typeof AuthenticatedAdminMediaReviewRoute
@@ -1133,6 +1199,7 @@ export interface FileRoutesById {
   '/_authenticated/m/upgrade': typeof AuthenticatedMUpgradeRoute
   '/_authenticated/portal/account': typeof AuthenticatedPortalAccountRoute
   '/_authenticated/portal/announcements': typeof AuthenticatedPortalAnnouncementsRoute
+  '/_authenticated/portal/appointments': typeof AuthenticatedPortalAppointmentsRoute
   '/_authenticated/portal/calendar': typeof AuthenticatedPortalCalendarRoute
   '/_authenticated/portal/check-in': typeof AuthenticatedPortalCheckInRoute
   '/_authenticated/portal/check-ins': typeof AuthenticatedPortalCheckInsRouteWithChildren
@@ -1178,6 +1245,7 @@ export interface FileRoutesById {
   '/_authenticated/portal/purchases/$id': typeof AuthenticatedPortalPurchasesIdRoute
   '/_authenticated/portal/recipes/$recipeId': typeof AuthenticatedPortalRecipesRecipeIdRoute
   '/_authenticated/portal/workouts/$dayId': typeof AuthenticatedPortalWorkoutsDayIdRoute
+  '/api/public/hooks/appointment-reminders': typeof ApiPublicHooksAppointmentRemindersRoute
   '/api/public/hooks/lift-archive-tick': typeof ApiPublicHooksLiftArchiveTickRoute
   '/api/public/hooks/media-archive': typeof ApiPublicHooksMediaArchiveRoute
   '/api/public/hooks/sms-reminders': typeof ApiPublicHooksSmsRemindersRoute
@@ -1194,6 +1262,7 @@ export interface FileRoutesById {
   '/_authenticated/portal/workouts/': typeof AuthenticatedPortalWorkoutsIndexRoute
   '/_authenticated/admin/client-programs/$clientId/analytics': typeof AuthenticatedAdminClientProgramsClientIdAnalyticsRoute
   '/_authenticated/admin/client-programs/$clientId/history': typeof AuthenticatedAdminClientProgramsClientIdHistoryRoute
+  '/api/public/google/oauth/callback': typeof ApiPublicGoogleOauthCallbackRoute
   '/_authenticated/m/workouts/$enrollmentId/$week/$day': typeof AuthenticatedMWorkoutsEnrollmentIdWeekDayRoute
 }
 export interface FileRouteTypes {
@@ -1209,10 +1278,13 @@ export interface FileRouteTypes {
     | '/m'
     | '/portal'
     | '/api/drive-upload'
+    | '/book/$slug'
     | '/admin/account'
+    | '/admin/appointments'
     | '/admin/apps'
     | '/admin/archives'
     | '/admin/automations'
+    | '/admin/booking-links'
     | '/admin/broadcasts'
     | '/admin/business-systems'
     | '/admin/calendar'
@@ -1229,6 +1301,7 @@ export interface FileRouteTypes {
     | '/admin/exercises'
     | '/admin/faqs'
     | '/admin/forms'
+    | '/admin/google-calendar'
     | '/admin/lift-videos'
     | '/admin/media-archives'
     | '/admin/media-review'
@@ -1257,6 +1330,7 @@ export interface FileRouteTypes {
     | '/m/upgrade'
     | '/portal/account'
     | '/portal/announcements'
+    | '/portal/appointments'
     | '/portal/calendar'
     | '/portal/check-in'
     | '/portal/check-ins'
@@ -1302,6 +1376,7 @@ export interface FileRouteTypes {
     | '/portal/purchases/$id'
     | '/portal/recipes/$recipeId'
     | '/portal/workouts/$dayId'
+    | '/api/public/hooks/appointment-reminders'
     | '/api/public/hooks/lift-archive-tick'
     | '/api/public/hooks/media-archive'
     | '/api/public/hooks/sms-reminders'
@@ -1318,6 +1393,7 @@ export interface FileRouteTypes {
     | '/portal/workouts/'
     | '/admin/client-programs/$clientId/analytics'
     | '/admin/client-programs/$clientId/history'
+    | '/api/public/google/oauth/callback'
     | '/m/workouts/$enrollmentId/$week/$day'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -1328,10 +1404,13 @@ export interface FileRouteTypes {
     | '/setup'
     | '/sitemap'
     | '/api/drive-upload'
+    | '/book/$slug'
     | '/admin/account'
+    | '/admin/appointments'
     | '/admin/apps'
     | '/admin/archives'
     | '/admin/automations'
+    | '/admin/booking-links'
     | '/admin/broadcasts'
     | '/admin/business-systems'
     | '/admin/calendar'
@@ -1348,6 +1427,7 @@ export interface FileRouteTypes {
     | '/admin/exercises'
     | '/admin/faqs'
     | '/admin/forms'
+    | '/admin/google-calendar'
     | '/admin/lift-videos'
     | '/admin/media-archives'
     | '/admin/media-review'
@@ -1376,6 +1456,7 @@ export interface FileRouteTypes {
     | '/m/upgrade'
     | '/portal/account'
     | '/portal/announcements'
+    | '/portal/appointments'
     | '/portal/calendar'
     | '/portal/check-in'
     | '/portal/check-ins'
@@ -1421,6 +1502,7 @@ export interface FileRouteTypes {
     | '/portal/purchases/$id'
     | '/portal/recipes/$recipeId'
     | '/portal/workouts/$dayId'
+    | '/api/public/hooks/appointment-reminders'
     | '/api/public/hooks/lift-archive-tick'
     | '/api/public/hooks/media-archive'
     | '/api/public/hooks/sms-reminders'
@@ -1437,6 +1519,7 @@ export interface FileRouteTypes {
     | '/portal/workouts'
     | '/admin/client-programs/$clientId/analytics'
     | '/admin/client-programs/$clientId/history'
+    | '/api/public/google/oauth/callback'
     | '/m/workouts/$enrollmentId/$week/$day'
   id:
     | '__root__'
@@ -1451,10 +1534,13 @@ export interface FileRouteTypes {
     | '/_authenticated/m'
     | '/_authenticated/portal'
     | '/api/drive-upload'
+    | '/book/$slug'
     | '/_authenticated/admin/account'
+    | '/_authenticated/admin/appointments'
     | '/_authenticated/admin/apps'
     | '/_authenticated/admin/archives'
     | '/_authenticated/admin/automations'
+    | '/_authenticated/admin/booking-links'
     | '/_authenticated/admin/broadcasts'
     | '/_authenticated/admin/business-systems'
     | '/_authenticated/admin/calendar'
@@ -1471,6 +1557,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/exercises'
     | '/_authenticated/admin/faqs'
     | '/_authenticated/admin/forms'
+    | '/_authenticated/admin/google-calendar'
     | '/_authenticated/admin/lift-videos'
     | '/_authenticated/admin/media-archives'
     | '/_authenticated/admin/media-review'
@@ -1499,6 +1586,7 @@ export interface FileRouteTypes {
     | '/_authenticated/m/upgrade'
     | '/_authenticated/portal/account'
     | '/_authenticated/portal/announcements'
+    | '/_authenticated/portal/appointments'
     | '/_authenticated/portal/calendar'
     | '/_authenticated/portal/check-in'
     | '/_authenticated/portal/check-ins'
@@ -1544,6 +1632,7 @@ export interface FileRouteTypes {
     | '/_authenticated/portal/purchases/$id'
     | '/_authenticated/portal/recipes/$recipeId'
     | '/_authenticated/portal/workouts/$dayId'
+    | '/api/public/hooks/appointment-reminders'
     | '/api/public/hooks/lift-archive-tick'
     | '/api/public/hooks/media-archive'
     | '/api/public/hooks/sms-reminders'
@@ -1560,6 +1649,7 @@ export interface FileRouteTypes {
     | '/_authenticated/portal/workouts/'
     | '/_authenticated/admin/client-programs/$clientId/analytics'
     | '/_authenticated/admin/client-programs/$clientId/history'
+    | '/api/public/google/oauth/callback'
     | '/_authenticated/m/workouts/$enrollmentId/$week/$day'
   fileRoutesById: FileRoutesById
 }
@@ -1572,14 +1662,17 @@ export interface RootRouteChildren {
   SetupRoute: typeof SetupRoute
   SitemapRoute: typeof SitemapRoute
   ApiDriveUploadRoute: typeof ApiDriveUploadRoute
+  BookSlugRoute: typeof BookSlugRoute
   ApiPublicSignnowWebhookRoute: typeof ApiPublicSignnowWebhookRoute
   ApiPublicStripeWebhookRoute: typeof ApiPublicStripeWebhookRoute
+  ApiPublicHooksAppointmentRemindersRoute: typeof ApiPublicHooksAppointmentRemindersRoute
   ApiPublicHooksLiftArchiveTickRoute: typeof ApiPublicHooksLiftArchiveTickRoute
   ApiPublicHooksMediaArchiveRoute: typeof ApiPublicHooksMediaArchiveRoute
   ApiPublicHooksSmsRemindersRoute: typeof ApiPublicHooksSmsRemindersRoute
   LovableEmailAuthPreviewRoute: typeof LovableEmailAuthPreviewRoute
   LovableEmailAuthWebhookRoute: typeof LovableEmailAuthWebhookRoute
   LovableEmailQueueProcessRoute: typeof LovableEmailQueueProcessRoute
+  ApiPublicGoogleOauthCallbackRoute: typeof ApiPublicGoogleOauthCallbackRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -1631,6 +1724,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/book/$slug': {
+      id: '/book/$slug'
+      path: '/book/$slug'
+      fullPath: '/book/$slug'
+      preLoaderRoute: typeof BookSlugRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/drive-upload': {
@@ -1792,6 +1892,13 @@ declare module '@tanstack/react-router' {
       path: '/calendar'
       fullPath: '/portal/calendar'
       preLoaderRoute: typeof AuthenticatedPortalCalendarRouteImport
+      parentRoute: typeof AuthenticatedPortalRouteRoute
+    }
+    '/_authenticated/portal/appointments': {
+      id: '/_authenticated/portal/appointments'
+      path: '/appointments'
+      fullPath: '/portal/appointments'
+      preLoaderRoute: typeof AuthenticatedPortalAppointmentsRouteImport
       parentRoute: typeof AuthenticatedPortalRouteRoute
     }
     '/_authenticated/portal/announcements': {
@@ -1990,6 +2097,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminLiftVideosRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
+    '/_authenticated/admin/google-calendar': {
+      id: '/_authenticated/admin/google-calendar'
+      path: '/google-calendar'
+      fullPath: '/admin/google-calendar'
+      preLoaderRoute: typeof AuthenticatedAdminGoogleCalendarRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
     '/_authenticated/admin/forms': {
       id: '/_authenticated/admin/forms'
       path: '/forms'
@@ -2102,6 +2216,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminBroadcastsRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
+    '/_authenticated/admin/booking-links': {
+      id: '/_authenticated/admin/booking-links'
+      path: '/booking-links'
+      fullPath: '/admin/booking-links'
+      preLoaderRoute: typeof AuthenticatedAdminBookingLinksRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
     '/_authenticated/admin/automations': {
       id: '/_authenticated/admin/automations'
       path: '/automations'
@@ -2121,6 +2242,13 @@ declare module '@tanstack/react-router' {
       path: '/apps'
       fullPath: '/admin/apps'
       preLoaderRoute: typeof AuthenticatedAdminAppsRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
+    '/_authenticated/admin/appointments': {
+      id: '/_authenticated/admin/appointments'
+      path: '/appointments'
+      fullPath: '/admin/appointments'
+      preLoaderRoute: typeof AuthenticatedAdminAppointmentsRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
     '/_authenticated/admin/account': {
@@ -2226,6 +2354,13 @@ declare module '@tanstack/react-router' {
       path: '/api/public/hooks/lift-archive-tick'
       fullPath: '/api/public/hooks/lift-archive-tick'
       preLoaderRoute: typeof ApiPublicHooksLiftArchiveTickRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/hooks/appointment-reminders': {
+      id: '/api/public/hooks/appointment-reminders'
+      path: '/api/public/hooks/appointment-reminders'
+      fullPath: '/api/public/hooks/appointment-reminders'
+      preLoaderRoute: typeof ApiPublicHooksAppointmentRemindersRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated/portal/workouts/$dayId': {
@@ -2410,6 +2545,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminAgreementsSignedRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
+    '/api/public/google/oauth/callback': {
+      id: '/api/public/google/oauth/callback'
+      path: '/api/public/google/oauth/callback'
+      fullPath: '/api/public/google/oauth/callback'
+      preLoaderRoute: typeof ApiPublicGoogleOauthCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_authenticated/admin/client-programs/$clientId/history': {
       id: '/_authenticated/admin/client-programs/$clientId/history'
       path: '/history'
@@ -2500,9 +2642,11 @@ const AuthenticatedAdminClientProgramsClientIdRouteWithChildren =
 
 interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminAccountRoute: typeof AuthenticatedAdminAccountRoute
+  AuthenticatedAdminAppointmentsRoute: typeof AuthenticatedAdminAppointmentsRoute
   AuthenticatedAdminAppsRoute: typeof AuthenticatedAdminAppsRoute
   AuthenticatedAdminArchivesRoute: typeof AuthenticatedAdminArchivesRoute
   AuthenticatedAdminAutomationsRoute: typeof AuthenticatedAdminAutomationsRoute
+  AuthenticatedAdminBookingLinksRoute: typeof AuthenticatedAdminBookingLinksRoute
   AuthenticatedAdminBroadcastsRoute: typeof AuthenticatedAdminBroadcastsRouteWithChildren
   AuthenticatedAdminBusinessSystemsRoute: typeof AuthenticatedAdminBusinessSystemsRoute
   AuthenticatedAdminCalendarRoute: typeof AuthenticatedAdminCalendarRoute
@@ -2519,6 +2663,7 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminExercisesRoute: typeof AuthenticatedAdminExercisesRoute
   AuthenticatedAdminFaqsRoute: typeof AuthenticatedAdminFaqsRoute
   AuthenticatedAdminFormsRoute: typeof AuthenticatedAdminFormsRoute
+  AuthenticatedAdminGoogleCalendarRoute: typeof AuthenticatedAdminGoogleCalendarRoute
   AuthenticatedAdminLiftVideosRoute: typeof AuthenticatedAdminLiftVideosRoute
   AuthenticatedAdminMediaArchivesRoute: typeof AuthenticatedAdminMediaArchivesRoute
   AuthenticatedAdminMediaReviewRoute: typeof AuthenticatedAdminMediaReviewRoute
@@ -2564,9 +2709,11 @@ interface AuthenticatedAdminRouteRouteChildren {
 const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren =
   {
     AuthenticatedAdminAccountRoute: AuthenticatedAdminAccountRoute,
+    AuthenticatedAdminAppointmentsRoute: AuthenticatedAdminAppointmentsRoute,
     AuthenticatedAdminAppsRoute: AuthenticatedAdminAppsRoute,
     AuthenticatedAdminArchivesRoute: AuthenticatedAdminArchivesRoute,
     AuthenticatedAdminAutomationsRoute: AuthenticatedAdminAutomationsRoute,
+    AuthenticatedAdminBookingLinksRoute: AuthenticatedAdminBookingLinksRoute,
     AuthenticatedAdminBroadcastsRoute:
       AuthenticatedAdminBroadcastsRouteWithChildren,
     AuthenticatedAdminBusinessSystemsRoute:
@@ -2587,6 +2734,8 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
     AuthenticatedAdminExercisesRoute: AuthenticatedAdminExercisesRoute,
     AuthenticatedAdminFaqsRoute: AuthenticatedAdminFaqsRoute,
     AuthenticatedAdminFormsRoute: AuthenticatedAdminFormsRoute,
+    AuthenticatedAdminGoogleCalendarRoute:
+      AuthenticatedAdminGoogleCalendarRoute,
     AuthenticatedAdminLiftVideosRoute: AuthenticatedAdminLiftVideosRoute,
     AuthenticatedAdminMediaArchivesRoute: AuthenticatedAdminMediaArchivesRoute,
     AuthenticatedAdminMediaReviewRoute: AuthenticatedAdminMediaReviewRoute,
@@ -2778,6 +2927,7 @@ const AuthenticatedPortalRecipesRouteWithChildren =
 interface AuthenticatedPortalRouteRouteChildren {
   AuthenticatedPortalAccountRoute: typeof AuthenticatedPortalAccountRoute
   AuthenticatedPortalAnnouncementsRoute: typeof AuthenticatedPortalAnnouncementsRoute
+  AuthenticatedPortalAppointmentsRoute: typeof AuthenticatedPortalAppointmentsRoute
   AuthenticatedPortalCalendarRoute: typeof AuthenticatedPortalCalendarRoute
   AuthenticatedPortalCheckInRoute: typeof AuthenticatedPortalCheckInRoute
   AuthenticatedPortalCheckInsRoute: typeof AuthenticatedPortalCheckInsRouteWithChildren
@@ -2803,6 +2953,7 @@ const AuthenticatedPortalRouteRouteChildren: AuthenticatedPortalRouteRouteChildr
     AuthenticatedPortalAccountRoute: AuthenticatedPortalAccountRoute,
     AuthenticatedPortalAnnouncementsRoute:
       AuthenticatedPortalAnnouncementsRoute,
+    AuthenticatedPortalAppointmentsRoute: AuthenticatedPortalAppointmentsRoute,
     AuthenticatedPortalCalendarRoute: AuthenticatedPortalCalendarRoute,
     AuthenticatedPortalCheckInRoute: AuthenticatedPortalCheckInRoute,
     AuthenticatedPortalCheckInsRoute:
@@ -2860,14 +3011,18 @@ const rootRouteChildren: RootRouteChildren = {
   SetupRoute: SetupRoute,
   SitemapRoute: SitemapRoute,
   ApiDriveUploadRoute: ApiDriveUploadRoute,
+  BookSlugRoute: BookSlugRoute,
   ApiPublicSignnowWebhookRoute: ApiPublicSignnowWebhookRoute,
   ApiPublicStripeWebhookRoute: ApiPublicStripeWebhookRoute,
+  ApiPublicHooksAppointmentRemindersRoute:
+    ApiPublicHooksAppointmentRemindersRoute,
   ApiPublicHooksLiftArchiveTickRoute: ApiPublicHooksLiftArchiveTickRoute,
   ApiPublicHooksMediaArchiveRoute: ApiPublicHooksMediaArchiveRoute,
   ApiPublicHooksSmsRemindersRoute: ApiPublicHooksSmsRemindersRoute,
   LovableEmailAuthPreviewRoute: LovableEmailAuthPreviewRoute,
   LovableEmailAuthWebhookRoute: LovableEmailAuthWebhookRoute,
   LovableEmailQueueProcessRoute: LovableEmailQueueProcessRoute,
+  ApiPublicGoogleOauthCallbackRoute: ApiPublicGoogleOauthCallbackRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
