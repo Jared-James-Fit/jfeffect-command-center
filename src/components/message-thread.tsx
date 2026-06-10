@@ -41,6 +41,7 @@ import { markRecent as markSoundRecent } from "@/lib/chat-sounds";
 import { ChatSoundCard } from "@/components/chat-sound-card";
 import { renderBodyWithMeet } from "@/components/chat-shared";
 import { MeetQuickAction } from "@/components/meet-quick-action";
+import { ChatSendMenu } from "@/components/chat-send-menu";
 import {
   Paperclip, Send, X, FileText, Image as ImageIcon, Video, Link as LinkIcon, ExternalLink,
   Mic, Trash2, Play, Pause, Camera, File as FileIcon, Flag, AlertCircle, AlertTriangle,
