@@ -195,6 +195,32 @@ function AdminDashboard() {
 
   const liftNeedReview = liftVideos.filter((v) => !v.reviewed_at && v.status !== "Archived");
 
+  // Latest comment per lift video shown in Needs Attention (for preview line).
+  const liftIdsForPreview = liftNeedReview.slice(0, 10).map((v) => v.id);
+  const { data: liftLatestComments = [] } = useQuery({
+    queryKey: ["lift-latest-comments-dash", liftIdsForPreview.sort().join(",")],
+    enabled: liftIdsForPreview.length > 0,
+    queryFn: async () => {
+      const { data } = await (supabase.from("lift_video_comments") as any)
+        .select("video_id, body, author_role, created_at, is_internal_note")
+        .in("video_id", liftIdsForPreview)
+        .eq("is_internal_note", false)
+        .order("created_at", { ascending: false })
+        .limit(200);
+      return (data ?? []) as Array<{ video_id: string; body: string | null; author_role: string; created_at: string; is_internal_note: boolean }>;
+    },
+  });
+  const liftPreviewByVideoId = useMemo(() => {
+    const m = new Map<string, { body: string; from: "admin" | "client" }>();
+    for (const c of liftLatestComments) {
+      if (m.has(c.video_id)) continue;
+      const body = (c.body ?? "").trim();
+      if (!body) continue;
+      m.set(c.video_id, { body, from: c.author_role === "admin" ? "admin" : "client" });
+    }
+    return m;
+  }, [liftLatestComments]);
+
   const clientNameById = useMemo(() => new Map(clients.map((c) => [c.id, c.full_name])), [clients]);
   const clientById = useMemo(() => new Map(clients.map((c) => [c.id, c])), [clients]);
   const stateMap = useMemo(() => new Map(convStates.map((s) => [s.client_id, s])), [convStates]);
@@ -246,10 +272,14 @@ function AdminDashboard() {
   });
 
   // Build Needs Attention unified feed
-  type NeedItem = { id: string; clientId?: string; name: string; reason: string; time?: string; tone: string; priority: number; href: string; search?: any; params?: any; action: string; avatarUrl?: string | null; thumbnailUrl?: string | null };
+  type NeedItem = { id: string; clientId?: string; name: string; reason: string; time?: string; tone: string; priority: number; href: string; search?: any; params?: any; action: string; avatarUrl?: string | null; thumbnailUrl?: string | null; preview?: string | null; previewFromClient?: boolean };
   const need: NeedItem[] = [];
   for (const v of liftNeedReview.slice(0, 10)) {
     const c: any = clientById.get(v.client_id);
+    const latest = liftPreviewByVideoId.get(v.id);
+    const note = (v as any).client_notes?.trim?.() || (v as any).question_for_coach?.trim?.() || null;
+    const preview = latest?.body ?? note ?? null;
+    const previewFromClient = latest ? latest.from === "client" : true;
     need.push({
       id: `lift-${v.id}`,
       clientId: v.client_id,
@@ -263,6 +293,8 @@ function AdminDashboard() {
       action: "Open Review",
       avatarUrl: c?.profile_picture_url ?? null,
       thumbnailUrl: v.thumbnail_url ?? null,
+      preview,
+      previewFromClient,
     });
   }
   for (const s of checkInSubmissions.slice(0, 10)) {
@@ -516,6 +548,14 @@ function AdminDashboard() {
                           <Badge variant="outline" className={`text-[10px] max-w-full truncate ${n.tone}`}>{n.reason}</Badge>
                           {n.time && <span className="text-[10px] text-muted-foreground">{n.time}</span>}
                         </div>
+                        {n.preview && (
+                          <div className="mt-1 line-clamp-2 text-[11px] text-muted-foreground">
+                            <span className="font-semibold text-foreground/80">
+                              {n.previewFromClient ? `${n.name.split(" ")[0]}:` : "You:"}
+                            </span>{" "}
+                            {n.preview}
+                          </div>
+                        )}
                       </div>
                       <Link to={n.href as any} params={n.params as any} search={n.search} className="shrink-0">
                         <Button variant="outline" size="sm" className="h-8 text-[11px] shrink-0">{n.action}</Button>

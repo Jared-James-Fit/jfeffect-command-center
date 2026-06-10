@@ -225,9 +225,9 @@ function AdminLiftVideos() {
     <>
       <PageHeader title="Lift Video Review" subtitle="Coaching review inbox — tap a submission to review." />
 
-      <div className="mx-auto w-full max-w-[1600px] p-4 md:p-6">
+      <div className="mx-auto w-full max-w-[1600px] p-3 sm:p-4 md:p-6">
         {/* Mobile: show detail full-screen when a submission is open */}
-        <div className={cn("lg:hidden", openSub ? "block" : "hidden")}>
+        <div className={cn("lg:hidden mx-auto w-full max-w-2xl", openSub ? "block" : "hidden")}>
           {openSub && activeClip && (
             <ReviewDetail
               sub={openSub}
