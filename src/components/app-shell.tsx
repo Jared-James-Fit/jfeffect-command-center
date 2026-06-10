@@ -547,12 +547,12 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
                       <Link
                         to={item.to}
                         onClick={() => { setMoreOpen(false); setMoreQuery(""); }}
-                        className="flex items-center gap-3 rounded-md px-3 py-2.5 text-sm hover:bg-sidebar-accent"
+                        className="flex min-h-[52px] items-center gap-3 rounded-md px-3 py-3.5 text-base hover:bg-sidebar-accent"
                       >
-                        <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
+                        <Icon className="h-5 w-5 shrink-0 text-muted-foreground" />
                         <div className="min-w-0 flex-1">
-                          <div className="truncate font-medium">{item.label}</div>
-                          {group && <div className="truncate text-[11px] text-muted-foreground">{group}</div>}
+                          <div className="truncate font-semibold">{item.label}</div>
+                          {group && <div className="truncate text-[12px] text-muted-foreground">{group}</div>}
                         </div>
                       </Link>
                     </li>
@@ -585,13 +585,13 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
                                   to={item.to}
                                   onClick={() => setMoreOpen(false)}
                                   className={cn(
-                                    "flex items-center gap-3 rounded-md px-3 py-2.5 text-sm",
+                                    "flex min-h-[52px] items-center gap-3 rounded-md px-3 py-3.5 text-base font-medium",
                                     active
                                       ? "bg-primary/15 font-semibold text-primary"
                                       : "hover:bg-sidebar-accent",
                                   )}
                                 >
-                                  <Icon className="h-4 w-4 shrink-0" />
+                                  <Icon className="h-5 w-5 shrink-0" />
                                   <span className="truncate">{item.label}</span>
                                 </Link>
                               </li>
