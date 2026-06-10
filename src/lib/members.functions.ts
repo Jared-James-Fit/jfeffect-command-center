@@ -90,6 +90,19 @@ export const createAppMember = createServerFn({ method: "POST" })
     if (data.apply_defaults !== false) {
       await supabaseAdmin.rpc("apply_default_member_access", { _member_id: row.id });
     }
+    // Fire SMS automations registered for the "account_created" trigger.
+    try {
+      const { fireAutomationTrigger } = await import("@/lib/sms-trigger.server");
+      const origin = getOrigin();
+      const link = `${origin}/member-setup?token=${setup_token}`;
+      await fireAutomationTrigger(supabaseAdmin, {
+        trigger: "account_created",
+        memberId: row.id,
+        vars: { setup_link: link },
+      });
+    } catch (e) {
+      console.error("[createAppMember] automation trigger failed", e);
+    }
     return { member: row };
   });
 
@@ -100,6 +113,8 @@ const UpdateMemberInput = z.object({
   account_type: z.enum(["app_member","program_only","jf_member"]).optional(),
   messaging_permission: z.enum(["none","support_only","upgrade_only"]).optional(),
   admin_notes: z.string().nullable().optional(),
+  phone: z.string().nullable().optional(),
+  sms_opt_out: z.boolean().optional(),
 });
 
 export const updateAppMember = createServerFn({ method: "POST" })

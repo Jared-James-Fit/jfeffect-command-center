@@ -390,3 +390,29 @@ export const deleteSmsAutomation = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return { ok: true };
   });
+
+/** Send a test SMS rendering the automation body with sample template vars. */
+const TestAutomation = z.object({
+  to: z.string().trim().min(5).max(40),
+  body: z.string().trim().min(1).max(1000),
+});
+export const testSmsAutomation = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => TestAutomation.parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context as any;
+    const { data: roles } = await supabase.from("user_roles").select("role").eq("user_id", userId);
+    if (!(roles ?? []).some((r: any) => r.role === "admin")) throw new Error("Admin only");
+    const { data: settings } = await supabase.from("sms_settings").select("*").eq("singleton", true).maybeSingle();
+    if (!settings?.from_phone) throw new Error("Set a Twilio From phone number first");
+    const to = normalizePhone(data.to);
+    if (!to) throw new Error("Invalid phone number");
+    const rendered = renderTemplate(data.body, {
+      first_name: "Alex",
+      full_name: "Alex Sample",
+      brand: settings.brand_name ?? "Your coach",
+      setup_link: `${process.env.PUBLIC_APP_URL || process.env.SITE_URL || ""}/member-setup?token=SAMPLE`,
+    });
+    const { sid } = await sendViaTwilio(to, settings.from_phone, rendered);
+    return { ok: true, sid, rendered };
+  });

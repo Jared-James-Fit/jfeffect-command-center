@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,9 +7,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useServerFn } from "@tanstack/react-start";
-import { upsertSmsAutomation } from "@/lib/sms.functions";
+import { upsertSmsAutomation, testSmsAutomation } from "@/lib/sms.functions";
 import { toast } from "sonner";
-import { Zap } from "lucide-react";
+import { Zap, Send } from "lucide-react";
+import { useAutosave } from "@/hooks/use-autosave";
+import { SaveStatus } from "@/components/save-status";
 
 export type AutomationRow = {
   id?: string;
@@ -30,6 +32,8 @@ export type AutomationRow = {
 };
 
 const TRIGGERS = [
+  ["account_created", "New account created"],
+  ["subscription_purchased", "Subscription purchased (Stripe)"],
   ["unread_message", "Unread app message"],
   ["missed_check_in", "Missed check-in"],
   ["missed_workout", "Missed workout"],
@@ -47,6 +51,7 @@ const TRIGGERS = [
 
 const AUDIENCES = [
   ["all_active", "All active coaching clients"],
+  ["new_members", "New members / subscribers (auto)"],
   ["app_members", "App members"],
   ["program_members", "Program-only members"],
   ["unread_clients", "Clients with unread messages"],
@@ -77,35 +82,76 @@ export function SmsAutomationDialog({
   onSaved?: () => void;
 }) {
   const save = useServerFn(upsertSmsAutomation);
+  const testFn = useServerFn(testSmsAutomation);
   const [f, setF] = useState<AutomationRow>(empty);
-  const [busy, setBusy] = useState(false);
+  const [testTo, setTestTo] = useState("");
+  const [testing, setTesting] = useState(false);
+  const [savedId, setSavedId] = useState<string | undefined>(undefined);
 
   useEffect(() => {
-    if (open) setF(initial ?? empty);
+    if (open) {
+      setF(initial ?? empty);
+      setSavedId(initial?.id);
+    }
   }, [open, initial]);
 
   const upd = (k: keyof AutomationRow, v: any) => setF((s) => ({ ...s, [k]: v }));
 
-  const doSave = async () => {
-    if (!f.name.trim()) return toast.error("Name required");
-    if (!f.body.trim()) return toast.error("Message body required");
-    setBusy(true);
+  // Auto-save: requires a valid name + body. Persist edits as the user types.
+  const autosaveValue = useMemo(() => {
+    if (!open) return null;
+    if (!f.name.trim() || !f.body.trim()) return null;
+    return { ...f, id: savedId } as AutomationRow;
+  }, [open, f, savedId]);
+
+  const saveCb = useCallback(async (v: AutomationRow | null) => {
+    if (!v) return;
+    const res: any = await save({ data: v as any });
+    if (res?.id && !savedId) setSavedId(res.id);
+    onSaved?.();
+  }, [save, savedId, onSaved]);
+
+  const autosave = useAutosave<AutomationRow | null>({
+    key: savedId ? `sms-auto:${savedId}` : "sms-auto:new",
+    value: autosaveValue,
+    enabled: !!autosaveValue,
+    onSave: saveCb,
+    delay: 700,
+  });
+
+  const doTest = async () => {
+    if (!testTo.trim()) return toast.error("Enter a phone number to test");
+    if (!f.body.trim()) return toast.error("Add a message body first");
+    setTesting(true);
     try {
-      await save({ data: f as any });
-      toast.success("Automation saved");
-      onSaved?.();
-      onOpenChange(false);
+      await testFn({ data: { to: testTo.trim(), body: f.body } });
+      toast.success("Test SMS sent");
     } catch (e: any) { toast.error(e?.message ?? "Failed"); }
-    finally { setBusy(false); }
+    finally { setTesting(false); }
   };
+
+  const showSetupTagHint =
+    f.trigger_type === "account_created" || f.trigger_type === "subscription_purchased";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2"><Zap className="h-5 w-5" />{initial?.id ? "Edit" : "Create"} SMS Automation</DialogTitle>
+          <DialogTitle className="flex items-center justify-between gap-2">
+            <span className="flex items-center gap-2"><Zap className="h-5 w-5" />{savedId ? "Edit" : "Create"} SMS Automation</span>
+            <SaveStatus state={autosave.state} savedAt={autosave.savedAt} />
+          </DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
+          {showSetupTagHint && (
+            <div className="rounded-md border border-primary/30 bg-primary/5 p-3 text-xs">
+              <div className="font-semibold mb-1">Setup-link automation</div>
+              <div className="text-muted-foreground">
+                This trigger fires automatically when a {f.trigger_type === "account_created" ? "new app member account is created" : "JF Membership subscription is purchased through Stripe"}.
+                Include the <code className="px-1 rounded bg-background">{"{setup_link}"}</code> tag in your message — it inserts a one-time link the recipient taps to finish setting up their app account.
+              </div>
+            </div>
+          )}
           <div className="grid gap-3 md:grid-cols-2">
             <div className="space-y-1.5">
               <Label>Automation name</Label>
@@ -185,8 +231,30 @@ export function SmsAutomationDialog({
             <Label>SMS message body</Label>
             <Textarea rows={4} value={f.body} onChange={(e) => upd("body", e.target.value)} maxLength={1000} />
             <div className="flex justify-between text-[11px] text-muted-foreground">
-              <span>Tags: {"{first_name}"} {"{full_name}"} {"{brand}"}</span>
+              <span>Tags: {"{first_name}"} {"{full_name}"} {"{brand}"} {"{setup_link}"}</span>
               <span>{f.body.length}/1000</span>
+            </div>
+          </div>
+
+          <div className="rounded-md border border-border p-3 space-y-2">
+            <div className="flex items-center justify-between">
+              <Label className="text-xs uppercase tracking-wider text-muted-foreground">Test this automation</Label>
+            </div>
+            <div className="flex gap-2">
+              <Input
+                type="tel"
+                placeholder="+15551234567"
+                value={testTo}
+                onChange={(e) => setTestTo(e.target.value)}
+                className="max-w-[220px]"
+              />
+              <Button type="button" variant="outline" size="sm" onClick={doTest} disabled={testing}>
+                <Send className="mr-1 h-3.5 w-3.5" />{testing ? "Sending…" : "Send test SMS"}
+              </Button>
+            </div>
+            <div className="text-[11px] text-muted-foreground">
+              Sends the current message body to the number above using sample values
+              (e.g. <code>{"{first_name}"}</code> = "Alex", <code>{"{setup_link}"}</code> = a sample link).
             </div>
           </div>
 
@@ -208,8 +276,14 @@ export function SmsAutomationDialog({
           </div>
         </div>
         <DialogFooter>
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={doSave} disabled={busy}>{busy ? "Saving…" : "Save automation"}</Button>
+          <div className="flex w-full items-center justify-between">
+            <div className="text-xs text-muted-foreground">
+              {!f.name.trim() || !f.body.trim()
+                ? "Fill in a name and message body to start auto-saving."
+                : "Changes save automatically."}
+            </div>
+            <Button onClick={() => onOpenChange(false)}>Done</Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

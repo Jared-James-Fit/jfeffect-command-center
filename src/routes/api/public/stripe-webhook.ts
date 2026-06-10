@@ -361,6 +361,21 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
                   customer_id: obj.customer ?? null, subscription_id: obj.id,
                   member_id: member?.id ?? null, payload: obj,
                 }).then(() => {}, () => {});
+                // Fire "subscription_purchased" SMS automations for new JF subs.
+                if (member) {
+                  try {
+                    const { fireAutomationTrigger } = await import("@/lib/sms-trigger.server");
+                    const origin = process.env.PUBLIC_APP_URL || process.env.SITE_URL || "";
+                    const setupLink = member.setup_token && !member.user_id
+                      ? `${origin}/member-setup?token=${member.setup_token}`
+                      : `${origin}/auth`;
+                    await fireAutomationTrigger(supabase, {
+                      trigger: "subscription_purchased",
+                      memberId: member.id,
+                      vars: { setup_link: setupLink },
+                    });
+                  } catch (e) { console.error("[stripe-webhook] sms trigger failed", e); }
+                }
                 break;
               }
               const purchase = await resolvePurchase(supabase, obj, {

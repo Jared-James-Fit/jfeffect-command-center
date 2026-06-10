@@ -397,10 +397,12 @@ export type Database = {
           last_signed_in_at: string | null
           messaging_permission: string
           paused_until: string | null
+          phone: string | null
           setup_token: string | null
           setup_token_expires_at: string | null
           signup_ip: string | null
           signup_user_agent: string | null
+          sms_opt_out: boolean
           status: string
           stripe_customer_id: string | null
           stripe_price_id: string | null
@@ -429,10 +431,12 @@ export type Database = {
           last_signed_in_at?: string | null
           messaging_permission?: string
           paused_until?: string | null
+          phone?: string | null
           setup_token?: string | null
           setup_token_expires_at?: string | null
           signup_ip?: string | null
           signup_user_agent?: string | null
+          sms_opt_out?: boolean
           status?: string
           stripe_customer_id?: string | null
           stripe_price_id?: string | null
@@ -461,10 +465,12 @@ export type Database = {
           last_signed_in_at?: string | null
           messaging_permission?: string
           paused_until?: string | null
+          phone?: string | null
           setup_token?: string | null
           setup_token_expires_at?: string | null
           signup_ip?: string | null
           signup_user_agent?: string | null
+          sms_opt_out?: boolean
           status?: string
           stripe_customer_id?: string | null
           stripe_price_id?: string | null
@@ -7293,8 +7299,11 @@ export type Database = {
       }
       sms_log: {
         Row: {
+          app_member_id: string | null
+          automation_id: string | null
+          automation_trigger: string | null
           body: string
-          client_id: string
+          client_id: string | null
           created_at: string
           error: string | null
           id: string
@@ -7307,8 +7316,11 @@ export type Database = {
           twilio_sid: string | null
         }
         Insert: {
+          app_member_id?: string | null
+          automation_id?: string | null
+          automation_trigger?: string | null
           body: string
-          client_id: string
+          client_id?: string | null
           created_at?: string
           error?: string | null
           id?: string
@@ -7321,8 +7333,11 @@ export type Database = {
           twilio_sid?: string | null
         }
         Update: {
+          app_member_id?: string | null
+          automation_id?: string | null
+          automation_trigger?: string | null
           body?: string
-          client_id?: string
+          client_id?: string | null
           created_at?: string
           error?: string | null
           id?: string
@@ -7335,6 +7350,20 @@ export type Database = {
           twilio_sid?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "sms_log_app_member_id_fkey"
+            columns: ["app_member_id"]
+            isOneToOne: false
+            referencedRelation: "app_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sms_log_automation_id_fkey"
+            columns: ["automation_id"]
+            isOneToOne: false
+            referencedRelation: "sms_automations"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "sms_log_client_id_fkey"
             columns: ["client_id"]
