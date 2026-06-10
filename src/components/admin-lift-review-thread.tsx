@@ -37,7 +37,7 @@ type Props = {
 export function AdminLiftReviewThread({ video, userId, clientName, clientAvatarPath, onChanged }: Props) {
   const [comments, setComments] = useState<LiftVideoComment[]>([]);
   const [isInternal, setIsInternal] = useState(false);
-  const [quickReplyText, setQuickReplyText] = useState<string | null>(null);
+  const [quickReply, setQuickReply] = useState<{ text: string; nonce: number } | null>(null);
   const [signedUrl, setSignedUrl] = useState<string | null>(null);
   const [embedUrl, setEmbedUrl] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -233,6 +233,7 @@ export function AdminLiftReviewThread({ video, userId, clientName, clientAvatarP
         <LiftCommentComposer
           clientId={video.client_id}
           placeholder="Reply to client…"
+          appendText={quickReply}
           onSend={handleSend}
           trailing={
             <DropdownMenu>
@@ -243,7 +244,7 @@ export function AdminLiftReviewThread({ video, userId, clientName, clientAvatarP
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-72">
                 {LIFT_VIDEO_QUICK_REPLIES.map((q) => (
-                  <DropdownMenuItem key={q} onClick={() => setQuickReplyText(q)}>
+                  <DropdownMenuItem key={q} onClick={() => setQuickReply({ text: q, nonce: Date.now() })}>
                     <span className="text-xs">{q}</span>
                   </DropdownMenuItem>
                 ))}
@@ -255,11 +256,6 @@ export function AdminLiftReviewThread({ video, userId, clientName, clientAvatarP
           <Switch checked={isInternal} onCheckedChange={setIsInternal} />
           Internal note (not visible to client)
         </label>
-        {quickReplyText && (
-          <div className="mt-1 text-[10px] text-muted-foreground">
-            Tip: paste quick reply manually — selected: "{quickReplyText.slice(0, 40)}…"
-          </div>
-        )}
       </div>
     </div>
   );
