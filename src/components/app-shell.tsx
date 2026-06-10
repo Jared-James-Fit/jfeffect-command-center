@@ -894,6 +894,22 @@ function BottomNavSlot({ item, pathname, navBadges, onNavigate }: {
   const badge = navBadgeFor(item, navBadges);
 
   if (!item.children) {
+    if (item.to === "__search__") {
+      return (
+        <button
+          type="button"
+          onClick={() => { try { window.dispatchEvent(new CustomEvent("open-command-palette")); } catch {} }}
+          style={{ WebkitTapHighlightColor: "transparent" }}
+          className="relative flex min-h-[64px] flex-col items-center justify-center gap-0.5 px-0.5 pt-2 pb-2 text-[10px] font-medium text-muted-foreground hover:text-foreground touch-manipulation select-none"
+          aria-label="Search keywords"
+        >
+          <div className="relative">
+            <Icon className="h-5 w-5" />
+          </div>
+          <span className="w-full px-0.5 text-center text-[9.5px] leading-tight tracking-tight">{item.label}</span>
+        </button>
+      );
+    }
     const active = pathname === item.to;
     return (
       <Link
