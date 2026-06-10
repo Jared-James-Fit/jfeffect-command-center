@@ -395,6 +395,7 @@ function ClientDetail() {
               </Button>
             )}
             <Button variant="outline" size="sm" onClick={() => setPriceCardOpen(true)}><Tag className="mr-2 h-4 w-4" />Assign Offer / View Price Card</Button>
+            <Button variant="outline" size="sm" onClick={() => setBookingLinkOpen(true)}><Link2 className="mr-2 h-4 w-4" />Send Booking Link</Button>
             <ActionButton variant="outline" size="sm" onAction={sendSetup} loadingLabel="Sending…" successLabel="Sent" successToast={false} errorToast={false} icon={<Mail className="h-4 w-4" />}>Send setup link</ActionButton>
             {form.status === "Deactivated" ? (
               <Button variant="outline" size="sm" onClick={() => setReactivateOpen(true)}>
