@@ -26,6 +26,67 @@ type BellItem = {
   created_at: string;
 };
 
+/** Build "unread group message" bell items for any user (admin/coach/client).
+ *  Uses chat_group_members.last_read_at vs latest group_messages.created_at. */
+async function fetchUnreadGroupItems(userId: string): Promise<BellItem[]> {
+  // 1) Groups I'm a member of (with my last_read_at)
+  const { data: mem } = await (supabase.from("chat_group_members") as any)
+    .select("group_id, last_read_at")
+    .eq("user_id", userId);
+  const memberships = (mem ?? []) as { group_id: string; last_read_at: string | null }[];
+  if (memberships.length === 0) return [];
+  const groupIds = memberships.map((m) => m.group_id);
+
+  // 2) Group metadata (name)
+  const { data: groups } = await (supabase.from("chat_groups") as any)
+    .select("id, name, archived")
+    .in("id", groupIds);
+  const gMap = new Map<string, { name: string; archived: boolean }>(
+    (groups ?? []).map((g: any) => [g.id, { name: g.name, archived: !!g.archived }]),
+  );
+
+  // 3) Recent messages across those groups
+  const { data: msgs } = await (supabase.from("group_messages") as any)
+    .select("id, group_id, sender_id, sender_role, body, attachments, created_at, deleted_at")
+    .in("group_id", groupIds)
+    .is("deleted_at", null)
+    .order("created_at", { ascending: false })
+    .limit(200);
+
+  const lastReadByGroup = new Map(memberships.map((m) => [m.group_id, m.last_read_at]));
+  const seen = new Set<string>();
+  const items: BellItem[] = [];
+  for (const m of (msgs ?? []) as any[]) {
+    if (seen.has(m.group_id)) continue; // newest per group only
+    if (m.sender_id === userId) { seen.add(m.group_id); continue; }
+    const meta = gMap.get(m.group_id);
+    if (!meta || meta.archived) { seen.add(m.group_id); continue; }
+    const lastRead = lastReadByGroup.get(m.group_id);
+    if (lastRead && new Date(m.created_at).getTime() <= new Date(lastRead).getTime()) {
+      seen.add(m.group_id);
+      continue;
+    }
+    seen.add(m.group_id);
+    const atts = (m.attachments ?? []) as any[];
+    const hasVoice = atts.some((a) => a?.type === "audio");
+    const hasMedia = atts.some((a) => a?.type === "image" || a?.type === "video");
+    const summary = hasVoice ? "Voice message"
+      : hasMedia ? "Photo / video"
+      : atts.length ? "Attachment"
+      : (m.body || "");
+    items.push({
+      kind: "group_message",
+      clientId: "",
+      groupId: m.group_id,
+      name: meta.name,
+      title: `New in ${meta.name}`,
+      body: summary,
+      created_at: m.created_at,
+    });
+  }
+  return items;
+}
+
 export function NotificationBell() {
   const { role, user } = useAuth();
   const qc = useQueryClient();
