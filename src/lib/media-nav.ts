@@ -7,7 +7,7 @@ import type { NavItem } from "@/components/app-shell";
 export const mediaNav: NavItem[] = [
   // Overview
   { to: "/media", label: "Media Dashboard", icon: LayoutDashboard, group: "Overview" },
-  { to: "/media/action-items", label: "Action Items", icon: ListChecks, group: "Overview" },
+  { to: "/media/action-items", label: "Tasks", icon: ListChecks, group: "Overview" },
   // Planning
   { to: "/media/calendar", label: "Content Calendar", icon: Calendar, group: "Planning" },
   { to: "/media/campaigns", label: "Campaigns / Promos", icon: Sparkles, group: "Planning" },
