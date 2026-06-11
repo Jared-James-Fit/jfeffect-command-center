@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as StaffSetupRouteImport } from './routes/staff-setup'
 import { Route as SitemapRouteImport } from './routes/sitemap'
 import { Route as SetupRouteImport } from './routes/setup'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
@@ -25,9 +26,11 @@ import { Route as CoachingApplyRouteImport } from './routes/coaching.apply'
 import { Route as BookSlugRouteImport } from './routes/book.$slug'
 import { Route as ApiDriveUploadRouteImport } from './routes/api/drive-upload'
 import { Route as AuthenticatedPortalRouteRouteImport } from './routes/_authenticated/portal/route'
+import { Route as AuthenticatedMediaRouteRouteImport } from './routes/_authenticated/media/route'
 import { Route as AuthenticatedMRouteRouteImport } from './routes/_authenticated/m/route'
 import { Route as AuthenticatedAdminRouteRouteImport } from './routes/_authenticated/admin/route'
 import { Route as AuthenticatedPortalIndexRouteImport } from './routes/_authenticated/portal/index'
+import { Route as AuthenticatedMediaIndexRouteImport } from './routes/_authenticated/media/index'
 import { Route as AuthenticatedMIndexRouteImport } from './routes/_authenticated/m/index'
 import { Route as AuthenticatedAdminIndexRouteImport } from './routes/_authenticated/admin/index'
 import { Route as ApiPublicStripeWebhookRouteImport } from './routes/api/public/stripe-webhook'
@@ -49,6 +52,18 @@ import { Route as AuthenticatedPortalCalendarRouteImport } from './routes/_authe
 import { Route as AuthenticatedPortalAppointmentsRouteImport } from './routes/_authenticated/portal/appointments'
 import { Route as AuthenticatedPortalAnnouncementsRouteImport } from './routes/_authenticated/portal/announcements'
 import { Route as AuthenticatedPortalAccountRouteImport } from './routes/_authenticated/portal/account'
+import { Route as AuthenticatedMediaUploadsRouteImport } from './routes/_authenticated/media/uploads'
+import { Route as AuthenticatedMediaTestimonialsRouteImport } from './routes/_authenticated/media/testimonials'
+import { Route as AuthenticatedMediaPromoLinksRouteImport } from './routes/_authenticated/media/promo-links'
+import { Route as AuthenticatedMediaInboxRouteImport } from './routes/_authenticated/media/inbox'
+import { Route as AuthenticatedMediaEventsRouteImport } from './routes/_authenticated/media/events'
+import { Route as AuthenticatedMediaCampaignsRouteImport } from './routes/_authenticated/media/campaigns'
+import { Route as AuthenticatedMediaCalendarRouteImport } from './routes/_authenticated/media/calendar'
+import { Route as AuthenticatedMediaBroadcastsRouteImport } from './routes/_authenticated/media/broadcasts'
+import { Route as AuthenticatedMediaArchivesRouteImport } from './routes/_authenticated/media/archives'
+import { Route as AuthenticatedMediaAnnouncementsRouteImport } from './routes/_authenticated/media/announcements'
+import { Route as AuthenticatedMediaActionItemsRouteImport } from './routes/_authenticated/media/action-items'
+import { Route as AuthenticatedMediaAccountRouteImport } from './routes/_authenticated/media/account'
 import { Route as AuthenticatedMWelcomeRouteImport } from './routes/_authenticated/m/welcome'
 import { Route as AuthenticatedMUpgradeRouteImport } from './routes/_authenticated/m/upgrade'
 import { Route as AuthenticatedMToolsRouteImport } from './routes/_authenticated/m/tools'
@@ -63,6 +78,7 @@ import { Route as AuthenticatedAdminTrainingPhasesRouteImport } from './routes/_
 import { Route as AuthenticatedAdminTrainingIntelligenceRouteImport } from './routes/_authenticated/admin/training-intelligence'
 import { Route as AuthenticatedAdminTestimonialsRouteImport } from './routes/_authenticated/admin/testimonials'
 import { Route as AuthenticatedAdminTasksRouteImport } from './routes/_authenticated/admin/tasks'
+import { Route as AuthenticatedAdminStaffRouteImport } from './routes/_authenticated/admin/staff'
 import { Route as AuthenticatedAdminSopsRouteImport } from './routes/_authenticated/admin/sops'
 import { Route as AuthenticatedAdminSettingsRouteImport } from './routes/_authenticated/admin/settings'
 import { Route as AuthenticatedAdminResourcesRouteImport } from './routes/_authenticated/admin/resources'
@@ -103,6 +119,7 @@ import { Route as AuthenticatedAdminBookingLinksRouteImport } from './routes/_au
 import { Route as AuthenticatedAdminAutomationsRouteImport } from './routes/_authenticated/admin/automations'
 import { Route as AuthenticatedAdminArchivesRouteImport } from './routes/_authenticated/admin/archives'
 import { Route as AuthenticatedAdminAppsRouteImport } from './routes/_authenticated/admin/apps'
+import { Route as AuthenticatedAdminApprovalsRouteImport } from './routes/_authenticated/admin/approvals'
 import { Route as AuthenticatedAdminAppointmentsRouteImport } from './routes/_authenticated/admin/appointments'
 import { Route as AuthenticatedAdminAccountRouteImport } from './routes/_authenticated/admin/account'
 import { Route as AuthenticatedPortalWorkoutsIndexRouteImport } from './routes/_authenticated/portal/workouts.index'
@@ -128,6 +145,8 @@ import { Route as AuthenticatedPortalRecipesRecipeIdRouteImport } from './routes
 import { Route as AuthenticatedPortalPurchasesIdRouteImport } from './routes/_authenticated/portal/purchases.$id'
 import { Route as AuthenticatedPortalEventsIdRouteImport } from './routes/_authenticated/portal/events.$id'
 import { Route as AuthenticatedPortalCheckInsFormIdRouteImport } from './routes/_authenticated/portal/check-ins.$formId'
+import { Route as AuthenticatedMediaSalesMembershipRouteImport } from './routes/_authenticated/media/sales.membership'
+import { Route as AuthenticatedMediaSalesCoachingRouteImport } from './routes/_authenticated/media/sales.coaching'
 import { Route as AuthenticatedMResourcesSlugRouteImport } from './routes/_authenticated/m/resources.$slug'
 import { Route as AuthenticatedMPlansPlanIdRouteImport } from './routes/_authenticated/m/plans.$planId'
 import { Route as AuthenticatedMMyPlansEnrollmentIdRouteImport } from './routes/_authenticated/m/my-plans.$enrollmentId'
@@ -171,6 +190,11 @@ import { Route as AuthenticatedAdminClientProgramsClientIdHistoryRouteImport } f
 import { Route as AuthenticatedAdminClientProgramsClientIdAnalyticsRouteImport } from './routes/_authenticated/admin/client-programs.$clientId.analytics'
 import { Route as AuthenticatedMWorkoutsEnrollmentIdWeekDayRouteImport } from './routes/_authenticated/m/workouts.$enrollmentId.$week.$day'
 
+const StaffSetupRoute = StaffSetupRouteImport.update({
+  id: '/staff-setup',
+  path: '/staff-setup',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SitemapRoute = SitemapRouteImport.update({
   id: '/sitemap',
   path: '/sitemap',
@@ -251,6 +275,11 @@ const AuthenticatedPortalRouteRoute =
     path: '/portal',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedMediaRouteRoute = AuthenticatedMediaRouteRouteImport.update({
+  id: '/media',
+  path: '/media',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedMRouteRoute = AuthenticatedMRouteRouteImport.update({
   id: '/m',
   path: '/m',
@@ -267,6 +296,11 @@ const AuthenticatedPortalIndexRoute =
     path: '/',
     getParentRoute: () => AuthenticatedPortalRouteRoute,
   } as any)
+const AuthenticatedMediaIndexRoute = AuthenticatedMediaIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AuthenticatedMediaRouteRoute,
+} as any)
 const AuthenticatedMIndexRoute = AuthenticatedMIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -389,6 +423,77 @@ const AuthenticatedPortalAccountRoute =
     path: '/account',
     getParentRoute: () => AuthenticatedPortalRouteRoute,
   } as any)
+const AuthenticatedMediaUploadsRoute =
+  AuthenticatedMediaUploadsRouteImport.update({
+    id: '/uploads',
+    path: '/uploads',
+    getParentRoute: () => AuthenticatedMediaRouteRoute,
+  } as any)
+const AuthenticatedMediaTestimonialsRoute =
+  AuthenticatedMediaTestimonialsRouteImport.update({
+    id: '/testimonials',
+    path: '/testimonials',
+    getParentRoute: () => AuthenticatedMediaRouteRoute,
+  } as any)
+const AuthenticatedMediaPromoLinksRoute =
+  AuthenticatedMediaPromoLinksRouteImport.update({
+    id: '/promo-links',
+    path: '/promo-links',
+    getParentRoute: () => AuthenticatedMediaRouteRoute,
+  } as any)
+const AuthenticatedMediaInboxRoute = AuthenticatedMediaInboxRouteImport.update({
+  id: '/inbox',
+  path: '/inbox',
+  getParentRoute: () => AuthenticatedMediaRouteRoute,
+} as any)
+const AuthenticatedMediaEventsRoute =
+  AuthenticatedMediaEventsRouteImport.update({
+    id: '/events',
+    path: '/events',
+    getParentRoute: () => AuthenticatedMediaRouteRoute,
+  } as any)
+const AuthenticatedMediaCampaignsRoute =
+  AuthenticatedMediaCampaignsRouteImport.update({
+    id: '/campaigns',
+    path: '/campaigns',
+    getParentRoute: () => AuthenticatedMediaRouteRoute,
+  } as any)
+const AuthenticatedMediaCalendarRoute =
+  AuthenticatedMediaCalendarRouteImport.update({
+    id: '/calendar',
+    path: '/calendar',
+    getParentRoute: () => AuthenticatedMediaRouteRoute,
+  } as any)
+const AuthenticatedMediaBroadcastsRoute =
+  AuthenticatedMediaBroadcastsRouteImport.update({
+    id: '/broadcasts',
+    path: '/broadcasts',
+    getParentRoute: () => AuthenticatedMediaRouteRoute,
+  } as any)
+const AuthenticatedMediaArchivesRoute =
+  AuthenticatedMediaArchivesRouteImport.update({
+    id: '/archives',
+    path: '/archives',
+    getParentRoute: () => AuthenticatedMediaRouteRoute,
+  } as any)
+const AuthenticatedMediaAnnouncementsRoute =
+  AuthenticatedMediaAnnouncementsRouteImport.update({
+    id: '/announcements',
+    path: '/announcements',
+    getParentRoute: () => AuthenticatedMediaRouteRoute,
+  } as any)
+const AuthenticatedMediaActionItemsRoute =
+  AuthenticatedMediaActionItemsRouteImport.update({
+    id: '/action-items',
+    path: '/action-items',
+    getParentRoute: () => AuthenticatedMediaRouteRoute,
+  } as any)
+const AuthenticatedMediaAccountRoute =
+  AuthenticatedMediaAccountRouteImport.update({
+    id: '/account',
+    path: '/account',
+    getParentRoute: () => AuthenticatedMediaRouteRoute,
+  } as any)
 const AuthenticatedMWelcomeRoute = AuthenticatedMWelcomeRouteImport.update({
   id: '/welcome',
   path: '/welcome',
@@ -462,6 +567,11 @@ const AuthenticatedAdminTestimonialsRoute =
 const AuthenticatedAdminTasksRoute = AuthenticatedAdminTasksRouteImport.update({
   id: '/tasks',
   path: '/tasks',
+  getParentRoute: () => AuthenticatedAdminRouteRoute,
+} as any)
+const AuthenticatedAdminStaffRoute = AuthenticatedAdminStaffRouteImport.update({
+  id: '/staff',
+  path: '/staff',
   getParentRoute: () => AuthenticatedAdminRouteRoute,
 } as any)
 const AuthenticatedAdminSopsRoute = AuthenticatedAdminSopsRouteImport.update({
@@ -700,6 +810,12 @@ const AuthenticatedAdminAppsRoute = AuthenticatedAdminAppsRouteImport.update({
   path: '/apps',
   getParentRoute: () => AuthenticatedAdminRouteRoute,
 } as any)
+const AuthenticatedAdminApprovalsRoute =
+  AuthenticatedAdminApprovalsRouteImport.update({
+    id: '/approvals',
+    path: '/approvals',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
 const AuthenticatedAdminAppointmentsRoute =
   AuthenticatedAdminAppointmentsRouteImport.update({
     id: '/appointments',
@@ -846,6 +962,18 @@ const AuthenticatedPortalCheckInsFormIdRoute =
     id: '/$formId',
     path: '/$formId',
     getParentRoute: () => AuthenticatedPortalCheckInsRoute,
+  } as any)
+const AuthenticatedMediaSalesMembershipRoute =
+  AuthenticatedMediaSalesMembershipRouteImport.update({
+    id: '/sales/membership',
+    path: '/sales/membership',
+    getParentRoute: () => AuthenticatedMediaRouteRoute,
+  } as any)
+const AuthenticatedMediaSalesCoachingRoute =
+  AuthenticatedMediaSalesCoachingRouteImport.update({
+    id: '/sales/coaching',
+    path: '/sales/coaching',
+    getParentRoute: () => AuthenticatedMediaRouteRoute,
   } as any)
 const AuthenticatedMResourcesSlugRoute =
   AuthenticatedMResourcesSlugRouteImport.update({
@@ -1111,8 +1239,10 @@ export interface FileRoutesByFullPath {
   '/reset-password': typeof ResetPasswordRoute
   '/setup': typeof SetupRoute
   '/sitemap': typeof SitemapRoute
+  '/staff-setup': typeof StaffSetupRoute
   '/admin': typeof AuthenticatedAdminRouteRouteWithChildren
   '/m': typeof AuthenticatedMRouteRouteWithChildren
+  '/media': typeof AuthenticatedMediaRouteRouteWithChildren
   '/portal': typeof AuthenticatedPortalRouteRouteWithChildren
   '/api/drive-upload': typeof ApiDriveUploadRoute
   '/book/$slug': typeof BookSlugRoute
@@ -1120,6 +1250,7 @@ export interface FileRoutesByFullPath {
   '/signup/jf': typeof SignupJfRoute
   '/admin/account': typeof AuthenticatedAdminAccountRoute
   '/admin/appointments': typeof AuthenticatedAdminAppointmentsRoute
+  '/admin/approvals': typeof AuthenticatedAdminApprovalsRoute
   '/admin/apps': typeof AuthenticatedAdminAppsRoute
   '/admin/archives': typeof AuthenticatedAdminArchivesRoute
   '/admin/automations': typeof AuthenticatedAdminAutomationsRoute
@@ -1160,6 +1291,7 @@ export interface FileRoutesByFullPath {
   '/admin/resources': typeof AuthenticatedAdminResourcesRoute
   '/admin/settings': typeof AuthenticatedAdminSettingsRoute
   '/admin/sops': typeof AuthenticatedAdminSopsRoute
+  '/admin/staff': typeof AuthenticatedAdminStaffRoute
   '/admin/tasks': typeof AuthenticatedAdminTasksRoute
   '/admin/testimonials': typeof AuthenticatedAdminTestimonialsRoute
   '/admin/training-intelligence': typeof AuthenticatedAdminTrainingIntelligenceRoute
@@ -1174,6 +1306,18 @@ export interface FileRoutesByFullPath {
   '/m/tools': typeof AuthenticatedMToolsRoute
   '/m/upgrade': typeof AuthenticatedMUpgradeRoute
   '/m/welcome': typeof AuthenticatedMWelcomeRoute
+  '/media/account': typeof AuthenticatedMediaAccountRoute
+  '/media/action-items': typeof AuthenticatedMediaActionItemsRoute
+  '/media/announcements': typeof AuthenticatedMediaAnnouncementsRoute
+  '/media/archives': typeof AuthenticatedMediaArchivesRoute
+  '/media/broadcasts': typeof AuthenticatedMediaBroadcastsRoute
+  '/media/calendar': typeof AuthenticatedMediaCalendarRoute
+  '/media/campaigns': typeof AuthenticatedMediaCampaignsRoute
+  '/media/events': typeof AuthenticatedMediaEventsRoute
+  '/media/inbox': typeof AuthenticatedMediaInboxRoute
+  '/media/promo-links': typeof AuthenticatedMediaPromoLinksRoute
+  '/media/testimonials': typeof AuthenticatedMediaTestimonialsRoute
+  '/media/uploads': typeof AuthenticatedMediaUploadsRoute
   '/portal/account': typeof AuthenticatedPortalAccountRoute
   '/portal/announcements': typeof AuthenticatedPortalAnnouncementsRoute
   '/portal/appointments': typeof AuthenticatedPortalAppointmentsRoute
@@ -1195,6 +1339,7 @@ export interface FileRoutesByFullPath {
   '/api/public/stripe-webhook': typeof ApiPublicStripeWebhookRoute
   '/admin/': typeof AuthenticatedAdminIndexRoute
   '/m/': typeof AuthenticatedMIndexRoute
+  '/media/': typeof AuthenticatedMediaIndexRoute
   '/portal/': typeof AuthenticatedPortalIndexRoute
   '/admin/agreements/signed': typeof AuthenticatedAdminAgreementsSignedRoute
   '/admin/blocks/$blockId': typeof AuthenticatedAdminBlocksBlockIdRoute
@@ -1234,6 +1379,8 @@ export interface FileRoutesByFullPath {
   '/m/my-plans/$enrollmentId': typeof AuthenticatedMMyPlansEnrollmentIdRoute
   '/m/plans/$planId': typeof AuthenticatedMPlansPlanIdRoute
   '/m/resources/$slug': typeof AuthenticatedMResourcesSlugRoute
+  '/media/sales/coaching': typeof AuthenticatedMediaSalesCoachingRoute
+  '/media/sales/membership': typeof AuthenticatedMediaSalesMembershipRoute
   '/portal/check-ins/$formId': typeof AuthenticatedPortalCheckInsFormIdRoute
   '/portal/events/$id': typeof AuthenticatedPortalEventsIdRoute
   '/portal/purchases/$id': typeof AuthenticatedPortalPurchasesIdRoute
@@ -1273,12 +1420,14 @@ export interface FileRoutesByTo {
   '/reset-password': typeof ResetPasswordRoute
   '/setup': typeof SetupRoute
   '/sitemap': typeof SitemapRoute
+  '/staff-setup': typeof StaffSetupRoute
   '/api/drive-upload': typeof ApiDriveUploadRoute
   '/book/$slug': typeof BookSlugRoute
   '/coaching/apply': typeof CoachingApplyRoute
   '/signup/jf': typeof SignupJfRoute
   '/admin/account': typeof AuthenticatedAdminAccountRoute
   '/admin/appointments': typeof AuthenticatedAdminAppointmentsRoute
+  '/admin/approvals': typeof AuthenticatedAdminApprovalsRoute
   '/admin/apps': typeof AuthenticatedAdminAppsRoute
   '/admin/archives': typeof AuthenticatedAdminArchivesRoute
   '/admin/automations': typeof AuthenticatedAdminAutomationsRoute
@@ -1318,6 +1467,7 @@ export interface FileRoutesByTo {
   '/admin/resources': typeof AuthenticatedAdminResourcesRoute
   '/admin/settings': typeof AuthenticatedAdminSettingsRoute
   '/admin/sops': typeof AuthenticatedAdminSopsRoute
+  '/admin/staff': typeof AuthenticatedAdminStaffRoute
   '/admin/tasks': typeof AuthenticatedAdminTasksRoute
   '/admin/testimonials': typeof AuthenticatedAdminTestimonialsRoute
   '/admin/training-intelligence': typeof AuthenticatedAdminTrainingIntelligenceRoute
@@ -1332,6 +1482,18 @@ export interface FileRoutesByTo {
   '/m/tools': typeof AuthenticatedMToolsRoute
   '/m/upgrade': typeof AuthenticatedMUpgradeRoute
   '/m/welcome': typeof AuthenticatedMWelcomeRoute
+  '/media/account': typeof AuthenticatedMediaAccountRoute
+  '/media/action-items': typeof AuthenticatedMediaActionItemsRoute
+  '/media/announcements': typeof AuthenticatedMediaAnnouncementsRoute
+  '/media/archives': typeof AuthenticatedMediaArchivesRoute
+  '/media/broadcasts': typeof AuthenticatedMediaBroadcastsRoute
+  '/media/calendar': typeof AuthenticatedMediaCalendarRoute
+  '/media/campaigns': typeof AuthenticatedMediaCampaignsRoute
+  '/media/events': typeof AuthenticatedMediaEventsRoute
+  '/media/inbox': typeof AuthenticatedMediaInboxRoute
+  '/media/promo-links': typeof AuthenticatedMediaPromoLinksRoute
+  '/media/testimonials': typeof AuthenticatedMediaTestimonialsRoute
+  '/media/uploads': typeof AuthenticatedMediaUploadsRoute
   '/portal/account': typeof AuthenticatedPortalAccountRoute
   '/portal/announcements': typeof AuthenticatedPortalAnnouncementsRoute
   '/portal/appointments': typeof AuthenticatedPortalAppointmentsRoute
@@ -1353,6 +1515,7 @@ export interface FileRoutesByTo {
   '/api/public/stripe-webhook': typeof ApiPublicStripeWebhookRoute
   '/admin': typeof AuthenticatedAdminIndexRoute
   '/m': typeof AuthenticatedMIndexRoute
+  '/media': typeof AuthenticatedMediaIndexRoute
   '/portal': typeof AuthenticatedPortalIndexRoute
   '/admin/agreements/signed': typeof AuthenticatedAdminAgreementsSignedRoute
   '/admin/blocks/$blockId': typeof AuthenticatedAdminBlocksBlockIdRoute
@@ -1392,6 +1555,8 @@ export interface FileRoutesByTo {
   '/m/my-plans/$enrollmentId': typeof AuthenticatedMMyPlansEnrollmentIdRoute
   '/m/plans/$planId': typeof AuthenticatedMPlansPlanIdRoute
   '/m/resources/$slug': typeof AuthenticatedMResourcesSlugRoute
+  '/media/sales/coaching': typeof AuthenticatedMediaSalesCoachingRoute
+  '/media/sales/membership': typeof AuthenticatedMediaSalesMembershipRoute
   '/portal/check-ins/$formId': typeof AuthenticatedPortalCheckInsFormIdRoute
   '/portal/events/$id': typeof AuthenticatedPortalEventsIdRoute
   '/portal/purchases/$id': typeof AuthenticatedPortalPurchasesIdRoute
@@ -1433,8 +1598,10 @@ export interface FileRoutesById {
   '/reset-password': typeof ResetPasswordRoute
   '/setup': typeof SetupRoute
   '/sitemap': typeof SitemapRoute
+  '/staff-setup': typeof StaffSetupRoute
   '/_authenticated/admin': typeof AuthenticatedAdminRouteRouteWithChildren
   '/_authenticated/m': typeof AuthenticatedMRouteRouteWithChildren
+  '/_authenticated/media': typeof AuthenticatedMediaRouteRouteWithChildren
   '/_authenticated/portal': typeof AuthenticatedPortalRouteRouteWithChildren
   '/api/drive-upload': typeof ApiDriveUploadRoute
   '/book/$slug': typeof BookSlugRoute
@@ -1442,6 +1609,7 @@ export interface FileRoutesById {
   '/signup/jf': typeof SignupJfRoute
   '/_authenticated/admin/account': typeof AuthenticatedAdminAccountRoute
   '/_authenticated/admin/appointments': typeof AuthenticatedAdminAppointmentsRoute
+  '/_authenticated/admin/approvals': typeof AuthenticatedAdminApprovalsRoute
   '/_authenticated/admin/apps': typeof AuthenticatedAdminAppsRoute
   '/_authenticated/admin/archives': typeof AuthenticatedAdminArchivesRoute
   '/_authenticated/admin/automations': typeof AuthenticatedAdminAutomationsRoute
@@ -1482,6 +1650,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/resources': typeof AuthenticatedAdminResourcesRoute
   '/_authenticated/admin/settings': typeof AuthenticatedAdminSettingsRoute
   '/_authenticated/admin/sops': typeof AuthenticatedAdminSopsRoute
+  '/_authenticated/admin/staff': typeof AuthenticatedAdminStaffRoute
   '/_authenticated/admin/tasks': typeof AuthenticatedAdminTasksRoute
   '/_authenticated/admin/testimonials': typeof AuthenticatedAdminTestimonialsRoute
   '/_authenticated/admin/training-intelligence': typeof AuthenticatedAdminTrainingIntelligenceRoute
@@ -1496,6 +1665,18 @@ export interface FileRoutesById {
   '/_authenticated/m/tools': typeof AuthenticatedMToolsRoute
   '/_authenticated/m/upgrade': typeof AuthenticatedMUpgradeRoute
   '/_authenticated/m/welcome': typeof AuthenticatedMWelcomeRoute
+  '/_authenticated/media/account': typeof AuthenticatedMediaAccountRoute
+  '/_authenticated/media/action-items': typeof AuthenticatedMediaActionItemsRoute
+  '/_authenticated/media/announcements': typeof AuthenticatedMediaAnnouncementsRoute
+  '/_authenticated/media/archives': typeof AuthenticatedMediaArchivesRoute
+  '/_authenticated/media/broadcasts': typeof AuthenticatedMediaBroadcastsRoute
+  '/_authenticated/media/calendar': typeof AuthenticatedMediaCalendarRoute
+  '/_authenticated/media/campaigns': typeof AuthenticatedMediaCampaignsRoute
+  '/_authenticated/media/events': typeof AuthenticatedMediaEventsRoute
+  '/_authenticated/media/inbox': typeof AuthenticatedMediaInboxRoute
+  '/_authenticated/media/promo-links': typeof AuthenticatedMediaPromoLinksRoute
+  '/_authenticated/media/testimonials': typeof AuthenticatedMediaTestimonialsRoute
+  '/_authenticated/media/uploads': typeof AuthenticatedMediaUploadsRoute
   '/_authenticated/portal/account': typeof AuthenticatedPortalAccountRoute
   '/_authenticated/portal/announcements': typeof AuthenticatedPortalAnnouncementsRoute
   '/_authenticated/portal/appointments': typeof AuthenticatedPortalAppointmentsRoute
@@ -1517,6 +1698,7 @@ export interface FileRoutesById {
   '/api/public/stripe-webhook': typeof ApiPublicStripeWebhookRoute
   '/_authenticated/admin/': typeof AuthenticatedAdminIndexRoute
   '/_authenticated/m/': typeof AuthenticatedMIndexRoute
+  '/_authenticated/media/': typeof AuthenticatedMediaIndexRoute
   '/_authenticated/portal/': typeof AuthenticatedPortalIndexRoute
   '/_authenticated/admin/agreements/signed': typeof AuthenticatedAdminAgreementsSignedRoute
   '/_authenticated/admin/blocks/$blockId': typeof AuthenticatedAdminBlocksBlockIdRoute
@@ -1556,6 +1738,8 @@ export interface FileRoutesById {
   '/_authenticated/m/my-plans/$enrollmentId': typeof AuthenticatedMMyPlansEnrollmentIdRoute
   '/_authenticated/m/plans/$planId': typeof AuthenticatedMPlansPlanIdRoute
   '/_authenticated/m/resources/$slug': typeof AuthenticatedMResourcesSlugRoute
+  '/_authenticated/media/sales/coaching': typeof AuthenticatedMediaSalesCoachingRoute
+  '/_authenticated/media/sales/membership': typeof AuthenticatedMediaSalesMembershipRoute
   '/_authenticated/portal/check-ins/$formId': typeof AuthenticatedPortalCheckInsFormIdRoute
   '/_authenticated/portal/events/$id': typeof AuthenticatedPortalEventsIdRoute
   '/_authenticated/portal/purchases/$id': typeof AuthenticatedPortalPurchasesIdRoute
@@ -1597,8 +1781,10 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/setup'
     | '/sitemap'
+    | '/staff-setup'
     | '/admin'
     | '/m'
+    | '/media'
     | '/portal'
     | '/api/drive-upload'
     | '/book/$slug'
@@ -1606,6 +1792,7 @@ export interface FileRouteTypes {
     | '/signup/jf'
     | '/admin/account'
     | '/admin/appointments'
+    | '/admin/approvals'
     | '/admin/apps'
     | '/admin/archives'
     | '/admin/automations'
@@ -1646,6 +1833,7 @@ export interface FileRouteTypes {
     | '/admin/resources'
     | '/admin/settings'
     | '/admin/sops'
+    | '/admin/staff'
     | '/admin/tasks'
     | '/admin/testimonials'
     | '/admin/training-intelligence'
@@ -1660,6 +1848,18 @@ export interface FileRouteTypes {
     | '/m/tools'
     | '/m/upgrade'
     | '/m/welcome'
+    | '/media/account'
+    | '/media/action-items'
+    | '/media/announcements'
+    | '/media/archives'
+    | '/media/broadcasts'
+    | '/media/calendar'
+    | '/media/campaigns'
+    | '/media/events'
+    | '/media/inbox'
+    | '/media/promo-links'
+    | '/media/testimonials'
+    | '/media/uploads'
     | '/portal/account'
     | '/portal/announcements'
     | '/portal/appointments'
@@ -1681,6 +1881,7 @@ export interface FileRouteTypes {
     | '/api/public/stripe-webhook'
     | '/admin/'
     | '/m/'
+    | '/media/'
     | '/portal/'
     | '/admin/agreements/signed'
     | '/admin/blocks/$blockId'
@@ -1720,6 +1921,8 @@ export interface FileRouteTypes {
     | '/m/my-plans/$enrollmentId'
     | '/m/plans/$planId'
     | '/m/resources/$slug'
+    | '/media/sales/coaching'
+    | '/media/sales/membership'
     | '/portal/check-ins/$formId'
     | '/portal/events/$id'
     | '/portal/purchases/$id'
@@ -1759,12 +1962,14 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/setup'
     | '/sitemap'
+    | '/staff-setup'
     | '/api/drive-upload'
     | '/book/$slug'
     | '/coaching/apply'
     | '/signup/jf'
     | '/admin/account'
     | '/admin/appointments'
+    | '/admin/approvals'
     | '/admin/apps'
     | '/admin/archives'
     | '/admin/automations'
@@ -1804,6 +2009,7 @@ export interface FileRouteTypes {
     | '/admin/resources'
     | '/admin/settings'
     | '/admin/sops'
+    | '/admin/staff'
     | '/admin/tasks'
     | '/admin/testimonials'
     | '/admin/training-intelligence'
@@ -1818,6 +2024,18 @@ export interface FileRouteTypes {
     | '/m/tools'
     | '/m/upgrade'
     | '/m/welcome'
+    | '/media/account'
+    | '/media/action-items'
+    | '/media/announcements'
+    | '/media/archives'
+    | '/media/broadcasts'
+    | '/media/calendar'
+    | '/media/campaigns'
+    | '/media/events'
+    | '/media/inbox'
+    | '/media/promo-links'
+    | '/media/testimonials'
+    | '/media/uploads'
     | '/portal/account'
     | '/portal/announcements'
     | '/portal/appointments'
@@ -1839,6 +2057,7 @@ export interface FileRouteTypes {
     | '/api/public/stripe-webhook'
     | '/admin'
     | '/m'
+    | '/media'
     | '/portal'
     | '/admin/agreements/signed'
     | '/admin/blocks/$blockId'
@@ -1878,6 +2097,8 @@ export interface FileRouteTypes {
     | '/m/my-plans/$enrollmentId'
     | '/m/plans/$planId'
     | '/m/resources/$slug'
+    | '/media/sales/coaching'
+    | '/media/sales/membership'
     | '/portal/check-ins/$formId'
     | '/portal/events/$id'
     | '/portal/purchases/$id'
@@ -1918,8 +2139,10 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/setup'
     | '/sitemap'
+    | '/staff-setup'
     | '/_authenticated/admin'
     | '/_authenticated/m'
+    | '/_authenticated/media'
     | '/_authenticated/portal'
     | '/api/drive-upload'
     | '/book/$slug'
@@ -1927,6 +2150,7 @@ export interface FileRouteTypes {
     | '/signup/jf'
     | '/_authenticated/admin/account'
     | '/_authenticated/admin/appointments'
+    | '/_authenticated/admin/approvals'
     | '/_authenticated/admin/apps'
     | '/_authenticated/admin/archives'
     | '/_authenticated/admin/automations'
@@ -1967,6 +2191,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/resources'
     | '/_authenticated/admin/settings'
     | '/_authenticated/admin/sops'
+    | '/_authenticated/admin/staff'
     | '/_authenticated/admin/tasks'
     | '/_authenticated/admin/testimonials'
     | '/_authenticated/admin/training-intelligence'
@@ -1981,6 +2206,18 @@ export interface FileRouteTypes {
     | '/_authenticated/m/tools'
     | '/_authenticated/m/upgrade'
     | '/_authenticated/m/welcome'
+    | '/_authenticated/media/account'
+    | '/_authenticated/media/action-items'
+    | '/_authenticated/media/announcements'
+    | '/_authenticated/media/archives'
+    | '/_authenticated/media/broadcasts'
+    | '/_authenticated/media/calendar'
+    | '/_authenticated/media/campaigns'
+    | '/_authenticated/media/events'
+    | '/_authenticated/media/inbox'
+    | '/_authenticated/media/promo-links'
+    | '/_authenticated/media/testimonials'
+    | '/_authenticated/media/uploads'
     | '/_authenticated/portal/account'
     | '/_authenticated/portal/announcements'
     | '/_authenticated/portal/appointments'
@@ -2002,6 +2239,7 @@ export interface FileRouteTypes {
     | '/api/public/stripe-webhook'
     | '/_authenticated/admin/'
     | '/_authenticated/m/'
+    | '/_authenticated/media/'
     | '/_authenticated/portal/'
     | '/_authenticated/admin/agreements/signed'
     | '/_authenticated/admin/blocks/$blockId'
@@ -2041,6 +2279,8 @@ export interface FileRouteTypes {
     | '/_authenticated/m/my-plans/$enrollmentId'
     | '/_authenticated/m/plans/$planId'
     | '/_authenticated/m/resources/$slug'
+    | '/_authenticated/media/sales/coaching'
+    | '/_authenticated/media/sales/membership'
     | '/_authenticated/portal/check-ins/$formId'
     | '/_authenticated/portal/events/$id'
     | '/_authenticated/portal/purchases/$id'
@@ -2082,6 +2322,7 @@ export interface RootRouteChildren {
   ResetPasswordRoute: typeof ResetPasswordRoute
   SetupRoute: typeof SetupRoute
   SitemapRoute: typeof SitemapRoute
+  StaffSetupRoute: typeof StaffSetupRoute
   ApiDriveUploadRoute: typeof ApiDriveUploadRoute
   BookSlugRoute: typeof BookSlugRoute
   SignupJfRoute: typeof SignupJfRoute
@@ -2100,6 +2341,13 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/staff-setup': {
+      id: '/staff-setup'
+      path: '/staff-setup'
+      fullPath: '/staff-setup'
+      preLoaderRoute: typeof StaffSetupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/sitemap': {
       id: '/sitemap'
       path: '/sitemap'
@@ -2212,6 +2460,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedPortalRouteRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/media': {
+      id: '/_authenticated/media'
+      path: '/media'
+      fullPath: '/media'
+      preLoaderRoute: typeof AuthenticatedMediaRouteRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/m': {
       id: '/_authenticated/m'
       path: '/m'
@@ -2232,6 +2487,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/portal/'
       preLoaderRoute: typeof AuthenticatedPortalIndexRouteImport
       parentRoute: typeof AuthenticatedPortalRouteRoute
+    }
+    '/_authenticated/media/': {
+      id: '/_authenticated/media/'
+      path: '/'
+      fullPath: '/media/'
+      preLoaderRoute: typeof AuthenticatedMediaIndexRouteImport
+      parentRoute: typeof AuthenticatedMediaRouteRoute
     }
     '/_authenticated/m/': {
       id: '/_authenticated/m/'
@@ -2380,6 +2642,90 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedPortalAccountRouteImport
       parentRoute: typeof AuthenticatedPortalRouteRoute
     }
+    '/_authenticated/media/uploads': {
+      id: '/_authenticated/media/uploads'
+      path: '/uploads'
+      fullPath: '/media/uploads'
+      preLoaderRoute: typeof AuthenticatedMediaUploadsRouteImport
+      parentRoute: typeof AuthenticatedMediaRouteRoute
+    }
+    '/_authenticated/media/testimonials': {
+      id: '/_authenticated/media/testimonials'
+      path: '/testimonials'
+      fullPath: '/media/testimonials'
+      preLoaderRoute: typeof AuthenticatedMediaTestimonialsRouteImport
+      parentRoute: typeof AuthenticatedMediaRouteRoute
+    }
+    '/_authenticated/media/promo-links': {
+      id: '/_authenticated/media/promo-links'
+      path: '/promo-links'
+      fullPath: '/media/promo-links'
+      preLoaderRoute: typeof AuthenticatedMediaPromoLinksRouteImport
+      parentRoute: typeof AuthenticatedMediaRouteRoute
+    }
+    '/_authenticated/media/inbox': {
+      id: '/_authenticated/media/inbox'
+      path: '/inbox'
+      fullPath: '/media/inbox'
+      preLoaderRoute: typeof AuthenticatedMediaInboxRouteImport
+      parentRoute: typeof AuthenticatedMediaRouteRoute
+    }
+    '/_authenticated/media/events': {
+      id: '/_authenticated/media/events'
+      path: '/events'
+      fullPath: '/media/events'
+      preLoaderRoute: typeof AuthenticatedMediaEventsRouteImport
+      parentRoute: typeof AuthenticatedMediaRouteRoute
+    }
+    '/_authenticated/media/campaigns': {
+      id: '/_authenticated/media/campaigns'
+      path: '/campaigns'
+      fullPath: '/media/campaigns'
+      preLoaderRoute: typeof AuthenticatedMediaCampaignsRouteImport
+      parentRoute: typeof AuthenticatedMediaRouteRoute
+    }
+    '/_authenticated/media/calendar': {
+      id: '/_authenticated/media/calendar'
+      path: '/calendar'
+      fullPath: '/media/calendar'
+      preLoaderRoute: typeof AuthenticatedMediaCalendarRouteImport
+      parentRoute: typeof AuthenticatedMediaRouteRoute
+    }
+    '/_authenticated/media/broadcasts': {
+      id: '/_authenticated/media/broadcasts'
+      path: '/broadcasts'
+      fullPath: '/media/broadcasts'
+      preLoaderRoute: typeof AuthenticatedMediaBroadcastsRouteImport
+      parentRoute: typeof AuthenticatedMediaRouteRoute
+    }
+    '/_authenticated/media/archives': {
+      id: '/_authenticated/media/archives'
+      path: '/archives'
+      fullPath: '/media/archives'
+      preLoaderRoute: typeof AuthenticatedMediaArchivesRouteImport
+      parentRoute: typeof AuthenticatedMediaRouteRoute
+    }
+    '/_authenticated/media/announcements': {
+      id: '/_authenticated/media/announcements'
+      path: '/announcements'
+      fullPath: '/media/announcements'
+      preLoaderRoute: typeof AuthenticatedMediaAnnouncementsRouteImport
+      parentRoute: typeof AuthenticatedMediaRouteRoute
+    }
+    '/_authenticated/media/action-items': {
+      id: '/_authenticated/media/action-items'
+      path: '/action-items'
+      fullPath: '/media/action-items'
+      preLoaderRoute: typeof AuthenticatedMediaActionItemsRouteImport
+      parentRoute: typeof AuthenticatedMediaRouteRoute
+    }
+    '/_authenticated/media/account': {
+      id: '/_authenticated/media/account'
+      path: '/account'
+      fullPath: '/media/account'
+      preLoaderRoute: typeof AuthenticatedMediaAccountRouteImport
+      parentRoute: typeof AuthenticatedMediaRouteRoute
+    }
     '/_authenticated/m/welcome': {
       id: '/_authenticated/m/welcome'
       path: '/welcome'
@@ -2476,6 +2822,13 @@ declare module '@tanstack/react-router' {
       path: '/tasks'
       fullPath: '/admin/tasks'
       preLoaderRoute: typeof AuthenticatedAdminTasksRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
+    '/_authenticated/admin/staff': {
+      id: '/_authenticated/admin/staff'
+      path: '/staff'
+      fullPath: '/admin/staff'
+      preLoaderRoute: typeof AuthenticatedAdminStaffRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
     '/_authenticated/admin/sops': {
@@ -2758,6 +3111,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminAppsRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
+    '/_authenticated/admin/approvals': {
+      id: '/_authenticated/admin/approvals'
+      path: '/approvals'
+      fullPath: '/admin/approvals'
+      preLoaderRoute: typeof AuthenticatedAdminApprovalsRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
     '/_authenticated/admin/appointments': {
       id: '/_authenticated/admin/appointments'
       path: '/appointments'
@@ -2932,6 +3292,20 @@ declare module '@tanstack/react-router' {
       fullPath: '/portal/check-ins/$formId'
       preLoaderRoute: typeof AuthenticatedPortalCheckInsFormIdRouteImport
       parentRoute: typeof AuthenticatedPortalCheckInsRoute
+    }
+    '/_authenticated/media/sales/membership': {
+      id: '/_authenticated/media/sales/membership'
+      path: '/sales/membership'
+      fullPath: '/media/sales/membership'
+      preLoaderRoute: typeof AuthenticatedMediaSalesMembershipRouteImport
+      parentRoute: typeof AuthenticatedMediaRouteRoute
+    }
+    '/_authenticated/media/sales/coaching': {
+      id: '/_authenticated/media/sales/coaching'
+      path: '/sales/coaching'
+      fullPath: '/media/sales/coaching'
+      preLoaderRoute: typeof AuthenticatedMediaSalesCoachingRouteImport
+      parentRoute: typeof AuthenticatedMediaRouteRoute
     }
     '/_authenticated/m/resources/$slug': {
       id: '/_authenticated/m/resources/$slug'
@@ -3337,6 +3711,7 @@ const AuthenticatedAdminClientProgramsClientIdRouteWithChildren =
 interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminAccountRoute: typeof AuthenticatedAdminAccountRoute
   AuthenticatedAdminAppointmentsRoute: typeof AuthenticatedAdminAppointmentsRoute
+  AuthenticatedAdminApprovalsRoute: typeof AuthenticatedAdminApprovalsRoute
   AuthenticatedAdminAppsRoute: typeof AuthenticatedAdminAppsRoute
   AuthenticatedAdminArchivesRoute: typeof AuthenticatedAdminArchivesRoute
   AuthenticatedAdminAutomationsRoute: typeof AuthenticatedAdminAutomationsRoute
@@ -3377,6 +3752,7 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminResourcesRoute: typeof AuthenticatedAdminResourcesRoute
   AuthenticatedAdminSettingsRoute: typeof AuthenticatedAdminSettingsRoute
   AuthenticatedAdminSopsRoute: typeof AuthenticatedAdminSopsRoute
+  AuthenticatedAdminStaffRoute: typeof AuthenticatedAdminStaffRoute
   AuthenticatedAdminTasksRoute: typeof AuthenticatedAdminTasksRoute
   AuthenticatedAdminTestimonialsRoute: typeof AuthenticatedAdminTestimonialsRoute
   AuthenticatedAdminTrainingIntelligenceRoute: typeof AuthenticatedAdminTrainingIntelligenceRoute
@@ -3415,6 +3791,7 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
   {
     AuthenticatedAdminAccountRoute: AuthenticatedAdminAccountRoute,
     AuthenticatedAdminAppointmentsRoute: AuthenticatedAdminAppointmentsRoute,
+    AuthenticatedAdminApprovalsRoute: AuthenticatedAdminApprovalsRoute,
     AuthenticatedAdminAppsRoute: AuthenticatedAdminAppsRoute,
     AuthenticatedAdminArchivesRoute: AuthenticatedAdminArchivesRoute,
     AuthenticatedAdminAutomationsRoute: AuthenticatedAdminAutomationsRoute,
@@ -3465,6 +3842,7 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
     AuthenticatedAdminResourcesRoute: AuthenticatedAdminResourcesRoute,
     AuthenticatedAdminSettingsRoute: AuthenticatedAdminSettingsRoute,
     AuthenticatedAdminSopsRoute: AuthenticatedAdminSopsRoute,
+    AuthenticatedAdminStaffRoute: AuthenticatedAdminStaffRoute,
     AuthenticatedAdminTasksRoute: AuthenticatedAdminTasksRoute,
     AuthenticatedAdminTestimonialsRoute: AuthenticatedAdminTestimonialsRoute,
     AuthenticatedAdminTrainingIntelligenceRoute:
@@ -3592,6 +3970,49 @@ const AuthenticatedMRouteRouteChildren: AuthenticatedMRouteRouteChildren = {
 const AuthenticatedMRouteRouteWithChildren =
   AuthenticatedMRouteRoute._addFileChildren(AuthenticatedMRouteRouteChildren)
 
+interface AuthenticatedMediaRouteRouteChildren {
+  AuthenticatedMediaAccountRoute: typeof AuthenticatedMediaAccountRoute
+  AuthenticatedMediaActionItemsRoute: typeof AuthenticatedMediaActionItemsRoute
+  AuthenticatedMediaAnnouncementsRoute: typeof AuthenticatedMediaAnnouncementsRoute
+  AuthenticatedMediaArchivesRoute: typeof AuthenticatedMediaArchivesRoute
+  AuthenticatedMediaBroadcastsRoute: typeof AuthenticatedMediaBroadcastsRoute
+  AuthenticatedMediaCalendarRoute: typeof AuthenticatedMediaCalendarRoute
+  AuthenticatedMediaCampaignsRoute: typeof AuthenticatedMediaCampaignsRoute
+  AuthenticatedMediaEventsRoute: typeof AuthenticatedMediaEventsRoute
+  AuthenticatedMediaInboxRoute: typeof AuthenticatedMediaInboxRoute
+  AuthenticatedMediaPromoLinksRoute: typeof AuthenticatedMediaPromoLinksRoute
+  AuthenticatedMediaTestimonialsRoute: typeof AuthenticatedMediaTestimonialsRoute
+  AuthenticatedMediaUploadsRoute: typeof AuthenticatedMediaUploadsRoute
+  AuthenticatedMediaIndexRoute: typeof AuthenticatedMediaIndexRoute
+  AuthenticatedMediaSalesCoachingRoute: typeof AuthenticatedMediaSalesCoachingRoute
+  AuthenticatedMediaSalesMembershipRoute: typeof AuthenticatedMediaSalesMembershipRoute
+}
+
+const AuthenticatedMediaRouteRouteChildren: AuthenticatedMediaRouteRouteChildren =
+  {
+    AuthenticatedMediaAccountRoute: AuthenticatedMediaAccountRoute,
+    AuthenticatedMediaActionItemsRoute: AuthenticatedMediaActionItemsRoute,
+    AuthenticatedMediaAnnouncementsRoute: AuthenticatedMediaAnnouncementsRoute,
+    AuthenticatedMediaArchivesRoute: AuthenticatedMediaArchivesRoute,
+    AuthenticatedMediaBroadcastsRoute: AuthenticatedMediaBroadcastsRoute,
+    AuthenticatedMediaCalendarRoute: AuthenticatedMediaCalendarRoute,
+    AuthenticatedMediaCampaignsRoute: AuthenticatedMediaCampaignsRoute,
+    AuthenticatedMediaEventsRoute: AuthenticatedMediaEventsRoute,
+    AuthenticatedMediaInboxRoute: AuthenticatedMediaInboxRoute,
+    AuthenticatedMediaPromoLinksRoute: AuthenticatedMediaPromoLinksRoute,
+    AuthenticatedMediaTestimonialsRoute: AuthenticatedMediaTestimonialsRoute,
+    AuthenticatedMediaUploadsRoute: AuthenticatedMediaUploadsRoute,
+    AuthenticatedMediaIndexRoute: AuthenticatedMediaIndexRoute,
+    AuthenticatedMediaSalesCoachingRoute: AuthenticatedMediaSalesCoachingRoute,
+    AuthenticatedMediaSalesMembershipRoute:
+      AuthenticatedMediaSalesMembershipRoute,
+  }
+
+const AuthenticatedMediaRouteRouteWithChildren =
+  AuthenticatedMediaRouteRoute._addFileChildren(
+    AuthenticatedMediaRouteRouteChildren,
+  )
+
 interface AuthenticatedPortalCheckInsRouteChildren {
   AuthenticatedPortalCheckInsFormIdRoute: typeof AuthenticatedPortalCheckInsFormIdRoute
 }
@@ -3716,12 +4137,14 @@ const AuthenticatedPortalRouteRouteWithChildren =
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedAdminRouteRoute: typeof AuthenticatedAdminRouteRouteWithChildren
   AuthenticatedMRouteRoute: typeof AuthenticatedMRouteRouteWithChildren
+  AuthenticatedMediaRouteRoute: typeof AuthenticatedMediaRouteRouteWithChildren
   AuthenticatedPortalRouteRoute: typeof AuthenticatedPortalRouteRouteWithChildren
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAdminRouteRoute: AuthenticatedAdminRouteRouteWithChildren,
   AuthenticatedMRouteRoute: AuthenticatedMRouteRouteWithChildren,
+  AuthenticatedMediaRouteRoute: AuthenticatedMediaRouteRouteWithChildren,
   AuthenticatedPortalRouteRoute: AuthenticatedPortalRouteRouteWithChildren,
 }
 
@@ -3752,6 +4175,7 @@ const rootRouteChildren: RootRouteChildren = {
   ResetPasswordRoute: ResetPasswordRoute,
   SetupRoute: SetupRoute,
   SitemapRoute: SitemapRoute,
+  StaffSetupRoute: StaffSetupRoute,
   ApiDriveUploadRoute: ApiDriveUploadRoute,
   BookSlugRoute: BookSlugRoute,
   SignupJfRoute: SignupJfRoute,
@@ -3771,13 +4195,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

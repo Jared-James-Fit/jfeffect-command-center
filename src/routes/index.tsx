@@ -22,7 +22,12 @@ function IndexRedirect() {
   useEffect(() => {
     if (loading) return;
     if (user && role) {
-      navigate({ to: role === "client" ? "/portal" : "/admin", replace: true });
+      const dest =
+        role === "client" ? "/portal"
+        : role === "member" ? "/m"
+        : role === "media_manager" ? "/media"
+        : "/admin";
+      navigate({ to: dest, replace: true });
     } else {
       navigate({ to: "/auth", replace: true });
     }

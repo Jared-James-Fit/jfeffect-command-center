@@ -62,6 +62,8 @@ export const adminNav: NavItem[] = [
   { to: "/admin/resources", label: "Resources", icon: FolderOpen, group: "Documents" },
   // TEAM / OPS
   { to: "/admin/coaches", label: "Coaches", icon: UserCheck, group: "Team / Ops" },
+  { to: "/admin/staff", label: "Staff & Media Managers", icon: UserPlus, group: "Team / Ops" },
+  { to: "/admin/approvals", label: "Approvals Queue", icon: ClipboardCheck, group: "Team / Ops" },
   { to: "/admin/media-review", label: "Media Inbox", icon: Film, group: "Team / Ops" },
   { to: "/admin/media-archives", label: "Media Archives", icon: FolderOpen, group: "Team / Ops" },
   { to: "/admin/apps", label: "Integrations", icon: Layers, group: "Team / Ops" },

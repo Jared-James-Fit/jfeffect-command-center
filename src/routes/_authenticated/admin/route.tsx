@@ -32,6 +32,10 @@ function AdminLayout() {
       navigate({ to: "/m", replace: true });
       return;
     }
+    if (role === "media_manager") {
+      navigate({ to: "/media", replace: true });
+      return;
+    }
     // Any other role (client / unknown) → portal
     navigate({ to: "/portal", replace: true });
   }, [role, loading, navigate]);

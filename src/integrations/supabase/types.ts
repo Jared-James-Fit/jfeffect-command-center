@@ -930,7 +930,13 @@ export type Database = {
           link_label: string | null
           link_url: string | null
           publish_at: string
+          review_notes: string | null
+          review_status: Database["public"]["Enums"]["review_status"]
+          reviewed_at: string | null
+          reviewed_by: string | null
           status: string
+          submitted_at: string | null
+          submitted_by: string | null
           title: string
           transcript: string | null
           type: string
@@ -950,7 +956,13 @@ export type Database = {
           link_label?: string | null
           link_url?: string | null
           publish_at?: string
+          review_notes?: string | null
+          review_status?: Database["public"]["Enums"]["review_status"]
+          reviewed_at?: string | null
+          reviewed_by?: string | null
           status?: string
+          submitted_at?: string | null
+          submitted_by?: string | null
           title: string
           transcript?: string | null
           type?: string
@@ -970,7 +982,13 @@ export type Database = {
           link_label?: string | null
           link_url?: string | null
           publish_at?: string
+          review_notes?: string | null
+          review_status?: Database["public"]["Enums"]["review_status"]
+          reviewed_at?: string | null
+          reviewed_by?: string | null
           status?: string
+          submitted_at?: string | null
+          submitted_by?: string | null
           title?: string
           transcript?: string | null
           type?: string
@@ -3252,8 +3270,14 @@ export type Database = {
           internal_notes: string | null
           location: string | null
           name: string
+          review_notes: string | null
+          review_status: Database["public"]["Enums"]["review_status"]
+          reviewed_at: string | null
+          reviewed_by: string | null
           start_time: string | null
           status: Database["public"]["Enums"]["event_status"]
+          submitted_at: string | null
+          submitted_by: string | null
           timezone: string | null
           updated_at: string
         }
@@ -3278,8 +3302,14 @@ export type Database = {
           internal_notes?: string | null
           location?: string | null
           name: string
+          review_notes?: string | null
+          review_status?: Database["public"]["Enums"]["review_status"]
+          reviewed_at?: string | null
+          reviewed_by?: string | null
           start_time?: string | null
           status?: Database["public"]["Enums"]["event_status"]
+          submitted_at?: string | null
+          submitted_by?: string | null
           timezone?: string | null
           updated_at?: string
         }
@@ -3304,8 +3334,14 @@ export type Database = {
           internal_notes?: string | null
           location?: string | null
           name?: string
+          review_notes?: string | null
+          review_status?: Database["public"]["Enums"]["review_status"]
+          reviewed_at?: string | null
+          reviewed_by?: string | null
           start_time?: string | null
           status?: Database["public"]["Enums"]["event_status"]
+          submitted_at?: string | null
+          submitted_by?: string | null
           timezone?: string | null
           updated_at?: string
         }
@@ -4406,6 +4442,7 @@ export type Database = {
           file_name: string | null
           id: string
           last_error: string | null
+          marketing_visibility: Database["public"]["Enums"]["media_visibility"]
           mime_type: string | null
           restored_at: string | null
           size_bytes: number | null
@@ -4429,6 +4466,7 @@ export type Database = {
           file_name?: string | null
           id?: string
           last_error?: string | null
+          marketing_visibility?: Database["public"]["Enums"]["media_visibility"]
           mime_type?: string | null
           restored_at?: string | null
           size_bytes?: number | null
@@ -4452,6 +4490,7 @@ export type Database = {
           file_name?: string | null
           id?: string
           last_error?: string | null
+          marketing_visibility?: Database["public"]["Enums"]["media_visibility"]
           mime_type?: string | null
           restored_at?: string | null
           size_bytes?: number | null
@@ -4580,6 +4619,7 @@ export type Database = {
           id: string
           liked_at: string | null
           liked_by: string | null
+          marketing_visibility: Database["public"]["Enums"]["media_visibility"]
           media_type: string
           mime_type: string | null
           pain_note: string | null
@@ -4617,6 +4657,7 @@ export type Database = {
           id?: string
           liked_at?: string | null
           liked_by?: string | null
+          marketing_visibility?: Database["public"]["Enums"]["media_visibility"]
           media_type: string
           mime_type?: string | null
           pain_note?: string | null
@@ -4654,6 +4695,7 @@ export type Database = {
           id?: string
           liked_at?: string | null
           liked_by?: string | null
+          marketing_visibility?: Database["public"]["Enums"]["media_visibility"]
           media_type?: string
           mime_type?: string | null
           pain_note?: string | null
@@ -7518,6 +7560,13 @@ export type Database = {
       sales_pages: {
         Row: {
           created_at: string
+          draft_notes: string | null
+          draft_payload: Json | null
+          draft_reviewed_at: string | null
+          draft_reviewed_by: string | null
+          draft_status: Database["public"]["Enums"]["review_status"] | null
+          draft_submitted_at: string | null
+          draft_submitted_by: string | null
           hero_headline: string
           hero_image_url: string | null
           hero_subheadline: string
@@ -7537,6 +7586,13 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          draft_notes?: string | null
+          draft_payload?: Json | null
+          draft_reviewed_at?: string | null
+          draft_reviewed_by?: string | null
+          draft_status?: Database["public"]["Enums"]["review_status"] | null
+          draft_submitted_at?: string | null
+          draft_submitted_by?: string | null
           hero_headline?: string
           hero_image_url?: string | null
           hero_subheadline?: string
@@ -7556,6 +7612,13 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          draft_notes?: string | null
+          draft_payload?: Json | null
+          draft_reviewed_at?: string | null
+          draft_reviewed_by?: string | null
+          draft_status?: Database["public"]["Enums"]["review_status"] | null
+          draft_submitted_at?: string | null
+          draft_submitted_by?: string | null
           hero_headline?: string
           hero_image_url?: string | null
           hero_subheadline?: string
@@ -7921,6 +7984,57 @@ export type Database = {
           singleton?: boolean
           updated_at?: string
           updated_by?: string | null
+        }
+        Relationships: []
+      }
+      staff_invites: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          email: string
+          first_name: string | null
+          id: string
+          last_name: string | null
+          phone: string | null
+          redeemed_at: string | null
+          redeemed_user_id: string | null
+          role: Database["public"]["Enums"]["app_role"]
+          setup_token: string | null
+          setup_token_expires_at: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          email: string
+          first_name?: string | null
+          id?: string
+          last_name?: string | null
+          phone?: string | null
+          redeemed_at?: string | null
+          redeemed_user_id?: string | null
+          role: Database["public"]["Enums"]["app_role"]
+          setup_token?: string | null
+          setup_token_expires_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          email?: string
+          first_name?: string | null
+          id?: string
+          last_name?: string | null
+          phone?: string | null
+          redeemed_at?: string | null
+          redeemed_user_id?: string | null
+          role?: Database["public"]["Enums"]["app_role"]
+          setup_token?: string | null
+          setup_token_expires_at?: string | null
+          status?: string
+          updated_at?: string
         }
         Relationships: []
       }
@@ -8294,6 +8408,7 @@ export type Database = {
         Args: { _group_id: string; _user_id: string }
         Returns: boolean
       }
+      is_media_manager: { Args: { _uid: string }; Returns: boolean }
       jf_member_has_full_access: {
         Args: { _user_id: string }
         Returns: boolean
@@ -8344,7 +8459,7 @@ export type Database = {
       user_is_active: { Args: { _user_id: string }; Returns: boolean }
     }
     Enums: {
-      app_role: "admin" | "client" | "coach"
+      app_role: "admin" | "client" | "coach" | "media_manager"
       appointment_source: "manual" | "booking_link" | "external"
       appointment_status: "Scheduled" | "Completed" | "Cancelled" | "NoShow"
       appointment_type:
@@ -8406,8 +8521,15 @@ export type Database = {
         | "disconnected"
       group_member_role: "admin" | "member"
       group_permission_mode: "everyone" | "admins_only" | "read_only"
+      media_visibility: "private" | "marketing" | "public"
       reminder_audience: "attendee" | "host"
       reminder_status: "pending" | "sent" | "failed" | "skipped"
+      review_status:
+        | "draft"
+        | "needs_review"
+        | "approved"
+        | "published"
+        | "archived"
       task_quadrant: "do" | "schedule" | "delegate" | "eliminate"
       task_status: "open" | "done"
     }
@@ -8537,7 +8659,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["admin", "client", "coach"],
+      app_role: ["admin", "client", "coach", "media_manager"],
       appointment_source: ["manual", "booking_link", "external"],
       appointment_status: ["Scheduled", "Completed", "Cancelled", "NoShow"],
       appointment_type: [
@@ -8605,8 +8727,16 @@ export const Constants = {
       ],
       group_member_role: ["admin", "member"],
       group_permission_mode: ["everyone", "admins_only", "read_only"],
+      media_visibility: ["private", "marketing", "public"],
       reminder_audience: ["attendee", "host"],
       reminder_status: ["pending", "sent", "failed", "skipped"],
+      review_status: [
+        "draft",
+        "needs_review",
+        "approved",
+        "published",
+        "archived",
+      ],
       task_quadrant: ["do", "schedule", "delegate", "eliminate"],
       task_status: ["open", "done"],
     },
