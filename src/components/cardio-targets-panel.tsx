@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Heart, Plus, Pencil, Trash2, Copy, EyeOff, LayoutList, BookOpen, Sparkles, RefreshCw, Link2, Link2Off, MoreHorizontal, AlertTriangle } from "lucide-react";
+import { Heart, Plus, Pencil, Trash2, Copy, EyeOff, LayoutList, BookOpen, Sparkles, RefreshCw, Link2, Link2Off, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { CardioTargetDialog } from "./cardio-target-dialog";
 import { CardioProgramBuilderDialog } from "./cardio-program-builder-dialog";
