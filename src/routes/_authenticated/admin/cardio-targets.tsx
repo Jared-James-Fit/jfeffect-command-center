@@ -48,12 +48,12 @@ function CardioDashboard() {
   return (
     <>
       <PageHeader title="Cardio Targets" subtitle="All client cardio targets in one place." actions={
-        <Button size="sm" className="bg-gradient-primary font-bold uppercase" onClick={() => { setEditing(null); setOpen(true); }}>
+        <Button size="sm" className="bg-gradient-primary font-bold uppercase w-full sm:w-auto" onClick={() => { setEditing(null); setOpen(true); }}>
           <Plus className="mr-2 h-4 w-4" /> Add Cardio
         </Button>
       } />
-      <div className="p-6 md:p-8 space-y-4">
-        <Card className="border-border bg-card p-4 grid gap-3 md:grid-cols-4">
+      <div className="p-3 sm:p-6 md:p-8 space-y-4 overflow-x-hidden">
+        <Card className="border-border bg-card p-3 sm:p-4 grid gap-3 md:grid-cols-4">
           <Input placeholder="Search client" value={filters.search} onChange={(e) => setFilters({ ...filters, search: e.target.value })} />
           <Select value={filters.client} onValueChange={(v) => setFilters({ ...filters, client: v })}>
             <SelectTrigger><SelectValue placeholder="Client" /></SelectTrigger>
@@ -81,25 +81,25 @@ function CardioDashboard() {
             </SelectContent>
           </Select>
         </Card>
-        <Card className="border-border bg-card p-4">
+        <Card className="border-border bg-card p-2 sm:p-4">
           {rows.length === 0 ? (
             <div className="rounded-md border border-dashed border-border p-10 text-center text-sm text-muted-foreground">No cardio targets match.</div>
           ) : (
             <ul className="divide-y divide-border">
               {rows.map((t: any) => (
-                <li key={t.id} className="flex flex-wrap items-center justify-between gap-2 py-3">
-                  <div className="flex items-center gap-3 flex-wrap">
+                <li key={t.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2 py-3 sm:flex sm:flex-wrap sm:items-center sm:justify-between">
+                  <div className="flex min-w-0 flex-wrap items-center gap-1.5 sm:gap-3">
                     <Badge variant="outline" className={t.derived.tone}>{t.derived.label}</Badge>
                     <Badge variant="outline" className={dayTypeTone(t.day_type)}>{dayTypeLabel(t)}</Badge>
                     {t.clients && (
-                      <Link to="/admin/clients/$id" params={{ id: t.clients.id }} className="text-sm font-semibold text-primary hover:underline">{t.clients.full_name}</Link>
+                      <Link to="/admin/clients/$id" params={{ id: t.clients.id }} className="truncate text-sm font-semibold text-primary hover:underline">{t.clients.full_name}</Link>
                     )}
-                    <span className="text-xs text-muted-foreground">
+                    <span className="w-full text-xs text-muted-foreground sm:w-auto">
                       {t.cardio_type === "Custom" ? t.custom_type : t.cardio_type} {t.frequency_per_week ? `· ${t.frequency_per_week}x/wk` : ""} {t.duration_minutes ? `· ${t.duration_minutes} min` : ""} {t.intensity ? `· ${t.intensity}` : ""}
                     </span>
-                    <span className="text-xs text-muted-foreground">{t.start_date} → {t.end_date ?? "ongoing"}</span>
+                    <span className="w-full text-xs text-muted-foreground sm:w-auto">{t.start_date} → {t.end_date ?? "ongoing"}</span>
                   </div>
-                  <Button size="sm" variant="ghost" onClick={() => { setEditing(t); setOpen(true); }}><Pencil className="h-4 w-4" /></Button>
+                  <Button size="icon" variant="ghost" className="h-9 w-9 shrink-0" onClick={() => { setEditing(t); setOpen(true); }} aria-label="Edit cardio target"><Pencil className="h-4 w-4" /></Button>
                 </li>
               ))}
             </ul>
