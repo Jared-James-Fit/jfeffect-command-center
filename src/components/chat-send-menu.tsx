@@ -41,6 +41,9 @@ export function ChatSendMenu({
   disabled,
   onAttach,
   surface,
+  hideTrigger,
+  externalOpen,
+  onExternalOpenChange,
 }: {
   /** Clients the request will target. For group chats: all client members. */
   clientIds: string[];
@@ -49,16 +52,30 @@ export function ChatSendMenu({
   disabled?: boolean;
   onAttach: (att: ChatSendAttachment, body: string) => void | Promise<void>;
   surface: "dm" | "group";
+  /** When true, render only the dialogs (no Plus trigger) — caller drives them. */
+  hideTrigger?: boolean;
+  externalOpen?: { form?: boolean; sig?: boolean; recipe?: boolean; action?: boolean };
+  onExternalOpenChange?: (key: "form" | "sig" | "recipe" | "action", v: boolean) => void;
 }) {
-  const [actionOpen, setActionOpen] = useState(false);
-  const [formOpen, setFormOpen] = useState(false);
-  const [sigOpen, setSigOpen] = useState(false);
-  const [recipeOpen, setRecipeOpen] = useState(false);
+  const [actionOpenInt, setActionOpenInt] = useState(false);
+  const [formOpenInt, setFormOpenInt] = useState(false);
+  const [sigOpenInt, setSigOpenInt] = useState(false);
+  const [recipeOpenInt, setRecipeOpenInt] = useState(false);
+
+  const actionOpen = externalOpen?.action ?? actionOpenInt;
+  const formOpen = externalOpen?.form ?? formOpenInt;
+  const sigOpen = externalOpen?.sig ?? sigOpenInt;
+  const recipeOpen = externalOpen?.recipe ?? recipeOpenInt;
+  const setActionOpen = (v: boolean) => onExternalOpenChange ? onExternalOpenChange("action", v) : setActionOpenInt(v);
+  const setFormOpen = (v: boolean) => onExternalOpenChange ? onExternalOpenChange("form", v) : setFormOpenInt(v);
+  const setSigOpen = (v: boolean) => onExternalOpenChange ? onExternalOpenChange("sig", v) : setSigOpenInt(v);
+  const setRecipeOpen = (v: boolean) => onExternalOpenChange ? onExternalOpenChange("recipe", v) : setRecipeOpenInt(v);
 
   const hasTargets = clientIds.length > 0;
 
   return (
     <>
+      {!hideTrigger && (
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
@@ -102,6 +119,7 @@ export function ChatSendMenu({
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+      )}
 
       <FormPickerDialog
         open={formOpen} onOpenChange={setFormOpen}
