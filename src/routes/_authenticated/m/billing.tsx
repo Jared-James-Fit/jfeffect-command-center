@@ -86,7 +86,11 @@ function BillingPage() {
 
         <div className="grid gap-3 sm:grid-cols-2 pt-2">
           <Info label="Plan" value={isHold ? "Hold Plan" : "JF Membership"} />
-          <Info label="Price" value={isHold ? (s?.hold_price_display ?? "$9/month") : (s?.monthly_price_display ?? "$29/month")} />
+          <Info
+            label="Price"
+            value={isHold ? (s?.hold_price_display ?? "$9/month USD") : (s?.monthly_price_display ?? "$29/month USD")}
+            hint="Taxes calculated at checkout where applicable."
+          />
           {status === "Trialing" && <Info label="Trial ends" value={fmt(m.trial_end_at)} />}
           <Info label="Next billing date" value={fmt(m.current_period_end)} />
           {m.cancel_at && <Info label="Cancels on" value={fmt(m.cancel_at)} />}
@@ -112,16 +116,17 @@ function BillingPage() {
         </Card>
       )}
 
-      <CancelFlow open={cancelOpen} onOpenChange={setCancelOpen} holdPriceDisplay={s?.hold_price_display ?? "$9/month"} onDone={() => qc.invalidateQueries({ queryKey: ["my-jf-billing"] })} />
+      <CancelFlow open={cancelOpen} onOpenChange={setCancelOpen} holdPriceDisplay={s?.hold_price_display ?? "$9/month USD"} onDone={() => qc.invalidateQueries({ queryKey: ["my-jf-billing"] })} />
     </div>
   );
 }
 
-function Info({ label, value }: { label: string; value: string }) {
+function Info({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
     <div>
       <div className="text-[11px] uppercase tracking-wider text-muted-foreground">{label}</div>
       <div className="text-sm">{value}</div>
+      {hint && <div className="text-[11px] text-muted-foreground mt-0.5">{hint}</div>}
     </div>
   );
 }
