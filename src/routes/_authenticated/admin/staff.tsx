@@ -25,6 +25,9 @@ function StaffPage() {
   const { data, isLoading } = useQuery({ queryKey: ["staff"], queryFn: () => list() });
 
   const [form, setForm] = useState({ email: "", first_name: "", last_name: "", phone: "" });
+  const hasActive = (data?.members ?? []).length > 0;
+  const hasPending = (data?.invites ?? []).some((i: any) => i.status === "pending");
+  const inviteDisabled = hasActive || hasPending;
 
   async function handleInvite() {
     if (!form.email || !form.first_name || !form.last_name) return toast.error("Name and email required");
@@ -46,13 +49,16 @@ function StaffPage() {
 
       <Card className="p-4 space-y-3">
         <h2 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">Invite Media Manager</h2>
+        <p className="text-xs text-muted-foreground">
+          Only one Media Manager account is allowed. {inviteDisabled && "Revoke the current Media Manager or pending invite before adding another."}
+        </p>
         <div className="grid gap-2 sm:grid-cols-2">
-          <Input placeholder="First name" value={form.first_name} onChange={(e) => setForm({ ...form, first_name: e.target.value })} />
-          <Input placeholder="Last name" value={form.last_name} onChange={(e) => setForm({ ...form, last_name: e.target.value })} />
-          <Input placeholder="Email" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
-          <Input placeholder="Phone (optional)" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+          <Input disabled={inviteDisabled} placeholder="First name" value={form.first_name} onChange={(e) => setForm({ ...form, first_name: e.target.value })} />
+          <Input disabled={inviteDisabled} placeholder="Last name" value={form.last_name} onChange={(e) => setForm({ ...form, last_name: e.target.value })} />
+          <Input disabled={inviteDisabled} placeholder="Email" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+          <Input disabled={inviteDisabled} placeholder="Phone (optional)" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
         </div>
-        <Button onClick={handleInvite}>Send Invite</Button>
+        <Button onClick={handleInvite} disabled={inviteDisabled}>Send Invite</Button>
       </Card>
 
       <section className="space-y-2">
