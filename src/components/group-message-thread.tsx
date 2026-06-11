@@ -27,7 +27,6 @@ import {
 } from "@/lib/group-chats";
 import { useGroupPresence } from "@/hooks/use-group-presence";
 import { getChatSettings, DEFAULT_REACTION } from "@/lib/chat-settings";
-import { GifPicker } from "@/components/gif-picker";
 import { markRecent } from "@/lib/chat-gifs";
 import { markRecent as markSoundRecent } from "@/lib/chat-sounds";
 import { fallbackEmoji } from "@/lib/gif-fallback";
@@ -37,7 +36,7 @@ import {
   uploadAttachmentToPath, LINK_RE, renderBodyWithMeet, type SharedAttachment,
 } from "@/components/chat-shared";
 import { MeetQuickAction } from "@/components/meet-quick-action";
-import { ChatSendMenu } from "@/components/chat-send-menu";
+import { ComposerPlusMenu } from "@/components/composer-plus-menu";
 import {
   Paperclip, Send, X, Image as ImageIcon, Camera, File as FileIcon,
   Mic, Trash2, Play, Pause, Square, Loader2, MoreHorizontal, Pencil, Check,
