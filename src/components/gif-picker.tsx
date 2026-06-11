@@ -256,7 +256,7 @@ export function GifPicker({
   };
 
   const innerBody = (
-    <>
+    <div className="flex min-h-0 flex-1 flex-col">
       {showSounds && onPickSound && (
           <div className="flex items-center gap-1 border-b border-border p-1">
             <button
@@ -281,7 +281,7 @@ export function GifPicker({
             </button>
           </div>
       )}
-      <div className="space-y-2 border-b border-border p-2">
+      <div className="shrink-0 space-y-2 border-b border-border p-2">
           <div className="relative">
             <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
             <Input
@@ -319,13 +319,13 @@ export function GifPicker({
             ))}
           </div>
       </div>
-      <Tabs defaultValue="browse" className="w-full">
-          <TabsList className="mx-2 mt-2 grid w-[calc(100%-1rem)] grid-cols-3">
+      <Tabs defaultValue="browse" className="flex min-h-0 w-full flex-1 flex-col">
+          <TabsList className="mx-2 mt-2 grid w-[calc(100%-1rem)] shrink-0 grid-cols-3">
             <TabsTrigger value="browse">Browse</TabsTrigger>
             <TabsTrigger value="recent">Recent</TabsTrigger>
             <TabsTrigger value="fav">Favorites</TabsTrigger>
           </TabsList>
-          <div className="max-h-[60vh] overflow-y-auto p-2">
+          <div className="min-h-0 flex-1 overflow-y-auto p-2">
             {mode === "gifs" ? (
               <>
                 <TabsContent value="browse" className="m-0"><Grid items={filtered} /></TabsContent>
@@ -341,14 +341,14 @@ export function GifPicker({
             )}
           </div>
       </Tabs>
-    </>
+    </div>
   );
 
   if (asDialog) {
     return (
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-lg p-0 gap-0">
-          <DialogHeader className="px-3 pt-3">
+        <DialogContent className="flex h-[90dvh] max-h-[90dvh] max-w-lg flex-col gap-0 p-0 sm:h-[80vh]">
+          <DialogHeader className="shrink-0 px-3 pt-3 pb-2">
             <DialogTitle className="text-sm">GIFs & sounds</DialogTitle>
           </DialogHeader>
           {innerBody}
@@ -376,7 +376,8 @@ export function GifPicker({
       <PopoverContent
         side="top"
         align="start"
-        className="w-[min(92vw,420px)] p-0"
+        className="flex h-[min(70vh,560px)] w-[min(92vw,420px)] flex-col p-0"
+        collisionPadding={12}
       >
         {innerBody}
       </PopoverContent>
