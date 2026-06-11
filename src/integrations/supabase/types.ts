@@ -7575,6 +7575,95 @@ export type Database = {
         }
         Relationships: []
       }
+      setup_prompt_dismissals: {
+        Row: {
+          created_at: string
+          id: string
+          prompt_id: string
+          remind_after: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          prompt_id: string
+          remind_after?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          prompt_id?: string
+          remind_after?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "setup_prompt_dismissals_prompt_id_fkey"
+            columns: ["prompt_id"]
+            isOneToOne: false
+            referencedRelation: "setup_prompts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      setup_prompts: {
+        Row: {
+          android_steps: Json
+          audience_scope: string
+          body: string | null
+          created_at: string
+          enabled: boolean
+          id: string
+          ios_steps: Json
+          link_label: string | null
+          link_url: string | null
+          sort_order: number
+          title: string
+          updated_at: string
+          video_embed_url: string | null
+          video_url: string | null
+        }
+        Insert: {
+          android_steps?: Json
+          audience_scope?: string
+          body?: string | null
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          ios_steps?: Json
+          link_label?: string | null
+          link_url?: string | null
+          sort_order?: number
+          title: string
+          updated_at?: string
+          video_embed_url?: string | null
+          video_url?: string | null
+        }
+        Update: {
+          android_steps?: Json
+          audience_scope?: string
+          body?: string | null
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          ios_steps?: Json
+          link_label?: string | null
+          link_url?: string | null
+          sort_order?: number
+          title?: string
+          updated_at?: string
+          video_embed_url?: string | null
+          video_url?: string | null
+        }
+        Relationships: []
+      }
       signnow_settings: {
         Row: {
           access_token_expires_at: string | null
