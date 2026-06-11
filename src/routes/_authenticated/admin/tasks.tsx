@@ -1,6 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { TasksPage } from "@/components/tasks/tasks-page";
+import { TasksPage as SharedTasksPage } from "@/components/tasks/tasks-page";
+
+function AdminTasksRoute() {
+  return <SharedTasksPage storagePrefix="jf" />;
+}
 
 export const Route = createFileRoute("/_authenticated/admin/tasks")({
-  component: () => <TasksPage storagePrefix="jf" />,
+  component: AdminTasksRoute,
 });
