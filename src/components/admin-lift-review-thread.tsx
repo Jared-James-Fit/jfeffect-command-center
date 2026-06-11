@@ -44,6 +44,7 @@ export function AdminLiftReviewThread({ video, userId, clientName, clientAvatarP
 
   const openUrl = liftVideoOpenUrl(video);
   const driveFileId = liftVideoDriveFileId(video);
+  const driveEmbedUrl = video.drive_embed_url ?? (driveFileId ? `https://drive.google.com/file/d/${driveFileId}/preview` : null);
 
   const loadComments = async () => {
     const c = await listComments(video.id, { includeInternal: true });
@@ -108,8 +109,11 @@ export function AdminLiftReviewThread({ video, userId, clientName, clientAvatarP
           <LiftVideoPlayer
             src={signedUrl}
             fallbackUrl={openUrl}
+            embedFallbackUrl={driveEmbedUrl}
             thumbnailUrl={video.thumbnail_url}
             title={video.exercise || "Lift video"}
+            sourceType={video.file_type}
+            sourcePath={video.video_storage_path}
           />
         ) : embedUrl ? (
           <div className="relative aspect-video w-full bg-black">
