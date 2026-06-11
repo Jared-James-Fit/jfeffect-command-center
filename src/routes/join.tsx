@@ -58,6 +58,9 @@ function SignupJf() {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (settings && !settings.has_monthly_price) {
+      return toast.error("Membership checkout is temporarily unavailable. Please contact support.");
+    }
     if (!form.terms) return toast.error("Please accept the terms.");
     if (form.password.length < 8) return toast.error("Password must be at least 8 characters.");
     if (form.password !== form.confirm) return toast.error("Passwords don't match.");
@@ -137,6 +140,11 @@ function SignupJf() {
               Checkout was cancelled. You can try again below.
             </div>
           )}
+          {settings && !settings.has_monthly_price && (
+            <div className="mt-3 rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-200">
+              Membership checkout is temporarily unavailable. Please contact support.
+            </div>
+          )}
           <form onSubmit={submit} className="mt-4 grid gap-3">
             <div className="grid grid-cols-2 gap-3">
               <div><Label>First name</Label><Input required value={form.first_name} onChange={(e) => setForm({ ...form, first_name: e.target.value })} /></div>
@@ -156,7 +164,7 @@ function SignupJf() {
                 <span>I agree to receive transactional and marketing SMS. Msg/data rates may apply. Reply STOP to opt out.</span>
               </label>
             )}
-            <Button type="submit" size="lg" disabled={busy} className="mt-2 h-12 text-base font-bold">
+            <Button type="submit" size="lg" disabled={busy || (settings && !settings.has_monthly_price)} className="mt-2 h-12 text-base font-bold">
               {busy ? "Starting checkout…" : ctaLabel}
             </Button>
             <p className="text-[11px] text-center text-muted-foreground">
