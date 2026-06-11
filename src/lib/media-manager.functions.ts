@@ -190,7 +190,7 @@ export const submitForReview = createServerFn({ method: "POST" })
         .eq("page_key", data.id);
       if (error) throw new Error(error.message);
     } else {
-      const { error } = await supabase.from(tableFor(data.kind))
+      const { error } = await (supabase.from(tableFor(data.kind)) as any)
         .update({ review_status: "needs_review", submitted_by: userId, submitted_at: new Date().toISOString() })
         .eq("id", data.id);
       if (error) throw new Error(error.message);
@@ -211,7 +211,7 @@ export const approveItem = createServerFn({ method: "POST" })
       const { error } = await supabaseAdmin.from("sales_pages").update(patch).eq("page_key", data.id);
       if (error) throw new Error(error.message);
     } else {
-      const { error } = await supabaseAdmin.from(tableFor(data.kind))
+      const { error } = await (supabaseAdmin.from(tableFor(data.kind)) as any)
         .update({ review_status: "approved", reviewed_by: context.userId, reviewed_at: new Date().toISOString(), review_notes: data.notes ?? null })
         .eq("id", data.id);
       if (error) throw new Error(error.message);
@@ -231,7 +231,7 @@ export const rejectItem = createServerFn({ method: "POST" })
         .eq("page_key", data.id);
       if (error) throw new Error(error.message);
     } else {
-      const { error } = await supabaseAdmin.from(tableFor(data.kind))
+      const { error } = await (supabaseAdmin.from(tableFor(data.kind)) as any)
         .update({ review_status: "draft", reviewed_by: context.userId, reviewed_at: new Date().toISOString(), review_notes: data.notes })
         .eq("id", data.id);
       if (error) throw new Error(error.message);
