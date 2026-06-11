@@ -20,6 +20,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { WorkoutListCard } from "@/components/workout-list-card";
 import { ClientPreviousBlocks } from "@/components/client-previous-blocks";
 import { WeekScheduleView } from "@/components/week-schedule-view";
+import { ProgressComparison } from "@/components/progress-comparison";
 
 export const Route = createFileRoute("/_authenticated/portal/workouts/")({ component: WorkoutsPage });
 
@@ -168,7 +169,15 @@ function WorkoutsPage() {
             </TabsContent>
 
             <TabsContent value="history" className="space-y-3">
-              {client?.id && <ClientPreviousBlocks clientId={client.id} mode="client" />}
+              {client?.id && (
+                <>
+                  <Card className="p-4">
+                    <div className="mb-2 text-sm font-bold uppercase tracking-widest text-muted-foreground">Compare Progress</div>
+                    <ProgressComparison clientId={client.id} />
+                  </Card>
+                  <ClientPreviousBlocks clientId={client.id} mode="client" />
+                </>
+              )}
             </TabsContent>
           </Tabs>
         )}
