@@ -65,6 +65,17 @@ export const inviteMediaManager = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    // Enforce single Media Manager: reject if one already exists or a pending invite is outstanding.
+    const { data: existingRoles } = await supabaseAdmin
+      .from("user_roles").select("user_id").eq("role", "media_manager").limit(1);
+    if (existingRoles && existingRoles.length > 0) {
+      throw new Error("A Media Manager already exists. Revoke the current one before inviting another.");
+    }
+    const { data: pending } = await supabaseAdmin
+      .from("staff_invites").select("id").eq("role", "media_manager").eq("status", "pending").limit(1);
+    if (pending && pending.length > 0) {
+      throw new Error("A pending Media Manager invite already exists. Revoke it before inviting another.");
+    }
     const setup_token = genToken();
     const setup_token_expires_at = new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString();
     const { data: row, error } = await supabaseAdmin

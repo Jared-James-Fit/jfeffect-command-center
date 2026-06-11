@@ -3,6 +3,8 @@ import { useEffect } from "react";
 import { useAuth } from "@/lib/auth";
 import { AppShell } from "@/components/app-shell";
 import { mediaNav } from "@/lib/media-nav";
+import { DashboardModeSwitcher } from "@/components/dashboard-mode-switcher";
+import { setDashboardMode, useDashboardMode } from "@/lib/dashboard-mode";
 
 export const Route = createFileRoute("/_authenticated/media")({
   component: MediaLayout,
@@ -11,6 +13,10 @@ export const Route = createFileRoute("/_authenticated/media")({
 function MediaLayout() {
   const { role, loading } = useAuth();
   const navigate = useNavigate();
+  const [mode] = useDashboardMode();
+  useEffect(() => {
+    if (role === "admin" && mode !== "media") setDashboardMode("media");
+  }, [role, mode]);
   useEffect(() => {
     if (loading || !role) return;
     if (role !== "media_manager" && role !== "admin") {
@@ -28,6 +34,7 @@ function MediaLayout() {
 
   return (
     <AppShell items={mediaNav} title="Media Manager">
+      {role === "admin" && <DashboardModeSwitcher />}
       <Outlet />
     </AppShell>
   );
