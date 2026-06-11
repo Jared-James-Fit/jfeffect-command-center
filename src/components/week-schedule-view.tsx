@@ -1,8 +1,8 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { addDays, format, parseISO, startOfWeek, isSameDay, isBefore } from "date-fns";
-import { ChevronLeft, ChevronRight, Calendar, Lock, Dumbbell, Activity, CheckCircle2, AlertTriangle, RefreshCcw, Moon } from "lucide-react";
+import { addDays, format, parseISO, startOfWeek } from "date-fns";
+import { ChevronLeft, ChevronRight, Calendar, Lock, Dumbbell, Activity, CheckCircle2, AlertTriangle, Moon } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
