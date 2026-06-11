@@ -8,7 +8,7 @@ import {
   UserPlus, Library, Wrench, HelpCircle,
   ChefHat, Megaphone, Phone, Link2 as LinkIcon,
   ListChecks, LayoutGrid,
-  Heart,
+  Heart, Flame,
 } from "lucide-react";
 import { Sparkles } from "lucide-react";
 import type { NavItem } from "@/components/app-shell";
