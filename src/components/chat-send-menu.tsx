@@ -41,6 +41,9 @@ export function ChatSendMenu({
   disabled,
   onAttach,
   surface,
+  hideTrigger,
+  externalOpen,
+  onExternalOpenChange,
 }: {
   /** Clients the request will target. For group chats: all client members. */
   clientIds: string[];
@@ -49,16 +52,30 @@ export function ChatSendMenu({
   disabled?: boolean;
   onAttach: (att: ChatSendAttachment, body: string) => void | Promise<void>;
   surface: "dm" | "group";
+  /** When true, render only the dialogs (no Plus trigger) — caller drives them. */
+  hideTrigger?: boolean;
+  externalOpen?: { form?: boolean; sig?: boolean; recipe?: boolean; action?: boolean };
+  onExternalOpenChange?: (key: "form" | "sig" | "recipe" | "action", v: boolean) => void;
 }) {
-  const [actionOpen, setActionOpen] = useState(false);
-  const [formOpen, setFormOpen] = useState(false);
-  const [sigOpen, setSigOpen] = useState(false);
-  const [recipeOpen, setRecipeOpen] = useState(false);
+  const [actionOpenInt, setActionOpenInt] = useState(false);
+  const [formOpenInt, setFormOpenInt] = useState(false);
+  const [sigOpenInt, setSigOpenInt] = useState(false);
+  const [recipeOpenInt, setRecipeOpenInt] = useState(false);
+
+  const actionOpen = externalOpen?.action ?? actionOpenInt;
+  const formOpen = externalOpen?.form ?? formOpenInt;
+  const sigOpen = externalOpen?.sig ?? sigOpenInt;
+  const recipeOpen = externalOpen?.recipe ?? recipeOpenInt;
+  const setActionOpen = (v: boolean) => onExternalOpenChange ? onExternalOpenChange("action", v) : setActionOpenInt(v);
+  const setFormOpen = (v: boolean) => onExternalOpenChange ? onExternalOpenChange("form", v) : setFormOpenInt(v);
+  const setSigOpen = (v: boolean) => onExternalOpenChange ? onExternalOpenChange("sig", v) : setSigOpenInt(v);
+  const setRecipeOpen = (v: boolean) => onExternalOpenChange ? onExternalOpenChange("recipe", v) : setRecipeOpenInt(v);
 
   const hasTargets = clientIds.length > 0;
 
   return (
     <>
+      {!hideTrigger && (
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
@@ -102,6 +119,7 @@ export function ChatSendMenu({
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+      )}
 
       <FormPickerDialog
         open={formOpen} onOpenChange={setFormOpen}
@@ -154,7 +172,6 @@ function FormPickerDialog({
         .from("nf_forms")
         .select("id, title, description, active, archived, kind, external_url")
         .eq("archived", false)
-        .eq("active", true)
         .order("title");
       if (error) throw error;
       return data ?? [];
@@ -208,7 +225,7 @@ function FormPickerDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Share a form</DialogTitle>
           <DialogDescription>
@@ -217,15 +234,15 @@ function FormPickerDialog({
         </DialogHeader>
         <div className="space-y-3">
           <div className="relative">
-            <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search forms…"
-              className="pl-7 h-9"
+              placeholder="Search forms & check-ins…"
+              className="pl-9 h-11 text-base"
             />
           </div>
-          <div className="max-h-64 overflow-y-auto rounded-md border">
+          <div className="max-h-[55vh] min-h-[180px] overflow-y-auto rounded-md border">
             {isLoading && <div className="p-3 text-sm text-muted-foreground">Loading…</div>}
             {!isLoading && filtered.length === 0 && (
               <div className="p-3 text-sm text-muted-foreground">No forms found.</div>
@@ -235,12 +252,20 @@ function FormPickerDialog({
                 key={f.id}
                 type="button"
                 onClick={() => setSelectedId(f.id)}
-                className={`flex w-full items-start gap-2 border-b border-border/60 px-3 py-2 text-left text-sm last:border-b-0 hover:bg-accent/40 ${selectedId === f.id ? "bg-accent/60" : ""}`}
+                className={`flex w-full items-start gap-3 border-b border-border/60 px-3 py-3 text-left text-sm last:border-b-0 hover:bg-accent/40 ${selectedId === f.id ? "bg-accent/60" : ""}`}
               >
-                <ClipboardList className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-                <div className="min-w-0">
-                  <div className="truncate font-medium">{f.title}</div>
-                  {f.description && <div className="truncate text-[11px] text-muted-foreground">{f.description}</div>}
+                <ClipboardList className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <div className="truncate font-medium">{f.title}</div>
+                    {f.kind === "external" && (
+                      <span className="shrink-0 rounded bg-secondary px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">External</span>
+                    )}
+                    {!f.active && (
+                      <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">Draft</span>
+                    )}
+                  </div>
+                  {f.description && <div className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{f.description}</div>}
                 </div>
               </button>
             ))}
@@ -352,7 +377,7 @@ function SignaturePickerDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Send signature request</DialogTitle>
           <DialogDescription>
@@ -369,7 +394,7 @@ function SignaturePickerDialog({
               className="pl-7 h-9"
             />
           </div>
-          <div className="max-h-64 overflow-y-auto rounded-md border">
+          <div className="max-h-[55vh] min-h-[180px] overflow-y-auto rounded-md border">
             {isLoading && <div className="p-3 text-sm text-muted-foreground">Loading…</div>}
             {!isLoading && filtered.length === 0 && (
               <div className="p-3 text-sm text-muted-foreground">No active templates.</div>
@@ -379,9 +404,9 @@ function SignaturePickerDialog({
                 key={t.id}
                 type="button"
                 onClick={() => setSelectedId(t.id)}
-                className={`flex w-full items-start gap-2 border-b border-border/60 px-3 py-2 text-left text-sm last:border-b-0 hover:bg-accent/40 ${selectedId === t.id ? "bg-accent/60" : ""}`}
+                className={`flex w-full items-start gap-3 border-b border-border/60 px-3 py-3 text-left text-sm last:border-b-0 hover:bg-accent/40 ${selectedId === t.id ? "bg-accent/60" : ""}`}
               >
-                <FileSignature className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                <FileSignature className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
                 <div className="min-w-0">
                   <div className="truncate font-medium">{t.name}</div>
                   {t.agreement_type && <div className="truncate text-[11px] text-muted-foreground">{t.agreement_type}</div>}
@@ -473,7 +498,7 @@ function RecipePickerDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Share a recipe</DialogTitle>
           <DialogDescription>
@@ -490,7 +515,7 @@ function RecipePickerDialog({
               className="pl-7 h-9"
             />
           </div>
-          <div className="max-h-64 overflow-y-auto rounded-md border">
+          <div className="max-h-[55vh] min-h-[180px] overflow-y-auto rounded-md border">
             {isLoading && <div className="p-3 text-sm text-muted-foreground">Loading…</div>}
             {!isLoading && filtered.length === 0 && (
               <div className="p-3 text-sm text-muted-foreground">No recipes found.</div>
@@ -500,9 +525,9 @@ function RecipePickerDialog({
                 key={r.id}
                 type="button"
                 onClick={() => setSelectedId(r.id)}
-                className={`flex w-full items-start gap-2 border-b border-border/60 px-3 py-2 text-left text-sm last:border-b-0 hover:bg-accent/40 ${selectedId === r.id ? "bg-accent/60" : ""}`}
+                className={`flex w-full items-start gap-3 border-b border-border/60 px-3 py-3 text-left text-sm last:border-b-0 hover:bg-accent/40 ${selectedId === r.id ? "bg-accent/60" : ""}`}
               >
-                <UtensilsCrossed className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                <UtensilsCrossed className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
                 <div className="min-w-0">
                   <div className="truncate font-medium">{r.title}</div>
                   <div className="truncate text-[11px] text-muted-foreground">

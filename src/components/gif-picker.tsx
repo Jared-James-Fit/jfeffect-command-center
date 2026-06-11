@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -24,15 +25,25 @@ export function GifPicker({
   onPickSound,
   showSounds = true,
   disabled,
+  controlledOpen,
+  onControlledOpenChange,
+  hideTrigger,
+  asDialog,
 }: {
   onPick: (gif: ChatGif) => void;
   onPickSound?: (sound: ChatSound) => void;
   showSounds?: boolean;
   disabled?: boolean;
+  controlledOpen?: boolean;
+  onControlledOpenChange?: (v: boolean) => void;
+  hideTrigger?: boolean;
+  asDialog?: boolean;
 }) {
   const { user } = useAuth();
   const qc = useQueryClient();
-  const [open, setOpen] = useState(false);
+  const [openInt, setOpenInt] = useState(false);
+  const open = controlledOpen ?? openInt;
+  const setOpen = (v: boolean) => onControlledOpenChange ? onControlledOpenChange(v) : setOpenInt(v);
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<string | "all">("all");
   const [mode, setMode] = useState<"gifs" | "sounds">("gifs");
@@ -244,26 +255,9 @@ export function GifPicker({
     );
   };
 
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="h-10 w-10 shrink-0 rounded-full"
-          disabled={disabled}
-          title="GIFs & effects"
-        >
-          <Sparkles className="h-5 w-5" />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent
-        side="top"
-        align="start"
-        className="w-[min(92vw,420px)] p-0"
-      >
-        {showSounds && onPickSound && (
+  const innerBody = (
+    <>
+      {showSounds && onPickSound && (
           <div className="flex items-center gap-1 border-b border-border p-1">
             <button
               type="button"
@@ -286,8 +280,8 @@ export function GifPicker({
               Sounds
             </button>
           </div>
-        )}
-        <div className="space-y-2 border-b border-border p-2">
+      )}
+      <div className="space-y-2 border-b border-border p-2">
           <div className="relative">
             <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
             <Input
@@ -324,8 +318,8 @@ export function GifPicker({
               </button>
             ))}
           </div>
-        </div>
-        <Tabs defaultValue="browse" className="w-full">
+      </div>
+      <Tabs defaultValue="browse" className="w-full">
           <TabsList className="mx-2 mt-2 grid w-[calc(100%-1rem)] grid-cols-3">
             <TabsTrigger value="browse">Browse</TabsTrigger>
             <TabsTrigger value="recent">Recent</TabsTrigger>
@@ -346,7 +340,45 @@ export function GifPicker({
               </>
             )}
           </div>
-        </Tabs>
+      </Tabs>
+    </>
+  );
+
+  if (asDialog) {
+    return (
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-lg p-0 gap-0">
+          <DialogHeader className="px-3 pt-3">
+            <DialogTitle className="text-sm">GIFs & sounds</DialogTitle>
+          </DialogHeader>
+          {innerBody}
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      {!hideTrigger && (
+        <PopoverTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-10 w-10 shrink-0 rounded-full"
+            disabled={disabled}
+            title="GIFs & effects"
+          >
+            <Sparkles className="h-5 w-5" />
+          </Button>
+        </PopoverTrigger>
+      )}
+      <PopoverContent
+        side="top"
+        align="start"
+        className="w-[min(92vw,420px)] p-0"
+      >
+        {innerBody}
       </PopoverContent>
     </Popover>
   );
