@@ -38,7 +38,7 @@ export const Route = createFileRoute("/_authenticated/admin/native-forms")({
 function AdminNativeForms() {
   const qc = useQueryClient();
   const [editing, setEditing] = useState<NfForm | null>(null);
-  const [editTab, setEditTab] = useState<"settings" | "questions" | "assign">("settings");
+  const [editTab, setEditTab] = useState<"settings" | "questions" | "shared">("settings");
   const [creating, setCreating] = useState<NfKind | null>(null);
   const deleteFormsFn = useServerFn(deleteNativeForms);
   const syncFilloutFn = useServerFn(syncFilloutForms);
@@ -100,7 +100,7 @@ function AdminNativeForms() {
 
   return (
     <>
-      <PageHeader title="Check-Ins & Form Builder" subtitle="Build native forms or embed external check-ins, then assign them to clients." actions={
+      <PageHeader title="Check-Ins & Form Builder" subtitle="Build native forms or embed external check-ins. Share them from chat or this page — clients only see forms they've been shared." actions={
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" onClick={handleSyncFillout} disabled={syncing}>
             <ExternalLink className="mr-2 h-4 w-4" /> {syncing ? "Syncing…" : "Sync from Fillout"}
@@ -144,7 +144,7 @@ function AdminNativeForms() {
               selected={formSelection.isSelected(f.id)}
               onSelect={(checked) => formSelection.setOne(f.id, checked)}
               onEdit={() => { setEditTab("settings"); setEditing(f); }}
-              onSend={() => { setEditTab("assign"); setEditing(f); }}
+              onSend={() => { setEditTab("shared"); setEditing(f); }}
             />
           );
         })}
