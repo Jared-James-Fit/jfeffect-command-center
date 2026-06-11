@@ -665,15 +665,15 @@ function AssignmentsEditor({ formId, form, onFormChange }: { formId: string; for
       <div className="rounded-lg border border-border bg-secondary/10 p-3 space-y-3">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <Label className="text-sm font-bold">Assign to all active coaching clients</Label>
-            <p className="text-xs text-muted-foreground">Every Active / New Client sees this form. No need to tick individually.</p>
+            <Label className="text-sm font-bold">Share with every active coaching client</Label>
+            <p className="text-xs text-muted-foreground">Turn on to grant access to all Active / New clients at once. Otherwise pick individuals below or share via chat.</p>
           </div>
           <Switch checked={broadcastOn} disabled={saving} onCheckedChange={setBroadcast} />
         </div>
         <div className="flex items-center justify-between gap-3">
           <div>
-            <Label className="text-sm font-bold">Auto-assign to new coaching clients</Label>
-            <p className="text-xs text-muted-foreground">Future active clients get this form added automatically.</p>
+            <Label className="text-sm font-bold">Auto-share with new clients</Label>
+            <p className="text-xs text-muted-foreground">Future active clients are added to this form automatically.</p>
           </div>
           <Switch checked={form.auto_assign_new_clients} disabled={saving} onCheckedChange={setAutoAssign} />
         </div>
@@ -682,8 +682,8 @@ function AssignmentsEditor({ formId, form, onFormChange }: { formId: string; for
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="text-xs text-muted-foreground">
           {broadcastOn
-            ? `Assigned to all active coaching clients (individual ticks are inherited)`
-            : `${selectedIds.size} client${selectedIds.size === 1 ? "" : "s"} selected${dirty ? " · unsaved" : ""}`}
+            ? `Shared with every active coaching client (individual ticks are inherited)`
+            : `Shared with ${selectedIds.size} client${selectedIds.size === 1 ? "" : "s"}${dirty ? " · unsaved" : ""}`}
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={selectAllVisible} disabled={broadcastOn || saving}>{allVisibleSelected ? "All visible selected" : "Select all visible"}</Button>
@@ -695,18 +695,18 @@ function AssignmentsEditor({ formId, form, onFormChange }: { formId: string; for
             successLabel="Saved"
             onAction={saveAssignmentChanges}
           >
-            Save assignments
+            Save shares
           </ActionButton>
         </div>
       </div>
 
       {form.archived ? (
         <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-          Assigned, but not visible because this form is archived.
+          Shared, but not visible because this form is archived.
         </div>
       ) : !form.active ? (
         <div className="rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning">
-          Assigned, but not visible because this form is still Draft.
+          Shared, but not visible because this form is still Draft.
         </div>
       ) : null}
 
