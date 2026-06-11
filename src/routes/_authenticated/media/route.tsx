@@ -5,6 +5,7 @@ import { AppShell } from "@/components/app-shell";
 import { mediaNav } from "@/lib/media-nav";
 import { DashboardModeSwitcher } from "@/components/dashboard-mode-switcher";
 import { setDashboardMode, useDashboardMode } from "@/lib/dashboard-mode";
+import { TaskPopupGate } from "@/components/tasks/task-popup-gate";
 
 export const Route = createFileRoute("/_authenticated/media")({
   component: MediaLayout,
@@ -36,6 +37,7 @@ function MediaLayout() {
     <AppShell items={mediaNav} title="Media Manager">
       {role === "admin" && <DashboardModeSwitcher />}
       <Outlet />
+      <TaskPopupGate scope="media_manager" />
     </AppShell>
   );
 }
