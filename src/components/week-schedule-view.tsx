@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { WEEK_DAYS, SHORT_DAY, formatDays, type WeekDay } from "@/lib/training-schedule";
 import { detectAvailabilityChange } from "@/lib/auto-scheduler";
+import { dayScheduledDate } from "@/lib/workout-today";
 import { cn } from "@/lib/utils";
 
 const sb = supabase as any;
@@ -49,8 +50,8 @@ function todayISO(): string {
 
 async function loadBlockData(blockId: string, clientId: string) {
   const [{ data: block }, { data: weeks }, { data: cardio }] = await Promise.all([
-    sb.from("pl_blocks").select("id, start_date, last_scheduled_at, last_scheduled_availability").eq("id", blockId).maybeSingle(),
-    sb.from("pl_weeks").select("id, week_index").eq("block_id", blockId),
+    sb.from("pl_blocks").select("id, start_date, end_date, last_scheduled_at, last_scheduled_availability").eq("id", blockId).maybeSingle(),
+    sb.from("pl_weeks").select("id, week_index, training_days, start_date, end_date").eq("block_id", blockId),
     sb.from("cardio_targets")
       .select("id, day_type, frequency_per_week, cardio_type, custom_type, duration_minutes, intensity, heart_rate_zone, client_notes, status, visible_to_client, enabled, start_date, end_date")
       .eq("client_id", clientId),
@@ -63,7 +64,7 @@ async function loadBlockData(blockId: string, clientId: string) {
   const { data: completions } = dayIds.length
     ? await sb.from("pl_day_completions").select("day_id, completed_at, completed_date").in("day_id", dayIds)
     : { data: [] };
-  return { block, days: days ?? [], cardio: cardio ?? [], completions: completions ?? [] };
+  return { block, weeks: weeks ?? [], days: days ?? [], cardio: cardio ?? [], completions: completions ?? [] };
 }
 
 function buildCells(
@@ -71,15 +72,25 @@ function buildCells(
   allDays: any[],
   cardioTargets: any[],
   completions: any[],
+  weeks: any[],
+  block: any,
 ): DayCell[] {
   const weekDates: string[] = WEEK_DAYS.map((_, i) => format(addDays(weekStart, i), "yyyy-MM-dd"));
   const today = todayISO();
 
-  // Workouts on this week
+  // Workouts on this week — fall back to derived date when scheduled_date is missing
+  const weekById = new Map<string, any>();
+  for (const w of weeks) weekById.set(w.id, w);
   const workoutsByDate = new Map<string, any>();
   for (const d of allDays) {
-    if (d.scheduled_date && weekDates.includes(d.scheduled_date)) {
-      workoutsByDate.set(d.scheduled_date, d);
+    let iso = d.scheduled_date ?? null;
+    if (!iso) {
+      const wk = weekById.get(d.week_id);
+      const sd = dayScheduledDate({ day: d, week: wk, block, completion: null } as any);
+      iso = sd ? format(sd, "yyyy-MM-dd") : null;
+    }
+    if (iso && weekDates.includes(iso)) {
+      workoutsByDate.set(iso, d);
     }
   }
   const workoutDates = new Set(workoutsByDate.keys());
@@ -188,7 +199,7 @@ export function WeekScheduleView({
 
   const cells = useMemo(() => {
     if (!data) return [] as DayCell[];
-    return buildCells(weekStart, data.days, data.cardio, data.completions);
+    return buildCells(weekStart, data.days, data.cardio, data.completions, data.weeks, data.block);
   }, [data, weekStart]);
 
   const goPrev = () => setWeekStart((d) => addDays(d, -7));
