@@ -263,7 +263,7 @@ export function WeekScheduleView({
                 <div className="mt-0.5 text-sm text-muted-foreground">No workout scheduled today</div>
               )}
             </div>
-            {todaysCell.workout && (
+            {todaysCell.workout && mode === "client" && (
               <Button asChild size="sm" className="shrink-0">
                 <Link to="/portal/workouts/$dayId" params={{ dayId: todaysCell.workout.dayId }}>Open</Link>
               </Button>
