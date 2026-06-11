@@ -73,10 +73,10 @@ export function JfMembershipSettingsCard() {
       <div className="rounded-md border border-border bg-background/50 p-3 text-xs">
         <div className="mb-2 font-bold uppercase tracking-widest text-muted-foreground">Setup checklist</div>
         <ul className="space-y-1.5">
-          <ChecklistItem done={false}>
+          <ChecklistItem done={monthlyOk}>
             In Stripe, create product <strong>JF Membership</strong> with a recurring monthly price of <strong>$29 USD</strong>. Copy the price ID (starts with <code>price_</code>).
           </ChecklistItem>
-          <ChecklistItem done={false}>
+          <ChecklistItem done={holdOk}>
             In Stripe, create product <strong>JF Membership Hold Plan</strong> with a recurring monthly price of <strong>$9 USD</strong>. Copy that price ID.
           </ChecklistItem>
           <ChecklistItem done={monthlyOk}>
