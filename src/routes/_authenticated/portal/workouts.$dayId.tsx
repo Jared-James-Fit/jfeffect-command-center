@@ -83,16 +83,16 @@ function WorkoutDay() {
   const blockCompleted = block?.status === "Completed" || block?.status === "Archived";
   const readonly = search.readonly === 1 || blockEnded || blockCompleted;
 
-  const { data: rows = [] } = useQuery({
+  const { data: rows = [], isSuccess: rowsLoaded } = useQuery({
     queryKey: ["pl-day-rows", dayId],
    queryFn: async () => (await sb.from("pl_exercise_rows").select("*, exercises(id,name,video_url,vimeo_embed_url,thumbnail_url,cues,common_mistakes,muscle_group,category,pl_lift_group,warmup_protocol_id,is_powerlifting,warmup_notes)").eq("day_id", dayId).order("sort_order")).data ?? [],
   });
 
   useEffect(() => {
-    if (rows.length === 0) {
+    if (rowsLoaded && rows.length === 0) {
       toast.info("This workout is empty — no exercises have been added yet.");
     }
-  }, [rows.length]);
+  }, [rowsLoaded, rows.length]);
 
   const { data: results = [] } = useQuery({
     queryKey: ["pl-day-results", dayId, client?.id],
