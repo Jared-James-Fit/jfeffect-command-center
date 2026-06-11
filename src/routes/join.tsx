@@ -134,7 +134,7 @@ function SignupJf() {
         images={(p?.visuals ?? []).filter((v) => v.slot === "proof")}
       />
 
-      <FaqAccordion items={s.faq ?? []} />
+      <FaqAccordion items={mergeTaxFaq(s.faq ?? [])} />
 
       {/* Signup form */}
       <Section className="!pt-4">
