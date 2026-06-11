@@ -2316,10 +2316,15 @@ export type Database = {
           category: string
           created_at: string
           created_by: string | null
+          examples: string | null
           id: string
           question: string
           sort_order: number
+          subcategory: string | null
           updated_at: string
+          visible_coaching: boolean
+          visible_everyone: boolean
+          visible_membership: boolean
         }
         Insert: {
           active?: boolean
@@ -2327,10 +2332,15 @@ export type Database = {
           category: string
           created_at?: string
           created_by?: string | null
+          examples?: string | null
           id?: string
           question: string
           sort_order?: number
+          subcategory?: string | null
           updated_at?: string
+          visible_coaching?: boolean
+          visible_everyone?: boolean
+          visible_membership?: boolean
         }
         Update: {
           active?: boolean
@@ -2338,10 +2348,15 @@ export type Database = {
           category?: string
           created_at?: string
           created_by?: string | null
+          examples?: string | null
           id?: string
           question?: string
           sort_order?: number
+          subcategory?: string | null
           updated_at?: string
+          visible_coaching?: boolean
+          visible_everyone?: boolean
+          visible_membership?: boolean
         }
         Relationships: []
       }
