@@ -299,9 +299,11 @@ export function LiftVideoCard({ video, role, userId, onChanged, onEdit, clientNa
           <LiftVideoPlayer
             src={playablePreviewUrl}
             fallbackUrl={openUrl}
-            embedFallbackUrl={null}
+            embedFallbackUrl={video.drive_embed_url ?? (driveFileId ? `https://drive.google.com/file/d/${driveFileId}/preview` : null)}
             thumbnailUrl={video.thumbnail_url}
             title={video.exercise || "Lift video"}
+            sourceType={video.file_type}
+            sourcePath={video.video_storage_path}
             onPlaybackError={(message) => {
               setLastPlaybackError(message);
               if (role === "admin") setPlaybackError(video.id, message).catch(() => {});
