@@ -5994,6 +5994,8 @@ export type Database = {
           est_minutes_per_workout: number | null
           goal: string | null
           id: string
+          last_scheduled_at: string | null
+          last_scheduled_availability: string[] | null
           name: string
           prep_id: string | null
           sort_order: number
@@ -6022,6 +6024,8 @@ export type Database = {
           est_minutes_per_workout?: number | null
           goal?: string | null
           id?: string
+          last_scheduled_at?: string | null
+          last_scheduled_availability?: string[] | null
           name: string
           prep_id?: string | null
           sort_order?: number
@@ -6050,6 +6054,8 @@ export type Database = {
           est_minutes_per_workout?: number | null
           goal?: string | null
           id?: string
+          last_scheduled_at?: string | null
+          last_scheduled_availability?: string[] | null
           name?: string
           prep_id?: string | null
           sort_order?: number
@@ -6249,6 +6255,8 @@ export type Database = {
           id: string
           is_custom: boolean
           notes: string | null
+          schedule_locked: boolean
+          schedule_source: string | null
           scheduled_date: string | null
           source_day_id: string | null
           title: string | null
@@ -6267,6 +6275,8 @@ export type Database = {
           id?: string
           is_custom?: boolean
           notes?: string | null
+          schedule_locked?: boolean
+          schedule_source?: string | null
           scheduled_date?: string | null
           source_day_id?: string | null
           title?: string | null
@@ -6285,6 +6295,8 @@ export type Database = {
           id?: string
           is_custom?: boolean
           notes?: string | null
+          schedule_locked?: boolean
+          schedule_source?: string | null
           scheduled_date?: string | null
           source_day_id?: string | null
           title?: string | null
