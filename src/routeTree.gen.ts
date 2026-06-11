@@ -64,7 +64,6 @@ import { Route as AuthenticatedMediaArchivesRouteImport } from './routes/_authen
 import { Route as AuthenticatedMediaAnnouncementsRouteImport } from './routes/_authenticated/media/announcements'
 import { Route as AuthenticatedMediaActionItemsRouteImport } from './routes/_authenticated/media/action-items'
 import { Route as AuthenticatedMediaAccountRouteImport } from './routes/_authenticated/media/account'
-import { Route as AuthenticatedMWelcomeRouteImport } from './routes/_authenticated/m/welcome'
 import { Route as AuthenticatedMUpgradeRouteImport } from './routes/_authenticated/m/upgrade'
 import { Route as AuthenticatedMToolsRouteImport } from './routes/_authenticated/m/tools'
 import { Route as AuthenticatedMResourcesRouteImport } from './routes/_authenticated/m/resources'
@@ -495,11 +494,6 @@ const AuthenticatedMediaAccountRoute =
     path: '/account',
     getParentRoute: () => AuthenticatedMediaRouteRoute,
   } as any)
-const AuthenticatedMWelcomeRoute = AuthenticatedMWelcomeRouteImport.update({
-  id: '/welcome',
-  path: '/welcome',
-  getParentRoute: () => AuthenticatedMRouteRoute,
-} as any)
 const AuthenticatedMUpgradeRoute = AuthenticatedMUpgradeRouteImport.update({
   id: '/upgrade',
   path: '/upgrade',
@@ -1313,7 +1307,6 @@ export interface FileRoutesByFullPath {
   '/m/resources': typeof AuthenticatedMResourcesRouteWithChildren
   '/m/tools': typeof AuthenticatedMToolsRoute
   '/m/upgrade': typeof AuthenticatedMUpgradeRoute
-  '/m/welcome': typeof AuthenticatedMWelcomeRoute
   '/media/account': typeof AuthenticatedMediaAccountRoute
   '/media/action-items': typeof AuthenticatedMediaActionItemsRoute
   '/media/announcements': typeof AuthenticatedMediaAnnouncementsRoute
@@ -1490,7 +1483,6 @@ export interface FileRoutesByTo {
   '/m/resources': typeof AuthenticatedMResourcesRouteWithChildren
   '/m/tools': typeof AuthenticatedMToolsRoute
   '/m/upgrade': typeof AuthenticatedMUpgradeRoute
-  '/m/welcome': typeof AuthenticatedMWelcomeRoute
   '/media/account': typeof AuthenticatedMediaAccountRoute
   '/media/action-items': typeof AuthenticatedMediaActionItemsRoute
   '/media/announcements': typeof AuthenticatedMediaAnnouncementsRoute
@@ -1674,7 +1666,6 @@ export interface FileRoutesById {
   '/_authenticated/m/resources': typeof AuthenticatedMResourcesRouteWithChildren
   '/_authenticated/m/tools': typeof AuthenticatedMToolsRoute
   '/_authenticated/m/upgrade': typeof AuthenticatedMUpgradeRoute
-  '/_authenticated/m/welcome': typeof AuthenticatedMWelcomeRoute
   '/_authenticated/media/account': typeof AuthenticatedMediaAccountRoute
   '/_authenticated/media/action-items': typeof AuthenticatedMediaActionItemsRoute
   '/_authenticated/media/announcements': typeof AuthenticatedMediaAnnouncementsRoute
@@ -1858,7 +1849,6 @@ export interface FileRouteTypes {
     | '/m/resources'
     | '/m/tools'
     | '/m/upgrade'
-    | '/m/welcome'
     | '/media/account'
     | '/media/action-items'
     | '/media/announcements'
@@ -2035,7 +2025,6 @@ export interface FileRouteTypes {
     | '/m/resources'
     | '/m/tools'
     | '/m/upgrade'
-    | '/m/welcome'
     | '/media/account'
     | '/media/action-items'
     | '/media/announcements'
@@ -2218,7 +2207,6 @@ export interface FileRouteTypes {
     | '/_authenticated/m/resources'
     | '/_authenticated/m/tools'
     | '/_authenticated/m/upgrade'
-    | '/_authenticated/m/welcome'
     | '/_authenticated/media/account'
     | '/_authenticated/media/action-items'
     | '/_authenticated/media/announcements'
@@ -2738,13 +2726,6 @@ declare module '@tanstack/react-router' {
       fullPath: '/media/account'
       preLoaderRoute: typeof AuthenticatedMediaAccountRouteImport
       parentRoute: typeof AuthenticatedMediaRouteRoute
-    }
-    '/_authenticated/m/welcome': {
-      id: '/_authenticated/m/welcome'
-      path: '/welcome'
-      fullPath: '/m/welcome'
-      preLoaderRoute: typeof AuthenticatedMWelcomeRouteImport
-      parentRoute: typeof AuthenticatedMRouteRoute
     }
     '/_authenticated/m/upgrade': {
       id: '/_authenticated/m/upgrade'
@@ -3957,7 +3938,6 @@ interface AuthenticatedMRouteRouteChildren {
   AuthenticatedMResourcesRoute: typeof AuthenticatedMResourcesRouteWithChildren
   AuthenticatedMToolsRoute: typeof AuthenticatedMToolsRoute
   AuthenticatedMUpgradeRoute: typeof AuthenticatedMUpgradeRoute
-  AuthenticatedMWelcomeRoute: typeof AuthenticatedMWelcomeRoute
   AuthenticatedMIndexRoute: typeof AuthenticatedMIndexRoute
   AuthenticatedMWorkoutsEnrollmentIdWeekDayRoute: typeof AuthenticatedMWorkoutsEnrollmentIdWeekDayRoute
 }
@@ -3971,7 +3951,6 @@ const AuthenticatedMRouteRouteChildren: AuthenticatedMRouteRouteChildren = {
   AuthenticatedMResourcesRoute: AuthenticatedMResourcesRouteWithChildren,
   AuthenticatedMToolsRoute: AuthenticatedMToolsRoute,
   AuthenticatedMUpgradeRoute: AuthenticatedMUpgradeRoute,
-  AuthenticatedMWelcomeRoute: AuthenticatedMWelcomeRoute,
   AuthenticatedMIndexRoute: AuthenticatedMIndexRoute,
   AuthenticatedMWorkoutsEnrollmentIdWeekDayRoute:
     AuthenticatedMWorkoutsEnrollmentIdWeekDayRoute,
@@ -4205,3 +4184,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
