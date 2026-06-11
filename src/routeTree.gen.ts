@@ -86,7 +86,6 @@ import { Route as AuthenticatedAdminRecipesRouteImport } from './routes/_authent
 import { Route as AuthenticatedAdminPurchasesRouteImport } from './routes/_authenticated/admin/purchases'
 import { Route as AuthenticatedAdminProgramsRouteImport } from './routes/_authenticated/admin/programs'
 import { Route as AuthenticatedAdminProgramLibraryRouteImport } from './routes/_authenticated/admin/program-library'
-import { Route as AuthenticatedAdminPopupsRouteImport } from './routes/_authenticated/admin/popups'
 import { Route as AuthenticatedAdminPaymentsRouteImport } from './routes/_authenticated/admin/payments'
 import { Route as AuthenticatedAdminPaymentLinksRouteImport } from './routes/_authenticated/admin/payment-links'
 import { Route as AuthenticatedAdminOffersRouteImport } from './routes/_authenticated/admin/offers'
@@ -96,7 +95,6 @@ import { Route as AuthenticatedAdminMessagesRouteImport } from './routes/_authen
 import { Route as AuthenticatedAdminMembershipRouteImport } from './routes/_authenticated/admin/membership'
 import { Route as AuthenticatedAdminMediaReviewRouteImport } from './routes/_authenticated/admin/media-review'
 import { Route as AuthenticatedAdminMediaArchivesRouteImport } from './routes/_authenticated/admin/media-archives'
-import { Route as AuthenticatedAdminLoadScreensRouteImport } from './routes/_authenticated/admin/load-screens'
 import { Route as AuthenticatedAdminLiftVideosRouteImport } from './routes/_authenticated/admin/lift-videos'
 import { Route as AuthenticatedAdminGoogleCalendarRouteImport } from './routes/_authenticated/admin/google-calendar'
 import { Route as AuthenticatedAdminFormsRouteImport } from './routes/_authenticated/admin/forms'
@@ -616,12 +614,6 @@ const AuthenticatedAdminProgramLibraryRoute =
     path: '/program-library',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
-const AuthenticatedAdminPopupsRoute =
-  AuthenticatedAdminPopupsRouteImport.update({
-    id: '/popups',
-    path: '/popups',
-    getParentRoute: () => AuthenticatedAdminRouteRoute,
-  } as any)
 const AuthenticatedAdminPaymentsRoute =
   AuthenticatedAdminPaymentsRouteImport.update({
     id: '/payments',
@@ -674,12 +666,6 @@ const AuthenticatedAdminMediaArchivesRoute =
   AuthenticatedAdminMediaArchivesRouteImport.update({
     id: '/media-archives',
     path: '/media-archives',
-    getParentRoute: () => AuthenticatedAdminRouteRoute,
-  } as any)
-const AuthenticatedAdminLoadScreensRoute =
-  AuthenticatedAdminLoadScreensRouteImport.update({
-    id: '/load-screens',
-    path: '/load-screens',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
 const AuthenticatedAdminLiftVideosRoute =
@@ -1282,7 +1268,6 @@ export interface FileRoutesByFullPath {
   '/admin/forms': typeof AuthenticatedAdminFormsRoute
   '/admin/google-calendar': typeof AuthenticatedAdminGoogleCalendarRoute
   '/admin/lift-videos': typeof AuthenticatedAdminLiftVideosRoute
-  '/admin/load-screens': typeof AuthenticatedAdminLoadScreensRoute
   '/admin/media-archives': typeof AuthenticatedAdminMediaArchivesRoute
   '/admin/media-review': typeof AuthenticatedAdminMediaReviewRoute
   '/admin/membership': typeof AuthenticatedAdminMembershipRouteWithChildren
@@ -1292,7 +1277,6 @@ export interface FileRoutesByFullPath {
   '/admin/offers': typeof AuthenticatedAdminOffersRoute
   '/admin/payment-links': typeof AuthenticatedAdminPaymentLinksRoute
   '/admin/payments': typeof AuthenticatedAdminPaymentsRoute
-  '/admin/popups': typeof AuthenticatedAdminPopupsRoute
   '/admin/program-library': typeof AuthenticatedAdminProgramLibraryRoute
   '/admin/programs': typeof AuthenticatedAdminProgramsRoute
   '/admin/purchases': typeof AuthenticatedAdminPurchasesRouteWithChildren
@@ -1460,7 +1444,6 @@ export interface FileRoutesByTo {
   '/admin/forms': typeof AuthenticatedAdminFormsRoute
   '/admin/google-calendar': typeof AuthenticatedAdminGoogleCalendarRoute
   '/admin/lift-videos': typeof AuthenticatedAdminLiftVideosRoute
-  '/admin/load-screens': typeof AuthenticatedAdminLoadScreensRoute
   '/admin/media-archives': typeof AuthenticatedAdminMediaArchivesRoute
   '/admin/media-review': typeof AuthenticatedAdminMediaReviewRoute
   '/admin/messages': typeof AuthenticatedAdminMessagesRoute
@@ -1469,7 +1452,6 @@ export interface FileRoutesByTo {
   '/admin/offers': typeof AuthenticatedAdminOffersRoute
   '/admin/payment-links': typeof AuthenticatedAdminPaymentLinksRoute
   '/admin/payments': typeof AuthenticatedAdminPaymentsRoute
-  '/admin/popups': typeof AuthenticatedAdminPopupsRoute
   '/admin/program-library': typeof AuthenticatedAdminProgramLibraryRoute
   '/admin/programs': typeof AuthenticatedAdminProgramsRoute
   '/admin/purchases': typeof AuthenticatedAdminPurchasesRouteWithChildren
@@ -1643,7 +1625,6 @@ export interface FileRoutesById {
   '/_authenticated/admin/forms': typeof AuthenticatedAdminFormsRoute
   '/_authenticated/admin/google-calendar': typeof AuthenticatedAdminGoogleCalendarRoute
   '/_authenticated/admin/lift-videos': typeof AuthenticatedAdminLiftVideosRoute
-  '/_authenticated/admin/load-screens': typeof AuthenticatedAdminLoadScreensRoute
   '/_authenticated/admin/media-archives': typeof AuthenticatedAdminMediaArchivesRoute
   '/_authenticated/admin/media-review': typeof AuthenticatedAdminMediaReviewRoute
   '/_authenticated/admin/membership': typeof AuthenticatedAdminMembershipRouteWithChildren
@@ -1653,7 +1634,6 @@ export interface FileRoutesById {
   '/_authenticated/admin/offers': typeof AuthenticatedAdminOffersRoute
   '/_authenticated/admin/payment-links': typeof AuthenticatedAdminPaymentLinksRoute
   '/_authenticated/admin/payments': typeof AuthenticatedAdminPaymentsRoute
-  '/_authenticated/admin/popups': typeof AuthenticatedAdminPopupsRoute
   '/_authenticated/admin/program-library': typeof AuthenticatedAdminProgramLibraryRoute
   '/_authenticated/admin/programs': typeof AuthenticatedAdminProgramsRoute
   '/_authenticated/admin/purchases': typeof AuthenticatedAdminPurchasesRouteWithChildren
@@ -1827,7 +1807,6 @@ export interface FileRouteTypes {
     | '/admin/forms'
     | '/admin/google-calendar'
     | '/admin/lift-videos'
-    | '/admin/load-screens'
     | '/admin/media-archives'
     | '/admin/media-review'
     | '/admin/membership'
@@ -1837,7 +1816,6 @@ export interface FileRouteTypes {
     | '/admin/offers'
     | '/admin/payment-links'
     | '/admin/payments'
-    | '/admin/popups'
     | '/admin/program-library'
     | '/admin/programs'
     | '/admin/purchases'
@@ -2005,7 +1983,6 @@ export interface FileRouteTypes {
     | '/admin/forms'
     | '/admin/google-calendar'
     | '/admin/lift-videos'
-    | '/admin/load-screens'
     | '/admin/media-archives'
     | '/admin/media-review'
     | '/admin/messages'
@@ -2014,7 +1991,6 @@ export interface FileRouteTypes {
     | '/admin/offers'
     | '/admin/payment-links'
     | '/admin/payments'
-    | '/admin/popups'
     | '/admin/program-library'
     | '/admin/programs'
     | '/admin/purchases'
@@ -2187,7 +2163,6 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/forms'
     | '/_authenticated/admin/google-calendar'
     | '/_authenticated/admin/lift-videos'
-    | '/_authenticated/admin/load-screens'
     | '/_authenticated/admin/media-archives'
     | '/_authenticated/admin/media-review'
     | '/_authenticated/admin/membership'
@@ -2197,7 +2172,6 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/offers'
     | '/_authenticated/admin/payment-links'
     | '/_authenticated/admin/payments'
-    | '/_authenticated/admin/popups'
     | '/_authenticated/admin/program-library'
     | '/_authenticated/admin/programs'
     | '/_authenticated/admin/purchases'
@@ -2894,13 +2868,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminProgramLibraryRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
-    '/_authenticated/admin/popups': {
-      id: '/_authenticated/admin/popups'
-      path: '/popups'
-      fullPath: '/admin/popups'
-      preLoaderRoute: typeof AuthenticatedAdminPopupsRouteImport
-      parentRoute: typeof AuthenticatedAdminRouteRoute
-    }
     '/_authenticated/admin/payments': {
       id: '/_authenticated/admin/payments'
       path: '/payments'
@@ -2962,13 +2929,6 @@ declare module '@tanstack/react-router' {
       path: '/media-archives'
       fullPath: '/admin/media-archives'
       preLoaderRoute: typeof AuthenticatedAdminMediaArchivesRouteImport
-      parentRoute: typeof AuthenticatedAdminRouteRoute
-    }
-    '/_authenticated/admin/load-screens': {
-      id: '/_authenticated/admin/load-screens'
-      path: '/load-screens'
-      fullPath: '/admin/load-screens'
-      preLoaderRoute: typeof AuthenticatedAdminLoadScreensRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
     '/_authenticated/admin/lift-videos': {
@@ -3738,7 +3698,6 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminFormsRoute: typeof AuthenticatedAdminFormsRoute
   AuthenticatedAdminGoogleCalendarRoute: typeof AuthenticatedAdminGoogleCalendarRoute
   AuthenticatedAdminLiftVideosRoute: typeof AuthenticatedAdminLiftVideosRoute
-  AuthenticatedAdminLoadScreensRoute: typeof AuthenticatedAdminLoadScreensRoute
   AuthenticatedAdminMediaArchivesRoute: typeof AuthenticatedAdminMediaArchivesRoute
   AuthenticatedAdminMediaReviewRoute: typeof AuthenticatedAdminMediaReviewRoute
   AuthenticatedAdminMembershipRoute: typeof AuthenticatedAdminMembershipRouteWithChildren
@@ -3748,7 +3707,6 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminOffersRoute: typeof AuthenticatedAdminOffersRoute
   AuthenticatedAdminPaymentLinksRoute: typeof AuthenticatedAdminPaymentLinksRoute
   AuthenticatedAdminPaymentsRoute: typeof AuthenticatedAdminPaymentsRoute
-  AuthenticatedAdminPopupsRoute: typeof AuthenticatedAdminPopupsRoute
   AuthenticatedAdminProgramLibraryRoute: typeof AuthenticatedAdminProgramLibraryRoute
   AuthenticatedAdminProgramsRoute: typeof AuthenticatedAdminProgramsRoute
   AuthenticatedAdminPurchasesRoute: typeof AuthenticatedAdminPurchasesRouteWithChildren
@@ -3827,7 +3785,6 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
     AuthenticatedAdminGoogleCalendarRoute:
       AuthenticatedAdminGoogleCalendarRoute,
     AuthenticatedAdminLiftVideosRoute: AuthenticatedAdminLiftVideosRoute,
-    AuthenticatedAdminLoadScreensRoute: AuthenticatedAdminLoadScreensRoute,
     AuthenticatedAdminMediaArchivesRoute: AuthenticatedAdminMediaArchivesRoute,
     AuthenticatedAdminMediaReviewRoute: AuthenticatedAdminMediaReviewRoute,
     AuthenticatedAdminMembershipRoute:
@@ -3839,7 +3796,6 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
     AuthenticatedAdminOffersRoute: AuthenticatedAdminOffersRoute,
     AuthenticatedAdminPaymentLinksRoute: AuthenticatedAdminPaymentLinksRoute,
     AuthenticatedAdminPaymentsRoute: AuthenticatedAdminPaymentsRoute,
-    AuthenticatedAdminPopupsRoute: AuthenticatedAdminPopupsRoute,
     AuthenticatedAdminProgramLibraryRoute:
       AuthenticatedAdminProgramLibraryRoute,
     AuthenticatedAdminProgramsRoute: AuthenticatedAdminProgramsRoute,
@@ -4205,3 +4161,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
