@@ -1,9 +1,9 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { toast } from "sonner";
-import { Archive, Eye, Megaphone, Pencil, Trash2, Calendar as CalendarIcon, Cake, ClipboardCheck, Image as ImageIcon, UserCog, Activity } from "lucide-react";
+import { Archive, Eye, Megaphone, Pencil, Trash2, Calendar as CalendarIcon, Cake, ClipboardCheck, Image as ImageIcon, UserCog, Activity, Smartphone, Plus } from "lucide-react";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,11 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { supabase } from "@/integrations/supabase/client";
 
 const sb = supabase as any;
@@ -26,15 +31,17 @@ function LoadScreensPage() {
       />
       <div className="p-6 md:p-8 pb-32">
         <Tabs defaultValue="broadcasts" className="space-y-4">
-          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4">
+          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-5">
             <TabsTrigger value="broadcasts" className="text-xs sm:text-sm"><Megaphone className="mr-1 h-3.5 w-3.5" />Broadcasts</TabsTrigger>
             <TabsTrigger value="events" className="text-xs sm:text-sm"><CalendarIcon className="mr-1 h-3.5 w-3.5" />Event Popups</TabsTrigger>
             <TabsTrigger value="birthdays" className="text-xs sm:text-sm"><Cake className="mr-1 h-3.5 w-3.5" />Birthday Cards</TabsTrigger>
+            <TabsTrigger value="install" className="text-xs sm:text-sm"><Smartphone className="mr-1 h-3.5 w-3.5" />Install Prompts</TabsTrigger>
             <TabsTrigger value="setup" className="text-xs sm:text-sm"><ClipboardCheck className="mr-1 h-3.5 w-3.5" />Setup Gates</TabsTrigger>
           </TabsList>
           <TabsContent value="broadcasts"><BroadcastsPanel /></TabsContent>
           <TabsContent value="events"><EventsPanel /></TabsContent>
           <TabsContent value="birthdays"><BirthdaysPanel /></TabsContent>
+          <TabsContent value="install"><InstallPromptsPanel /></TabsContent>
           <TabsContent value="setup"><SetupGatesPanel /></TabsContent>
         </Tabs>
       </div>
