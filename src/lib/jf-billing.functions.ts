@@ -498,7 +498,18 @@ export const adminGetJfSettings = createServerFn({ method: "GET" })
     await assertAdmin(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data } = await supabaseAdmin.from("jf_membership_settings").select("*").eq("id", true).maybeSingle();
-    return { settings: data };
+    const diagnostics = getStripeKeyDiagnostics();
+    const mode: StripeMode = ((data as any)?.stripe_mode === "test" ? "test" : "live");
+    const key_available_for_mode = !!getStripeKeyForMode(mode);
+    return {
+      settings: data,
+      stripe: {
+        ...diagnostics,
+        configured_mode: mode,
+        key_available_for_mode,
+        mismatch: !key_available_for_mode,
+      },
+    };
   });
 
 const SettingsInput = z.object({
@@ -510,6 +521,7 @@ const SettingsInput = z.object({
   upgrade_coaching_url: z.string().url().optional().nullable().or(z.literal("")),
   support_email: z.string().email().optional().nullable().or(z.literal("")),
   refund_policy: z.string().optional(),
+  stripe_mode: z.enum(["test", "live"]).optional(),
 });
 export const adminUpdateJfSettings = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
