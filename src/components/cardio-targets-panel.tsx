@@ -69,21 +69,21 @@ export function CardioTargetsPanel({ clientId }: { clientId: string }) {
   });
 
   return (
-    <Card className="border-border bg-card p-6 md:col-span-3 space-y-4">
-      <div className="flex items-center justify-between">
+    <Card className="border-border bg-card p-4 sm:p-6 md:col-span-3 space-y-4 overflow-hidden">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h3 className="flex items-center gap-2 text-xs uppercase tracking-widest text-muted-foreground">
-          <Heart className="h-4 w-4" /> Cardio Targets
+          <Heart className="h-4 w-4 shrink-0" /> Cardio Targets
         </h3>
-        <div className="flex gap-2">
-          <Button size="sm" variant="outline" onClick={() => setTemplatesOpen(true)}>
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" variant="outline" className="flex-1 sm:flex-none" onClick={() => setTemplatesOpen(true)}>
             <BookOpen className="mr-1 h-4 w-4" /> Assign Saved
           </Button>
-          <Button size="sm" variant="outline" onClick={() => setBuilderOpen(true)}>
+          <Button size="sm" variant="outline" className="flex-1 sm:flex-none" onClick={() => setBuilderOpen(true)}>
             <LayoutList className="mr-1 h-4 w-4" /> Create Program
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button size="sm" className="bg-gradient-primary font-bold uppercase">
+              <Button size="sm" className="flex-1 bg-gradient-primary font-bold uppercase sm:flex-none">
                 <Plus className="mr-1 h-4 w-4" /> Single
               </Button>
             </DropdownMenuTrigger>
@@ -114,12 +114,12 @@ export function CardioTargetsPanel({ clientId }: { clientId: string }) {
                   const d = deriveTarget(t);
                   const cal = formatCalorieTarget(t.calorie_target_min, t.calorie_target_max);
                   return (
-                    <li key={t.id} className={`flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-secondary/20 px-3 py-2 ${t.enabled === false ? "opacity-60" : ""}`}>
-                      <div className="flex flex-wrap items-center gap-2 text-sm">
+                    <li key={t.id} className={`grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2 rounded-md border border-border bg-secondary/20 px-3 py-2 sm:flex sm:flex-wrap sm:items-center sm:justify-between ${t.enabled === false ? "opacity-60" : ""}`}>
+                      <div className="flex min-w-0 flex-wrap items-center gap-1.5 text-sm sm:gap-2">
                         <Badge variant="outline" className={dayTypeTone(t.day_type)}>{dayTypeLabel(t)}</Badge>
                         <Badge variant="outline" className={d.tone}>{d.label}</Badge>
-                        <span className="font-semibold">{t.cardio_type === "Custom" ? t.custom_type : t.cardio_type}</span>
-                        <span className="text-xs text-muted-foreground">
+                        <span className="truncate font-semibold">{t.cardio_type === "Custom" ? t.custom_type : t.cardio_type}</span>
+                        <span className="w-full text-xs text-muted-foreground sm:w-auto">
                           {t.frequency_per_week ? `${t.frequency_per_week}x/wk` : ""} {t.duration_minutes ? `· ${t.duration_minutes} min` : ""} {t.intensity ? `· ${t.intensity}` : ""}
                         </span>
                         {cal && <Badge variant="outline" className="text-[10px]">{cal}</Badge>}
@@ -127,10 +127,10 @@ export function CardioTargetsPanel({ clientId }: { clientId: string }) {
                           <Badge variant="outline" className="text-[10px]"><EyeOff className="mr-1 h-3 w-3" />Disabled</Badge>
                         )}
                       </div>
-                      <div className="flex gap-1">
-                        <Button size="sm" variant="ghost" onClick={() => duplicate(t)}><Copy className="h-4 w-4" /></Button>
-                        <Button size="sm" variant="ghost" onClick={() => { setEditing(t); setDefaultDayType(undefined); setOpen(true); }}><Pencil className="h-4 w-4" /></Button>
-                        <Button size="sm" variant="ghost" className="text-destructive" onClick={() => del(t)}><Trash2 className="h-4 w-4" /></Button>
+                      <div className="flex shrink-0 gap-0.5">
+                        <Button size="icon" variant="ghost" className="h-9 w-9" onClick={() => duplicate(t)} aria-label="Duplicate"><Copy className="h-4 w-4" /></Button>
+                        <Button size="icon" variant="ghost" className="h-9 w-9" onClick={() => { setEditing(t); setDefaultDayType(undefined); setOpen(true); }} aria-label="Edit"><Pencil className="h-4 w-4" /></Button>
+                        <Button size="icon" variant="ghost" className="h-9 w-9 text-destructive" onClick={() => del(t)} aria-label="Delete"><Trash2 className="h-4 w-4" /></Button>
                       </div>
                     </li>
                   );
