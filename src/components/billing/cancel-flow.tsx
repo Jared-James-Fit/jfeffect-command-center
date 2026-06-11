@@ -13,7 +13,7 @@ import { Snowflake, Pause, XCircle, Heart } from "lucide-react";
 const REASONS = ["Too expensive","Not using it enough","Missing features","Technical issue","Switching to coaching","Taking a break","Other"];
 const LOSE = ["workout plan library","workout tracking","exercise library","recipe library","nutrition resources","resource library","events","announcements","progress tracking","member-only updates"];
 
-export function CancelFlow({ open, onOpenChange, holdPriceDisplay = "$9/month", onDone }: {
+export function CancelFlow({ open, onOpenChange, holdPriceDisplay = "$9/month USD", onDone }: {
   open: boolean; onOpenChange: (b: boolean) => void; holdPriceDisplay?: string; onDone?: () => void;
 }) {
   const [step, setStep] = useState<"warn" | "options" | "reason" | "confirm">("warn");
@@ -88,6 +88,7 @@ export function CancelFlow({ open, onOpenChange, holdPriceDisplay = "$9/month", 
                   <div className="flex-1">
                     <div className="font-semibold">Switch to Hold Plan</div>
                     <div className="text-xs text-muted-foreground">{holdPriceDisplay} to keep your profile, history, and progress. Reactivate anytime.</div>
+                    <div className="text-[11px] text-muted-foreground mt-1">Taxes calculated at checkout where applicable.</div>
                   </div>
                   <Button size="sm" variant="outline" disabled={hold.isPending} onClick={() => hold.mutate()}>
                     {hold.isPending ? "Switching…" : "Hold Plan"}
