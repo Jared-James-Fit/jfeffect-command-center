@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, History } from "lucide-react";
 import { getCompletedHistory } from "@/lib/pl-programs";
+import { ProgressComparison } from "@/components/progress-comparison";
 
 export const Route = createFileRoute("/_authenticated/admin/client-programs/$clientId/history")({ component: HistoryPage });
 
@@ -29,6 +30,11 @@ function HistoryPage() {
         <Link to="/admin/client-programs/$clientId" params={{ clientId }} className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground">
           <ArrowLeft className="mr-1 h-4 w-4" /> Back to programs
         </Link>
+
+        <section>
+          <h2 className="mb-3 text-sm font-bold uppercase tracking-widest text-muted-foreground">Compare Progress</h2>
+          <ProgressComparison clientId={clientId} />
+        </section>
 
         <section>
           <h2 className="mb-3 text-sm font-bold uppercase tracking-widest text-muted-foreground">Completed Preps</h2>
