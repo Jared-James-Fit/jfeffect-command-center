@@ -118,6 +118,7 @@ import { Route as AuthenticatedAdminBookingLinksRouteImport } from './routes/_au
 import { Route as AuthenticatedAdminAutomationsRouteImport } from './routes/_authenticated/admin/automations'
 import { Route as AuthenticatedAdminArchivesRouteImport } from './routes/_authenticated/admin/archives'
 import { Route as AuthenticatedAdminAppsRouteImport } from './routes/_authenticated/admin/apps'
+import { Route as AuthenticatedAdminApprovalsRouteImport } from './routes/_authenticated/admin/approvals'
 import { Route as AuthenticatedAdminAppointmentsRouteImport } from './routes/_authenticated/admin/appointments'
 import { Route as AuthenticatedAdminAccountRouteImport } from './routes/_authenticated/admin/account'
 import { Route as AuthenticatedPortalWorkoutsIndexRouteImport } from './routes/_authenticated/portal/workouts.index'
@@ -803,6 +804,12 @@ const AuthenticatedAdminAppsRoute = AuthenticatedAdminAppsRouteImport.update({
   path: '/apps',
   getParentRoute: () => AuthenticatedAdminRouteRoute,
 } as any)
+const AuthenticatedAdminApprovalsRoute =
+  AuthenticatedAdminApprovalsRouteImport.update({
+    id: '/approvals',
+    path: '/approvals',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
 const AuthenticatedAdminAppointmentsRoute =
   AuthenticatedAdminAppointmentsRouteImport.update({
     id: '/appointments',
@@ -1236,6 +1243,7 @@ export interface FileRoutesByFullPath {
   '/signup/jf': typeof SignupJfRoute
   '/admin/account': typeof AuthenticatedAdminAccountRoute
   '/admin/appointments': typeof AuthenticatedAdminAppointmentsRoute
+  '/admin/approvals': typeof AuthenticatedAdminApprovalsRoute
   '/admin/apps': typeof AuthenticatedAdminAppsRoute
   '/admin/archives': typeof AuthenticatedAdminArchivesRoute
   '/admin/automations': typeof AuthenticatedAdminAutomationsRoute
@@ -1411,6 +1419,7 @@ export interface FileRoutesByTo {
   '/signup/jf': typeof SignupJfRoute
   '/admin/account': typeof AuthenticatedAdminAccountRoute
   '/admin/appointments': typeof AuthenticatedAdminAppointmentsRoute
+  '/admin/approvals': typeof AuthenticatedAdminApprovalsRoute
   '/admin/apps': typeof AuthenticatedAdminAppsRoute
   '/admin/archives': typeof AuthenticatedAdminArchivesRoute
   '/admin/automations': typeof AuthenticatedAdminAutomationsRoute
@@ -1591,6 +1600,7 @@ export interface FileRoutesById {
   '/signup/jf': typeof SignupJfRoute
   '/_authenticated/admin/account': typeof AuthenticatedAdminAccountRoute
   '/_authenticated/admin/appointments': typeof AuthenticatedAdminAppointmentsRoute
+  '/_authenticated/admin/approvals': typeof AuthenticatedAdminApprovalsRoute
   '/_authenticated/admin/apps': typeof AuthenticatedAdminAppsRoute
   '/_authenticated/admin/archives': typeof AuthenticatedAdminArchivesRoute
   '/_authenticated/admin/automations': typeof AuthenticatedAdminAutomationsRoute
@@ -1772,6 +1782,7 @@ export interface FileRouteTypes {
     | '/signup/jf'
     | '/admin/account'
     | '/admin/appointments'
+    | '/admin/approvals'
     | '/admin/apps'
     | '/admin/archives'
     | '/admin/automations'
@@ -1947,6 +1958,7 @@ export interface FileRouteTypes {
     | '/signup/jf'
     | '/admin/account'
     | '/admin/appointments'
+    | '/admin/approvals'
     | '/admin/apps'
     | '/admin/archives'
     | '/admin/automations'
@@ -2126,6 +2138,7 @@ export interface FileRouteTypes {
     | '/signup/jf'
     | '/_authenticated/admin/account'
     | '/_authenticated/admin/appointments'
+    | '/_authenticated/admin/approvals'
     | '/_authenticated/admin/apps'
     | '/_authenticated/admin/archives'
     | '/_authenticated/admin/automations'
@@ -3078,6 +3091,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminAppsRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
+    '/_authenticated/admin/approvals': {
+      id: '/_authenticated/admin/approvals'
+      path: '/approvals'
+      fullPath: '/admin/approvals'
+      preLoaderRoute: typeof AuthenticatedAdminApprovalsRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
     '/_authenticated/admin/appointments': {
       id: '/_authenticated/admin/appointments'
       path: '/appointments'
@@ -3671,6 +3691,7 @@ const AuthenticatedAdminClientProgramsClientIdRouteWithChildren =
 interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminAccountRoute: typeof AuthenticatedAdminAccountRoute
   AuthenticatedAdminAppointmentsRoute: typeof AuthenticatedAdminAppointmentsRoute
+  AuthenticatedAdminApprovalsRoute: typeof AuthenticatedAdminApprovalsRoute
   AuthenticatedAdminAppsRoute: typeof AuthenticatedAdminAppsRoute
   AuthenticatedAdminArchivesRoute: typeof AuthenticatedAdminArchivesRoute
   AuthenticatedAdminAutomationsRoute: typeof AuthenticatedAdminAutomationsRoute
@@ -3750,6 +3771,7 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
   {
     AuthenticatedAdminAccountRoute: AuthenticatedAdminAccountRoute,
     AuthenticatedAdminAppointmentsRoute: AuthenticatedAdminAppointmentsRoute,
+    AuthenticatedAdminApprovalsRoute: AuthenticatedAdminApprovalsRoute,
     AuthenticatedAdminAppsRoute: AuthenticatedAdminAppsRoute,
     AuthenticatedAdminArchivesRoute: AuthenticatedAdminArchivesRoute,
     AuthenticatedAdminAutomationsRoute: AuthenticatedAdminAutomationsRoute,
