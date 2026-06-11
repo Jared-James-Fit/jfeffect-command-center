@@ -1,178 +1,80 @@
-## Goal
+## Phase 2 — Cardio Defaults + Nutrition Day Sync
 
-Ship two premium public sales pages — `/join` (JF Membership, upgrade existing) and `/coaching` (new Private Coaching) — both backed by an admin CMS so you can edit copy, swap images, manage testimonials, and configure the coaching CTA without touching code.
+Builds on Phase 1. No rewrite of Cardio Targets — adds new actions, a tiny sync layer, and small client-portal surface. Touches only cardio files plus one tiny add on the client portal.
 
----
+### Data model (no schema changes)
+Cardio already has `cardio_targets.day_type` with values `General / Training Day / Rest Day / High Day / Custom`. Nutrition already has `nutrition_target_days.day_label` with values like `Training Day / Rest Day / High Day / Low Day / Daily`. Sync is a **name match** between `cardio_targets.day_type` and `nutrition_target_days.day_label`. No DB migration needed.
 
-## Architecture
+Note on naming: the spec calls it "Non-Training Day"; the existing enum uses "Rest Day" (and nutrition matches on "Rest Day"). To keep sync working without forking enums, we'll keep the stored value as `Rest Day` and surface the friendly label "Non-Training Day" in the new defaults UI only.
 
-One small CMS, two pages. Both pages render from the same content store so the admin UX is consistent and we don't duplicate code.
+### Part 1 — Apply Default Cardio
+Add a new primary action `Apply Default Cardio` in `CardioTargetsPanel` header. On click, ensures one Active target exists for each of the three day types using these defaults:
 
-### New DB: `sales_pages` (1 row per page key)
+- Training Day → Incline Walking · 25 min · Zone 2 · 4×/wk · ~150–200 cal · visible
+- Rest Day (labeled "Non-Training Day") → Outdoor Walking · 25 min · Zone 1–2 · 3×/wk · visible
+- High Day → Outdoor Walking · 20 min · Zone 1–2 · note "Keep fatigue low" · visible
 
-```text
-sales_pages
-├── page_key            text PK   -- 'join' | 'coaching'
-├── published           bool
-├── hero_headline       text
-├── hero_subheadline    text
-├── primary_cta_label   text
-├── primary_cta_kind    text      -- 'checkout' | 'application' | 'booking' | 'external' | 'lead_form'
-├── primary_cta_url     text      -- used when kind = external/booking
-├── secondary_cta_label text
-├── secondary_cta_href  text
-├── sections            jsonb     -- ordered blocks (included, not-included, comparison, how-it-works, faq, options)
-├── visuals             jsonb     -- ordered [{url, alt, slot, visible}] for hero + app previews + proof
-├── testimonials        jsonb     -- [{name, quote, image_url, visible, order}]
-├── updated_at, updated_by
-```
+A small confirm dialog before applying explains what will be created.
 
-Seeded with the exact copy from the spec for both `join` and `coaching`. RLS: public SELECT when `published = true`; admin all.
+### Part 2 — No duplicates
+Detection: a target counts as the "default" for a day type if `day_type` matches and `program_name` is null. On Apply:
+- If none of the three defaults exist → insert all three.
+- If some/all exist → open a confirm dialog with three options:
+  - **Update existing defaults** (overwrite the defining fields, keep notes)
+  - **Keep existing** (no-op)
+  - **Create as new** (extra) — disabled by default to avoid clutter
 
-### New storage bucket: `sales-page-media` (public)
+### Part 3 — Sync with nutrition day types
+A new helper `getNutritionDayLabels(clientId)` reads the client's latest active nutrition target + days and returns the list (e.g. `["Training Day","Rest Day","High Day"]`). The defaults dialog and Quick Actions use this to:
+- Pre-check which defaults to apply (only for day types the nutrition plan actually uses).
+- Skip "High Day" silently if nutrition doesn't include it (or warn admin).
+- Drive a new `Sync With Nutrition Days` action that reconciles existing cardio targets: any cardio with `day_type` matching a current nutrition `day_label` gets its `program_name` cleared (so it's treated as the linked default) and a toast confirms `N synced`.
 
-Used for hero images, app-preview screenshots, testimonial photos, transformation/proof cards. Admin uploads, the public page just reads the public URL.
+### Part 4 — Customization preserved
+`CardioTargetDialog` already covers all editable fields; no change needed. Edit / Copy / Delete in the panel continue to work. Defaults are normal rows after insertion, fully editable.
 
-### New DB: `coaching_applications` (lead capture)
+### Part 5 — Link badge per row
+In each panel row, add an inline indicator:
+- `Linked to: Training Day nutrition` (green) when a same-named nutrition day exists for the client.
+- `Not linked to nutrition day` (muted) when no match.
 
-```text
-coaching_applications
-├── id, created_at
-├── full_name, email, phone
-├── goals, training_history, schedule, budget_range, timeline
-├── source         text      -- 'coaching_page'
-├── status         text      -- 'New' | 'Contacted' | 'Approved' | 'Rejected'
-├── notes_admin    text
-```
+Computed client-side from the nutrition day labels we already fetch.
 
-RLS: anon INSERT only (the form); admin SELECT/UPDATE/DELETE.
+### Part 6 — Renamed day types
+Add a one-shot check on the cardio admin route: after fetching cardio + nutrition, if there are cardio targets whose `day_type` doesn't appear in the current nutrition day labels AND the nutrition plan recently changed, show a single banner at the top:
+> "Your nutrition day types changed. Sync cardio names? [Sync] [Dismiss]"
 
----
+Sync opens a small dialog listing each orphaned target with two buttons per row: `Update Cardio Name → <closest nutrition label>` or `Keep Current Name`. We don't auto-rename anything without admin confirmation.
 
-## Routes
+### Part 7 — Client view
+The client portal already lists cardio inside the admin panel only. Add a compact "Cardio by Day" card on `/portal/nutrition-targets` (right under the nutrition day tabs) showing the active cardio targets grouped by `day_type` so the client knows which cardio applies to which nutrition day. Example row: `Training Day Cardio · Incline Walking · 25 min · Zone 2`. Hidden if no active cardio.
 
-| Path             | Purpose                                                            |
-| ---------------- | ------------------------------------------------------------------ |
-| `/join`          | Existing JF Membership page — upgrade visuals + pull from CMS      |
-| `/coaching`      | New Private Coaching sales page — pulls from CMS                   |
-| `/apply`         | Redirect → `/coaching`                                             |
-| `/membership`    | Redirect → `/join`                                                 |
-| `/signup/jf`     | Already redirects → `/join` ✓                                      |
-| `/coaching/apply`| Coaching lead form (used when CTA kind = `lead_form` / default)    |
+### Part 8 — Quick Actions
+The panel header's button row becomes:
 
-All public routes work without login. Membership checkout still calls `createJfSignupCheckout` unchanged. Coaching CTA resolves at click time from `primary_cta_kind`:
-- `application` / `lead_form` → navigate to `/coaching/apply`
-- `booking` / `external` → open `primary_cta_url` in new tab
-- `checkout` → start Stripe checkout via existing payment-links flow (only if admin pastes a price id)
+1. `Apply Default Cardio` (primary, new)
+2. `Sync With Nutrition Days` (new)
+3. `Create Custom Cardio` (renames the existing "Single" dropdown trigger)
+4. `Assign Saved Cardio` (existing)
 
----
+Existing `Create Program` stays in an overflow menu so the row stays clean on mobile.
 
-## Page sections (built as small components, fed from `sections` jsonb)
+### Part 9 — Performance
+- All writes go through a single `applyDefaultCardio({clientId, mode})` helper using one bulk `upsert` per mode, then a single `invalidateQueries(["cardio-targets", clientId])`.
+- No page reload; existing query cache drives the re-render.
+- Nutrition day labels reuse the existing `my-nutrition-targets` query when available; admin route adds a `["client-nutrition-days", clientId]` query that's cached.
 
-Shared component library under `src/components/sales/`:
-- `SalesHero` (headline, sub, dual CTA, hero image)
-- `AppPreviewGrid` (mockup cards from `visuals` slot=`app_preview`)
-- `FeatureGrid` (icon + title + body)
-- `IncludedNotIncluded` (two columns ✓ / ✗)
-- `ComparisonCard` (Membership vs Coaching)
-- `OptionCard` (coaching plan tiles)
-- `HowItWorks` (numbered steps)
-- `ProofWall` (testimonials + transformation images)
-- `FAQAccordion` (uses existing `Accordion` from shadcn)
-- `FinalCta`
-- `StickyMobileCta` (visible <md only, hides on scroll-up after CTA tap)
-- `ShareToolbar` (copy / SMS / email / chat / IG-bio / promo message; uses `jfeffect.com` URLs only — never the preview origin)
+### Files changed
+- `src/lib/nutrition-cardio.ts` — add `DEFAULT_CARDIO_PRESETS`, `applyDefaultCardio()`, `syncCardioWithNutritionDays()`, `getNutritionDayLabels()`, `findOrphanedCardio()`.
+- `src/components/cardio-targets-panel.tsx` — new header actions, linked-badge per row, orphan banner, defaults confirm dialog.
+- `src/components/cardio-apply-defaults-dialog.tsx` (new) — confirm + per-day-type checkboxes + update/keep mode.
+- `src/components/cardio-sync-rename-dialog.tsx` (new) — per-row rename prompts.
+- `src/routes/_authenticated/portal/nutrition-targets.tsx` — add "Cardio by Day" summary card.
 
-### `/join` upgrade keeps existing checkout — adds: hero image slot, AppPreviewGrid, FeatureGrid, IncludedNotIncluded, ComparisonCard, ProofWall, sticky mobile CTA.
+### Out of scope this phase
+- Frequency enforcement against client's training-days-per-week (already a separate concept).
+- Mid-week auto-rotation of cardio per day of week.
+- Phase-3 items: workout warm-up protocols, FAQ buttons, history view, etc.
 
-### `/coaching` brand new: full structure from spec, including "What coaching is not", coaching options, results wall, 5-step how-it-works, FAQ, final CTA.
-
----
-
-## Admin
-
-New "Sales Pages" group in Coaching Admin nav (Business section):
-
-- `/admin/sales/membership` — edit `join` page
-- `/admin/sales/coaching` — edit `coaching` page (incl. CTA destination)
-- `/admin/sales/coaching-applications` — inbox for submitted lead forms
-
-Existing `/admin/membership/sales-page` (Membership Admin Dashboard) gets pointed at the same editor so there's one source of truth.
-
-Editor surface per page:
-- Hero copy + image upload
-- Primary/secondary CTA (label + destination type + URL)
-- Section toggles + per-section content edit
-- Visuals manager (upload / replace / remove / alt / visible / drag-reorder)
-- Testimonials manager (CRUD)
-- FAQ editor
-- Buttons: **Preview Page**, **Copy Public Link** (copies `https://jfeffect.com/<slug>`), **Open Live Page**, **Save**, **Publish/Unpublish**
-
-Editor is admin-only (server fn checks `has_role(admin)`). Public page only reads `sales_pages` row with `published=true` via a public server fn — no PII, no admin fields exposed.
-
----
-
-## Share tools
-
-`ShareToolbar` (admin-only, on both editor pages) emits:
-- Copy link → `https://jfeffect.com/join` or `/coaching`
-- SMS / Email / In-chat share with default promo message from spec
-- "Copy IG-bio link" (same URL, toast confirms)
-- "Copy promo message" (full body from spec)
-
----
-
-## Server functions (`src/lib/sales-pages.functions.ts`)
-
-- `getPublicSalesPage({ page_key })` — public, returns only `published` rows
-- `getSalesPageAdmin({ page_key })` — admin-only
-- `updateSalesPage({ page_key, patch })` — admin-only
-- `uploadSalesMedia` — handled via direct supabase client upload to `sales-page-media`
-- `submitCoachingApplication({ ... })` — public POST, rate-limit by inserting through anon RLS policy
-- `listCoachingApplications` / `updateCoachingApplication` — admin-only
-
----
-
-## File map (new + edited)
-
-**New (~18 files):**
-- `supabase/migrations/<ts>_sales_pages.sql` (table + RLS + grants + seed + storage bucket via tool)
-- `src/lib/sales-pages.functions.ts`
-- `src/lib/coaching-applications.functions.ts`
-- `src/components/sales/*` (10 small components above)
-- `src/routes/coaching.tsx`
-- `src/routes/coaching.apply.tsx`
-- `src/routes/membership.tsx` (redirect → /join)
-- `src/routes/apply.tsx` (redirect → /coaching)
-- `src/routes/_authenticated/admin/sales.membership.tsx`
-- `src/routes/_authenticated/admin/sales.coaching.tsx`
-- `src/routes/_authenticated/admin/sales.coaching-applications.tsx`
-
-**Edited (~5):**
-- `src/routes/join.tsx` — slot in new section components, pull CMS row, add sticky mobile CTA
-- `src/lib/admin-nav.ts` — add Sales Pages entries under Business
-- `src/routes/_authenticated/admin/membership.sales-page.tsx` — point at new editor (or render it inline)
-- `src/components/admin/jf-membership-settings-card.tsx` — small copy tweak
-- `.lovable/plan.md` — log
-
----
-
-## Out of scope for this batch (will note in code as TODO if relevant)
-
-- Native multi-step coaching application wizard with file uploads → MVP is single-page form; can grow later.
-- Automated email reply to applicants → not in this pass; admins see inbox.
-- A/B testing variants of the pages.
-- Custom analytics/conversion tracking beyond what you already have.
-
----
-
-## Verification
-
-After build I'll exec:
-1. View both public pages at desktop + mobile widths, confirm sections render.
-2. Submit a fake coaching application, confirm row lands and admin inbox shows it.
-3. Confirm `/membership`, `/apply`, `/signup/jf` all 302 → correct destination.
-4. Confirm Copy Public Link writes `https://jfeffect.com/...` (never preview URL).
-5. Confirm admin editor is gated; sign-out + reload `/coaching` still loads.
-
-Ready to build on approval.
+### Testing checklist (covered)
+All 16 checklist items from the request are covered by the steps above. Mobile layout from Phase 1 stays — only adding rows/badges that already use `flex-wrap` patterns.
