@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Rewind, FastForward, Gauge, Maximize2, Loader2, AlertTriangle, ExternalLink, RefreshCw } from "lucide-react";
+import { Rewind, FastForward, Gauge, Maximize2, Loader2, AlertTriangle, ExternalLink, RefreshCw, Download } from "lucide-react";
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
@@ -31,6 +31,7 @@ export function LiftVideoPlayer({
   const [slow, setSlow] = useState(false);
   const [useEmbedFallback, setUseEmbedFallback] = useState(false);
   const [retryKey, setRetryKey] = useState(0);
+  const [incompatible, setIncompatible] = useState(false);
   const [orientation, setOrientation] = useState<"portrait" | "landscape" | "unknown">(
     // Default to portrait (9:16) so the canvas is reserved instantly and the
     // UI doesn't visually "jump" while metadata loads. Real dimensions
@@ -42,6 +43,7 @@ export function LiftVideoPlayer({
     setStatus("loading");
     setSlow(false);
     setUseEmbedFallback(false);
+    setIncompatible(false);
     // Show fallback prompt at 5s, hard-error at 10s so admin is never stuck.
     const slowTimer = window.setTimeout(() => setSlow(true), 5000);
     const errorTimer = window.setTimeout(() => {
@@ -52,6 +54,24 @@ export function LiftVideoPlayer({
       window.clearTimeout(errorTimer);
     };
   }, [src, retryKey]);
+
+  // Pre-check: many client uploads from iPhone are .mov / HEVC. Chrome and
+  // Firefox on desktop can fetch metadata (so scrubbing appears to work) but
+  // cannot decode frames, so play() silently no-ops. Detect that up front and
+  // surface a clear download/open-original CTA instead of an inert player.
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const probe = document.createElement("video");
+    const lower = src.toLowerCase();
+    const looksMov = /\.mov($|\?)/i.test(lower) || /\.qt($|\?)/i.test(lower);
+    const canMov = probe.canPlayType("video/quicktime");
+    const canHevcMp4 = probe.canPlayType('video/mp4; codecs="hvc1"') || probe.canPlayType('video/mp4; codecs="hev1"');
+    if (looksMov && !canMov && !canHevcMp4) {
+      setIncompatible(true);
+    } else {
+      setIncompatible(false);
+    }
+  }, [src]);
 
   const skip = (delta: number) => {
     if (useEmbedFallback) return;
@@ -106,7 +126,32 @@ export function LiftVideoPlayer({
             : undefined
         }
       >
-        {useEmbedFallback && embedFallbackUrl ? (
+        {incompatible ? (
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-black/70 p-4 text-center text-white">
+            <AlertTriangle className="h-6 w-6" />
+            <div>
+              <div className="text-sm font-medium">This video can't play in your browser.</div>
+              <div className="mt-1 text-xs text-white/70">
+                The client uploaded a QuickTime / HEVC file (iPhone default). Open it in Drive,
+                or download and play in QuickTime / VLC.
+              </div>
+            </div>
+            <div className="flex flex-wrap justify-center gap-2">
+              {fallbackUrl && (
+                <Button size="sm" asChild>
+                  <a href={fallbackUrl} target="_blank" rel="noreferrer">
+                    Watch in Drive <ExternalLink className="ml-1 h-3 w-3" />
+                  </a>
+                </Button>
+              )}
+              <Button size="sm" variant="secondary" asChild>
+                <a href={src} download>
+                  <Download className="mr-1 h-3 w-3" /> Download
+                </a>
+              </Button>
+            </div>
+          </div>
+        ) : useEmbedFallback && embedFallbackUrl ? (
           <iframe
             key={`${embedFallbackUrl}-${retryKey}`}
             src={embedFallbackUrl}
