@@ -516,6 +516,56 @@ function ClientDetail() {
                   }}
                 />
               </label>
+              <label className="mt-2 flex items-center justify-between gap-2 rounded-md border border-border bg-secondary/30 px-3 py-2 text-xs">
+                <span>
+                  <span className="font-semibold">Client → Coach: call button</span>
+                  <span className="block text-[10px] text-muted-foreground">
+                    Shows a Call button in the client's chat so they can reach their assigned coach for urgent matters.
+                  </span>
+                </span>
+                <Switch
+                  checked={!!form.coach_call_access_enabled}
+                  onCheckedChange={async (v) => {
+                    set("coach_call_access_enabled", v);
+                    const { error } = await supabase
+                      .from("clients")
+                      .update({ coach_call_access_enabled: v } as any)
+                      .eq("id", id);
+                    if (error) {
+                      toast.error(error.message);
+                      set("coach_call_access_enabled", !v);
+                    } else {
+                      toast.success(v ? "Client can call their coach" : "Client can no longer call their coach");
+                      qc.invalidateQueries({ queryKey: ["client", id] });
+                    }
+                  }}
+                />
+              </label>
+              <label className="mt-2 flex items-center justify-between gap-2 rounded-md border border-border bg-secondary/30 px-3 py-2 text-xs">
+                <span>
+                  <span className="font-semibold">Client → Coach: SMS button</span>
+                  <span className="block text-[10px] text-muted-foreground">
+                    Shows a Text button in the client's chat so they can SMS their assigned coach for urgent matters. Off by default.
+                  </span>
+                </span>
+                <Switch
+                  checked={!!form.coach_sms_access_enabled}
+                  onCheckedChange={async (v) => {
+                    set("coach_sms_access_enabled", v);
+                    const { error } = await supabase
+                      .from("clients")
+                      .update({ coach_sms_access_enabled: v } as any)
+                      .eq("id", id);
+                    if (error) {
+                      toast.error(error.message);
+                      set("coach_sms_access_enabled", !v);
+                    } else {
+                      toast.success(v ? "Client can SMS their coach" : "Client can no longer SMS their coach");
+                      qc.invalidateQueries({ queryKey: ["client", id] });
+                    }
+                  }}
+                />
+              </label>
             </div>
             <div><Label>Instagram</Label><Input value={form.instagram ?? ""} onChange={(e) => set("instagram", e.target.value)} /></div>
             <div><Label>Start date</Label><Input type="date" value={form.start_date ?? ""} onChange={(e) => set("start_date", e.target.value || null)} /></div>
