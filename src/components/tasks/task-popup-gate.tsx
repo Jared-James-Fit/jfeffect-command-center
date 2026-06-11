@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ListChecks } from "lucide-react";
 import { useAuth } from "@/lib/auth";
-import { fetchTasks, QUADRANTS, countOpen, type TaskQuadrant } from "@/lib/tasks";
+import { fetchTasks, QUADRANTS, countOpen, type TaskQuadrant, type TaskScope } from "@/lib/tasks";
 
 const KEY_ADMIN = "jf-tasks-popup-seen-day";
 const KEY_MM = "jf-tasks-popup-seen-day-mm";
@@ -57,10 +57,11 @@ export function TaskPopupGate({ scope = "admin" }: { scope?: "admin" | "media_ma
     catch { setSeenToday(false); }
   }, [user, allowed, storageKey]);
 
+  const dbScope: TaskScope = scope === "media_manager" ? "media" : "admin";
   // Fetch tasks up front so we can decide whether opening the popup is even useful.
   const { data: tasks = [] } = useQuery({
-    queryKey: ["tasks", scope, user?.id ?? null],
-    queryFn: fetchTasks,
+    queryKey: ["tasks", dbScope, user?.id ?? null],
+    queryFn: () => fetchTasks(dbScope),
     enabled: !!user && allowed && !seenToday,
     staleTime: 60_000,
   });
