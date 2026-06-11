@@ -1,5 +1,5 @@
 import {
-  LayoutDashboard, Users, CreditCard, AlertCircle, FolderOpen, Calendar, Megaphone,
+  LayoutDashboard, Users, CreditCard, AlertCircle, FolderOpen, Calendar, Megaphone, UserPlus,
   HelpCircle, ChefHat, BookOpen, Settings, ListChecks, KeyRound,
   Link2 as LinkIcon, BarChart3, RefreshCw, ShoppingBag, Tag, MessagesSquare, Trophy, ShieldCheck,
 } from "lucide-react";
@@ -38,4 +38,5 @@ export const membershipNav: NavItem[] = [
   { to: "/admin/settings", label: "Membership Settings", icon: Settings, group: "Settings" },
   { to: "/admin/membership/access-checklist", label: "Access Checklist", icon: ShieldCheck, group: "Settings" },
   { to: "/admin/membership/refund-policy", label: "Refund / Cancellation Policy", icon: HelpCircle, group: "Settings" },
+  { to: "/admin/staff", label: "Staff & Media Manager", icon: UserPlus, group: "Settings" },
 ];

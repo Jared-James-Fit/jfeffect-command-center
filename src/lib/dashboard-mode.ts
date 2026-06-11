@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-export type DashboardMode = "coaching" | "membership";
+export type DashboardMode = "coaching" | "membership" | "media";
 const KEY = "jf-dashboard-mode";
 const EVENT = "jf-dashboard-mode-change";
 
@@ -8,6 +8,7 @@ export function getDashboardMode(): DashboardMode {
   try {
     const v = localStorage.getItem(KEY);
     if (v === "membership") return "membership";
+    if (v === "media") return "media";
   } catch {}
   return "coaching";
 }
