@@ -25,6 +25,7 @@ import { Route as CoachingApplyRouteImport } from './routes/coaching.apply'
 import { Route as BookSlugRouteImport } from './routes/book.$slug'
 import { Route as ApiDriveUploadRouteImport } from './routes/api/drive-upload'
 import { Route as AuthenticatedPortalRouteRouteImport } from './routes/_authenticated/portal/route'
+import { Route as AuthenticatedMediaRouteRouteImport } from './routes/_authenticated/media/route'
 import { Route as AuthenticatedMRouteRouteImport } from './routes/_authenticated/m/route'
 import { Route as AuthenticatedAdminRouteRouteImport } from './routes/_authenticated/admin/route'
 import { Route as AuthenticatedPortalIndexRouteImport } from './routes/_authenticated/portal/index'
@@ -251,6 +252,11 @@ const AuthenticatedPortalRouteRoute =
     path: '/portal',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedMediaRouteRoute = AuthenticatedMediaRouteRouteImport.update({
+  id: '/media',
+  path: '/media',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedMRouteRoute = AuthenticatedMRouteRouteImport.update({
   id: '/m',
   path: '/m',
@@ -1113,6 +1119,7 @@ export interface FileRoutesByFullPath {
   '/sitemap': typeof SitemapRoute
   '/admin': typeof AuthenticatedAdminRouteRouteWithChildren
   '/m': typeof AuthenticatedMRouteRouteWithChildren
+  '/media': typeof AuthenticatedMediaRouteRoute
   '/portal': typeof AuthenticatedPortalRouteRouteWithChildren
   '/api/drive-upload': typeof ApiDriveUploadRoute
   '/book/$slug': typeof BookSlugRoute
@@ -1273,6 +1280,7 @@ export interface FileRoutesByTo {
   '/reset-password': typeof ResetPasswordRoute
   '/setup': typeof SetupRoute
   '/sitemap': typeof SitemapRoute
+  '/media': typeof AuthenticatedMediaRouteRoute
   '/api/drive-upload': typeof ApiDriveUploadRoute
   '/book/$slug': typeof BookSlugRoute
   '/coaching/apply': typeof CoachingApplyRoute
@@ -1435,6 +1443,7 @@ export interface FileRoutesById {
   '/sitemap': typeof SitemapRoute
   '/_authenticated/admin': typeof AuthenticatedAdminRouteRouteWithChildren
   '/_authenticated/m': typeof AuthenticatedMRouteRouteWithChildren
+  '/_authenticated/media': typeof AuthenticatedMediaRouteRoute
   '/_authenticated/portal': typeof AuthenticatedPortalRouteRouteWithChildren
   '/api/drive-upload': typeof ApiDriveUploadRoute
   '/book/$slug': typeof BookSlugRoute
@@ -1599,6 +1608,7 @@ export interface FileRouteTypes {
     | '/sitemap'
     | '/admin'
     | '/m'
+    | '/media'
     | '/portal'
     | '/api/drive-upload'
     | '/book/$slug'
@@ -1759,6 +1769,7 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/setup'
     | '/sitemap'
+    | '/media'
     | '/api/drive-upload'
     | '/book/$slug'
     | '/coaching/apply'
@@ -1920,6 +1931,7 @@ export interface FileRouteTypes {
     | '/sitemap'
     | '/_authenticated/admin'
     | '/_authenticated/m'
+    | '/_authenticated/media'
     | '/_authenticated/portal'
     | '/api/drive-upload'
     | '/book/$slug'
@@ -2210,6 +2222,13 @@ declare module '@tanstack/react-router' {
       path: '/portal'
       fullPath: '/portal'
       preLoaderRoute: typeof AuthenticatedPortalRouteRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/media': {
+      id: '/_authenticated/media'
+      path: '/media'
+      fullPath: '/media'
+      preLoaderRoute: typeof AuthenticatedMediaRouteRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/m': {
@@ -3716,12 +3735,14 @@ const AuthenticatedPortalRouteRouteWithChildren =
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedAdminRouteRoute: typeof AuthenticatedAdminRouteRouteWithChildren
   AuthenticatedMRouteRoute: typeof AuthenticatedMRouteRouteWithChildren
+  AuthenticatedMediaRouteRoute: typeof AuthenticatedMediaRouteRoute
   AuthenticatedPortalRouteRoute: typeof AuthenticatedPortalRouteRouteWithChildren
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAdminRouteRoute: AuthenticatedAdminRouteRouteWithChildren,
   AuthenticatedMRouteRoute: AuthenticatedMRouteRouteWithChildren,
+  AuthenticatedMediaRouteRoute: AuthenticatedMediaRouteRoute,
   AuthenticatedPortalRouteRoute: AuthenticatedPortalRouteRouteWithChildren,
 }
 
