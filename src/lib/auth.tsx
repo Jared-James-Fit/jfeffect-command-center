@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { useRouter } from "@tanstack/react-router";
@@ -30,6 +30,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const router = useRouter();
   const queryClient = useQueryClient();
+  const lastUserIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     const { data: sub } = supabase.auth.onAuthStateChange((event, sess) => {
@@ -40,12 +41,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (sess && (event === "SIGNED_IN" || event === "TOKEN_REFRESHED" || event === "INITIAL_SESSION")) {
         void markClientSignedIn();
       }
-      router.invalidate();
-      queryClient.invalidateQueries();
+      // Only blow away caches on a real identity change (sign-in/sign-out or
+      // user-switch). TOKEN_REFRESHED and INITIAL_SESSION fire frequently and
+      // were causing every page to refetch everything → slow, inconsistent loads.
+      const newUid = sess?.user?.id ?? null;
+      const identityChanged = newUid !== lastUserIdRef.current;
+      if (identityChanged && (event === "SIGNED_IN" || event === "SIGNED_OUT" || event === "USER_UPDATED")) {
+        lastUserIdRef.current = newUid;
+        router.invalidate();
+        queryClient.invalidateQueries();
+      } else {
+        lastUserIdRef.current = newUid;
+      }
     });
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
       setUser(data.session?.user ?? null);
+      lastUserIdRef.current = data.session?.user?.id ?? null;
       setLoading(false);
       if (data.session) void markClientSignedIn();
     });
