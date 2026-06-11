@@ -6,7 +6,7 @@ import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Activity, FileText, Dumbbell, Loader2, ExternalLink, Video } from "lucide-react";
+import { Activity, FileText, Dumbbell, Loader2, ExternalLink, Video, Calendar as CalendarIcon, History, ListChecks, Sun } from "lucide-react";
 import { getClientWorkouts } from "@/lib/pl-programs";
 import { derivePhase, type TrainingPhase } from "@/lib/training-phases";
 import { WorkoutArchiveSection } from "@/components/workout-archive-section";
@@ -16,6 +16,9 @@ import { BlockSummaryCard } from "@/components/block-summary-card";
 import { BlockWeekColumns } from "@/components/block-week-columns";
 import { SmartTodayCard } from "@/components/smart-today-card";
 import { FaqWidget } from "@/components/faq-widget";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { WorkoutListCard } from "@/components/workout-list-card";
+import { ClientPreviousBlocks } from "@/components/client-previous-blocks";
 
 export const Route = createFileRoute("/_authenticated/portal/workouts/")({ component: WorkoutsPage });
 
@@ -58,6 +61,13 @@ function WorkoutsPage() {
     if (it.day?.id) bg.weeks.get(wk)!.entries.push(it);
   }
   const workoutItems = (items as any[]).filter((it) => it.day?.id);
+
+  // Treat the latest non-archived block (default ordering from getClientWorkouts)
+  // as the current block for the "All Workouts" tab.
+  const blockList = [...blockGroups.values()];
+  const currentGroup = blockList[blockList.length - 1] ?? null;
+  const currentBlockId: string | null = currentGroup?.block?.id ?? null;
+  const currentBlockItems = workoutItems.filter((it) => it.block?.id === currentBlockId);
 
   return (
     <>
@@ -113,9 +123,52 @@ function WorkoutsPage() {
             <p className="mt-3 text-sm text-muted-foreground">No workouts assigned yet. Your coach will publish your block soon.</p>
           </Card>
         ) : (
-          [...blockGroups.values()].map(({ block, weeks }) => (
-            <BlockSection key={block?.id ?? "none"} block={block} weeks={[...weeks.values()]} />
-          ))
+          <Tabs defaultValue="today" className="space-y-4">
+            <TabsList className="grid w-full grid-cols-4">
+              <TabsTrigger value="today" className="text-xs sm:text-sm"><Sun className="mr-1 h-3.5 w-3.5" /><span className="hidden sm:inline">Today</span><span className="sm:hidden">Today</span></TabsTrigger>
+              <TabsTrigger value="all" className="text-xs sm:text-sm"><ListChecks className="mr-1 h-3.5 w-3.5" /><span className="hidden sm:inline">All Workouts</span><span className="sm:hidden">All</span></TabsTrigger>
+              <TabsTrigger value="calendar" className="text-xs sm:text-sm"><CalendarIcon className="mr-1 h-3.5 w-3.5" /><span className="hidden sm:inline">Calendar</span><span className="sm:hidden">Cal</span></TabsTrigger>
+              <TabsTrigger value="history" className="text-xs sm:text-sm"><History className="mr-1 h-3.5 w-3.5" /><span className="hidden sm:inline">History</span><span className="sm:hidden">Hist</span></TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="today" className="space-y-4">
+              {currentGroup ? (
+                <BlockSection block={currentGroup.block} weeks={[...currentGroup.weeks.values()]} />
+              ) : (
+                <Card className="p-6 text-sm text-muted-foreground">No active block.</Card>
+              )}
+            </TabsContent>
+
+            <TabsContent value="all" className="space-y-3">
+              {currentBlockItems.length === 0 ? (
+                <Card className="p-6 text-sm text-muted-foreground">No workouts assigned in your current block.</Card>
+              ) : (
+                <>
+                  <p className="text-xs text-muted-foreground">
+                    Every workout in your current block — tap any to start, even if it isn't today.
+                  </p>
+                  {currentBlockItems.map((it) => (
+                    <WorkoutListCard key={it.day.id} item={it} />
+                  ))}
+                </>
+              )}
+            </TabsContent>
+
+            <TabsContent value="calendar" className="space-y-4">
+              {currentGroup ? (
+                <Card className="p-3">
+                  <div className="mb-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">Weeks</div>
+                  <BlockWeekColumns block={currentGroup.block} weeks={[...currentGroup.weeks.values()]} mode="client" />
+                </Card>
+              ) : (
+                <Card className="p-6 text-sm text-muted-foreground">No schedule available.</Card>
+              )}
+            </TabsContent>
+
+            <TabsContent value="history" className="space-y-3">
+              {client?.id && <ClientPreviousBlocks clientId={client.id} mode="client" />}
+            </TabsContent>
+          </Tabs>
         )}
 
         {client?.id && <WorkoutArchiveSection clientId={client.id} mode="client" />}
