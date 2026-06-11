@@ -1,113 +1,117 @@
-## Phase 4 — All workouts anytime + previous blocks / history access
+# Phase 6A — Smart Scheduling (Engine + Preview/Apply)
 
-### Scope guardrails
-- Do NOT rebuild the workout system, the block/week/day flow, or the existing completion logic.
-- Keep `SmartTodayCard`, `BlockSummaryCard`, `BlockWeekColumns`, `WorkoutArchiveSection`, and `workouts.$dayId.tsx` intact.
-- Only ADD: a tabbed client workouts screen, an "outside-scheduled-day" notice, status labels, and admin previous-blocks/history surfacing. Reuse existing data — no schema rewrites.
+Scope: scheduling logic, admin preview UI, and apply flow only. No full calendar, no progress comparison. Client view reuses the existing scheduled-date display from Phase 4.
 
-### Existing data we'll reuse
-- `pl_blocks` (start_date / end_date / status — already supports current vs prior)
-- `pl_weeks`, `pl_days` (scheduled_date + day_index + training_days)
-- `pl_day_completions` (already has `completed_at`)
-- `pl_row_results` (logged weights/reps/RPE/notes per set)
-- `getClientWorkouts(clientId)` already returns full items grouped by block
+## What already exists (will be reused, not rebuilt)
 
-So no migration is required for v1.
+- Client availability: `clients.available_training_days`, `committed_training_days`, `preferred_training_days`, `unavailable_training_days` (day-name arrays).
+- Blocks: `pl_blocks.start_date`, `end_date`, `weeks`, `week_duration_days`.
+- Workout days: `pl_days.scheduled_date`, `day_index`.
+- Cardio: `cardio_targets.day_type` ("Training Day" | "Rest Day" | "High Day" | "General" | "Custom") and `frequency_per_week`.
+- "Today's workout" already keys off `pl_days.scheduled_date` (`src/lib/workout-today.ts`).
 
----
+## New schema (single migration)
 
-### PART 1 — Client tabs (Today | All | Calendar | History)
+Add to `pl_days`:
+- `schedule_source text` — "auto" | "manual" (default "auto" when set, null otherwise).
+- `schedule_locked boolean` — true after admin manually overrides; auto-rescheduler must not overwrite.
 
-Refactor `src/routes/_authenticated/portal/workouts.index.tsx` to:
-- Keep all existing top sections (FAQ widgets, TrainingScheduleCard, SmartTodayCard, "Open My Program" card).
-- Below that, add a `Tabs` (segmented control) with 4 tabs:
-  - **Today** — current `SmartTodayCard` summary + next/up workouts (default).
-  - **All Workouts** — current block only: list every assigned day with status badge. Tap → existing `/portal/workouts/$dayId`.
-  - **Calendar** — keep existing `BlockWeekColumns` view (already a per-week schedule).
-  - **History** — new `<ClientPreviousBlocks clientId=…/>` component (see Part 4).
+Add to `pl_blocks`:
+- `last_scheduled_at timestamptz`.
+- `last_scheduled_availability text[]` — snapshot of the availability array used at last generation (used to detect "availability changed").
 
-Group blocks via `block.status` + `block.end_date`: "current" = active or latest with no end_date in past; everything else = history.
+No data migration. Existing rows behave as if never auto-scheduled. RLS is unchanged (columns added to tables that already have policies).
 
-### PART 2 — Allow completion outside scheduled day
+## Scheduling engine — `src/lib/auto-scheduler.ts`
 
-In `src/routes/_authenticated/portal/workouts.$dayId.tsx`:
-- Compute the day's scheduled date using existing helper `dayScheduledDate` (see `src/lib/workout-today.ts`; export it if not already exported).
-- If `today !== scheduledDate` AND not yet completed, render a small `Alert`:
-  > "This workout is scheduled for **{Mon, Mar 10}**, but you can still complete it today."
-- Do NOT block submit. Completion already writes `completed_at = now()` (actual date) and never touches `scheduled_date`. No DB change needed.
+Pure functions, then DB-touching wrappers. Inputs: block + weeks/days + client availability + cardio targets. Output: preview rows the UI renders.
 
-### PART 3 — Status display
+```text
+buildSchedulePreview(blockId) -> {
+  rows: [
+    { weekIndex, dayIndex, dayId, title,
+      dateISO, weekday,                 // proposed placement
+      dayType: "Training" | "Rest" | "High",
+      cardio: [{ targetId, label, dayType }],
+      manualOverride: boolean,          // existing schedule_locked=true
+      warnings: string[]                // per-row
+    },
+  ],
+  blockWarnings: string[],              // e.g. "3 available days, 4 workouts"
+  availabilityUsed: string[],           // snapshot
+}
+```
 
-Add `src/lib/workout-status.ts` exporting `getWorkoutStatus(item, today)` returning:
-- `today` | `upcoming` | `completed_today` | `completed_on_scheduled` | `completed_different_day` | `missed` | `available`
+Placement algorithm per week, in order:
+1. Resolve weekday pool = `committed_training_days` ∪ `available_training_days` − `unavailable_training_days`. Fall back to `preferred_training_days` if first set is empty.
+2. Anchor week to `pl_blocks.start_date` + (weekIndex × 7).
+3. Walk workouts in `day_index` order. For each, take the next weekday from the pool; emit date for that weekday in the anchored week.
+4. If a `pl_days` row has `schedule_locked = true`, keep its existing `scheduled_date` and skip the slot it occupies for that week.
+5. After placement: schedule cardio onto the same dates.
+   - Each active+visible `cardio_target`: assign on workout dates when `day_type = "Training Day"`, on non-workout dates in week when `day_type = "Rest Day"`, on `High Day` if a "high day" workout exists (`pl_days.focus ILIKE '%high%'` or future flag — for now, only attach if a workout in week has `focus` containing "high"), else attach to first available non-workout date. "General" cardio attaches to every day up to `frequency_per_week`.
+6. Warnings:
+   - workouts > available pool size → block-level warning.
+   - locked day on a weekday no longer in availability → row warning.
+   - cardio target with no eligible day for its type → block warning.
 
-Used by new `WorkoutListCard` (All Workouts tab) and reused in History. Wording: "Completed Tue", "Scheduled Thu", "Missed Mon", "Completed Fri instead of Mon".
+`applySchedule(blockId, preview)`:
+- Wraps DB updates in `pl_days.update({ scheduled_date, schedule_source: "auto" })`, skipping rows where `schedule_locked = true`.
+- Writes `pl_blocks.last_scheduled_at = now()`, `last_scheduled_availability = availabilityUsed`.
+- Never touches `pl_day_completions`, `pl_row_results`, completion timestamps, or cardio target rows.
 
-### PART 4 — Previous blocks / Training history (client)
+`markDayManual(dayId, date)`:
+- Sets `pl_days.scheduled_date = date`, `schedule_source = "manual"`, `schedule_locked = true`.
 
-New `src/components/client-previous-blocks.tsx`:
-- Query: list blocks for client where `status = 'Completed'` OR `end_date < today` (summary only — id, name, dates, completed count from existing `BlockSummaryCard` data path). Lazy.
-- Each row → expandable to show weeks → days. Clicking a day opens **read-only** existing `/portal/workouts/$dayId` with `?readonly=1` search param.
-- In `workouts.$dayId.tsx`, when `readonly` is true OR the day's block is `Completed`/in the past, disable inputs and hide "Complete" / "Save" actions. Show logged values from `pl_row_results`.
+`clearAutoSchedule(blockId, { keepManualOverrides: boolean })`:
+- Nulls `scheduled_date` and resets `schedule_source` only for rows where `schedule_locked = false` (or always when `keepManualOverrides=false`).
+- Nulls `pl_blocks.last_scheduled_at` / `last_scheduled_availability`.
 
-(Admin can flip the readonly flag from their side — see Part 5 — by passing `?readonly=0`.)
+`detectAvailabilityChange(blockId)`:
+- Compare `clients.available_training_days` (and committed) to `pl_blocks.last_scheduled_availability`.
+- Returns `{ changed: boolean, before, after }`.
 
-### PART 5 — Admin: previous blocks + history
+Cardio placement reads `cardio_targets` filtered by `client_id`, `status = "Active"`, `visible_to_client = true`. Read-only; never updated by the scheduler.
 
-`src/routes/_authenticated/admin/client-programs.$clientId.tsx` already lists blocks. Add a `Tabs` view:
-- **Current Block** (existing default content)
-- **Previous Blocks** — reuse `ClientPreviousBlocks` with `mode="admin"` (no readonly enforcement; admin can navigate into the block builder `/admin/blocks/$blockId`).
-- **Workout History** — flat list of completed workouts across blocks (date, block, day, completion status). Reuses the existing `client-programs.$clientId.history.tsx` route via a tab link if it already exists; otherwise embed a lightweight history table.
+## Admin UI — `src/components/auto-schedule-panel.tsx`
 
-No schema change.
+Renders inside the existing block editor route (`src/routes/_authenticated/admin/blocks.$blockId.tsx`), under the structure canvas / above warm-up panel.
 
-### PART 6 — Simple progress comparison (v1)
+States and quick actions (Part 9):
+- Idle: shows last scheduled date (or "Not scheduled"), availability summary, and a yellow notice if `detectAvailabilityChange` returns changed.
+  - Buttons: `Build Schedule From Availability`, `Preview Updated Schedule` (only when changed), `Edit Schedule Manually`, `Clear Auto Schedule`.
+- Preview: opens a `Dialog` with a per-week table — columns: Day, Title, Date, Weekday, Day Type, Cardio, Override, Warnings.
+  - Manual edits inline: a small date picker per row that flips the row to manual on change.
+  - Buttons: `Apply Schedule`, `Cancel`, `Edit Manually` (closes preview and scrolls to per-day inline editor in the existing day list).
+- Clear menu: `Clear Auto Schedule` opens a confirm dialog with checkbox `Keep manual overrides` (default checked).
+- Each row with `schedule_locked` shows a `Manual Override` badge.
 
-New `src/components/exercise-progress-compare.tsx` (admin-only, in the new History tab):
-- Pick an exercise → query `pl_row_results` joined to `pl_exercise_rows` filtered by `exercise_id` and client → group by `block_id` → show top set per block (max load × reps, last logged RPE).
-- One small "Block completion" stat: `completed_days / total_days` per block.
+## Integration points
 
-Loaded only when the tab is opened. Skip the client side for v1.
+- New file `src/lib/auto-scheduler.ts` (pure logic + DB wrappers using `supabase` client; admin-only operations).
+- New component `src/components/auto-schedule-panel.tsx`.
+- Edit `src/routes/_authenticated/admin/blocks.$blockId.tsx` to mount the panel.
+- Edit `src/integrations/supabase/types.ts` regenerated automatically after the migration.
 
-### PART 7 — Search / filter in history
+## What stays untouched
 
-In the admin History tab and client History tab, add lightweight client-side filters over the already-loaded summary list: free-text search (exercise/day title), block dropdown, status (completed / missed). No server pagination for v1.
+- Workout flow, logs, completion records, and history (Phase 4).
+- Warm-up resolver, cardio editor, nutrition targets.
+- Client portal: still uses `pl_days.scheduled_date` it already reads. No new client UI in 6A.
+- Group chat, messaging, billing, none of these are touched.
 
-### PART 8 — Data rules
+## Testing checklist (will be verified before reporting done)
 
-- Never write to old `pl_day_completions` from the readonly view.
-- Never modify `scheduled_date`; `completed_at` is the only field touched on completion (already the case).
-- No deletes, no dedupe writes.
+- Build button appears in block editor.
+- Preview reflects availability; reducing availability to 3 days for a 4-day program produces the expected warning.
+- Apply writes `scheduled_date` and respects `schedule_locked`.
+- Cardio rows align to day type (Training/Rest/High).
+- Manual edit flips row to Manual Override badge and survives next preview build.
+- Changing `clients.available_training_days` makes the notice appear; Preview Updated keeps locked days.
+- `pl_day_completions` rowcount and timestamps unchanged across all flows.
 
-### PART 9 — Mobile / tablet UX
+## Out of scope (later phases)
 
-- Use shadcn `Tabs` with `grid-cols-4` on mobile (icons + short label), full row on desktop.
-- All workout cards full-width on mobile, `pb-32` to clear bottom nav (already done in the page).
-- History rows use `Accordion` (collapsible) so they don't feel buried.
-
-### PART 10 — Performance
-
-- Tabs render lazy: each tab's heavy content is mounted only when active (conditional render).
-- `getClientWorkouts` is already loaded once for the page; Today/All/Calendar all derive from that single fetch (no extra round-trips).
-- Previous Blocks issues a single summary query; details fetched only when a row is expanded.
-- Progress comparison query runs only when the comparator is opened.
-
-### PART 11 — Files to change / add
-
-Create:
-- `src/lib/workout-status.ts`
-- `src/components/workout-list-card.tsx` (All Workouts row)
-- `src/components/client-previous-blocks.tsx`
-- `src/components/exercise-progress-compare.tsx`
-
-Edit:
-- `src/routes/_authenticated/portal/workouts.index.tsx` (wrap existing content in tabs)
-- `src/routes/_authenticated/portal/workouts.$dayId.tsx` (outside-day alert + readonly mode via `?readonly=1`)
-- `src/routes/_authenticated/admin/client-programs.$clientId.tsx` (tabs: Current / Previous / History)
-- `src/lib/workout-today.ts` (export `dayScheduledDate` if not exported)
-
-### Out of scope (deferred)
-- Client-side progress comparison UI
-- Reordering / rescheduling workouts
-- Permission flag to let a client edit an old block
-- Detailed per-set diff charts
+- Full client calendar UI (Phase 6B).
+- Progress comparison across blocks.
+- Automatic per-week regeneration on availability save (admin must press Preview Updated).
+- Push/email notifications when schedule changes.
