@@ -246,18 +246,7 @@ export const completeJfSignup = createServerFn({ method: "POST" })
     const s = await loadSettings();
 
     // Resolve the Stripe key for the configured mode (test/live).
-    // Without this, stripeFetch defaults to STRIPE_SECRET_KEY (often the live key)
-    // and a test-mode cs_test_... session lookup returns "No such checkout session",
-    // which the welcome page surfaces as "expired or invalid".
-    const mode: StripeMode = (s.stripe_mode === "test" ? "test" : "live");
-    const apiKey = getStripeKeyForMode(mode);
-    if (!apiKey) {
-      console.error(
-        `[jf-complete] Stripe key missing for mode=${mode}. session_id=${data.session_id.slice(0,16)}… ` +
-        `Diagnostics=${JSON.stringify(getStripeKeyDiagnostics())}`,
-      );
-      throw new Error("Membership setup is temporarily unavailable. Please contact support.");
-    }
+    const { apiKey, mode } = resolveStripeKey(s, "complete");
 
     // Re-fetch the session from Stripe in the correct mode
     let session: any;
