@@ -43,6 +43,28 @@ async function loadSettings() {
   return data;
 }
 
+/**
+ * Resolve the Stripe secret key matching the configured mode in jf_membership_settings.
+ * Throws a member-safe error and logs admin-side diagnostics if the key for that mode
+ * is missing. Use the returned key with every stripeFetch call so test-mode customers /
+ * subscriptions are read with sk_test_… and live ones with sk_live_….
+ */
+function resolveStripeKey(s: any, where: string): { apiKey: string; mode: StripeMode } {
+  const mode: StripeMode = (s?.stripe_mode === "test" ? "test" : "live");
+  const apiKey = getStripeKeyForMode(mode);
+  if (!apiKey) {
+    console.error(
+      `[jf-billing:${where}] Stripe key missing for mode=${mode}. ` +
+      `Diagnostics=${JSON.stringify(getStripeKeyDiagnostics())}. ` +
+      (mode === "test"
+        ? "Add STRIPE_SECRET_KEY_TEST (sk_test_…) in project secrets, or switch JF Membership Stripe Mode to Live."
+        : "Add a live STRIPE_SECRET_KEY (sk_live_…), or switch JF Membership Stripe Mode to Test."),
+    );
+    throw new Error("Billing is temporarily unavailable. Please contact support.");
+  }
+  return { apiKey, mode };
+}
+
 async function applyStripeStateToMember(memberId: string, sub: any, holdPriceId: string | null) {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const status = statusFromSubscription(sub, holdPriceId);
