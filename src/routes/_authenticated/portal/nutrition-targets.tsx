@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Apple, Beef, Wheat, Droplets, Flame, Cookie, FileText, Download, ExternalLink } from "lucide-react";
+import { Apple, Beef, Wheat, Droplets, Flame, Cookie, FileText, Download, ExternalLink, Heart } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { MealPlanDisplay } from "@/components/meal-plan-display";
 import { FaqWidget } from "@/components/faq-widget";
@@ -115,8 +115,73 @@ function NutritionView({ current }: { current: any }) {
 
       {activeDay && <DayPanel day={activeDay} water={current.water} />}
 
+      <CardioByDay clientId={current.client_id} nutritionLabels={days.map((d: any) => d.day_label)} />
+
       {current.pdf_url && <PdfCard path={current.pdf_url} name={current.pdf_name} />}
     </>
+  );
+}
+
+function CardioByDay({ clientId, nutritionLabels }: { clientId: string; nutritionLabels: string[] }) {
+  const { data: cardio = [] } = useQuery({
+    queryKey: ["my-cardio-by-day", clientId],
+    enabled: !!clientId,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("cardio_targets")
+        .select("*")
+        .eq("client_id", clientId)
+        .eq("visible_to_client", true)
+        .eq("enabled", true)
+        .neq("status", "Archived")
+        .order("day_type", { ascending: true });
+      return data ?? [];
+    },
+  });
+
+  const active = (cardio as any[]).filter((c) => c.status !== "Archived");
+  if (active.length === 0) return null;
+
+  // Group by day_type, preferring the most recent per type
+  const byType: Record<string, any> = {};
+  for (const c of active) {
+    const key = c.day_type === "Custom" ? c.custom_day_type || "Custom" : c.day_type;
+    if (!byType[key]) byType[key] = c;
+  }
+
+  const order = ["Training Day", "Rest Day", "High Day", "Low Day", "General", "Daily"];
+  const sorted = Object.entries(byType).sort(([a], [b]) => {
+    const ia = order.indexOf(a); const ib = order.indexOf(b);
+    return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+  });
+
+  return (
+    <Card className="border-border bg-card p-5 space-y-3">
+      <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+        <Heart className="h-3.5 w-3.5 text-primary" /> Cardio by Day
+      </div>
+      <ul className="space-y-2">
+        {sorted.map(([label, c]) => {
+          const friendly = label === "Rest Day" ? "Non-Training Day" : label;
+          const linked = nutritionLabels.includes(label);
+          return (
+            <li key={label} className="rounded-md border border-border bg-secondary/30 px-3 py-2">
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <div className="text-sm font-bold">{friendly} Cardio</div>
+                {linked && <span className="text-[10px] uppercase tracking-widest text-success">Linked</span>}
+              </div>
+              <div className="text-xs text-muted-foreground">
+                {c.cardio_type === "Custom" ? c.custom_type : c.cardio_type}
+                {c.duration_minutes ? ` · ${c.duration_minutes} min` : ""}
+                {c.intensity ? ` · ${c.intensity}` : ""}
+                {c.frequency_per_week ? ` · ${c.frequency_per_week}×/wk` : ""}
+              </div>
+              {c.client_notes && <div className="mt-1 text-xs text-foreground/80">{c.client_notes}</div>}
+            </li>
+          );
+        })}
+      </ul>
+    </Card>
   );
 }
 
