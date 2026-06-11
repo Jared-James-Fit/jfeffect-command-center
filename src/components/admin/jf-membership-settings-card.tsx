@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { Sparkles, AlertTriangle, CheckCircle2, Circle } from "lucide-react";
+import { Sparkles, AlertTriangle, CheckCircle2, Circle, KeyRound } from "lucide-react";
 
 export function JfMembershipSettingsCard() {
   const get = useServerFn(adminGetJfSettings);
@@ -42,6 +42,7 @@ export function JfMembershipSettingsCard() {
       upgrade_coaching_url: form.upgrade_coaching_url || null,
       support_email: form.support_email || null,
       refund_policy: form.refund_policy,
+      stripe_mode: form.stripe_mode === "test" ? "test" : "live",
     }});
     },
     onSuccess: () => { toast.success("Saved"); qc.invalidateQueries({ queryKey: ["jf-admin-settings"] }); },
@@ -49,6 +50,11 @@ export function JfMembershipSettingsCard() {
   });
 
   if (!data?.settings) return null;
+
+  const stripe = (data as any)?.stripe as
+    | { default_mode: "test" | "live" | null; test_key_present: boolean; live_key_available: boolean; test_key_available: boolean; configured_mode: "test" | "live"; key_available_for_mode: boolean; mismatch: boolean }
+    | undefined;
+  const selectedMode: "test" | "live" = form.stripe_mode === "test" ? "test" : "live";
 
   return (
     <Card className="border-emerald-500/30 bg-emerald-500/5 p-6 space-y-3 md:col-span-2">
@@ -59,6 +65,31 @@ export function JfMembershipSettingsCard() {
       <p className="text-xs text-muted-foreground">
         Configure Stripe price IDs (test or live), trial length, and the refund/cancellation policy shown on signup.
       </p>
+
+      {stripe && (
+        <div className={`flex items-start gap-2 rounded-md border p-3 text-xs ${stripe.mismatch ? "border-destructive/50 bg-destructive/10 text-destructive-foreground" : "border-emerald-500/40 bg-emerald-500/10 text-emerald-100"}`}>
+          <KeyRound className={`mt-0.5 h-4 w-4 shrink-0 ${stripe.mismatch ? "text-destructive" : "text-emerald-400"}`} />
+          <div className="space-y-1">
+            <div className="font-bold">
+              Stripe key status — configured mode: <span className="uppercase">{stripe.configured_mode}</span>
+            </div>
+            <ul className="opacity-90">
+              <li>Default <code>STRIPE_SECRET_KEY</code>: {stripe.default_mode ? <span className="uppercase">{stripe.default_mode}</span> : <span className="italic">not set</span>}</li>
+              <li><code>STRIPE_SECRET_KEY_TEST</code>: {stripe.test_key_present ? "present (test)" : "not set"}</li>
+              <li>Live key usable: {stripe.live_key_available ? "yes" : "no"} · Test key usable: {stripe.test_key_available ? "yes" : "no"}</li>
+            </ul>
+            {stripe.mismatch && (
+              <div className="mt-1">
+                <strong>Mismatch:</strong> Mode is set to <strong>{stripe.configured_mode}</strong>, but no {stripe.configured_mode === "test" ? "sk_test_…" : "sk_live_…"} key is configured.{" "}
+                {stripe.configured_mode === "test"
+                  ? "Add STRIPE_SECRET_KEY_TEST in project secrets, or switch mode to Live."
+                  : "Add a live STRIPE_SECRET_KEY, or switch mode to Test."}{" "}
+                Public checkout is safely blocked with a generic support message until this is fixed.
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {!fullyConfigured && (
         <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-100">
@@ -98,6 +129,24 @@ export function JfMembershipSettingsCard() {
       </div>
 
       <div className="grid gap-3 md:grid-cols-2">
+        <div className="md:col-span-2">
+          <Label>Stripe mode</Label>
+          <div className="mt-1 flex gap-2">
+            {(["test","live"] as const).map((m) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => setForm({ ...form, stripe_mode: m })}
+                className={`rounded-md border px-3 py-1.5 text-xs uppercase tracking-widest ${selectedMode === m ? "border-emerald-500 bg-emerald-500/20 text-emerald-100" : "border-border bg-background/50 text-muted-foreground"}`}
+              >
+                {m}
+              </button>
+            ))}
+          </div>
+          <p className="mt-1 text-[11px] text-muted-foreground">
+            Test mode uses <code>STRIPE_SECRET_KEY_TEST</code> (sk_test_…) and your sandbox price IDs. Live mode uses <code>STRIPE_SECRET_KEY</code> (sk_live_…) and live price IDs. Checkout is blocked if the saved price IDs don't match the selected mode's key.
+          </p>
+        </div>
         <div>
           <Label>Monthly price ID (Stripe)</Label>
           <Input
