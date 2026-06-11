@@ -31,6 +31,8 @@ export const Route = createFileRoute("/join")({
       { property: "og:type", content: "website" },
       { property: "og:url", content: "https://jfeffect.com/join" },
       { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:title", content: "JF Membership — $29/mo, 3-day free trial" },
+      { name: "twitter:description", content: "Self-guided workouts, recipes, tracking, resources, and community." },
     ],
   }),
 });
