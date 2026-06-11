@@ -2010,6 +2010,7 @@ export type Database = {
           unavailable_training_days: string[] | null
           updated_at: string
           user_id: string | null
+          warmup_protocol_id: string | null
           website: string | null
           youtube: string | null
         }
@@ -2153,6 +2154,7 @@ export type Database = {
           unavailable_training_days?: string[] | null
           updated_at?: string
           user_id?: string | null
+          warmup_protocol_id?: string | null
           website?: string | null
           youtube?: string | null
         }
@@ -2296,6 +2298,7 @@ export type Database = {
           unavailable_training_days?: string[] | null
           updated_at?: string
           user_id?: string | null
+          warmup_protocol_id?: string | null
           website?: string | null
           youtube?: string | null
         }
@@ -2305,6 +2308,13 @@ export type Database = {
             columns: ["assigned_check_in_link_id"]
             isOneToOne: false
             referencedRelation: "check_in_links"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "clients_warmup_protocol_id_fkey"
+            columns: ["warmup_protocol_id"]
+            isOneToOne: false
+            referencedRelation: "warmup_protocols"
             referencedColumns: ["id"]
           },
         ]
@@ -3307,9 +3317,11 @@ export type Database = {
           difficulty: string | null
           equipment: string | null
           id: string
+          is_powerlifting: boolean
           legacy_youtube_url: string | null
           muscle_group: string | null
           name: string
+          pl_lift_group: string | null
           quality_warning: string | null
           safe_to_publish: boolean
           source_quality: string | null
@@ -3325,6 +3337,8 @@ export type Database = {
           vimeo_url: string | null
           vimeo_video_id: string | null
           vimeo_working: boolean
+          warmup_notes: string | null
+          warmup_protocol_id: string | null
           youtube_fallback_allowed: boolean
           youtube_replaced: boolean
           youtube_url: string | null
@@ -3340,9 +3354,11 @@ export type Database = {
           difficulty?: string | null
           equipment?: string | null
           id?: string
+          is_powerlifting?: boolean
           legacy_youtube_url?: string | null
           muscle_group?: string | null
           name: string
+          pl_lift_group?: string | null
           quality_warning?: string | null
           safe_to_publish?: boolean
           source_quality?: string | null
@@ -3358,6 +3374,8 @@ export type Database = {
           vimeo_url?: string | null
           vimeo_video_id?: string | null
           vimeo_working?: boolean
+          warmup_notes?: string | null
+          warmup_protocol_id?: string | null
           youtube_fallback_allowed?: boolean
           youtube_replaced?: boolean
           youtube_url?: string | null
@@ -3373,9 +3391,11 @@ export type Database = {
           difficulty?: string | null
           equipment?: string | null
           id?: string
+          is_powerlifting?: boolean
           legacy_youtube_url?: string | null
           muscle_group?: string | null
           name?: string
+          pl_lift_group?: string | null
           quality_warning?: string | null
           safe_to_publish?: boolean
           source_quality?: string | null
@@ -3391,11 +3411,21 @@ export type Database = {
           vimeo_url?: string | null
           vimeo_video_id?: string | null
           vimeo_working?: boolean
+          warmup_notes?: string | null
+          warmup_protocol_id?: string | null
           youtube_fallback_allowed?: boolean
           youtube_replaced?: boolean
           youtube_url?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "exercises_warmup_protocol_id_fkey"
+            columns: ["warmup_protocol_id"]
+            isOneToOne: false
+            referencedRelation: "warmup_protocols"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       featured_member_items: {
         Row: {
@@ -5972,6 +6002,7 @@ export type Database = {
           status: string
           training_focus: string | null
           updated_at: string
+          warmup_protocol_id: string | null
           week_duration_days: number
           week_start_index: number | null
           weeks: number
@@ -5999,6 +6030,7 @@ export type Database = {
           status?: string
           training_focus?: string | null
           updated_at?: string
+          warmup_protocol_id?: string | null
           week_duration_days?: number
           week_start_index?: number | null
           weeks?: number
@@ -6026,6 +6058,7 @@ export type Database = {
           status?: string
           training_focus?: string | null
           updated_at?: string
+          warmup_protocol_id?: string | null
           week_duration_days?: number
           week_start_index?: number | null
           weeks?: number
@@ -6050,6 +6083,13 @@ export type Database = {
             columns: ["source_template_id"]
             isOneToOne: false
             referencedRelation: "pl_templates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pl_blocks_warmup_protocol_id_fkey"
+            columns: ["warmup_protocol_id"]
+            isOneToOne: false
+            referencedRelation: "warmup_protocols"
             referencedColumns: ["id"]
           },
         ]
@@ -6213,6 +6253,8 @@ export type Database = {
           source_day_id: string | null
           title: string | null
           updated_at: string
+          warmup_mode: string
+          warmup_protocol_id: string | null
           week_id: string
         }
         Insert: {
@@ -6229,6 +6271,8 @@ export type Database = {
           source_day_id?: string | null
           title?: string | null
           updated_at?: string
+          warmup_mode?: string
+          warmup_protocol_id?: string | null
           week_id: string
         }
         Update: {
@@ -6245,6 +6289,8 @@ export type Database = {
           source_day_id?: string | null
           title?: string | null
           updated_at?: string
+          warmup_mode?: string
+          warmup_protocol_id?: string | null
           week_id?: string
         }
         Relationships: [
@@ -6253,6 +6299,13 @@ export type Database = {
             columns: ["source_day_id"]
             isOneToOne: false
             referencedRelation: "pl_days"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pl_days_warmup_protocol_id_fkey"
+            columns: ["warmup_protocol_id"]
+            isOneToOne: false
+            referencedRelation: "warmup_protocols"
             referencedColumns: ["id"]
           },
           {
@@ -7950,6 +8003,135 @@ export type Database = {
           is_primary?: boolean
           role?: Database["public"]["Enums"]["app_role"]
           user_id?: string
+        }
+        Relationships: []
+      }
+      warmup_assignments: {
+        Row: {
+          client_id: string | null
+          created_at: string
+          created_by: string | null
+          exercise_id: string | null
+          id: string
+          pl_block_id: string | null
+          pl_day_id: string | null
+          protocol_id: string
+          scope: string
+          updated_at: string
+        }
+        Insert: {
+          client_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          exercise_id?: string | null
+          id?: string
+          pl_block_id?: string | null
+          pl_day_id?: string | null
+          protocol_id: string
+          scope: string
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          exercise_id?: string | null
+          id?: string
+          pl_block_id?: string | null
+          pl_day_id?: string | null
+          protocol_id?: string
+          scope?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "warmup_assignments_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "warmup_assignments_exercise_id_fkey"
+            columns: ["exercise_id"]
+            isOneToOne: false
+            referencedRelation: "exercises"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "warmup_assignments_pl_block_id_fkey"
+            columns: ["pl_block_id"]
+            isOneToOne: false
+            referencedRelation: "pl_blocks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "warmup_assignments_pl_day_id_fkey"
+            columns: ["pl_day_id"]
+            isOneToOne: false
+            referencedRelation: "pl_days"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "warmup_assignments_protocol_id_fkey"
+            columns: ["protocol_id"]
+            isOneToOne: false
+            referencedRelation: "warmup_protocols"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      warmup_protocols: {
+        Row: {
+          archived: boolean
+          category: string
+          created_at: string
+          created_by: string | null
+          estimated_minutes: number | null
+          id: string
+          internal_notes: string | null
+          is_default_general: boolean
+          is_default_powerlifting: boolean
+          name: string
+          notes: string | null
+          sections: Json
+          target_lift: string | null
+          updated_at: string
+          visible_to_client: boolean
+        }
+        Insert: {
+          archived?: boolean
+          category?: string
+          created_at?: string
+          created_by?: string | null
+          estimated_minutes?: number | null
+          id?: string
+          internal_notes?: string | null
+          is_default_general?: boolean
+          is_default_powerlifting?: boolean
+          name: string
+          notes?: string | null
+          sections?: Json
+          target_lift?: string | null
+          updated_at?: string
+          visible_to_client?: boolean
+        }
+        Update: {
+          archived?: boolean
+          category?: string
+          created_at?: string
+          created_by?: string | null
+          estimated_minutes?: number | null
+          id?: string
+          internal_notes?: string | null
+          is_default_general?: boolean
+          is_default_powerlifting?: boolean
+          name?: string
+          notes?: string | null
+          sections?: Json
+          target_lift?: string | null
+          updated_at?: string
+          visible_to_client?: boolean
         }
         Relationships: []
       }
