@@ -13,7 +13,7 @@ import {
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import {
   Megaphone, Calendar, ListChecks, Cake, ExternalLink, Plus, Eye, Search,
 } from "lucide-react";
@@ -227,10 +227,10 @@ function PopupsManager() {
     if (!row.canToggle) return;
     try {
       await togglePopup(row, next);
-      toast({ title: next ? "Popup enabled" : "Popup disabled", description: row.title });
+      toast.success(next ? "Popup enabled" : "Popup disabled", { description: row.title });
       qc.invalidateQueries({ queryKey: ["admin-popups"] });
     } catch (e: any) {
-      toast({ title: "Couldn't update popup", description: e?.message ?? "Unknown error", variant: "destructive" });
+      toast.error("Couldn't update popup", { description: e?.message ?? "Unknown error" });
     }
   }
 
