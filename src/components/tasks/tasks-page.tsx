@@ -19,7 +19,7 @@ import { Plus, MoreHorizontal, Trash2, ListChecks, Settings2, StickyNote, Rotate
 import { supabase } from "@/integrations/supabase/client";
 import {
   QUADRANTS, fetchTasks, fetchCoachesLite, createTask, toggleTaskDone,
-  updateTask, deleteTask, type TaskRow, type TaskQuadrant,
+  updateTask, deleteTask, type TaskRow, type TaskQuadrant, type TaskScope,
 } from "@/lib/tasks";
 import { cn } from "@/lib/utils";
 
@@ -84,26 +84,28 @@ export interface TasksPageProps {
   title?: string;
   subtitle?: string;
   storagePrefix?: string;
+  scope?: TaskScope;
 }
 
 export function TasksPage({
   title = "Task Manager",
   subtitle = "Collaborate on what needs to get done.",
   storagePrefix = "jf",
+  scope = "admin",
 }: TasksPageProps = {}) {
   const qc = useQueryClient();
-  const { data: tasks = [] } = useQuery({ queryKey: ["tasks"], queryFn: fetchTasks });
+  const { data: tasks = [] } = useQuery({ queryKey: ["tasks", scope], queryFn: () => fetchTasks(scope) });
   const { data: coaches = [] } = useQuery({ queryKey: ["coaches-lite"], queryFn: fetchCoachesLite });
   const { styles: quadStyles, update: updateQuadStyle, reset: resetQuadStyle } =
     useQuadrantStyles(`${storagePrefix}-quadrant-styles`);
 
   useEffect(() => {
     const ch = supabase.channel(`${storagePrefix}-tasks-rt`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "tasks" }, () => {
-        qc.invalidateQueries({ queryKey: ["tasks"] });
+      .on("postgres_changes", { event: "*", schema: "public", table: "tasks", filter: `scope=eq.${scope}` }, () => {
+        qc.invalidateQueries({ queryKey: ["tasks", scope] });
       }).subscribe();
     return () => { supabase.removeChannel(ch); };
-  }, [qc, storagePrefix]);
+  }, [qc, storagePrefix, scope]);
 
   const [newTitle, setNewTitle] = useState("");
   const [newQuadrant, setNewQuadrant] = useState<TaskQuadrant>("do");
@@ -122,8 +124,8 @@ export function TasksPage({
     const title = newTitle.trim();
     if (!title) return;
     setNewTitle("");
-    await createTask({ title, quadrant: newQuadrant });
-    qc.invalidateQueries({ queryKey: ["tasks"] });
+    await createTask({ title, quadrant: newQuadrant, scope });
+    qc.invalidateQueries({ queryKey: ["tasks", scope] });
   }
 
   return (

@@ -8078,6 +8078,7 @@ export type Database = {
           position: number
           priority: number
           quadrant: Database["public"]["Enums"]["task_quadrant"]
+          scope: string
           status: Database["public"]["Enums"]["task_status"]
           title: string
           updated_at: string
@@ -8094,6 +8095,7 @@ export type Database = {
           position?: number
           priority?: number
           quadrant?: Database["public"]["Enums"]["task_quadrant"]
+          scope?: string
           status?: Database["public"]["Enums"]["task_status"]
           title: string
           updated_at?: string
@@ -8110,6 +8112,7 @@ export type Database = {
           position?: number
           priority?: number
           quadrant?: Database["public"]["Enums"]["task_quadrant"]
+          scope?: string
           status?: Database["public"]["Enums"]["task_status"]
           title?: string
           updated_at?: string

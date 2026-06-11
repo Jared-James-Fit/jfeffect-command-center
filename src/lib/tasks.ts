@@ -16,9 +16,12 @@ export interface TaskRow {
   completed_at: string | null;
   completed_by: string | null;
   position: number;
+  scope: TaskScope;
   created_at: string;
   updated_at: string;
 }
+
+export type TaskScope = "admin" | "media";
 
 export const QUADRANTS: { key: TaskQuadrant; title: string; subtitle: string; tone: string }[] = [
   { key: "do",        title: "Do First",   subtitle: "Urgent · Important",         tone: "border-destructive/50 bg-destructive/5" },
@@ -27,9 +30,10 @@ export const QUADRANTS: { key: TaskQuadrant; title: string; subtitle: string; to
   { key: "eliminate", title: "Eliminate",  subtitle: "Not Urgent · Not Important", tone: "border-muted-foreground/30 bg-muted/30" },
 ];
 
-export async function fetchTasks(): Promise<TaskRow[]> {
+export async function fetchTasks(scope: TaskScope = "admin"): Promise<TaskRow[]> {
   const { data, error } = await (supabase.from("tasks") as any)
-    .select("*").order("status").order("position").order("created_at", { ascending: false });
+    .select("*").eq("scope", scope)
+    .order("status").order("position").order("created_at", { ascending: false });
   if (error) throw error;
   return (data ?? []) as TaskRow[];
 }
@@ -41,7 +45,7 @@ export async function getMyCoachId(): Promise<string | null> {
   return data?.id ?? null;
 }
 
-export async function createTask(input: { title: string; quadrant?: TaskQuadrant; assigned_to?: string | null; due_at?: string | null; notes?: string | null }): Promise<void> {
+export async function createTask(input: { title: string; quadrant?: TaskQuadrant; assigned_to?: string | null; due_at?: string | null; notes?: string | null; scope?: TaskScope }): Promise<void> {
   const me = await getMyCoachId();
   const { error } = await (supabase.from("tasks") as any).insert({
     title: input.title,
@@ -49,6 +53,7 @@ export async function createTask(input: { title: string; quadrant?: TaskQuadrant
     assigned_to: input.assigned_to ?? null,
     due_at: input.due_at ?? null,
     notes: input.notes ?? null,
+    scope: input.scope ?? "admin",
     created_by: me,
   });
   if (error) throw error;

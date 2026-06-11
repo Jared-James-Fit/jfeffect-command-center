@@ -7,6 +7,7 @@ function MediaTasksRoute() {
       title="Tasks"
       subtitle="Plan, prioritize, and knock out media work."
       storagePrefix="jf-media"
+      scope="media"
     />
   );
 }
