@@ -3960,6 +3960,7 @@ export type Database = {
           monthly_price_display: string
           monthly_price_id: string | null
           refund_policy: string
+          stripe_mode: string
           support_email: string | null
           trial_days: number
           updated_at: string
@@ -3972,6 +3973,7 @@ export type Database = {
           monthly_price_display?: string
           monthly_price_id?: string | null
           refund_policy?: string
+          stripe_mode?: string
           support_email?: string | null
           trial_days?: number
           updated_at?: string
@@ -3984,6 +3986,7 @@ export type Database = {
           monthly_price_display?: string
           monthly_price_id?: string | null
           refund_policy?: string
+          stripe_mode?: string
           support_email?: string | null
           trial_days?: number
           updated_at?: string
