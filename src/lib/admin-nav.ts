@@ -25,6 +25,7 @@ export const adminNav: NavItem[] = [
   { to: "/admin/client-action-requests", label: "Action Requests", icon: ClipboardCheck, group: "Core" },
   // COMMUNICATION
   { to: "/admin/broadcasts", label: "Broadcasts", icon: Megaphone, group: "Communication" },
+  { to: "/admin/load-screens", label: "Load Screens & Setup", icon: LayoutGrid, group: "Communication" },
   { to: "/admin/call-access", label: "Call Access", icon: Phone, group: "Communication" },
   { to: "/admin/settings/sms", label: "SMS Access", icon: MessageCircle, group: "Communication" },
   { to: "/admin/settings/chat", label: "Chat Settings", icon: MessageCircle, group: "Communication" },
@@ -88,6 +89,7 @@ export const coachingAdminNav: NavItem[] = [
   { to: "/admin/client-action-requests", label: "Action Requests", icon: ClipboardCheck, group: "Core" },
   // COMMUNICATION
   { to: "/admin/broadcasts", label: "Broadcasts", icon: Megaphone, group: "Communication" },
+  { to: "/admin/load-screens", label: "Load Screens & Setup", icon: LayoutGrid, group: "Communication" },
   { to: "/admin/call-access", label: "Call Access", icon: Phone, group: "Communication" },
   { to: "/admin/settings/sms", label: "SMS Access", icon: MessageCircle, group: "Communication" },
   { to: "/admin/settings/chat", label: "Chat Settings", icon: MessageCircle, group: "Communication" },
