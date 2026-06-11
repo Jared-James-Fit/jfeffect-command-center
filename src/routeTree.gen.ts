@@ -62,6 +62,7 @@ import { Route as AuthenticatedMediaBroadcastsRouteImport } from './routes/_auth
 import { Route as AuthenticatedMediaArchivesRouteImport } from './routes/_authenticated/media/archives'
 import { Route as AuthenticatedMediaAnnouncementsRouteImport } from './routes/_authenticated/media/announcements'
 import { Route as AuthenticatedMediaActionItemsRouteImport } from './routes/_authenticated/media/action-items'
+import { Route as AuthenticatedMediaAccountRouteImport } from './routes/_authenticated/media/account'
 import { Route as AuthenticatedMWelcomeRouteImport } from './routes/_authenticated/m/welcome'
 import { Route as AuthenticatedMUpgradeRouteImport } from './routes/_authenticated/m/upgrade'
 import { Route as AuthenticatedMToolsRouteImport } from './routes/_authenticated/m/tools'
@@ -477,6 +478,12 @@ const AuthenticatedMediaActionItemsRoute =
   AuthenticatedMediaActionItemsRouteImport.update({
     id: '/action-items',
     path: '/action-items',
+    getParentRoute: () => AuthenticatedMediaRouteRoute,
+  } as any)
+const AuthenticatedMediaAccountRoute =
+  AuthenticatedMediaAccountRouteImport.update({
+    id: '/account',
+    path: '/account',
     getParentRoute: () => AuthenticatedMediaRouteRoute,
   } as any)
 const AuthenticatedMWelcomeRoute = AuthenticatedMWelcomeRouteImport.update({
@@ -1277,6 +1284,7 @@ export interface FileRoutesByFullPath {
   '/m/tools': typeof AuthenticatedMToolsRoute
   '/m/upgrade': typeof AuthenticatedMUpgradeRoute
   '/m/welcome': typeof AuthenticatedMWelcomeRoute
+  '/media/account': typeof AuthenticatedMediaAccountRoute
   '/media/action-items': typeof AuthenticatedMediaActionItemsRoute
   '/media/announcements': typeof AuthenticatedMediaAnnouncementsRoute
   '/media/archives': typeof AuthenticatedMediaArchivesRoute
@@ -1449,6 +1457,7 @@ export interface FileRoutesByTo {
   '/m/tools': typeof AuthenticatedMToolsRoute
   '/m/upgrade': typeof AuthenticatedMUpgradeRoute
   '/m/welcome': typeof AuthenticatedMWelcomeRoute
+  '/media/account': typeof AuthenticatedMediaAccountRoute
   '/media/action-items': typeof AuthenticatedMediaActionItemsRoute
   '/media/announcements': typeof AuthenticatedMediaAnnouncementsRoute
   '/media/archives': typeof AuthenticatedMediaArchivesRoute
@@ -1628,6 +1637,7 @@ export interface FileRoutesById {
   '/_authenticated/m/tools': typeof AuthenticatedMToolsRoute
   '/_authenticated/m/upgrade': typeof AuthenticatedMUpgradeRoute
   '/_authenticated/m/welcome': typeof AuthenticatedMWelcomeRoute
+  '/_authenticated/media/account': typeof AuthenticatedMediaAccountRoute
   '/_authenticated/media/action-items': typeof AuthenticatedMediaActionItemsRoute
   '/_authenticated/media/announcements': typeof AuthenticatedMediaAnnouncementsRoute
   '/_authenticated/media/archives': typeof AuthenticatedMediaArchivesRoute
@@ -1807,6 +1817,7 @@ export interface FileRouteTypes {
     | '/m/tools'
     | '/m/upgrade'
     | '/m/welcome'
+    | '/media/account'
     | '/media/action-items'
     | '/media/announcements'
     | '/media/archives'
@@ -1979,6 +1990,7 @@ export interface FileRouteTypes {
     | '/m/tools'
     | '/m/upgrade'
     | '/m/welcome'
+    | '/media/account'
     | '/media/action-items'
     | '/media/announcements'
     | '/media/archives'
@@ -2157,6 +2169,7 @@ export interface FileRouteTypes {
     | '/_authenticated/m/tools'
     | '/_authenticated/m/upgrade'
     | '/_authenticated/m/welcome'
+    | '/_authenticated/media/account'
     | '/_authenticated/media/action-items'
     | '/_authenticated/media/announcements'
     | '/_authenticated/media/archives'
@@ -2659,6 +2672,13 @@ declare module '@tanstack/react-router' {
       path: '/action-items'
       fullPath: '/media/action-items'
       preLoaderRoute: typeof AuthenticatedMediaActionItemsRouteImport
+      parentRoute: typeof AuthenticatedMediaRouteRoute
+    }
+    '/_authenticated/media/account': {
+      id: '/_authenticated/media/account'
+      path: '/account'
+      fullPath: '/media/account'
+      preLoaderRoute: typeof AuthenticatedMediaAccountRouteImport
       parentRoute: typeof AuthenticatedMediaRouteRoute
     }
     '/_authenticated/m/welcome': {
@@ -3888,6 +3908,7 @@ const AuthenticatedMRouteRouteWithChildren =
   AuthenticatedMRouteRoute._addFileChildren(AuthenticatedMRouteRouteChildren)
 
 interface AuthenticatedMediaRouteRouteChildren {
+  AuthenticatedMediaAccountRoute: typeof AuthenticatedMediaAccountRoute
   AuthenticatedMediaActionItemsRoute: typeof AuthenticatedMediaActionItemsRoute
   AuthenticatedMediaAnnouncementsRoute: typeof AuthenticatedMediaAnnouncementsRoute
   AuthenticatedMediaArchivesRoute: typeof AuthenticatedMediaArchivesRoute
@@ -3906,6 +3927,7 @@ interface AuthenticatedMediaRouteRouteChildren {
 
 const AuthenticatedMediaRouteRouteChildren: AuthenticatedMediaRouteRouteChildren =
   {
+    AuthenticatedMediaAccountRoute: AuthenticatedMediaAccountRoute,
     AuthenticatedMediaActionItemsRoute: AuthenticatedMediaActionItemsRoute,
     AuthenticatedMediaAnnouncementsRoute: AuthenticatedMediaAnnouncementsRoute,
     AuthenticatedMediaArchivesRoute: AuthenticatedMediaArchivesRoute,
