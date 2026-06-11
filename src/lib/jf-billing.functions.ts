@@ -43,6 +43,28 @@ async function loadSettings() {
   return data;
 }
 
+/**
+ * Resolve the Stripe secret key matching the configured mode in jf_membership_settings.
+ * Throws a member-safe error and logs admin-side diagnostics if the key for that mode
+ * is missing. Use the returned key with every stripeFetch call so test-mode customers /
+ * subscriptions are read with sk_test_… and live ones with sk_live_….
+ */
+function resolveStripeKey(s: any, where: string): { apiKey: string; mode: StripeMode } {
+  const mode: StripeMode = (s?.stripe_mode === "test" ? "test" : "live");
+  const apiKey = getStripeKeyForMode(mode);
+  if (!apiKey) {
+    console.error(
+      `[jf-billing:${where}] Stripe key missing for mode=${mode}. ` +
+      `Diagnostics=${JSON.stringify(getStripeKeyDiagnostics())}. ` +
+      (mode === "test"
+        ? "Add STRIPE_SECRET_KEY_TEST (sk_test_…) in project secrets, or switch JF Membership Stripe Mode to Live."
+        : "Add a live STRIPE_SECRET_KEY (sk_live_…), or switch JF Membership Stripe Mode to Test."),
+    );
+    throw new Error("Billing is temporarily unavailable. Please contact support.");
+  }
+  return { apiKey, mode };
+}
+
 async function applyStripeStateToMember(memberId: string, sub: any, holdPriceId: string | null) {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const status = statusFromSubscription(sub, holdPriceId);
@@ -224,18 +246,7 @@ export const completeJfSignup = createServerFn({ method: "POST" })
     const s = await loadSettings();
 
     // Resolve the Stripe key for the configured mode (test/live).
-    // Without this, stripeFetch defaults to STRIPE_SECRET_KEY (often the live key)
-    // and a test-mode cs_test_... session lookup returns "No such checkout session",
-    // which the welcome page surfaces as "expired or invalid".
-    const mode: StripeMode = (s.stripe_mode === "test" ? "test" : "live");
-    const apiKey = getStripeKeyForMode(mode);
-    if (!apiKey) {
-      console.error(
-        `[jf-complete] Stripe key missing for mode=${mode}. session_id=${data.session_id.slice(0,16)}… ` +
-        `Diagnostics=${JSON.stringify(getStripeKeyDiagnostics())}`,
-      );
-      throw new Error("Membership setup is temporarily unavailable. Please contact support.");
-    }
+    const { apiKey, mode } = resolveStripeKey(s, "complete");
 
     // Re-fetch the session from Stripe in the correct mode
     let session: any;
@@ -402,9 +413,11 @@ export const cancelJfMembership = createServerFn({ method: "POST" })
     const { userId } = context as any;
     const member = await assertMyMember(userId);
     const s = await loadSettings();
+    const { apiKey } = resolveStripeKey(s, "cancel");
     const sub = await stripeFetch(`/subscriptions/${member.stripe_subscription_id}`, {
       method: "POST",
       body: formEncode({ cancel_at_period_end: "true" }),
+      apiKey,
     });
     await applyStripeStateToMember(member.id, sub, s.hold_price_id);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -426,6 +439,7 @@ export const freezeJfMembership = createServerFn({ method: "POST" })
     const { userId } = context as any;
     const member = await assertMyMember(userId);
     const s = await loadSettings();
+    const { apiKey } = resolveStripeKey(s, "freeze");
     const resumesAt = Math.floor(Date.now() / 1000) + 30 * 24 * 3600;
     const sub = await stripeFetch(`/subscriptions/${member.stripe_subscription_id}`, {
       method: "POST",
@@ -433,6 +447,7 @@ export const freezeJfMembership = createServerFn({ method: "POST" })
         "pause_collection[behavior]": "void",
         "pause_collection[resumes_at]": String(resumesAt),
       }),
+      apiKey,
     });
     await applyStripeStateToMember(member.id, sub, s.hold_price_id);
     await fireMemberSms(member.id, "subscription_frozen", {
@@ -448,8 +463,9 @@ export const switchToHoldPlan = createServerFn({ method: "POST" })
     const member = await assertMyMember(userId);
     const s = await loadSettings();
     if (!s.hold_price_id) throw new Error("Hold Plan price isn't configured yet.");
+    const { apiKey } = resolveStripeKey(s, "hold");
     // Get current sub to find item id
-    const current = await stripeFetch(`/subscriptions/${member.stripe_subscription_id}`);
+    const current = await stripeFetch(`/subscriptions/${member.stripe_subscription_id}`, { apiKey });
     const itemId = current.items?.data?.[0]?.id;
     if (!itemId) throw new Error("Subscription has no item.");
     const sub = await stripeFetch(`/subscriptions/${member.stripe_subscription_id}`, {
@@ -461,6 +477,7 @@ export const switchToHoldPlan = createServerFn({ method: "POST" })
         cancel_at_period_end: "false",
         "pause_collection": "",
       }),
+      apiKey,
     });
     await applyStripeStateToMember(member.id, sub, s.hold_price_id);
     await fireMemberSms(member.id, "subscription_hold_plan", {
@@ -476,7 +493,8 @@ export const reactivateFullMembership = createServerFn({ method: "POST" })
     const member = await assertMyMember(userId);
     const s = await loadSettings();
     if (!s.monthly_price_id) throw new Error("Membership price isn't configured.");
-    const current = await stripeFetch(`/subscriptions/${member.stripe_subscription_id}`);
+    const { apiKey } = resolveStripeKey(s, "reactivate");
+    const current = await stripeFetch(`/subscriptions/${member.stripe_subscription_id}`, { apiKey });
     const itemId = current.items?.data?.[0]?.id;
     if (!itemId) throw new Error("Subscription has no item.");
     const sub = await stripeFetch(`/subscriptions/${member.stripe_subscription_id}`, {
@@ -488,6 +506,7 @@ export const reactivateFullMembership = createServerFn({ method: "POST" })
         cancel_at_period_end: "false",
         "pause_collection": "",
       }),
+      apiKey,
     });
     await applyStripeStateToMember(member.id, sub, s.hold_price_id);
     await fireMemberSms(member.id, "subscription_reactivated", {
@@ -504,9 +523,12 @@ export const openBillingPortal = createServerFn({ method: "POST" })
     const { userId } = context as any;
     const member = await findMemberByUser(userId);
     if (!member?.stripe_customer_id) throw new Error("No billing account found.");
+    const s = await loadSettings();
+    const { apiKey } = resolveStripeKey(s, "portal");
     const portal = await stripeFetch("/billing_portal/sessions", {
       method: "POST",
       body: formEncode({ customer: member.stripe_customer_id, return_url: data.return_url }),
+      apiKey,
     });
     return { url: portal.url as string };
   });
@@ -517,7 +539,8 @@ export const syncMyStripeStatus = createServerFn({ method: "POST" })
     const { userId } = context as any;
     const member = await assertMyMember(userId);
     const s = await loadSettings();
-    const sub = await stripeFetch(`/subscriptions/${member.stripe_subscription_id}`);
+    const { apiKey } = resolveStripeKey(s, "sync");
+    const sub = await stripeFetch(`/subscriptions/${member.stripe_subscription_id}`, { apiKey });
     await applyStripeStateToMember(member.id, sub, s.hold_price_id);
     return { ok: true, subscription_status: statusFromSubscription(sub, s.hold_price_id) };
   });
@@ -592,7 +615,8 @@ export const adminSyncMemberStripe = createServerFn({ method: "POST" })
     const m = await loadMemberOrThrow(data.member_id);
     if (!m.stripe_subscription_id) return { ok: false, reason: "No subscription on file." };
     const s = await loadSettings();
-    const sub = await stripeFetch(`/subscriptions/${m.stripe_subscription_id}`);
+    const { apiKey } = resolveStripeKey(s, "adminSync");
+    const sub = await stripeFetch(`/subscriptions/${m.stripe_subscription_id}`, { apiKey });
     await applyStripeStateToMember(m.id, sub, s.hold_price_id);
     return { ok: true, subscription_status: statusFromSubscription(sub, s.hold_price_id) };
   });
@@ -605,9 +629,11 @@ export const adminCancelMember = createServerFn({ method: "POST" })
     const m = await loadMemberOrThrow(data.member_id);
     if (!m.stripe_subscription_id) throw new Error("No subscription.");
     const s = await loadSettings();
+    const { apiKey } = resolveStripeKey(s, "adminCancel");
     const sub = await stripeFetch(`/subscriptions/${m.stripe_subscription_id}`, {
       method: "POST",
       body: formEncode({ cancel_at_period_end: "true" }),
+      apiKey,
     });
     await applyStripeStateToMember(m.id, sub, s.hold_price_id);
     await fireMemberSms(m.id, "subscription_cancelled");
@@ -622,10 +648,12 @@ export const adminFreezeMember = createServerFn({ method: "POST" })
     const m = await loadMemberOrThrow(data.member_id);
     if (!m.stripe_subscription_id) throw new Error("No subscription.");
     const s = await loadSettings();
+    const { apiKey } = resolveStripeKey(s, "adminFreeze");
     const resumesAt = Math.floor(Date.now() / 1000) + 30 * 24 * 3600;
     const sub = await stripeFetch(`/subscriptions/${m.stripe_subscription_id}`, {
       method: "POST",
       body: formEncode({ "pause_collection[behavior]": "void", "pause_collection[resumes_at]": String(resumesAt) }),
+      apiKey,
     });
     await applyStripeStateToMember(m.id, sub, s.hold_price_id);
     await fireMemberSms(m.id, "subscription_frozen", {
@@ -643,11 +671,13 @@ export const adminHoldPlanMember = createServerFn({ method: "POST" })
     if (!m.stripe_subscription_id) throw new Error("No subscription.");
     const s = await loadSettings();
     if (!s.hold_price_id) throw new Error("Hold Plan price not configured.");
-    const current = await stripeFetch(`/subscriptions/${m.stripe_subscription_id}`);
+    const { apiKey } = resolveStripeKey(s, "adminHold");
+    const current = await stripeFetch(`/subscriptions/${m.stripe_subscription_id}`, { apiKey });
     const itemId = current.items?.data?.[0]?.id;
     const sub = await stripeFetch(`/subscriptions/${m.stripe_subscription_id}`, {
       method: "POST",
       body: formEncode({ [`items[0][id]`]: itemId, [`items[0][price]`]: s.hold_price_id, proration_behavior: "none", "pause_collection": "" }),
+      apiKey,
     });
     await applyStripeStateToMember(m.id, sub, s.hold_price_id);
     await fireMemberSms(m.id, "subscription_hold_plan", {
@@ -665,11 +695,13 @@ export const adminReactivateMember = createServerFn({ method: "POST" })
     if (!m.stripe_subscription_id) throw new Error("No subscription.");
     const s = await loadSettings();
     if (!s.monthly_price_id) throw new Error("Monthly price not configured.");
-    const current = await stripeFetch(`/subscriptions/${m.stripe_subscription_id}`);
+    const { apiKey } = resolveStripeKey(s, "adminReactivate");
+    const current = await stripeFetch(`/subscriptions/${m.stripe_subscription_id}`, { apiKey });
     const itemId = current.items?.data?.[0]?.id;
     const sub = await stripeFetch(`/subscriptions/${m.stripe_subscription_id}`, {
       method: "POST",
       body: formEncode({ [`items[0][id]`]: itemId, [`items[0][price]`]: s.monthly_price_id, proration_behavior: "create_prorations", cancel_at_period_end: "false", "pause_collection": "" }),
+      apiKey,
     });
     await applyStripeStateToMember(m.id, sub, s.hold_price_id);
     await fireMemberSms(m.id, "subscription_reactivated", {
