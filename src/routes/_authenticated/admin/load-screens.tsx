@@ -385,3 +385,215 @@ function SetupGatesPanel() {
     </Card>
   );
 }
+
+/* ================= INSTALL PROMPTS ================= */
+type InstallPrompt = {
+  id: string;
+  title: string;
+  body: string | null;
+  video_embed_url: string | null;
+  video_url: string | null;
+  link_url: string | null;
+  link_label: string | null;
+  ios_steps: string[];
+  android_steps: string[];
+  audience_scope: string;
+  enabled: boolean;
+  sort_order: number;
+};
+
+function emptyPrompt(): Partial<InstallPrompt> {
+  return {
+    title: "",
+    body: "",
+    video_embed_url: "",
+    video_url: "",
+    link_url: "",
+    link_label: "",
+    ios_steps: [],
+    android_steps: [],
+    audience_scope: "everyone",
+    enabled: true,
+    sort_order: 0,
+  };
+}
+
+function InstallPromptsPanel() {
+  const qc = useQueryClient();
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [confirm, setConfirm] = useState<null | "delete">(null);
+  const [editing, setEditing] = useState<Partial<InstallPrompt> | null>(null);
+
+  const { data: rows = [], isLoading } = useQuery({
+    queryKey: ["load-screens-install"],
+    queryFn: async () =>
+      (await sb.from("setup_prompts").select("*").order("sort_order", { ascending: true })).data ?? [],
+  });
+
+  const toggle = (id: string) =>
+    setSelected((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const toggleAll = (checked: boolean) =>
+    setSelected(checked ? new Set(rows.map((r: any) => r.id)) : new Set());
+
+  const doDelete = async () => {
+    const ids = [...selected];
+    const { error } = await sb.from("setup_prompts").delete().in("id", ids);
+    if (error) toast.error(error.message); else toast.success(`Deleted ${ids.length}`);
+    setSelected(new Set()); setConfirm(null);
+    qc.invalidateQueries({ queryKey: ["load-screens-install"] });
+  };
+
+  const toggleEnabled = async (id: string, enabled: boolean) => {
+    const { error } = await sb.from("setup_prompts").update({ enabled }).eq("id", id);
+    if (error) toast.error(error.message);
+    qc.invalidateQueries({ queryKey: ["load-screens-install"] });
+  };
+
+  return (
+    <Card className="p-4">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <div className="text-xs text-muted-foreground">
+          Setup popups that appear when users first open the app (Add to Home Screen, install guides, etc.). Disable to hide without deleting.
+        </div>
+        <Button size="sm" onClick={() => setEditing(emptyPrompt())}>
+          <Plus className="mr-1 h-3.5 w-3.5" /> New prompt
+        </Button>
+      </div>
+      <BulkBar total={rows.length} selectedCount={selected.size} onToggleAll={toggleAll}
+        onDelete={() => setConfirm("delete")} />
+      {isLoading ? (
+        <div className="p-6 text-sm text-muted-foreground">Loading…</div>
+      ) : rows.length === 0 ? (
+        <div className="rounded-md border border-dashed border-border p-6 text-center text-sm text-muted-foreground">No install prompts.</div>
+      ) : (
+        <ul className="space-y-2">
+          {rows.map((r: any) => (
+            <li key={r.id} className="flex flex-wrap items-center gap-3 rounded-md border border-border bg-card p-3">
+              <Checkbox checked={selected.has(r.id)} onCheckedChange={() => toggle(r.id)} />
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="truncate text-sm font-semibold">{r.title}</span>
+                  <Badge variant="outline" className="text-[10px]">{r.audience_scope}</Badge>
+                  <Badge variant="outline" className="text-[10px]">Order {r.sort_order}</Badge>
+                </div>
+                {r.body && <div className="mt-0.5 line-clamp-1 text-[11px] text-muted-foreground">{r.body}</div>}
+              </div>
+              <div className="flex items-center gap-2">
+                <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                  <Switch checked={r.enabled} onCheckedChange={(v) => toggleEnabled(r.id, v)} />
+                  {r.enabled ? "On" : "Off"}
+                </label>
+                <Button size="sm" variant="outline" onClick={() => setEditing(r)}>
+                  <Pencil className="mr-1 h-3.5 w-3.5" /> Edit
+                </Button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+      <ConfirmDialog open={confirm === "delete"} onOpenChange={(v) => !v && setConfirm(null)}
+        title="Delete install prompts?" description={`${selected.size} will be permanently deleted.`}
+        confirmText="Delete" destructive onConfirm={doDelete} />
+      {editing && (
+        <InstallPromptEditor
+          value={editing}
+          onClose={() => setEditing(null)}
+          onSaved={() => { setEditing(null); qc.invalidateQueries({ queryKey: ["load-screens-install"] }); }}
+        />
+      )}
+    </Card>
+  );
+}
+
+function InstallPromptEditor({
+  value, onClose, onSaved,
+}: { value: Partial<InstallPrompt>; onClose: () => void; onSaved: () => void }) {
+  const [form, setForm] = useState<Partial<InstallPrompt>>(value);
+  const [iosText, setIosText] = useState((value.ios_steps ?? []).join("\n"));
+  const [andText, setAndText] = useState((value.android_steps ?? []).join("\n"));
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => { setForm(value); setIosText((value.ios_steps ?? []).join("\n")); setAndText((value.android_steps ?? []).join("\n")); }, [value]);
+
+  const save = async () => {
+    if (!form.title?.trim()) { toast.error("Title is required"); return; }
+    setSaving(true);
+    const payload = {
+      title: form.title.trim(),
+      body: form.body || null,
+      video_embed_url: form.video_embed_url || null,
+      video_url: form.video_url || null,
+      link_url: form.link_url || null,
+      link_label: form.link_label || null,
+      ios_steps: iosText.split("\n").map((s) => s.trim()).filter(Boolean),
+      android_steps: andText.split("\n").map((s) => s.trim()).filter(Boolean),
+      audience_scope: form.audience_scope || "everyone",
+      enabled: form.enabled ?? true,
+      sort_order: Number(form.sort_order ?? 0),
+    };
+    const q = form.id
+      ? sb.from("setup_prompts").update(payload).eq("id", form.id)
+      : sb.from("setup_prompts").insert(payload);
+    const { error } = await q;
+    setSaving(false);
+    if (error) { toast.error(error.message); return; }
+    toast.success("Saved");
+    onSaved();
+  };
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>{form.id ? "Edit install prompt" : "New install prompt"}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div><Label className="text-xs">Title</Label>
+            <Input value={form.title ?? ""} onChange={(e) => setForm({ ...form, title: e.target.value })} />
+          </div>
+          <div><Label className="text-xs">Body / description</Label>
+            <Textarea rows={2} value={form.body ?? ""} onChange={(e) => setForm({ ...form, body: e.target.value })} />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div><Label className="text-xs">YouTube embed URL</Label>
+              <Input placeholder="https://www.youtube.com/embed/..." value={form.video_embed_url ?? ""} onChange={(e) => setForm({ ...form, video_embed_url: e.target.value })} />
+            </div>
+            <div><Label className="text-xs">External video link</Label>
+              <Input placeholder="https://youtu.be/..." value={form.video_url ?? ""} onChange={(e) => setForm({ ...form, video_url: e.target.value })} />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div><Label className="text-xs">iOS steps (one per line)</Label>
+              <Textarea rows={4} value={iosText} onChange={(e) => setIosText(e.target.value)} />
+            </div>
+            <div><Label className="text-xs">Android steps (one per line)</Label>
+              <Textarea rows={4} value={andText} onChange={(e) => setAndText(e.target.value)} />
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            <div><Label className="text-xs">Audience</Label>
+              <select className="h-9 w-full rounded-md border border-border bg-background px-2 text-sm"
+                value={form.audience_scope ?? "everyone"}
+                onChange={(e) => setForm({ ...form, audience_scope: e.target.value })}>
+                <option value="everyone">Everyone</option>
+                <option value="coaching_clients">Coaching clients</option>
+                <option value="app_members">App members</option>
+              </select>
+            </div>
+            <div><Label className="text-xs">Sort order</Label>
+              <Input type="number" value={form.sort_order ?? 0} onChange={(e) => setForm({ ...form, sort_order: Number(e.target.value) })} />
+            </div>
+            <div className="flex items-end gap-2">
+              <Switch checked={form.enabled ?? true} onCheckedChange={(v) => setForm({ ...form, enabled: v })} />
+              <span className="text-xs">{form.enabled ? "Enabled" : "Disabled"}</span>
+            </div>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button onClick={save} disabled={saving}>{saving ? "Saving…" : "Save"}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
