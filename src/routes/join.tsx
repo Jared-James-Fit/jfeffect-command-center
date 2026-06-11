@@ -37,6 +37,13 @@ export const Route = createFileRoute("/join")({
   }),
 });
 
+function mergeTaxFaq(items: Array<{ q: string; a: string }>) {
+  const taxQ = "Are taxes included?";
+  const taxA = "Taxes are calculated at checkout where applicable based on your location.";
+  const has = items.some((f) => (f.q ?? "").trim().toLowerCase() === taxQ.toLowerCase());
+  return has ? items : [...items, { q: taxQ, a: taxA }];
+}
+
 function SignupJf() {
   const getSettings = useServerFn(getJfPublicSettings);
   const createCheckout = useServerFn(createJfSignupCheckout);
