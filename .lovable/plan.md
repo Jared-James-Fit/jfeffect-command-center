@@ -1,80 +1,113 @@
-## Phase 2 — Cardio Defaults + Nutrition Day Sync
+## Phase 4 — All workouts anytime + previous blocks / history access
 
-Builds on Phase 1. No rewrite of Cardio Targets — adds new actions, a tiny sync layer, and small client-portal surface. Touches only cardio files plus one tiny add on the client portal.
+### Scope guardrails
+- Do NOT rebuild the workout system, the block/week/day flow, or the existing completion logic.
+- Keep `SmartTodayCard`, `BlockSummaryCard`, `BlockWeekColumns`, `WorkoutArchiveSection`, and `workouts.$dayId.tsx` intact.
+- Only ADD: a tabbed client workouts screen, an "outside-scheduled-day" notice, status labels, and admin previous-blocks/history surfacing. Reuse existing data — no schema rewrites.
 
-### Data model (no schema changes)
-Cardio already has `cardio_targets.day_type` with values `General / Training Day / Rest Day / High Day / Custom`. Nutrition already has `nutrition_target_days.day_label` with values like `Training Day / Rest Day / High Day / Low Day / Daily`. Sync is a **name match** between `cardio_targets.day_type` and `nutrition_target_days.day_label`. No DB migration needed.
+### Existing data we'll reuse
+- `pl_blocks` (start_date / end_date / status — already supports current vs prior)
+- `pl_weeks`, `pl_days` (scheduled_date + day_index + training_days)
+- `pl_day_completions` (already has `completed_at`)
+- `pl_row_results` (logged weights/reps/RPE/notes per set)
+- `getClientWorkouts(clientId)` already returns full items grouped by block
 
-Note on naming: the spec calls it "Non-Training Day"; the existing enum uses "Rest Day" (and nutrition matches on "Rest Day"). To keep sync working without forking enums, we'll keep the stored value as `Rest Day` and surface the friendly label "Non-Training Day" in the new defaults UI only.
+So no migration is required for v1.
 
-### Part 1 — Apply Default Cardio
-Add a new primary action `Apply Default Cardio` in `CardioTargetsPanel` header. On click, ensures one Active target exists for each of the three day types using these defaults:
+---
 
-- Training Day → Incline Walking · 25 min · Zone 2 · 4×/wk · ~150–200 cal · visible
-- Rest Day (labeled "Non-Training Day") → Outdoor Walking · 25 min · Zone 1–2 · 3×/wk · visible
-- High Day → Outdoor Walking · 20 min · Zone 1–2 · note "Keep fatigue low" · visible
+### PART 1 — Client tabs (Today | All | Calendar | History)
 
-A small confirm dialog before applying explains what will be created.
+Refactor `src/routes/_authenticated/portal/workouts.index.tsx` to:
+- Keep all existing top sections (FAQ widgets, TrainingScheduleCard, SmartTodayCard, "Open My Program" card).
+- Below that, add a `Tabs` (segmented control) with 4 tabs:
+  - **Today** — current `SmartTodayCard` summary + next/up workouts (default).
+  - **All Workouts** — current block only: list every assigned day with status badge. Tap → existing `/portal/workouts/$dayId`.
+  - **Calendar** — keep existing `BlockWeekColumns` view (already a per-week schedule).
+  - **History** — new `<ClientPreviousBlocks clientId=…/>` component (see Part 4).
 
-### Part 2 — No duplicates
-Detection: a target counts as the "default" for a day type if `day_type` matches and `program_name` is null. On Apply:
-- If none of the three defaults exist → insert all three.
-- If some/all exist → open a confirm dialog with three options:
-  - **Update existing defaults** (overwrite the defining fields, keep notes)
-  - **Keep existing** (no-op)
-  - **Create as new** (extra) — disabled by default to avoid clutter
+Group blocks via `block.status` + `block.end_date`: "current" = active or latest with no end_date in past; everything else = history.
 
-### Part 3 — Sync with nutrition day types
-A new helper `getNutritionDayLabels(clientId)` reads the client's latest active nutrition target + days and returns the list (e.g. `["Training Day","Rest Day","High Day"]`). The defaults dialog and Quick Actions use this to:
-- Pre-check which defaults to apply (only for day types the nutrition plan actually uses).
-- Skip "High Day" silently if nutrition doesn't include it (or warn admin).
-- Drive a new `Sync With Nutrition Days` action that reconciles existing cardio targets: any cardio with `day_type` matching a current nutrition `day_label` gets its `program_name` cleared (so it's treated as the linked default) and a toast confirms `N synced`.
+### PART 2 — Allow completion outside scheduled day
 
-### Part 4 — Customization preserved
-`CardioTargetDialog` already covers all editable fields; no change needed. Edit / Copy / Delete in the panel continue to work. Defaults are normal rows after insertion, fully editable.
+In `src/routes/_authenticated/portal/workouts.$dayId.tsx`:
+- Compute the day's scheduled date using existing helper `dayScheduledDate` (see `src/lib/workout-today.ts`; export it if not already exported).
+- If `today !== scheduledDate` AND not yet completed, render a small `Alert`:
+  > "This workout is scheduled for **{Mon, Mar 10}**, but you can still complete it today."
+- Do NOT block submit. Completion already writes `completed_at = now()` (actual date) and never touches `scheduled_date`. No DB change needed.
 
-### Part 5 — Link badge per row
-In each panel row, add an inline indicator:
-- `Linked to: Training Day nutrition` (green) when a same-named nutrition day exists for the client.
-- `Not linked to nutrition day` (muted) when no match.
+### PART 3 — Status display
 
-Computed client-side from the nutrition day labels we already fetch.
+Add `src/lib/workout-status.ts` exporting `getWorkoutStatus(item, today)` returning:
+- `today` | `upcoming` | `completed_today` | `completed_on_scheduled` | `completed_different_day` | `missed` | `available`
 
-### Part 6 — Renamed day types
-Add a one-shot check on the cardio admin route: after fetching cardio + nutrition, if there are cardio targets whose `day_type` doesn't appear in the current nutrition day labels AND the nutrition plan recently changed, show a single banner at the top:
-> "Your nutrition day types changed. Sync cardio names? [Sync] [Dismiss]"
+Used by new `WorkoutListCard` (All Workouts tab) and reused in History. Wording: "Completed Tue", "Scheduled Thu", "Missed Mon", "Completed Fri instead of Mon".
 
-Sync opens a small dialog listing each orphaned target with two buttons per row: `Update Cardio Name → <closest nutrition label>` or `Keep Current Name`. We don't auto-rename anything without admin confirmation.
+### PART 4 — Previous blocks / Training history (client)
 
-### Part 7 — Client view
-The client portal already lists cardio inside the admin panel only. Add a compact "Cardio by Day" card on `/portal/nutrition-targets` (right under the nutrition day tabs) showing the active cardio targets grouped by `day_type` so the client knows which cardio applies to which nutrition day. Example row: `Training Day Cardio · Incline Walking · 25 min · Zone 2`. Hidden if no active cardio.
+New `src/components/client-previous-blocks.tsx`:
+- Query: list blocks for client where `status = 'Completed'` OR `end_date < today` (summary only — id, name, dates, completed count from existing `BlockSummaryCard` data path). Lazy.
+- Each row → expandable to show weeks → days. Clicking a day opens **read-only** existing `/portal/workouts/$dayId` with `?readonly=1` search param.
+- In `workouts.$dayId.tsx`, when `readonly` is true OR the day's block is `Completed`/in the past, disable inputs and hide "Complete" / "Save" actions. Show logged values from `pl_row_results`.
 
-### Part 8 — Quick Actions
-The panel header's button row becomes:
+(Admin can flip the readonly flag from their side — see Part 5 — by passing `?readonly=0`.)
 
-1. `Apply Default Cardio` (primary, new)
-2. `Sync With Nutrition Days` (new)
-3. `Create Custom Cardio` (renames the existing "Single" dropdown trigger)
-4. `Assign Saved Cardio` (existing)
+### PART 5 — Admin: previous blocks + history
 
-Existing `Create Program` stays in an overflow menu so the row stays clean on mobile.
+`src/routes/_authenticated/admin/client-programs.$clientId.tsx` already lists blocks. Add a `Tabs` view:
+- **Current Block** (existing default content)
+- **Previous Blocks** — reuse `ClientPreviousBlocks` with `mode="admin"` (no readonly enforcement; admin can navigate into the block builder `/admin/blocks/$blockId`).
+- **Workout History** — flat list of completed workouts across blocks (date, block, day, completion status). Reuses the existing `client-programs.$clientId.history.tsx` route via a tab link if it already exists; otherwise embed a lightweight history table.
 
-### Part 9 — Performance
-- All writes go through a single `applyDefaultCardio({clientId, mode})` helper using one bulk `upsert` per mode, then a single `invalidateQueries(["cardio-targets", clientId])`.
-- No page reload; existing query cache drives the re-render.
-- Nutrition day labels reuse the existing `my-nutrition-targets` query when available; admin route adds a `["client-nutrition-days", clientId]` query that's cached.
+No schema change.
 
-### Files changed
-- `src/lib/nutrition-cardio.ts` — add `DEFAULT_CARDIO_PRESETS`, `applyDefaultCardio()`, `syncCardioWithNutritionDays()`, `getNutritionDayLabels()`, `findOrphanedCardio()`.
-- `src/components/cardio-targets-panel.tsx` — new header actions, linked-badge per row, orphan banner, defaults confirm dialog.
-- `src/components/cardio-apply-defaults-dialog.tsx` (new) — confirm + per-day-type checkboxes + update/keep mode.
-- `src/components/cardio-sync-rename-dialog.tsx` (new) — per-row rename prompts.
-- `src/routes/_authenticated/portal/nutrition-targets.tsx` — add "Cardio by Day" summary card.
+### PART 6 — Simple progress comparison (v1)
 
-### Out of scope this phase
-- Frequency enforcement against client's training-days-per-week (already a separate concept).
-- Mid-week auto-rotation of cardio per day of week.
-- Phase-3 items: workout warm-up protocols, FAQ buttons, history view, etc.
+New `src/components/exercise-progress-compare.tsx` (admin-only, in the new History tab):
+- Pick an exercise → query `pl_row_results` joined to `pl_exercise_rows` filtered by `exercise_id` and client → group by `block_id` → show top set per block (max load × reps, last logged RPE).
+- One small "Block completion" stat: `completed_days / total_days` per block.
 
-### Testing checklist (covered)
-All 16 checklist items from the request are covered by the steps above. Mobile layout from Phase 1 stays — only adding rows/badges that already use `flex-wrap` patterns.
+Loaded only when the tab is opened. Skip the client side for v1.
+
+### PART 7 — Search / filter in history
+
+In the admin History tab and client History tab, add lightweight client-side filters over the already-loaded summary list: free-text search (exercise/day title), block dropdown, status (completed / missed). No server pagination for v1.
+
+### PART 8 — Data rules
+
+- Never write to old `pl_day_completions` from the readonly view.
+- Never modify `scheduled_date`; `completed_at` is the only field touched on completion (already the case).
+- No deletes, no dedupe writes.
+
+### PART 9 — Mobile / tablet UX
+
+- Use shadcn `Tabs` with `grid-cols-4` on mobile (icons + short label), full row on desktop.
+- All workout cards full-width on mobile, `pb-32` to clear bottom nav (already done in the page).
+- History rows use `Accordion` (collapsible) so they don't feel buried.
+
+### PART 10 — Performance
+
+- Tabs render lazy: each tab's heavy content is mounted only when active (conditional render).
+- `getClientWorkouts` is already loaded once for the page; Today/All/Calendar all derive from that single fetch (no extra round-trips).
+- Previous Blocks issues a single summary query; details fetched only when a row is expanded.
+- Progress comparison query runs only when the comparator is opened.
+
+### PART 11 — Files to change / add
+
+Create:
+- `src/lib/workout-status.ts`
+- `src/components/workout-list-card.tsx` (All Workouts row)
+- `src/components/client-previous-blocks.tsx`
+- `src/components/exercise-progress-compare.tsx`
+
+Edit:
+- `src/routes/_authenticated/portal/workouts.index.tsx` (wrap existing content in tabs)
+- `src/routes/_authenticated/portal/workouts.$dayId.tsx` (outside-day alert + readonly mode via `?readonly=1`)
+- `src/routes/_authenticated/admin/client-programs.$clientId.tsx` (tabs: Current / Previous / History)
+- `src/lib/workout-today.ts` (export `dayScheduledDate` if not exported)
+
+### Out of scope (deferred)
+- Client-side progress comparison UI
+- Reordering / rescheduling workouts
+- Permission flag to let a client edit an old block
+- Detailed per-set diff charts

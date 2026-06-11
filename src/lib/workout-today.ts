@@ -18,7 +18,7 @@ function isSameDay(a: Date, b: Date) {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 }
 
-function dayScheduledDate(item: WorkoutItem): Date | null {
+export function dayScheduledDate(item: WorkoutItem): Date | null {
   // 1) explicit scheduled_date on the day
   if (item.day?.scheduled_date) {
     const d = parseISO(item.day.scheduled_date);

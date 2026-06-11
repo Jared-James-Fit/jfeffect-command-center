@@ -139,38 +139,82 @@ function ClientProgramsPage() {
         </section>
 
         <section>
-          <h2 className="mb-3 text-sm font-bold uppercase tracking-widest text-muted-foreground">All Blocks</h2>
-          {blocks.length === 0 ? (
-            <Card className="p-6 text-sm text-muted-foreground">No blocks yet.</Card>
-          ) : (
-            <div className="grid gap-2">
-              {(blocks as any[]).map((b) => (
-                <Card key={b.id} className="p-3 flex items-center justify-between hover:bg-secondary/30">
-                  <Link to="/admin/blocks/$blockId" params={{ blockId: b.id }} className="flex-1">
-                    <div>
-                      <div className="font-bold">{b.name}</div>
-                      <div className="text-xs text-muted-foreground">{b.weeks} weeks · {b.training_focus ?? "—"}</div>
-                      {b.source_template_id && (templateLookup as any)[b.source_template_id] && (
-                        <div className="mt-1 inline-flex items-center gap-1 rounded border border-primary/30 bg-primary/5 px-1.5 py-0.5 text-[10px] text-primary">
-                          <BookOpen className="h-2.5 w-2.5" /> From template: {(templateLookup as any)[b.source_template_id].name}
-                        </div>
-                      )}
-                    </div>
-                  </Link>
-                  <Select value={b.status} onValueChange={async (v) => { await updateBlock(b.id, { status: v as BlockStatus }); refresh(); toast.success(`Status: ${v}`); }}>
-                    <SelectTrigger className="h-7 w-28 text-xs"><SelectValue /></SelectTrigger>
-                    <SelectContent>{BLOCK_STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
-                  </Select>
-                </Card>
-              ))}
-            </div>
-          )}
+          <BlocksSection
+            blocks={blocks as any[]}
+            templateLookup={templateLookup as any}
+            onRefresh={refresh}
+          />
         </section>
       </div>
 
       <NewPrepDialog open={prepOpen} onOpenChange={setPrepOpen} clientId={clientId} onCreated={refresh} />
       <NewBlockDialog open={blockOpen} onOpenChange={setBlockOpen} clientId={clientId} preps={preps as any[]} onCreated={refresh} />
     </>
+  );
+}
+
+function BlocksSection({ blocks, templateLookup, onRefresh }: { blocks: any[]; templateLookup: any; onRefresh: () => void }) {
+  const today = new Date();
+  const isPrevious = (b: any) => {
+    if (b.status === "Completed" || b.status === "Archived") return true;
+    if (b.end_date && new Date(b.end_date) < today) return true;
+    return false;
+  };
+  const current = blocks.filter((b) => !isPrevious(b));
+  const previous = blocks.filter(isPrevious);
+
+  if (blocks.length === 0) {
+    return <Card className="p-6 text-sm text-muted-foreground">No blocks yet.</Card>;
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="mb-3 text-sm font-bold uppercase tracking-widest text-muted-foreground">Current Blocks</h2>
+        {current.length === 0 ? (
+          <Card className="p-6 text-sm text-muted-foreground">No active blocks.</Card>
+        ) : (
+          <div className="grid gap-2">
+            {current.map((b) => <BlockRow key={b.id} b={b} templateLookup={templateLookup} onRefresh={onRefresh} />)}
+          </div>
+        )}
+      </div>
+      {previous.length > 0 && (
+        <div>
+          <h2 className="mb-3 flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-muted-foreground">
+            <History className="h-3.5 w-3.5" /> Previous Blocks
+          </h2>
+          <div className="grid gap-2">
+            {previous.map((b) => <BlockRow key={b.id} b={b} templateLookup={templateLookup} onRefresh={onRefresh} />)}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function BlockRow({ b, templateLookup, onRefresh }: { b: any; templateLookup: any; onRefresh: () => void }) {
+  return (
+    <Card className="p-3 flex items-center justify-between hover:bg-secondary/30">
+      <Link to="/admin/blocks/$blockId" params={{ blockId: b.id }} className="flex-1">
+        <div>
+          <div className="font-bold">{b.name}</div>
+          <div className="text-xs text-muted-foreground">
+            {b.weeks} weeks · {b.training_focus ?? "—"}
+            {b.start_date && ` · ${b.start_date}`}{b.end_date && ` – ${b.end_date}`}
+          </div>
+          {b.source_template_id && templateLookup[b.source_template_id] && (
+            <div className="mt-1 inline-flex items-center gap-1 rounded border border-primary/30 bg-primary/5 px-1.5 py-0.5 text-[10px] text-primary">
+              <BookOpen className="h-2.5 w-2.5" /> From template: {templateLookup[b.source_template_id].name}
+            </div>
+          )}
+        </div>
+      </Link>
+      <Select value={b.status} onValueChange={async (v) => { await updateBlock(b.id, { status: v as BlockStatus }); onRefresh(); toast.success(`Status: ${v}`); }}>
+        <SelectTrigger className="h-7 w-28 text-xs"><SelectValue /></SelectTrigger>
+        <SelectContent>{BLOCK_STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+      </Select>
+    </Card>
   );
 }
 

@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Clock, CheckCircle2, Play, StickyNote, NotebookPen } from "lucide-react";
+import { ArrowLeft, Clock, CheckCircle2, Play, StickyNote, NotebookPen, Info, Lock } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { getExerciseVideoSource } from "@/lib/exercise-video";
 import { toast } from "sonner";
@@ -20,13 +20,21 @@ import { useAutosave, readLocalDraft, clearLocalDraft } from "@/hooks/use-autosa
 import { SaveStatus } from "@/components/save-status";
 import { ActionButton } from "@/components/action-button";
 import { TrainingHelpButton } from "@/components/training-help-sheet";
+import { dayScheduledDate } from "@/lib/workout-today";
+import { format, startOfDay } from "date-fns";
 
-export const Route = createFileRoute("/_authenticated/portal/workouts/$dayId")({ component: WorkoutDay });
+export const Route = createFileRoute("/_authenticated/portal/workouts/$dayId")({
+  validateSearch: (s: Record<string, unknown>) => ({
+    readonly: s.readonly === 1 || s.readonly === "1" || s.readonly === true ? 1 : undefined,
+  }),
+  component: WorkoutDay,
+});
 
 const sb = supabase as any;
 
 function WorkoutDay() {
   const { dayId } = Route.useParams();
+  const search = Route.useSearch();
   const portalUserId = usePortalUserId();
   const qc = useQueryClient();
 
@@ -50,6 +58,29 @@ function WorkoutDay() {
       return (data?.block_id as string | null) ?? null;
     },
   });
+
+  // Resolve block + week for the outside-day notice and readonly auto-detection.
+  const { data: week = null } = useQuery({
+    queryKey: ["pl-week", day?.week_id],
+    enabled: !!day?.week_id,
+    queryFn: async () => (await sb.from("pl_weeks").select("*").eq("id", day.week_id).maybeSingle()).data,
+  });
+  const { data: block = null } = useQuery({
+    queryKey: ["pl-block", blockId],
+    enabled: !!blockId,
+    queryFn: async () => (await sb.from("pl_blocks").select("*").eq("id", blockId).maybeSingle()).data,
+  });
+
+  const scheduledDate = useMemo(() => {
+    if (!day) return null;
+    return dayScheduledDate({ day, week, block, completion: null } as any);
+  }, [day, week, block]);
+  const today = startOfDay(new Date());
+  const isOutsideScheduledDay = !!scheduledDate && scheduledDate.getTime() !== today.getTime();
+
+  const blockEnded = block?.end_date ? new Date(block.end_date) < today : false;
+  const blockCompleted = block?.status === "Completed" || block?.status === "Archived";
+  const readonly = search.readonly === 1 || blockEnded || blockCompleted;
 
   const { data: rows = [] } = useQuery({
     queryKey: ["pl-day-rows", dayId],
@@ -200,8 +231,26 @@ function WorkoutDay() {
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant="outline"><Clock className="mr-1 h-3 w-3" /> {durationRange(day.duration_override_min ?? day.duration_estimate_min ?? 60)}</Badge>
           {completion && <Badge variant="outline" className="text-green-500 border-green-500/30 bg-green-500/10"><CheckCircle2 className="mr-1 h-3 w-3" /> Completed</Badge>}
+          {readonly && <Badge variant="outline" className="border-muted-foreground/30 bg-muted/30 text-muted-foreground"><Lock className="mr-1 h-3 w-3" /> Read-only</Badge>}
           <div className="ml-auto"><SaveStatus state={metaSave.state} savedAt={metaSave.savedAt} /></div>
         </div>
+
+        {!readonly && isOutsideScheduledDay && !completion?.completed_at && scheduledDate && (
+          <Card className="flex items-start gap-2 border-amber-500/30 bg-amber-500/5 p-3 text-xs">
+            <Info className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+            <div>
+              This workout is scheduled for <strong>{format(scheduledDate, "EEE MMM d")}</strong>,
+              but you can still complete it today. Your scheduled day is saved.
+            </div>
+          </Card>
+        )}
+
+        {readonly && (
+          <Card className="flex items-start gap-2 border-border bg-secondary/30 p-3 text-xs">
+            <Lock className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+            <div>Viewing a past workout. Logs are read-only.</div>
+          </Card>
+        )}
 
         {day.notes && <Card className="p-4 text-sm whitespace-pre-wrap bg-secondary/30">{day.notes}</Card>}
 
@@ -216,12 +265,14 @@ function WorkoutDay() {
               blockId={blockId}
               existingResults={(results as any[]).filter((x) => x.row_id === r.id)}
               existingNote={notesByRowId.get(r.id)}
+              readonly={readonly}
               onChange={refresh}
               onNoteChange={refreshNotes}
             />
           ))}
         </div>
 
+        {!readonly && (
         <Card ref={generalNotesRef} className="p-4 space-y-3">
           <div className="flex items-center justify-between">
             <div className="text-sm font-bold">Workout Notes</div>
@@ -275,19 +326,32 @@ function WorkoutDay() {
             </ActionButton>
           </div>
         </Card>
+        )}
+
+        {readonly && completion?.client_notes && (
+          <Card className="p-4 space-y-2">
+            <div className="text-sm font-bold">Workout Notes</div>
+            <p className="whitespace-pre-wrap text-sm text-muted-foreground">{completion.client_notes}</p>
+            {completion.actual_duration_min && (
+              <div className="text-xs text-muted-foreground">Duration: {completion.actual_duration_min} min</div>
+            )}
+          </Card>
+        )}
       </div>
 
       {/* Sticky general-notes shortcut */}
+      {!readonly && (
       <div className="fixed bottom-4 right-4 z-30 md:bottom-6 md:right-6">
         <Button size="lg" variant="secondary" onClick={focusGeneralNotes} className="shadow-lg">
           <NotebookPen className="mr-2 h-4 w-4" /> Workout Notes
         </Button>
       </div>
+      )}
     </>
   );
 }
 
-function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResults, existingNote, onChange, onNoteChange }: { row: any; dayId: string; dayTitle: string; clientId: string | undefined; blockId?: string | null; existingResults: any[]; existingNote?: any; onChange: () => void; onNoteChange: () => void }) {
+function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResults, existingNote, readonly = false, onChange, onNoteChange }: { row: any; dayId: string; dayTitle: string; clientId: string | undefined; blockId?: string | null; existingResults: any[]; existingNote?: any; readonly?: boolean; onChange: () => void; onNoteChange: () => void }) {
   const name = row.exercises?.name ?? row.exercise_name_override ?? "Exercise";
   const exercise = row.exercises ?? null;
   const exerciseId = exercise?.id ?? null;
@@ -379,7 +443,7 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
       <div className="mt-3 space-y-2">
         {Array.from({ length: setCount }).map((_, i) => {
           const existing = existingResults.find((x) => x.set_index === i + 1);
-          return <SetRow key={i} rowId={row.id} clientId={clientId} setIndex={i + 1} existing={existing} targetReps={row.reps_text} targetRpe={row.rpe} onChange={onChange} />;
+          return <SetRow key={i} rowId={row.id} clientId={clientId} setIndex={i + 1} existing={existing} targetReps={row.reps_text} targetRpe={row.rpe} readonly={readonly} onChange={onChange} />;
         })}
       </div>
       <HowToSheet open={howToOpen} onOpenChange={setHowToOpen} exercise={exercise} fallbackName={name} fallbackVideo={video} />
@@ -590,7 +654,7 @@ function ExerciseNotesSheet({ open, onOpenChange, clientId, dayId, dayTitle, row
   );
 }
 
-function SetRow({ rowId, clientId, setIndex, existing, targetReps, targetRpe, onChange }: { rowId: string; clientId: string | undefined; setIndex: number; existing?: any; targetReps?: string | null; targetRpe?: string | null; onChange: () => void }) {
+function SetRow({ rowId, clientId, setIndex, existing, targetReps, targetRpe, readonly = false, onChange }: { rowId: string; clientId: string | undefined; setIndex: number; existing?: any; targetReps?: string | null; targetRpe?: string | null; readonly?: boolean; onChange: () => void }) {
   const [load, setLoad] = useState(existing?.actual_load?.toString() ?? "");
   const [reps, setReps] = useState(existing?.actual_reps?.toString() ?? "");
   const [rpe, setRpe] = useState(existing?.actual_rpe ?? "");
@@ -623,8 +687,9 @@ function SetRow({ rowId, clientId, setIndex, existing, targetReps, targetRpe, on
     key: draftKey,
     value,
     delay: 800,
-    enabled: !!clientId && hydrated && (load.length > 0 || reps.length > 0 || rpe.length > 0 || !!existing),
+    enabled: !readonly && !!clientId && hydrated && (load.length > 0 || reps.length > 0 || rpe.length > 0 || !!existing),
     onSave: async ({ load, reps, rpe }) => {
+      if (readonly) return;
       if (!clientId) return;
       if (!load && !reps && !rpe && !existing) return;
       const payload = {
@@ -650,10 +715,10 @@ function SetRow({ rowId, clientId, setIndex, existing, targetReps, targetRpe, on
   return (
     <div className="flex items-center gap-2 text-xs">
       <span className="w-10 font-mono text-muted-foreground">Set {setIndex}</span>
-      <Input className="h-9 w-20" inputMode="decimal" placeholder="kg" value={load} onChange={(e) => setLoad(e.target.value)} onBlur={() => save.flush()} />
-      <Input className="h-9 w-16" inputMode="numeric" placeholder={targetReps || "reps"} value={reps} onChange={(e) => setReps(e.target.value)} onBlur={() => save.flush()} />
-      <Input className="h-9 w-16" inputMode="decimal" placeholder={targetRpe ? `@${targetRpe}` : "RPE"} value={rpe} onChange={(e) => setRpe(e.target.value)} onBlur={() => save.flush()} />
-      <SaveStatus state={save.state} savedAt={save.savedAt} compact className="ml-1" />
+      <Input className="h-9 w-20" inputMode="decimal" placeholder="kg" value={load} onChange={(e) => setLoad(e.target.value)} onBlur={() => save.flush()} readOnly={readonly} disabled={readonly} />
+      <Input className="h-9 w-16" inputMode="numeric" placeholder={targetReps || "reps"} value={reps} onChange={(e) => setReps(e.target.value)} onBlur={() => save.flush()} readOnly={readonly} disabled={readonly} />
+      <Input className="h-9 w-16" inputMode="decimal" placeholder={targetRpe ? `@${targetRpe}` : "RPE"} value={rpe} onChange={(e) => setRpe(e.target.value)} onBlur={() => save.flush()} readOnly={readonly} disabled={readonly} />
+      {!readonly && <SaveStatus state={save.state} savedAt={save.savedAt} compact className="ml-1" />}
       {existing?.completed_at && <CheckCircle2 className="h-4 w-4 text-green-500" />}
     </div>
   );
