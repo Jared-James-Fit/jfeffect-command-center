@@ -654,7 +654,7 @@ function ExerciseNotesSheet({ open, onOpenChange, clientId, dayId, dayTitle, row
   );
 }
 
-function SetRow({ rowId, clientId, setIndex, existing, targetReps, targetRpe, onChange }: { rowId: string; clientId: string | undefined; setIndex: number; existing?: any; targetReps?: string | null; targetRpe?: string | null; onChange: () => void }) {
+function SetRow({ rowId, clientId, setIndex, existing, targetReps, targetRpe, readonly = false, onChange }: { rowId: string; clientId: string | undefined; setIndex: number; existing?: any; targetReps?: string | null; targetRpe?: string | null; readonly?: boolean; onChange: () => void }) {
   const [load, setLoad] = useState(existing?.actual_load?.toString() ?? "");
   const [reps, setReps] = useState(existing?.actual_reps?.toString() ?? "");
   const [rpe, setRpe] = useState(existing?.actual_rpe ?? "");
@@ -687,8 +687,9 @@ function SetRow({ rowId, clientId, setIndex, existing, targetReps, targetRpe, on
     key: draftKey,
     value,
     delay: 800,
-    enabled: !!clientId && hydrated && (load.length > 0 || reps.length > 0 || rpe.length > 0 || !!existing),
+    enabled: !readonly && !!clientId && hydrated && (load.length > 0 || reps.length > 0 || rpe.length > 0 || !!existing),
     onSave: async ({ load, reps, rpe }) => {
+      if (readonly) return;
       if (!clientId) return;
       if (!load && !reps && !rpe && !existing) return;
       const payload = {
@@ -714,10 +715,10 @@ function SetRow({ rowId, clientId, setIndex, existing, targetReps, targetRpe, on
   return (
     <div className="flex items-center gap-2 text-xs">
       <span className="w-10 font-mono text-muted-foreground">Set {setIndex}</span>
-      <Input className="h-9 w-20" inputMode="decimal" placeholder="kg" value={load} onChange={(e) => setLoad(e.target.value)} onBlur={() => save.flush()} />
-      <Input className="h-9 w-16" inputMode="numeric" placeholder={targetReps || "reps"} value={reps} onChange={(e) => setReps(e.target.value)} onBlur={() => save.flush()} />
-      <Input className="h-9 w-16" inputMode="decimal" placeholder={targetRpe ? `@${targetRpe}` : "RPE"} value={rpe} onChange={(e) => setRpe(e.target.value)} onBlur={() => save.flush()} />
-      <SaveStatus state={save.state} savedAt={save.savedAt} compact className="ml-1" />
+      <Input className="h-9 w-20" inputMode="decimal" placeholder="kg" value={load} onChange={(e) => setLoad(e.target.value)} onBlur={() => save.flush()} readOnly={readonly} disabled={readonly} />
+      <Input className="h-9 w-16" inputMode="numeric" placeholder={targetReps || "reps"} value={reps} onChange={(e) => setReps(e.target.value)} onBlur={() => save.flush()} readOnly={readonly} disabled={readonly} />
+      <Input className="h-9 w-16" inputMode="decimal" placeholder={targetRpe ? `@${targetRpe}` : "RPE"} value={rpe} onChange={(e) => setRpe(e.target.value)} onBlur={() => save.flush()} readOnly={readonly} disabled={readonly} />
+      {!readonly && <SaveStatus state={save.state} savedAt={save.savedAt} compact className="ml-1" />}
       {existing?.completed_at && <CheckCircle2 className="h-4 w-4 text-green-500" />}
     </div>
   );
