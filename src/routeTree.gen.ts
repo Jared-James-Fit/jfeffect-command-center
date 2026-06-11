@@ -96,7 +96,6 @@ import { Route as AuthenticatedAdminMessagesRouteImport } from './routes/_authen
 import { Route as AuthenticatedAdminMembershipRouteImport } from './routes/_authenticated/admin/membership'
 import { Route as AuthenticatedAdminMediaReviewRouteImport } from './routes/_authenticated/admin/media-review'
 import { Route as AuthenticatedAdminMediaArchivesRouteImport } from './routes/_authenticated/admin/media-archives'
-import { Route as AuthenticatedAdminLoadScreensRouteImport } from './routes/_authenticated/admin/load-screens'
 import { Route as AuthenticatedAdminLiftVideosRouteImport } from './routes/_authenticated/admin/lift-videos'
 import { Route as AuthenticatedAdminGoogleCalendarRouteImport } from './routes/_authenticated/admin/google-calendar'
 import { Route as AuthenticatedAdminFormsRouteImport } from './routes/_authenticated/admin/forms'
@@ -674,12 +673,6 @@ const AuthenticatedAdminMediaArchivesRoute =
   AuthenticatedAdminMediaArchivesRouteImport.update({
     id: '/media-archives',
     path: '/media-archives',
-    getParentRoute: () => AuthenticatedAdminRouteRoute,
-  } as any)
-const AuthenticatedAdminLoadScreensRoute =
-  AuthenticatedAdminLoadScreensRouteImport.update({
-    id: '/load-screens',
-    path: '/load-screens',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
 const AuthenticatedAdminLiftVideosRoute =
@@ -1282,7 +1275,6 @@ export interface FileRoutesByFullPath {
   '/admin/forms': typeof AuthenticatedAdminFormsRoute
   '/admin/google-calendar': typeof AuthenticatedAdminGoogleCalendarRoute
   '/admin/lift-videos': typeof AuthenticatedAdminLiftVideosRoute
-  '/admin/load-screens': typeof AuthenticatedAdminLoadScreensRoute
   '/admin/media-archives': typeof AuthenticatedAdminMediaArchivesRoute
   '/admin/media-review': typeof AuthenticatedAdminMediaReviewRoute
   '/admin/membership': typeof AuthenticatedAdminMembershipRouteWithChildren
@@ -1460,7 +1452,6 @@ export interface FileRoutesByTo {
   '/admin/forms': typeof AuthenticatedAdminFormsRoute
   '/admin/google-calendar': typeof AuthenticatedAdminGoogleCalendarRoute
   '/admin/lift-videos': typeof AuthenticatedAdminLiftVideosRoute
-  '/admin/load-screens': typeof AuthenticatedAdminLoadScreensRoute
   '/admin/media-archives': typeof AuthenticatedAdminMediaArchivesRoute
   '/admin/media-review': typeof AuthenticatedAdminMediaReviewRoute
   '/admin/messages': typeof AuthenticatedAdminMessagesRoute
@@ -1643,7 +1634,6 @@ export interface FileRoutesById {
   '/_authenticated/admin/forms': typeof AuthenticatedAdminFormsRoute
   '/_authenticated/admin/google-calendar': typeof AuthenticatedAdminGoogleCalendarRoute
   '/_authenticated/admin/lift-videos': typeof AuthenticatedAdminLiftVideosRoute
-  '/_authenticated/admin/load-screens': typeof AuthenticatedAdminLoadScreensRoute
   '/_authenticated/admin/media-archives': typeof AuthenticatedAdminMediaArchivesRoute
   '/_authenticated/admin/media-review': typeof AuthenticatedAdminMediaReviewRoute
   '/_authenticated/admin/membership': typeof AuthenticatedAdminMembershipRouteWithChildren
@@ -1827,7 +1817,6 @@ export interface FileRouteTypes {
     | '/admin/forms'
     | '/admin/google-calendar'
     | '/admin/lift-videos'
-    | '/admin/load-screens'
     | '/admin/media-archives'
     | '/admin/media-review'
     | '/admin/membership'
@@ -2005,7 +1994,6 @@ export interface FileRouteTypes {
     | '/admin/forms'
     | '/admin/google-calendar'
     | '/admin/lift-videos'
-    | '/admin/load-screens'
     | '/admin/media-archives'
     | '/admin/media-review'
     | '/admin/messages'
@@ -2187,7 +2175,6 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/forms'
     | '/_authenticated/admin/google-calendar'
     | '/_authenticated/admin/lift-videos'
-    | '/_authenticated/admin/load-screens'
     | '/_authenticated/admin/media-archives'
     | '/_authenticated/admin/media-review'
     | '/_authenticated/admin/membership'
@@ -2964,13 +2951,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminMediaArchivesRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
-    '/_authenticated/admin/load-screens': {
-      id: '/_authenticated/admin/load-screens'
-      path: '/load-screens'
-      fullPath: '/admin/load-screens'
-      preLoaderRoute: typeof AuthenticatedAdminLoadScreensRouteImport
-      parentRoute: typeof AuthenticatedAdminRouteRoute
-    }
     '/_authenticated/admin/lift-videos': {
       id: '/_authenticated/admin/lift-videos'
       path: '/lift-videos'
@@ -3738,7 +3718,6 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminFormsRoute: typeof AuthenticatedAdminFormsRoute
   AuthenticatedAdminGoogleCalendarRoute: typeof AuthenticatedAdminGoogleCalendarRoute
   AuthenticatedAdminLiftVideosRoute: typeof AuthenticatedAdminLiftVideosRoute
-  AuthenticatedAdminLoadScreensRoute: typeof AuthenticatedAdminLoadScreensRoute
   AuthenticatedAdminMediaArchivesRoute: typeof AuthenticatedAdminMediaArchivesRoute
   AuthenticatedAdminMediaReviewRoute: typeof AuthenticatedAdminMediaReviewRoute
   AuthenticatedAdminMembershipRoute: typeof AuthenticatedAdminMembershipRouteWithChildren
@@ -3827,7 +3806,6 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
     AuthenticatedAdminGoogleCalendarRoute:
       AuthenticatedAdminGoogleCalendarRoute,
     AuthenticatedAdminLiftVideosRoute: AuthenticatedAdminLiftVideosRoute,
-    AuthenticatedAdminLoadScreensRoute: AuthenticatedAdminLoadScreensRoute,
     AuthenticatedAdminMediaArchivesRoute: AuthenticatedAdminMediaArchivesRoute,
     AuthenticatedAdminMediaReviewRoute: AuthenticatedAdminMediaReviewRoute,
     AuthenticatedAdminMembershipRoute:
@@ -4205,3 +4183,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
