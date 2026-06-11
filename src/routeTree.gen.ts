@@ -29,6 +29,7 @@ import { Route as AuthenticatedMediaRouteRouteImport } from './routes/_authentic
 import { Route as AuthenticatedMRouteRouteImport } from './routes/_authenticated/m/route'
 import { Route as AuthenticatedAdminRouteRouteImport } from './routes/_authenticated/admin/route'
 import { Route as AuthenticatedPortalIndexRouteImport } from './routes/_authenticated/portal/index'
+import { Route as AuthenticatedMediaIndexRouteImport } from './routes/_authenticated/media/index'
 import { Route as AuthenticatedMIndexRouteImport } from './routes/_authenticated/m/index'
 import { Route as AuthenticatedAdminIndexRouteImport } from './routes/_authenticated/admin/index'
 import { Route as ApiPublicStripeWebhookRouteImport } from './routes/api/public/stripe-webhook'
@@ -273,6 +274,11 @@ const AuthenticatedPortalIndexRoute =
     path: '/',
     getParentRoute: () => AuthenticatedPortalRouteRoute,
   } as any)
+const AuthenticatedMediaIndexRoute = AuthenticatedMediaIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AuthenticatedMediaRouteRoute,
+} as any)
 const AuthenticatedMIndexRoute = AuthenticatedMIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -1119,7 +1125,7 @@ export interface FileRoutesByFullPath {
   '/sitemap': typeof SitemapRoute
   '/admin': typeof AuthenticatedAdminRouteRouteWithChildren
   '/m': typeof AuthenticatedMRouteRouteWithChildren
-  '/media': typeof AuthenticatedMediaRouteRoute
+  '/media': typeof AuthenticatedMediaRouteRouteWithChildren
   '/portal': typeof AuthenticatedPortalRouteRouteWithChildren
   '/api/drive-upload': typeof ApiDriveUploadRoute
   '/book/$slug': typeof BookSlugRoute
@@ -1202,6 +1208,7 @@ export interface FileRoutesByFullPath {
   '/api/public/stripe-webhook': typeof ApiPublicStripeWebhookRoute
   '/admin/': typeof AuthenticatedAdminIndexRoute
   '/m/': typeof AuthenticatedMIndexRoute
+  '/media/': typeof AuthenticatedMediaIndexRoute
   '/portal/': typeof AuthenticatedPortalIndexRoute
   '/admin/agreements/signed': typeof AuthenticatedAdminAgreementsSignedRoute
   '/admin/blocks/$blockId': typeof AuthenticatedAdminBlocksBlockIdRoute
@@ -1280,7 +1287,6 @@ export interface FileRoutesByTo {
   '/reset-password': typeof ResetPasswordRoute
   '/setup': typeof SetupRoute
   '/sitemap': typeof SitemapRoute
-  '/media': typeof AuthenticatedMediaRouteRoute
   '/api/drive-upload': typeof ApiDriveUploadRoute
   '/book/$slug': typeof BookSlugRoute
   '/coaching/apply': typeof CoachingApplyRoute
@@ -1361,6 +1367,7 @@ export interface FileRoutesByTo {
   '/api/public/stripe-webhook': typeof ApiPublicStripeWebhookRoute
   '/admin': typeof AuthenticatedAdminIndexRoute
   '/m': typeof AuthenticatedMIndexRoute
+  '/media': typeof AuthenticatedMediaIndexRoute
   '/portal': typeof AuthenticatedPortalIndexRoute
   '/admin/agreements/signed': typeof AuthenticatedAdminAgreementsSignedRoute
   '/admin/blocks/$blockId': typeof AuthenticatedAdminBlocksBlockIdRoute
@@ -1443,7 +1450,7 @@ export interface FileRoutesById {
   '/sitemap': typeof SitemapRoute
   '/_authenticated/admin': typeof AuthenticatedAdminRouteRouteWithChildren
   '/_authenticated/m': typeof AuthenticatedMRouteRouteWithChildren
-  '/_authenticated/media': typeof AuthenticatedMediaRouteRoute
+  '/_authenticated/media': typeof AuthenticatedMediaRouteRouteWithChildren
   '/_authenticated/portal': typeof AuthenticatedPortalRouteRouteWithChildren
   '/api/drive-upload': typeof ApiDriveUploadRoute
   '/book/$slug': typeof BookSlugRoute
@@ -1526,6 +1533,7 @@ export interface FileRoutesById {
   '/api/public/stripe-webhook': typeof ApiPublicStripeWebhookRoute
   '/_authenticated/admin/': typeof AuthenticatedAdminIndexRoute
   '/_authenticated/m/': typeof AuthenticatedMIndexRoute
+  '/_authenticated/media/': typeof AuthenticatedMediaIndexRoute
   '/_authenticated/portal/': typeof AuthenticatedPortalIndexRoute
   '/_authenticated/admin/agreements/signed': typeof AuthenticatedAdminAgreementsSignedRoute
   '/_authenticated/admin/blocks/$blockId': typeof AuthenticatedAdminBlocksBlockIdRoute
@@ -1691,6 +1699,7 @@ export interface FileRouteTypes {
     | '/api/public/stripe-webhook'
     | '/admin/'
     | '/m/'
+    | '/media/'
     | '/portal/'
     | '/admin/agreements/signed'
     | '/admin/blocks/$blockId'
@@ -1769,7 +1778,6 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/setup'
     | '/sitemap'
-    | '/media'
     | '/api/drive-upload'
     | '/book/$slug'
     | '/coaching/apply'
@@ -1850,6 +1858,7 @@ export interface FileRouteTypes {
     | '/api/public/stripe-webhook'
     | '/admin'
     | '/m'
+    | '/media'
     | '/portal'
     | '/admin/agreements/signed'
     | '/admin/blocks/$blockId'
@@ -2014,6 +2023,7 @@ export interface FileRouteTypes {
     | '/api/public/stripe-webhook'
     | '/_authenticated/admin/'
     | '/_authenticated/m/'
+    | '/_authenticated/media/'
     | '/_authenticated/portal/'
     | '/_authenticated/admin/agreements/signed'
     | '/_authenticated/admin/blocks/$blockId'
@@ -2251,6 +2261,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/portal/'
       preLoaderRoute: typeof AuthenticatedPortalIndexRouteImport
       parentRoute: typeof AuthenticatedPortalRouteRoute
+    }
+    '/_authenticated/media/': {
+      id: '/_authenticated/media/'
+      path: '/'
+      fullPath: '/media/'
+      preLoaderRoute: typeof AuthenticatedMediaIndexRouteImport
+      parentRoute: typeof AuthenticatedMediaRouteRoute
     }
     '/_authenticated/m/': {
       id: '/_authenticated/m/'
@@ -3611,6 +3628,20 @@ const AuthenticatedMRouteRouteChildren: AuthenticatedMRouteRouteChildren = {
 const AuthenticatedMRouteRouteWithChildren =
   AuthenticatedMRouteRoute._addFileChildren(AuthenticatedMRouteRouteChildren)
 
+interface AuthenticatedMediaRouteRouteChildren {
+  AuthenticatedMediaIndexRoute: typeof AuthenticatedMediaIndexRoute
+}
+
+const AuthenticatedMediaRouteRouteChildren: AuthenticatedMediaRouteRouteChildren =
+  {
+    AuthenticatedMediaIndexRoute: AuthenticatedMediaIndexRoute,
+  }
+
+const AuthenticatedMediaRouteRouteWithChildren =
+  AuthenticatedMediaRouteRoute._addFileChildren(
+    AuthenticatedMediaRouteRouteChildren,
+  )
+
 interface AuthenticatedPortalCheckInsRouteChildren {
   AuthenticatedPortalCheckInsFormIdRoute: typeof AuthenticatedPortalCheckInsFormIdRoute
 }
@@ -3735,14 +3766,14 @@ const AuthenticatedPortalRouteRouteWithChildren =
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedAdminRouteRoute: typeof AuthenticatedAdminRouteRouteWithChildren
   AuthenticatedMRouteRoute: typeof AuthenticatedMRouteRouteWithChildren
-  AuthenticatedMediaRouteRoute: typeof AuthenticatedMediaRouteRoute
+  AuthenticatedMediaRouteRoute: typeof AuthenticatedMediaRouteRouteWithChildren
   AuthenticatedPortalRouteRoute: typeof AuthenticatedPortalRouteRouteWithChildren
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAdminRouteRoute: AuthenticatedAdminRouteRouteWithChildren,
   AuthenticatedMRouteRoute: AuthenticatedMRouteRouteWithChildren,
-  AuthenticatedMediaRouteRoute: AuthenticatedMediaRouteRoute,
+  AuthenticatedMediaRouteRoute: AuthenticatedMediaRouteRouteWithChildren,
   AuthenticatedPortalRouteRoute: AuthenticatedPortalRouteRouteWithChildren,
 }
 
