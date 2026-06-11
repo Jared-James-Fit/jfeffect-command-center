@@ -95,13 +95,7 @@ export async function resolveWarmupForDay(opts: {
     return { protocol: null, lifts, source: "none" };
   }
 
-  // 1) Per-day custom override
-  if (opts.warmupMode === "custom" && opts.dayProtocolId) {
-    const p = await fetchProtocol(opts.dayProtocolId);
-    if (p) return { protocol: p, lifts, source: "day" };
-  }
-
-  // 2) Client-specific
+  // 1) Client-specific (highest priority)
   const { data: client } = await sb
     .from("clients")
     .select("warmup_protocol_id")
@@ -112,7 +106,7 @@ export async function resolveWarmupForDay(opts: {
     if (p) return { protocol: p, lifts, source: "client" };
   }
 
-  // 3) Block-specific
+  // 2) Block-specific
   if (opts.blockId) {
     const { data: block } = await sb
       .from("pl_blocks")
@@ -125,13 +119,26 @@ export async function resolveWarmupForDay(opts: {
     }
   }
 
-  // 4) Per-day explicit pick (general/powerlifting forced)
+  // 3) Per-day overrides
+  if (opts.warmupMode === "custom" && opts.dayProtocolId) {
+    const p = await fetchProtocol(opts.dayProtocolId);
+    if (p) return { protocol: p, lifts, source: "day" };
+  }
   if (opts.warmupMode === "general" || opts.warmupMode === "powerlifting") {
     const p = await fetchDefault(opts.warmupMode === "powerlifting" ? "pl" : "general");
     if (p) return { protocol: p, lifts, source: "day-mode" };
   }
 
-  // 5) Auto-detect (default)
+  // 4) Exercise-specific (first exercise with a custom protocol wins)
+  for (const r of opts.exerciseRows) {
+    const pid = r.exercises?.warmup_protocol_id;
+    if (pid) {
+      const p = await fetchProtocol(pid);
+      if (p) return { protocol: p, lifts, source: "exercise" };
+    }
+  }
+
+  // 5) Default — auto-detect from lifts → PL default, else general
   if (lifts.size > 0) {
     const p = await fetchDefault("pl");
     if (p) return { protocol: p, lifts, source: "auto-pl" };
