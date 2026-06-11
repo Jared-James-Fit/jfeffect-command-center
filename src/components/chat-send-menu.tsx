@@ -144,6 +144,7 @@ function FormPickerDialog({
   const [note, setNote] = useState("");
   const [sending, setSending] = useState(false);
   const assign = useServerFn(bulkAssignNativeFormToClients);
+  const qc = useQueryClient();
 
   const { data: forms = [], isLoading } = useQuery({
     queryKey: ["chat-send-forms"],
@@ -151,7 +152,7 @@ function FormPickerDialog({
     queryFn: async () => {
       const { data, error } = await supabase
         .from("nf_forms")
-        .select("id, title, description, active, archived")
+        .select("id, title, description, active, archived, kind, external_url")
         .eq("archived", false)
         .eq("active", true)
         .order("title");
@@ -174,22 +175,30 @@ function FormPickerDialog({
     try {
       await assign({ data: { formId: selectedId, clientIds } });
       const form = (forms as any[]).find((f) => f.id === selectedId);
+      // Refresh the admin "Shared with" lists so the new share appears immediately.
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["nf-assignments", selectedId] }),
+        qc.invalidateQueries({ queryKey: ["nf-forms"] }),
+        qc.invalidateQueries({ queryKey: ["nf-forms-for-client"] }),
+      ]);
       await onAttach(
         {
           kind: "form_request",
           type: "link",
-          url: `/admin/native-forms/${selectedId}`,
+          url: form?.kind === "external" && form?.external_url
+            ? form.external_url
+            : `/portal/check-ins/${selectedId}`,
           form_id: selectedId,
           assignment_client_ids: clientIds,
-          request_title: form?.title ?? "Form request",
+          request_title: form?.title ?? "Form",
           request_note: note || undefined,
         },
-        note || `Please fill out: ${form?.title ?? "Form"}`,
+        note || `Shared a form: ${form?.title ?? "Form"}`,
       );
       onOpenChange(false);
       setSelectedId("");
       setNote("");
-      toast.success("Form sent");
+      toast.success(`Form shared with ${clientIds.length} ${clientIds.length === 1 ? "client" : "clients"}`);
     } catch (e: any) {
       toast.error(e?.message ?? "Failed to send form");
     } finally {
@@ -201,9 +210,9 @@ function FormPickerDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Send a form</DialogTitle>
+          <DialogTitle>Share a form</DialogTitle>
           <DialogDescription>
-            Assigns the form to {clientIds.length} {clientIds.length === 1 ? "client" : "clients"} and drops a live status card in chat.
+            Grants {clientIds.length} {clientIds.length === 1 ? "client" : "clients"} access and drops a live status card in chat. Tracked under the form's "Shared with" tab.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">

@@ -38,7 +38,7 @@ export const Route = createFileRoute("/_authenticated/admin/native-forms")({
 function AdminNativeForms() {
   const qc = useQueryClient();
   const [editing, setEditing] = useState<NfForm | null>(null);
-  const [editTab, setEditTab] = useState<"settings" | "questions" | "assign">("settings");
+  const [editTab, setEditTab] = useState<"settings" | "questions" | "shared">("settings");
   const [creating, setCreating] = useState<NfKind | null>(null);
   const deleteFormsFn = useServerFn(deleteNativeForms);
   const syncFilloutFn = useServerFn(syncFilloutForms);
@@ -100,7 +100,7 @@ function AdminNativeForms() {
 
   return (
     <>
-      <PageHeader title="Check-Ins & Form Builder" subtitle="Build native forms or embed external check-ins, then assign them to clients." actions={
+      <PageHeader title="Check-Ins & Form Builder" subtitle="Build native forms or embed external check-ins. Share them from chat or this page — clients only see forms they've been shared." actions={
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" onClick={handleSyncFillout} disabled={syncing}>
             <ExternalLink className="mr-2 h-4 w-4" /> {syncing ? "Syncing…" : "Sync from Fillout"}
@@ -144,7 +144,7 @@ function AdminNativeForms() {
               selected={formSelection.isSelected(f.id)}
               onSelect={(checked) => formSelection.setOne(f.id, checked)}
               onEdit={() => { setEditTab("settings"); setEditing(f); }}
-              onSend={() => { setEditTab("assign"); setEditing(f); }}
+              onSend={() => { setEditTab("shared"); setEditing(f); }}
             />
           );
         })}
@@ -205,7 +205,9 @@ function FormRow({
   const hasAudience = form.visibility === "all_active_clients" || assignments.length > 0;
   const hasContent = form.kind === "external" ? !!form.external_url : questions.length > 0;
   const isActive = form.active && !form.archived && hasContent && hasAudience;
-  const assignedCount = form.visibility === "all_active_clients" ? "All active" : `${assignments.length} assigned`;
+  const assignedCount = form.visibility === "all_active_clients"
+    ? "Shared with all active clients"
+    : `Shared with ${assignments.length}`;
   const kindLabel = form.kind === "external" ? "External" : "Native";
 
   return (
@@ -231,14 +233,14 @@ function FormRow({
           </div>
           {hasAudience && (form.archived || !form.active) && (
             <div className="mt-2 text-xs font-medium text-warning">
-              Assigned, but not visible because this form is {form.archived ? "archived" : "still Draft"}.
+              Shared with clients, but not visible because this form is {form.archived ? "archived" : "still Draft"}.
             </div>
           )}
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button size="sm" onClick={onSend} className="bg-gradient-primary font-bold">
-            <Send className="mr-1 h-4 w-4" /> Send / Assign
+            <Send className="mr-1 h-4 w-4" /> Share
           </Button>
           <Button variant="outline" size="sm" onClick={onEdit}><FileEdit className="mr-1 h-4 w-4" /> Edit</Button>
           <Button variant="outline" size="sm" onClick={async () => {
@@ -256,10 +258,10 @@ function FormRow({
   );
 }
 
-function FormEditorDialog({ form, open, onClose, initialTab = "settings" }: { form: NfForm; open: boolean; onClose: () => void; initialTab?: "settings" | "questions" | "assign" }) {
+function FormEditorDialog({ form, open, onClose, initialTab = "settings" }: { form: NfForm; open: boolean; onClose: () => void; initialTab?: "settings" | "questions" | "shared" }) {
   const qc = useQueryClient();
   const [local, setLocal] = useState<NfForm>(form);
-  const [activeTab, setActiveTab] = useState<"settings" | "questions" | "assign">(initialTab);
+  const [activeTab, setActiveTab] = useState<"settings" | "questions" | "shared">(initialTab);
 
   const { data: questions = [] } = useQuery({
     queryKey: ["nf-questions", form.id],
@@ -304,7 +306,7 @@ function FormEditorDialog({ form, open, onClose, initialTab = "settings" }: { fo
           {form.kind === "native" && (
             <Button type="button" size="sm" variant={activeTab === "questions" ? "default" : "ghost"} onClick={() => setActiveTab("questions")}>Questions ({questions.length})</Button>
           )}
-          <Button type="button" size="sm" variant={activeTab === "assign" ? "default" : "ghost"} onClick={() => setActiveTab("assign")}>Assign</Button>
+          <Button type="button" size="sm" variant={activeTab === "shared" ? "default" : "ghost"} onClick={() => setActiveTab("shared")}>Shared with</Button>
         </div>
 
           {activeTab === "settings" && <div className="space-y-3">
@@ -416,7 +418,7 @@ function FormEditorDialog({ form, open, onClose, initialTab = "settings" }: { fo
             </div>
           )}
 
-          {activeTab === "assign" && <div>
+          {activeTab === "shared" && <div>
             <AssignmentsEditor formId={form.id} form={local} onFormChange={setLocal} />
           </div>}
       </DialogContent>
@@ -665,15 +667,15 @@ function AssignmentsEditor({ formId, form, onFormChange }: { formId: string; for
       <div className="rounded-lg border border-border bg-secondary/10 p-3 space-y-3">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <Label className="text-sm font-bold">Assign to all active coaching clients</Label>
-            <p className="text-xs text-muted-foreground">Every Active / New Client sees this form. No need to tick individually.</p>
+            <Label className="text-sm font-bold">Share with every active coaching client</Label>
+            <p className="text-xs text-muted-foreground">Turn on to grant access to all Active / New clients at once. Otherwise pick individuals below or share via chat.</p>
           </div>
           <Switch checked={broadcastOn} disabled={saving} onCheckedChange={setBroadcast} />
         </div>
         <div className="flex items-center justify-between gap-3">
           <div>
-            <Label className="text-sm font-bold">Auto-assign to new coaching clients</Label>
-            <p className="text-xs text-muted-foreground">Future active clients get this form added automatically.</p>
+            <Label className="text-sm font-bold">Auto-share with new clients</Label>
+            <p className="text-xs text-muted-foreground">Future active clients are added to this form automatically.</p>
           </div>
           <Switch checked={form.auto_assign_new_clients} disabled={saving} onCheckedChange={setAutoAssign} />
         </div>
@@ -682,8 +684,8 @@ function AssignmentsEditor({ formId, form, onFormChange }: { formId: string; for
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="text-xs text-muted-foreground">
           {broadcastOn
-            ? `Assigned to all active coaching clients (individual ticks are inherited)`
-            : `${selectedIds.size} client${selectedIds.size === 1 ? "" : "s"} selected${dirty ? " · unsaved" : ""}`}
+            ? `Shared with every active coaching client (individual ticks are inherited)`
+            : `Shared with ${selectedIds.size} client${selectedIds.size === 1 ? "" : "s"}${dirty ? " · unsaved" : ""}`}
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={selectAllVisible} disabled={broadcastOn || saving}>{allVisibleSelected ? "All visible selected" : "Select all visible"}</Button>
@@ -695,18 +697,18 @@ function AssignmentsEditor({ formId, form, onFormChange }: { formId: string; for
             successLabel="Saved"
             onAction={saveAssignmentChanges}
           >
-            Save assignments
+            Save shares
           </ActionButton>
         </div>
       </div>
 
       {form.archived ? (
         <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-          Assigned, but not visible because this form is archived.
+          Shared, but not visible because this form is archived.
         </div>
       ) : !form.active ? (
         <div className="rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning">
-          Assigned, but not visible because this form is still Draft.
+          Shared, but not visible because this form is still Draft.
         </div>
       ) : null}
 
