@@ -223,8 +223,32 @@ export const completeJfSignup = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const s = await loadSettings();
 
-    // Re-fetch the session from Stripe
-    const session = await stripeFetch(`/checkout/sessions/${encodeURIComponent(data.session_id)}?expand[]=subscription`);
+    // Resolve the Stripe key for the configured mode (test/live).
+    // Without this, stripeFetch defaults to STRIPE_SECRET_KEY (often the live key)
+    // and a test-mode cs_test_... session lookup returns "No such checkout session",
+    // which the welcome page surfaces as "expired or invalid".
+    const mode: StripeMode = (s.stripe_mode === "test" ? "test" : "live");
+    const apiKey = getStripeKeyForMode(mode);
+    if (!apiKey) {
+      console.error(
+        `[jf-complete] Stripe key missing for mode=${mode}. session_id=${data.session_id.slice(0,16)}… ` +
+        `Diagnostics=${JSON.stringify(getStripeKeyDiagnostics())}`,
+      );
+      throw new Error("Membership setup is temporarily unavailable. Please contact support.");
+    }
+
+    // Re-fetch the session from Stripe in the correct mode
+    let session: any;
+    try {
+      session = await stripeFetch(
+        `/checkout/sessions/${encodeURIComponent(data.session_id)}?expand[]=subscription`,
+        { apiKey },
+      );
+    } catch (err: any) {
+      const msg = String(err?.message ?? "");
+      console.error(`[jf-complete] Stripe session fetch failed (mode=${mode}) session_id=${data.session_id.slice(0,16)}…: ${msg}`);
+      throw new Error("Checkout session not found.");
+    }
     if (!session) throw new Error("Checkout session not found.");
     if (session.mode !== "subscription") throw new Error("Wrong checkout mode.");
     const subscription = session.subscription;
