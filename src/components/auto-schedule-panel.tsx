@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { CalendarRange, AlertTriangle, Lock, Loader2, RefreshCcw, Sparkles, Trash2 } from "lucide-react";
+import { CalendarRange, AlertTriangle, Lock, Loader2, RefreshCcw, Sparkles, Trash2, Eye } from "lucide-react";
 import { toast } from "sonner";
 import { format, parseISO } from "date-fns";
 import {
@@ -21,6 +21,7 @@ import {
 } from "@/lib/auto-scheduler";
 import { supabase } from "@/integrations/supabase/client";
 import { formatDays } from "@/lib/training-schedule";
+import { WeekScheduleView } from "@/components/week-schedule-view";
 
 const sb = supabase as any;
 
@@ -30,6 +31,7 @@ export function AutoSchedulePanel({ blockId }: { blockId: string }) {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [clearOpen, setClearOpen] = useState(false);
   const [keepOverrides, setKeepOverrides] = useState(true);
+  const [calendarOpen, setCalendarOpen] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const { data: block } = useQuery({
@@ -162,6 +164,9 @@ export function AutoSchedulePanel({ blockId }: { blockId: string }) {
         <Button size="sm" variant="outline" onClick={() => setClearOpen(true)} disabled={busy}>
           <Trash2 className="mr-1 h-3 w-3" /> Clear Auto Schedule
         </Button>
+        <Button size="sm" variant="outline" onClick={() => setCalendarOpen(true)}>
+          <Eye className="mr-1 h-3 w-3" /> Preview Client Calendar
+        </Button>
       </div>
       <p className="text-[11px] text-muted-foreground">
         Scheduling is planning only — workout logs, completion records, and completed dates are never changed.
@@ -194,6 +199,18 @@ export function AutoSchedulePanel({ blockId }: { blockId: string }) {
               {busy ? "Clearing…" : "Clear"}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={calendarOpen} onOpenChange={setCalendarOpen}>
+        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Client Calendar Preview</DialogTitle>
+            <DialogDescription>This is exactly what the client sees in their Calendar tab.</DialogDescription>
+          </DialogHeader>
+          {block?.client_id && (
+            <WeekScheduleView clientId={block.client_id} blockId={blockId} mode="admin" />
+          )}
         </DialogContent>
       </Dialog>
     </Card>
