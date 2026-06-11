@@ -19,6 +19,7 @@ import { listClientMaxes, buildMaxIndex, computeRowLoad } from "@/lib/pl-maxes";
 import { useAutosave, readLocalDraft, clearLocalDraft } from "@/hooks/use-autosave";
 import { SaveStatus } from "@/components/save-status";
 import { ActionButton } from "@/components/action-button";
+import { TrainingHelpButton } from "@/components/training-help-sheet";
 
 export const Route = createFileRoute("/_authenticated/portal/workouts/$dayId")({ component: WorkoutDay });
 
@@ -365,6 +366,7 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
           <Button size="sm" variant={hasNote ? "default" : "outline"} onClick={() => setNotesOpen(true)} className="w-full">
             <StickyNote className="mr-1 h-3 w-3" /> Notes
           </Button>
+          <TrainingHelpButton size="sm" variant="ghost" className="w-full" />
         </div>
       </div>
 
