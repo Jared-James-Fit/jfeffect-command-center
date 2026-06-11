@@ -53,6 +53,7 @@ import { Route as AuthenticatedPortalAnnouncementsRouteImport } from './routes/_
 import { Route as AuthenticatedPortalAccountRouteImport } from './routes/_authenticated/portal/account'
 import { Route as AuthenticatedMediaUploadsRouteImport } from './routes/_authenticated/media/uploads'
 import { Route as AuthenticatedMediaTestimonialsRouteImport } from './routes/_authenticated/media/testimonials'
+import { Route as AuthenticatedMediaPromoLinksRouteImport } from './routes/_authenticated/media/promo-links'
 import { Route as AuthenticatedMediaInboxRouteImport } from './routes/_authenticated/media/inbox'
 import { Route as AuthenticatedMediaEventsRouteImport } from './routes/_authenticated/media/events'
 import { Route as AuthenticatedMediaCampaignsRouteImport } from './routes/_authenticated/media/campaigns'
@@ -422,6 +423,12 @@ const AuthenticatedMediaTestimonialsRoute =
   AuthenticatedMediaTestimonialsRouteImport.update({
     id: '/testimonials',
     path: '/testimonials',
+    getParentRoute: () => AuthenticatedMediaRouteRoute,
+  } as any)
+const AuthenticatedMediaPromoLinksRoute =
+  AuthenticatedMediaPromoLinksRouteImport.update({
+    id: '/promo-links',
+    path: '/promo-links',
     getParentRoute: () => AuthenticatedMediaRouteRoute,
   } as any)
 const AuthenticatedMediaInboxRoute = AuthenticatedMediaInboxRouteImport.update({
@@ -1270,6 +1277,7 @@ export interface FileRoutesByFullPath {
   '/media/campaigns': typeof AuthenticatedMediaCampaignsRoute
   '/media/events': typeof AuthenticatedMediaEventsRoute
   '/media/inbox': typeof AuthenticatedMediaInboxRoute
+  '/media/promo-links': typeof AuthenticatedMediaPromoLinksRoute
   '/media/testimonials': typeof AuthenticatedMediaTestimonialsRoute
   '/media/uploads': typeof AuthenticatedMediaUploadsRoute
   '/portal/account': typeof AuthenticatedPortalAccountRoute
@@ -1440,6 +1448,7 @@ export interface FileRoutesByTo {
   '/media/campaigns': typeof AuthenticatedMediaCampaignsRoute
   '/media/events': typeof AuthenticatedMediaEventsRoute
   '/media/inbox': typeof AuthenticatedMediaInboxRoute
+  '/media/promo-links': typeof AuthenticatedMediaPromoLinksRoute
   '/media/testimonials': typeof AuthenticatedMediaTestimonialsRoute
   '/media/uploads': typeof AuthenticatedMediaUploadsRoute
   '/portal/account': typeof AuthenticatedPortalAccountRoute
@@ -1617,6 +1626,7 @@ export interface FileRoutesById {
   '/_authenticated/media/campaigns': typeof AuthenticatedMediaCampaignsRoute
   '/_authenticated/media/events': typeof AuthenticatedMediaEventsRoute
   '/_authenticated/media/inbox': typeof AuthenticatedMediaInboxRoute
+  '/_authenticated/media/promo-links': typeof AuthenticatedMediaPromoLinksRoute
   '/_authenticated/media/testimonials': typeof AuthenticatedMediaTestimonialsRoute
   '/_authenticated/media/uploads': typeof AuthenticatedMediaUploadsRoute
   '/_authenticated/portal/account': typeof AuthenticatedPortalAccountRoute
@@ -1794,6 +1804,7 @@ export interface FileRouteTypes {
     | '/media/campaigns'
     | '/media/events'
     | '/media/inbox'
+    | '/media/promo-links'
     | '/media/testimonials'
     | '/media/uploads'
     | '/portal/account'
@@ -1964,6 +1975,7 @@ export interface FileRouteTypes {
     | '/media/campaigns'
     | '/media/events'
     | '/media/inbox'
+    | '/media/promo-links'
     | '/media/testimonials'
     | '/media/uploads'
     | '/portal/account'
@@ -2140,6 +2152,7 @@ export interface FileRouteTypes {
     | '/_authenticated/media/campaigns'
     | '/_authenticated/media/events'
     | '/_authenticated/media/inbox'
+    | '/_authenticated/media/promo-links'
     | '/_authenticated/media/testimonials'
     | '/_authenticated/media/uploads'
     | '/_authenticated/portal/account'
@@ -2570,6 +2583,13 @@ declare module '@tanstack/react-router' {
       path: '/testimonials'
       fullPath: '/media/testimonials'
       preLoaderRoute: typeof AuthenticatedMediaTestimonialsRouteImport
+      parentRoute: typeof AuthenticatedMediaRouteRoute
+    }
+    '/_authenticated/media/promo-links': {
+      id: '/_authenticated/media/promo-links'
+      path: '/promo-links'
+      fullPath: '/media/promo-links'
+      preLoaderRoute: typeof AuthenticatedMediaPromoLinksRouteImport
       parentRoute: typeof AuthenticatedMediaRouteRoute
     }
     '/_authenticated/media/inbox': {
@@ -3855,6 +3875,7 @@ interface AuthenticatedMediaRouteRouteChildren {
   AuthenticatedMediaCampaignsRoute: typeof AuthenticatedMediaCampaignsRoute
   AuthenticatedMediaEventsRoute: typeof AuthenticatedMediaEventsRoute
   AuthenticatedMediaInboxRoute: typeof AuthenticatedMediaInboxRoute
+  AuthenticatedMediaPromoLinksRoute: typeof AuthenticatedMediaPromoLinksRoute
   AuthenticatedMediaTestimonialsRoute: typeof AuthenticatedMediaTestimonialsRoute
   AuthenticatedMediaUploadsRoute: typeof AuthenticatedMediaUploadsRoute
   AuthenticatedMediaIndexRoute: typeof AuthenticatedMediaIndexRoute
@@ -3871,6 +3892,7 @@ const AuthenticatedMediaRouteRouteChildren: AuthenticatedMediaRouteRouteChildren
     AuthenticatedMediaCampaignsRoute: AuthenticatedMediaCampaignsRoute,
     AuthenticatedMediaEventsRoute: AuthenticatedMediaEventsRoute,
     AuthenticatedMediaInboxRoute: AuthenticatedMediaInboxRoute,
+    AuthenticatedMediaPromoLinksRoute: AuthenticatedMediaPromoLinksRoute,
     AuthenticatedMediaTestimonialsRoute: AuthenticatedMediaTestimonialsRoute,
     AuthenticatedMediaUploadsRoute: AuthenticatedMediaUploadsRoute,
     AuthenticatedMediaIndexRoute: AuthenticatedMediaIndexRoute,
