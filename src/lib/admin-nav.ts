@@ -97,6 +97,7 @@ export const coachingAdminNav: NavItem[] = [
   { to: "/admin/program-library", label: "Program Library", icon: BookOpen, group: "Programming" },
   { to: "/admin/exercises", label: "Exercise Library", icon: Dumbbell, group: "Programming" },
   { to: "/admin/cardio-targets", label: "Cardio Targets", icon: Heart, group: "Programming", keywords: ["card", "cardio", "targets", "conditioning", "steps", "hiit", "liss", "zone 2", "heart rate"] },
+  { to: "/admin/warmup-protocols", label: "Warm-Up Protocols", icon: Flame, group: "Programming", keywords: ["warmup", "warm-up", "warm up", "sbd", "squat", "bench", "deadlift", "mobility"] },
   { to: "/admin/recipes", label: "Recipe Library", icon: ChefHat, group: "Programming" },
   { to: "/admin/native-forms", label: "Check-Ins & Forms", icon: FileEdit, group: "Programming" },
   { to: "/admin/fillout-submissions", label: "Fillout Submissions", icon: ClipboardList, group: "Programming" },
