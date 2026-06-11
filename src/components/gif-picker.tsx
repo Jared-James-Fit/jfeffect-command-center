@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -24,15 +25,25 @@ export function GifPicker({
   onPickSound,
   showSounds = true,
   disabled,
+  controlledOpen,
+  onControlledOpenChange,
+  hideTrigger,
+  asDialog,
 }: {
   onPick: (gif: ChatGif) => void;
   onPickSound?: (sound: ChatSound) => void;
   showSounds?: boolean;
   disabled?: boolean;
+  controlledOpen?: boolean;
+  onControlledOpenChange?: (v: boolean) => void;
+  hideTrigger?: boolean;
+  asDialog?: boolean;
 }) {
   const { user } = useAuth();
   const qc = useQueryClient();
-  const [open, setOpen] = useState(false);
+  const [openInt, setOpenInt] = useState(false);
+  const open = controlledOpen ?? openInt;
+  const setOpen = (v: boolean) => onControlledOpenChange ? onControlledOpenChange(v) : setOpenInt(v);
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<string | "all">("all");
   const [mode, setMode] = useState<"gifs" | "sounds">("gifs");
