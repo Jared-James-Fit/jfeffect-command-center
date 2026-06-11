@@ -181,7 +181,7 @@ import { Route as AuthenticatedAdminEventsFormatGuideRouteImport } from './route
 import { Route as AuthenticatedAdminEventsIdRouteImport } from './routes/_authenticated/admin/events.$id'
 import { Route as AuthenticatedAdminCoachesIdRouteImport } from './routes/_authenticated/admin/coaches.$id'
 import { Route as AuthenticatedAdminClientsIdRouteImport } from './routes/_authenticated/admin/clients.$id'
-import { Route as AuthenticatedAdminClientProgramsClientIdRouteImport } from './routes/_authenticated/admin/client-programs.$clientId'
+import { Route as AuthenticatedAdminClientProgramsClientIdRouteImport } from './routes/_authenticated/admin/client-programs.$clientId_'
 import { Route as AuthenticatedAdminBroadcastsBroadcastIdRouteImport } from './routes/_authenticated/admin/broadcasts.$broadcastId'
 import { Route as AuthenticatedAdminBlocksBlockIdRouteImport } from './routes/_authenticated/admin/blocks.$blockId'
 import { Route as AuthenticatedAdminAgreementsSignedRouteImport } from './routes/_authenticated/admin/agreements.signed'
@@ -1181,7 +1181,7 @@ const AuthenticatedAdminClientsIdRoute =
   } as any)
 const AuthenticatedAdminClientProgramsClientIdRoute =
   AuthenticatedAdminClientProgramsClientIdRouteImport.update({
-    id: '/client-programs/$clientId',
+    id: '/client-programs/$clientId_',
     path: '/client-programs/$clientId',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
@@ -1211,15 +1211,15 @@ const ApiPublicGoogleOauthCallbackRoute =
   } as any)
 const AuthenticatedAdminClientProgramsClientIdHistoryRoute =
   AuthenticatedAdminClientProgramsClientIdHistoryRouteImport.update({
-    id: '/history',
-    path: '/history',
-    getParentRoute: () => AuthenticatedAdminClientProgramsClientIdRoute,
+    id: '/client-programs/$clientId/history',
+    path: '/client-programs/$clientId/history',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
 const AuthenticatedAdminClientProgramsClientIdAnalyticsRoute =
   AuthenticatedAdminClientProgramsClientIdAnalyticsRouteImport.update({
-    id: '/analytics',
-    path: '/analytics',
-    getParentRoute: () => AuthenticatedAdminClientProgramsClientIdRoute,
+    id: '/client-programs/$clientId/analytics',
+    path: '/client-programs/$clientId/analytics',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
 const AuthenticatedMWorkoutsEnrollmentIdWeekDayRoute =
   AuthenticatedMWorkoutsEnrollmentIdWeekDayRouteImport.update({
@@ -1344,7 +1344,7 @@ export interface FileRoutesByFullPath {
   '/admin/agreements/signed': typeof AuthenticatedAdminAgreementsSignedRoute
   '/admin/blocks/$blockId': typeof AuthenticatedAdminBlocksBlockIdRoute
   '/admin/broadcasts/$broadcastId': typeof AuthenticatedAdminBroadcastsBroadcastIdRoute
-  '/admin/client-programs/$clientId': typeof AuthenticatedAdminClientProgramsClientIdRouteWithChildren
+  '/admin/client-programs/$clientId': typeof AuthenticatedAdminClientProgramsClientIdRoute
   '/admin/clients/$id': typeof AuthenticatedAdminClientsIdRoute
   '/admin/coaches/$id': typeof AuthenticatedAdminCoachesIdRoute
   '/admin/events/$id': typeof AuthenticatedAdminEventsIdRoute
@@ -1520,7 +1520,7 @@ export interface FileRoutesByTo {
   '/admin/agreements/signed': typeof AuthenticatedAdminAgreementsSignedRoute
   '/admin/blocks/$blockId': typeof AuthenticatedAdminBlocksBlockIdRoute
   '/admin/broadcasts/$broadcastId': typeof AuthenticatedAdminBroadcastsBroadcastIdRoute
-  '/admin/client-programs/$clientId': typeof AuthenticatedAdminClientProgramsClientIdRouteWithChildren
+  '/admin/client-programs/$clientId': typeof AuthenticatedAdminClientProgramsClientIdRoute
   '/admin/clients/$id': typeof AuthenticatedAdminClientsIdRoute
   '/admin/coaches/$id': typeof AuthenticatedAdminCoachesIdRoute
   '/admin/events/$id': typeof AuthenticatedAdminEventsIdRoute
@@ -1703,7 +1703,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/agreements/signed': typeof AuthenticatedAdminAgreementsSignedRoute
   '/_authenticated/admin/blocks/$blockId': typeof AuthenticatedAdminBlocksBlockIdRoute
   '/_authenticated/admin/broadcasts/$broadcastId': typeof AuthenticatedAdminBroadcastsBroadcastIdRoute
-  '/_authenticated/admin/client-programs/$clientId': typeof AuthenticatedAdminClientProgramsClientIdRouteWithChildren
+  '/_authenticated/admin/client-programs/$clientId_': typeof AuthenticatedAdminClientProgramsClientIdRoute
   '/_authenticated/admin/clients/$id': typeof AuthenticatedAdminClientsIdRoute
   '/_authenticated/admin/coaches/$id': typeof AuthenticatedAdminCoachesIdRoute
   '/_authenticated/admin/events/$id': typeof AuthenticatedAdminEventsIdRoute
@@ -2244,7 +2244,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/agreements/signed'
     | '/_authenticated/admin/blocks/$blockId'
     | '/_authenticated/admin/broadcasts/$broadcastId'
-    | '/_authenticated/admin/client-programs/$clientId'
+    | '/_authenticated/admin/client-programs/$clientId_'
     | '/_authenticated/admin/clients/$id'
     | '/_authenticated/admin/coaches/$id'
     | '/_authenticated/admin/events/$id'
@@ -3545,8 +3545,8 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminClientsIdRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
-    '/_authenticated/admin/client-programs/$clientId': {
-      id: '/_authenticated/admin/client-programs/$clientId'
+    '/_authenticated/admin/client-programs/$clientId_': {
+      id: '/_authenticated/admin/client-programs/$clientId_'
       path: '/client-programs/$clientId'
       fullPath: '/admin/client-programs/$clientId'
       preLoaderRoute: typeof AuthenticatedAdminClientProgramsClientIdRouteImport
@@ -3582,17 +3582,17 @@ declare module '@tanstack/react-router' {
     }
     '/_authenticated/admin/client-programs/$clientId/history': {
       id: '/_authenticated/admin/client-programs/$clientId/history'
-      path: '/history'
+      path: '/client-programs/$clientId/history'
       fullPath: '/admin/client-programs/$clientId/history'
       preLoaderRoute: typeof AuthenticatedAdminClientProgramsClientIdHistoryRouteImport
-      parentRoute: typeof AuthenticatedAdminClientProgramsClientIdRoute
+      parentRoute: typeof AuthenticatedAdminRouteRoute
     }
     '/_authenticated/admin/client-programs/$clientId/analytics': {
       id: '/_authenticated/admin/client-programs/$clientId/analytics'
-      path: '/analytics'
+      path: '/client-programs/$clientId/analytics'
       fullPath: '/admin/client-programs/$clientId/analytics'
       preLoaderRoute: typeof AuthenticatedAdminClientProgramsClientIdAnalyticsRouteImport
-      parentRoute: typeof AuthenticatedAdminClientProgramsClientIdRoute
+      parentRoute: typeof AuthenticatedAdminRouteRoute
     }
     '/_authenticated/m/workouts/$enrollmentId/$week/$day': {
       id: '/_authenticated/m/workouts/$enrollmentId/$week/$day'
@@ -3690,24 +3690,6 @@ const AuthenticatedAdminPurchasesRouteWithChildren =
     AuthenticatedAdminPurchasesRouteChildren,
   )
 
-interface AuthenticatedAdminClientProgramsClientIdRouteChildren {
-  AuthenticatedAdminClientProgramsClientIdAnalyticsRoute: typeof AuthenticatedAdminClientProgramsClientIdAnalyticsRoute
-  AuthenticatedAdminClientProgramsClientIdHistoryRoute: typeof AuthenticatedAdminClientProgramsClientIdHistoryRoute
-}
-
-const AuthenticatedAdminClientProgramsClientIdRouteChildren: AuthenticatedAdminClientProgramsClientIdRouteChildren =
-  {
-    AuthenticatedAdminClientProgramsClientIdAnalyticsRoute:
-      AuthenticatedAdminClientProgramsClientIdAnalyticsRoute,
-    AuthenticatedAdminClientProgramsClientIdHistoryRoute:
-      AuthenticatedAdminClientProgramsClientIdHistoryRoute,
-  }
-
-const AuthenticatedAdminClientProgramsClientIdRouteWithChildren =
-  AuthenticatedAdminClientProgramsClientIdRoute._addFileChildren(
-    AuthenticatedAdminClientProgramsClientIdRouteChildren,
-  )
-
 interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminAccountRoute: typeof AuthenticatedAdminAccountRoute
   AuthenticatedAdminAppointmentsRoute: typeof AuthenticatedAdminAppointmentsRoute
@@ -3761,7 +3743,7 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminIndexRoute: typeof AuthenticatedAdminIndexRoute
   AuthenticatedAdminAgreementsSignedRoute: typeof AuthenticatedAdminAgreementsSignedRoute
   AuthenticatedAdminBlocksBlockIdRoute: typeof AuthenticatedAdminBlocksBlockIdRoute
-  AuthenticatedAdminClientProgramsClientIdRoute: typeof AuthenticatedAdminClientProgramsClientIdRouteWithChildren
+  AuthenticatedAdminClientProgramsClientIdRoute: typeof AuthenticatedAdminClientProgramsClientIdRoute
   AuthenticatedAdminClientsIdRoute: typeof AuthenticatedAdminClientsIdRoute
   AuthenticatedAdminCoachesIdRoute: typeof AuthenticatedAdminCoachesIdRoute
   AuthenticatedAdminEventsIdRoute: typeof AuthenticatedAdminEventsIdRoute
@@ -3785,6 +3767,8 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminMemberPlansIndexRoute: typeof AuthenticatedAdminMemberPlansIndexRoute
   AuthenticatedAdminMemberResourcesIndexRoute: typeof AuthenticatedAdminMemberResourcesIndexRoute
   AuthenticatedAdminMembersIndexRoute: typeof AuthenticatedAdminMembersIndexRoute
+  AuthenticatedAdminClientProgramsClientIdAnalyticsRoute: typeof AuthenticatedAdminClientProgramsClientIdAnalyticsRoute
+  AuthenticatedAdminClientProgramsClientIdHistoryRoute: typeof AuthenticatedAdminClientProgramsClientIdHistoryRoute
 }
 
 const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren =
@@ -3856,7 +3840,7 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
       AuthenticatedAdminAgreementsSignedRoute,
     AuthenticatedAdminBlocksBlockIdRoute: AuthenticatedAdminBlocksBlockIdRoute,
     AuthenticatedAdminClientProgramsClientIdRoute:
-      AuthenticatedAdminClientProgramsClientIdRouteWithChildren,
+      AuthenticatedAdminClientProgramsClientIdRoute,
     AuthenticatedAdminClientsIdRoute: AuthenticatedAdminClientsIdRoute,
     AuthenticatedAdminCoachesIdRoute: AuthenticatedAdminCoachesIdRoute,
     AuthenticatedAdminEventsIdRoute: AuthenticatedAdminEventsIdRoute,
@@ -3892,6 +3876,10 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
     AuthenticatedAdminMemberResourcesIndexRoute:
       AuthenticatedAdminMemberResourcesIndexRoute,
     AuthenticatedAdminMembersIndexRoute: AuthenticatedAdminMembersIndexRoute,
+    AuthenticatedAdminClientProgramsClientIdAnalyticsRoute:
+      AuthenticatedAdminClientProgramsClientIdAnalyticsRoute,
+    AuthenticatedAdminClientProgramsClientIdHistoryRoute:
+      AuthenticatedAdminClientProgramsClientIdHistoryRoute,
   }
 
 const AuthenticatedAdminRouteRouteWithChildren =
@@ -4195,3 +4183,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}

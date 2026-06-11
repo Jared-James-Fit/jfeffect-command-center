@@ -16,7 +16,7 @@ import { toast } from "sonner";
 import { listClientPreps, listClientBlocks, createPrep, createBlock, countdownLabel, updatePrep, updateBlock, GOAL_TYPES, TRAINING_FOCUSES, PREP_STATUSES, BLOCK_STATUSES, type PrepStatus, type BlockStatus } from "@/lib/pl-programs";
 import { ClientTrainingIntelCard } from "@/components/client-training-intel-card";
 
-export const Route = createFileRoute("/_authenticated/admin/client-programs/$clientId")({ component: ClientProgramsPage });
+export const Route = createFileRoute("/_authenticated/admin/client-programs/$clientId_")({ component: ClientProgramsPage });
 
 function ClientProgramsPage() {
   const { clientId } = Route.useParams();
