@@ -10,11 +10,12 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Search, Trash2, Youtube, Pencil, CheckCircle2, AlertTriangle } from "lucide-react";
+import { Plus, Search, Trash2, Youtube, Pencil, CheckCircle2, AlertTriangle, Flame } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { buildCleanVimeoEmbedUrl, vimeoUrlFromId, MIGRATION_STATUSES } from "@/lib/exercise-video";
+import { ExerciseWarmupDialog } from "@/components/exercise-warmup-dialog";
 
 export const Route = createFileRoute("/_authenticated/admin/exercises")({
   component: ExercisesAdmin,
@@ -83,6 +84,8 @@ function ExercisesAdmin() {
     qc.invalidateQueries({ queryKey: ["exercises"] });
   };
 
+  const [warmupTarget, setWarmupTarget] = useState<any | null>(null);
+
   return (
     <>
       <PageHeader
@@ -133,6 +136,7 @@ function ExercisesAdmin() {
                 </div>
                 <div className="flex gap-1">
                   <Button variant="ghost" size="sm" onClick={() => setEditing(e)}><Pencil className="h-3 w-3" /></Button>
+                  <Button variant="ghost" size="sm" title="Warm-up settings" onClick={() => setWarmupTarget(e)}><Flame className="h-3 w-3 text-orange-500" /></Button>
                   <Button variant="ghost" size="sm" onClick={() => del(e.id)}><Trash2 className="h-3 w-3" /></Button>
                 </div>
               </div>
@@ -177,6 +181,11 @@ function ExercisesAdmin() {
           />
         )}
       </Dialog>
+      <ExerciseWarmupDialog
+        exercise={warmupTarget}
+        open={!!warmupTarget}
+        onClose={() => setWarmupTarget(null)}
+      />
     </>
   );
 }
