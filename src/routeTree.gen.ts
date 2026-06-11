@@ -86,6 +86,7 @@ import { Route as AuthenticatedAdminRecipesRouteImport } from './routes/_authent
 import { Route as AuthenticatedAdminPurchasesRouteImport } from './routes/_authenticated/admin/purchases'
 import { Route as AuthenticatedAdminProgramsRouteImport } from './routes/_authenticated/admin/programs'
 import { Route as AuthenticatedAdminProgramLibraryRouteImport } from './routes/_authenticated/admin/program-library'
+import { Route as AuthenticatedAdminPopupsRouteImport } from './routes/_authenticated/admin/popups'
 import { Route as AuthenticatedAdminPaymentsRouteImport } from './routes/_authenticated/admin/payments'
 import { Route as AuthenticatedAdminPaymentLinksRouteImport } from './routes/_authenticated/admin/payment-links'
 import { Route as AuthenticatedAdminOffersRouteImport } from './routes/_authenticated/admin/offers'
@@ -612,6 +613,12 @@ const AuthenticatedAdminProgramLibraryRoute =
   AuthenticatedAdminProgramLibraryRouteImport.update({
     id: '/program-library',
     path: '/program-library',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
+const AuthenticatedAdminPopupsRoute =
+  AuthenticatedAdminPopupsRouteImport.update({
+    id: '/popups',
+    path: '/popups',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
 const AuthenticatedAdminPaymentsRoute =
@@ -1277,6 +1284,7 @@ export interface FileRoutesByFullPath {
   '/admin/offers': typeof AuthenticatedAdminOffersRoute
   '/admin/payment-links': typeof AuthenticatedAdminPaymentLinksRoute
   '/admin/payments': typeof AuthenticatedAdminPaymentsRoute
+  '/admin/popups': typeof AuthenticatedAdminPopupsRoute
   '/admin/program-library': typeof AuthenticatedAdminProgramLibraryRoute
   '/admin/programs': typeof AuthenticatedAdminProgramsRoute
   '/admin/purchases': typeof AuthenticatedAdminPurchasesRouteWithChildren
@@ -1452,6 +1460,7 @@ export interface FileRoutesByTo {
   '/admin/offers': typeof AuthenticatedAdminOffersRoute
   '/admin/payment-links': typeof AuthenticatedAdminPaymentLinksRoute
   '/admin/payments': typeof AuthenticatedAdminPaymentsRoute
+  '/admin/popups': typeof AuthenticatedAdminPopupsRoute
   '/admin/program-library': typeof AuthenticatedAdminProgramLibraryRoute
   '/admin/programs': typeof AuthenticatedAdminProgramsRoute
   '/admin/purchases': typeof AuthenticatedAdminPurchasesRouteWithChildren
@@ -1634,6 +1643,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/offers': typeof AuthenticatedAdminOffersRoute
   '/_authenticated/admin/payment-links': typeof AuthenticatedAdminPaymentLinksRoute
   '/_authenticated/admin/payments': typeof AuthenticatedAdminPaymentsRoute
+  '/_authenticated/admin/popups': typeof AuthenticatedAdminPopupsRoute
   '/_authenticated/admin/program-library': typeof AuthenticatedAdminProgramLibraryRoute
   '/_authenticated/admin/programs': typeof AuthenticatedAdminProgramsRoute
   '/_authenticated/admin/purchases': typeof AuthenticatedAdminPurchasesRouteWithChildren
@@ -1816,6 +1826,7 @@ export interface FileRouteTypes {
     | '/admin/offers'
     | '/admin/payment-links'
     | '/admin/payments'
+    | '/admin/popups'
     | '/admin/program-library'
     | '/admin/programs'
     | '/admin/purchases'
@@ -1991,6 +2002,7 @@ export interface FileRouteTypes {
     | '/admin/offers'
     | '/admin/payment-links'
     | '/admin/payments'
+    | '/admin/popups'
     | '/admin/program-library'
     | '/admin/programs'
     | '/admin/purchases'
@@ -2172,6 +2184,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/offers'
     | '/_authenticated/admin/payment-links'
     | '/_authenticated/admin/payments'
+    | '/_authenticated/admin/popups'
     | '/_authenticated/admin/program-library'
     | '/_authenticated/admin/programs'
     | '/_authenticated/admin/purchases'
@@ -2866,6 +2879,13 @@ declare module '@tanstack/react-router' {
       path: '/program-library'
       fullPath: '/admin/program-library'
       preLoaderRoute: typeof AuthenticatedAdminProgramLibraryRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
+    '/_authenticated/admin/popups': {
+      id: '/_authenticated/admin/popups'
+      path: '/popups'
+      fullPath: '/admin/popups'
+      preLoaderRoute: typeof AuthenticatedAdminPopupsRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
     '/_authenticated/admin/payments': {
@@ -3707,6 +3727,7 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminOffersRoute: typeof AuthenticatedAdminOffersRoute
   AuthenticatedAdminPaymentLinksRoute: typeof AuthenticatedAdminPaymentLinksRoute
   AuthenticatedAdminPaymentsRoute: typeof AuthenticatedAdminPaymentsRoute
+  AuthenticatedAdminPopupsRoute: typeof AuthenticatedAdminPopupsRoute
   AuthenticatedAdminProgramLibraryRoute: typeof AuthenticatedAdminProgramLibraryRoute
   AuthenticatedAdminProgramsRoute: typeof AuthenticatedAdminProgramsRoute
   AuthenticatedAdminPurchasesRoute: typeof AuthenticatedAdminPurchasesRouteWithChildren
@@ -3796,6 +3817,7 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
     AuthenticatedAdminOffersRoute: AuthenticatedAdminOffersRoute,
     AuthenticatedAdminPaymentLinksRoute: AuthenticatedAdminPaymentLinksRoute,
     AuthenticatedAdminPaymentsRoute: AuthenticatedAdminPaymentsRoute,
+    AuthenticatedAdminPopupsRoute: AuthenticatedAdminPopupsRoute,
     AuthenticatedAdminProgramLibraryRoute:
       AuthenticatedAdminProgramLibraryRoute,
     AuthenticatedAdminProgramsRoute: AuthenticatedAdminProgramsRoute,
@@ -4161,13 +4183,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
