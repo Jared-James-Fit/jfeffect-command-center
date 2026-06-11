@@ -1,30 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { PageHeader } from "@/components/app-shell";
-import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Badge } from "@/components/ui/badge";
-import { Textarea } from "@/components/ui/textarea";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Label } from "@/components/ui/label";
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
-import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Plus, MoreHorizontal, Trash2, ListChecks, Settings2, StickyNote, RotateCcw, X } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
-import {
-  QUADRANTS, fetchTasks, fetchCoachesLite, createTask, toggleTaskDone,
-  updateTask, deleteTask, type TaskRow, type TaskQuadrant,
-} from "@/lib/tasks";
-import { cn } from "@/lib/utils";
+import { TasksPage } from "@/components/tasks/tasks-page";
 
-export const Route = createFileRoute("/_authenticated/admin/tasks")({ component: TasksPage });
+export const Route = createFileRoute("/_authenticated/admin/tasks")({
+  component: () => <TasksPage storagePrefix="jf" />,
+});
 
 // ---------- Quadrant customization (color + labels), persisted to localStorage ----------
 type QuadStyle = { color: string; title: string; subtitle: string };
