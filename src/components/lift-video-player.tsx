@@ -15,6 +15,8 @@ export function LiftVideoPlayer({
   embedFallbackUrl,
   thumbnailUrl,
   initialOrientation,
+  sourceType,
+  sourcePath,
   onPlaybackError,
 }: {
   src: string;
@@ -23,6 +25,8 @@ export function LiftVideoPlayer({
   embedFallbackUrl?: string | null;
   thumbnailUrl?: string | null;
   initialOrientation?: "portrait" | "landscape" | "unknown";
+  sourceType?: string | null;
+  sourcePath?: string | null;
   onPlaybackError?: (message: string) => void;
 }) {
   const ref = useRef<HTMLVideoElement | null>(null);
@@ -62,16 +66,23 @@ export function LiftVideoPlayer({
   useEffect(() => {
     if (typeof document === "undefined") return;
     const probe = document.createElement("video");
-    const lower = src.toLowerCase();
-    const looksMov = /\.mov($|\?)/i.test(lower) || /\.qt($|\?)/i.test(lower);
+    const lower = [src, sourcePath, sourceType].filter(Boolean).join(" ").toLowerCase();
+    const looksMov = lower.includes("video/quicktime") || /\.(mov|qt)(?:$|[?#])/i.test(lower);
     const canMov = probe.canPlayType("video/quicktime");
+    const looksHevc = lower.includes("hevc") || lower.includes("hvc1") || lower.includes("hev1");
     const canHevcMp4 = probe.canPlayType('video/mp4; codecs="hvc1"') || probe.canPlayType('video/mp4; codecs="hev1"');
-    if (looksMov && !canMov && !canHevcMp4) {
+    if ((looksMov && !canMov) || (looksHevc && !canHevcMp4)) {
+      if (embedFallbackUrl) {
+        setUseEmbedFallback(true);
+        setStatus("loading");
+        return;
+      }
       setIncompatible(true);
+      setStatus("ready");
     } else {
       setIncompatible(false);
     }
-  }, [src]);
+  }, [src, sourcePath, sourceType, embedFallbackUrl]);
 
   const skip = (delta: number) => {
     if (useEmbedFallback) return;
@@ -213,7 +224,7 @@ export function LiftVideoPlayer({
             className="h-full w-full bg-black object-contain"
           />
         )}
-        {(status === "loading" || status === "error") && (
+        {!incompatible && (status === "loading" || status === "error") && (
           <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-black/50 p-4 text-center text-white">
             {status === "error" ? (
               <AlertTriangle className="h-6 w-6" />
@@ -248,15 +259,15 @@ export function LiftVideoPlayer({
         )}
       </div>
       <div className="flex flex-wrap items-center gap-2 px-1 pb-1">
-        <Button size="sm" variant="outline" onClick={() => skip(-5)} title="Back 5s">
+        <Button size="sm" variant="outline" onClick={() => skip(-5)} title="Back 5s" disabled={useEmbedFallback || incompatible}>
           <Rewind className="mr-1 h-3 w-3" /> -5s
         </Button>
-        <Button size="sm" variant="outline" onClick={() => skip(5)} title="Forward 5s">
+        <Button size="sm" variant="outline" onClick={() => skip(5)} title="Forward 5s" disabled={useEmbedFallback || incompatible}>
           <FastForward className="mr-1 h-3 w-3" /> +5s
         </Button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button size="sm" variant="outline">
+            <Button size="sm" variant="outline" disabled={useEmbedFallback || incompatible}>
               <Gauge className="mr-1 h-3 w-3" /> {speed}x
             </Button>
           </DropdownMenuTrigger>
@@ -268,7 +279,7 @@ export function LiftVideoPlayer({
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
-        <Button size="sm" variant="outline" onClick={goFullscreen} title="Fullscreen" className="ml-auto" disabled={useEmbedFallback}>
+        <Button size="sm" variant="outline" onClick={goFullscreen} title="Fullscreen" className="ml-auto" disabled={useEmbedFallback || incompatible}>
           <Maximize2 className="mr-1 h-3 w-3" /> Fullscreen
         </Button>
         {fallbackUrl && (
