@@ -13,6 +13,7 @@ import { CheckCircle2, Save } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { ActionButton } from "@/components/action-button";
+import { TrainingHelpButton } from "@/components/training-help-sheet";
 
 export const Route = createFileRoute("/_authenticated/m/workouts/$enrollmentId/$week/$day")({ component: WorkoutTracker });
 
@@ -102,7 +103,12 @@ function WorkoutTracker() {
       <PageHeader
         title={dayObj?.title || `Week ${weekIndex} · Day ${dayIndex}`}
         subtitle={plan?.name}
-        actions={isComplete ? <Badge>Complete</Badge> : null}
+        actions={
+          <div className="flex items-center gap-2">
+            <TrainingHelpButton size="sm" variant="outline" />
+            {isComplete ? <Badge>Complete</Badge> : null}
+          </div>
+        }
       />
       {rows.length === 0 && (
         <Card className="p-6 text-sm text-muted-foreground">No exercises configured for this workout.</Card>
