@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as StaffSetupRouteImport } from './routes/staff-setup'
 import { Route as SitemapRouteImport } from './routes/sitemap'
 import { Route as SetupRouteImport } from './routes/setup'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
@@ -189,6 +190,11 @@ import { Route as AuthenticatedAdminClientProgramsClientIdHistoryRouteImport } f
 import { Route as AuthenticatedAdminClientProgramsClientIdAnalyticsRouteImport } from './routes/_authenticated/admin/client-programs.$clientId.analytics'
 import { Route as AuthenticatedMWorkoutsEnrollmentIdWeekDayRouteImport } from './routes/_authenticated/m/workouts.$enrollmentId.$week.$day'
 
+const StaffSetupRoute = StaffSetupRouteImport.update({
+  id: '/staff-setup',
+  path: '/staff-setup',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SitemapRoute = SitemapRouteImport.update({
   id: '/sitemap',
   path: '/sitemap',
@@ -1233,6 +1239,7 @@ export interface FileRoutesByFullPath {
   '/reset-password': typeof ResetPasswordRoute
   '/setup': typeof SetupRoute
   '/sitemap': typeof SitemapRoute
+  '/staff-setup': typeof StaffSetupRoute
   '/admin': typeof AuthenticatedAdminRouteRouteWithChildren
   '/m': typeof AuthenticatedMRouteRouteWithChildren
   '/media': typeof AuthenticatedMediaRouteRouteWithChildren
@@ -1413,6 +1420,7 @@ export interface FileRoutesByTo {
   '/reset-password': typeof ResetPasswordRoute
   '/setup': typeof SetupRoute
   '/sitemap': typeof SitemapRoute
+  '/staff-setup': typeof StaffSetupRoute
   '/api/drive-upload': typeof ApiDriveUploadRoute
   '/book/$slug': typeof BookSlugRoute
   '/coaching/apply': typeof CoachingApplyRoute
@@ -1590,6 +1598,7 @@ export interface FileRoutesById {
   '/reset-password': typeof ResetPasswordRoute
   '/setup': typeof SetupRoute
   '/sitemap': typeof SitemapRoute
+  '/staff-setup': typeof StaffSetupRoute
   '/_authenticated/admin': typeof AuthenticatedAdminRouteRouteWithChildren
   '/_authenticated/m': typeof AuthenticatedMRouteRouteWithChildren
   '/_authenticated/media': typeof AuthenticatedMediaRouteRouteWithChildren
@@ -1772,6 +1781,7 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/setup'
     | '/sitemap'
+    | '/staff-setup'
     | '/admin'
     | '/m'
     | '/media'
@@ -1952,6 +1962,7 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/setup'
     | '/sitemap'
+    | '/staff-setup'
     | '/api/drive-upload'
     | '/book/$slug'
     | '/coaching/apply'
@@ -2128,6 +2139,7 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/setup'
     | '/sitemap'
+    | '/staff-setup'
     | '/_authenticated/admin'
     | '/_authenticated/m'
     | '/_authenticated/media'
@@ -2310,6 +2322,7 @@ export interface RootRouteChildren {
   ResetPasswordRoute: typeof ResetPasswordRoute
   SetupRoute: typeof SetupRoute
   SitemapRoute: typeof SitemapRoute
+  StaffSetupRoute: typeof StaffSetupRoute
   ApiDriveUploadRoute: typeof ApiDriveUploadRoute
   BookSlugRoute: typeof BookSlugRoute
   SignupJfRoute: typeof SignupJfRoute
@@ -2328,6 +2341,13 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/staff-setup': {
+      id: '/staff-setup'
+      path: '/staff-setup'
+      fullPath: '/staff-setup'
+      preLoaderRoute: typeof StaffSetupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/sitemap': {
       id: '/sitemap'
       path: '/sitemap'
@@ -4155,6 +4175,7 @@ const rootRouteChildren: RootRouteChildren = {
   ResetPasswordRoute: ResetPasswordRoute,
   SetupRoute: SetupRoute,
   SitemapRoute: SitemapRoute,
+  StaffSetupRoute: StaffSetupRoute,
   ApiDriveUploadRoute: ApiDriveUploadRoute,
   BookSlugRoute: BookSlugRoute,
   SignupJfRoute: SignupJfRoute,
