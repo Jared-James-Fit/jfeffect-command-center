@@ -19,6 +19,7 @@ import { FaqWidget } from "@/components/faq-widget";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { WorkoutListCard } from "@/components/workout-list-card";
 import { ClientPreviousBlocks } from "@/components/client-previous-blocks";
+import { WeekScheduleView } from "@/components/week-schedule-view";
 
 export const Route = createFileRoute("/_authenticated/portal/workouts/")({ component: WorkoutsPage });
 
@@ -155,13 +156,14 @@ function WorkoutsPage() {
             </TabsContent>
 
             <TabsContent value="calendar" className="space-y-4">
-              {currentGroup ? (
+              {client?.id && (
+                <WeekScheduleView clientId={client.id} blockId={currentBlockId} mode="client" />
+              )}
+              {currentGroup && (
                 <Card className="p-3">
-                  <div className="mb-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">Weeks</div>
+                  <div className="mb-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">Block overview</div>
                   <BlockWeekColumns block={currentGroup.block} weeks={[...currentGroup.weeks.values()]} mode="client" />
                 </Card>
-              ) : (
-                <Card className="p-6 text-sm text-muted-foreground">No schedule available.</Card>
               )}
             </TabsContent>
 
