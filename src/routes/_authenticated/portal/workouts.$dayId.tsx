@@ -20,6 +20,7 @@ import { useAutosave, readLocalDraft, clearLocalDraft } from "@/hooks/use-autosa
 import { SaveStatus } from "@/components/save-status";
 import { ActionButton } from "@/components/action-button";
 import { TrainingHelpButton } from "@/components/training-help-sheet";
+import { WarmupButton } from "@/components/warmup-sheet";
 import { dayScheduledDate } from "@/lib/workout-today";
 import { format, startOfDay } from "date-fns";
 
@@ -234,6 +235,20 @@ function WorkoutDay() {
           {readonly && <Badge variant="outline" className="border-muted-foreground/30 bg-muted/30 text-muted-foreground"><Lock className="mr-1 h-3 w-3" /> Read-only</Badge>}
           <div className="ml-auto"><SaveStatus state={metaSave.state} savedAt={metaSave.savedAt} /></div>
         </div>
+
+        {client?.id && (
+          <div className="flex flex-wrap gap-2">
+            <WarmupButton
+              dayId={dayId}
+              blockId={blockId}
+              clientId={client.id}
+              warmupMode={(day as any).warmup_mode}
+              dayProtocolId={(day as any).warmup_protocol_id}
+              exerciseRows={rows as any[]}
+            />
+            <TrainingHelpButton size="sm" variant="outline" />
+          </div>
+        )}
 
         {!readonly && isOutsideScheduledDay && !completion?.completed_at && scheduledDate && (
           <Card className="flex items-start gap-2 border-amber-500/30 bg-amber-500/5 p-3 text-xs">
