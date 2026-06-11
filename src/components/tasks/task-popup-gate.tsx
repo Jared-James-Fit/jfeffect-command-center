@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -8,7 +8,8 @@ import { ListChecks } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { fetchTasks, QUADRANTS, countOpen, type TaskQuadrant } from "@/lib/tasks";
 
-const KEY = "jf-tasks-popup-seen-day";
+const KEY_ADMIN = "jf-tasks-popup-seen-day";
+const KEY_MM = "jf-tasks-popup-seen-day-mm";
 
 // Mirror of tasks page quadrant styles (color + labels), persisted to localStorage.
 type QuadStyle = { color: string; title: string; subtitle: string };
@@ -34,37 +35,48 @@ function todayKey(): string {
   return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
 }
 
-/** Show a one-shot task summary popup the first time an admin/coach lands in /admin per session. */
-export function TaskPopupGate() {
+/** Show a one-shot task summary popup the first time an admin/coach (or media manager) lands in their dashboard per day. */
+export function TaskPopupGate({ scope = "admin" }: { scope?: "admin" | "media_manager" }) {
   const { user, role } = useAuth();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [styles, setStyles] = useState<Record<TaskQuadrant, QuadStyle>>(DEFAULT_STYLES);
 
+  const storageKey = scope === "media_manager" ? KEY_MM : KEY_ADMIN;
+  const allowed = scope === "media_manager"
+    ? (role === "media_manager" || role === "admin")
+    : (role === "admin" || role === "coach");
+
   useEffect(() => {
-    if (!user || (role !== "admin" && role !== "coach")) return;
+    if (!user || !allowed) return;
     try {
-      if (localStorage.getItem(KEY) === todayKey()) return;
+      if (localStorage.getItem(storageKey) === todayKey()) return;
       setOpen(true);
       setStyles(readQuadStyles());
     } catch {}
-  }, [user, role]);
+  }, [user, allowed, storageKey]);
 
   const skipForToday = () => {
-    try { localStorage.setItem(KEY, todayKey()); } catch {}
+    try { localStorage.setItem(storageKey, todayKey()); } catch {}
     setOpen(false);
   };
 
   const { data: tasks = [] } = useQuery({
-    queryKey: ["tasks"],
+    queryKey: ["tasks", scope, user?.id ?? null],
     queryFn: fetchTasks,
     enabled: open,
   });
 
-  const openCount = countOpen(tasks);
+  // For MM, only show tasks assigned to them. Admin sees everything.
+  const scopedTasks = useMemo(() => {
+    if (scope !== "media_manager" || !user?.id) return tasks;
+    return tasks.filter((t) => t.assigned_to === user.id);
+  }, [tasks, scope, user?.id]);
+
+  const openCount = countOpen(scopedTasks);
   const counts = QUADRANTS.map((q) => ({
     q,
-    n: tasks.filter((t) => t.status === "open" && t.quadrant === (q.key as TaskQuadrant)).length,
+    n: scopedTasks.filter((t) => t.status === "open" && t.quadrant === (q.key as TaskQuadrant)).length,
   }));
 
   return (
@@ -93,9 +105,12 @@ export function TaskPopupGate() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => { setOpen(false); navigate({ to: "/admin/tasks" }); }}
+            onClick={() => {
+              setOpen(false);
+              navigate({ to: scope === "media_manager" ? "/media/action-items" : "/admin/tasks" });
+            }}
           >
-            Open Task Manager
+            {scope === "media_manager" ? "Open Action Items" : "Open Task Manager"}
           </Button>
           <Button size="lg" className="text-base font-bold" onClick={skipForToday}>
             Get First Win
