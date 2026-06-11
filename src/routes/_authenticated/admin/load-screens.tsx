@@ -310,7 +310,7 @@ function BirthdaysPanel() {
                   </Link>
                 </Button>
                 <Button asChild size="sm" variant="outline">
-                  <Link to="/admin/client-pov" search={{ clientId: r.client_id } as any}>
+                  <Link to="/admin/client-pov">
                     <Eye className="mr-1 h-3.5 w-3.5" /> Preview
                   </Link>
                 </Button>
