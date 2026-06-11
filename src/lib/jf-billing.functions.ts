@@ -8,7 +8,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { stripeFetch, formEncode } from "@/lib/stripe.server";
+import { stripeFetch, formEncode, getStripeKeyForMode, getStripeKeyDiagnostics, detectStripeKeyMode, type StripeMode } from "@/lib/stripe.server";
 
 /* ───── helpers ───── */
 
@@ -121,6 +121,21 @@ export const createJfSignupCheckout = createServerFn({ method: "POST" })
     if (!s.monthly_price_id) throw new Error("Membership pricing isn't configured yet. Please contact support.");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
+    // Resolve Stripe mode + key
+    const mode: StripeMode = (s.stripe_mode === "test" ? "test" : "live");
+    const apiKey = getStripeKeyForMode(mode);
+    if (!apiKey) {
+      console.error(
+        `[jf-checkout] Stripe key missing for mode=${mode}. ` +
+        `Saved monthly_price_id=${s.monthly_price_id?.slice(0,8)}…; hold_price_id=${s.hold_price_id?.slice(0,8) ?? "(none)"}. ` +
+        `Diagnostics=${JSON.stringify(getStripeKeyDiagnostics())}. ` +
+        (mode === "test"
+          ? "Add STRIPE_SECRET_KEY_TEST (sk_test_…) in project secrets, or switch JF Membership Stripe Mode to Live."
+          : "Add a live STRIPE_SECRET_KEY (sk_live_…), or switch JF Membership Stripe Mode to Test."),
+      );
+      throw new Error("Checkout is temporarily unavailable. Please contact support.");
+    }
+
     const emailLc = data.email.trim().toLowerCase();
 
     // Block if a user already exists with this email and is a JF member
@@ -158,7 +173,19 @@ export const createJfSignupCheckout = createServerFn({ method: "POST" })
       "subscription_data[metadata][email_lc]": emailLc,
       ...(useTrial ? { "subscription_data[trial_period_days]": String(s.trial_days) } : {}),
     });
-    const session = await stripeFetch("/checkout/sessions", { method: "POST", body: sessionBody });
+    let session: any;
+    try {
+      session = await stripeFetch("/checkout/sessions", { method: "POST", body: sessionBody, apiKey });
+    } catch (err: any) {
+      const msg = String(err?.message ?? "");
+      console.error(`[jf-checkout] Stripe session create failed (mode=${mode}): ${msg}`);
+      // Detect a price/mode mismatch
+      const mismatch = /No such price|similar object exists in (live|test) mode/i.test(msg);
+      if (mismatch) {
+        throw new Error("Checkout is temporarily unavailable. Please contact support.");
+      }
+      throw new Error("Checkout is temporarily unavailable. Please contact support.");
+    }
 
     // Stash pending signup
     await supabaseAdmin.from("jf_pending_signups").insert({
