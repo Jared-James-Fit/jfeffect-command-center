@@ -42,30 +42,34 @@ export function TaskPopupGate({ scope = "admin" }: { scope?: "admin" | "media_ma
   const [open, setOpen] = useState(false);
   const [styles, setStyles] = useState<Record<TaskQuadrant, QuadStyle>>(DEFAULT_STYLES);
 
-  const storageKey = scope === "media_manager" ? KEY_MM : KEY_ADMIN;
+  // Per-user storage so "seen today" never leaks across accounts on the same browser.
+  const baseKey = scope === "media_manager" ? KEY_MM : KEY_ADMIN;
+  const storageKey = user?.id ? `${baseKey}:${user.id}` : baseKey;
   const allowed = scope === "media_manager"
     ? (role === "media_manager" || role === "admin")
     : (role === "admin" || role === "coach");
 
+  // Has this user already dismissed the popup today?
+  const [seenToday, setSeenToday] = useState(true);
   useEffect(() => {
-    if (!user || !allowed) return;
-    try {
-      if (localStorage.getItem(storageKey) === todayKey()) return;
-      setOpen(true);
-      setStyles(readQuadStyles());
-    } catch {}
+    if (!user || !allowed) { setSeenToday(true); return; }
+    try { setSeenToday(localStorage.getItem(storageKey) === todayKey()); }
+    catch { setSeenToday(false); }
   }, [user, allowed, storageKey]);
 
-  const skipForToday = () => {
-    try { localStorage.setItem(storageKey, todayKey()); } catch {}
-    setOpen(false);
-  };
-
+  // Fetch tasks up front so we can decide whether opening the popup is even useful.
   const { data: tasks = [] } = useQuery({
     queryKey: ["tasks", scope, user?.id ?? null],
     queryFn: fetchTasks,
-    enabled: open,
+    enabled: !!user && allowed && !seenToday,
+    staleTime: 60_000,
   });
+
+  const skipForToday = () => {
+    try { localStorage.setItem(storageKey, todayKey()); } catch {}
+    setSeenToday(true);
+    setOpen(false);
+  };
 
   // For MM, only show tasks assigned to them. Admin sees everything.
   const scopedTasks = useMemo(() => {
@@ -74,6 +78,17 @@ export function TaskPopupGate({ scope = "admin" }: { scope?: "admin" | "media_ma
   }, [tasks, scope, user?.id]);
 
   const openCount = countOpen(scopedTasks);
+
+  // Only surface the popup when there is at least one open task in the user's scope
+  // AND they haven't already dismissed it today. Otherwise it's just noise.
+  useEffect(() => {
+    if (!user || !allowed || seenToday) return;
+    if (openCount > 0 && !open) {
+      setOpen(true);
+      setStyles(readQuadStyles());
+    }
+  }, [user, allowed, seenToday, openCount, open]);
+
   const counts = QUADRANTS.map((q) => ({
     q,
     n: scopedTasks.filter((t) => t.status === "open" && t.quadrant === (q.key as TaskQuadrant)).length,
