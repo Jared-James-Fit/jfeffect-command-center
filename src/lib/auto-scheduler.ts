@@ -253,14 +253,22 @@ export async function buildSchedulePreview(blockId: string): Promise<SchedulePre
 export async function applySchedule(blockId: string, preview: SchedulePreview): Promise<{ updated: number }> {
   let updated = 0;
   for (const r of preview.rows) {
-    if (r.manualOverride) continue; // never overwrite locked
     if (!r.dateISO) continue;
-    const { error } = await sb
-      .from("pl_days")
-      .update({ scheduled_date: r.dateISO, schedule_source: "auto" })
-      .eq("id", r.dayId)
-      .eq("schedule_locked", false);
-    if (!error) updated++;
+    if (r.manualOverride) {
+      // Persist preview-edited manual overrides (and re-affirm existing ones)
+      const { error } = await sb
+        .from("pl_days")
+        .update({ scheduled_date: r.dateISO, schedule_source: "manual", schedule_locked: true })
+        .eq("id", r.dayId);
+      if (!error) updated++;
+    } else {
+      const { error } = await sb
+        .from("pl_days")
+        .update({ scheduled_date: r.dateISO, schedule_source: "auto" })
+        .eq("id", r.dayId)
+        .eq("schedule_locked", false);
+      if (!error) updated++;
+    }
   }
   await sb
     .from("pl_blocks")
