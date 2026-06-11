@@ -753,7 +753,7 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
                 return (
                   <CommandItem
                     key={item.to}
-                    value={`${group.label ?? ""} ${item.label} ${item.to}`}
+                    value={`${group.label ?? ""} ${item.label} ${item.to} ${(item.keywords ?? []).join(" ")}`}
                     onSelect={() => {
                       setPaletteOpen(false);
                       navigate({ to: item.to });
