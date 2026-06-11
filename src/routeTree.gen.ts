@@ -51,6 +51,7 @@ import { Route as AuthenticatedPortalCalendarRouteImport } from './routes/_authe
 import { Route as AuthenticatedPortalAppointmentsRouteImport } from './routes/_authenticated/portal/appointments'
 import { Route as AuthenticatedPortalAnnouncementsRouteImport } from './routes/_authenticated/portal/announcements'
 import { Route as AuthenticatedPortalAccountRouteImport } from './routes/_authenticated/portal/account'
+import { Route as AuthenticatedMediaEventsRouteImport } from './routes/_authenticated/media/events'
 import { Route as AuthenticatedMediaCampaignsRouteImport } from './routes/_authenticated/media/campaigns'
 import { Route as AuthenticatedMediaCalendarRouteImport } from './routes/_authenticated/media/calendar'
 import { Route as AuthenticatedMediaBroadcastsRouteImport } from './routes/_authenticated/media/broadcasts'
@@ -404,6 +405,12 @@ const AuthenticatedPortalAccountRoute =
     id: '/account',
     path: '/account',
     getParentRoute: () => AuthenticatedPortalRouteRoute,
+  } as any)
+const AuthenticatedMediaEventsRoute =
+  AuthenticatedMediaEventsRouteImport.update({
+    id: '/events',
+    path: '/events',
+    getParentRoute: () => AuthenticatedMediaRouteRoute,
   } as any)
 const AuthenticatedMediaCampaignsRoute =
   AuthenticatedMediaCampaignsRouteImport.update({
@@ -1219,6 +1226,7 @@ export interface FileRoutesByFullPath {
   '/media/broadcasts': typeof AuthenticatedMediaBroadcastsRoute
   '/media/calendar': typeof AuthenticatedMediaCalendarRoute
   '/media/campaigns': typeof AuthenticatedMediaCampaignsRoute
+  '/media/events': typeof AuthenticatedMediaEventsRoute
   '/portal/account': typeof AuthenticatedPortalAccountRoute
   '/portal/announcements': typeof AuthenticatedPortalAnnouncementsRoute
   '/portal/appointments': typeof AuthenticatedPortalAppointmentsRoute
@@ -1382,6 +1390,7 @@ export interface FileRoutesByTo {
   '/media/broadcasts': typeof AuthenticatedMediaBroadcastsRoute
   '/media/calendar': typeof AuthenticatedMediaCalendarRoute
   '/media/campaigns': typeof AuthenticatedMediaCampaignsRoute
+  '/media/events': typeof AuthenticatedMediaEventsRoute
   '/portal/account': typeof AuthenticatedPortalAccountRoute
   '/portal/announcements': typeof AuthenticatedPortalAnnouncementsRoute
   '/portal/appointments': typeof AuthenticatedPortalAppointmentsRoute
@@ -1552,6 +1561,7 @@ export interface FileRoutesById {
   '/_authenticated/media/broadcasts': typeof AuthenticatedMediaBroadcastsRoute
   '/_authenticated/media/calendar': typeof AuthenticatedMediaCalendarRoute
   '/_authenticated/media/campaigns': typeof AuthenticatedMediaCampaignsRoute
+  '/_authenticated/media/events': typeof AuthenticatedMediaEventsRoute
   '/_authenticated/portal/account': typeof AuthenticatedPortalAccountRoute
   '/_authenticated/portal/announcements': typeof AuthenticatedPortalAnnouncementsRoute
   '/_authenticated/portal/appointments': typeof AuthenticatedPortalAppointmentsRoute
@@ -1722,6 +1732,7 @@ export interface FileRouteTypes {
     | '/media/broadcasts'
     | '/media/calendar'
     | '/media/campaigns'
+    | '/media/events'
     | '/portal/account'
     | '/portal/announcements'
     | '/portal/appointments'
@@ -1885,6 +1896,7 @@ export interface FileRouteTypes {
     | '/media/broadcasts'
     | '/media/calendar'
     | '/media/campaigns'
+    | '/media/events'
     | '/portal/account'
     | '/portal/announcements'
     | '/portal/appointments'
@@ -2054,6 +2066,7 @@ export interface FileRouteTypes {
     | '/_authenticated/media/broadcasts'
     | '/_authenticated/media/calendar'
     | '/_authenticated/media/campaigns'
+    | '/_authenticated/media/events'
     | '/_authenticated/portal/account'
     | '/_authenticated/portal/announcements'
     | '/_authenticated/portal/appointments'
@@ -2467,6 +2480,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/portal/account'
       preLoaderRoute: typeof AuthenticatedPortalAccountRouteImport
       parentRoute: typeof AuthenticatedPortalRouteRoute
+    }
+    '/_authenticated/media/events': {
+      id: '/_authenticated/media/events'
+      path: '/events'
+      fullPath: '/media/events'
+      preLoaderRoute: typeof AuthenticatedMediaEventsRouteImport
+      parentRoute: typeof AuthenticatedMediaRouteRoute
     }
     '/_authenticated/media/campaigns': {
       id: '/_authenticated/media/campaigns'
@@ -3713,6 +3733,7 @@ interface AuthenticatedMediaRouteRouteChildren {
   AuthenticatedMediaBroadcastsRoute: typeof AuthenticatedMediaBroadcastsRoute
   AuthenticatedMediaCalendarRoute: typeof AuthenticatedMediaCalendarRoute
   AuthenticatedMediaCampaignsRoute: typeof AuthenticatedMediaCampaignsRoute
+  AuthenticatedMediaEventsRoute: typeof AuthenticatedMediaEventsRoute
   AuthenticatedMediaIndexRoute: typeof AuthenticatedMediaIndexRoute
 }
 
@@ -3722,6 +3743,7 @@ const AuthenticatedMediaRouteRouteChildren: AuthenticatedMediaRouteRouteChildren
     AuthenticatedMediaBroadcastsRoute: AuthenticatedMediaBroadcastsRoute,
     AuthenticatedMediaCalendarRoute: AuthenticatedMediaCalendarRoute,
     AuthenticatedMediaCampaignsRoute: AuthenticatedMediaCampaignsRoute,
+    AuthenticatedMediaEventsRoute: AuthenticatedMediaEventsRoute,
     AuthenticatedMediaIndexRoute: AuthenticatedMediaIndexRoute,
   }
 
