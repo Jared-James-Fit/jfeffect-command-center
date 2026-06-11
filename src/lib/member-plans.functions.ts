@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { assertMemberCanReadProtected } from "@/lib/jf-access.server";
 
 async function assertAdmin(ctx: any) {
   const { supabase, userId } = ctx;
@@ -175,6 +176,7 @@ export const startPlan = createServerFn({ method: "POST" })
   }).parse(i))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
+    await assertMemberCanReadProtected(supabase, userId);
     const { data: member } = await supabase.from("app_members").select("id").eq("user_id", userId).maybeSingle();
     if (!member) throw new Error("Not a member");
 
@@ -224,6 +226,7 @@ export const completeWorkout = createServerFn({ method: "POST" })
   }).parse(i))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
+    await assertMemberCanReadProtected(supabase, userId);
     const { data: member } = await supabase.from("app_members").select("id").eq("user_id", userId).maybeSingle();
     if (!member) throw new Error("Not a member");
 
@@ -268,6 +271,7 @@ export const uncompleteWorkout = createServerFn({ method: "POST" })
   }).parse(i))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
+    await assertMemberCanReadProtected(supabase, userId);
     const { data: member } = await supabase.from("app_members").select("id").eq("user_id", userId).maybeSingle();
     if (!member) throw new Error("Not a member");
     const { error } = await supabase
@@ -304,7 +308,8 @@ export const logSet = createServerFn({ method: "POST" })
     notes: z.string().max(1000).nullable().optional(),
   }).parse(i))
   .handler(async ({ data, context }) => {
-    const { supabase } = context;
+    const { supabase, userId } = context;
+    await assertMemberCanReadProtected(supabase, userId);
     const { enrollmentId, weekIndex, dayIndex, exerciseIndex, setIndex, ...rest } = data;
     const { error } = await supabase.from("member_set_logs").upsert({
       enrollment_id: enrollmentId,
@@ -323,6 +328,7 @@ export const restartPlan = createServerFn({ method: "POST" })
   .inputValidator((i: { enrollmentId: string }) => z.object({ enrollmentId: z.string().uuid() }).parse(i))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
+    await assertMemberCanReadProtected(supabase, userId);
     const { data: member } = await supabase.from("app_members").select("id").eq("user_id", userId).maybeSingle();
     if (!member) throw new Error("Not a member");
     const { data: old } = await supabase.from("member_plan_enrollments").select("plan_id").eq("id", data.enrollmentId).eq("member_id", member.id).maybeSingle();
