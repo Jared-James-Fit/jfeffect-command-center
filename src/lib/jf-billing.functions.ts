@@ -413,9 +413,11 @@ export const cancelJfMembership = createServerFn({ method: "POST" })
     const { userId } = context as any;
     const member = await assertMyMember(userId);
     const s = await loadSettings();
+    const { apiKey } = resolveStripeKey(s, "cancel");
     const sub = await stripeFetch(`/subscriptions/${member.stripe_subscription_id}`, {
       method: "POST",
       body: formEncode({ cancel_at_period_end: "true" }),
+      apiKey,
     });
     await applyStripeStateToMember(member.id, sub, s.hold_price_id);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -437,6 +439,7 @@ export const freezeJfMembership = createServerFn({ method: "POST" })
     const { userId } = context as any;
     const member = await assertMyMember(userId);
     const s = await loadSettings();
+    const { apiKey } = resolveStripeKey(s, "freeze");
     const resumesAt = Math.floor(Date.now() / 1000) + 30 * 24 * 3600;
     const sub = await stripeFetch(`/subscriptions/${member.stripe_subscription_id}`, {
       method: "POST",
@@ -444,6 +447,7 @@ export const freezeJfMembership = createServerFn({ method: "POST" })
         "pause_collection[behavior]": "void",
         "pause_collection[resumes_at]": String(resumesAt),
       }),
+      apiKey,
     });
     await applyStripeStateToMember(member.id, sub, s.hold_price_id);
     await fireMemberSms(member.id, "subscription_frozen", {
@@ -459,8 +463,9 @@ export const switchToHoldPlan = createServerFn({ method: "POST" })
     const member = await assertMyMember(userId);
     const s = await loadSettings();
     if (!s.hold_price_id) throw new Error("Hold Plan price isn't configured yet.");
+    const { apiKey } = resolveStripeKey(s, "hold");
     // Get current sub to find item id
-    const current = await stripeFetch(`/subscriptions/${member.stripe_subscription_id}`);
+    const current = await stripeFetch(`/subscriptions/${member.stripe_subscription_id}`, { apiKey });
     const itemId = current.items?.data?.[0]?.id;
     if (!itemId) throw new Error("Subscription has no item.");
     const sub = await stripeFetch(`/subscriptions/${member.stripe_subscription_id}`, {
@@ -472,6 +477,7 @@ export const switchToHoldPlan = createServerFn({ method: "POST" })
         cancel_at_period_end: "false",
         "pause_collection": "",
       }),
+      apiKey,
     });
     await applyStripeStateToMember(member.id, sub, s.hold_price_id);
     await fireMemberSms(member.id, "subscription_hold_plan", {
@@ -487,7 +493,8 @@ export const reactivateFullMembership = createServerFn({ method: "POST" })
     const member = await assertMyMember(userId);
     const s = await loadSettings();
     if (!s.monthly_price_id) throw new Error("Membership price isn't configured.");
-    const current = await stripeFetch(`/subscriptions/${member.stripe_subscription_id}`);
+    const { apiKey } = resolveStripeKey(s, "reactivate");
+    const current = await stripeFetch(`/subscriptions/${member.stripe_subscription_id}`, { apiKey });
     const itemId = current.items?.data?.[0]?.id;
     if (!itemId) throw new Error("Subscription has no item.");
     const sub = await stripeFetch(`/subscriptions/${member.stripe_subscription_id}`, {
@@ -499,6 +506,7 @@ export const reactivateFullMembership = createServerFn({ method: "POST" })
         cancel_at_period_end: "false",
         "pause_collection": "",
       }),
+      apiKey,
     });
     await applyStripeStateToMember(member.id, sub, s.hold_price_id);
     await fireMemberSms(member.id, "subscription_reactivated", {
@@ -515,9 +523,12 @@ export const openBillingPortal = createServerFn({ method: "POST" })
     const { userId } = context as any;
     const member = await findMemberByUser(userId);
     if (!member?.stripe_customer_id) throw new Error("No billing account found.");
+    const s = await loadSettings();
+    const { apiKey } = resolveStripeKey(s, "portal");
     const portal = await stripeFetch("/billing_portal/sessions", {
       method: "POST",
       body: formEncode({ customer: member.stripe_customer_id, return_url: data.return_url }),
+      apiKey,
     });
     return { url: portal.url as string };
   });
@@ -528,7 +539,8 @@ export const syncMyStripeStatus = createServerFn({ method: "POST" })
     const { userId } = context as any;
     const member = await assertMyMember(userId);
     const s = await loadSettings();
-    const sub = await stripeFetch(`/subscriptions/${member.stripe_subscription_id}`);
+    const { apiKey } = resolveStripeKey(s, "sync");
+    const sub = await stripeFetch(`/subscriptions/${member.stripe_subscription_id}`, { apiKey });
     await applyStripeStateToMember(member.id, sub, s.hold_price_id);
     return { ok: true, subscription_status: statusFromSubscription(sub, s.hold_price_id) };
   });
