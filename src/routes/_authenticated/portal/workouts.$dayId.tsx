@@ -85,7 +85,7 @@ function WorkoutDay() {
 
   const { data: rows = [] } = useQuery({
     queryKey: ["pl-day-rows", dayId],
-    queryFn: async () => (await sb.from("pl_exercise_rows").select("*, exercises(id,name,video_url,vimeo_embed_url,thumbnail_url,cues,common_mistakes,muscle_group,category)").eq("day_id", dayId).order("sort_order")).data ?? [],
+   queryFn: async () => (await sb.from("pl_exercise_rows").select("*, exercises(id,name,video_url,vimeo_embed_url,thumbnail_url,cues,common_mistakes,muscle_group,category,pl_lift_group,warmup_protocol_id,is_powerlifting,warmup_notes)").eq("day_id", dayId).order("sort_order")).data ?? [],
   });
 
   useEffect(() => {
