@@ -288,12 +288,12 @@ export async function clearAutoSchedule(
   const weekIds = (weeks ?? []).map((w: any) => w.id);
   if (weekIds.length === 0) return { cleared: 0 };
 
-  let q = sb
-    .from("pl_days")
-    .update({ scheduled_date: null, schedule_source: null })
-    .in("week_id", weekIds);
+  const patch = opts.keepManualOverrides
+    ? { scheduled_date: null, schedule_source: null }
+    : { scheduled_date: null, schedule_source: null, schedule_locked: false };
+
+  let q = sb.from("pl_days").update(patch).in("week_id", weekIds);
   if (opts.keepManualOverrides) q = q.eq("schedule_locked", false);
-  else q = (sb.from("pl_days") as any).update({ scheduled_date: null, schedule_source: null, schedule_locked: false }).in("week_id", weekIds);
 
   const { data } = await q.select("id");
   await sb
