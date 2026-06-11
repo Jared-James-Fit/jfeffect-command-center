@@ -8,6 +8,7 @@ import {
   UserPlus, Library, Wrench, HelpCircle,
   ChefHat, Megaphone, Phone, Link2 as LinkIcon,
   ListChecks, LayoutGrid,
+  Heart,
 } from "lucide-react";
 import { Sparkles } from "lucide-react";
 import type { NavItem } from "@/components/app-shell";
@@ -36,6 +37,7 @@ export const adminNav: NavItem[] = [
   // PROGRAMMING
   { to: "/admin/program-library", label: "Program Library", icon: BookOpen, group: "Programming" },
   { to: "/admin/exercises", label: "Exercise Library", icon: Dumbbell, group: "Programming" },
+  { to: "/admin/cardio-targets", label: "Cardio Targets", icon: Heart, group: "Programming", keywords: ["card", "cardio", "targets", "conditioning", "steps", "hiit", "liss", "zone 2", "heart rate"] },
   { to: "/admin/recipes", label: "Recipe Library", icon: ChefHat, group: "Programming" },
   { to: "/admin/native-forms", label: "Check-Ins & Forms", icon: FileEdit, group: "Programming" },
   { to: "/admin/fillout-submissions", label: "Fillout Submissions", icon: ClipboardList, group: "Programming" },
@@ -93,6 +95,7 @@ export const coachingAdminNav: NavItem[] = [
   // PROGRAMMING (coaching)
   { to: "/admin/program-library", label: "Program Library", icon: BookOpen, group: "Programming" },
   { to: "/admin/exercises", label: "Exercise Library", icon: Dumbbell, group: "Programming" },
+  { to: "/admin/cardio-targets", label: "Cardio Targets", icon: Heart, group: "Programming", keywords: ["card", "cardio", "targets", "conditioning", "steps", "hiit", "liss", "zone 2", "heart rate"] },
   { to: "/admin/recipes", label: "Recipe Library", icon: ChefHat, group: "Programming" },
   { to: "/admin/native-forms", label: "Check-Ins & Forms", icon: FileEdit, group: "Programming" },
   { to: "/admin/fillout-submissions", label: "Fillout Submissions", icon: ClipboardList, group: "Programming" },
