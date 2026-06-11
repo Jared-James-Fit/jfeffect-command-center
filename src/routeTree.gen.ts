@@ -22,6 +22,7 @@ import { Route as ApplyRouteImport } from './routes/apply'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SignupJfRouteImport } from './routes/signup.jf'
+import { Route as MWelcomeRouteImport } from './routes/m.welcome'
 import { Route as CoachingApplyRouteImport } from './routes/coaching.apply'
 import { Route as BookSlugRouteImport } from './routes/book.$slug'
 import { Route as ApiDriveUploadRouteImport } from './routes/api/drive-upload'
@@ -252,6 +253,11 @@ const IndexRoute = IndexRouteImport.update({
 const SignupJfRoute = SignupJfRouteImport.update({
   id: '/signup/jf',
   path: '/signup/jf',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MWelcomeRoute = MWelcomeRouteImport.update({
+  id: '/m/welcome',
+  path: '/m/welcome',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CoachingApplyRoute = CoachingApplyRouteImport.update({
@@ -1248,6 +1254,7 @@ export interface FileRoutesByFullPath {
   '/api/drive-upload': typeof ApiDriveUploadRoute
   '/book/$slug': typeof BookSlugRoute
   '/coaching/apply': typeof CoachingApplyRoute
+  '/m/welcome': typeof MWelcomeRoute
   '/signup/jf': typeof SignupJfRoute
   '/admin/account': typeof AuthenticatedAdminAccountRoute
   '/admin/appointments': typeof AuthenticatedAdminAppointmentsRoute
@@ -1425,6 +1432,7 @@ export interface FileRoutesByTo {
   '/api/drive-upload': typeof ApiDriveUploadRoute
   '/book/$slug': typeof BookSlugRoute
   '/coaching/apply': typeof CoachingApplyRoute
+  '/m/welcome': typeof MWelcomeRoute
   '/signup/jf': typeof SignupJfRoute
   '/admin/account': typeof AuthenticatedAdminAccountRoute
   '/admin/appointments': typeof AuthenticatedAdminAppointmentsRoute
@@ -1607,6 +1615,7 @@ export interface FileRoutesById {
   '/api/drive-upload': typeof ApiDriveUploadRoute
   '/book/$slug': typeof BookSlugRoute
   '/coaching/apply': typeof CoachingApplyRoute
+  '/m/welcome': typeof MWelcomeRoute
   '/signup/jf': typeof SignupJfRoute
   '/_authenticated/admin/account': typeof AuthenticatedAdminAccountRoute
   '/_authenticated/admin/appointments': typeof AuthenticatedAdminAppointmentsRoute
@@ -1790,6 +1799,7 @@ export interface FileRouteTypes {
     | '/api/drive-upload'
     | '/book/$slug'
     | '/coaching/apply'
+    | '/m/welcome'
     | '/signup/jf'
     | '/admin/account'
     | '/admin/appointments'
@@ -1967,6 +1977,7 @@ export interface FileRouteTypes {
     | '/api/drive-upload'
     | '/book/$slug'
     | '/coaching/apply'
+    | '/m/welcome'
     | '/signup/jf'
     | '/admin/account'
     | '/admin/appointments'
@@ -2148,6 +2159,7 @@ export interface FileRouteTypes {
     | '/api/drive-upload'
     | '/book/$slug'
     | '/coaching/apply'
+    | '/m/welcome'
     | '/signup/jf'
     | '/_authenticated/admin/account'
     | '/_authenticated/admin/appointments'
@@ -2326,6 +2338,7 @@ export interface RootRouteChildren {
   StaffSetupRoute: typeof StaffSetupRoute
   ApiDriveUploadRoute: typeof ApiDriveUploadRoute
   BookSlugRoute: typeof BookSlugRoute
+  MWelcomeRoute: typeof MWelcomeRoute
   SignupJfRoute: typeof SignupJfRoute
   ApiPublicSignnowWebhookRoute: typeof ApiPublicSignnowWebhookRoute
   ApiPublicStripeWebhookRoute: typeof ApiPublicStripeWebhookRoute
@@ -2431,6 +2444,13 @@ declare module '@tanstack/react-router' {
       path: '/signup/jf'
       fullPath: '/signup/jf'
       preLoaderRoute: typeof SignupJfRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/m/welcome': {
+      id: '/m/welcome'
+      path: '/m/welcome'
+      fullPath: '/m/welcome'
+      preLoaderRoute: typeof MWelcomeRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/coaching/apply': {
@@ -4167,6 +4187,7 @@ const rootRouteChildren: RootRouteChildren = {
   StaffSetupRoute: StaffSetupRoute,
   ApiDriveUploadRoute: ApiDriveUploadRoute,
   BookSlugRoute: BookSlugRoute,
+  MWelcomeRoute: MWelcomeRoute,
   SignupJfRoute: SignupJfRoute,
   ApiPublicSignnowWebhookRoute: ApiPublicSignnowWebhookRoute,
   ApiPublicStripeWebhookRoute: ApiPublicStripeWebhookRoute,
@@ -4184,13 +4205,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
