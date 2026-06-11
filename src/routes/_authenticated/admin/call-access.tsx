@@ -78,7 +78,7 @@ function CallAccessPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("clients")
-        .select("id, full_name, first_name, last_name, email, phone, call_access_enabled, sms_opt_out, assigned_coach_id, archived")
+        .select("id, full_name, first_name, last_name, email, phone, call_access_enabled, sms_opt_out, coach_call_access_enabled, coach_sms_access_enabled, assigned_coach_id, archived")
         .or("archived.is.null,archived.eq.false")
         .order("full_name");
       if (error) throw error;
@@ -203,13 +203,15 @@ function CallAccessPage() {
                     <th className="px-3 py-2 text-left">Coach</th>
                     <th className="px-3 py-2 text-left">Phone</th>
                     <th className="px-3 py-2 text-left">Call</th>
+                    <th className="px-3 py-2 text-left">Client → Coach Call</th>
+                    <th className="px-3 py-2 text-left">Client → Coach SMS</th>
                     <th className="px-3 py-2 text-left">SMS opt-out</th>
                     <th className="px-3 py-2 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {isLoading && <tr><td colSpan={6} className="p-6 text-center text-muted-foreground">Loading…</td></tr>}
-                  {!isLoading && filtered.length === 0 && <tr><td colSpan={6} className="p-6 text-center text-muted-foreground">No matching clients.</td></tr>}
+                  {isLoading && <tr><td colSpan={8} className="p-6 text-center text-muted-foreground">Loading…</td></tr>}
+                  {!isLoading && filtered.length === 0 && <tr><td colSpan={8} className="p-6 text-center text-muted-foreground">No matching clients.</td></tr>}
                   {filtered.map((c: any) => {
                     const tel = c.phone ? String(c.phone).replace(/[^+\d]/g, "") : "";
                     return (
@@ -246,6 +248,12 @@ function CallAccessPage() {
                             {c.call_access_enabled && !c.phone && <Badge variant="outline" className="border-amber-500/40 text-amber-600">Add phone</Badge>}
                             {c.call_access_enabled && c.phone && <Badge variant="outline" className="border-emerald-500/40 text-emerald-600">Live</Badge>}
                           </div>
+                        </td>
+                        <td className="px-3 py-2">
+                          <Switch checked={!!c.coach_call_access_enabled} onCheckedChange={(v) => updateClient(c.id, { coach_call_access_enabled: v })} />
+                        </td>
+                        <td className="px-3 py-2">
+                          <Switch checked={!!c.coach_sms_access_enabled} onCheckedChange={(v) => updateClient(c.id, { coach_sms_access_enabled: v })} />
                         </td>
                         <td className="px-3 py-2">
                           <Switch checked={!!c.sms_opt_out} onCheckedChange={(v) => updateClient(c.id, { sms_opt_out: v })} />

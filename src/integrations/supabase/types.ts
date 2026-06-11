@@ -1907,7 +1907,9 @@ export type Database = {
           checkin_notes_admin: string | null
           checkin_notes_client: string | null
           city: string | null
+          coach_call_access_enabled: boolean
           coach_notes: string | null
+          coach_sms_access_enabled: boolean
           coaching_package: string | null
           coaching_type: string | null
           committed_training_days: string[] | null
@@ -2051,7 +2053,9 @@ export type Database = {
           checkin_notes_admin?: string | null
           checkin_notes_client?: string | null
           city?: string | null
+          coach_call_access_enabled?: boolean
           coach_notes?: string | null
+          coach_sms_access_enabled?: boolean
           coaching_package?: string | null
           coaching_type?: string | null
           committed_training_days?: string[] | null
@@ -2195,7 +2199,9 @@ export type Database = {
           checkin_notes_admin?: string | null
           checkin_notes_client?: string | null
           city?: string | null
+          coach_call_access_enabled?: boolean
           coach_notes?: string | null
+          coach_sms_access_enabled?: boolean
           coaching_package?: string | null
           coaching_type?: string | null
           committed_training_days?: string[] | null
