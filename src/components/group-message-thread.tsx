@@ -883,109 +883,85 @@ export function GroupMessageThread({
             </div>
           ) : (
             <div className="flex items-end gap-1.5">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button type="button" variant="ghost" size="icon" className="h-10 w-10 shrink-0 rounded-full" disabled={uploading}>
-                    <Paperclip className="h-5 w-5" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start">
-                  <DropdownMenuLabel className="text-xs">Attach</DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => cameraInputRef.current?.click()}>
-                    <Camera className="mr-2 h-4 w-4" /> Take photo
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => photoInputRef.current?.click()}>
-                    <ImageIcon className="mr-2 h-4 w-4" /> Photo or video
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => fileInputRef.current?.click()}>
-                    <FileIcon className="mr-2 h-4 w-4" /> File / document
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-
-              {canManage && (
-                <ChatSendMenu
-                  surface="group"
-                  clientIds={memberClients}
-                  disabled={sending || uploading || memberClients.length === 0}
-                  onAttach={async (att, noteBody) => {
-                    if (!user) return;
-                    try {
-                      await sendGroupMessage({
-                        groupId,
-                        senderId: user.id,
-                        senderRole: "admin",
-                        body: noteBody,
-                        attachments: [att as unknown as GroupAttachment],
-                      });
-                      qc.invalidateQueries({ queryKey: ["group-messages", groupId] });
-                    } catch (e: any) {
-                      toast.error(e?.message ?? "Failed to send");
-                    }
-                  }}
-                />
-              )}
-
-              {canSendGifs && (
-                <GifPicker
-                  disabled={sending || uploading}
-                  showSounds
-                  onPickSound={!canSendSounds ? undefined : async (s) => {
-                    if (!user) return;
-                    setSending(true);
-                    try {
-                      await sendGroupMessage({
-                        groupId,
-                        senderId: user.id,
-                        senderRole: canManage ? "admin" : "member",
-                        body: "",
-                        attachments: [{
-                          type: "audio",
-                          kind: "sound",
-                          url: s.media_url,
-                          name: s.title,
-                          mime: s.mime,
-                          duration: s.duration_ms ? s.duration_ms / 1000 : undefined,
-                        }],
-                      });
-                      qc.invalidateQueries({ queryKey: ["group-messages", groupId] });
-                      try { await markSoundRecent(user.id, s.id); } catch {}
-                    } catch (e: any) {
-                      toast.error(e?.message ?? "Failed to send sound");
-                    } finally {
-                      setSending(false);
-                    }
-                  }}
-                  onPick={async (g) => {
-                    if (!user) return;
-                    setSending(true);
-                    try {
-                      await sendGroupMessage({
-                        groupId,
-                        senderId: user.id,
-                        senderRole: canManage ? "admin" : "member",
-                        body: "",
-                        attachments: [{
-                          type: g.media_type.startsWith("video") ? "video" : "image",
-                          url: g.media_url,
-                          name: g.title,
-                          mime: g.media_type,
-                          kind: "gif",
-                          category: g.category,
-                          fallback_emoji: fallbackEmoji(g.title, g.category),
-                        }],
-                      });
-                      qc.invalidateQueries({ queryKey: ["group-messages", groupId] });
-                      try { await markRecent(user.id, g.id); } catch {}
-                    } catch (e: any) {
-                      toast.error(e?.message ?? "Failed to send GIF");
-                    } finally {
-                      setSending(false);
-                    }
-                  }}
-                />
-              )}
+              <ComposerPlusMenu
+                role={canManage ? "admin" : "member"}
+                surface="group"
+                clientIds={memberClients}
+                disabled={sending || uploading}
+                canSendGifs={canSendGifs}
+                canSendSounds={canSendSounds}
+                onPickCamera={() => cameraInputRef.current?.click()}
+                onPickPhotos={() => photoInputRef.current?.click()}
+                onPickFiles={() => fileInputRef.current?.click()}
+                onAttach={canManage ? async (att, noteBody) => {
+                  if (!user) return;
+                  try {
+                    await sendGroupMessage({
+                      groupId,
+                      senderId: user.id,
+                      senderRole: "admin",
+                      body: noteBody,
+                      attachments: [att as unknown as GroupAttachment],
+                    });
+                    qc.invalidateQueries({ queryKey: ["group-messages", groupId] });
+                  } catch (e: any) {
+                    toast.error(e?.message ?? "Failed to send");
+                  }
+                } : undefined}
+                onPickGif={async (g) => {
+                  if (!user) return;
+                  setSending(true);
+                  try {
+                    await sendGroupMessage({
+                      groupId,
+                      senderId: user.id,
+                      senderRole: canManage ? "admin" : "member",
+                      body: "",
+                      attachments: [{
+                        type: g.media_type.startsWith("video") ? "video" : "image",
+                        url: g.media_url,
+                        name: g.title,
+                        mime: g.media_type,
+                        kind: "gif",
+                        category: g.category,
+                        fallback_emoji: fallbackEmoji(g.title, g.category),
+                      }],
+                    });
+                    qc.invalidateQueries({ queryKey: ["group-messages", groupId] });
+                    try { await markRecent(user.id, g.id); } catch {}
+                  } catch (e: any) {
+                    toast.error(e?.message ?? "Failed to send GIF");
+                  } finally {
+                    setSending(false);
+                  }
+                }}
+                onPickSound={!canSendSounds ? undefined : async (s) => {
+                  if (!user) return;
+                  setSending(true);
+                  try {
+                    await sendGroupMessage({
+                      groupId,
+                      senderId: user.id,
+                      senderRole: canManage ? "admin" : "member",
+                      body: "",
+                      attachments: [{
+                        type: "audio",
+                        kind: "sound",
+                        url: s.media_url,
+                        name: s.title,
+                        mime: s.mime,
+                        duration: s.duration_ms ? s.duration_ms / 1000 : undefined,
+                      }],
+                    });
+                    qc.invalidateQueries({ queryKey: ["group-messages", groupId] });
+                    try { await markSoundRecent(user.id, s.id); } catch {}
+                  } catch (e: any) {
+                    toast.error(e?.message ?? "Failed to send sound");
+                  } finally {
+                    setSending(false);
+                  }
+                }}
+              />
 
               {canManage && (
                 <MeetQuickAction
