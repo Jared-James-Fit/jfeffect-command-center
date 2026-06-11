@@ -24,6 +24,8 @@ function AdminLayout() {
   useEffect(() => {
     const inMembership = pathname.startsWith("/admin/membership");
     if (inMembership && mode !== "membership") setDashboardMode("membership");
+    if (!inMembership && mode === "membership") setDashboardMode("coaching");
+    if (mode === "media") setDashboardMode(inMembership ? "membership" : "coaching");
   }, [pathname, mode]);
   useEffect(() => {
     if (loading || !role) return;
