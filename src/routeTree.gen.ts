@@ -139,6 +139,7 @@ import { Route as AuthenticatedPortalRecipesRecipeIdRouteImport } from './routes
 import { Route as AuthenticatedPortalPurchasesIdRouteImport } from './routes/_authenticated/portal/purchases.$id'
 import { Route as AuthenticatedPortalEventsIdRouteImport } from './routes/_authenticated/portal/events.$id'
 import { Route as AuthenticatedPortalCheckInsFormIdRouteImport } from './routes/_authenticated/portal/check-ins.$formId'
+import { Route as AuthenticatedMediaSalesMembershipRouteImport } from './routes/_authenticated/media/sales.membership'
 import { Route as AuthenticatedMResourcesSlugRouteImport } from './routes/_authenticated/m/resources.$slug'
 import { Route as AuthenticatedMPlansPlanIdRouteImport } from './routes/_authenticated/m/plans.$planId'
 import { Route as AuthenticatedMMyPlansEnrollmentIdRouteImport } from './routes/_authenticated/m/my-plans.$enrollmentId'
@@ -921,6 +922,12 @@ const AuthenticatedPortalCheckInsFormIdRoute =
     path: '/$formId',
     getParentRoute: () => AuthenticatedPortalCheckInsRoute,
   } as any)
+const AuthenticatedMediaSalesMembershipRoute =
+  AuthenticatedMediaSalesMembershipRouteImport.update({
+    id: '/sales/membership',
+    path: '/sales/membership',
+    getParentRoute: () => AuthenticatedMediaRouteRoute,
+  } as any)
 const AuthenticatedMResourcesSlugRoute =
   AuthenticatedMResourcesSlugRouteImport.update({
     id: '/$slug',
@@ -1319,6 +1326,7 @@ export interface FileRoutesByFullPath {
   '/m/my-plans/$enrollmentId': typeof AuthenticatedMMyPlansEnrollmentIdRoute
   '/m/plans/$planId': typeof AuthenticatedMPlansPlanIdRoute
   '/m/resources/$slug': typeof AuthenticatedMResourcesSlugRoute
+  '/media/sales/membership': typeof AuthenticatedMediaSalesMembershipRoute
   '/portal/check-ins/$formId': typeof AuthenticatedPortalCheckInsFormIdRoute
   '/portal/events/$id': typeof AuthenticatedPortalEventsIdRoute
   '/portal/purchases/$id': typeof AuthenticatedPortalPurchasesIdRoute
@@ -1487,6 +1495,7 @@ export interface FileRoutesByTo {
   '/m/my-plans/$enrollmentId': typeof AuthenticatedMMyPlansEnrollmentIdRoute
   '/m/plans/$planId': typeof AuthenticatedMPlansPlanIdRoute
   '/m/resources/$slug': typeof AuthenticatedMResourcesSlugRoute
+  '/media/sales/membership': typeof AuthenticatedMediaSalesMembershipRoute
   '/portal/check-ins/$formId': typeof AuthenticatedPortalCheckInsFormIdRoute
   '/portal/events/$id': typeof AuthenticatedPortalEventsIdRoute
   '/portal/purchases/$id': typeof AuthenticatedPortalPurchasesIdRoute
@@ -1662,6 +1671,7 @@ export interface FileRoutesById {
   '/_authenticated/m/my-plans/$enrollmentId': typeof AuthenticatedMMyPlansEnrollmentIdRoute
   '/_authenticated/m/plans/$planId': typeof AuthenticatedMPlansPlanIdRoute
   '/_authenticated/m/resources/$slug': typeof AuthenticatedMResourcesSlugRoute
+  '/_authenticated/media/sales/membership': typeof AuthenticatedMediaSalesMembershipRoute
   '/_authenticated/portal/check-ins/$formId': typeof AuthenticatedPortalCheckInsFormIdRoute
   '/_authenticated/portal/events/$id': typeof AuthenticatedPortalEventsIdRoute
   '/_authenticated/portal/purchases/$id': typeof AuthenticatedPortalPurchasesIdRoute
@@ -1837,6 +1847,7 @@ export interface FileRouteTypes {
     | '/m/my-plans/$enrollmentId'
     | '/m/plans/$planId'
     | '/m/resources/$slug'
+    | '/media/sales/membership'
     | '/portal/check-ins/$formId'
     | '/portal/events/$id'
     | '/portal/purchases/$id'
@@ -2005,6 +2016,7 @@ export interface FileRouteTypes {
     | '/m/my-plans/$enrollmentId'
     | '/m/plans/$planId'
     | '/m/resources/$slug'
+    | '/media/sales/membership'
     | '/portal/check-ins/$formId'
     | '/portal/events/$id'
     | '/portal/purchases/$id'
@@ -2179,6 +2191,7 @@ export interface FileRouteTypes {
     | '/_authenticated/m/my-plans/$enrollmentId'
     | '/_authenticated/m/plans/$planId'
     | '/_authenticated/m/resources/$slug'
+    | '/_authenticated/media/sales/membership'
     | '/_authenticated/portal/check-ins/$formId'
     | '/_authenticated/portal/events/$id'
     | '/_authenticated/portal/purchases/$id'
@@ -3148,6 +3161,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedPortalCheckInsFormIdRouteImport
       parentRoute: typeof AuthenticatedPortalCheckInsRoute
     }
+    '/_authenticated/media/sales/membership': {
+      id: '/_authenticated/media/sales/membership'
+      path: '/sales/membership'
+      fullPath: '/media/sales/membership'
+      preLoaderRoute: typeof AuthenticatedMediaSalesMembershipRouteImport
+      parentRoute: typeof AuthenticatedMediaRouteRoute
+    }
     '/_authenticated/m/resources/$slug': {
       id: '/_authenticated/m/resources/$slug'
       path: '/$slug'
@@ -3818,6 +3838,7 @@ interface AuthenticatedMediaRouteRouteChildren {
   AuthenticatedMediaTestimonialsRoute: typeof AuthenticatedMediaTestimonialsRoute
   AuthenticatedMediaUploadsRoute: typeof AuthenticatedMediaUploadsRoute
   AuthenticatedMediaIndexRoute: typeof AuthenticatedMediaIndexRoute
+  AuthenticatedMediaSalesMembershipRoute: typeof AuthenticatedMediaSalesMembershipRoute
 }
 
 const AuthenticatedMediaRouteRouteChildren: AuthenticatedMediaRouteRouteChildren =
@@ -3832,6 +3853,8 @@ const AuthenticatedMediaRouteRouteChildren: AuthenticatedMediaRouteRouteChildren
     AuthenticatedMediaTestimonialsRoute: AuthenticatedMediaTestimonialsRoute,
     AuthenticatedMediaUploadsRoute: AuthenticatedMediaUploadsRoute,
     AuthenticatedMediaIndexRoute: AuthenticatedMediaIndexRoute,
+    AuthenticatedMediaSalesMembershipRoute:
+      AuthenticatedMediaSalesMembershipRoute,
   }
 
 const AuthenticatedMediaRouteRouteWithChildren =
