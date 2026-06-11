@@ -1433,105 +1433,80 @@ export function MessageThread({
           </div>
         ) : (
           <div className="flex items-end gap-1.5">
-            {/* Attachment menu */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button type="button" variant="ghost" size="icon" className="h-10 w-10 shrink-0 rounded-full" disabled={uploading}>
-                  <Paperclip className="h-5 w-5" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start">
-                <DropdownMenuLabel className="text-xs">Attach</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => cameraInputRef.current?.click()}>
-                  <Camera className="mr-2 h-4 w-4" /> Take photo
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => photoInputRef.current?.click()}>
-                  <ImageIcon className="mr-2 h-4 w-4" /> Photo or video
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => fileInputRef.current?.click()}>
-                  <FileIcon className="mr-2 h-4 w-4" /> File / document
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-
-            {role === "admin" && (
-              <ChatSendMenu
-                surface="dm"
-                clientIds={[clientId]}
-                defaultClientId={clientId}
-                disabled={sending || uploading}
-                onAttach={async (att, noteBody) => {
-                  await doSend({ body: noteBody, extraAttachments: [att as unknown as MessageAttachment] });
-                }}
-              />
-            )}
-
-            {canSendGifs && (
-              <GifPicker
-                disabled={sending || uploading}
-                showSounds
-                onPickSound={!canSendSounds ? undefined : async (s) => {
-                  if (!user) return;
-                  setSending(true);
-                  try {
-                    await sendMessage({
-                      clientId,
-                      senderId: user.id,
-                      senderRole: role,
-                      body: "",
-                      attachments: [{
-                        type: "audio",
-                        kind: "sound",
-                        url: s.media_url,
-                        name: s.title,
-                        mime: s.mime,
-                        duration: s.duration_ms ? s.duration_ms / 1000 : undefined,
-                      }],
-                      messageType,
-                      isInternalNote: role === "admin" ? internalNote : false,
-                      priority: role === "admin" ? priority : undefined,
-                    });
-                    qc.invalidateQueries({ queryKey: ["messages", clientId, role] });
-                    try { await markSoundRecent(user.id, s.id); } catch {}
-                  } catch (e: any) {
-                    toast.error(e?.message ?? "Failed to send sound");
-                  } finally {
-                    setSending(false);
-                  }
-                }}
-                onPick={async (g) => {
-                  if (!user) return;
-                  setSending(true);
-                  try {
-                    await sendMessage({
-                      clientId,
-                      senderId: user.id,
-                      senderRole: role,
-                      body: "",
-                      attachments: [{
-                        type: g.media_type.startsWith("video") ? "video" : "image",
-                        url: g.media_url,
-                        name: g.title,
-                        mime: g.media_type,
+            <ComposerPlusMenu
+              role={role}
+              surface="dm"
+              clientIds={[clientId]}
+              defaultClientId={clientId}
+              disabled={sending || uploading}
+              canSendGifs={canSendGifs}
+              canSendSounds={canSendSounds}
+              onPickCamera={() => cameraInputRef.current?.click()}
+              onPickPhotos={() => photoInputRef.current?.click()}
+              onPickFiles={() => fileInputRef.current?.click()}
+              onAttach={role === "admin" ? async (att, noteBody) => {
+                await doSend({ body: noteBody, extraAttachments: [att as unknown as MessageAttachment] });
+              } : undefined}
+              onPickGif={async (g) => {
+                if (!user) return;
+                setSending(true);
+                try {
+                  await sendMessage({
+                    clientId,
+                    senderId: user.id,
+                    senderRole: role,
+                    body: "",
+                    attachments: [{
+                      type: g.media_type.startsWith("video") ? "video" : "image",
+                      url: g.media_url,
+                      name: g.title,
+                      mime: g.media_type,
                       kind: "gif",
                       category: g.category,
                       fallback_emoji: fallbackEmoji(g.title, g.category),
-                      }],
-                      messageType,
-                      isInternalNote: role === "admin" ? internalNote : false,
-                      priority: role === "admin" ? priority : undefined,
-                    });
-                    qc.invalidateQueries({ queryKey: ["messages", clientId, role] });
-                    try { await markRecent(user.id, g.id); } catch {}
-                  } catch (e: any) {
-                    toast.error(e?.message ?? "Failed to send GIF");
-                  } finally {
-                    setSending(false);
-                  }
-                }}
-              />
-            )}
+                    }],
+                    messageType,
+                    isInternalNote: role === "admin" ? internalNote : false,
+                    priority: role === "admin" ? priority : undefined,
+                  });
+                  qc.invalidateQueries({ queryKey: ["messages", clientId, role] });
+                  try { await markRecent(user.id, g.id); } catch {}
+                } catch (e: any) {
+                  toast.error(e?.message ?? "Failed to send GIF");
+                } finally {
+                  setSending(false);
+                }
+              }}
+              onPickSound={!canSendSounds ? undefined : async (s) => {
+                if (!user) return;
+                setSending(true);
+                try {
+                  await sendMessage({
+                    clientId,
+                    senderId: user.id,
+                    senderRole: role,
+                    body: "",
+                    attachments: [{
+                      type: "audio",
+                      kind: "sound",
+                      url: s.media_url,
+                      name: s.title,
+                      mime: s.mime,
+                      duration: s.duration_ms ? s.duration_ms / 1000 : undefined,
+                    }],
+                    messageType,
+                    isInternalNote: role === "admin" ? internalNote : false,
+                    priority: role === "admin" ? priority : undefined,
+                  });
+                  qc.invalidateQueries({ queryKey: ["messages", clientId, role] });
+                  try { await markSoundRecent(user.id, s.id); } catch {}
+                } catch (e: any) {
+                  toast.error(e?.message ?? "Failed to send sound");
+                } finally {
+                  setSending(false);
+                }
+              }}
+            />
 
             {/* Priority selector removed for simplicity. */}
 
