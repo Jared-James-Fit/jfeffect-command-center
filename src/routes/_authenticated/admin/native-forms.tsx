@@ -205,7 +205,9 @@ function FormRow({
   const hasAudience = form.visibility === "all_active_clients" || assignments.length > 0;
   const hasContent = form.kind === "external" ? !!form.external_url : questions.length > 0;
   const isActive = form.active && !form.archived && hasContent && hasAudience;
-  const assignedCount = form.visibility === "all_active_clients" ? "All active" : `${assignments.length} assigned`;
+  const assignedCount = form.visibility === "all_active_clients"
+    ? "Shared with all active clients"
+    : `Shared with ${assignments.length}`;
   const kindLabel = form.kind === "external" ? "External" : "Native";
 
   return (
@@ -231,7 +233,7 @@ function FormRow({
           </div>
           {hasAudience && (form.archived || !form.active) && (
             <div className="mt-2 text-xs font-medium text-warning">
-              Assigned, but not visible because this form is {form.archived ? "archived" : "still Draft"}.
+              Shared with clients, but not visible because this form is {form.archived ? "archived" : "still Draft"}.
             </div>
           )}
           </div>
