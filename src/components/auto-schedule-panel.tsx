@@ -15,7 +15,6 @@ import {
   applySchedule,
   clearAutoSchedule,
   detectAvailabilityChange,
-  markDayManual,
   unlockDay,
   type PreviewRow,
   type SchedulePreview,
@@ -227,9 +226,8 @@ function PreviewDialog({
     return [...m.entries()].sort((a, b) => a[0] - b[0]);
   }, [preview]);
 
-  const updateRowDate = async (row: PreviewRow, newDate: string) => {
-    await markDayManual(row.dayId, newDate);
-    toast.success("Set as manual override");
+  const updateRowDate = (row: PreviewRow, newDate: string) => {
+    // Preview-only edit. Persists when admin clicks Apply.
     const next: SchedulePreview = {
       ...preview,
       rows: preview.rows.map((r) =>
@@ -239,10 +237,10 @@ function PreviewDialog({
       ),
     };
     onChange(next);
-    qc.invalidateQueries({ queryKey: ["block-days-warmup"] });
   };
 
   const unlockRow = async (row: PreviewRow) => {
+    // Unlock immediately so a follow-up Build picks it up; date stays for now.
     await unlockDay(row.dayId);
     toast.success("Override removed");
     const next: SchedulePreview = {
@@ -250,6 +248,7 @@ function PreviewDialog({
       rows: preview.rows.map((r) => (r.dayId === row.dayId ? { ...r, manualOverride: false } : r)),
     };
     onChange(next);
+    qc.invalidateQueries({ queryKey: ["block-days-warmup"] });
   };
 
   return (
