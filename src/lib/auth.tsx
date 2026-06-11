@@ -5,7 +5,7 @@ import { useRouter } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { markClientSignedIn } from "@/lib/activity";
 
-export type AppRole = "admin" | "coach" | "client" | "member";
+export type AppRole = "admin" | "coach" | "media_manager" | "client" | "member";
 
 interface AuthState {
   user: User | null;
@@ -67,6 +67,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setRole(
         roles.includes("admin") ? "admin"
         : roles.includes("coach") ? "coach"
+        : roles.includes("media_manager") ? "media_manager"
         : memberRow ? "member"
         : roles.includes("client") ? "client"
         : null,
