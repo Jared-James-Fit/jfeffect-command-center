@@ -515,7 +515,7 @@ function RecipePickerDialog({
               className="pl-7 h-9"
             />
           </div>
-          <div className="max-h-64 overflow-y-auto rounded-md border">
+          <div className="max-h-[55vh] min-h-[180px] overflow-y-auto rounded-md border">
             {isLoading && <div className="p-3 text-sm text-muted-foreground">Loading…</div>}
             {!isLoading && filtered.length === 0 && (
               <div className="p-3 text-sm text-muted-foreground">No recipes found.</div>
@@ -525,9 +525,9 @@ function RecipePickerDialog({
                 key={r.id}
                 type="button"
                 onClick={() => setSelectedId(r.id)}
-                className={`flex w-full items-start gap-2 border-b border-border/60 px-3 py-2 text-left text-sm last:border-b-0 hover:bg-accent/40 ${selectedId === r.id ? "bg-accent/60" : ""}`}
+                className={`flex w-full items-start gap-3 border-b border-border/60 px-3 py-3 text-left text-sm last:border-b-0 hover:bg-accent/40 ${selectedId === r.id ? "bg-accent/60" : ""}`}
               >
-                <UtensilsCrossed className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                <UtensilsCrossed className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
                 <div className="min-w-0">
                   <div className="truncate font-medium">{r.title}</div>
                   <div className="truncate text-[11px] text-muted-foreground">
