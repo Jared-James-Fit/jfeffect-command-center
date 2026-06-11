@@ -25,8 +25,8 @@ export const adminNav: NavItem[] = [
   { to: "/admin/client-action-requests", label: "Action Requests", icon: ClipboardCheck, group: "Core" },
   // COMMUNICATION
   { to: "/admin/broadcasts", label: "Broadcasts", icon: Megaphone, group: "Communication" },
-  { to: "/admin/popups", label: "Popups Manager", icon: LayoutGrid, group: "Communication" },
-  { to: "/admin/load-screens", label: "Load Screens & Setup", icon: LayoutGrid, group: "Communication" },
+  { to: "/admin/popups", label: "Popups", icon: LayoutGrid, group: "Communication", keywords: ["popup", "popups", "pop up", "pop-up", "pop ups", "modal", "broadcast", "task popup", "load screen", "birthday card", "event popup"] },
+  { to: "/admin/load-screens", label: "Load Screens & Setup", icon: LayoutGrid, group: "Communication", keywords: ["load screen", "loading", "setup", "popup", "splash"] },
   { to: "/admin/call-access", label: "Call Access", icon: Phone, group: "Communication" },
   { to: "/admin/settings/sms", label: "SMS Access", icon: MessageCircle, group: "Communication" },
   { to: "/admin/settings/chat", label: "Chat Settings", icon: MessageCircle, group: "Communication" },
@@ -92,7 +92,8 @@ export const coachingAdminNav: NavItem[] = [
   { to: "/admin/client-action-requests", label: "Action Requests", icon: ClipboardCheck, group: "Core" },
   // COMMUNICATION
   { to: "/admin/broadcasts", label: "Broadcasts", icon: Megaphone, group: "Communication" },
-  { to: "/admin/load-screens", label: "Load Screens & Setup", icon: LayoutGrid, group: "Communication" },
+  { to: "/admin/popups", label: "Popups", icon: LayoutGrid, group: "Communication", keywords: ["popup", "popups", "pop up", "pop-up", "pop ups", "modal", "broadcast", "task popup", "load screen", "birthday card", "event popup"] },
+  { to: "/admin/load-screens", label: "Load Screens & Setup", icon: LayoutGrid, group: "Communication", keywords: ["load screen", "loading", "setup", "popup", "splash"] },
   { to: "/admin/call-access", label: "Call Access", icon: Phone, group: "Communication" },
   { to: "/admin/settings/sms", label: "SMS Access", icon: MessageCircle, group: "Communication" },
   { to: "/admin/settings/chat", label: "Chat Settings", icon: MessageCircle, group: "Communication" },
