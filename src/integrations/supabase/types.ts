@@ -8415,6 +8415,7 @@ export type Database = {
       }
       mark_client_signed_in: { Args: never; Returns: undefined }
       mark_stale_lift_uploads: { Args: never; Returns: number }
+      member_can_consume: { Args: { _user_id: string }; Returns: boolean }
       member_has_access: {
         Args: { _key: string; _member_id: string }
         Returns: boolean
