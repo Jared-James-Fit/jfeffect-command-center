@@ -23,7 +23,7 @@ export const Route = createFileRoute("/m/welcome")({
 type State =
   | { kind: "idle" }
   | { kind: "loading" }
-  | { kind: "ok"; signedIn: boolean; result: any }
+  | { kind: "ok"; signedIn: boolean; result: any; stalled: boolean }
   | { kind: "error"; message: string };
 
 function publicErrorMessage(raw: string | undefined): string {
@@ -41,10 +41,22 @@ function Welcome() {
   const [state, setState] = useState<State>(search.session_id ? { kind: "loading" } : { kind: "error", message: "Missing checkout session. Please contact support." });
   const ran = useRef(false);
 
+  // Wait until Supabase has actually persisted a session (post-verifyOtp).
+  async function waitForSession(timeoutMs = 4000): Promise<boolean> {
+    const start = Date.now();
+    while (Date.now() - start < timeoutMs) {
+      const { data } = await supabase.auth.getSession();
+      if (data.session) return true;
+      await new Promise((r) => setTimeout(r, 150));
+    }
+    return false;
+  }
+
   useEffect(() => {
     if (!search.session_id || ran.current) return;
     ran.current = true;
     let cancelled = false;
+    let stalledTimer: any = null;
 
     (async () => {
       let lastErr: any = null;
@@ -61,17 +73,29 @@ function Welcome() {
                 token_hash: r.otp_token_hash,
                 type: "magiclink",
               });
-              signedIn = !error;
+              if (!error) {
+                // Block until the session is actually persisted client-side,
+                // otherwise /m's auth gate will bounce us to /auth.
+                signedIn = await waitForSession();
+              }
             } catch {
               signedIn = false;
             }
           }
-          setState({ kind: "ok", signedIn, result: r });
+          if (cancelled) return;
+          setState({ kind: "ok", signedIn, result: r, stalled: false });
 
           if (signedIn) {
+            // Auto-redirect — REPLACE so Back doesn't return to /m/welcome.
             setTimeout(() => {
-              if (!cancelled) navigate({ to: "/m" });
-            }, 800);
+              if (!cancelled) navigate({ to: "/m", replace: true });
+            }, 600);
+            // Fallback: if for any reason the redirect didn't take, surface
+            // the "Continue to Membership" CTA prominently after 4s.
+            stalledTimer = setTimeout(() => {
+              if (cancelled) return;
+              setState((s) => (s.kind === "ok" ? { ...s, stalled: true } : s));
+            }, 4000);
           }
           return;
         } catch (e: any) {
@@ -85,7 +109,7 @@ function Welcome() {
       }
     })();
 
-    return () => { cancelled = true; };
+    return () => { cancelled = true; if (stalledTimer) clearTimeout(stalledTimer); };
   }, [search.session_id, complete, navigate]);
 
   return (
@@ -109,7 +133,7 @@ function Welcome() {
           {state.kind === "ok" && (
             <div className="mt-5 space-y-4">
               <div className="flex items-center gap-2 text-sm text-emerald-300">
-                <CheckCircle2 className="h-4 w-4" /> Your account is ready.
+                <CheckCircle2 className="h-4 w-4" /> Your membership is ready.
               </div>
               {state.result?.email && (
                 <div className="text-sm"><span className="text-muted-foreground">Email:</span> {state.result.email}</div>
@@ -120,9 +144,16 @@ function Welcome() {
                   {new Date(state.result.trial_end_at).toLocaleDateString()}
                 </div>
               )}
+              {state.signedIn && state.stalled && (
+                <p className="text-xs text-muted-foreground">
+                  Taking longer than expected? Use the button below to continue.
+                </p>
+              )}
               <div className="flex flex-wrap gap-2 pt-2">
                 {state.signedIn ? (
-                  <Link to="/m"><Button>Go to dashboard</Button></Link>
+                  <Button onClick={() => navigate({ to: "/m", replace: true })}>
+                    Continue to Membership
+                  </Button>
                 ) : (
                   <Link to="/auth"><Button>Log in</Button></Link>
                 )}
