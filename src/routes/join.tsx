@@ -37,6 +37,13 @@ export const Route = createFileRoute("/join")({
   }),
 });
 
+function mergeTaxFaq(items: Array<{ q: string; a: string }>) {
+  const taxQ = "Are taxes included?";
+  const taxA = "Taxes are calculated at checkout where applicable based on your location.";
+  const has = items.some((f) => (f.q ?? "").trim().toLowerCase() === taxQ.toLowerCase());
+  return has ? items : [...items, { q: taxQ, a: taxA }];
+}
+
 function SignupJf() {
   const getSettings = useServerFn(getJfPublicSettings);
   const createCheckout = useServerFn(createJfSignupCheckout);
@@ -94,7 +101,7 @@ function SignupJf() {
   return (
     <SalesPageShell>
       <SalesHero
-        eyebrow={`JF Membership · ${settings?.monthly_price_display ?? "$29/month"}`}
+      eyebrow={`JF Membership · ${settings?.monthly_price_display ?? "$29/month USD"}`}
         headline={p?.hero_headline ?? "Train with the JF Effect system without full coaching."}
         sub={p?.hero_subheadline ?? "Get self-guided workout plans, tracking tools, exercise demos, recipes, nutrition resources, events, and member-only updates inside the JF Effect app."}
         image={p?.hero_image_url ?? null}
@@ -127,14 +134,17 @@ function SignupJf() {
         images={(p?.visuals ?? []).filter((v) => v.slot === "proof")}
       />
 
-      <FaqAccordion items={s.faq ?? []} />
+      <FaqAccordion items={mergeTaxFaq(s.faq ?? [])} />
 
       {/* Signup form */}
       <Section className="!pt-4">
         <div ref={formRef} id="cta" />
         <Card className="mx-auto max-w-xl p-6 md:p-8">
           <h2 className="text-2xl font-black tracking-tight">Create your account</h2>
-          <p className="mt-1 text-sm text-muted-foreground">Start your free trial. No charge for {trialDays} days. Cancel anytime.</p>
+          <p className="mt-1 text-sm text-foreground">
+            {trialDays} days free, then {settings?.monthly_price_display ?? "$29/month USD"}.
+          </p>
+          <p className="text-xs text-muted-foreground">Taxes calculated at checkout where applicable.</p>
           {cancelled && (
             <div className="mt-3 rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-200">
               Checkout was cancelled. You can try again below.
@@ -169,6 +179,9 @@ function SignupJf() {
             </Button>
             <p className="text-[11px] text-center text-muted-foreground">
               You'll be redirected to Stripe to enter card details. You won't be charged until the trial ends.
+            </p>
+            <p className="text-[11px] text-center text-muted-foreground">
+              Taxes calculated at checkout where applicable.
             </p>
           </form>
           {settings?.refund_policy && (

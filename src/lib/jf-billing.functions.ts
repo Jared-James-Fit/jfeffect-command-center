@@ -426,7 +426,7 @@ export const switchToHoldPlan = createServerFn({ method: "POST" })
     });
     await applyStripeStateToMember(member.id, sub, s.hold_price_id);
     await fireMemberSms(member.id, "subscription_hold_plan", {
-      hold_price: s.hold_price_display ?? "$9/month",
+      hold_price: s.hold_price_display ?? "$9/month USD",
     });
     return { ok: true };
   });
@@ -453,7 +453,7 @@ export const reactivateFullMembership = createServerFn({ method: "POST" })
     });
     await applyStripeStateToMember(member.id, sub, s.hold_price_id);
     await fireMemberSms(member.id, "subscription_reactivated", {
-      price: s.monthly_price_display ?? "$29/month",
+      price: s.monthly_price_display ?? "$29/month USD",
     });
     return { ok: true };
   });
@@ -613,7 +613,7 @@ export const adminHoldPlanMember = createServerFn({ method: "POST" })
     });
     await applyStripeStateToMember(m.id, sub, s.hold_price_id);
     await fireMemberSms(m.id, "subscription_hold_plan", {
-      hold_price: s.hold_price_display ?? "$9/month",
+      hold_price: s.hold_price_display ?? "$9/month USD",
     });
     return { ok: true };
   });
@@ -635,7 +635,7 @@ export const adminReactivateMember = createServerFn({ method: "POST" })
     });
     await applyStripeStateToMember(m.id, sub, s.hold_price_id);
     await fireMemberSms(m.id, "subscription_reactivated", {
-      price: s.monthly_price_display ?? "$29/month",
+      price: s.monthly_price_display ?? "$29/month USD",
     });
     return { ok: true };
   });
