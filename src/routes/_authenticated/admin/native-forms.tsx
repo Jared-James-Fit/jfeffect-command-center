@@ -238,7 +238,7 @@ function FormRow({
         </div>
         <div className="flex flex-wrap gap-2">
           <Button size="sm" onClick={onSend} className="bg-gradient-primary font-bold">
-            <Send className="mr-1 h-4 w-4" /> Send / Assign
+            <Send className="mr-1 h-4 w-4" /> Share
           </Button>
           <Button variant="outline" size="sm" onClick={onEdit}><FileEdit className="mr-1 h-4 w-4" /> Edit</Button>
           <Button variant="outline" size="sm" onClick={async () => {
@@ -256,10 +256,10 @@ function FormRow({
   );
 }
 
-function FormEditorDialog({ form, open, onClose, initialTab = "settings" }: { form: NfForm; open: boolean; onClose: () => void; initialTab?: "settings" | "questions" | "assign" }) {
+function FormEditorDialog({ form, open, onClose, initialTab = "settings" }: { form: NfForm; open: boolean; onClose: () => void; initialTab?: "settings" | "questions" | "shared" }) {
   const qc = useQueryClient();
   const [local, setLocal] = useState<NfForm>(form);
-  const [activeTab, setActiveTab] = useState<"settings" | "questions" | "assign">(initialTab);
+  const [activeTab, setActiveTab] = useState<"settings" | "questions" | "shared">(initialTab);
 
   const { data: questions = [] } = useQuery({
     queryKey: ["nf-questions", form.id],
@@ -304,7 +304,7 @@ function FormEditorDialog({ form, open, onClose, initialTab = "settings" }: { fo
           {form.kind === "native" && (
             <Button type="button" size="sm" variant={activeTab === "questions" ? "default" : "ghost"} onClick={() => setActiveTab("questions")}>Questions ({questions.length})</Button>
           )}
-          <Button type="button" size="sm" variant={activeTab === "assign" ? "default" : "ghost"} onClick={() => setActiveTab("assign")}>Assign</Button>
+          <Button type="button" size="sm" variant={activeTab === "shared" ? "default" : "ghost"} onClick={() => setActiveTab("shared")}>Shared with</Button>
         </div>
 
           {activeTab === "settings" && <div className="space-y-3">
@@ -416,7 +416,7 @@ function FormEditorDialog({ form, open, onClose, initialTab = "settings" }: { fo
             </div>
           )}
 
-          {activeTab === "assign" && <div>
+          {activeTab === "shared" && <div>
             <AssignmentsEditor formId={form.id} form={local} onFormChange={setLocal} />
           </div>}
       </DialogContent>
