@@ -18,7 +18,18 @@ const CATEGORIES = [
   { key: "nutrition", label: "Nutrition FAQ" },
   { key: "workouts", label: "Workouts FAQ" },
   { key: "cardio", label: "Cardio FAQ" },
+  { key: "training_help", label: "Training Help" },
 ] as const;
+
+const TRAINING_HELP_SUBCATEGORIES = [
+  "RPE / RIR",
+  "Warm-Ups",
+  "Powerlifting",
+  "Exercise Terms",
+  "Logging Workouts",
+  "Cardio",
+  "Common Questions",
+];
 
 function FaqsAdmin() {
   return (
@@ -71,6 +82,9 @@ function CategoryEditor({ category, title }: { category: string; title: string }
       answer: "",
       sort_order: nextSort,
       active: true,
+      ...(category === "training_help"
+        ? { subcategory: "Common Questions", visible_coaching: true, visible_membership: true, visible_everyone: true }
+        : {}),
     });
     if (error) return toast.error(error.message);
     invalidate();
@@ -108,6 +122,7 @@ function CategoryEditor({ category, title }: { category: string; title: string }
             <li key={f.id}>
               <FaqRow
                 faq={f}
+                isTrainingHelp={category === "training_help"}
                 onChanged={invalidate}
                 onUp={idx > 0 ? () => move(idx, -1) : undefined}
                 onDown={idx < faqs.length - 1 ? () => move(idx, 1) : undefined}
@@ -120,16 +135,38 @@ function CategoryEditor({ category, title }: { category: string; title: string }
   );
 }
 
-function FaqRow({ faq, onChanged, onUp, onDown }: { faq: any; onChanged: () => void; onUp?: () => void; onDown?: () => void }) {
+function FaqRow({ faq, isTrainingHelp, onChanged, onUp, onDown }: { faq: any; isTrainingHelp?: boolean; onChanged: () => void; onUp?: () => void; onDown?: () => void }) {
   const [question, setQuestion] = useState(faq.question);
   const [answer, setAnswer] = useState(faq.answer);
   const [active, setActive] = useState(faq.active);
+  const [subcategory, setSubcategory] = useState<string>(faq.subcategory ?? "Common Questions");
+  const [examples, setExamples] = useState<string>(faq.examples ?? "");
+  const [visEveryone, setVisEveryone] = useState<boolean>(faq.visible_everyone ?? true);
+  const [visCoaching, setVisCoaching] = useState<boolean>(faq.visible_coaching ?? true);
+  const [visMembership, setVisMembership] = useState<boolean>(faq.visible_membership ?? true);
   const [saving, setSaving] = useState(false);
-  const dirty = question !== faq.question || answer !== faq.answer || active !== faq.active;
+  const dirty =
+    question !== faq.question ||
+    answer !== faq.answer ||
+    active !== faq.active ||
+    (isTrainingHelp &&
+      (subcategory !== (faq.subcategory ?? "Common Questions") ||
+        examples !== (faq.examples ?? "") ||
+        visEveryone !== (faq.visible_everyone ?? true) ||
+        visCoaching !== (faq.visible_coaching ?? true) ||
+        visMembership !== (faq.visible_membership ?? true)));
 
   const save = async () => {
     setSaving(true);
-    const { error } = await supabase.from("coach_faqs").update({ question, answer, active }).eq("id", faq.id);
+    const patch: any = { question, answer, active };
+    if (isTrainingHelp) {
+      patch.subcategory = subcategory;
+      patch.examples = examples || null;
+      patch.visible_everyone = visEveryone;
+      patch.visible_coaching = visCoaching;
+      patch.visible_membership = visMembership;
+    }
+    const { error } = await supabase.from("coach_faqs").update(patch).eq("id", faq.id);
     setSaving(false);
     if (error) return toast.error(error.message);
     toast.success("Saved");
@@ -164,6 +201,39 @@ function FaqRow({ faq, onChanged, onUp, onDown }: { faq: any; onChanged: () => v
         placeholder="Answer — paste freely, supports multiple lines"
         rows={4}
       />
+      {isTrainingHelp && (
+        <div className="space-y-2 pt-1 border-t border-border/60">
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="text-[10px] uppercase tracking-wider text-muted-foreground">Category</label>
+            <select
+              value={subcategory}
+              onChange={(e) => setSubcategory(e.target.value)}
+              className="h-8 rounded-md border border-border bg-background px-2 text-xs"
+            >
+              {TRAINING_HELP_SUBCATEGORIES.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+          </div>
+          <Textarea
+            value={examples}
+            onChange={(e) => setExamples(e.target.value)}
+            placeholder="Examples (optional) — one per line"
+            rows={3}
+          />
+          <div className="flex flex-wrap items-center gap-3 text-xs">
+            <label className="flex items-center gap-1.5">
+              <Switch checked={visEveryone} onCheckedChange={setVisEveryone} /> Everyone
+            </label>
+            <label className="flex items-center gap-1.5">
+              <Switch checked={visCoaching} onCheckedChange={setVisCoaching} /> Coaching clients
+            </label>
+            <label className="flex items-center gap-1.5">
+              <Switch checked={visMembership} onCheckedChange={setVisMembership} /> JF Membership
+            </label>
+          </div>
+        </div>
+      )}
       {dirty && (
         <div className="flex justify-end">
           <Button size="sm" className="bg-gradient-primary font-bold uppercase" onClick={save} disabled={saving}>
