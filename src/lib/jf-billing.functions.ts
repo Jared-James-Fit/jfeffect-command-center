@@ -302,6 +302,19 @@ export const completeJfSignup = createServerFn({ method: "POST" })
     // Cleanup pending
     await supabaseAdmin.from("jf_pending_signups").delete().eq("session_id", session.id);
 
+    // Issue a one-time magic-link token so the public welcome page can
+    // sign the new member in without us shipping their password to the client.
+    let otp_token_hash: string | null = null;
+    try {
+      const { data: linkRes } = await (supabaseAdmin as any).auth.admin.generateLink({
+        type: "magiclink",
+        email: emailLc,
+      });
+      otp_token_hash = linkRes?.properties?.hashed_token ?? null;
+    } catch (e) {
+      console.error("[jf-billing] generateLink failed", e);
+    }
+
     return {
       ok: true,
       member_id: memberId,
@@ -309,6 +322,7 @@ export const completeJfSignup = createServerFn({ method: "POST" })
       subscription_status: statusFromSubscription(subscription, s.hold_price_id),
       trial_end_at: nowIsoFromUnix(subscription.trial_end),
       current_period_end: nowIsoFromUnix(subscription.current_period_end),
+      otp_token_hash,
     };
   });
 

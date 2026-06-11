@@ -22,6 +22,7 @@ import { Route as ApplyRouteImport } from './routes/apply'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SignupJfRouteImport } from './routes/signup.jf'
+import { Route as MWelcomeRouteImport } from './routes/m.welcome'
 import { Route as CoachingApplyRouteImport } from './routes/coaching.apply'
 import { Route as BookSlugRouteImport } from './routes/book.$slug'
 import { Route as ApiDriveUploadRouteImport } from './routes/api/drive-upload'
@@ -64,7 +65,6 @@ import { Route as AuthenticatedMediaArchivesRouteImport } from './routes/_authen
 import { Route as AuthenticatedMediaAnnouncementsRouteImport } from './routes/_authenticated/media/announcements'
 import { Route as AuthenticatedMediaActionItemsRouteImport } from './routes/_authenticated/media/action-items'
 import { Route as AuthenticatedMediaAccountRouteImport } from './routes/_authenticated/media/account'
-import { Route as AuthenticatedMWelcomeRouteImport } from './routes/_authenticated/m/welcome'
 import { Route as AuthenticatedMUpgradeRouteImport } from './routes/_authenticated/m/upgrade'
 import { Route as AuthenticatedMToolsRouteImport } from './routes/_authenticated/m/tools'
 import { Route as AuthenticatedMResourcesRouteImport } from './routes/_authenticated/m/resources'
@@ -253,6 +253,11 @@ const IndexRoute = IndexRouteImport.update({
 const SignupJfRoute = SignupJfRouteImport.update({
   id: '/signup/jf',
   path: '/signup/jf',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MWelcomeRoute = MWelcomeRouteImport.update({
+  id: '/m/welcome',
+  path: '/m/welcome',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CoachingApplyRoute = CoachingApplyRouteImport.update({
@@ -495,11 +500,6 @@ const AuthenticatedMediaAccountRoute =
     path: '/account',
     getParentRoute: () => AuthenticatedMediaRouteRoute,
   } as any)
-const AuthenticatedMWelcomeRoute = AuthenticatedMWelcomeRouteImport.update({
-  id: '/welcome',
-  path: '/welcome',
-  getParentRoute: () => AuthenticatedMRouteRoute,
-} as any)
 const AuthenticatedMUpgradeRoute = AuthenticatedMUpgradeRouteImport.update({
   id: '/upgrade',
   path: '/upgrade',
@@ -1254,6 +1254,7 @@ export interface FileRoutesByFullPath {
   '/api/drive-upload': typeof ApiDriveUploadRoute
   '/book/$slug': typeof BookSlugRoute
   '/coaching/apply': typeof CoachingApplyRoute
+  '/m/welcome': typeof MWelcomeRoute
   '/signup/jf': typeof SignupJfRoute
   '/admin/account': typeof AuthenticatedAdminAccountRoute
   '/admin/appointments': typeof AuthenticatedAdminAppointmentsRoute
@@ -1313,7 +1314,6 @@ export interface FileRoutesByFullPath {
   '/m/resources': typeof AuthenticatedMResourcesRouteWithChildren
   '/m/tools': typeof AuthenticatedMToolsRoute
   '/m/upgrade': typeof AuthenticatedMUpgradeRoute
-  '/m/welcome': typeof AuthenticatedMWelcomeRoute
   '/media/account': typeof AuthenticatedMediaAccountRoute
   '/media/action-items': typeof AuthenticatedMediaActionItemsRoute
   '/media/announcements': typeof AuthenticatedMediaAnnouncementsRoute
@@ -1432,6 +1432,7 @@ export interface FileRoutesByTo {
   '/api/drive-upload': typeof ApiDriveUploadRoute
   '/book/$slug': typeof BookSlugRoute
   '/coaching/apply': typeof CoachingApplyRoute
+  '/m/welcome': typeof MWelcomeRoute
   '/signup/jf': typeof SignupJfRoute
   '/admin/account': typeof AuthenticatedAdminAccountRoute
   '/admin/appointments': typeof AuthenticatedAdminAppointmentsRoute
@@ -1490,7 +1491,6 @@ export interface FileRoutesByTo {
   '/m/resources': typeof AuthenticatedMResourcesRouteWithChildren
   '/m/tools': typeof AuthenticatedMToolsRoute
   '/m/upgrade': typeof AuthenticatedMUpgradeRoute
-  '/m/welcome': typeof AuthenticatedMWelcomeRoute
   '/media/account': typeof AuthenticatedMediaAccountRoute
   '/media/action-items': typeof AuthenticatedMediaActionItemsRoute
   '/media/announcements': typeof AuthenticatedMediaAnnouncementsRoute
@@ -1615,6 +1615,7 @@ export interface FileRoutesById {
   '/api/drive-upload': typeof ApiDriveUploadRoute
   '/book/$slug': typeof BookSlugRoute
   '/coaching/apply': typeof CoachingApplyRoute
+  '/m/welcome': typeof MWelcomeRoute
   '/signup/jf': typeof SignupJfRoute
   '/_authenticated/admin/account': typeof AuthenticatedAdminAccountRoute
   '/_authenticated/admin/appointments': typeof AuthenticatedAdminAppointmentsRoute
@@ -1674,7 +1675,6 @@ export interface FileRoutesById {
   '/_authenticated/m/resources': typeof AuthenticatedMResourcesRouteWithChildren
   '/_authenticated/m/tools': typeof AuthenticatedMToolsRoute
   '/_authenticated/m/upgrade': typeof AuthenticatedMUpgradeRoute
-  '/_authenticated/m/welcome': typeof AuthenticatedMWelcomeRoute
   '/_authenticated/media/account': typeof AuthenticatedMediaAccountRoute
   '/_authenticated/media/action-items': typeof AuthenticatedMediaActionItemsRoute
   '/_authenticated/media/announcements': typeof AuthenticatedMediaAnnouncementsRoute
@@ -1799,6 +1799,7 @@ export interface FileRouteTypes {
     | '/api/drive-upload'
     | '/book/$slug'
     | '/coaching/apply'
+    | '/m/welcome'
     | '/signup/jf'
     | '/admin/account'
     | '/admin/appointments'
@@ -1858,7 +1859,6 @@ export interface FileRouteTypes {
     | '/m/resources'
     | '/m/tools'
     | '/m/upgrade'
-    | '/m/welcome'
     | '/media/account'
     | '/media/action-items'
     | '/media/announcements'
@@ -1977,6 +1977,7 @@ export interface FileRouteTypes {
     | '/api/drive-upload'
     | '/book/$slug'
     | '/coaching/apply'
+    | '/m/welcome'
     | '/signup/jf'
     | '/admin/account'
     | '/admin/appointments'
@@ -2035,7 +2036,6 @@ export interface FileRouteTypes {
     | '/m/resources'
     | '/m/tools'
     | '/m/upgrade'
-    | '/m/welcome'
     | '/media/account'
     | '/media/action-items'
     | '/media/announcements'
@@ -2159,6 +2159,7 @@ export interface FileRouteTypes {
     | '/api/drive-upload'
     | '/book/$slug'
     | '/coaching/apply'
+    | '/m/welcome'
     | '/signup/jf'
     | '/_authenticated/admin/account'
     | '/_authenticated/admin/appointments'
@@ -2218,7 +2219,6 @@ export interface FileRouteTypes {
     | '/_authenticated/m/resources'
     | '/_authenticated/m/tools'
     | '/_authenticated/m/upgrade'
-    | '/_authenticated/m/welcome'
     | '/_authenticated/media/account'
     | '/_authenticated/media/action-items'
     | '/_authenticated/media/announcements'
@@ -2338,6 +2338,7 @@ export interface RootRouteChildren {
   StaffSetupRoute: typeof StaffSetupRoute
   ApiDriveUploadRoute: typeof ApiDriveUploadRoute
   BookSlugRoute: typeof BookSlugRoute
+  MWelcomeRoute: typeof MWelcomeRoute
   SignupJfRoute: typeof SignupJfRoute
   ApiPublicSignnowWebhookRoute: typeof ApiPublicSignnowWebhookRoute
   ApiPublicStripeWebhookRoute: typeof ApiPublicStripeWebhookRoute
@@ -2443,6 +2444,13 @@ declare module '@tanstack/react-router' {
       path: '/signup/jf'
       fullPath: '/signup/jf'
       preLoaderRoute: typeof SignupJfRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/m/welcome': {
+      id: '/m/welcome'
+      path: '/m/welcome'
+      fullPath: '/m/welcome'
+      preLoaderRoute: typeof MWelcomeRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/coaching/apply': {
@@ -2738,13 +2746,6 @@ declare module '@tanstack/react-router' {
       fullPath: '/media/account'
       preLoaderRoute: typeof AuthenticatedMediaAccountRouteImport
       parentRoute: typeof AuthenticatedMediaRouteRoute
-    }
-    '/_authenticated/m/welcome': {
-      id: '/_authenticated/m/welcome'
-      path: '/welcome'
-      fullPath: '/m/welcome'
-      preLoaderRoute: typeof AuthenticatedMWelcomeRouteImport
-      parentRoute: typeof AuthenticatedMRouteRoute
     }
     '/_authenticated/m/upgrade': {
       id: '/_authenticated/m/upgrade'
@@ -3957,7 +3958,6 @@ interface AuthenticatedMRouteRouteChildren {
   AuthenticatedMResourcesRoute: typeof AuthenticatedMResourcesRouteWithChildren
   AuthenticatedMToolsRoute: typeof AuthenticatedMToolsRoute
   AuthenticatedMUpgradeRoute: typeof AuthenticatedMUpgradeRoute
-  AuthenticatedMWelcomeRoute: typeof AuthenticatedMWelcomeRoute
   AuthenticatedMIndexRoute: typeof AuthenticatedMIndexRoute
   AuthenticatedMWorkoutsEnrollmentIdWeekDayRoute: typeof AuthenticatedMWorkoutsEnrollmentIdWeekDayRoute
 }
@@ -3971,7 +3971,6 @@ const AuthenticatedMRouteRouteChildren: AuthenticatedMRouteRouteChildren = {
   AuthenticatedMResourcesRoute: AuthenticatedMResourcesRouteWithChildren,
   AuthenticatedMToolsRoute: AuthenticatedMToolsRoute,
   AuthenticatedMUpgradeRoute: AuthenticatedMUpgradeRoute,
-  AuthenticatedMWelcomeRoute: AuthenticatedMWelcomeRoute,
   AuthenticatedMIndexRoute: AuthenticatedMIndexRoute,
   AuthenticatedMWorkoutsEnrollmentIdWeekDayRoute:
     AuthenticatedMWorkoutsEnrollmentIdWeekDayRoute,
@@ -4188,6 +4187,7 @@ const rootRouteChildren: RootRouteChildren = {
   StaffSetupRoute: StaffSetupRoute,
   ApiDriveUploadRoute: ApiDriveUploadRoute,
   BookSlugRoute: BookSlugRoute,
+  MWelcomeRoute: MWelcomeRoute,
   SignupJfRoute: SignupJfRoute,
   ApiPublicSignnowWebhookRoute: ApiPublicSignnowWebhookRoute,
   ApiPublicStripeWebhookRoute: ApiPublicStripeWebhookRoute,
