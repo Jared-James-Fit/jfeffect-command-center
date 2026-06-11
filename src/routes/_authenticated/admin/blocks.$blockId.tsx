@@ -16,6 +16,7 @@ import {
   StructureCanvas,
   appendRowToFirstDay,
 } from "@/routes/_authenticated/admin/program-library_.$templateId";
+import { BlockWarmupPanel } from "@/components/block-warmup-panel";
 
 export const Route = createFileRoute("/_authenticated/admin/blocks/$blockId")({ component: BlockEditor });
 
@@ -354,6 +355,8 @@ function BlockEditor() {
         clientId={clientId}
         blockId={blockId}
       />
+
+      <BlockWarmupPanel blockId={blockId} />
     </div>
   );
 }

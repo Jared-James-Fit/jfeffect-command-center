@@ -43,6 +43,7 @@ import { PriceCardPickerDialog } from "@/components/price-card-picker-dialog";
 import { AgreementsPanel } from "@/components/agreements-panel";
 import { TrainingScheduleCard } from "@/components/training-schedule-card";
 import { AssignedProgramsCard } from "@/components/assigned-programs-card";
+import { ClientWarmupCard } from "@/components/client-warmup-card";
 import { PowerlifterBadge, POWERLIFTER_BADGE_LABELS } from "@/components/powerlifter-badge";
 import { SocialHandlesEditor } from "@/components/social-handles-editor";
 import { SocialIcons } from "@/components/social-icons";
@@ -626,6 +627,7 @@ function ClientDetail() {
           <ImportantDatesPanel clientId={id} />
           <ClientExerciseNotesCard clientId={id} />
           <ClientMaxesPanel clientId={id} />
+          <ClientWarmupCard clientId={id} />
         </TabsContent>
 
         <TabsContent value="nutrition" className="grid gap-6 md:grid-cols-3">
