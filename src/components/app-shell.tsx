@@ -32,6 +32,8 @@ export interface NavItem {
   label: string;
   icon: React.ComponentType<{ className?: string }>;
   group?: string;
+  /** Optional aliases / synonyms used by the section search & command palette. */
+  keywords?: string[];
   /** Optional grouped sub-items shown on tap/long-press in the mobile bottom bar. */
   children?: NavItem[];
 }
@@ -259,7 +261,14 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
     const results: { item: NavItem; group: string }[] = [];
     for (const g of grouped) {
       for (const it of g.items) {
-        if (it.label.toLowerCase().includes(q)) {
+        const hay = [
+          it.label,
+          g.label ?? "",
+          ...(it.keywords ?? []),
+        ]
+          .join(" ")
+          .toLowerCase();
+        if (hay.includes(q)) {
           results.push({ item: it, group: g.label ?? "" });
         }
       }
