@@ -449,6 +449,29 @@ export function ExerciseLibraryPanel({
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<string | null>(null);
   const [favs, setFavs] = useState<Set<string>>(() => readFavs());
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  // Global keyboard shortcuts:
+  //   "/"   → focus the search input (and expand if collapsed)
+  //   Esc   → clear the search input when focused
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName;
+      const typing = tag === "INPUT" || tag === "TEXTAREA" || (target?.isContentEditable ?? false);
+      if (e.key === "/" && !typing && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        e.preventDefault();
+        if (collapsed) onToggleCollapse?.();
+        // wait a tick in case we just expanded
+        setTimeout(() => inputRef.current?.focus(), 0);
+      } else if (e.key === "Escape" && document.activeElement === inputRef.current) {
+        setQ("");
+        (document.activeElement as HTMLElement)?.blur();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [collapsed, onToggleCollapse]);
 
   const toggleFav = (id: string) => {
     const next = new Set(favs);
@@ -485,24 +508,45 @@ export function ExerciseLibraryPanel({
   if (collapsed) {
     return (
       <div className="flex h-full w-10 flex-col items-center border-r border-border bg-card">
-        <Button size="icon" variant="ghost" className="mt-2" onClick={onToggleCollapse} title="Show exercise library">
+        <Button size="icon" variant="ghost" className="mt-2" onClick={onToggleCollapse} title="Show exercise library (press /)">
           <Search className="h-4 w-4" />
         </Button>
+        <kbd className="mt-1 rounded border border-border bg-background px-1 text-[9px] font-mono text-muted-foreground">/</kbd>
       </div>
     );
   }
 
   return (
-    <div className="flex h-full w-52 flex-col border-r border-border bg-card text-xs">
-      <div className="border-b border-border">
-        <div className="flex items-center gap-1 p-2">
-          <Search className="h-3 w-3 text-muted-foreground" />
+    <div className="flex h-full w-60 flex-col border-r border-border bg-card text-xs">
+      <div className="border-b-2 border-border">
+        <div className="flex items-center gap-1.5 p-2">
+          <Search className="h-4 w-4 text-muted-foreground" />
           <Input
+            ref={inputRef}
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Search exercises…"
-            className="h-7 border-0 bg-transparent px-1 text-xs focus-visible:ring-0"
+            placeholder="Search exercises…   ( / )"
+            className="h-8 border-0 bg-transparent px-1 text-sm font-medium focus-visible:ring-0"
+            onKeyDown={(e) => {
+              if (e.key === "Escape") { e.preventDefault(); setQ(""); (e.currentTarget as HTMLInputElement).blur(); }
+            }}
           />
+          {q && (
+            <button
+              type="button"
+              onClick={() => { setQ(""); inputRef.current?.focus(); }}
+              className="rounded p-0.5 text-muted-foreground hover:bg-secondary hover:text-foreground"
+              title="Clear (Esc)"
+            >
+              ×
+            </button>
+          )}
+          <kbd
+            title="Press / to focus, Esc to clear"
+            className="hidden sm:inline-flex h-5 items-center rounded border border-border bg-background px-1 font-mono text-[10px] text-muted-foreground"
+          >
+            /
+          </kbd>
           {onToggleCollapse && (
             <Button size="icon" variant="ghost" className="h-6 w-6" onClick={onToggleCollapse} title="Hide">
               ×
