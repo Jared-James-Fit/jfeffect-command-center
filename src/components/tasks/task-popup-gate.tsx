@@ -10,22 +10,46 @@ import { fetchTasks, QUADRANTS, countOpen, type TaskQuadrant, type TaskScope } f
 
 const KEY_ADMIN = "jf-tasks-popup-seen-day";
 const KEY_MM = "jf-tasks-popup-seen-day-mm";
+const ENABLED_KEY_ADMIN = "jf-tasks-popup-enabled-admin";
+const ENABLED_KEY_MM = "jf-tasks-popup-enabled-mm";
+
+/** Read the enabled flag (default ON if never set). */
+export function isTaskPopupEnabled(scope: "admin" | "media_manager"): boolean {
+  if (typeof window === "undefined") return true;
+  try {
+    const v = localStorage.getItem(scope === "media_manager" ? ENABLED_KEY_MM : ENABLED_KEY_ADMIN);
+    return v == null ? true : v === "1";
+  } catch { return true; }
+}
+export function setTaskPopupEnabled(scope: "admin" | "media_manager", enabled: boolean) {
+  try {
+    localStorage.setItem(
+      scope === "media_manager" ? ENABLED_KEY_MM : ENABLED_KEY_ADMIN,
+      enabled ? "1" : "0",
+    );
+  } catch {}
+}
 
 // Mirror of tasks page quadrant styles (color + labels), persisted to localStorage.
 type QuadStyle = { color: string; title: string; subtitle: string };
-const DEFAULT_STYLES: Record<TaskQuadrant, QuadStyle> = {
+export const DEFAULT_QUAD_STYLES: Record<TaskQuadrant, QuadStyle> = {
   do:        { color: "#22c55e", title: "Do First",  subtitle: "Urgent · Important" },
   schedule:  { color: "#3b82f6", title: "Schedule",  subtitle: "Important · Not Urgent" },
   delegate:  { color: "#eab308", title: "Delegate",  subtitle: "Urgent · Not Important" },
   eliminate: { color: "#ef4444", title: "Eliminate", subtitle: "Not Urgent · Not Important" },
 };
-const QUAD_STYLE_KEY = "jf-quadrant-styles";
-function readQuadStyles(): Record<TaskQuadrant, QuadStyle> {
+const DEFAULT_STYLES = DEFAULT_QUAD_STYLES;
+export const QUAD_STYLE_KEY = "jf-quadrant-styles";
+export type { QuadStyle };
+export function readQuadStyles(): Record<TaskQuadrant, QuadStyle> {
   try {
     const raw = localStorage.getItem(QUAD_STYLE_KEY);
     if (raw) return { ...DEFAULT_STYLES, ...JSON.parse(raw) };
   } catch {}
   return DEFAULT_STYLES;
+}
+export function writeQuadStyles(s: Record<TaskQuadrant, QuadStyle>) {
+  try { localStorage.setItem(QUAD_STYLE_KEY, JSON.stringify(s)); } catch {}
 }
 function tintStyle(color: string): React.CSSProperties {
   return { backgroundColor: `${color}1A`, borderColor: `${color}80` };
@@ -48,21 +72,22 @@ export function TaskPopupGate({ scope = "admin" }: { scope?: "admin" | "media_ma
   const allowed = scope === "media_manager"
     ? (role === "media_manager" || role === "admin")
     : (role === "admin" || role === "coach");
+  const enabled = isTaskPopupEnabled(scope);
 
   // Has this user already dismissed the popup today?
   const [seenToday, setSeenToday] = useState(true);
   useEffect(() => {
-    if (!user || !allowed) { setSeenToday(true); return; }
+    if (!user || !allowed || !enabled) { setSeenToday(true); return; }
     try { setSeenToday(localStorage.getItem(storageKey) === todayKey()); }
     catch { setSeenToday(false); }
-  }, [user, allowed, storageKey]);
+  }, [user, allowed, storageKey, enabled]);
 
   const dbScope: TaskScope = scope === "media_manager" ? "media" : "admin";
   // Fetch tasks up front so we can decide whether opening the popup is even useful.
   const { data: tasks = [] } = useQuery({
     queryKey: ["tasks", dbScope, user?.id ?? null],
     queryFn: () => fetchTasks(dbScope),
-    enabled: !!user && allowed && !seenToday,
+    enabled: !!user && allowed && enabled && !seenToday,
     staleTime: 60_000,
   });
 
@@ -83,12 +108,12 @@ export function TaskPopupGate({ scope = "admin" }: { scope?: "admin" | "media_ma
   // Only surface the popup when there is at least one open task in the user's scope
   // AND they haven't already dismissed it today. Otherwise it's just noise.
   useEffect(() => {
-    if (!user || !allowed || seenToday) return;
+    if (!user || !allowed || !enabled || seenToday) return;
     if (openCount > 0 && !open) {
       setOpen(true);
       setStyles(readQuadStyles());
     }
-  }, [user, allowed, seenToday, openCount, open]);
+  }, [user, allowed, enabled, seenToday, openCount, open]);
 
   const counts = QUADRANTS.map((q) => ({
     q,
@@ -96,7 +121,7 @@ export function TaskPopupGate({ scope = "admin" }: { scope?: "admin" | "media_ma
   }));
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={(o) => { if (!o) skipForToday(); else setOpen(true); }}>
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
