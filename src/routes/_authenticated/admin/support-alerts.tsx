@@ -295,6 +295,6 @@ function AlertCard({ alert, onUpdateStatus, onAddNote }: {
           </div>
         </div>
       </div>
-    </div>
+    </Card>
   );
 }
