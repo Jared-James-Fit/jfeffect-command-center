@@ -96,6 +96,7 @@ export function useAutosave<T>({
       lastSaved.current = v;
       lastSavedSet.current = true;
       retryAttempt.current = 0;
+      reportedFailRef.current = false;
       setSavedAt(Date.now());
       clearDraft();
       // If value changed mid-save, schedule another
