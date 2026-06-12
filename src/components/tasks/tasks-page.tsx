@@ -150,7 +150,15 @@ export function TasksPage({
 
   return (
     <>
-      <PageHeader title={title} subtitle={subtitle} />
+      <PageHeader
+        title={title}
+        subtitle={subtitle}
+        actions={
+          <Button variant="outline" size="sm" onClick={() => setAssigneesOpen(true)}>
+            <Users className="mr-1 h-4 w-4" />Manage assignees
+          </Button>
+        }
+      />
       <div className="space-y-5 p-4 pb-32 md:p-6 md:pb-8">
         <Card className="border-border bg-card p-4">
           <div className="flex flex-wrap items-center gap-2">
@@ -191,7 +199,7 @@ export function TasksPage({
           ) : (
             <ul className="divide-y divide-border">
               {open.map((t) => (
-                <TaskListRow key={t.id} task={t} coaches={coaches} coachName={coachName} quadStyles={quadStyles} />
+                <TaskListRow key={t.id} task={t} assignees={assignees} quadStyles={quadStyles} />
               ))}
             </ul>
           )}
@@ -202,7 +210,7 @@ export function TasksPage({
               </summary>
               <ul className="mt-2 divide-y divide-border">
                 {done.slice(0, 50).map((t) => (
-                  <TaskListRow key={t.id} task={t} coaches={coaches} coachName={coachName} quadStyles={quadStyles} />
+                  <TaskListRow key={t.id} task={t} assignees={assignees} quadStyles={quadStyles} />
                 ))}
               </ul>
             </details>
@@ -254,11 +262,11 @@ export function TasksPage({
                         }} className="mt-0.5" />
                         <div className="min-w-0 flex-1">
                           <div className="text-sm font-medium leading-tight">{t.title}</div>
-                          {coachName(t.assigned_to) && (
-                            <div className="mt-0.5 text-[10px] text-muted-foreground">→ {coachName(t.assigned_to)}</div>
+                          {t.assignee_name && (
+                            <div className="mt-0.5 text-[10px] text-muted-foreground">→ {t.assignee_name}</div>
                           )}
                         </div>
-                        <TaskRowMenu task={t} coaches={coaches} quadStyles={quadStyles} />
+                        <TaskRowMenu task={t} assignees={assignees} quadStyles={quadStyles} />
                       </li>
                     ))}
                   </ul>
@@ -268,11 +276,17 @@ export function TasksPage({
           </div>
         </div>
       </div>
+      <AssigneesDialog
+        open={assigneesOpen}
+        onOpenChange={setAssigneesOpen}
+        assignees={assignees}
+        setAssignees={setAssignees}
+      />
     </>
   );
 }
 
-function TaskListRow({ task, coaches, coachName, quadStyles }: { task: TaskRow; coaches: { id: string; full_name: string | null }[]; coachName: (id: string | null) => string | null; quadStyles: Record<TaskQuadrant, QuadStyle> }) {
+function TaskListRow({ task, assignees, quadStyles }: { task: TaskRow; assignees: Assignee[]; quadStyles: Record<TaskQuadrant, QuadStyle> }) {
   const isDone = task.status === "done";
   const qs = quadStyles[task.quadrant];
   return (
@@ -284,15 +298,15 @@ function TaskListRow({ task, coaches, coachName, quadStyles }: { task: TaskRow; 
           <Badge variant="outline" className="text-[9px]" style={{ borderColor: `${qs.color}80`, color: qs.color }}>
             {qs.title}
           </Badge>
-          {coachName(task.assigned_to) && <span>→ {coachName(task.assigned_to)}</span>}
+          {task.assignee_name && <span>→ {task.assignee_name}</span>}
         </div>
       </div>
-      <TaskRowMenu task={task} coaches={coaches} quadStyles={quadStyles} />
+      <TaskRowMenu task={task} assignees={assignees} quadStyles={quadStyles} />
     </li>
   );
 }
 
-function TaskRowMenu({ task, coaches, quadStyles }: { task: TaskRow; coaches: { id: string; full_name: string | null }[]; quadStyles: Record<TaskQuadrant, QuadStyle> }) {
+function TaskRowMenu({ task, assignees, quadStyles }: { task: TaskRow; assignees: Assignee[]; quadStyles: Record<TaskQuadrant, QuadStyle> }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -307,10 +321,13 @@ function TaskRowMenu({ task, coaches, quadStyles }: { task: TaskRow; coaches: { 
           </DropdownMenuItem>
         ))}
         <div className="mt-1 px-2 py-1 text-[10px] uppercase tracking-widest text-muted-foreground">Assign to</div>
-        <DropdownMenuItem onClick={() => updateTask(task.id, { assigned_to: null })}>Unassigned</DropdownMenuItem>
-        {coaches.map((c) => (
-          <DropdownMenuItem key={c.id} onClick={() => updateTask(task.id, { assigned_to: c.id })}>
-            {c.full_name ?? "—"}
+        <DropdownMenuItem onClick={() => updateTask(task.id, { assignee_name: null })}>Unassigned</DropdownMenuItem>
+        {assignees.length === 0 && (
+          <div className="px-2 py-1.5 text-[11px] text-muted-foreground">No names yet. Use "Manage assignees" to add some.</div>
+        )}
+        {assignees.map((a) => (
+          <DropdownMenuItem key={a.id} onClick={() => updateTask(task.id, { assignee_name: a.name })}>
+            {a.name}
           </DropdownMenuItem>
         ))}
         <DropdownMenuItem className="text-destructive" onClick={() => deleteTask(task.id)}>
