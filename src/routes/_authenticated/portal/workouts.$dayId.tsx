@@ -1034,6 +1034,32 @@ function SetRow({ rowId, workoutId, exerciseId, exerciseName, clientId, setIndex
     value,
     delay: 800,
     enabled: !readonly && !!clientId && hydrated && (load.length > 0 || reps.length > 0 || rpe.length > 0 || !!existing),
+    onPermanentFailure: ({ value }) => {
+      if (!clientId) return;
+      const loadNum = value.load ? Number(value.load) : null;
+      const repsNum = value.reps ? parseInt(value.reps, 10) : null;
+      const rpeNum = value.rpe ? Number(value.rpe) : null;
+      enqueueOfflineWrite({
+        id: `portal_set:${rowId}:${clientId}:${setIndex}`,
+        label: `Saved set ${setIndex}`,
+        handlerKey: "portal_table_upsert",
+        payload: {
+          table: "pl_row_results",
+          id: existing?.id ?? null,
+          payload: {
+            row_id: rowId,
+            client_id: clientId,
+            set_index: setIndex,
+            actual_load: loadNum,
+            actual_load_unit: value.unit,
+            actual_reps: repsNum,
+            actual_rpe: value.rpe || null,
+            actual_rpe_num: rpeNum,
+            completed_at: new Date().toISOString(),
+          },
+        },
+      });
+    },
     onSave: async ({ load, reps, rpe, unit }) => {
       if (readonly) return;
       if (!clientId) return;
