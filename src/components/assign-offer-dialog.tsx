@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
+import { ActionButton } from "@/components/action-button";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
@@ -11,10 +11,10 @@ import { Badge } from "@/components/ui/badge";
 import { AlertTriangle, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { snapshotOfferForPurchase } from "@/lib/offers";
-import { runJob } from "@/lib/progress-jobs";
 import { useServerFn } from "@tanstack/react-start";
 import { createAgreement } from "@/lib/agreements.functions";
 import { createCheckoutSessionForAssignment } from "@/lib/stripe-checkout.functions";
+import { runJob } from "@/lib/progress-jobs";
 
 export function AssignOfferDialog({ offer, onClose, fixedClientId }: { offer: any | null; onClose: () => void; fixedClientId?: string }) {
   const qc = useQueryClient();
@@ -53,47 +53,52 @@ export function AssignOfferDialog({ offer, onClose, fixedClientId }: { offer: an
 
   const submit = async () => {
     if (!offer || !clientId || !selectedClient) return;
-    setBusy(true);
-    const { data: u } = await supabase.auth.getUser();
-    const snap = snapshotOfferForPurchase(offer, { clientId, assignedBy: u.user?.id ?? null, timezone: selectedClient.timezone });
-    const payload = {
-      ...snap,
-      admin_notes: adminNotes || null,
-      agreement_signed_at_purchase: !!selectedClient.agreement_signed,
-      agreement_signed_date: selectedClient.agreement_signed_date ?? null,
-      agreement_version: selectedClient.agreement_version ?? null,
-      agreement_link: selectedClient.agreement_link ?? null,
-      payment_status: recordPaid ? "Paid" : "Pending",
-      paid_at: recordPaid ? new Date().toISOString() : null,
-      amount_paid: recordPaid ? snap.full_payable_amount ?? 0 : 0,
-    };
-    const { data: purchase, error } = await supabase
-      .from("purchase_records").insert(payload as any).select("id").single();
-    if (error) { setBusy(false); return toast.error(error.message); }
-    toast.success("Purchase record created");
-
-    // Generate a client-specific Stripe Checkout Session (unless admin marked paid).
-    // Falls back silently to the legacy payment_link_url snapshot if no Stripe Price ID.
-    let generatedUrl: string | null = null;
-    if (!recordPaid && purchase?.id && offer?.stripe_price_id) {
-      try {
+    
+    runJob({
+      title: "Assigning offer",
+      description: `Assigning ${offer.name} to ${selectedClient.full_name}`,
+      steps: ["Validate product", "Create assignment", "Create checkout session", "Save purchase record", "Send checkout link", "Finalize"],
+    }, async (job) => {
+      job.completeStep(0); // Validate product
+      
+      const { data: { user: u } } = await supabase.auth.getUser();
+      const snap = snapshotOfferForPurchase(offer, { clientId, assignedBy: u?.id ?? null, timezone: selectedClient.timezone });
+      const payload = {
+        ...snap,
+        admin_notes: adminNotes || null,
+        agreement_signed_at_purchase: !!selectedClient.agreement_signed,
+        agreement_signed_date: selectedClient.agreement_signed_date ?? null,
+        agreement_version: selectedClient.agreement_version ?? null,
+        agreement_link: selectedClient.agreement_link ?? null,
+        payment_status: recordPaid ? "Paid" : "Pending",
+        paid_at: recordPaid ? new Date().toISOString() : null,
+        amount_paid: recordPaid ? snap.full_payable_amount ?? 0 : 0,
+      };
+      
+      job.completeStep(1); // Create assignment
+      
+      const { data: purchase, error } = await supabase
+        .from("purchase_records").insert(payload as any).select("id").single();
+      if (error) throw error;
+      
+      job.completeStep(3); // Save purchase record
+      
+      let generatedUrl: string | null = null;
+      if (!recordPaid && purchase?.id && offer?.stripe_price_id) {
         const res = await createCheckoutFn({
           data: { purchaseRecordId: purchase.id, origin: window.location.origin },
         });
         generatedUrl = res.url;
         setCheckoutUrl(res.url);
         try { await navigator.clipboard.writeText(res.url); } catch {}
-        toast.success("Checkout link generated & copied to clipboard");
-      } catch (e: any) {
-        toast.error(`Couldn't generate checkout link: ${e?.message ?? "unknown error"}`);
+        job.completeStep(2); // Create checkout session
+        job.completeStep(4); // Send checkout link
+      } else {
+        job.completeStep(2);
+        job.completeStep(4);
       }
-    } else if (!recordPaid && !offer?.stripe_price_id && offer?.stripe_payment_link) {
-      toast.message("Using legacy payment link (no Stripe Price ID on this offer).");
-    }
-    setBusy(false);
 
-    if (createAgreementOnAssign && agreementTemplateId && purchase?.id) {
-      try {
+      if (createAgreementOnAssign && agreementTemplateId && purchase?.id) {
         await createAgreementFn({
           data: {
             client_id: clientId,
@@ -103,21 +108,21 @@ export function AssignOfferDialog({ offer, onClose, fixedClientId }: { offer: an
             send_now: false,
           },
         });
-        toast.success("Draft agreement linked to purchase");
-      } catch (e: any) {
-        toast.error(`Couldn't create draft agreement: ${e?.message ?? "unknown error"}`);
+        qc.invalidateQueries({ queryKey: ["client-agreements", clientId] });
       }
-      qc.invalidateQueries({ queryKey: ["client-agreements", clientId] });
-    }
 
-    qc.invalidateQueries({ queryKey: ["purchase-records"] });
-    qc.invalidateQueries({ queryKey: ["client-purchases", clientId] });
-    if (!generatedUrl) {
-      onClose();
-      setClientId(fixedClientId ?? "");
-      setAdminNotes("");
-      setRecordPaid(false);
-    }
+      qc.invalidateQueries({ queryKey: ["purchase-records"] });
+      qc.invalidateQueries({ queryKey: ["client-purchases", clientId] });
+      
+      job.completeStep(5); // Finalize
+      
+      if (!generatedUrl) {
+        onClose();
+        setClientId(fixedClientId ?? "");
+        setAdminNotes("");
+        setRecordPaid(false);
+      }
+    });
   };
 
   return (
@@ -133,8 +138,8 @@ export function AssignOfferDialog({ offer, onClose, fixedClientId }: { offer: an
                 </div>
                 <div className="break-all rounded bg-background px-2 py-1 font-mono text-xs">{checkoutUrl}</div>
                 <div className="flex gap-2">
-                  <Button size="sm" variant="outline" onClick={async () => { try { await navigator.clipboard.writeText(checkoutUrl); toast.success("Copied"); } catch {} }}>Copy link</Button>
-                  <Button size="sm" variant="outline" onClick={() => window.open(checkoutUrl, "_blank")}>Open</Button>
+                  <ActionButton size="sm" variant="outline" onClick={async () => { try { await navigator.clipboard.writeText(checkoutUrl); toast.success("Copied"); } catch {} }}>Copy link</ActionButton>
+                  <ActionButton size="sm" variant="outline" onClick={() => window.open(checkoutUrl, "_blank")}>Open</ActionButton>
                 </div>
                 <p className="text-xs text-muted-foreground">Send this link to the client. The webhook will mark this exact purchase as paid when they complete checkout.</p>
               </div>
@@ -194,15 +199,15 @@ export function AssignOfferDialog({ offer, onClose, fixedClientId }: { offer: an
                       ))}
                     </SelectContent>
                   </Select>
-                  <p className="mt-1 text-xs text-muted-foreground">The draft is linked to this purchase. You'll still send it manually from the client's Agreements panel.</p>
+                  <p className="mt-1 text-xs text-muted-foreground">The draft is linked to this purchase. You'\''ll still send it manually from the client'\''s Agreements panel.</p>
                 </div>
               )}
             </div>
           </div>
         )}
         <DialogFooter>
-          <Button variant="ghost" onClick={onClose}>Cancel</Button>
-          <Button disabled={!clientId || busy} onClick={submit} className="bg-gradient-primary font-bold uppercase">{busy ? "Creating…" : "Create purchase record"}</Button>
+          <ActionButton variant="ghost" onClick={onClose}>Cancel</ActionButton>
+          <ActionButton disabled={!clientId} onClick={submit} className="bg-gradient-primary font-bold uppercase">Create purchase record</ActionButton>
         </DialogFooter>
       </DialogContent>
     </Dialog>
