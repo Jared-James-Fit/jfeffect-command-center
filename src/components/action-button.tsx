@@ -3,6 +3,7 @@ import { Loader2, Check, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { Button, type ButtonProps } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { jobStore } from "@/lib/progress-jobs";
 
 /**
  * Action state machine used by both <ActionButton> and the useAction() hook.
@@ -33,6 +34,16 @@ export interface ActionButtonProps extends Omit<ButtonProps, "onClick"> {
   hideSpinner?: boolean;
   /** External state override — useful when the action is owned by a parent (e.g. autosave + manual save). */
   state?: ActionState;
+  /**
+   * Opt the action into the global progress drawer.
+   * Pass a short title (e.g. "Saving client settings") and the button will
+   * push a pending → success/error entry the user can see app-wide.
+   * Use for actions that may take more than ~500ms or that the user might
+   * navigate away from before completion.
+   */
+  jobLabel?: string;
+  /** Optional sub-line shown in the drawer entry (client name, file name, etc.). */
+  jobDescription?: string;
 }
 
 /**
@@ -62,6 +73,8 @@ export const ActionButton = React.forwardRef<HTMLButtonElement, ActionButtonProp
       className,
       state: stateProp,
       type = "button",
+      jobLabel,
+      jobDescription,
       ...rest
     },
     ref,
@@ -96,15 +109,20 @@ export const ActionButton = React.forwardRef<HTMLButtonElement, ActionButtonProp
       }
       inflightRef.current = true;
       setInnerState("pending");
+      const handle = jobLabel
+        ? jobStore.start({ title: jobLabel, description: jobDescription ?? null, statusText: "Working…" })
+        : null;
       try {
         await onAction(event);
         if (!mountedRef.current) return;
         setInnerState("success");
         if (successToast) toast.success(successToast);
+        if (handle) jobStore.succeed(handle.id);
         scheduleReset();
       } catch (err: any) {
         if (!mountedRef.current) return;
         setInnerState("error");
+        if (handle) jobStore.fail(handle.id, err);
         if (errorToast !== false) {
           const msg =
             typeof errorToast === "string"

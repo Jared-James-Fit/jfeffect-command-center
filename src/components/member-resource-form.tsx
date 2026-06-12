@@ -5,6 +5,8 @@ import { useQuery } from "@tanstack/react-query";
 import { adminCreateResource, adminUpdateResource, adminGetUploadUrl } from "@/lib/member-resources.functions";
 import { listAccessLevels } from "@/lib/product-access.functions";
 import { supabase } from "@/integrations/supabase/client";
+import { runJob } from "@/lib/progress-jobs";
+import { uploadFileToSignedUrlWithProgress, formatBytes } from "@/lib/upload-with-progress";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -52,13 +54,30 @@ export function MemberResourceForm({ initial }: { initial?: Initial }) {
   const uploadFile = async (file: File) => {
     setUploading(true);
     try {
-      const { path, signedUrl, token } = await signUpload({ data: { filename: file.name, contentType: file.type || "application/octet-stream" } });
-      // Use Supabase client uploadToSignedUrl for proper auth
-      const { error } = await supabase.storage.from("member-resources").uploadToSignedUrl(path, token, file);
-      if (error) throw error;
-      setForm((f) => ({ ...f, storage_path: path, format: file.type.startsWith("video/") ? "video" : file.type.startsWith("image/") ? "image" : "pdf" }));
-      toast.success("Uploaded");
-    } catch (e: any) { toast.error(e?.message ?? "Upload failed"); }
+      await runJob(
+        {
+          title: "Uploading file",
+          description: `${file.name} · ${formatBytes(file.size)}`,
+          initialPercent: 0,
+          successToast: "Uploaded",
+        },
+        async (job) => {
+          job.setStatusText("Preparing upload");
+          const { path, signedUrl, token } = await signUpload({ data: { filename: file.name, contentType: file.type || "application/octet-stream" } });
+          job.setStatusText("Uploading");
+          await uploadFileToSignedUrlWithProgress({
+            bucket: "member-resources",
+            path, signedUrl, token, file,
+            contentType: file.type || "application/octet-stream",
+            onProgress: ({ loaded, total, percent }) => {
+              job.setPercent(percent);
+              job.setStatusText(`${formatBytes(loaded)} of ${formatBytes(total)}`);
+            },
+          });
+          setForm((f) => ({ ...f, storage_path: path, format: file.type.startsWith("video/") ? "video" : file.type.startsWith("image/") ? "image" : "pdf" }));
+        },
+      );
+    } catch { /* runJob already surfaced toast + retry */ }
     finally { setUploading(false); }
   };
 

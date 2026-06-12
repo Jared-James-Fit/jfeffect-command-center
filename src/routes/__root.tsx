@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "sonner";
 import { AuthProvider } from "@/lib/auth";
 import { ClientImpersonationProvider } from "@/lib/client-impersonation";
+import { ProgressDrawer } from "@/components/progress-drawer";
 import {
   Outlet,
   Link,
@@ -262,6 +263,7 @@ function RootComponent() {
           {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
           <Outlet />
           <Toaster position="top-right" theme="dark" richColors />
+          <ProgressDrawer />
         </ClientImpersonationProvider>
       </AuthProvider>
     </QueryClientProvider>
