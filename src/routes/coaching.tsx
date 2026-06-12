@@ -35,7 +35,6 @@ export const Route = createFileRoute("/coaching")({
 
 function CoachingPage() {
   const fetchPage = useServerFn(getPublicSalesPage);
-  const navigate = useNavigate();
   const { data: p } = useQuery({
     queryKey: ["public-sales-page", "coaching"],
     queryFn: () => fetchPage({ data: { page_key: "coaching" } }),
