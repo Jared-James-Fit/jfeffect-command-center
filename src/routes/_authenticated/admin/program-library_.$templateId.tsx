@@ -919,6 +919,13 @@ function WeekEditor({ week, setWeek, exercises, onCopyDayToFuture, hideHeader, c
 
 function DayEditor({ day, setDay, exercises, compact }: { day: any; setDay: (d: any) => void; exercises: any[]; compact?: boolean }) {
   const rows = day.rows || [];
+  // Derive ordered purpose labels (Primary / Secondary / Tertiary / Quaternary
+  // for competition + variation rows; Assistance for everything else). Manual
+  // `purpose_label` on a row wins. Recomputes whenever rows are reordered.
+  const purposeLabels = useMemo(() => {
+    const exById = new Map<string, any>((exercises as any[]).map((e) => [e.id, e]));
+    return derivePurposeLabels(rows, (r: any) => (r.exercise_id ? exById.get(r.exercise_id) : null));
+  }, [rows, exercises]);
   const [dragOver, setDragOver] = useState(false);
   const [dragRowIdx, setDragRowIdx] = useState<number | null>(null);
   const [dropTargetIdx, setDropTargetIdx] = useState<number | null>(null);
