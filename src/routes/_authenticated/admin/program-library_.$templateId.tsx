@@ -1157,7 +1157,7 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
     >
       <div className={`absolute left-0 top-0 h-full w-2 ${accent}`} aria-hidden />
       <div className="grid grid-cols-12 items-end gap-1">
-        <Field className="col-span-4" label="Exercise">
+        <Field className="col-span-12 md:col-span-4" label="Exercise">
         <div className="flex items-center gap-1">
           <span
             draggable={!!onDragStartRow}
@@ -1170,7 +1170,9 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
           </span>
           <div className="min-w-0 flex-1">
         <Select value={row.exercise_id ?? "__custom"} onValueChange={(v) => setRow({ ...row, exercise_id: v === "__custom" ? null : v })}>
-          <SelectTrigger className={cn(h, "text-sm font-semibold")}><SelectValue placeholder="Exercise" /></SelectTrigger>
+          <SelectTrigger className={cn("min-h-8 h-auto py-1 text-sm font-semibold [&>span]:line-clamp-2 [&>span]:whitespace-normal [&>span]:text-left")}>
+            <SelectValue placeholder="Exercise" />
+          </SelectTrigger>
           <SelectContent>
             <SelectItem value="__custom">— Custom name —</SelectItem>
             {(exercises as any[]).map((e) => <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>)}
@@ -1178,6 +1180,50 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
         </Select>
         {!row.exercise_id && (
           <RowCell className="mt-1 h-7 text-sm font-semibold" placeholder="Custom name" value={row.exercise_name_override} onCommit={(v) => setRow({ ...row, exercise_name_override: v })} />
+        )}
+        {purposeLabel && (
+          <div className="mt-1 flex items-center gap-1">
+            <Popover>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  className={cn(
+                    "inline-flex items-center gap-1 rounded-full border px-1.5 py-0 text-[9px] font-bold uppercase tracking-wide transition hover:bg-secondary",
+                    row.purpose_label
+                      ? "border-primary/40 bg-primary/10 text-primary"
+                      : "border-border bg-muted/30 text-muted-foreground",
+                  )}
+                  title={row.purpose_label ? "Manual purpose label — click to change" : "Auto purpose label — click to override"}
+                >
+                  {purposeLabel}
+                </button>
+              </PopoverTrigger>
+              <PopoverContent className="w-44 p-2" align="start">
+                <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Purpose label</div>
+                <div className="grid gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setRow({ ...row, purpose_label: null })}
+                    className={cn("rounded px-2 py-1 text-left text-xs hover:bg-muted",
+                      !row.purpose_label && "bg-muted/60 font-semibold")}
+                  >
+                    Auto (from position)
+                  </button>
+                  {PURPOSE_LABEL_OPTIONS.map((opt) => (
+                    <button
+                      key={opt}
+                      type="button"
+                      onClick={() => setRow({ ...row, purpose_label: opt })}
+                      className={cn("rounded px-2 py-1 text-left text-xs hover:bg-muted",
+                        row.purpose_label === opt && "bg-primary/10 font-semibold text-primary")}
+                    >
+                      {opt}
+                    </button>
+                  ))}
+                </div>
+              </PopoverContent>
+            </Popover>
+          </div>
         )}
           </div>
         </div>
