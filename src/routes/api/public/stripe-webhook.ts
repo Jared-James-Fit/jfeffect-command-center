@@ -176,10 +176,18 @@ async function captureCheckoutPromo(supabase: any, obj: any, eventId: string) {
       redeemed_at: new Date().toISOString(),
     };
 
-    const { error } = await supabase
-      .from("promo_code_redemptions")
-      .upsert(row, { onConflict: "stripe_checkout_session_id" });
-    if (error) console.error("[stripe-webhook] promo upsert failed", error);
+    // Dedupe by checkout session id (partial unique index can't be an
+    // ON CONFLICT target, so check explicitly first).
+    if (row.stripe_checkout_session_id) {
+      const { data: existing } = await supabase
+        .from("promo_code_redemptions")
+        .select("id")
+        .eq("stripe_checkout_session_id", row.stripe_checkout_session_id)
+        .maybeSingle();
+      if (existing) return;
+    }
+    const { error } = await supabase.from("promo_code_redemptions").insert(row);
+    if (error) console.error("[stripe-webhook] promo insert failed", error);
   } catch (e) {
     console.error("[stripe-webhook] captureCheckoutPromo error", e);
   }
