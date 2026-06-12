@@ -16,6 +16,7 @@ import {
   estimateDayMinutes, durationRange, PERCENTAGE_BASES, type TrainingStyle,
 } from "@/lib/pl-programs";
 import { ExerciseLibraryPanel, type ExerciseRef, DND_EXERCISE, readDrop, movementAccent } from "@/components/program-builder";
+import { GripVertical } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAutosave } from "@/hooks/use-autosave";
 import { SaveStatus } from "@/components/save-status";
