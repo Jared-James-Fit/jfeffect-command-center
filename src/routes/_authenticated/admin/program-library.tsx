@@ -583,6 +583,16 @@ function AssignDialog({ template, onClose }: { template: any; onClose: () => voi
 
   if (!template) return null;
 
+  const isBlockish = template.template_type === "block" || template.template_type === "full_prep";
+  const conflict = isBlockish
+    ? findOverlappingBlock(blocks as any[], startDate, endDate || startDate)
+    : null;
+  const suggestedStart = suggestNextStartISO(blocks as any[]);
+  const applySuggestion = () => {
+    setStartDate(suggestedStart);
+    if (templateWeeks > 0) setEndDate(computeEndDateFromStart(suggestedStart, templateWeeks));
+  };
+
   const type = template.template_type;
   const validModes: { v: string; label: string }[] =
     type === "full_prep"
@@ -603,6 +613,11 @@ function AssignDialog({ template, onClose }: { template: any; onClose: () => voi
 
   const submit = async () => {
     if (!clientId) return toast.error("Pick a client");
+    if (conflict) {
+      return toast.error(
+        `Overlaps with "${conflict.name ?? "another block"}" (${conflict.start_date ?? "?"} – ${conflict.end_date ?? "?"}). Use the suggested start date.`,
+      );
+    }
     let placement: TemplatePlacement;
     try {
       switch (effectiveMode) {
