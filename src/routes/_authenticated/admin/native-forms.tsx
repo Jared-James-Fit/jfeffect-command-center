@@ -232,8 +232,25 @@ function FormRow({
             {" · "}{assignedCount}{" · "}{form.recurrence}
           </div>
           {hasAudience && (form.archived || !form.active) && (
-            <div className="mt-2 text-xs font-medium text-warning">
-              Shared with clients, but not visible because this form is {form.archived ? "archived" : "still Draft"}.
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <div className="text-xs font-medium text-warning">
+                Shared with clients, but not visible because this form is {form.archived ? "archived" : "still Draft"}.
+              </div>
+              {!form.archived && !form.active && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 border-emerald-500/40 text-emerald-600 hover:bg-emerald-500/10"
+                  onClick={async () => {
+                    await upsertForm({ id: form.id, active: true });
+                    qc.invalidateQueries({ queryKey: ["nf-forms"] });
+                    qc.invalidateQueries({ queryKey: ["nf-forms-for-client"] });
+                    toast.success("Activated — clients can now see it");
+                  }}
+                >
+                  Activate now
+                </Button>
+              )}
             </div>
           )}
           </div>

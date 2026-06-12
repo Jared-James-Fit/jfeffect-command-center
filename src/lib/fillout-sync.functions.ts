@@ -35,7 +35,14 @@ export const syncFilloutForms = createServerFn({ method: "POST" })
       const body = await res.text().catch(() => "");
       return { ok: false, fetched: 0, created: 0, updated: 0, error: `Fillout API ${res.status}: ${body.slice(0, 200)}` };
     }
-    const forms = (await res.json()) as Array<{ id: string; name: string; url?: string }>;
+    const forms = (await res.json()) as Array<{
+      id: number | string;
+      formId?: string;
+      name: string;
+      url?: string;
+      publicUrl?: string;
+      isPublished?: boolean;
+    }>;
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
@@ -43,12 +50,16 @@ export const syncFilloutForms = createServerFn({ method: "POST" })
     let updated = 0;
 
     for (const f of forms) {
-      const url = f.url || `https://forms.fillout.com/t/${f.id}`;
-      // Find existing by external_url containing the fillout id
+      // Fillout's PUBLIC form URL uses the slug `formId` (e.g. "vEw5ZWeAKSus"),
+      // NOT the numeric `id`. The numeric id produces a 404 page.
+      const slug = f.formId || String(f.id);
+      const url = f.publicUrl || f.url || `https://forms.fillout.com/t/${slug}`;
+
+      // Match existing rows by slug OR legacy numeric id (so prior bad syncs heal).
       const { data: existing } = await supabaseAdmin
         .from("nf_forms")
-        .select("id")
-        .ilike("external_url", `%${f.id}%`)
+        .select("id, external_url")
+        .or(`external_url.ilike.%${slug}%,external_url.ilike.%/t/${f.id}%`)
         .limit(1);
 
       if (existing && existing.length > 0) {
@@ -66,7 +77,9 @@ export const syncFilloutForms = createServerFn({ method: "POST" })
           title: f.name || "Untitled Fillout Form",
           form_type: "check_in",
           recurrence: "none",
-          active: false,
+          // Published Fillout forms come in Active so once you "Share" they appear
+          // to clients immediately. Unpublished drafts stay inactive.
+          active: f.isPublished !== false,
           archived: false,
           kind: "external",
           external_url: url,
