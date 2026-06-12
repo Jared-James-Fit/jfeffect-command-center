@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -19,6 +20,7 @@ type Props = {
 
 export function QuickAssignTemplateDialog({ open, onOpenChange, clientId, clientName }: Props) {
   const qc = useQueryClient();
+  const navigate = useNavigate();
   const today = new Date().toISOString().slice(0, 10);
   const [templateId, setTemplateId] = useState<string>("");
   const [startDate, setStartDate] = useState<string>(today);
@@ -67,6 +69,7 @@ export function QuickAssignTemplateDialog({ open, onOpenChange, clientId, client
       onOpenChange(false);
       setTemplateId("");
       setEndDate("");
+      navigate({ to: "/admin/client-programs/$clientId", params: { clientId } });
     } catch (e: any) {
       toast.error(e.message);
     } finally {
