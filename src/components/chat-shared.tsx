@@ -829,7 +829,13 @@ function FormRequestCard({ att, mine }: { att: SharedAttachment; mine: boolean }
       subtitle={att.request_note || `Form to fill${form?.title ? `: ${form.title}` : ""}`}
       chip={{ label: rollup }}
       mine={mine}
-      onOpen={() => formId && window.open(`/admin/native-forms`, "_blank")}
+      onOpen={() => {
+        if (isStaff) {
+          if (formId) window.open(`/admin/native-forms`, "_blank");
+          return;
+        }
+        if (att.url) window.open(att.url, "_blank");
+      }}
     >
       <PerClientRows clientIds={clientIds} rowFor={(cid) => statusFor(cid)} />
     </RequestShell>
