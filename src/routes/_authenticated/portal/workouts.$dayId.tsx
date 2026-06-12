@@ -35,6 +35,7 @@ import { resolveExerciseUnit, modeUnit, saveExerciseUnitPref, saveExerciseUnitPr
 import { WorkoutUndoProvider, useWorkoutUndo, UndoButton } from "@/lib/workout-undo";
 import { WorkoutSyncBanner } from "@/components/workout-sync-banner";
 import { writePlanCache, cachedInitialData } from "@/lib/workout-plan-cache";
+import { enqueueOfflineWrite, registerQueueHandler } from "@/lib/workout-offline-queue";
 
 export const Route = createFileRoute("/_authenticated/portal/workouts/$dayId")({
   validateSearch: (s: Record<string, unknown>) => ({
@@ -56,6 +57,23 @@ function WorkoutDay() {
   const qc = useQueryClient();
   const undo = useWorkoutUndo();
   const cacheScope = `portal:${dayId}`;
+
+  // Register a passthrough handler so any autosave that hits its
+  // permanent-failure threshold can hand the write to the durable queue.
+  // The queue retries on its own schedule and escalates to coaches after 3
+  // more attempts. Handler is idempotent: payload describes table + row.
+  useEffect(() => {
+    registerQueueHandler("portal_table_upsert", async (p: any) => {
+      if (!p?.table) return;
+      if (p.id) {
+        const { error } = await sb.from(p.table).update(p.payload).eq("id", p.id);
+        if (error) throw error;
+      } else {
+        const { error } = await sb.from(p.table).insert(p.payload);
+        if (error) throw error;
+      }
+    });
+  }, []);
 
   const { data: client } = useQuery({
     queryKey: ["my-client", portalUserId],
@@ -352,6 +370,24 @@ function WorkoutDay() {
     value: { notes, actualMin },
     delay: 1000,
     enabled: !!client?.id && draftHydrated && (notes.length > 0 || actualMin.length > 0),
+    onPermanentFailure: ({ value }) => {
+      if (!client?.id) return;
+      enqueueOfflineWrite({
+        id: `portal_meta:${dayId}:${client.id}`,
+        label: "Workout notes",
+        handlerKey: "portal_table_upsert",
+        payload: {
+          table: "pl_day_completions",
+          id: completion?.id ?? null,
+          payload: {
+            day_id: dayId,
+            client_id: client.id,
+            client_notes: value.notes || null,
+            actual_duration_min: value.actualMin ? parseInt(value.actualMin) : null,
+          },
+        },
+      });
+    },
     onSave: async ({ notes, actualMin }) => {
       if (!client?.id) return;
       const patch: any = {
