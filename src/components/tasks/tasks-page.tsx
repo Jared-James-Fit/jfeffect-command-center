@@ -8,6 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -15,10 +16,10 @@ import {
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Plus, MoreHorizontal, Trash2, ListChecks, Settings2, StickyNote, RotateCcw, X } from "lucide-react";
+import { Plus, MoreHorizontal, Trash2, ListChecks, Settings2, StickyNote, RotateCcw, X, Users, Pencil, Check } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  QUADRANTS, fetchTasks, fetchCoachesLite, createTask, toggleTaskDone,
+  QUADRANTS, fetchTasks, createTask, toggleTaskDone,
   updateTask, deleteTask, type TaskRow, type TaskQuadrant, type TaskScope,
 } from "@/lib/tasks";
 import { cn } from "@/lib/utils";
@@ -55,6 +56,26 @@ function useQuadrantStyles(storageKey: string) {
 
 function tintStyle(color: string) {
   return { backgroundColor: `${color}1A`, borderColor: `${color}80` } as React.CSSProperties;
+}
+
+// ---------- Custom Assignees (localStorage) ----------
+type Assignee = { id: string; name: string };
+
+function useAssignees(storageKey: string) {
+  const [assignees, setAssignees] = useState<Assignee[]>([]);
+  const loadedRef = useRef(false);
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(storageKey);
+      if (raw) setAssignees(JSON.parse(raw));
+    } catch {}
+    loadedRef.current = true;
+  }, [storageKey]);
+  useEffect(() => {
+    if (!loadedRef.current) return;
+    try { localStorage.setItem(storageKey, JSON.stringify(assignees)); } catch {}
+  }, [assignees, storageKey]);
+  return [assignees, setAssignees] as const;
 }
 
 // ---------- Quick Notes (localStorage, autosave) ----------
