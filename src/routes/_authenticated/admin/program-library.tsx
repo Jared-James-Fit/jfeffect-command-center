@@ -16,6 +16,7 @@ import {
   ArchiveRestore, Trash2, Clock, Calendar, Layers, MoreVertical, Search, Users, AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
+import { runJob } from "@/lib/progress-jobs";
 import {
   listTemplates, createTemplate, applyTemplateToClient, duplicateTemplate, updateTemplate,
   setTemplateArchived, deleteTemplate, summarizeTemplatePayload,
@@ -640,18 +641,34 @@ function AssignDialog({ template, onClose }: { template: any; onClose: () => voi
         default:
           placement = { mode: "standalone_block" };
       }
-      await applyTemplateToClient({ templateId: template.id, clientId, placement, name: name || undefined, clientVisible: visible, startDate: startDate || null, endDate: endDate || null });
-      toast.success("Template assigned");
-      qc.invalidateQueries({ queryKey: ["pl-template-assignments", template.id] });
-      qc.invalidateQueries({ queryKey: ["pl-preps", clientId] });
-      qc.invalidateQueries({ queryKey: ["pl-blocks", clientId] });
-      qc.invalidateQueries({ queryKey: ["assigned-preps", clientId] });
-      qc.invalidateQueries({ queryKey: ["assigned-blocks", clientId] });
-      qc.invalidateQueries({ queryKey: ["my-workouts"] });
-      onClose();
-      navigate({ to: "/admin/client-programs/$clientId", params: { clientId } });
+      const clientName = (clients as any[]).find((c) => c.id === clientId)?.full_name ?? "client";
+      await runJob(
+        {
+          title: `Assigning "${template.name}"`,
+          description: `To ${clientName}`,
+          steps: ["Validate library", "Prepare assignment", "Assign workouts", "Sync access", "Finalize"],
+          successToast: "Template assigned",
+        },
+        async (job) => {
+          job.completeStep(0);
+          job.completeStep(1);
+          await applyTemplateToClient({ templateId: template.id, clientId, placement, name: name || undefined, clientVisible: visible, startDate: startDate || null, endDate: endDate || null });
+          job.completeStep(2);
+          qc.invalidateQueries({ queryKey: ["pl-template-assignments", template.id] });
+          qc.invalidateQueries({ queryKey: ["pl-preps", clientId] });
+          qc.invalidateQueries({ queryKey: ["pl-blocks", clientId] });
+          qc.invalidateQueries({ queryKey: ["assigned-preps", clientId] });
+          qc.invalidateQueries({ queryKey: ["assigned-blocks", clientId] });
+          qc.invalidateQueries({ queryKey: ["my-workouts"] });
+          job.completeStep(3);
+          onClose();
+          navigate({ to: "/admin/client-programs/$clientId", params: { clientId } });
+          job.completeStep(4);
+        },
+      );
     } catch (e: any) {
-      toast.error(e.message);
+      // runJob already toasts on error; only catch pre-runJob throws
+      if (e?.message) toast.error(e.message);
     }
   };
 
