@@ -99,19 +99,45 @@ export interface SignNowTemplateRef {
 /** List templates owned by the authenticated SignNow user. */
 export async function listSignNowTemplates(): Promise<SignNowTemplateRef[]> {
   // documentsv2 supports filter=template-only; legacy /user/documentsv2 returns paginated results.
-  const res = await signnowFetch("/user/documentsv2?filter=template-only&per_page=100");
-  const text = await res.text();
-  if (!res.ok) throw new SignNowApiError(res.status, text);
-  const json = JSON.parse(text);
-  const docs = Array.isArray(json?.data) ? json.data : Array.isArray(json) ? json : [];
-  return docs
-    .filter((d: any) => d?.template === true || d?.is_template === 1 || d?.template === 1)
-    .map((d: any) => ({
-      id: d.id ?? d.document_id,
-      name: d.document_name ?? d.name ?? "Untitled template",
-      updated: typeof d.updated === "number" ? d.updated : null,
-    }))
-    .filter((t: SignNowTemplateRef) => !!t.id && !!t.name);
+  // We paginate to be safe, then aggressively filter out anything that isn't a
+  // live, non-trashed template owned by this account. SignNow returns deleted /
+  // archived / trashed templates here even though they don't appear in the UI,
+  // which is why the sync used to pick up "phantom" templates.
+  const out: SignNowTemplateRef[] = [];
+  const seen = new Set<string>();
+  for (let page = 1; page <= 10; page += 1) {
+    const res = await signnowFetch(
+      `/user/documentsv2?filter=template-only&per_page=100&page=${page}`,
+    );
+    const text = await res.text();
+    if (!res.ok) throw new SignNowApiError(res.status, text);
+    const json = JSON.parse(text);
+    const docs = Array.isArray(json?.data) ? json.data : Array.isArray(json) ? json : [];
+    if (docs.length === 0) break;
+    for (const d of docs) {
+      const id = d?.id ?? d?.document_id;
+      if (!id || seen.has(id)) continue;
+      // Must be flagged as a template.
+      const isTemplate = d?.template === true || d?.is_template === 1 || d?.template === 1;
+      if (!isTemplate) continue;
+      // Exclude anything SignNow considers removed / trashed / deleted.
+      const removed =
+        d?.removed === true || d?.removed === 1 ||
+        d?.deleted === true || d?.deleted === 1 ||
+        d?.trash === true || d?.trash === 1 ||
+        d?.is_trash === true || d?.is_trash === 1 ||
+        !!d?.deleted_at || !!d?.trashed_at;
+      if (removed) continue;
+      seen.add(id);
+      out.push({
+        id,
+        name: d?.document_name ?? d?.name ?? "Untitled template",
+        updated: typeof d?.updated === "number" ? d.updated : null,
+      });
+    }
+    if (docs.length < 100) break;
+  }
+  return out.filter((t) => !!t.id && !!t.name);
 }
 
 /** Copy a template into a new document, returning the new document id. */
