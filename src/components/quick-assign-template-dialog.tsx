@@ -12,6 +12,7 @@ import { applyTemplateToClient, getTemplateWeeks, computeEndDateFromStart } from
 import { toast } from "sonner";
 import { findOverlappingBlock, suggestNextStartISO } from "@/lib/block-schedule";
 import { AlertTriangle } from "lucide-react";
+import { runJob } from "@/lib/progress-jobs";
 
 type Props = {
   open: boolean;
@@ -78,23 +79,39 @@ export function QuickAssignTemplateDialog({ open, onOpenChange, clientId, client
       const placement = selected?.template_type === "full_prep"
         ? { mode: "new_prep" as const, prep: {} }
         : { mode: "standalone_block" as const };
-      await applyTemplateToClient({
-        templateId, clientId, placement,
-        clientVisible: visible,
-        startDate: startDate || null,
-        endDate: endDate || null,
-      });
-      toast.success("Template assigned");
-      qc.invalidateQueries({ queryKey: ["pl-blocks", clientId] });
-      qc.invalidateQueries({ queryKey: ["pl-preps", clientId] });
-      qc.invalidateQueries({ queryKey: ["clients-blocks-all"] });
-      qc.invalidateQueries({ queryKey: ["assigned-blocks", clientId] });
+      await runJob(
+        {
+          title: "Assigning program template",
+          description: `${selected?.name ?? "Template"}${clientName ? ` → ${clientName}` : ""}`,
+          steps: ["Validating schedule", "Creating assignment", "Syncing client access"],
+          successToast: "Template assigned",
+          successAction: {
+            label: "Open client",
+            onClick: () => navigate({ to: "/admin/client-programs/$clientId", params: { clientId } }),
+          },
+        },
+        async (job) => {
+          job.completeStep(0);
+          await applyTemplateToClient({
+            templateId, clientId, placement,
+            clientVisible: visible,
+            startDate: startDate || null,
+            endDate: endDate || null,
+          });
+          job.completeStep(1);
+          qc.invalidateQueries({ queryKey: ["pl-blocks", clientId] });
+          qc.invalidateQueries({ queryKey: ["pl-preps", clientId] });
+          qc.invalidateQueries({ queryKey: ["clients-blocks-all"] });
+          qc.invalidateQueries({ queryKey: ["assigned-blocks", clientId] });
+          job.completeStep(2);
+        },
+      );
       onOpenChange(false);
       setTemplateId("");
       setEndDate("");
       navigate({ to: "/admin/client-programs/$clientId", params: { clientId } });
     } catch (e: any) {
-      toast.error(e.message);
+      // runJob already surfaced the error toast + drawer entry with Retry.
     } finally {
       setBusy(false);
     }
