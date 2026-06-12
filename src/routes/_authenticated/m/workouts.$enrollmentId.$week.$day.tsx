@@ -14,6 +14,11 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { ActionButton } from "@/components/action-button";
 import { TrainingHelpButton } from "@/components/training-help-sheet";
+import { WorkoutEmptyCard } from "@/components/workout-empty-state";
+import { runJob } from "@/lib/progress-jobs";
+import { useAuth } from "@/lib/auth";
+import { useClientImpersonation } from "@/lib/client-impersonation";
+import { writeSetEditAudit } from "@/lib/logged-set-audit";
 
 export const Route = createFileRoute("/_authenticated/m/workouts/$enrollmentId/$week/$day")({ component: WorkoutTracker });
 
@@ -27,10 +32,12 @@ function WorkoutTracker() {
   const completeFn = useServerFn(completeWorkout);
   const uncompleteFn = useServerFn(uncompleteWorkout);
   const logFn = useServerFn(logSet);
+  const { user } = useAuth();
+  const { isImpersonating, client: povClient } = useClientImpersonation();
   const [notes, setNotes] = useState("");
   const [logs, setLogs] = useState<Record<string, SetLog>>({});
 
-  const { data: enr } = useQuery({
+  const { data: enr, isError: enrError, isSuccess: enrLoaded, refetch: refetchEnr } = useQuery({
     queryKey: ["m-enrollment", enrollmentId],
     queryFn: async () => {
       const { data } = await supabase
@@ -68,10 +75,27 @@ function WorkoutTracker() {
     setLogs(map);
   }, [existingLogs]);
 
-  if (!enr) return <div className="p-6 text-sm text-muted-foreground">Loading…</div>;
-  const plan = enr.member_plans;
+  if (!enr && !enrLoaded && !enrError) {
+    return <div className="p-6 text-sm text-muted-foreground">Loading…</div>;
+  }
+  const plan = enr?.member_plans;
   const dayObj = plan?.published_payload?.weeks_data?.[weekIndex - 1]?.days?.[dayIndex - 1];
   const rows: any[] = dayObj?.rows ?? [];
+  const route = `/m/workouts/${enrollmentId}/${week}/${day}`;
+  if (enrError || (enrLoaded && !enr)) {
+    return (
+      <div className="space-y-5">
+        <PageHeader title="Workout didn’t load" subtitle="" />
+        <WorkoutEmptyCard
+          clientId={null}
+          clientName={null}
+          workoutId={null}
+          route={route}
+          onRetry={() => refetchEnr()}
+        />
+      </div>
+    );
+  }
   const loggingEnabled = plan?.logging_enabled !== false;
   const isComplete = !!completion;
 
@@ -80,15 +104,57 @@ function WorkoutTracker() {
   const saveLog = async (exerciseIndex: number, setIndex: number) => {
     const key = `${exerciseIndex}:${setIndex}`;
     const v = logs[key] ?? {};
+    const before = (existingLogs as any[]).find((l) => l.exercise_index === exerciseIndex && l.set_index === setIndex) ?? null;
     await logFn({ data: { enrollmentId, weekIndex, dayIndex, exerciseIndex, setIndex,
       reps: v.reps ?? null, load_lb: v.load_lb ?? null, rpe: v.rpe ?? null, rir: v.rir ?? null, notes: v.notes ?? null } });
+    qc.invalidateQueries({ queryKey: ["m-set-logs", enrollmentId, weekIndex, dayIndex] });
+    // Audit if coach/admin POV is editing on the member's behalf.
+    if (isImpersonating && user?.id && povClient?.id) {
+      const row = rows[exerciseIndex];
+      void writeSetEditAudit(
+        {
+          weight: before?.load_lb ?? null,
+          reps: before?.reps ?? null,
+          rpe: before?.rpe ?? null,
+          unit: "lb",
+          status: before ? "logged" : null,
+        },
+        {
+          weight: v.load_lb ?? null,
+          reps: v.reps ?? null,
+          rpe: v.rpe ?? null,
+          unit: "lb",
+          status: "logged",
+        },
+        {
+          setLogId: before?.id ?? null,
+          clientId: povClient.id,
+          workoutId: null,
+          enrollmentId,
+          exerciseId: null,
+          exerciseName: row?.exercise || row?.name || null,
+          editedByUserId: user.id,
+          editedByRole: "coach_pov",
+          editSource: "coach_pov",
+          pageRoute: route,
+        },
+      );
+    }
   };
 
   const handleComplete = async () => {
-    await completeFn({ data: { enrollmentId, weekIndex, dayIndex, notes } });
-    qc.invalidateQueries({ queryKey: ["m-completion", enrollmentId, weekIndex, dayIndex] });
-    qc.invalidateQueries({ queryKey: ["m-completions", enrollmentId] });
-    qc.invalidateQueries({ queryKey: ["m-enrollment", enrollmentId] });
+    await runJob(
+      { title: "Completing workout", description: dayObj?.title || `Week ${weekIndex} · Day ${dayIndex}`, steps: ["Saving notes", "Marking complete", "Refreshing"], successToast: "Workout complete" },
+      async (job) => {
+        job.completeStep(0);
+        await completeFn({ data: { enrollmentId, weekIndex, dayIndex, notes } });
+        job.completeStep(1);
+        qc.invalidateQueries({ queryKey: ["m-completion", enrollmentId, weekIndex, dayIndex] });
+        qc.invalidateQueries({ queryKey: ["m-completions", enrollmentId] });
+        qc.invalidateQueries({ queryKey: ["m-enrollment", enrollmentId] });
+        job.completeStep(2);
+      },
+    );
   };
 
   const handleUncomplete = async () => {
@@ -111,7 +177,13 @@ function WorkoutTracker() {
         }
       />
       {rows.length === 0 && (
-        <Card className="p-6 text-sm text-muted-foreground">No exercises configured for this workout.</Card>
+        <WorkoutEmptyCard
+          clientId={null}
+          clientName={null}
+          workoutId={null}
+          route={route}
+          onRetry={() => qc.invalidateQueries({ queryKey: ["m-enrollment", enrollmentId] })}
+        />
       )}
       {rows.map((row: any, ei: number) => {
         const setCount = Math.max(1, Number(row.sets) || 1);

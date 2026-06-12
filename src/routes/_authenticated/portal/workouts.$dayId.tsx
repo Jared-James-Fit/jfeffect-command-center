@@ -27,6 +27,10 @@ import { useServerFn } from "@tanstack/react-start";
 import { notifyCoachOfWorkoutFailure } from "@/lib/support-alerts.functions";
 import { runJob } from "@/lib/progress-jobs";
 import { cn } from "@/lib/utils";
+import { WorkoutEmptyCard } from "@/components/workout-empty-state";
+import { useAuth } from "@/lib/auth";
+import { useClientImpersonation } from "@/lib/client-impersonation";
+import { writeSetEditAudit } from "@/lib/logged-set-audit";
 
 export const Route = createFileRoute("/_authenticated/portal/workouts/$dayId")({
   validateSearch: (s: Record<string, unknown>) => ({
@@ -93,9 +97,9 @@ function WorkoutDay() {
   });
 
   useEffect(() => {
-    if (rowsLoaded && rows.length === 0) {
-      toast.info("This workout is empty — no exercises have been added yet.");
-    }
+    // Empty state is now rendered inline (see WorkoutEmptyCard below) so we
+    // no longer fire the misleading "empty workout" toast — that read like a
+    // crash to clients. Failed loads are still caught by WorkoutLoadBoundary.
   }, [rowsLoaded, rows.length]);
 
   const { data: results = [] } = useQuery({
@@ -267,6 +271,15 @@ function WorkoutDay() {
           </div>
           <div className="mx-auto max-w-3xl space-y-4 p-4 md:p-6">
             <WorkoutLoadBoundary clientId={client?.id ?? null} clientName={(client as any)?.full_name ?? null} dayId={dayId} route={`/portal/workouts/${dayId}`}>
+              {rowsLoaded && (rows as any[]).length === 0 ? (
+                <WorkoutEmptyCard
+                  clientId={client?.id ?? null}
+                  clientName={(client as any)?.full_name ?? null}
+                  workoutId={dayId}
+                  route={`/portal/workouts/${dayId}`}
+                  onRetry={() => qc.invalidateQueries({ queryKey: ["pl-day-rows", dayId] })}
+                />
+              ) : null}
               {(rows as any[]).map((r) => (
                 <ExerciseBlock
                   key={r.id}
@@ -349,6 +362,15 @@ function WorkoutDay() {
 
         <WorkoutLoadBoundary clientId={client?.id ?? null} clientName={(client as any)?.full_name ?? null} dayId={dayId} route={`/portal/workouts/${dayId}`}>
           <div className="space-y-3">
+            {rowsLoaded && (rows as any[]).length === 0 ? (
+              <WorkoutEmptyCard
+                clientId={client?.id ?? null}
+                clientName={(client as any)?.full_name ?? null}
+                workoutId={dayId}
+                route={`/portal/workouts/${dayId}`}
+                onRetry={() => qc.invalidateQueries({ queryKey: ["pl-day-rows", dayId] })}
+              />
+            ) : null}
             {(rows as any[]).map((r) => (
               <ExerciseBlock
                 key={r.id}
@@ -550,6 +572,9 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
             <SetRow
               key={i}
               rowId={row.id}
+              workoutId={dayId}
+              exerciseId={exerciseId ?? null}
+              exerciseName={name}
               clientId={clientId}
               setIndex={i + 1}
               existing={existing}
@@ -771,7 +796,9 @@ function ExerciseNotesSheet({ open, onOpenChange, clientId, dayId, dayTitle, row
   );
 }
 
-function SetRow({ rowId, clientId, setIndex, existing, targetReps, targetRpe, readonly = false, unit = "kg", focusMode = false, onChange }: { rowId: string; clientId: string | undefined; setIndex: number; existing?: any; targetReps?: string | null; targetRpe?: string | null; readonly?: boolean; unit?: "kg" | "lb"; focusMode?: boolean; onChange: () => void }) {
+function SetRow({ rowId, workoutId, exerciseId, exerciseName, clientId, setIndex, existing, targetReps, targetRpe, readonly = false, unit = "kg", focusMode = false, onChange }: { rowId: string; workoutId?: string | null; exerciseId?: string | null; exerciseName?: string | null; clientId: string | undefined; setIndex: number; existing?: any; targetReps?: string | null; targetRpe?: string | null; readonly?: boolean; unit?: "kg" | "lb"; focusMode?: boolean; onChange: () => void }) {
+  const { user } = useAuth();
+  const { isImpersonating, client: povClient } = useClientImpersonation();
   // Display weight is always shown in the active unit.
   // existing stores normalized kg + lb columns (Stage 1 trigger keeps them in sync),
   // plus the original actual_load/actual_load_unit pair. We pick whichever matches `unit`.
@@ -844,14 +871,50 @@ function SetRow({ rowId, clientId, setIndex, existing, targetReps, targetRpe, re
         actual_rpe_num: rpeNum,
         completed_at: new Date().toISOString(),
       };
+      let savedId: string | null = existing?.id ?? null;
+      // Snapshot "before" in the display unit so the audit diff is meaningful.
+      const before = existing
+        ? {
+            weight: unit === "kg"
+              ? (existing.actual_load_kg ?? existing.actual_load ?? null)
+              : (existing.actual_load_lb ?? existing.actual_load ?? null),
+            reps: existing.actual_reps ?? null,
+            rpe: existing.actual_rpe_num ?? existing.actual_rpe ?? null,
+            unit: existing.actual_load_unit ?? null,
+            status: existing.completed_at ? "completed" : null,
+          }
+        : { weight: null, reps: null, rpe: null, unit: null, status: null };
       if (existing) {
         const { error } = await sb.from("pl_row_results").update(payload).eq("id", existing.id);
         if (error) throw error;
       } else {
-        const { error } = await sb.from("pl_row_results").insert(payload);
+        const { data: inserted, error } = await sb.from("pl_row_results").insert(payload).select("id").maybeSingle();
         if (error) throw error;
+        savedId = inserted?.id ?? null;
       }
       onChange();
+      // Coach/admin POV audit trail. Only writes when impersonating, only the
+      // fields that actually changed, only after the save succeeds.
+      if (isImpersonating && user?.id && povClient?.id === clientId) {
+        const after = {
+          weight: loadNum,
+          reps: repsNum,
+          rpe: rpeNum,
+          unit,
+          status: "completed",
+        };
+        void writeSetEditAudit(before, after, {
+          setLogId: savedId,
+          clientId,
+          workoutId: workoutId ?? null,
+          exerciseId: exerciseId ?? null,
+          exerciseName: exerciseName ?? null,
+          editedByUserId: user.id,
+          editedByRole: "coach_pov",
+          editSource: "coach_pov",
+          pageRoute: typeof window !== "undefined" ? window.location.pathname : null,
+        });
+      }
     },
   });
 

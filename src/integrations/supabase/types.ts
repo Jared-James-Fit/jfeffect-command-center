@@ -4276,6 +4276,69 @@ export type Database = {
         }
         Relationships: []
       }
+      logged_set_edit_audit: {
+        Row: {
+          client_id: string | null
+          created_at: string
+          details: Json | null
+          edit_source: string
+          edited_by_role: string | null
+          edited_by_user_id: string | null
+          enrollment_id: string | null
+          exercise_id: string | null
+          exercise_name: string | null
+          field_changed: string
+          id: string
+          new_value: string | null
+          page_route: string | null
+          previous_value: string | null
+          program_id: string | null
+          reason: string | null
+          set_log_id: string | null
+          workout_id: string | null
+        }
+        Insert: {
+          client_id?: string | null
+          created_at?: string
+          details?: Json | null
+          edit_source?: string
+          edited_by_role?: string | null
+          edited_by_user_id?: string | null
+          enrollment_id?: string | null
+          exercise_id?: string | null
+          exercise_name?: string | null
+          field_changed: string
+          id?: string
+          new_value?: string | null
+          page_route?: string | null
+          previous_value?: string | null
+          program_id?: string | null
+          reason?: string | null
+          set_log_id?: string | null
+          workout_id?: string | null
+        }
+        Update: {
+          client_id?: string | null
+          created_at?: string
+          details?: Json | null
+          edit_source?: string
+          edited_by_role?: string | null
+          edited_by_user_id?: string | null
+          enrollment_id?: string | null
+          exercise_id?: string | null
+          exercise_name?: string | null
+          field_changed?: string
+          id?: string
+          new_value?: string | null
+          page_route?: string | null
+          previous_value?: string | null
+          program_id?: string | null
+          reason?: string | null
+          set_log_id?: string | null
+          workout_id?: string | null
+        }
+        Relationships: []
+      }
       manual_check_in_reviews: {
         Row: {
           action_items: string | null
