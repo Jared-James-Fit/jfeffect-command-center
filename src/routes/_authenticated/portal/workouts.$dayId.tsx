@@ -15,7 +15,14 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "
 import { getExerciseVideoSource } from "@/lib/exercise-video";
 import { toast } from "sonner";
 import { durationRange } from "@/lib/pl-programs";
-import { movementAccent } from "@/components/program-builder";
+import { exerciseAccent } from "@/components/program-builder";
+import {
+  derivePurposeLabels,
+  effectiveRestSeconds,
+  resolveCategory,
+  restRangeLabel,
+  type ExerciseMeta,
+} from "@/lib/exercise-metadata";
 import { listClientMaxes, buildMaxIndex, computeRowLoad } from "@/lib/pl-maxes";
 import { useAutosave, readLocalDraft, clearLocalDraft } from "@/hooks/use-autosave";
 import { SaveStatus } from "@/components/save-status";
@@ -129,7 +136,7 @@ function WorkoutDay() {
     queryKey: ["pl-day-rows", dayId],
     initialData: cachedInitialData<any[]>(cacheScope, "rows"),
     queryFn: async () => {
-      const r = (await sb.from("pl_exercise_rows").select("*, exercises(id,name,video_url,vimeo_embed_url,thumbnail_url,cues,common_mistakes,muscle_group,category,pl_lift_group,warmup_protocol_id,is_powerlifting,warmup_notes,default_load_unit)").eq("day_id", dayId).order("sort_order")).data ?? [];
+      const r = (await sb.from("pl_exercise_rows").select("*, exercises(id,name,video_url,vimeo_embed_url,thumbnail_url,cues,common_mistakes,muscle_group,category,pl_lift_group,warmup_protocol_id,is_powerlifting,warmup_notes,default_load_unit,exercise_category,is_competition_lift,competition_lift_type)").eq("day_id", dayId).order("sort_order")).data ?? [];
       writePlanCache(cacheScope, "rows", r);
       return r;
     },
@@ -176,6 +183,17 @@ function WorkoutDay() {
     for (const n of exerciseNotes as any[]) if (n.row_id) m.set(n.row_id, n);
     return m;
   }, [exerciseNotes]);
+
+  // Derive ordered purpose labels (Primary/Secondary/.../Assistance) for the day.
+  const purposeLabels = useMemo(
+    () => derivePurposeLabels(rows as any[], (r: any) => (r.exercises as ExerciseMeta | null) ?? null),
+    [rows],
+  );
+  const purposeLabelById = useMemo(() => {
+    const m = new Map<string, string>();
+    (rows as any[]).forEach((r, i) => m.set(r.id, purposeLabels[i]));
+    return m;
+  }, [rows, purposeLabels]);
 
   // Auto-track: started_at on first mount (creates draft row if needed)
   const startedRef = useRef(false);
@@ -470,6 +488,7 @@ function WorkoutDay() {
                   focusMode
                   onChange={refresh}
                   onNoteChange={refreshNotes}
+                  purposeLabel={purposeLabelById.get(r.id) ?? null}
                 />
               ))}
             </WorkoutLoadBoundary>
@@ -568,6 +587,7 @@ function WorkoutDay() {
                 onUnitChange={(u) => setExerciseUnit(r.exercises?.id ?? null, r.id, u)}
                 onChange={refresh}
                 onNoteChange={refreshNotes}
+                purposeLabel={purposeLabelById.get(r.id) ?? null}
               />
             ))}
           </div>
@@ -709,7 +729,7 @@ function SuggestedLoadBadge({ load, unit, exerciseName }: { load: number; unit: 
   );
 }
 
-function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResults, existingNote, readonly = false, unit = "kg", onUnitChange, focusMode = false, onChange, onNoteChange }: { row: any; dayId: string; dayTitle: string; clientId: string | undefined; blockId?: string | null; existingResults: any[]; existingNote?: any; readonly?: boolean; unit?: "kg" | "lb"; onUnitChange?: (u: "kg" | "lb") => void; focusMode?: boolean; onChange: () => void; onNoteChange: () => void }) {
+function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResults, existingNote, readonly = false, unit = "kg", onUnitChange, focusMode = false, onChange, onNoteChange, purposeLabel = null }: { row: any; dayId: string; dayTitle: string; clientId: string | undefined; blockId?: string | null; existingResults: any[]; existingNote?: any; readonly?: boolean; unit?: "kg" | "lb"; onUnitChange?: (u: "kg" | "lb") => void; focusMode?: boolean; onChange: () => void; onNoteChange: () => void; purposeLabel?: string | null }) {
   const name = row.exercises?.name ?? row.exercise_name_override ?? "Exercise";
   const exercise = row.exercises ?? null;
   const exerciseId = exercise?.id ?? null;
@@ -717,7 +737,37 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
   const hasGuide = Boolean(exerciseId || video);
   const cues = exercise?.cues ?? null;
   const setCount = Math.max(1, row.sets ?? 1);
-  const accent = movementAccent(name, row.card_color);
+  const exMeta: ExerciseMeta | null = exercise
+    ? {
+        exercise_category: exercise.exercise_category ?? null,
+        is_competition_lift: exercise.is_competition_lift ?? null,
+        competition_lift_type: exercise.competition_lift_type ?? null,
+        name: exercise.name ?? null,
+      }
+    : null;
+  const accent = exerciseAccent(exMeta, row.card_color);
+  const category = resolveCategory(exMeta);
+  const effectiveRest = effectiveRestSeconds(
+    { rest_seconds_override: row.rest_seconds_override, rest_seconds: row.rest_seconds },
+    exMeta,
+  );
+  const restDisplay = (() => {
+    if (row.rest_seconds_override != null) {
+      const s = row.rest_seconds_override as number;
+      return s >= 60 ? `${Math.round(s / 60)} min` : `${s}s`;
+    }
+    if (row.rest_seconds != null) {
+      const s = row.rest_seconds as number;
+      return s >= 60 ? `${Math.round(s / 60)} min` : `${s}s`;
+    }
+    return restRangeLabel(category);
+  })();
+  const categoryBadgeClass =
+    category === "competition"
+      ? "border-primary/30 bg-primary/10 text-primary"
+      : category === "variation"
+        ? "border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400"
+        : "border-muted-foreground/30 bg-muted text-muted-foreground";
   const [howToOpen, setHowToOpen] = useState(false);
   const [notesOpen, setNotesOpen] = useState(false);
   const hasNote = Boolean(existingNote?.id);
@@ -744,9 +794,17 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
     <Card className="relative overflow-hidden p-4 pl-5">
       <div className={`absolute left-0 top-0 h-full w-1.5 ${accent}`} aria-hidden />
       <div className="flex items-start justify-between gap-2">
-        <div>
-          <div className="flex items-center gap-2">
-            <div className="font-bold">{name}</div>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <div className="font-bold leading-snug break-words pr-1">{name}</div>
+            {purposeLabel && (
+              <Badge variant="outline" className={cn("text-[10px] font-bold uppercase tracking-wider", categoryBadgeClass)}>
+                {purposeLabel}
+              </Badge>
+            )}
+            <Badge variant="outline" className="text-[10px] font-bold uppercase tracking-wider capitalize">
+              {category}
+            </Badge>
             {hasNote && (
               <span title="You saved a note for this exercise" className="inline-flex items-center gap-1 rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] font-bold text-primary">
                 <StickyNote className="h-2.5 w-2.5" /> Note
@@ -760,7 +818,10 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
             {row.percentage && !row.manual_override && row.percentage_basis !== "none" && ` · ${row.percentage}%`}
             {row.load_kg && ` · ${row.load_kg} kg`}
             {row.tempo && ` · tempo ${row.tempo}`}
-            {row.rest_seconds && ` · rest ${row.rest_seconds}s`}
+            {` · rest ${restDisplay}`}
+            {effectiveRest != null && row.rest_seconds_override == null && row.rest_seconds == null && (
+              <span className="ml-1 opacity-70">(category default)</span>
+            )}
           </div>
           {row.manual_override && (row.load_kg || row.load_lb) && (
             <SuggestedLoadBadge
@@ -1101,6 +1162,10 @@ function SetRow({ rowId, workoutId, exerciseId, exerciseName, clientId, setIndex
       const loadNum = value.load ? Number(value.load) : null;
       const repsNum = value.reps ? parseInt(value.reps, 10) : null;
       const rpeNum = value.rpe ? Number(value.rpe) : null;
+      const allValid =
+        loadNum != null && isFinite(loadNum) && loadNum >= 0 &&
+        repsNum != null && isFinite(repsNum) && repsNum > 0 &&
+        rpeNum != null && isFinite(rpeNum) && rpeNum >= 0 && rpeNum <= 10;
       enqueueOfflineWrite({
         id: `portal_set:${rowId}:${clientId}:${setIndex}`,
         label: `Saved set ${setIndex}`,
@@ -1117,7 +1182,7 @@ function SetRow({ rowId, workoutId, exerciseId, exerciseName, clientId, setIndex
             actual_reps: repsNum,
             actual_rpe: value.rpe || null,
             actual_rpe_num: rpeNum,
-            completed_at: new Date().toISOString(),
+            completed_at: allValid ? new Date().toISOString() : null,
           },
         },
       });
@@ -1133,6 +1198,10 @@ function SetRow({ rowId, workoutId, exerciseId, exerciseName, clientId, setIndex
       if (load && (loadNum == null || !isFinite(loadNum) || loadNum < 0)) throw new Error("Weight must be a number");
       if (reps && (repsNum == null || !isFinite(repsNum) || repsNum < 0)) throw new Error("Reps must be a whole number");
       if (rpe && (rpeNum == null || !isFinite(rpeNum) || rpeNum < 0 || rpeNum > 10)) throw new Error("RPE must be 0–10");
+      const allValid =
+        loadNum != null && loadNum >= 0 &&
+        repsNum != null && repsNum > 0 &&
+        rpeNum != null && rpeNum >= 0 && rpeNum <= 10;
       const payload = {
         row_id: rowId,
         client_id: clientId,
@@ -1142,7 +1211,7 @@ function SetRow({ rowId, workoutId, exerciseId, exerciseName, clientId, setIndex
         actual_reps: repsNum,
         actual_rpe: rpe || null,
         actual_rpe_num: rpeNum,
-        completed_at: new Date().toISOString(),
+        completed_at: allValid ? new Date().toISOString() : null,
       };
       let savedId: string | null = existing?.id ?? null;
       // Snapshot "before" in the display unit so the audit diff is meaningful.
@@ -1174,7 +1243,7 @@ function SetRow({ rowId, workoutId, exerciseId, exerciseName, clientId, setIndex
           reps: repsNum,
           rpe: rpeNum,
           unit,
-          status: "completed",
+          status: allValid ? "completed" : "saved",
         };
         void writeSetEditAudit(before, after, {
           setLogId: savedId,
