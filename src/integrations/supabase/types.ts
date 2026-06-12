@@ -6881,6 +6881,7 @@ export type Database = {
       pl_exercise_rows: {
         Row: {
           basis_row_id: string | null
+          card_color: string | null
           created_at: string
           day_id: string
           estimated_seconds: number | null
@@ -6910,6 +6911,7 @@ export type Database = {
         }
         Insert: {
           basis_row_id?: string | null
+          card_color?: string | null
           created_at?: string
           day_id: string
           estimated_seconds?: number | null
@@ -6939,6 +6941,7 @@ export type Database = {
         }
         Update: {
           basis_row_id?: string | null
+          card_color?: string | null
           created_at?: string
           day_id?: string
           estimated_seconds?: number | null
