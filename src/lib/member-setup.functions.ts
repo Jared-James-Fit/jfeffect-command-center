@@ -44,7 +44,7 @@ export const updateMyMemberProfile = createServerFn({ method: "POST" })
       patch.sms_opt_out = true;
     }
 
-    const { error } = await supabase.from("app_members").update(patch).eq("id", me.id);
+    const { error } = await supabase.from("app_members").update(patch as any).eq("id", me.id);
     if (error) throw new Error(error.message);
 
     // Mark setup complete if all required fields are now present.
@@ -101,7 +101,7 @@ export const adminUpdateMemberSetup = createServerFn({ method: "POST" })
     } else if (sms_consent === false) {
       patch.sms_opt_out = true;
     }
-    const { error } = await supabaseAdmin.from("app_members").update(patch).eq("id", memberId);
+    const { error } = await supabaseAdmin.from("app_members").update(patch as any).eq("id", memberId);
     if (error) throw new Error(error.message);
     return { ok: true };
   });
