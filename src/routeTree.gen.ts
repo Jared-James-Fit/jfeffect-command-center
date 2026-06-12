@@ -69,6 +69,7 @@ import { Route as AuthenticatedMediaActionItemsRouteImport } from './routes/_aut
 import { Route as AuthenticatedMediaAccountRouteImport } from './routes/_authenticated/media/account'
 import { Route as AuthenticatedMUpgradeRouteImport } from './routes/_authenticated/m/upgrade'
 import { Route as AuthenticatedMToolsRouteImport } from './routes/_authenticated/m/tools'
+import { Route as AuthenticatedMSupportRouteImport } from './routes/_authenticated/m/support'
 import { Route as AuthenticatedMResourcesRouteImport } from './routes/_authenticated/m/resources'
 import { Route as AuthenticatedMPlansRouteImport } from './routes/_authenticated/m/plans'
 import { Route as AuthenticatedMMyPlansRouteImport } from './routes/_authenticated/m/my-plans'
@@ -523,6 +524,11 @@ const AuthenticatedMUpgradeRoute = AuthenticatedMUpgradeRouteImport.update({
 const AuthenticatedMToolsRoute = AuthenticatedMToolsRouteImport.update({
   id: '/tools',
   path: '/tools',
+  getParentRoute: () => AuthenticatedMRouteRoute,
+} as any)
+const AuthenticatedMSupportRoute = AuthenticatedMSupportRouteImport.update({
+  id: '/support',
+  path: '/support',
   getParentRoute: () => AuthenticatedMRouteRoute,
 } as any)
 const AuthenticatedMResourcesRoute = AuthenticatedMResourcesRouteImport.update({
@@ -1334,6 +1340,7 @@ export interface FileRoutesByFullPath {
   '/m/my-plans': typeof AuthenticatedMMyPlansRouteWithChildren
   '/m/plans': typeof AuthenticatedMPlansRouteWithChildren
   '/m/resources': typeof AuthenticatedMResourcesRouteWithChildren
+  '/m/support': typeof AuthenticatedMSupportRoute
   '/m/tools': typeof AuthenticatedMToolsRoute
   '/m/upgrade': typeof AuthenticatedMUpgradeRoute
   '/media/account': typeof AuthenticatedMediaAccountRoute
@@ -1514,6 +1521,7 @@ export interface FileRoutesByTo {
   '/m/my-plans': typeof AuthenticatedMMyPlansRouteWithChildren
   '/m/plans': typeof AuthenticatedMPlansRouteWithChildren
   '/m/resources': typeof AuthenticatedMResourcesRouteWithChildren
+  '/m/support': typeof AuthenticatedMSupportRoute
   '/m/tools': typeof AuthenticatedMToolsRoute
   '/m/upgrade': typeof AuthenticatedMUpgradeRoute
   '/media/account': typeof AuthenticatedMediaAccountRoute
@@ -1701,6 +1709,7 @@ export interface FileRoutesById {
   '/_authenticated/m/my-plans': typeof AuthenticatedMMyPlansRouteWithChildren
   '/_authenticated/m/plans': typeof AuthenticatedMPlansRouteWithChildren
   '/_authenticated/m/resources': typeof AuthenticatedMResourcesRouteWithChildren
+  '/_authenticated/m/support': typeof AuthenticatedMSupportRoute
   '/_authenticated/m/tools': typeof AuthenticatedMToolsRoute
   '/_authenticated/m/upgrade': typeof AuthenticatedMUpgradeRoute
   '/_authenticated/media/account': typeof AuthenticatedMediaAccountRoute
@@ -1888,6 +1897,7 @@ export interface FileRouteTypes {
     | '/m/my-plans'
     | '/m/plans'
     | '/m/resources'
+    | '/m/support'
     | '/m/tools'
     | '/m/upgrade'
     | '/media/account'
@@ -2068,6 +2078,7 @@ export interface FileRouteTypes {
     | '/m/my-plans'
     | '/m/plans'
     | '/m/resources'
+    | '/m/support'
     | '/m/tools'
     | '/m/upgrade'
     | '/media/account'
@@ -2254,6 +2265,7 @@ export interface FileRouteTypes {
     | '/_authenticated/m/my-plans'
     | '/_authenticated/m/plans'
     | '/_authenticated/m/resources'
+    | '/_authenticated/m/support'
     | '/_authenticated/m/tools'
     | '/_authenticated/m/upgrade'
     | '/_authenticated/media/account'
@@ -2813,6 +2825,13 @@ declare module '@tanstack/react-router' {
       path: '/tools'
       fullPath: '/m/tools'
       preLoaderRoute: typeof AuthenticatedMToolsRouteImport
+      parentRoute: typeof AuthenticatedMRouteRoute
+    }
+    '/_authenticated/m/support': {
+      id: '/_authenticated/m/support'
+      path: '/support'
+      fullPath: '/m/support'
+      preLoaderRoute: typeof AuthenticatedMSupportRouteImport
       parentRoute: typeof AuthenticatedMRouteRoute
     }
     '/_authenticated/m/resources': {
@@ -4019,6 +4038,7 @@ interface AuthenticatedMRouteRouteChildren {
   AuthenticatedMMyPlansRoute: typeof AuthenticatedMMyPlansRouteWithChildren
   AuthenticatedMPlansRoute: typeof AuthenticatedMPlansRouteWithChildren
   AuthenticatedMResourcesRoute: typeof AuthenticatedMResourcesRouteWithChildren
+  AuthenticatedMSupportRoute: typeof AuthenticatedMSupportRoute
   AuthenticatedMToolsRoute: typeof AuthenticatedMToolsRoute
   AuthenticatedMUpgradeRoute: typeof AuthenticatedMUpgradeRoute
   AuthenticatedMIndexRoute: typeof AuthenticatedMIndexRoute
@@ -4032,6 +4052,7 @@ const AuthenticatedMRouteRouteChildren: AuthenticatedMRouteRouteChildren = {
   AuthenticatedMMyPlansRoute: AuthenticatedMMyPlansRouteWithChildren,
   AuthenticatedMPlansRoute: AuthenticatedMPlansRouteWithChildren,
   AuthenticatedMResourcesRoute: AuthenticatedMResourcesRouteWithChildren,
+  AuthenticatedMSupportRoute: AuthenticatedMSupportRoute,
   AuthenticatedMToolsRoute: AuthenticatedMToolsRoute,
   AuthenticatedMUpgradeRoute: AuthenticatedMUpgradeRoute,
   AuthenticatedMIndexRoute: AuthenticatedMIndexRoute,
