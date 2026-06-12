@@ -796,7 +796,9 @@ function ExerciseNotesSheet({ open, onOpenChange, clientId, dayId, dayTitle, row
   );
 }
 
-function SetRow({ rowId, clientId, setIndex, existing, targetReps, targetRpe, readonly = false, unit = "kg", focusMode = false, onChange }: { rowId: string; clientId: string | undefined; setIndex: number; existing?: any; targetReps?: string | null; targetRpe?: string | null; readonly?: boolean; unit?: "kg" | "lb"; focusMode?: boolean; onChange: () => void }) {
+function SetRow({ rowId, workoutId, exerciseId, exerciseName, clientId, setIndex, existing, targetReps, targetRpe, readonly = false, unit = "kg", focusMode = false, onChange }: { rowId: string; workoutId?: string | null; exerciseId?: string | null; exerciseName?: string | null; clientId: string | undefined; setIndex: number; existing?: any; targetReps?: string | null; targetRpe?: string | null; readonly?: boolean; unit?: "kg" | "lb"; focusMode?: boolean; onChange: () => void }) {
+  const { user } = useAuth();
+  const { isImpersonating, client: povClient } = useClientImpersonation();
   // Display weight is always shown in the active unit.
   // existing stores normalized kg + lb columns (Stage 1 trigger keeps them in sync),
   // plus the original actual_load/actual_load_unit pair. We pick whichever matches `unit`.
