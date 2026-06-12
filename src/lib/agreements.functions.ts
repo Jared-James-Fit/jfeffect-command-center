@@ -219,18 +219,10 @@ export const testSignNowConnection = createServerFn({ method: "POST" })
 // Templates UI. Any synced row whose name is NOT in this list is forced
 // inactive + archived so it cannot appear in the Agreements template list or
 // invite dropdown. Historical agreement records are never touched.
-const ALLOWED_SIGNNOW_TEMPLATE_NAMES: ReadonlySet<string> = new Set([
-  "Liability waiver",
-  "Coaching Agreement - Minor (under 18)",
-  "Coaching Agreement (Payor - on the clients behalf)",
-  "Coaching Agreement",
-  "Complimentary Session - Liability Waiver - PAR-Q",
-]);
-
-// Pulls templates from SignNow and upserts matches into agreement_templates by signnow_template_id.
-// Only templates whose exact name is in ALLOWED_SIGNNOW_TEMPLATE_NAMES are
-// activated. All other synced rows are deactivated + archived so they stay
-// out of the template list and invite dropdown.
+// Pulls ALL templates from SignNow and upserts them into agreement_templates
+// by signnow_template_id. Every template returned by SignNow is synced as
+// active + unarchived so admins see the full template library. Admins can
+// archive or deactivate individual templates from the UI afterward.
 export const syncSignNowTemplates = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
@@ -253,20 +245,14 @@ export const syncSignNowTemplates = createServerFn({ method: "POST" })
     const seenRemoteIds = new Set<string>();
     for (const r of remote) {
       seenRemoteIds.add(r.id);
-      const allowed = ALLOWED_SIGNNOW_TEMPLATE_NAMES.has(r.name);
       const match = byId.get(r.id);
       if (match) {
-        const patch: any = {};
+        const patch: any = { is_active: true, archived: false };
         if (match.name !== r.name) patch.name = r.name;
-        // Force allowlisted rows active+unarchived, non-allowlisted inactive+archived.
-        patch.is_active = allowed;
-        patch.archived = !allowed;
         await supabase.from("agreement_templates")
           .update(patch).eq("id", match.id);
-        if (allowed) updated += 1;
-        else skipped += 1;
+        updated += 1;
       } else {
-        if (!allowed) { skipped += 1; continue; }
         await supabase.from("agreement_templates").insert({
           name: r.name,
           signnow_template_id: r.id,
@@ -274,16 +260,17 @@ export const syncSignNowTemplates = createServerFn({ method: "POST" })
           is_active: true,
           archived: false,
           created_by: userId,
-          notes: "Synced from SignNow (allowlisted).",
+          notes: "Synced from SignNow.",
         } as any);
         created += 1;
       }
     }
-    // Archive any previously-synced rows whose remote template no longer exists.
+    // Deactivate (but do not archive) any previously-synced rows whose remote
+    // template no longer exists in SignNow, so admins can still see history.
     for (const [sid, row] of byId.entries()) {
-      if (!seenRemoteIds.has(sid) && (row.is_active || row.archived === false)) {
+      if (!seenRemoteIds.has(sid) && row.is_active) {
         await supabase.from("agreement_templates")
-          .update({ is_active: false, archived: true } as any).eq("id", row.id);
+          .update({ is_active: false } as any).eq("id", row.id);
         skipped += 1;
       }
     }
