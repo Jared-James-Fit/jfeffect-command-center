@@ -194,6 +194,7 @@ import { Route as AuthenticatedAdminBlocksBlockIdRouteImport } from './routes/_a
 import { Route as AuthenticatedAdminAgreementsSignedRouteImport } from './routes/_authenticated/admin/agreements.signed'
 import { Route as AuthenticatedAdminCrmContactsIndexRouteImport } from './routes/_authenticated/admin/crm.contacts.index'
 import { Route as ApiPublicGoogleOauthCallbackRouteImport } from './routes/api/public/google/oauth/callback'
+import { Route as AuthenticatedAdminCrmContactsIdRouteImport } from './routes/_authenticated/admin/crm.contacts.$id'
 import { Route as AuthenticatedAdminClientProgramsClientIdHistoryRouteImport } from './routes/_authenticated/admin/client-programs.$clientId.history'
 import { Route as AuthenticatedAdminClientProgramsClientIdAnalyticsRouteImport } from './routes/_authenticated/admin/client-programs.$clientId.analytics'
 import { Route as AuthenticatedMWorkoutsEnrollmentIdWeekDayRouteImport } from './routes/_authenticated/m/workouts.$enrollmentId.$week.$day'
@@ -1264,6 +1265,12 @@ const ApiPublicGoogleOauthCallbackRoute =
     path: '/api/public/google/oauth/callback',
     getParentRoute: () => rootRouteImport,
   } as any)
+const AuthenticatedAdminCrmContactsIdRoute =
+  AuthenticatedAdminCrmContactsIdRouteImport.update({
+    id: '/crm/contacts/$id',
+    path: '/crm/contacts/$id',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
 const AuthenticatedAdminClientProgramsClientIdHistoryRoute =
   AuthenticatedAdminClientProgramsClientIdHistoryRouteImport.update({
     id: '/client-programs/$clientId/history',
@@ -1468,6 +1475,7 @@ export interface FileRoutesByFullPath {
   '/portal/workouts/': typeof AuthenticatedPortalWorkoutsIndexRoute
   '/admin/client-programs/$clientId/analytics': typeof AuthenticatedAdminClientProgramsClientIdAnalyticsRoute
   '/admin/client-programs/$clientId/history': typeof AuthenticatedAdminClientProgramsClientIdHistoryRoute
+  '/admin/crm/contacts/$id': typeof AuthenticatedAdminCrmContactsIdRoute
   '/api/public/google/oauth/callback': typeof ApiPublicGoogleOauthCallbackRoute
   '/admin/crm/contacts/': typeof AuthenticatedAdminCrmContactsIndexRoute
   '/m/workouts/$enrollmentId/$week/$day': typeof AuthenticatedMWorkoutsEnrollmentIdWeekDayRoute
@@ -1652,6 +1660,7 @@ export interface FileRoutesByTo {
   '/portal/workouts': typeof AuthenticatedPortalWorkoutsIndexRoute
   '/admin/client-programs/$clientId/analytics': typeof AuthenticatedAdminClientProgramsClientIdAnalyticsRoute
   '/admin/client-programs/$clientId/history': typeof AuthenticatedAdminClientProgramsClientIdHistoryRoute
+  '/admin/crm/contacts/$id': typeof AuthenticatedAdminCrmContactsIdRoute
   '/api/public/google/oauth/callback': typeof ApiPublicGoogleOauthCallbackRoute
   '/admin/crm/contacts': typeof AuthenticatedAdminCrmContactsIndexRoute
   '/m/workouts/$enrollmentId/$week/$day': typeof AuthenticatedMWorkoutsEnrollmentIdWeekDayRoute
@@ -1843,6 +1852,7 @@ export interface FileRoutesById {
   '/_authenticated/portal/workouts/': typeof AuthenticatedPortalWorkoutsIndexRoute
   '/_authenticated/admin/client-programs/$clientId/analytics': typeof AuthenticatedAdminClientProgramsClientIdAnalyticsRoute
   '/_authenticated/admin/client-programs/$clientId/history': typeof AuthenticatedAdminClientProgramsClientIdHistoryRoute
+  '/_authenticated/admin/crm/contacts/$id': typeof AuthenticatedAdminCrmContactsIdRoute
   '/api/public/google/oauth/callback': typeof ApiPublicGoogleOauthCallbackRoute
   '/_authenticated/admin/crm/contacts/': typeof AuthenticatedAdminCrmContactsIndexRoute
   '/_authenticated/m/workouts/$enrollmentId/$week/$day': typeof AuthenticatedMWorkoutsEnrollmentIdWeekDayRoute
@@ -2034,6 +2044,7 @@ export interface FileRouteTypes {
     | '/portal/workouts/'
     | '/admin/client-programs/$clientId/analytics'
     | '/admin/client-programs/$clientId/history'
+    | '/admin/crm/contacts/$id'
     | '/api/public/google/oauth/callback'
     | '/admin/crm/contacts/'
     | '/m/workouts/$enrollmentId/$week/$day'
@@ -2218,6 +2229,7 @@ export interface FileRouteTypes {
     | '/portal/workouts'
     | '/admin/client-programs/$clientId/analytics'
     | '/admin/client-programs/$clientId/history'
+    | '/admin/crm/contacts/$id'
     | '/api/public/google/oauth/callback'
     | '/admin/crm/contacts'
     | '/m/workouts/$enrollmentId/$week/$day'
@@ -2408,6 +2420,7 @@ export interface FileRouteTypes {
     | '/_authenticated/portal/workouts/'
     | '/_authenticated/admin/client-programs/$clientId/analytics'
     | '/_authenticated/admin/client-programs/$clientId/history'
+    | '/_authenticated/admin/crm/contacts/$id'
     | '/api/public/google/oauth/callback'
     | '/_authenticated/admin/crm/contacts/'
     | '/_authenticated/m/workouts/$enrollmentId/$week/$day'
@@ -3741,6 +3754,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicGoogleOauthCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authenticated/admin/crm/contacts/$id': {
+      id: '/_authenticated/admin/crm/contacts/$id'
+      path: '/crm/contacts/$id'
+      fullPath: '/admin/crm/contacts/$id'
+      preLoaderRoute: typeof AuthenticatedAdminCrmContactsIdRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
     '/_authenticated/admin/client-programs/$clientId/history': {
       id: '/_authenticated/admin/client-programs/$clientId/history'
       path: '/client-programs/$clientId/history'
@@ -3936,6 +3956,7 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminMembersIndexRoute: typeof AuthenticatedAdminMembersIndexRoute
   AuthenticatedAdminClientProgramsClientIdAnalyticsRoute: typeof AuthenticatedAdminClientProgramsClientIdAnalyticsRoute
   AuthenticatedAdminClientProgramsClientIdHistoryRoute: typeof AuthenticatedAdminClientProgramsClientIdHistoryRoute
+  AuthenticatedAdminCrmContactsIdRoute: typeof AuthenticatedAdminCrmContactsIdRoute
   AuthenticatedAdminCrmContactsIndexRoute: typeof AuthenticatedAdminCrmContactsIndexRoute
 }
 
@@ -4051,6 +4072,7 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
       AuthenticatedAdminClientProgramsClientIdAnalyticsRoute,
     AuthenticatedAdminClientProgramsClientIdHistoryRoute:
       AuthenticatedAdminClientProgramsClientIdHistoryRoute,
+    AuthenticatedAdminCrmContactsIdRoute: AuthenticatedAdminCrmContactsIdRoute,
     AuthenticatedAdminCrmContactsIndexRoute:
       AuthenticatedAdminCrmContactsIndexRoute,
   }
