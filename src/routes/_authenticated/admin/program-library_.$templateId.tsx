@@ -136,7 +136,9 @@ function writePrefs(p: EditorPrefs) {
 
 // Append a row into the first day reachable inside any template payload shape.
 export function appendRowToFirstDay(payload: any, type: string, row: any) {
-  const stamp = { sort_order: 0, sets: 3, reps_text: "8-12", time_profile: "accessory_compound", ...row };
+  // New rows default to NO suggested load (percentage_basis="none").
+  // Coaches must opt in via the "Include Suggested Load" toggle.
+  const stamp = { sort_order: 0, sets: 3, reps_text: "8-12", time_profile: "accessory_compound", percentage_basis: "none", ...row };
   const pushIntoDay = (d: any) => {
     d.rows = d.rows || [];
     d.rows.push({ ...stamp, sort_order: d.rows.length });
@@ -920,7 +922,7 @@ function DayEditor({ day, setDay, exercises, compact }: { day: any; setDay: (d: 
   const [dragRowIdx, setDragRowIdx] = useState<number | null>(null);
   const [dropTargetIdx, setDropTargetIdx] = useState<number | null>(null);
   const clip = useClip();
-  const addRow = () => setDay({ ...day, rows: [...rows, { sort_order: rows.length, sets: 3, reps_text: "8-12", time_profile: "accessory_compound" }] });
+  const addRow = () => setDay({ ...day, rows: [...rows, { sort_order: rows.length, sets: 3, reps_text: "8-12", time_profile: "accessory_compound", percentage_basis: "none" }] });
   const pasteFromClip = () => {
     if (!clip || clip.kind !== "rows") return;
     const cloned = JSON.parse(JSON.stringify(clip.rows));
@@ -929,7 +931,8 @@ function DayEditor({ day, setDay, exercises, compact }: { day: any; setDay: (d: 
   };
   const insertExercise = (exId: string, atIndex?: number) => {
     const ex = (exercises as any[]).find((x) => x.id === exId);
-    const newRow = { sort_order: 0, sets: 3, reps_text: "8-12", time_profile: "accessory_compound", exercise_id: exId, exercise_name_override: ex?.name };
+    // Default: NO suggested load. Coach opts in explicitly per row.
+    const newRow = { sort_order: 0, sets: 3, reps_text: "8-12", time_profile: "accessory_compound", percentage_basis: "none", exercise_id: exId, exercise_name_override: ex?.name };
     const next = [...rows];
     const idx = atIndex ?? next.length;
     next.splice(idx, 0, newRow);
@@ -1071,10 +1074,16 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
   const { clientId, blockId, index: maxesIndex, maxes, refresh } = useClientMaxesCtx();
   const [maxEditor, setMaxEditor] = useState<any>(null);
   // Derive a clear "load mode" from the existing basis field.
+  // NEW DEFAULT: an unset basis means NO suggested load (off-by-default).
+  // Legacy rows with explicit `manual` + an existing load value keep their
+  // suggested-load enabled so we never silently strip a real programmed load.
+  const hasExistingManualLoad = (row.load_kg ?? null) !== null || (row.load_lb ?? null) !== null;
   const loadMode: "pct" | "manual" | "none" =
     row.percentage_basis === "none" ? "none"
-    : (!row.percentage_basis || row.percentage_basis === "manual") ? "manual"
+    : row.percentage_basis === "manual" ? "manual"
+    : !row.percentage_basis ? (hasExistingManualLoad ? "manual" : "none")
     : "pct";
+  const suggestedOn = loadMode !== "none";
   const rowUnit: "kg" | "lb" = row.load_unit === "lb" ? "lb" : "kg";
   const setLoadMode = (mode: "pct" | "manual" | "none") => {
     if (mode === "manual") {
@@ -1233,11 +1242,28 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
       </div>
       {expanded && (
       <div className="grid grid-cols-12 items-end gap-1">
-        <Field className="col-span-3" label="Load mode">
-          <div className="inline-flex rounded-md border border-border p-0.5">
-            <button type="button" onClick={() => setLoadMode("pct")} className={cn("rounded px-1.5 py-0.5 text-[10px] font-semibold", loadMode === "pct" ? "bg-primary text-primary-foreground" : "text-muted-foreground")}>%</button>
-            <button type="button" onClick={() => setLoadMode("manual")} className={cn("rounded px-1.5 py-0.5 text-[10px] font-semibold", loadMode === "manual" ? "bg-primary text-primary-foreground" : "text-muted-foreground")}>Manual</button>
-            <button type="button" onClick={() => setLoadMode("none")} className={cn("rounded px-1.5 py-0.5 text-[10px] font-semibold", loadMode === "none" ? "bg-primary text-primary-foreground" : "text-muted-foreground")}>No load</button>
+        <Field className="col-span-3" label="Include Suggested Load">
+          <div className="flex items-center gap-2 h-8">
+            <button
+              type="button"
+              role="switch"
+              aria-checked={suggestedOn}
+              onClick={() => setLoadMode(suggestedOn ? "none" : "manual")}
+              className={cn(
+                "relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors",
+                suggestedOn ? "bg-primary" : "bg-muted",
+              )}
+              title={suggestedOn ? "Click to remove suggested load" : "Click to add a suggested load"}
+            >
+              <span className={cn("inline-block h-4 w-4 transform rounded-full bg-background shadow transition-transform", suggestedOn ? "translate-x-4" : "translate-x-0.5")} />
+            </button>
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{suggestedOn ? "On" : "Off"}</span>
+            {suggestedOn && (
+              <div className="ml-1 inline-flex rounded-md border border-border p-0.5">
+                <button type="button" onClick={() => setLoadMode("manual")} className={cn("rounded px-1.5 py-0.5 text-[10px] font-semibold", loadMode === "manual" ? "bg-primary text-primary-foreground" : "text-muted-foreground")} title="Fixed weight">Weight</button>
+                <button type="button" onClick={() => setLoadMode("pct")} className={cn("rounded px-1.5 py-0.5 text-[10px] font-semibold", loadMode === "pct" ? "bg-primary text-primary-foreground" : "text-muted-foreground")} title="Percentage of max">%</button>
+              </div>
+            )}
           </div>
         </Field>
         {loadMode === "pct" && (
@@ -1254,12 +1280,12 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
         </Field>
         )}
         {loadMode !== "none" && (
-        <Field className={cn(loadMode === "pct" ? "col-span-2" : "col-span-3")} label={`Load (${rowUnit})`}>
+        <Field className={cn(loadMode === "pct" ? "col-span-2" : "col-span-3")} label={`Suggested Load (${rowUnit})`}>
           <div className="flex gap-1">
             <RowCell
               className={cn("text-xs flex-1", h)}
               inputMode="decimal"
-              placeholder={loadMode === "pct" ? "auto" : "100"}
+              placeholder={loadMode === "pct" ? "auto" : "weight"}
               value={rowUnit === "kg" ? row.load_kg : row.load_lb}
               onCommit={(v) => setRow({ ...row, [rowUnit === "kg" ? "load_kg" : "load_lb"]: parseFloatOrNull(v) })}
             />
@@ -1294,7 +1320,7 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
         </div>
       )}
       {expanded && loadMode === "none" && (
-        <p className="text-[11px] text-muted-foreground italic">Client logs the load used — no target prescribed.</p>
+        <p className="text-[11px] text-muted-foreground italic">No suggested load — client will log the weight they use.</p>
       )}
       {expanded && clientId && computed && computed.status !== "manual" && (
         <div className="flex flex-wrap items-center gap-1.5 pt-0.5 text-[11px]">

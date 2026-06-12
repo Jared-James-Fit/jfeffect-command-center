@@ -9,7 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Clock, CheckCircle2, Play, StickyNote, NotebookPen, Info, Lock, Maximize2, Minimize2, AlertTriangle, RefreshCw, Send } from "lucide-react";
+import { ArrowLeft, Clock, CheckCircle2, Play, StickyNote, NotebookPen, Info, Lock, Maximize2, Minimize2, AlertTriangle, RefreshCw, Send, MessageCircle } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { getExerciseVideoSource } from "@/lib/exercise-video";
 import { toast } from "sonner";
@@ -651,6 +652,63 @@ function WorkoutDay() {
   );
 }
 
+function SuggestedLoadBadge({ load, unit, exerciseName }: { load: number; unit: "kg" | "lb"; exerciseName: string }) {
+  // Cheap suspicious-load heuristic: extreme absolute values flag a likely unit / data error.
+  // We deliberately keep this client-side and non-blocking — clients must always stop and
+  // contact their coach if anything looks wrong.
+  const SUSP_KG = 350;   // very few lifters program above this for any single exercise
+  const SUSP_LB = 770;
+  const suspicious = (unit === "kg" && load >= SUSP_KG) || (unit === "lb" && load >= SUSP_LB);
+  return (
+    <div className="mt-1 flex flex-wrap items-center gap-1.5">
+      <div className={cn(
+        "inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-bold",
+        suspicious ? "bg-amber-500/15 text-amber-700 dark:text-amber-400" : "bg-primary/10 text-primary",
+      )}>
+        Suggested Load: {load} {unit}
+        <Popover>
+          <PopoverTrigger asChild>
+            <button type="button" aria-label="What does Suggested Load mean?" className="ml-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full hover:bg-foreground/10">
+              <Info className="h-3 w-3" />
+            </button>
+          </PopoverTrigger>
+          <PopoverContent side="top" className="w-72 text-xs leading-relaxed">
+            <p className="font-semibold mb-1">What is Suggested Load?</p>
+            <p className="text-muted-foreground">
+              Suggested Load is the starting weight programmed by your coach for <span className="font-medium text-foreground">{exerciseName}</span>. Adjust only when your plan or coach allows it. If the weight looks incorrect, unusually high, or you feel uncomfortable lifting it, stop and contact your coach before continuing.
+            </p>
+            <div className="mt-2 flex gap-2">
+              <Link to="/portal/messages" className="inline-flex items-center gap-1 rounded-md bg-primary px-2 py-1 text-[11px] font-semibold text-primary-foreground">
+                <MessageCircle className="h-3 w-3" /> Contact Coach
+              </Link>
+            </div>
+          </PopoverContent>
+        </Popover>
+      </div>
+      {suspicious && (
+        <Popover>
+          <PopoverTrigger asChild>
+            <button type="button" className="inline-flex items-center gap-1 rounded-md bg-amber-500/15 px-2 py-0.5 text-[11px] font-semibold text-amber-700 dark:text-amber-400">
+              <AlertTriangle className="h-3 w-3" /> Check suggested load
+            </button>
+          </PopoverTrigger>
+          <PopoverContent side="top" className="w-72 text-xs leading-relaxed">
+            <p className="font-semibold mb-1">Check this weight before lifting</p>
+            <p className="text-muted-foreground">
+              {load} {unit} is much higher than expected for most lifters on this exercise. Confirm the unit (kg vs lb) and contact your coach before lifting if it looks incorrect. Never lift a weight you believe is unsafe.
+            </p>
+            <div className="mt-2 flex gap-2">
+              <Link to="/portal/messages" className="inline-flex items-center gap-1 rounded-md bg-primary px-2 py-1 text-[11px] font-semibold text-primary-foreground">
+                <MessageCircle className="h-3 w-3" /> Contact Coach
+              </Link>
+            </div>
+          </PopoverContent>
+        </Popover>
+      )}
+    </div>
+  );
+}
+
 function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResults, existingNote, readonly = false, unit = "kg", onUnitChange, focusMode = false, onChange, onNoteChange }: { row: any; dayId: string; dayTitle: string; clientId: string | undefined; blockId?: string | null; existingResults: any[]; existingNote?: any; readonly?: boolean; unit?: "kg" | "lb"; onUnitChange?: (u: "kg" | "lb") => void; focusMode?: boolean; onChange: () => void; onNoteChange: () => void }) {
   const name = row.exercises?.name ?? row.exercise_name_override ?? "Exercise";
   const exercise = row.exercises ?? null;
@@ -705,14 +763,18 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
             {row.rest_seconds && ` · rest ${row.rest_seconds}s`}
           </div>
           {row.manual_override && (row.load_kg || row.load_lb) && (
-            <div className="mt-1 inline-flex items-center gap-1 rounded-md bg-primary/10 px-2 py-0.5 text-xs font-bold text-primary">
-              Target load: {row.load_kg ?? row.load_lb} {row.load_kg ? "kg" : "lb"}
-            </div>
+            <SuggestedLoadBadge
+              load={(row.load_kg ?? row.load_lb) as number}
+              unit={row.load_kg ? "kg" : "lb"}
+              exerciseName={name}
+            />
           )}
-          {!row.manual_override && computed && computed.status === "ok" && (
-            <div className="mt-1 inline-flex items-center gap-1 rounded-md bg-primary/10 px-2 py-0.5 text-xs font-bold text-primary">
-              Target load: {computed.load} {computed.unit}
-            </div>
+          {!row.manual_override && computed && computed.status === "ok" && computed.load != null && (
+            <SuggestedLoadBadge
+              load={computed.load}
+              unit={computed.unit}
+              exerciseName={name}
+            />
           )}
           {row.percentage_basis === "none" && (
             <div className="mt-1 inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5 text-xs text-muted-foreground">
