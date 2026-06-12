@@ -2,13 +2,13 @@ import { useEffect, useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Smartphone, Share, Plus, CheckCircle2, Play, X } from "lucide-react";
+import { Smartphone, Share, Plus, CheckCircle2, Play } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 
-const VIDEO_URL = "https://youtu.be/jDOH1oJuWrc?si=iGqwqWTQqzlHLskj";
-const VIDEO_EMBED = "https://www.youtube.com/embed/jDOH1oJuWrc";
+const VIDEO_URL = "https://vimeo.com/1200330134";
+const VIDEO_EMBED = "https://player.vimeo.com/video/1200330134?title=0&byline=0&portrait=0&badge=0&dnt=1";
 
 type Platform = "ios" | "android-installable" | "android-manual" | "desktop";
 
@@ -40,8 +40,8 @@ export function HomeScreenSetupCard({ clientId, status, remindAfter }: Props) {
   const qc = useQueryClient();
   const [platform, setPlatform] = useState<Platform>("desktop");
   const [installEvent, setInstallEvent] = useState<any>(null);
-  const [showVideo, setShowVideo] = useState(false);
   const [showSteps, setShowSteps] = useState(false);
+  const [videoLoaded, setVideoLoaded] = useState(false);
   const standalone = useMemo(() => isStandalone(), []);
 
   useEffect(() => {
