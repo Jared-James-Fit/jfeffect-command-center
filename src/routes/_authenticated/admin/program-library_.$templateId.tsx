@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { AlertTriangle, ArrowLeft, Plus, Trash2, Save, Clock, Copy, LayoutGrid, CalendarRange, ArrowRight, ZoomIn, ZoomOut, Maximize2, PanelLeftClose, PanelLeftOpen, Rows3, ChevronDown, ChevronUp, Settings2, Undo2, Redo2, ClipboardCopy, ClipboardPaste } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Plus, Trash2, Save, Clock, Copy, LayoutGrid, CalendarRange, ArrowRight, ZoomIn, ZoomOut, Maximize2, Minimize2, PanelLeftClose, PanelLeftOpen, Rows3, ChevronDown, ChevronUp, Settings2, Undo2, Redo2, ClipboardCopy, ClipboardPaste, Expand } from "lucide-react";
 import { toast } from "sonner";
 import {
   getTemplate, updateTemplate, summarizeTemplatePayload, TIME_PROFILES,
@@ -426,6 +426,7 @@ export function StructureCanvas({ type, payload, setP, exercises, appendRowToFir
     writePrefs(next);
   };
   const { compact, zoom, sidebarCollapsed } = prefs;
+  const [fullscreen, setFullscreen] = useState(false);
   const setZoom = (z: number) => setPrefs({ zoom: Math.max(0.5, Math.min(1.3, +z.toFixed(2))) });
   const fitToScreen = () => {
     // Rough fit heuristic based on viewport width
@@ -439,14 +440,29 @@ export function StructureCanvas({ type, payload, setP, exercises, appendRowToFir
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const meta = e.metaKey || e.ctrlKey;
-      if (!meta) return;
+      if (!meta) {
+        if (e.key === "Escape" && fullscreen) {
+          e.preventDefault();
+          setFullscreen(false);
+        }
+        return;
+      }
       const k = e.key.toLowerCase();
       if (k === "z" && !e.shiftKey) { e.preventDefault(); undo(); }
       else if ((k === "z" && e.shiftKey) || k === "y") { e.preventDefault(); redo(); }
+      else if (k === "." && e.shiftKey) { e.preventDefault(); setFullscreen((v) => !v); }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [undo, redo]);
+  }, [undo, redo, fullscreen]);
+
+  // Lock body scroll while fullscreen.
+  useEffect(() => {
+    if (!fullscreen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
+  }, [fullscreen]);
 
   const maxesQuery = useQuery({
     queryKey: ["pl-client-maxes", clientId, blockId ?? null],
@@ -463,9 +479,19 @@ export function StructureCanvas({ type, payload, setP, exercises, appendRowToFir
 
   return (
     <MaxesContext.Provider value={maxesCtx}>
-    <div className="rounded-md border border-border bg-background">
+    <div
+      className={cn(
+        "rounded-md border border-border bg-background",
+        fullscreen && "fixed inset-0 z-[60] rounded-none border-0",
+      )}
+    >
       {/* Sticky compact toolbar */}
-      <div className="sticky top-[42px] z-20 flex flex-wrap items-center gap-1.5 border-b border-border bg-background/95 px-2 py-1.5 backdrop-blur">
+      <div
+        className={cn(
+          "z-20 flex flex-wrap items-center gap-1.5 border-b border-border bg-background/95 px-2 py-1.5 backdrop-blur",
+          fullscreen ? "sticky top-0" : "sticky top-[42px]",
+        )}
+      >
         <Button size="icon" variant="ghost" className="h-7 w-7" title={sidebarCollapsed ? "Show library" : "Hide library"} onClick={() => setPrefs({ sidebarCollapsed: !sidebarCollapsed })}>
           {sidebarCollapsed ? <PanelLeftOpen className="h-3.5 w-3.5" /> : <PanelLeftClose className="h-3.5 w-3.5" />}
         </Button>
@@ -503,12 +529,29 @@ export function StructureCanvas({ type, payload, setP, exercises, appendRowToFir
           </Button>
         </div>
         <div className="ml-auto inline-flex items-center gap-1.5">
+          <Button
+            size="sm"
+            variant={fullscreen ? "default" : "outline"}
+            className="h-7 gap-1 text-[11px] font-semibold"
+            onClick={() => setFullscreen((v) => !v)}
+            title={fullscreen ? "Exit full screen (Esc)" : "Open full screen editor (Shift+.)"}
+          >
+            {fullscreen ? (
+              <>
+                <Minimize2 className="h-3.5 w-3.5" /> Exit Full Screen
+              </>
+            ) : (
+              <>
+                <Expand className="h-3.5 w-3.5" /> Full Screen Mode
+              </>
+            )}
+          </Button>
           <BlockMaxesButton clientId={clientId ?? null} blockId={blockId ?? null} />
           {toolbarExtras}
         </div>
       </div>
 
-      <div className="flex h-[calc(100vh-150px)] gap-0 overflow-hidden">
+      <div className={cn("flex gap-0 overflow-hidden", fullscreen ? "h-[calc(100vh-46px)]" : "h-[calc(100vh-150px)]")}>
         <ExerciseLibraryPanel
           exercises={exercises as ExerciseRef[]}
           collapsed={sidebarCollapsed}
