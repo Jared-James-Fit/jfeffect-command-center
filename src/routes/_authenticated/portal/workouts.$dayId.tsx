@@ -44,6 +44,7 @@ import { WorkoutUndoProvider, useWorkoutUndo, UndoButton } from "@/lib/workout-u
 import { WorkoutSyncBanner } from "@/components/workout-sync-banner";
 import { writePlanCache, cachedInitialData } from "@/lib/workout-plan-cache";
 import { enqueueOfflineWrite, registerQueueHandler } from "@/lib/workout-offline-queue";
+import { WorkoutRestTimer } from "@/components/workout-rest-timer";
 
 export const Route = createFileRoute("/_authenticated/portal/workouts/$dayId")({
   validateSearch: (s: Record<string, unknown>) => ({
@@ -451,13 +452,13 @@ function WorkoutDay() {
   return (
     <>
       {focusMode && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-background">
+        <div className="fixed inset-0 z-[60] overflow-y-auto bg-background">
           <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-background/95 px-4 py-3 backdrop-blur">
-            <div className="font-bold">{day.title || `Day ${day.day_index}`} · Focus mode</div>
+            <div className="font-bold">{day.title || `Day ${day.day_index}`} · Full Screen</div>
             <div className="flex items-center gap-2">
               <UnitToggle unit={unit} onChange={handleGlobalUnitChange} label="Workout Units" />
               <Button size="sm" variant="outline" onClick={() => setFocusMode(false)}>
-                <Minimize2 className="mr-1 h-4 w-4" /> Exit
+                <Minimize2 className="mr-1 h-4 w-4" /> Exit Full Screen
               </Button>
             </div>
           </div>
@@ -521,7 +522,7 @@ function WorkoutDay() {
             {!readonly && <UnitToggle unit={unit} onChange={handleGlobalUnitChange} label="Workout Units" />}
             {!readonly && (
               <Button size="sm" variant="outline" onClick={() => setFocusMode(true)}>
-                <Maximize2 className="mr-1 h-4 w-4" /> Focus
+                <Maximize2 className="mr-1 h-4 w-4" /> Full Screen
               </Button>
             )}
             <SaveStatus state={metaSave.state} savedAt={metaSave.savedAt} />
@@ -772,6 +773,11 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
   const [notesOpen, setNotesOpen] = useState(false);
   const hasNote = Boolean(existingNote?.id);
 
+  // Rest timer trigger: SetRow calls bumpRestTimer() when a set is marked complete,
+  // which auto-starts the per-block <WorkoutRestTimer />.
+  const [restTimerTrigger, setRestTimerTrigger] = useState(0);
+  const bumpRestTimer = () => setRestTimerTrigger((t) => t + 1);
+
   const { data: maxes = [] } = useQuery({
     queryKey: ["pl-client-maxes", clientId, blockId ?? null],
     enabled: !!clientId && !!row.percentage && row.percentage_basis !== "manual",
@@ -845,6 +851,14 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
           {row.notes && <p className="mt-1 text-xs text-muted-foreground italic">{row.notes}</p>}
         </div>
         <div className="flex shrink-0 flex-col items-end gap-1">
+          {!readonly && (
+            <WorkoutRestTimer
+              effectiveSeconds={effectiveRest}
+              category={category}
+              triggerKey={restTimerTrigger}
+              compact
+            />
+          )}
           {!readonly && onUnitChange && (
             <UnitToggle unit={unit} onChange={onUnitChange} compact />
           )}
@@ -892,6 +906,7 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
               unit={unit}
               focusMode={focusMode}
               onChange={onChange}
+              onSetCompleted={bumpRestTimer}
             />
           );
         })}
@@ -1104,7 +1119,7 @@ function ExerciseNotesSheet({ open, onOpenChange, clientId, dayId, dayTitle, row
   );
 }
 
-function SetRow({ rowId, workoutId, exerciseId, exerciseName, clientId, setIndex, existing, targetReps, targetRpe, readonly = false, unit = "kg", focusMode = false, onChange }: { rowId: string; workoutId?: string | null; exerciseId?: string | null; exerciseName?: string | null; clientId: string | undefined; setIndex: number; existing?: any; targetReps?: string | null; targetRpe?: string | null; readonly?: boolean; unit?: "kg" | "lb"; focusMode?: boolean; onChange: () => void }) {
+function SetRow({ rowId, workoutId, exerciseId, exerciseName, clientId, setIndex, existing, targetReps, targetRpe, readonly = false, unit = "kg", focusMode = false, onChange, onSetCompleted }: { rowId: string; workoutId?: string | null; exerciseId?: string | null; exerciseName?: string | null; clientId: string | undefined; setIndex: number; existing?: any; targetReps?: string | null; targetRpe?: string | null; readonly?: boolean; unit?: "kg" | "lb"; focusMode?: boolean; onChange: () => void; onSetCompleted?: () => void }) {
   const { user } = useAuth();
   const { isImpersonating, client: povClient } = useClientImpersonation();
   // Display weight is always shown in the active unit.
@@ -1179,6 +1194,8 @@ function SetRow({ rowId, workoutId, exerciseId, exerciseName, clientId, setIndex
             set_index: setIndex,
             actual_load: loadNum,
             actual_load_unit: value.unit,
+            entered_value: loadNum,
+            entered_unit: value.unit,
             actual_reps: repsNum,
             actual_rpe: value.rpe || null,
             actual_rpe_num: rpeNum,
@@ -1208,6 +1225,8 @@ function SetRow({ rowId, workoutId, exerciseId, exerciseName, clientId, setIndex
         set_index: setIndex,
         actual_load: loadNum,
         actual_load_unit: unit,
+        entered_value: loadNum,
+        entered_unit: unit,
         actual_reps: repsNum,
         actual_rpe: rpe || null,
         actual_rpe_num: rpeNum,
@@ -1235,6 +1254,11 @@ function SetRow({ rowId, workoutId, exerciseId, exerciseName, clientId, setIndex
         savedId = inserted?.id ?? null;
       }
       onChange();
+      // Auto-start the per-exercise rest timer when this set transitions
+      // into a fully-valid completed state. Avoid re-triggering on idempotent
+      // updates that were already completed.
+      const wasCompleted = Boolean(existing?.completed_at);
+      if (allValid && !wasCompleted) onSetCompleted?.();
       // Coach/admin POV audit trail. Only writes when impersonating, only the
       // fields that actually changed, only after the save succeeds.
       if (isImpersonating && user?.id && povClient?.id === clientId) {
