@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { upsertApplicantClient, normalizeEmail, normalizePhone } from "./crm.functions";
 
 const submitSchema = z.object({
   first_name: z.string().trim().min(1).max(60),
@@ -89,9 +90,24 @@ export const submitCoachingApplication = createServerFn({ method: "POST" })
     const bookingSlug = (settings["coaching_apply.booking_link_slug"] || "").trim() || null;
     const allowCold = (settings["coaching_apply.allow_cold_booking"] || "false").toLowerCase() === "true";
 
+    // 1) Match-or-create CRM client (clients = single source of truth).
+    const upsert = await upsertApplicantClient(supabaseAdmin, {
+      first_name: data.first_name,
+      last_name: data.last_name,
+      email: data.email,
+      phone: data.phone || null,
+      instagram: data.instagram || null,
+      source: "coaching_application",
+      lead_score: scored.score,
+      lead_temperature: scored.temperature,
+      recommended_offer: scored.recommended_offer,
+    });
+
+    // 2) Insert full application record, linked to the client.
     const { data: inserted, error } = await supabaseAdmin
       .from("coaching_applications")
       .insert({
+        client_id: upsert.client_id,
         first_name: data.first_name,
         last_name: data.last_name,
         full_name,
@@ -125,17 +141,46 @@ export const submitCoachingApplication = createServerFn({ method: "POST" })
         summary: scored.summary,
         booking_link_slug: bookingSlug,
         source: "coaching_application",
-        status: "New",
+        status: upsert.conflict ? "Needs Review" : "New",
         submitted_at: new Date().toISOString(),
       })
       .select("id")
       .single();
     if (error) throw new Error(error.message);
 
+    // 3) CRM activity (dedupe by application id).
+    const activityType = upsert.is_active_client
+      ? "active_client_reapplied"
+      : upsert.created
+        ? "application_submitted"
+        : "reapplied";
+    await supabaseAdmin.from("client_crm_activities").upsert(
+      {
+        client_id: upsert.client_id,
+        activity_type: activityType,
+        title: upsert.created ? "Application submitted" : "Reapplied",
+        details: {
+          application_id: inserted.id,
+          lead_score: scored.score,
+          lead_temperature: scored.temperature,
+          recommended_offer: scored.recommended_offer,
+          conflict: upsert.conflict,
+          normalized_email: normalizeEmail(data.email),
+          normalized_phone: normalizePhone(data.phone),
+        },
+        source: "public_form",
+        application_id: inserted.id,
+        dedupe_key: `application:${inserted.id}`,
+      },
+      { onConflict: "client_id,dedupe_key", ignoreDuplicates: true } as any,
+    );
+
     const canBook = !!bookingSlug && (scored.temperature !== "cold" || allowCold);
     return {
       ok: true,
       id: inserted.id,
+      client_id: upsert.client_id,
+      conflict: upsert.conflict,
       lead_score: scored.score,
       lead_temperature: scored.temperature,
       recommended_offer: scored.recommended_offer,
