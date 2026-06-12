@@ -1,3 +1,5 @@
+import { uploadLiftFileToStorage } from '@/lib/lift-video-storage-upload';
+import { formatBytes } from '@/lib/upload-with-progress';
 import { runJob } from "@/lib/progress-jobs";
 import { useState, useRef, useEffect } from "react";
 import { useServerFn } from "@tanstack/react-start";
@@ -390,9 +392,10 @@ export function ClientLiftVideoUploader({ clientId, clientName, userId, onSaved 
   const handleSend = async () => {
     if (clips.length === 0) return toast.error("Add at least one video.");
 
-    setSaving(true);
-    setSendError(null);
-    try {
+    await runJob({
+      title: "Sending to Coach",
+      description: clips.length === 1 ? (clips[0].file?.name || clips[0].url) : `${clips.length} clips`,
+    }, async (job) => {
       const batchId = crypto.randomUUID();
       const total = clips.length;
       const sharedNote = batchNote.trim();
@@ -401,8 +404,7 @@ export function ClientLiftVideoUploader({ clientId, clientName, userId, onSaved 
         ? `⚠️ Pain / discomfort / urgent: ${urgentNote}`
         : "";
 
-      // 1) Create lift_videos rows immediately so the submission appears in
-      //    the client list as "Uploading" before Drive does any work.
+      job.setStatusText("Preparing...");
       const created: Array<{ row: any; clip: Clip; index: number }> = [];
       for (let i = 0; i < clips.length; i++) {
         const clip = clips[i];
@@ -442,46 +444,39 @@ export function ClientLiftVideoUploader({ clientId, clientName, userId, onSaved 
         created.push({ row, clip, index: i + 1 });
       }
 
-      // 2) Kick off background Drive uploads for file clips. The row already
-      //    exists in the DB — the queue patches it with Drive metadata when
-      //    each upload finishes (or marks it "Upload Failed" on error).
-      for (const item of created) {
-        if (item.clip.kind !== "file" || !item.clip.file) continue;
-        if (!userId) continue;
-        const perClipNote = item.clip.note.trim() || sharedNote || null;
-        enqueueLiftUpload({
-          videoId: item.row.id,
-          clientId,
-          clientName,
-          file: item.clip.file,
-          index: item.index,
-          total,
-          batchNote: sharedNote || null,
-          perClipNote,
-          urgent: isUrgent,
-          painNote: isUrgent ? urgentNote || null : null,
-          userId,
-          updateFn: updateClientLiftVideoFn,
+      const fileClips = created.filter(c => c.clip.kind === "file" && c.clip.file);
+      for (let i = 0; i < fileClips.length; i++) {
+        const item = fileClips[i];
+        job.setStatusText(`Uploading ${item.clip.file!.name}`);
+        const res = await uploadLiftFileToStorage({
+          file: item.clip.file!,
+          userId: userId!,
+          onProgress: (pct) => {
+            const fileWeight = 100 / fileClips.length;
+            const overallBase = (i * 100) / fileClips.length;
+            const currentProgress = (pct * fileWeight) / 100;
+            job.setPercent(overallBase + currentProgress);
+          }
         });
+        
+        job.setStatusText(`Updating ${item.clip.file!.name}`);
+        await updateClientLiftVideoFn({ data: {
+          id: item.row.id,
+          video_storage_path: res.path,
+          video_source: "upload",
+          file_type: res.mimeType,
+          file_size_bytes: res.sizeBytes,
+          upload_status: "Uploaded",
+          playback_error: null,
+          status: "Awaiting Review",
+          archive_status: "pending",
+          archive_next_attempt_at: new Date().toISOString(),
+        }});
       }
 
-      const fileCount = created.filter((c) => c.clip.kind === "file").length;
-      if (fileCount > 0) {
-        toast.success(`Submission sent — uploading ${fileCount} clip${fileCount === 1 ? "" : "s"} in the background.`);
-      } else {
-        toast.success("Submission sent to Coach Jared.");
-      }
       setSent(true);
       onSaved?.();
-    } catch (e: any) {
-      console.error(e);
-      const stage = (e as any)?.stage as string | undefined;
-      const rawMsg = (e?.message ?? String(e ?? "Unknown error")).replace(/^\[[^\]]+\]\s*/, "");
-      setSendError({ stage, message: rawMsg });
-      toast.error(friendlyDriveError(e, "client"));
-    } finally {
-      setSaving(false);
-    }
+    });
   };
 
   if (sent) {

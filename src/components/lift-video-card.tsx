@@ -1,3 +1,4 @@
+import { formatBytes } from '@/lib/upload-with-progress';
 import { runJob } from "@/lib/progress-jobs";
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
@@ -151,17 +152,24 @@ export function LiftVideoCard({ video, role, userId, onChanged, onEdit, clientNa
   };
 
   const handleRetryArchive = async () => {
-    setRetryingArchive(true);
-    try {
-      const r = await retryArchive({ data: { videoId: video.id } });
-      if (r?.ok) toast.success("Archived to Drive");
-      else toast.error(r?.reason ?? "Drive archive failed");
+    await runJob({
+      title: "Archiving to Drive",
+      steps: ["Upload complete", "Preparing archive", "Sending to Google Drive", "Saving archive status", "Finalized"],
+      successToast: "Archived to Drive",
+    }, async (job) => {
+      job.completeStep(); // Upload complete
+      job.setStatusText("Preparing archive...");
+      
+      const r: any = await retryArchive({ data: { videoId: video.id } });
+      if (!r?.ok) throw new Error(r?.reason ?? "Drive archive failed");
+      
+      job.completeStep(); // Preparing archive
+      job.completeStep(); // Sending to Google Drive
+      job.completeStep(); // Saving archive status
+      job.completeStep(); // Finalized
+      
       onChanged?.();
-    } catch (e: any) {
-      toast.error(e?.message ?? "Drive archive failed");
-    } finally {
-      setRetryingArchive(false);
-    }
+    });
   };
 
   const dayLabel = video.training_day === "Custom" ? video.custom_training_day : video.training_day;
@@ -504,13 +512,6 @@ function DebugLine({ label, value, good }: { label: string; value: string; good?
   );
 }
 
-function formatBytes(value: number | null | undefined) {
-  if (!value) return "Unknown";
-  if (value < 1024) return `${value} B`;
-  const mb = value / 1024 / 1024;
-  if (mb < 1024) return `${mb.toFixed(1)} MB`;
-  return `${(mb / 1024).toFixed(2)} GB`;
-}
 
 function ArchiveStatusBadge({
   status, onRetry, retrying, error,

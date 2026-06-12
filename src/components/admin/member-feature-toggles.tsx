@@ -8,6 +8,7 @@ import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useMemo, useState } from "react";
 import { Input } from "@/components/ui/input";
+import { runJob } from "@/lib/progress-jobs";
 
 /**
  * Per-member feature toggles. Lists every access level from `access_levels`
@@ -41,22 +42,20 @@ export function MemberFeatureToggles({
     return m;
   }, [access, now]);
 
-  const mut = useMutation({
-    mutationFn: async ({ key, on, grants }: { key: string; on: boolean; grants: Array<{ id: string }> }) => {
+  const toggle = (key: string, on: boolean, grants: Array<{ id: string }>) => {
+    runJob({
+      title: on ? "Enabling feature" : "Disabling feature",
+      description: `Updating access for ${key}`,
+    }, async () => {
       if (on) {
         await grant({ data: { memberId, accessKey: key, source: "admin_grant" } });
       } else {
         for (const g of grants) await revoke({ data: { accessId: g.id } });
       }
-    },
-    onMutate: ({ key }) => setPending((p) => ({ ...p, [key]: true })),
-    onSettled: (_d, _e, v) => setPending((p) => ({ ...p, [v.key]: false })),
-    onSuccess: (_d, v) => {
-      toast.success(v.on ? "Feature enabled" : "Feature disabled");
       qc.invalidateQueries({ queryKey: ["admin-member", memberId] });
-    },
-    onError: (e: any) => toast.error(e?.message ?? "Could not save"),
-  });
+      toast.success(on ? "Feature enabled" : "Feature disabled");
+    });
+  };
 
   const filtered = useMemo(() => {
     const list = [...levels].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
@@ -97,8 +96,7 @@ export function MemberFeatureToggles({
                 {isPending && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
                 <Switch
                   checked={on}
-                  disabled={isPending}
-                  onCheckedChange={(v) => mut.mutate({ key: lv.key, on: v, grants })}
+                  onCheckedChange={(v) => toggle(lv.key, v, grants)}
                 />
               </div>
             </div>

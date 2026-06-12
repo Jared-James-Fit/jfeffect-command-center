@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Button } from "@/components/ui/button";
+import { ActionButton } from "@/components/action-button";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
@@ -160,15 +160,15 @@ export function AccountProfileSettings({
             <div className="truncate text-base font-bold">{fullName || user.email}</div>
             <div className="truncate text-xs text-muted-foreground">{user.email}</div>
             <div className="mt-3 flex flex-wrap gap-2">
-              <Button size="sm" variant="outline" onClick={() => setEditing(true)}>
+              <ActionButton size="sm" variant="outline" onClick={() => setEditing(true)}>
                 <Camera className="mr-2 h-3.5 w-3.5" />
                 {path ? "Replace photo" : "Upload photo"}
-              </Button>
+              </ActionButton>
               {path && (
-                <Button size="sm" variant="ghost" onClick={onRemove} disabled={removing} className="text-destructive hover:text-destructive">
+                <ActionButton size="sm" variant="ghost" onClick={onRemove} jobLabel="Removing profile picture" className="text-destructive hover:text-destructive">
                   <Trash2 className="mr-2 h-3.5 w-3.5" />
                   Remove
-                </Button>
+                </ActionButton>
               )}
             </div>
           </div>
@@ -177,9 +177,9 @@ export function AccountProfileSettings({
         <div className="space-y-3 rounded-lg border border-border bg-secondary/30 p-4">
           <div className="flex items-center justify-between">
             <div className="text-sm font-semibold">Update profile picture</div>
-            <Button size="sm" variant="ghost" onClick={() => setEditing(false)}>
+            <ActionButton size="sm" variant="ghost" onClick={() => setEditing(false)}>
               <X className="h-4 w-4" />
-            </Button>
+            </ActionButton>
           </div>
           <ProfilePictureCapture
             userId={user.id}

@@ -1,3 +1,4 @@
+import { formatBytes } from '@/lib/upload-with-progress';
 import { runJob } from "@/lib/progress-jobs";
 import { useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
@@ -113,7 +114,6 @@ export function LiftVideoDialog({ open, onOpenChange, clientId, userId, clientNa
   const set = (k: string, v: any) => setForm((f: any) => ({ ...f, [k]: v }));
 
   const handleSave = async () => {
-    // Client multi-clip flow handled separately below.
     if (role === "client" && !initial) return handleClientBatchSend();
     if (role === "client" && initial) {
       // Editing a single existing clip — keep using the simple per-clip form below.
@@ -123,19 +123,24 @@ export function LiftVideoDialog({ open, onOpenChange, clientId, userId, clientNa
       if (tab === "upload" && !file && !initial) return toast.error("Choose a video file.");
     }
 
-    setSaving(true);
-    try {
+    await runJob({
+      title: initial ? "Updating video" : "Submitting video",
+      description: file?.name,
+    }, async (job) => {
       let videoUrl: string | null = form.video_url || null;
       let storagePath: string | null = initial?.video_storage_path ?? null;
       let source: "link" | "upload" = file ? "upload" : (form.video_url ? "link" : tab);
 
       if (file && userId) {
+        job.setStatusText("Uploading...");
         const res = await uploadVideoFile(file, userId);
         storagePath = res.path;
         videoUrl = res.url;
         source = "upload";
+        job.setPercent(100);
       }
 
+      job.setStatusText("Saving...");
       const payload: any = {
         client_id: clientId,
         uploaded_by: userId,
@@ -171,11 +176,7 @@ export function LiftVideoDialog({ open, onOpenChange, clientId, userId, clientNa
       }
       onSaved?.();
       onOpenChange(false);
-    } catch (e: any) {
-      toast.error(e.message ?? "Failed to save");
-    } finally {
-      setSaving(false);
-    }
+    });
   };
 
   // ---------- Multi-clip client send ----------
@@ -233,14 +234,16 @@ export function LiftVideoDialog({ open, onOpenChange, clientId, userId, clientNa
   const handleClientBatchSend = async () => {
     if (clips.length === 0) return toast.error("Add at least one video.");
 
-    setSaving(true);
-    setSendError(null);
-    try {
+    await runJob({
+      title: "Sending to Coach",
+      description: clips.length === 1 ? (clips[0].file?.name || clips[0].url) : `${clips.length} clips`,
+    }, async (job) => {
       const batchId = crypto.randomUUID();
       const total = clips.length;
       const sharedNote = noteMode === "batch" ? batchNote.trim() : "";
       const isUrgent = !!form.is_urgent;
       const urgentNote = isUrgent ? urgentText.trim() : "";
+      
       for (let i = 0; i < clips.length; i++) {
         const clip = clips[i];
         let videoUrl: string | null = null;
@@ -249,17 +252,26 @@ export function LiftVideoDialog({ open, onOpenChange, clientId, userId, clientNa
         let storageMeta: { mimeType: string; sizeBytes: number } | null = null;
 
         if (clip.kind === "file" && clip.file) {
-          // PRIMARY upload path: stream straight into Supabase Storage. The
-          // background Drive archive picks it up later — we don't block the
-          // client on Drive succeeding.
           if (!userId) throw new Error("Sign in to upload videos.");
-          const res = await uploadLiftFileToStorage({ file: clip.file, userId });
+          job.setStatusText(`Uploading ${clip.file.name}`);
+          const res = await uploadLiftFileToStorage({ 
+            file: clip.file, 
+            userId,
+            onProgress: (pct) => {
+              const fileWeight = 100 / clips.length;
+              const overallBase = (i * 100) / clips.length;
+              const currentProgress = (pct * fileWeight) / 100;
+              job.setPercent(overallBase + currentProgress);
+            }
+          });
           storagePath = res.path;
           storageMeta = { mimeType: res.mimeType, sizeBytes: res.sizeBytes };
           source = "upload";
         } else if (clip.kind === "link" && clip.url) {
           videoUrl = clip.url;
           source = "link";
+          const fileWeight = 100 / clips.length;
+          job.setPercent(((i + 1) * 100) / clips.length);
         }
 
         const perClipNote = noteMode === "perClip" ? clip.note.trim() : "";
@@ -306,15 +318,7 @@ export function LiftVideoDialog({ open, onOpenChange, clientId, userId, clientNa
 
       setSent(true);
       onSaved?.();
-    } catch (e: any) {
-      console.error(e);
-      const stage = (e as any)?.stage as string | undefined;
-      const rawMsg = (e?.message ?? String(e ?? "Unknown error")).replace(/^\[[^\]]+\]\s*/, "");
-      setSendError({ stage, message: rawMsg });
-      toast.error(friendlyDriveError(e, role === "client" ? "client" : "admin"));
-    } finally {
-      setSaving(false);
-    }
+    });
   };
 
   // ---------- Client (multi-clip DM-style) view ----------
