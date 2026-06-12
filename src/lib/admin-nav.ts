@@ -9,6 +9,7 @@ import {
   ChefHat, Megaphone, Phone, Link2 as LinkIcon,
   ListChecks, LayoutGrid,
   Heart, Flame,
+  Ticket,
 } from "lucide-react";
 import { Sparkles } from "lucide-react";
 import type { NavItem } from "@/components/app-shell";
@@ -50,6 +51,7 @@ export const adminNav: NavItem[] = [
   { to: "/admin/sales/coaching-applications", label: "Coaching Applications", icon: ClipboardList, group: "Business" },
   { to: "/admin/payment-links", label: "Products", icon: CreditCard, group: "Business" },
   { to: "/admin/payments", label: "Payments", icon: DollarSign, group: "Business" },
+  { to: "/admin/promo-codes", label: "Promo Codes", icon: Ticket, group: "Business" },
   { to: "/admin/purchases", label: "Purchases", icon: ClipboardCheck, group: "Business" },
   { to: "/admin/calendar", label: "PT Calendar", icon: Calendar, group: "Business" },
   { to: "/admin/appointments", label: "Appointments", icon: Calendar, group: "Business" },
@@ -111,6 +113,7 @@ export const coachingAdminNav: NavItem[] = [
   { to: "/admin/sales/coaching-applications", label: "Coaching Applications", icon: ClipboardList, group: "Business" },
   { to: "/admin/payment-links", label: "Products", icon: CreditCard, group: "Business" },
   { to: "/admin/payments", label: "Payments", icon: DollarSign, group: "Business" },
+  { to: "/admin/promo-codes", label: "Promo Codes", icon: Ticket, group: "Business" },
   { to: "/admin/purchases", label: "Purchases", icon: ClipboardCheck, group: "Business" },
   { to: "/admin/calendar", label: "PT Calendar", icon: Calendar, group: "Business" },
   { to: "/admin/appointments", label: "Appointments", icon: Calendar, group: "Business" },

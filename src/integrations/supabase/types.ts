@@ -7183,6 +7183,96 @@ export type Database = {
         }
         Relationships: []
       }
+      promo_code_redemptions: {
+        Row: {
+          amount_discount_cents: number | null
+          checkout_type: string | null
+          client_id: string | null
+          created_at: string
+          customer_email: string | null
+          discount_amount_off: number | null
+          discount_currency: string | null
+          discount_duration: string | null
+          discount_percent_off: number | null
+          id: string
+          member_id: string | null
+          product_id: string | null
+          product_name: string | null
+          product_type: string | null
+          promotion_code: string | null
+          raw: Json | null
+          redeemed_at: string
+          source: string | null
+          stripe_checkout_session_id: string | null
+          stripe_coupon_id: string | null
+          stripe_customer_id: string | null
+          stripe_event_id: string | null
+          stripe_payment_intent_id: string | null
+          stripe_promotion_code_id: string | null
+          stripe_subscription_id: string | null
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          amount_discount_cents?: number | null
+          checkout_type?: string | null
+          client_id?: string | null
+          created_at?: string
+          customer_email?: string | null
+          discount_amount_off?: number | null
+          discount_currency?: string | null
+          discount_duration?: string | null
+          discount_percent_off?: number | null
+          id?: string
+          member_id?: string | null
+          product_id?: string | null
+          product_name?: string | null
+          product_type?: string | null
+          promotion_code?: string | null
+          raw?: Json | null
+          redeemed_at?: string
+          source?: string | null
+          stripe_checkout_session_id?: string | null
+          stripe_coupon_id?: string | null
+          stripe_customer_id?: string | null
+          stripe_event_id?: string | null
+          stripe_payment_intent_id?: string | null
+          stripe_promotion_code_id?: string | null
+          stripe_subscription_id?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          amount_discount_cents?: number | null
+          checkout_type?: string | null
+          client_id?: string | null
+          created_at?: string
+          customer_email?: string | null
+          discount_amount_off?: number | null
+          discount_currency?: string | null
+          discount_duration?: string | null
+          discount_percent_off?: number | null
+          id?: string
+          member_id?: string | null
+          product_id?: string | null
+          product_name?: string | null
+          product_type?: string | null
+          promotion_code?: string | null
+          raw?: Json | null
+          redeemed_at?: string
+          source?: string | null
+          stripe_checkout_session_id?: string | null
+          stripe_coupon_id?: string | null
+          stripe_customer_id?: string | null
+          stripe_event_id?: string | null
+          stripe_payment_intent_id?: string | null
+          stripe_promotion_code_id?: string | null
+          stripe_subscription_id?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       pt_sessions: {
         Row: {
           client_id: string

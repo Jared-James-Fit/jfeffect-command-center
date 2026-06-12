@@ -184,7 +184,11 @@ export const createStripeLinkForOffer = createServerFn({ method: "POST" })
     });
     const link = await stripeFetch("/payment_links", {
       method: "POST",
-      body: formEncode({ "line_items[0][price]": price.id, "line_items[0][quantity]": 1 }),
+      body: formEncode({
+        "line_items[0][price]": price.id,
+        "line_items[0][quantity]": 1,
+        allow_promotion_codes: "true",
+      }),
     });
 
     await supabase.from("offers").update({
