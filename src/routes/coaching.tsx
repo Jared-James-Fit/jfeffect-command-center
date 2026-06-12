@@ -41,7 +41,7 @@ function CoachingPage() {
   });
 
   const handleApply = () => {
-    window.open("https://jaredjamesfit.com", "_blank", "noopener");
+    window.location.href = "/coaching/apply";
   };
 
   const previewItems = (p?.visuals ?? [])
