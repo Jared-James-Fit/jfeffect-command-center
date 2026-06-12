@@ -273,11 +273,63 @@ export const markAppointmentStatus = createServerFn({ method: "POST" })
     status: z.enum(["Scheduled","Completed","Cancelled","NoShow"]),
   }).parse(d))
   .handler(async ({ data, context }) => {
-    const { supabase } = context as any;
+    const { supabase, userId } = context as any;
+    const { data: before } = await supabase.from("appointments").select("*").eq("id", data.id).maybeSingle();
+    if (!before) throw new Error("Appointment not found");
     const { error } = await supabase.from("appointments").update({ status: data.status }).eq("id", data.id);
     if (error) throw new Error(error.message);
+    await writeApptCrmActivity({
+      appt: before,
+      newStatus: data.status,
+      actorUserId: userId,
+      action:
+        data.status === "Completed" ? "completed" :
+        data.status === "NoShow" ? "no_show" :
+        data.status === "Cancelled" ? "cancelled" : "status_changed",
+    });
     return { ok: true };
   });
+
+/** Idempotent CRM activity for an appointment status/lifecycle change. */
+async function writeApptCrmActivity(opts: {
+  appt: any;
+  newStatus?: string | null;
+  actorUserId?: string | null;
+  action: "completed" | "no_show" | "cancelled" | "rescheduled" | "status_changed";
+  extra?: Record<string, any>;
+}) {
+  const { appt, actorUserId, action } = opts;
+  if (!appt?.client_id) return;
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const isConsult = /Consult|Strategy|Onboarding|Coaching Call/i.test(appt.appointment_type || "");
+  const typeNoun = isConsult ? "call" : "appointment";
+  const activity_type =
+    action === "completed"   ? `${typeNoun}_completed` :
+    action === "no_show"     ? `${typeNoun}_no_show` :
+    action === "cancelled"   ? `${typeNoun}_cancelled` :
+    action === "rescheduled" ? `${typeNoun}_rescheduled` :
+    `${typeNoun}_status_changed`;
+  // Dedupe by appointment + action + resulting start time (so reschedule retries dedupe but new time creates new row).
+  const dedupe_key = `appt:${appt.id}:${action}:${appt.starts_at || ""}`;
+  await supabaseAdmin.from("client_crm_activities").upsert({
+    client_id: appt.client_id,
+    activity_type,
+    title: `${appt.title || appt.appointment_type || "Appointment"} — ${action.replace("_"," ")}`,
+    details: {
+      appointment_id: appt.id,
+      appointment_type: appt.appointment_type,
+      starts_at: appt.starts_at,
+      ends_at: appt.ends_at,
+      ...(opts.extra || {}),
+    },
+    source: "calendar",
+    appointment_id: appt.id,
+    actor_user_id: actorUserId || null,
+    dedupe_key,
+  } as any, { onConflict: "client_id,dedupe_key" });
+}
+
+export { writeApptCrmActivity };
 
 export const listMyPortalAppointments = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
