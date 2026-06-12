@@ -160,6 +160,8 @@ export function ClientLiftVideoUploader({ clientId, clientName, userId, onSaved 
   const multiRecordRef = useRef<HTMLInputElement | null>(null);
   const carouselRef = useRef<HTMLDivElement | null>(null);
   const pickerOpenedAtRef = useRef<{ source: "photos" | "record"; at: number } | null>(null);
+  const wakeLockRef = useRef<any>(null);
+  const recordWarnedRef = useRef(false);
   const diagEnabled = useDiagnosticsEnabled();
   const [diag, setDiag] = useState<DiagSample>({
     pickerOpenedAt: null,
@@ -219,9 +221,43 @@ export function ClientLiftVideoUploader({ clientId, clientName, userId, onSaved 
         handoffToDetailsMs: null,
       }));
     }
-    if (source === "photos") multiUploadRef.current?.click();
-    else multiRecordRef.current?.click();
+    if (source === "photos") {
+      multiUploadRef.current?.click();
+      return;
+    }
+    // Record Now: native phone camera will open. Attempt a screen wake lock
+    // (only helps while this page is visible) and warn the client once per
+    // session that the phone may sleep and stop the recording.
+    try {
+      const nav: any = typeof navigator !== "undefined" ? navigator : null;
+      if (nav?.wakeLock?.request) {
+        nav.wakeLock.request("screen").then((lock: any) => {
+          wakeLockRef.current = lock;
+          lock.addEventListener?.("release", () => { wakeLockRef.current = null; });
+        }).catch(() => { /* ignore — best effort */ });
+      } else if (!recordWarnedRef.current) {
+        toast.warning("Keep this screen awake while recording. If your phone locks, the recording may stop. For longer clips, record with your phone's camera app and upload the video here.", { duration: 8000 });
+      }
+      if (!recordWarnedRef.current) {
+        recordWarnedRef.current = true;
+      }
+    } catch { /* ignore */ }
+    multiRecordRef.current?.click();
   };
+
+  // Release wake lock whenever the page is hidden or this component unmounts.
+  useEffect(() => {
+    const release = () => {
+      try { wakeLockRef.current?.release?.(); } catch { /* ignore */ }
+      wakeLockRef.current = null;
+    };
+    const onVis = () => { if (document.visibilityState === "hidden") release(); };
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      document.removeEventListener("visibilitychange", onVis);
+      release();
+    };
+  }, []);
 
   const addFiles = (files: FileList | null) => {
     if (!files || files.length === 0) return;
