@@ -1,6 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { createClient } from "@supabase/supabase-js";
 import { stripeFetch } from "@/lib/stripe.server";
+import {
+  buildPromoRowFromSession,
+  fetchExpandedCheckoutSession,
+  upsertPromoRedemption,
+} from "@/lib/promo-capture";
 
 // Verify Stripe signature using Web Crypto (HMAC-SHA256).
 // Header format: t=timestamp,v1=sig,v1=sig...
@@ -101,178 +106,8 @@ function isTerminalCancelled(purchase: any): boolean {
  * in the Stripe Dashboard — the app just records what was used, regardless of
  * product (JF Membership, coaching, one-time, future products).
  */
-const _UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const _uuidOrNull = (v: any) => (typeof v === "string" && _UUID_RE.test(v) ? v : null);
-const _idOf = (v: any): string | null =>
-  typeof v === "string" ? v : v && typeof v === "object" && typeof v.id === "string" ? v.id : null;
-
-/**
- * Build the promo_code_redemptions row from a fully-expanded Checkout Session.
- * Exported so the admin backfill server fn can reuse the same logic.
- */
-export async function buildPromoRowFromSession(
-  full: any,
-  eventId: string | null,
-): Promise<Record<string, any> | null> {
-  if (!full?.id) return null;
-
-  // Two possible discount sources on a session — prefer whichever has the most data.
-  // - total_details.breakdown.discounts[].discount (Stripe's authoritative breakdown)
-  // - discounts[] (the line-level discounts, which expand promotion_code as an object)
-  const breakdown = full?.total_details?.breakdown?.discounts?.[0] ?? null;
-  const breakdownDiscount = breakdown?.discount ?? null;
-  const lineDiscount = Array.isArray(full?.discounts) ? full.discounts[0] : null;
-
-  // Promotion code — id can live on either object; text only appears when expanded.
-  let promoCodeId: string | null =
-    _idOf(breakdownDiscount?.promotion_code) ?? _idOf(lineDiscount?.promotion_code);
-  let promoCodeText: string | null =
-    (lineDiscount?.promotion_code && typeof lineDiscount.promotion_code === "object"
-      ? lineDiscount.promotion_code.code
-      : null) ??
-    (breakdownDiscount?.promotion_code && typeof breakdownDiscount.promotion_code === "object"
-      ? breakdownDiscount.promotion_code.code
-      : null);
-
-  // Coupon id can be on discount.coupon, discount.source.coupon, promotion_code.coupon,
-  // or promotion_code.promotion.coupon (newer Stripe shape).
-  const couponFromDiscount =
-    _idOf(breakdownDiscount?.coupon) ??
-    _idOf((breakdownDiscount as any)?.source?.coupon) ??
-    _idOf(lineDiscount?.coupon);
-  const promoObj =
-    (lineDiscount?.promotion_code && typeof lineDiscount.promotion_code === "object"
-      ? lineDiscount.promotion_code
-      : null) ??
-    (breakdownDiscount?.promotion_code && typeof breakdownDiscount.promotion_code === "object"
-      ? breakdownDiscount.promotion_code
-      : null);
-  const couponFromPromo =
-    _idOf((promoObj as any)?.coupon) ?? _idOf((promoObj as any)?.promotion?.coupon);
-  let couponId: string | null = couponFromDiscount ?? couponFromPromo;
-
-  // If we still don't have the promo code text but have an id, fetch it.
-  if (promoCodeId && !promoCodeText) {
-    try {
-      const pc = await stripeFetch(`/promotion_codes/${encodeURIComponent(promoCodeId)}`);
-      promoCodeText = pc?.code ?? null;
-      if (!couponId) couponId = _idOf(pc?.coupon) ?? _idOf(pc?.promotion?.coupon);
-    } catch (e) {
-      console.warn("[stripe-webhook] promotion_code fetch failed", (e as any)?.message || e);
-    }
-  }
-
-  // Fetch coupon details if we have an id but no resolved attributes.
-  let couponObj: any = null;
-  if (couponId) {
-    try {
-      couponObj = await stripeFetch(`/coupons/${encodeURIComponent(couponId)}`);
-    } catch (e) {
-      console.warn("[stripe-webhook] coupon fetch failed", (e as any)?.message || e);
-    }
-  }
-
-  const md = full?.metadata ?? {};
-  const amountDiscount =
-    breakdown?.amount ?? full?.total_details?.amount_discount ?? null;
-
-  return {
-    promotion_code: promoCodeText,
-    stripe_promotion_code_id: promoCodeId,
-    stripe_coupon_id: couponId,
-    discount_percent_off: couponObj?.percent_off ?? null,
-    discount_amount_off: couponObj?.amount_off ?? null,
-    discount_currency: couponObj?.currency ?? null,
-    discount_duration: couponObj?.duration ?? null,
-    amount_discount_cents: amountDiscount,
-    product_type:
-      md.kind || md.source || (full?.mode === "subscription" ? "subscription" : "one_time"),
-    product_id: _uuidOrNull(md.product_id),
-    product_name: md.product_name || null,
-    checkout_type: full?.mode ?? null,
-    source: md.source || md.kind || null,
-    customer_email: full?.customer_details?.email ?? full?.customer_email ?? null,
-    stripe_customer_id: _idOf(full?.customer),
-    stripe_subscription_id: _idOf(full?.subscription),
-    stripe_payment_intent_id: _idOf(full?.payment_intent),
-    stripe_checkout_session_id: full.id,
-    client_id: _uuidOrNull(md.client_id),
-    member_id: _uuidOrNull(md.member_id),
-    user_id: _uuidOrNull(md.user_id),
-    stripe_event_id: eventId,
-    raw: {
-      breakdown_discount: breakdownDiscount,
-      line_discount: lineDiscount,
-      coupon: couponObj,
-      promotion_code: promoObj,
-      total_details: full?.total_details ?? null,
-      metadata: md,
-    },
-    redeemed_at: new Date().toISOString(),
-  };
-}
-
-/** Fetch a Checkout Session with all the discount-related expansions. */
-export async function fetchExpandedCheckoutSession(sessionId: string): Promise<any> {
-  return await stripeFetch(
-    `/checkout/sessions/${encodeURIComponent(sessionId)}` +
-      `?expand[]=total_details.breakdown.discounts` +
-      `&expand[]=discounts.promotion_code` +
-      `&expand[]=discounts.coupon` +
-      `&expand[]=customer` +
-      `&expand[]=subscription` +
-      `&expand[]=payment_intent`,
-  );
-}
-
-/**
- * Idempotent upsert into promo_code_redemptions, keyed on checkout session id.
- * On retry we refresh fields rather than insert a duplicate (the partial
- * UNIQUE index on stripe_checkout_session_id guarantees no dupes).
- */
-export async function upsertPromoRedemption(
-  supabase: any,
-  row: Record<string, any>,
-): Promise<{ status: "inserted" | "updated" | "skipped" }> {
-  if (!row.stripe_checkout_session_id) {
-    const { error } = await supabase.from("promo_code_redemptions").insert(row);
-    if (error) {
-      console.error("[stripe-webhook] promo insert failed", error);
-      return { status: "skipped" };
-    }
-    return { status: "inserted" };
-  }
-  const { data: existing } = await supabase
-    .from("promo_code_redemptions")
-    .select("id")
-    .eq("stripe_checkout_session_id", row.stripe_checkout_session_id)
-    .maybeSingle();
-  if (existing) {
-    // Refresh — keep original redeemed_at, refresh discount metadata.
-    const { redeemed_at: _ignore, ...patch } = row;
-    const { error } = await supabase
-      .from("promo_code_redemptions")
-      .update(patch)
-      .eq("id", existing.id);
-    if (error) {
-      console.error("[stripe-webhook] promo update failed", error);
-      return { status: "skipped" };
-    }
-    return { status: "updated" };
-  }
-  const { error } = await supabase.from("promo_code_redemptions").insert(row);
-  if (error) {
-    console.error("[stripe-webhook] promo insert failed", error);
-    return { status: "skipped" };
-  }
-  return { status: "inserted" };
-}
-
 async function captureCheckoutPromo(supabase: any, obj: any, eventId: string) {
   try {
-    // Always capture every completed Checkout Session. If no discount, we
-    // still record a row labeled "no promotion code" so the admin page has
-    // full coverage and obvious gaps are visible.
     let full: any = obj;
     try {
       full = await fetchExpandedCheckoutSession(obj.id);
