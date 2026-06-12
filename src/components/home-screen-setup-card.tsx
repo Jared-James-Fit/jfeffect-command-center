@@ -2,13 +2,13 @@ import { useEffect, useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Smartphone, Share, Plus, CheckCircle2, Play, X } from "lucide-react";
+import { Smartphone, Share, Plus, CheckCircle2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 
-const VIDEO_URL = "https://youtu.be/jDOH1oJuWrc?si=iGqwqWTQqzlHLskj";
-const VIDEO_EMBED = "https://www.youtube.com/embed/jDOH1oJuWrc";
+const VIDEO_URL = "https://vimeo.com/1200330134";
+const VIDEO_EMBED = "https://player.vimeo.com/video/1200330134?title=0&byline=0&portrait=0&badge=0&dnt=1";
 
 type Platform = "ios" | "android-installable" | "android-manual" | "desktop";
 
@@ -40,8 +40,8 @@ export function HomeScreenSetupCard({ clientId, status, remindAfter }: Props) {
   const qc = useQueryClient();
   const [platform, setPlatform] = useState<Platform>("desktop");
   const [installEvent, setInstallEvent] = useState<any>(null);
-  const [showVideo, setShowVideo] = useState(false);
   const [showSteps, setShowSteps] = useState(false);
+  const [videoLoaded, setVideoLoaded] = useState(false);
   const standalone = useMemo(() => isStandalone(), []);
 
   useEffect(() => {
@@ -127,6 +127,30 @@ export function HomeScreenSetupCard({ clientId, status, remindAfter }: Props) {
                 : "Get the full app experience with a one-tap icon on your device."}
             </p>
 
+            <div className="mt-3 overflow-hidden rounded-md border border-border bg-black">
+              <div className="relative aspect-video w-full">
+                {!videoLoaded && (
+                  <div className="absolute inset-0 z-10 grid place-items-center bg-black/60 text-xs text-white/70">
+                    Loading video…
+                  </div>
+                )}
+                <iframe
+                  src={VIDEO_EMBED}
+                  title="Add JF Effect to Your Home Screen"
+                  allow="autoplay; fullscreen; picture-in-picture; clipboard-write; encrypted-media"
+                  allowFullScreen
+                  loading="lazy"
+                  onLoad={() => setVideoLoaded(true)}
+                  className="absolute inset-0 h-full w-full"
+                />
+              </div>
+            </div>
+            <div className="mt-1 text-right">
+              <a href={VIDEO_URL} target="_blank" rel="noopener noreferrer" className="text-[10px] text-muted-foreground underline">
+                Open on Vimeo
+              </a>
+            </div>
+
             <div className="mt-3 flex flex-wrap items-center gap-2">
               {canInstall && (
                 <Button size="sm" onClick={triggerInstall} className="bg-gradient-primary uppercase text-xs font-bold">
@@ -138,9 +162,6 @@ export function HomeScreenSetupCard({ clientId, status, remindAfter }: Props) {
                   Show Steps
                 </Button>
               )}
-              <Button size="sm" variant="outline" onClick={() => setShowVideo(true)} className="text-xs">
-                <Play className="mr-1 h-3 w-3" /> Watch Setup Video
-              </Button>
               <Button size="sm" variant="ghost" onClick={markDone} className="text-xs">
                 <CheckCircle2 className="mr-1 h-3 w-3" /> Mark as Done
               </Button>
@@ -181,39 +202,7 @@ export function HomeScreenSetupCard({ clientId, status, remindAfter }: Props) {
             </li>
           </ol>
           <div className="flex flex-wrap items-center justify-end gap-2 pt-2">
-            <Button size="sm" variant="outline" onClick={() => { setShowSteps(false); setShowVideo(true); }}>
-              <Play className="mr-1 h-3 w-3" /> Watch Video
-            </Button>
             <Button size="sm" onClick={async () => { setShowSteps(false); await markDone(); }} className="bg-gradient-primary uppercase text-xs font-bold">
-              Mark as Done
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={showVideo} onOpenChange={setShowVideo}>
-        <DialogContent className="max-w-2xl p-0 overflow-hidden">
-          <button
-            onClick={() => setShowVideo(false)}
-            className="absolute right-2 top-2 z-10 grid h-8 w-8 place-items-center rounded-full bg-background/80 text-foreground shadow"
-            aria-label="Close"
-          >
-            <X className="h-4 w-4" />
-          </button>
-          <div className="aspect-video w-full bg-black">
-            <iframe
-              src={VIDEO_EMBED}
-              title="Add JF Effect to Your Home Screen"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-              allowFullScreen
-              className="h-full w-full"
-            />
-          </div>
-          <div className="flex items-center justify-between gap-2 p-3">
-            <a href={VIDEO_URL} target="_blank" rel="noopener noreferrer" className="text-xs text-muted-foreground underline">
-              Open on YouTube
-            </a>
-            <Button size="sm" onClick={async () => { setShowVideo(false); await markDone(); }} className="bg-gradient-primary uppercase text-xs font-bold">
               Mark as Done
             </Button>
           </div>
