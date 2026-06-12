@@ -987,6 +987,20 @@ function DayEditor({ day, setDay, exercises, compact }: { day: any; setDay: (d: 
           {rows.map((r: any, i: number) => (
             <div
               key={i}
+              draggable
+              onDragStart={(e) => {
+                // Don't start a row-drag when the user is interacting with
+                // a form control or button inside the row.
+                const target = e.target as HTMLElement;
+                if (target.closest('input, textarea, select, button, [role="combobox"], [contenteditable="true"]')) {
+                  e.preventDefault();
+                  return;
+                }
+                e.dataTransfer.setData("application/x-pb-row-reorder", String(i));
+                e.dataTransfer.effectAllowed = "move";
+                setDragRowIdx(i);
+              }}
+              onDragEnd={() => { setDragRowIdx(null); setDropTargetIdx(null); }}
               onDragOver={(e) => {
                 if (dragRowIdx == null) return;
                 e.preventDefault();
@@ -1006,6 +1020,7 @@ function DayEditor({ day, setDay, exercises, compact }: { day: any; setDay: (d: 
                 setDropTargetIdx(null);
               }}
               className={cn(
+                "cursor-grab active:cursor-grabbing",
                 dropTargetIdx === i && "border-t-2 border-t-primary",
                 dropTargetIdx === i + 1 && "border-b-2 border-b-primary",
               )}
@@ -1014,8 +1029,10 @@ function DayEditor({ day, setDay, exercises, compact }: { day: any; setDay: (d: 
                 row={r}
                 setRow={(nr) => { const copy = [...rows]; copy[i] = nr; setDay({ ...day, rows: copy }); }}
                 onDelete={() => setDay({ ...day, rows: rows.filter((_: any, j: number) => j !== i) })}
-                onMoveUp={i > 0 ? () => moveRow(i, i - 1) : undefined}
-                onMoveDown={i < rows.length - 1 ? () => moveRow(i, i + 2) : undefined}
+                canMoveUp={i > 0}
+                canMoveDown={i < rows.length - 1}
+                onMoveUp={() => moveRow(i, i - 1)}
+                onMoveDown={() => moveRow(i, i + 2)}
                 onDragStartRow={(e) => {
                   e.dataTransfer.setData("application/x-pb-row-reorder", String(i));
                   e.dataTransfer.effectAllowed = "move";
