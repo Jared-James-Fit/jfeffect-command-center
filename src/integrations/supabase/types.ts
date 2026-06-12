@@ -3617,12 +3617,15 @@ export type Database = {
           archived_by: string | null
           category: string | null
           common_mistakes: string | null
+          competition_lift_type: string | null
           created_at: string
           cues: string | null
           default_load_unit: string | null
           difficulty: string | null
           equipment: string | null
+          exercise_category: string
           id: string
+          is_competition_lift: boolean
           is_powerlifting: boolean
           legacy_youtube_url: string | null
           muscle_group: string | null
@@ -3655,12 +3658,15 @@ export type Database = {
           archived_by?: string | null
           category?: string | null
           common_mistakes?: string | null
+          competition_lift_type?: string | null
           created_at?: string
           cues?: string | null
           default_load_unit?: string | null
           difficulty?: string | null
           equipment?: string | null
+          exercise_category?: string
           id?: string
+          is_competition_lift?: boolean
           is_powerlifting?: boolean
           legacy_youtube_url?: string | null
           muscle_group?: string | null
@@ -3693,12 +3699,15 @@ export type Database = {
           archived_by?: string | null
           category?: string | null
           common_mistakes?: string | null
+          competition_lift_type?: string | null
           created_at?: string
           cues?: string | null
           default_load_unit?: string | null
           difficulty?: string | null
           equipment?: string | null
+          exercise_category?: string
           id?: string
+          is_competition_lift?: boolean
           is_powerlifting?: boolean
           legacy_youtube_url?: string | null
           muscle_group?: string | null
@@ -7084,8 +7093,10 @@ export type Database = {
           percentage: number | null
           percentage_basis: string | null
           progression_method: string | null
+          purpose_label: string | null
           reps_text: string | null
           rest_seconds: number | null
+          rest_seconds_override: number | null
           rir: string | null
           rpe: string | null
           sets: number | null
@@ -7114,8 +7125,10 @@ export type Database = {
           percentage?: number | null
           percentage_basis?: string | null
           progression_method?: string | null
+          purpose_label?: string | null
           reps_text?: string | null
           rest_seconds?: number | null
+          rest_seconds_override?: number | null
           rir?: string | null
           rpe?: string | null
           sets?: number | null
@@ -7144,8 +7157,10 @@ export type Database = {
           percentage?: number | null
           percentage_basis?: string | null
           progression_method?: string | null
+          purpose_label?: string | null
           reps_text?: string | null
           rest_seconds?: number | null
+          rest_seconds_override?: number | null
           rir?: string | null
           rpe?: string | null
           sets?: number | null
