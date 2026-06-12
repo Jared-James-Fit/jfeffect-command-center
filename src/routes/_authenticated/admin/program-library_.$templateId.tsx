@@ -15,7 +15,9 @@ import {
   getTemplate, updateTemplate, summarizeTemplatePayload, TIME_PROFILES,
   estimateDayMinutes, durationRange, PERCENTAGE_BASES, type TrainingStyle,
 } from "@/lib/pl-programs";
-import { ExerciseLibraryPanel, type ExerciseRef, DND_EXERCISE, readDrop, movementAccent } from "@/components/program-builder";
+import { ExerciseLibraryPanel, type ExerciseRef, DND_EXERCISE, readDrop, movementAccent, EXERCISE_CARD_COLORS } from "@/components/program-builder";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Palette } from "lucide-react";
 import { GripVertical } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAutosave } from "@/hooks/use-autosave";
@@ -1060,7 +1062,7 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
     </div>
   );
   const exName = (exercises as any[]).find((e) => e.id === row.exercise_id)?.name ?? row.exercise_name_override ?? "";
-  const accent = movementAccent(exName);
+  const accent = movementAccent(exName, row.card_color);
   const [expanded, setExpanded] = useState(!compact);
   useEffect(() => { if (!compact) setExpanded(true); }, [compact]);
   const h = compact ? "h-7" : "h-8";
