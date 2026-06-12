@@ -15,6 +15,10 @@ type Options<T> = {
   delay?: number;
   /** Disable autosave entirely (e.g. while focused on a different control). */
   enabled?: boolean;
+  /** Fired once when a save has failed N times in a row (default 3). */
+  onPermanentFailure?: (info: { value: T; attempt: number; error: unknown }) => void;
+  /** Threshold for onPermanentFailure (default 3). */
+  permanentFailureAfter?: number;
 };
 
 const DRAFT_PREFIX = "lov:draft:";
@@ -32,6 +36,8 @@ export function useAutosave<T>({
   equals = defaultEquals,
   delay = 800,
   enabled = true,
+  onPermanentFailure,
+  permanentFailureAfter = 3,
 }: Options<T>) {
   const [state, setState] = useState<SaveState>("idle");
   const [savedAt, setSavedAt] = useState<number | null>(null);
@@ -43,6 +49,9 @@ export function useAutosave<T>({
   const inflight = useRef(false);
   const onSaveRef = useRef(onSave);
   onSaveRef.current = onSave;
+  const onPermFailRef = useRef(onPermanentFailure);
+  onPermFailRef.current = onPermanentFailure;
+  const reportedFailRef = useRef(false);
 
   // Track online state
   const [online, setOnline] = useState(typeof navigator === "undefined" ? true : navigator.onLine);
@@ -87,6 +96,7 @@ export function useAutosave<T>({
       lastSaved.current = v;
       lastSavedSet.current = true;
       retryAttempt.current = 0;
+      reportedFailRef.current = false;
       setSavedAt(Date.now());
       clearDraft();
       // If value changed mid-save, schedule another
@@ -104,10 +114,14 @@ export function useAutosave<T>({
       retryAttempt.current = Math.min(retryAttempt.current + 1, 5);
       const backoff = Math.min(1000 * 2 ** (retryAttempt.current - 1), 15000);
       setTimeout(() => { void doSave(); }, backoff);
+      if (retryAttempt.current >= permanentFailureAfter && !reportedFailRef.current) {
+        reportedFailRef.current = true;
+        try { onPermFailRef.current?.({ value: v, attempt: retryAttempt.current, error: err }); } catch {}
+      }
     } finally {
       inflight.current = false;
     }
-  }, [equals, online, writeDraft, clearDraft]);
+  }, [equals, online, writeDraft, clearDraft, permanentFailureAfter]);
 
   const schedule = useCallback(() => {
     if (timer.current) clearTimeout(timer.current);

@@ -32,12 +32,20 @@ import { useAuth } from "@/lib/auth";
 import { useClientImpersonation } from "@/lib/client-impersonation";
 import { writeSetEditAudit } from "@/lib/logged-set-audit";
 import { resolveExerciseUnit, modeUnit, saveExerciseUnitPref, saveExerciseUnitPrefsBulk, type WUnit } from "@/lib/exercise-unit-prefs";
+import { WorkoutUndoProvider, useWorkoutUndo, UndoButton } from "@/lib/workout-undo";
+import { WorkoutSyncBanner } from "@/components/workout-sync-banner";
+import { writePlanCache, cachedInitialData } from "@/lib/workout-plan-cache";
+import { enqueueOfflineWrite, registerQueueHandler } from "@/lib/workout-offline-queue";
 
 export const Route = createFileRoute("/_authenticated/portal/workouts/$dayId")({
   validateSearch: (s: Record<string, unknown>) => ({
     readonly: s.readonly === 1 || s.readonly === "1" || s.readonly === true ? 1 : undefined,
   }),
-  component: WorkoutDay,
+  component: () => (
+    <WorkoutUndoProvider>
+      <WorkoutDay />
+    </WorkoutUndoProvider>
+  ),
 });
 
 const sb = supabase as any;
@@ -47,6 +55,25 @@ function WorkoutDay() {
   const search = Route.useSearch();
   const portalUserId = usePortalUserId();
   const qc = useQueryClient();
+  const undo = useWorkoutUndo();
+  const cacheScope = `portal:${dayId}`;
+
+  // Register a passthrough handler so any autosave that hits its
+  // permanent-failure threshold can hand the write to the durable queue.
+  // The queue retries on its own schedule and escalates to coaches after 3
+  // more attempts. Handler is idempotent: payload describes table + row.
+  useEffect(() => {
+    registerQueueHandler("portal_table_upsert", async (p: any) => {
+      if (!p?.table) return;
+      if (p.id) {
+        const { error } = await sb.from(p.table).update(p.payload).eq("id", p.id);
+        if (error) throw error;
+      } else {
+        const { error } = await sb.from(p.table).insert(p.payload);
+        if (error) throw error;
+      }
+    });
+  }, []);
 
   const { data: client } = useQuery({
     queryKey: ["my-client", portalUserId],
@@ -56,7 +83,12 @@ function WorkoutDay() {
 
   const { data: day } = useQuery({
     queryKey: ["pl-day", dayId],
-    queryFn: async () => (await sb.from("pl_days").select("*").eq("id", dayId).maybeSingle()).data,
+    initialData: cachedInitialData<any>(cacheScope, "day"),
+    queryFn: async () => {
+      const d = (await sb.from("pl_days").select("*").eq("id", dayId).maybeSingle()).data;
+      if (d) writePlanCache(cacheScope, "day", d);
+      return d;
+    },
   });
 
   // Resolve which block this day belongs to so block-scoped maxes apply.
@@ -94,7 +126,12 @@ function WorkoutDay() {
 
   const { data: rows = [], isSuccess: rowsLoaded } = useQuery({
     queryKey: ["pl-day-rows", dayId],
-   queryFn: async () => (await sb.from("pl_exercise_rows").select("*, exercises(id,name,video_url,vimeo_embed_url,thumbnail_url,cues,common_mistakes,muscle_group,category,pl_lift_group,warmup_protocol_id,is_powerlifting,warmup_notes,default_load_unit)").eq("day_id", dayId).order("sort_order")).data ?? [],
+    initialData: cachedInitialData<any[]>(cacheScope, "rows"),
+    queryFn: async () => {
+      const r = (await sb.from("pl_exercise_rows").select("*, exercises(id,name,video_url,vimeo_embed_url,thumbnail_url,cues,common_mistakes,muscle_group,category,pl_lift_group,warmup_protocol_id,is_powerlifting,warmup_notes,default_load_unit)").eq("day_id", dayId).order("sort_order")).data ?? [];
+      writePlanCache(cacheScope, "rows", r);
+      return r;
+    },
   });
 
   useEffect(() => {
@@ -106,17 +143,25 @@ function WorkoutDay() {
   const { data: results = [] } = useQuery({
     queryKey: ["pl-day-results", dayId, client?.id],
     enabled: !!client?.id && (rows as any[]).length > 0,
+    initialData: client?.id ? cachedInitialData<any[]>(cacheScope, `results:${client.id}`) : undefined,
     queryFn: async () => {
       const rowIds = (rows as any[]).map((r) => r.id);
       if (!rowIds.length) return [];
-      return (await sb.from("pl_row_results").select("*").in("row_id", rowIds).eq("client_id", client!.id)).data ?? [];
+      const r = (await sb.from("pl_row_results").select("*").in("row_id", rowIds).eq("client_id", client!.id)).data ?? [];
+      writePlanCache(cacheScope, `results:${client!.id}`, r);
+      return r;
     },
   });
 
   const { data: completion } = useQuery({
     queryKey: ["pl-day-completion", dayId, client?.id],
     enabled: !!client?.id,
-    queryFn: async () => (await sb.from("pl_day_completions").select("*").eq("day_id", dayId).eq("client_id", client!.id).maybeSingle()).data,
+    initialData: client?.id ? cachedInitialData<any>(cacheScope, `completion:${client.id}`) : undefined,
+    queryFn: async () => {
+      const c = (await sb.from("pl_day_completions").select("*").eq("day_id", dayId).eq("client_id", client!.id).maybeSingle()).data;
+      writePlanCache(cacheScope, `completion:${client!.id}`, c);
+      return c;
+    },
   });
 
   // Exercise notes for this day
@@ -181,10 +226,22 @@ function WorkoutDay() {
   }, [client, builderDefaultUnit, unitHydrated]);
 
   const persistUnit = async (next: "kg" | "lb") => {
+    const prev = unit;
     setUnit(next);
     if (!client?.id) return;
     await sb.from("clients").update({ preferred_weight_unit: next }).eq("id", client.id);
     qc.invalidateQueries({ queryKey: ["my-client", portalUserId] });
+    undo.push({
+      label: `Changed unit to ${next.toUpperCase()}`,
+      coalesceKey: "unit-toggle",
+      undo: async () => {
+        setUnit(prev);
+        if (client?.id) {
+          await sb.from("clients").update({ preferred_weight_unit: prev }).eq("id", client.id);
+          qc.invalidateQueries({ queryKey: ["my-client", portalUserId] });
+        }
+      },
+    });
   };
 
   // ----------------------------------------------------------------
@@ -245,12 +302,25 @@ function WorkoutDay() {
 
   const setExerciseUnit = async (exerciseId: string | null, rowId: string, next: WUnit) => {
     const key = exerciseId ?? `row:${rowId}`;
+    const prevUnit = exerciseId ? unitOverrides[exerciseId] : (unitOverrides as any)[key];
     if (exerciseId) setUnitOverrides((m) => ({ ...m, [exerciseId]: next }));
     else setUnitOverrides((m) => ({ ...m, [key]: next } as any));
     if (client?.id && exerciseId) {
       try { await saveExerciseUnitPref(client.id, exerciseId, next); } catch { /* non-blocking */ }
       qc.invalidateQueries({ queryKey: ["client-exercise-unit-prefs", client.id] });
     }
+    undo.push({
+      label: `Set exercise unit to ${next.toUpperCase()}`,
+      coalesceKey: `ex-unit:${key}`,
+      undo: async () => {
+        if (exerciseId) setUnitOverrides((m) => ({ ...m, [exerciseId]: prevUnit as WUnit }));
+        else setUnitOverrides((m) => ({ ...m, [key]: prevUnit as WUnit } as any));
+        if (client?.id && exerciseId && (prevUnit === "kg" || prevUnit === "lb")) {
+          try { await saveExerciseUnitPref(client.id, exerciseId, prevUnit); } catch {}
+          qc.invalidateQueries({ queryKey: ["client-exercise-unit-prefs", client.id] });
+        }
+      },
+    });
   };
 
   // Global toggle: change workout-level pref AND bulk-set every exercise in this
@@ -300,6 +370,24 @@ function WorkoutDay() {
     value: { notes, actualMin },
     delay: 1000,
     enabled: !!client?.id && draftHydrated && (notes.length > 0 || actualMin.length > 0),
+    onPermanentFailure: ({ value }) => {
+      if (!client?.id) return;
+      enqueueOfflineWrite({
+        id: `portal_meta:${dayId}:${client.id}`,
+        label: "Workout notes",
+        handlerKey: "portal_table_upsert",
+        payload: {
+          table: "pl_day_completions",
+          id: completion?.id ?? null,
+          payload: {
+            day_id: dayId,
+            client_id: client.id,
+            client_notes: value.notes || null,
+            actual_duration_min: value.actualMin ? parseInt(value.actualMin) : null,
+          },
+        },
+      });
+    },
     onSave: async ({ notes, actualMin }) => {
       if (!client?.id) return;
       const patch: any = {
@@ -392,11 +480,18 @@ function WorkoutDay() {
         backLabel="Back to Workouts"
         title={day.title || `Day ${day.day_index}`}
         subtitle={day.focus ?? ""}
+        actions={!readonly ? <UndoButton /> : undefined}
       />
       <div className="p-4 md:p-8 space-y-4">
         <Link to="/portal/workouts" className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground">
           <ArrowLeft className="mr-1 h-4 w-4" /> All workouts
         </Link>
+
+        <WorkoutSyncBanner
+          clientId={client?.id ?? null}
+          workoutId={dayId}
+          pageRoute={`/portal/workouts/${dayId}`}
+        />
 
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant="outline"><Clock className="mr-1 h-3 w-3" /> {durationRange(day.duration_override_min ?? day.duration_estimate_min ?? 60)}</Badge>
@@ -939,6 +1034,32 @@ function SetRow({ rowId, workoutId, exerciseId, exerciseName, clientId, setIndex
     value,
     delay: 800,
     enabled: !readonly && !!clientId && hydrated && (load.length > 0 || reps.length > 0 || rpe.length > 0 || !!existing),
+    onPermanentFailure: ({ value }) => {
+      if (!clientId) return;
+      const loadNum = value.load ? Number(value.load) : null;
+      const repsNum = value.reps ? parseInt(value.reps, 10) : null;
+      const rpeNum = value.rpe ? Number(value.rpe) : null;
+      enqueueOfflineWrite({
+        id: `portal_set:${rowId}:${clientId}:${setIndex}`,
+        label: `Saved set ${setIndex}`,
+        handlerKey: "portal_table_upsert",
+        payload: {
+          table: "pl_row_results",
+          id: existing?.id ?? null,
+          payload: {
+            row_id: rowId,
+            client_id: clientId,
+            set_index: setIndex,
+            actual_load: loadNum,
+            actual_load_unit: value.unit,
+            actual_reps: repsNum,
+            actual_rpe: value.rpe || null,
+            actual_rpe_num: rpeNum,
+            completed_at: new Date().toISOString(),
+          },
+        },
+      });
+    },
     onSave: async ({ load, reps, rpe, unit }) => {
       if (readonly) return;
       if (!clientId) return;
