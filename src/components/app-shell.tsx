@@ -459,8 +459,8 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
                         )}
                       >
                         <div className="relative"><Icon className="h-4 w-4 shrink-0" /><SidebarBadge badge={navBadges[item.to]} isCollapsed={isCollapsed} /></div>
-                        {!isCollapsed {!isCollapsed && <span className="truncate flex-1">{item.label}</span>}{!isCollapsed && <span className="truncate flex-1">{item.label}</span>} <span className="truncate flex-1">{item.label}</span>}
-{!isCollapsed {!isCollapsed && <span className="truncate flex-1">{item.label}</span>}{!isCollapsed && <span className="truncate flex-1">{item.label}</span>} <SidebarBadge badge={navBadges[item.to]} isCollapsed={false} />}
+                        {!isCollapsed && <span className="truncate flex-1">{item.label}</span>}
+                        {!isCollapsed && <SidebarBadge badge={navBadges[item.to]} isCollapsed={false} />}
                         {!isCollapsed && (
                           <button
                             type="button"
@@ -531,8 +531,8 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
                             )}
                           >
                             <div className="relative"><Icon className="h-4 w-4 shrink-0" /><SidebarBadge badge={navBadges[item.to]} isCollapsed={isCollapsed} /></div>
-                            {!isCollapsed {!isCollapsed && <span className="truncate flex-1">{item.label}</span>}{!isCollapsed && <span className="truncate flex-1">{item.label}</span>} <span className="truncate flex-1">{item.label}</span>}
-{!isCollapsed {!isCollapsed && <span className="truncate flex-1">{item.label}</span>}{!isCollapsed && <span className="truncate flex-1">{item.label}</span>} <SidebarBadge badge={navBadges[item.to]} isCollapsed={false} />}
+                            {!isCollapsed && <span className="truncate flex-1">{item.label}</span>}
+                            {!isCollapsed && <SidebarBadge badge={navBadges[item.to]} isCollapsed={false} />}
                             {!isCollapsed && (
                               <button
                                 type="button"
