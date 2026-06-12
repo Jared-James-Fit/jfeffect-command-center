@@ -781,6 +781,33 @@ function AssignDialog({ template, onClose }: { template: any; onClose: () => voi
                 </div>
               )}
 
+              {isBlockish && conflict && (
+                <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-700 dark:text-amber-300">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                    <div className="flex-1">
+                      <div className="font-semibold">Schedule conflict</div>
+                      <div>
+                        Overlaps with <span className="font-semibold">{conflict.name ?? "an existing block"}</span>
+                        {conflict.start_date && conflict.end_date ? ` (${conflict.start_date} – ${conflict.end_date})` : ""}.
+                      </div>
+                      <button type="button" onClick={applySuggestion} className="mt-1 underline underline-offset-2 hover:no-underline">
+                        Use suggested start: {suggestedStart}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+              {isBlockish && !conflict && suggestedStart !== startDate && (blocks as any[]).some((b: any) => b.end_date) && (
+                <button
+                  type="button"
+                  onClick={applySuggestion}
+                  className="w-full rounded-md border border-border bg-secondary/30 px-2 py-1 text-[11px] text-muted-foreground hover:bg-secondary/50"
+                >
+                  Next free start after current blocks: {suggestedStart} · click to use
+                </button>
+              )}
+
               <div className="flex items-center justify-between rounded-md border border-border bg-secondary/30 px-3 py-2">
                 <Label className="text-xs">Visible to client</Label>
                 <Switch checked={visible} onCheckedChange={setVisible} />
@@ -790,7 +817,7 @@ function AssignDialog({ template, onClose }: { template: any; onClose: () => voi
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button onClick={submit}>Assign to client</Button>
+          <Button onClick={submit} disabled={!!conflict}>Assign to client</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
