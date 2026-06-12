@@ -4,7 +4,7 @@ import { z } from "zod";
 import { PageHeader } from "@/components/app-shell";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card } from "@/components/ui/card";
-import { AppointmentsPage } from "./appointments";
+import { UpcomingPanel } from "@/components/admin-calendar/upcoming-panel";
 import { BookingLinksPage } from "./booking-links";
 import { GoogleCalendarPage } from "./google-calendar";
 import { PtCalendarPanel } from "@/components/admin-calendar/pt-calendar-panel";
@@ -17,6 +17,11 @@ const searchSchema = z.object({
   tab: z.enum(TAB_VALUES).optional().catch(undefined),
   connected: z.string().optional(),
   error: z.string().optional(),
+  q: z.string().optional(),
+  source: z.string().optional(),
+  status: z.string().optional(),
+  type: z.string().optional(),
+  link: z.string().optional(),
 });
 
 export const Route = createFileRoute("/_authenticated/admin/calendar")({
@@ -73,7 +78,7 @@ function AdminCalendarShell() {
           </Tabs>
         </div>
       </div>
-      {active === "upcoming" && <AppointmentsPage />}
+      {active === "upcoming" && <UpcomingPanel />}
       {active === "availability" && <AvailabilityPlaceholder />}
       {active === "booking-links" && <BookingLinksPage />}
       {active === "pt-calendar" && <PtCalendarPanel />}

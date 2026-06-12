@@ -41,7 +41,7 @@ export function UpcomingAppointmentsCard({ mode, limit = 5 }: { mode: "admin" | 
         <h2 className="flex items-center gap-2 text-sm font-black uppercase tracking-widest">
           <CalendarIcon className="h-4 w-4 text-primary" /> Upcoming Appointments
         </h2>
-        <Link to={mode === "admin" ? "/admin/appointments" : "/portal/appointments"}>
+        <Link to={mode === "admin" ? "/admin/calendar" : "/portal/appointments"} search={mode === "admin" ? ({ tab: "upcoming" } as any) : undefined}>
           <Button size="sm" variant="ghost" className="h-7 text-xs">View all <ArrowRight className="ml-1 h-3 w-3" /></Button>
         </Link>
       </div>
