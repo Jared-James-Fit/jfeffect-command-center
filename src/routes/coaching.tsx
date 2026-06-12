@@ -42,21 +42,7 @@ function CoachingPage() {
   });
 
   const handleApply = () => {
-    const row = p as SalesPageRow | null;
-    if (!row) return navigate({ to: "/coaching/apply" });
-    switch (row.primary_cta_kind) {
-      case "booking":
-      case "external":
-        if (row.primary_cta_url) window.open(row.primary_cta_url, "_blank", "noopener");
-        else navigate({ to: "/coaching/apply" });
-        break;
-      case "checkout":
-        if (row.primary_cta_url) window.location.assign(row.primary_cta_url);
-        else navigate({ to: "/coaching/apply" });
-        break;
-      default:
-        navigate({ to: "/coaching/apply" });
-    }
+    window.open("https://jaredjamesfit.com", "_blank", "noopener");
   };
 
   const previewItems = (p?.visuals ?? [])
