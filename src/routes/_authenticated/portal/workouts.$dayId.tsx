@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Component, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { usePortalUserId } from "@/lib/client-impersonation";
@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Clock, CheckCircle2, Play, StickyNote, NotebookPen, Info, Lock } from "lucide-react";
+import { ArrowLeft, Clock, CheckCircle2, Play, StickyNote, NotebookPen, Info, Lock, Maximize2, Minimize2, AlertTriangle, RefreshCw, Send } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { getExerciseVideoSource } from "@/lib/exercise-video";
 import { toast } from "sonner";
@@ -23,6 +23,10 @@ import { TrainingHelpButton } from "@/components/training-help-sheet";
 import { WarmupButton } from "@/components/warmup-sheet";
 import { dayScheduledDate } from "@/lib/workout-today";
 import { format, startOfDay } from "date-fns";
+import { useServerFn } from "@tanstack/react-start";
+import { notifyCoachOfWorkoutFailure } from "@/lib/support-alerts.functions";
+import { runJob } from "@/lib/progress-jobs";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/portal/workouts/$dayId")({
   validateSearch: (s: Record<string, unknown>) => ({
