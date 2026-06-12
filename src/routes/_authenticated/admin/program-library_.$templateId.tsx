@@ -1074,10 +1074,16 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
   const { clientId, blockId, index: maxesIndex, maxes, refresh } = useClientMaxesCtx();
   const [maxEditor, setMaxEditor] = useState<any>(null);
   // Derive a clear "load mode" from the existing basis field.
+  // NEW DEFAULT: an unset basis means NO suggested load (off-by-default).
+  // Legacy rows with explicit `manual` + an existing load value keep their
+  // suggested-load enabled so we never silently strip a real programmed load.
+  const hasExistingManualLoad = (row.load_kg ?? null) !== null || (row.load_lb ?? null) !== null;
   const loadMode: "pct" | "manual" | "none" =
     row.percentage_basis === "none" ? "none"
-    : (!row.percentage_basis || row.percentage_basis === "manual") ? "manual"
+    : row.percentage_basis === "manual" ? "manual"
+    : !row.percentage_basis ? (hasExistingManualLoad ? "manual" : "none")
     : "pct";
+  const suggestedOn = loadMode !== "none";
   const rowUnit: "kg" | "lb" = row.load_unit === "lb" ? "lb" : "kg";
   const setLoadMode = (mode: "pct" | "manual" | "none") => {
     if (mode === "manual") {
