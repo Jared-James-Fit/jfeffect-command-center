@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { getPublicSalesPage, type SalesPageRow } from "@/lib/sales-pages.functions";
@@ -35,28 +35,13 @@ export const Route = createFileRoute("/coaching")({
 
 function CoachingPage() {
   const fetchPage = useServerFn(getPublicSalesPage);
-  const navigate = useNavigate();
   const { data: p } = useQuery({
     queryKey: ["public-sales-page", "coaching"],
     queryFn: () => fetchPage({ data: { page_key: "coaching" } }),
   });
 
   const handleApply = () => {
-    const row = p as SalesPageRow | null;
-    if (!row) return navigate({ to: "/coaching/apply" });
-    switch (row.primary_cta_kind) {
-      case "booking":
-      case "external":
-        if (row.primary_cta_url) window.open(row.primary_cta_url, "_blank", "noopener");
-        else navigate({ to: "/coaching/apply" });
-        break;
-      case "checkout":
-        if (row.primary_cta_url) window.location.assign(row.primary_cta_url);
-        else navigate({ to: "/coaching/apply" });
-        break;
-      default:
-        navigate({ to: "/coaching/apply" });
-    }
+    window.open("https://jaredjamesfit.com", "_blank", "noopener");
   };
 
   const previewItems = (p?.visuals ?? [])
