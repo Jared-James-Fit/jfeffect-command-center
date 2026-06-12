@@ -260,6 +260,8 @@ export function ClientLiftVideoUploader({ clientId, clientName, userId, onSaved 
   }, []);
 
   const addFiles = (files: FileList | null) => {
+    // Best-effort: release any wake lock we acquired for Record Now.
+    try { wakeLockRef.current?.release?.(); wakeLockRef.current = null; } catch { /* ignore */ }
     if (!files || files.length === 0) return;
     const handoff = pickerOpenedAtRef.current;
     if (handoff) {
