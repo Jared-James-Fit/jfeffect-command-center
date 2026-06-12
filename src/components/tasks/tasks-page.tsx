@@ -8,6 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -15,10 +16,10 @@ import {
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Plus, MoreHorizontal, Trash2, ListChecks, Settings2, StickyNote, RotateCcw, X } from "lucide-react";
+import { Plus, MoreHorizontal, Trash2, ListChecks, Settings2, StickyNote, RotateCcw, X, Users, Pencil, Check } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  QUADRANTS, fetchTasks, fetchCoachesLite, createTask, toggleTaskDone,
+  QUADRANTS, fetchTasks, createTask, toggleTaskDone,
   updateTask, deleteTask, type TaskRow, type TaskQuadrant, type TaskScope,
 } from "@/lib/tasks";
 import { cn } from "@/lib/utils";
@@ -55,6 +56,26 @@ function useQuadrantStyles(storageKey: string) {
 
 function tintStyle(color: string) {
   return { backgroundColor: `${color}1A`, borderColor: `${color}80` } as React.CSSProperties;
+}
+
+// ---------- Custom Assignees (localStorage) ----------
+type Assignee = { id: string; name: string };
+
+function useAssignees(storageKey: string) {
+  const [assignees, setAssignees] = useState<Assignee[]>([]);
+  const loadedRef = useRef(false);
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(storageKey);
+      if (raw) setAssignees(JSON.parse(raw));
+    } catch {}
+    loadedRef.current = true;
+  }, [storageKey]);
+  useEffect(() => {
+    if (!loadedRef.current) return;
+    try { localStorage.setItem(storageKey, JSON.stringify(assignees)); } catch {}
+  }, [assignees, storageKey]);
+  return [assignees, setAssignees] as const;
 }
 
 // ---------- Quick Notes (localStorage, autosave) ----------
@@ -95,7 +116,8 @@ export function TasksPage({
 }: TasksPageProps = {}) {
   const qc = useQueryClient();
   const { data: tasks = [] } = useQuery({ queryKey: ["tasks", scope], queryFn: () => fetchTasks(scope) });
-  const { data: coaches = [] } = useQuery({ queryKey: ["coaches-lite"], queryFn: fetchCoachesLite });
+  const [assignees, setAssignees] = useAssignees(`${storagePrefix}-task-assignees`);
+  const [assigneesOpen, setAssigneesOpen] = useState(false);
   const { styles: quadStyles, update: updateQuadStyle, reset: resetQuadStyle } =
     useQuadrantStyles(`${storagePrefix}-quadrant-styles`);
 
@@ -118,8 +140,6 @@ export function TasksPage({
     return m;
   }, [open]);
 
-  const coachName = (id: string | null) => coaches.find((c) => c.id === id)?.full_name ?? null;
-
   async function handleAdd() {
     const title = newTitle.trim();
     if (!title) return;
@@ -130,7 +150,15 @@ export function TasksPage({
 
   return (
     <>
-      <PageHeader title={title} subtitle={subtitle} />
+      <PageHeader
+        title={title}
+        subtitle={subtitle}
+        actions={
+          <Button variant="outline" size="sm" onClick={() => setAssigneesOpen(true)}>
+            <Users className="mr-1 h-4 w-4" />Manage assignees
+          </Button>
+        }
+      />
       <div className="space-y-5 p-4 pb-32 md:p-6 md:pb-8">
         <Card className="border-border bg-card p-4">
           <div className="flex flex-wrap items-center gap-2">
@@ -171,7 +199,7 @@ export function TasksPage({
           ) : (
             <ul className="divide-y divide-border">
               {open.map((t) => (
-                <TaskListRow key={t.id} task={t} coaches={coaches} coachName={coachName} quadStyles={quadStyles} />
+                <TaskListRow key={t.id} task={t} assignees={assignees} quadStyles={quadStyles} />
               ))}
             </ul>
           )}
@@ -182,7 +210,7 @@ export function TasksPage({
               </summary>
               <ul className="mt-2 divide-y divide-border">
                 {done.slice(0, 50).map((t) => (
-                  <TaskListRow key={t.id} task={t} coaches={coaches} coachName={coachName} quadStyles={quadStyles} />
+                  <TaskListRow key={t.id} task={t} assignees={assignees} quadStyles={quadStyles} />
                 ))}
               </ul>
             </details>
@@ -234,11 +262,11 @@ export function TasksPage({
                         }} className="mt-0.5" />
                         <div className="min-w-0 flex-1">
                           <div className="text-sm font-medium leading-tight">{t.title}</div>
-                          {coachName(t.assigned_to) && (
-                            <div className="mt-0.5 text-[10px] text-muted-foreground">→ {coachName(t.assigned_to)}</div>
+                          {t.assignee_name && (
+                            <div className="mt-0.5 text-[10px] text-muted-foreground">→ {t.assignee_name}</div>
                           )}
                         </div>
-                        <TaskRowMenu task={t} coaches={coaches} quadStyles={quadStyles} />
+                        <TaskRowMenu task={t} assignees={assignees} quadStyles={quadStyles} />
                       </li>
                     ))}
                   </ul>
@@ -248,11 +276,17 @@ export function TasksPage({
           </div>
         </div>
       </div>
+      <AssigneesDialog
+        open={assigneesOpen}
+        onOpenChange={setAssigneesOpen}
+        assignees={assignees}
+        setAssignees={setAssignees}
+      />
     </>
   );
 }
 
-function TaskListRow({ task, coaches, coachName, quadStyles }: { task: TaskRow; coaches: { id: string; full_name: string | null }[]; coachName: (id: string | null) => string | null; quadStyles: Record<TaskQuadrant, QuadStyle> }) {
+function TaskListRow({ task, assignees, quadStyles }: { task: TaskRow; assignees: Assignee[]; quadStyles: Record<TaskQuadrant, QuadStyle> }) {
   const isDone = task.status === "done";
   const qs = quadStyles[task.quadrant];
   return (
@@ -264,15 +298,15 @@ function TaskListRow({ task, coaches, coachName, quadStyles }: { task: TaskRow; 
           <Badge variant="outline" className="text-[9px]" style={{ borderColor: `${qs.color}80`, color: qs.color }}>
             {qs.title}
           </Badge>
-          {coachName(task.assigned_to) && <span>→ {coachName(task.assigned_to)}</span>}
+          {task.assignee_name && <span>→ {task.assignee_name}</span>}
         </div>
       </div>
-      <TaskRowMenu task={task} coaches={coaches} quadStyles={quadStyles} />
+      <TaskRowMenu task={task} assignees={assignees} quadStyles={quadStyles} />
     </li>
   );
 }
 
-function TaskRowMenu({ task, coaches, quadStyles }: { task: TaskRow; coaches: { id: string; full_name: string | null }[]; quadStyles: Record<TaskQuadrant, QuadStyle> }) {
+function TaskRowMenu({ task, assignees, quadStyles }: { task: TaskRow; assignees: Assignee[]; quadStyles: Record<TaskQuadrant, QuadStyle> }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -287,10 +321,13 @@ function TaskRowMenu({ task, coaches, quadStyles }: { task: TaskRow; coaches: { 
           </DropdownMenuItem>
         ))}
         <div className="mt-1 px-2 py-1 text-[10px] uppercase tracking-widest text-muted-foreground">Assign to</div>
-        <DropdownMenuItem onClick={() => updateTask(task.id, { assigned_to: null })}>Unassigned</DropdownMenuItem>
-        {coaches.map((c) => (
-          <DropdownMenuItem key={c.id} onClick={() => updateTask(task.id, { assigned_to: c.id })}>
-            {c.full_name ?? "—"}
+        <DropdownMenuItem onClick={() => updateTask(task.id, { assignee_name: null })}>Unassigned</DropdownMenuItem>
+        {assignees.length === 0 && (
+          <div className="px-2 py-1.5 text-[11px] text-muted-foreground">No names yet. Use "Manage assignees" to add some.</div>
+        )}
+        {assignees.map((a) => (
+          <DropdownMenuItem key={a.id} onClick={() => updateTask(task.id, { assignee_name: a.name })}>
+            {a.name}
           </DropdownMenuItem>
         ))}
         <DropdownMenuItem className="text-destructive" onClick={() => deleteTask(task.id)}>
@@ -463,5 +500,137 @@ function NoteCard({ note, selected, onSelect, onChange, onRemove }: {
         className="resize-none border-0 bg-transparent px-0 text-sm focus-visible:ring-0"
       />
     </div>
+  );
+}
+
+function AssigneesDialog({
+  open, onOpenChange, assignees, setAssignees,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  assignees: Assignee[];
+  setAssignees: React.Dispatch<React.SetStateAction<Assignee[]>>;
+}) {
+  const [newName, setNewName] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState("");
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  const addName = () => {
+    const n = newName.trim();
+    if (!n) return;
+    const id = (typeof crypto !== "undefined" && "randomUUID" in crypto) ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
+    setAssignees((arr) => [...arr, { id, name: n }]);
+    setNewName("");
+  };
+  const startEdit = (a: Assignee) => { setEditingId(a.id); setEditingName(a.name); };
+  const saveEdit = () => {
+    const n = editingName.trim();
+    if (!n || !editingId) { setEditingId(null); return; }
+    setAssignees((arr) => arr.map((a) => a.id === editingId ? { ...a, name: n } : a));
+    setEditingId(null);
+  };
+  const toggleSelect = (id: string, on: boolean) => {
+    setSelected((s) => { const x = new Set(s); if (on) x.add(id); else x.delete(id); return x; });
+  };
+  const allSelected = assignees.length > 0 && selected.size === assignees.length;
+  const someSelected = selected.size > 0 && !allSelected;
+  const toggleAll = (on: boolean) => setSelected(on ? new Set(assignees.map((a) => a.id)) : new Set());
+  const deleteSelected = () => {
+    setAssignees((arr) => arr.filter((a) => !selected.has(a.id)));
+    setSelected(new Set());
+  };
+  const deleteOne = (id: string) => {
+    setAssignees((arr) => arr.filter((a) => a.id !== id));
+    setSelected((s) => { const x = new Set(s); x.delete(id); return x; });
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Manage assignees</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div className="flex gap-2">
+            <Input
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") addName(); }}
+              placeholder="Add a name…"
+              autoFocus
+            />
+            <Button onClick={addName}><Plus className="mr-1 h-4 w-4" />Add</Button>
+          </div>
+
+          {assignees.length > 0 && (
+            <div className="flex items-center justify-between border-t border-border pt-2">
+              <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Checkbox
+                  checked={allSelected ? true : someSelected ? "indeterminate" : false}
+                  onCheckedChange={(v) => toggleAll(!!v)}
+                />
+                Select all
+              </label>
+              {selected.size > 0 && (
+                <Button variant="destructive" size="sm" onClick={deleteSelected}>
+                  <Trash2 className="mr-1 h-3.5 w-3.5" />Delete ({selected.size})
+                </Button>
+              )}
+            </div>
+          )}
+
+          <div className="max-h-72 space-y-1 overflow-y-auto">
+            {assignees.length === 0 ? (
+              <div className="rounded-md border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+                No names yet. Add your first assignee above.
+              </div>
+            ) : (
+              assignees.map((a) => {
+                const isEditing = editingId === a.id;
+                const isSelected = selected.has(a.id);
+                return (
+                  <div
+                    key={a.id}
+                    className={cn(
+                      "flex items-center gap-2 rounded-md border px-2 py-1.5",
+                      isSelected ? "border-primary/60 bg-primary/5" : "border-border/60",
+                    )}
+                  >
+                    <Checkbox checked={isSelected} onCheckedChange={(v) => toggleSelect(a.id, !!v)} />
+                    {isEditing ? (
+                      <Input
+                        value={editingName}
+                        onChange={(e) => setEditingName(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === "Enter") saveEdit(); if (e.key === "Escape") setEditingId(null); }}
+                        autoFocus
+                        className="h-8 flex-1"
+                      />
+                    ) : (
+                      <span className="flex-1 truncate text-sm">{a.name}</span>
+                    )}
+                    {isEditing ? (
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={saveEdit} aria-label="Save">
+                        <Check className="h-4 w-4" />
+                      </Button>
+                    ) : (
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => startEdit(a)} aria-label="Edit">
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
+                    <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => deleteOne(a.id)} aria-label="Delete">
+                      <X className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Done</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

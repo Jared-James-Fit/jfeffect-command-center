@@ -13,6 +13,7 @@ export interface TaskRow {
   due_at: string | null;
   created_by: string | null;
   assigned_to: string | null;
+  assignee_name: string | null;
   completed_at: string | null;
   completed_by: string | null;
   position: number;
@@ -45,12 +46,13 @@ export async function getMyCoachId(): Promise<string | null> {
   return data?.id ?? null;
 }
 
-export async function createTask(input: { title: string; quadrant?: TaskQuadrant; assigned_to?: string | null; due_at?: string | null; notes?: string | null; scope?: TaskScope }): Promise<void> {
+export async function createTask(input: { title: string; quadrant?: TaskQuadrant; assigned_to?: string | null; assignee_name?: string | null; due_at?: string | null; notes?: string | null; scope?: TaskScope }): Promise<void> {
   const me = await getMyCoachId();
   const { error } = await (supabase.from("tasks") as any).insert({
     title: input.title,
     quadrant: input.quadrant ?? "do",
     assigned_to: input.assigned_to ?? null,
+    assignee_name: input.assignee_name ?? null,
     due_at: input.due_at ?? null,
     notes: input.notes ?? null,
     scope: input.scope ?? "admin",
@@ -59,7 +61,7 @@ export async function createTask(input: { title: string; quadrant?: TaskQuadrant
   if (error) throw error;
 }
 
-export async function updateTask(id: string, patch: Partial<Pick<TaskRow, "title" | "notes" | "quadrant" | "due_at" | "assigned_to" | "priority" | "position">>): Promise<void> {
+export async function updateTask(id: string, patch: Partial<Pick<TaskRow, "title" | "notes" | "quadrant" | "due_at" | "assigned_to" | "assignee_name" | "priority" | "position">>): Promise<void> {
   const { error } = await (supabase.from("tasks") as any).update(patch).eq("id", id);
   if (error) throw error;
 }
