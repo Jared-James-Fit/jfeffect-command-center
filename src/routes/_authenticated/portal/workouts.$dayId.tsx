@@ -906,6 +906,7 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
               unit={unit}
               focusMode={focusMode}
               onChange={onChange}
+              onSetCompleted={bumpRestTimer}
             />
           );
         })}
