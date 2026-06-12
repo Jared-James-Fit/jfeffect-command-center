@@ -136,7 +136,9 @@ function writePrefs(p: EditorPrefs) {
 
 // Append a row into the first day reachable inside any template payload shape.
 export function appendRowToFirstDay(payload: any, type: string, row: any) {
-  const stamp = { sort_order: 0, sets: 3, reps_text: "8-12", time_profile: "accessory_compound", ...row };
+  // New rows default to NO suggested load (percentage_basis="none").
+  // Coaches must opt in via the "Include Suggested Load" toggle.
+  const stamp = { sort_order: 0, sets: 3, reps_text: "8-12", time_profile: "accessory_compound", percentage_basis: "none", ...row };
   const pushIntoDay = (d: any) => {
     d.rows = d.rows || [];
     d.rows.push({ ...stamp, sort_order: d.rows.length });
