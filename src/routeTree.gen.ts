@@ -36,6 +36,7 @@ import { Route as AuthenticatedMIndexRouteImport } from './routes/_authenticated
 import { Route as AuthenticatedAdminIndexRouteImport } from './routes/_authenticated/admin/index'
 import { Route as ApiPublicStripeWebhookRouteImport } from './routes/api/public/stripe-webhook'
 import { Route as ApiPublicSignnowWebhookRouteImport } from './routes/api/public/signnow-webhook'
+import { Route as ApiPublic_replay73ae9c8e4bcdc04ea9fd65f84f0752daRouteImport } from './routes/api/public/__replay-73ae9c8e4bcdc04ea9fd65f84f0752da'
 import { Route as AuthenticatedPortalResourcesRouteImport } from './routes/_authenticated/portal/resources'
 import { Route as AuthenticatedPortalRecipesRouteImport } from './routes/_authenticated/portal/recipes'
 import { Route as AuthenticatedPortalPurchasesRouteImport } from './routes/_authenticated/portal/purchases'
@@ -327,6 +328,12 @@ const ApiPublicSignnowWebhookRoute = ApiPublicSignnowWebhookRouteImport.update({
   path: '/api/public/signnow-webhook',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublic_replay73ae9c8e4bcdc04ea9fd65f84f0752daRoute =
+  ApiPublic_replay73ae9c8e4bcdc04ea9fd65f84f0752daRouteImport.update({
+    id: '/api/public/__replay-73ae9c8e4bcdc04ea9fd65f84f0752da',
+    path: '/api/public',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const AuthenticatedPortalResourcesRoute =
   AuthenticatedPortalResourcesRouteImport.update({
     id: '/resources',
@@ -1343,6 +1350,7 @@ export interface FileRoutesByFullPath {
   '/portal/purchases': typeof AuthenticatedPortalPurchasesRouteWithChildren
   '/portal/recipes': typeof AuthenticatedPortalRecipesRouteWithChildren
   '/portal/resources': typeof AuthenticatedPortalResourcesRoute
+  '/api/public': typeof ApiPublic_replay73ae9c8e4bcdc04ea9fd65f84f0752daRoute
   '/api/public/signnow-webhook': typeof ApiPublicSignnowWebhookRoute
   '/api/public/stripe-webhook': typeof ApiPublicStripeWebhookRoute
   '/admin/': typeof AuthenticatedAdminIndexRoute
@@ -1520,6 +1528,7 @@ export interface FileRoutesByTo {
   '/portal/purchases': typeof AuthenticatedPortalPurchasesRouteWithChildren
   '/portal/recipes': typeof AuthenticatedPortalRecipesRouteWithChildren
   '/portal/resources': typeof AuthenticatedPortalResourcesRoute
+  '/api/public': typeof ApiPublic_replay73ae9c8e4bcdc04ea9fd65f84f0752daRoute
   '/api/public/signnow-webhook': typeof ApiPublicSignnowWebhookRoute
   '/api/public/stripe-webhook': typeof ApiPublicStripeWebhookRoute
   '/admin': typeof AuthenticatedAdminIndexRoute
@@ -1704,6 +1713,7 @@ export interface FileRoutesById {
   '/_authenticated/portal/purchases': typeof AuthenticatedPortalPurchasesRouteWithChildren
   '/_authenticated/portal/recipes': typeof AuthenticatedPortalRecipesRouteWithChildren
   '/_authenticated/portal/resources': typeof AuthenticatedPortalResourcesRoute
+  '/api/public/__replay-73ae9c8e4bcdc04ea9fd65f84f0752da': typeof ApiPublic_replay73ae9c8e4bcdc04ea9fd65f84f0752daRoute
   '/api/public/signnow-webhook': typeof ApiPublicSignnowWebhookRoute
   '/api/public/stripe-webhook': typeof ApiPublicStripeWebhookRoute
   '/_authenticated/admin/': typeof AuthenticatedAdminIndexRoute
@@ -1888,6 +1898,7 @@ export interface FileRouteTypes {
     | '/portal/purchases'
     | '/portal/recipes'
     | '/portal/resources'
+    | '/api/public'
     | '/api/public/signnow-webhook'
     | '/api/public/stripe-webhook'
     | '/admin/'
@@ -2065,6 +2076,7 @@ export interface FileRouteTypes {
     | '/portal/purchases'
     | '/portal/recipes'
     | '/portal/resources'
+    | '/api/public'
     | '/api/public/signnow-webhook'
     | '/api/public/stripe-webhook'
     | '/admin'
@@ -2248,6 +2260,7 @@ export interface FileRouteTypes {
     | '/_authenticated/portal/purchases'
     | '/_authenticated/portal/recipes'
     | '/_authenticated/portal/resources'
+    | '/api/public/__replay-73ae9c8e4bcdc04ea9fd65f84f0752da'
     | '/api/public/signnow-webhook'
     | '/api/public/stripe-webhook'
     | '/_authenticated/admin/'
@@ -2340,6 +2353,7 @@ export interface RootRouteChildren {
   BookSlugRoute: typeof BookSlugRoute
   MWelcomeRoute: typeof MWelcomeRoute
   SignupJfRoute: typeof SignupJfRoute
+  ApiPublic_replay73ae9c8e4bcdc04ea9fd65f84f0752daRoute: typeof ApiPublic_replay73ae9c8e4bcdc04ea9fd65f84f0752daRoute
   ApiPublicSignnowWebhookRoute: typeof ApiPublicSignnowWebhookRoute
   ApiPublicStripeWebhookRoute: typeof ApiPublicStripeWebhookRoute
   ApiPublicHooksAppointmentRemindersRoute: typeof ApiPublicHooksAppointmentRemindersRoute
@@ -2542,6 +2556,13 @@ declare module '@tanstack/react-router' {
       path: '/api/public/signnow-webhook'
       fullPath: '/api/public/signnow-webhook'
       preLoaderRoute: typeof ApiPublicSignnowWebhookRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/__replay-73ae9c8e4bcdc04ea9fd65f84f0752da': {
+      id: '/api/public/__replay-73ae9c8e4bcdc04ea9fd65f84f0752da'
+      path: '/api/public'
+      fullPath: '/api/public'
+      preLoaderRoute: typeof ApiPublic_replay73ae9c8e4bcdc04ea9fd65f84f0752daRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated/portal/resources': {
@@ -4189,6 +4210,8 @@ const rootRouteChildren: RootRouteChildren = {
   BookSlugRoute: BookSlugRoute,
   MWelcomeRoute: MWelcomeRoute,
   SignupJfRoute: SignupJfRoute,
+  ApiPublic_replay73ae9c8e4bcdc04ea9fd65f84f0752daRoute:
+    ApiPublic_replay73ae9c8e4bcdc04ea9fd65f84f0752daRoute,
   ApiPublicSignnowWebhookRoute: ApiPublicSignnowWebhookRoute,
   ApiPublicStripeWebhookRoute: ApiPublicStripeWebhookRoute,
   ApiPublicHooksAppointmentRemindersRoute:
