@@ -10,6 +10,7 @@ import {
   ListChecks, LayoutGrid,
   Heart, Flame,
   Ticket,
+  AlertCircle,
 } from "lucide-react";
 import { Sparkles } from "lucide-react";
 import type { NavItem } from "@/components/app-shell";
@@ -24,6 +25,7 @@ export const adminNav: NavItem[] = [
   { to: "/admin/lift-videos", label: "Lift Reviews", icon: Video, group: "Core" },
   { to: "/admin/training-intelligence", label: "Training Intel", icon: Activity, group: "Core" },
   { to: "/admin/client-action-requests", label: "Action Requests", icon: ClipboardCheck, group: "Core" },
+  { to: "/admin/support-alerts", label: "Support Alerts", icon: AlertCircle },
   // COMMUNICATION
   { to: "/admin/broadcasts", label: "Broadcasts", icon: Megaphone, group: "Communication" },
   { to: "/admin/popups", label: "Popups", icon: LayoutGrid, group: "Communication", keywords: ["popup", "popups", "pop up", "pop-up", "pop ups", "modal", "broadcast", "task popup", "load screen", "birthday card", "event popup"] },
@@ -65,6 +67,7 @@ export const adminNav: NavItem[] = [
   // TEAM / OPS
   { to: "/admin/coaches", label: "Coaches", icon: UserCheck, group: "Team / Ops" },
   { to: "/admin/staff", label: "Staff & Media Managers", icon: UserPlus, group: "Team / Ops" },
+  { to: "/admin/support-alerts", label: "Support Alerts", icon: AlertCircle, group: "Team / Ops" },
   { to: "/admin/approvals", label: "Approvals Queue", icon: ClipboardCheck, group: "Team / Ops" },
   { to: "/admin/media-review", label: "Media Inbox", icon: Film, group: "Team / Ops" },
   { to: "/admin/media-archives", label: "Media Archives", icon: FolderOpen, group: "Team / Ops" },
@@ -91,6 +94,7 @@ export const coachingAdminNav: NavItem[] = [
   { to: "/admin/lift-videos", label: "Lift Reviews", icon: Video, group: "Core" },
   { to: "/admin/training-intelligence", label: "Training Intel", icon: Activity, group: "Core" },
   { to: "/admin/client-action-requests", label: "Action Requests", icon: ClipboardCheck, group: "Core" },
+  { to: "/admin/support-alerts", label: "Support Alerts", icon: AlertCircle },
   // COMMUNICATION
   { to: "/admin/broadcasts", label: "Broadcasts", icon: Megaphone, group: "Communication" },
   { to: "/admin/popups", label: "Popups", icon: LayoutGrid, group: "Communication", keywords: ["popup", "popups", "pop up", "pop-up", "pop ups", "modal", "broadcast", "task popup", "load screen", "birthday card", "event popup"] },
@@ -127,6 +131,7 @@ export const coachingAdminNav: NavItem[] = [
   // TEAM / OPS
   { to: "/admin/coaches", label: "Coaches", icon: UserCheck, group: "Team / Ops" },
   { to: "/admin/staff", label: "Staff & Media Manager", icon: UserPlus, group: "Team / Ops" },
+  { to: "/admin/support-alerts", label: "Support Alerts", icon: AlertCircle, group: "Team / Ops" },
   { to: "/admin/media-review", label: "Media Inbox", icon: Film, group: "Team / Ops" },
   { to: "/admin/media-archives", label: "Media Archives", icon: FolderOpen, group: "Team / Ops" },
   { to: "/admin/apps", label: "Integrations", icon: Layers, group: "Team / Ops" },
@@ -148,6 +153,7 @@ export const coachNav: NavItem[] = [
   { to: "/admin/lift-videos", label: "Lift Reviews", icon: Video },
   { to: "/admin/check-in-reviews", label: "Check-In Reviews", icon: ClipboardList },
   { to: "/admin/client-action-requests", label: "Action Requests", icon: ClipboardCheck },
+  { to: "/admin/support-alerts", label: "Support Alerts", icon: AlertCircle },
   { to: "/admin/media-review", label: "Media Review Inbox", icon: Film },
   { to: "/admin/broadcasts", label: "Broadcasts", icon: Megaphone },
   { to: "/admin/recipes", label: "Recipe Library", icon: ChefHat },

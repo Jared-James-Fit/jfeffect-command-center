@@ -61,7 +61,7 @@ export function useClientNavBadges(): Record<string, NavBadge> {
   const { data } = useQuery({
     queryKey: ["client-nav-badges", user?.id],
     enabled,
-    refetchInterval: 60_000,
+    refetchInterval: 30_000,
     queryFn: async () => {
       const { data: client } = await supabase
         .from("clients")
@@ -100,9 +100,9 @@ export function useClientNavBadges(): Record<string, NavBadge> {
   const { data: adminData } = useQuery({
     queryKey: ["admin-nav-badges", user?.id],
     enabled: adminEnabled,
-    refetchInterval: 60_000,
+    refetchInterval: 30_000,
     queryFn: async () => {
-      const [needsResp, liftPending, liftUrgent, mediaPending] = await Promise.all([
+      const [needsResp, liftPending, liftUrgent, mediaPending, supportAlerts] = await Promise.all([
         (supabase.from("conversation_state") as any)
           .select("client_id", { count: "exact", head: true })
           .eq("status", "needs_response"),
@@ -118,12 +118,14 @@ export function useClientNavBadges(): Record<string, NavBadge> {
           .select("id", { count: "exact", head: true })
           .eq("media_type", "Check-In Videos")
           .eq("status", "Pending Review"),
+        (supabase.from("support_alerts") as any).select("id", { count: "exact", head: true }).in("status", ["open", "in_progress"]),
       ]);
       return {
         messages: needsResp.count ?? 0,
         liftReviews: liftPending.count ?? 0,
         liftUrgent: liftUrgent.count ?? 0,
         checkIns: mediaPending.count ?? 0,
+        supportAlerts: supportAlerts.count ?? 0,
       };
     },
   });
@@ -134,6 +136,7 @@ export function useClientNavBadges(): Record<string, NavBadge> {
       .on("postgres_changes", { event: "*", schema: "public", table: "conversation_state" }, () => qc.invalidateQueries({ queryKey: ["admin-nav-badges", user.id] }))
       .on("postgres_changes", { event: "*", schema: "public", table: "lift_videos" }, () => qc.invalidateQueries({ queryKey: ["admin-nav-badges", user.id] }))
       .on("postgres_changes", { event: "*", schema: "public", table: "media_items" }, () => qc.invalidateQueries({ queryKey: ["admin-nav-badges", user.id] }))
+      .on("postgres_changes", { event: "*", schema: "public", table: "support_alerts" }, () => qc.invalidateQueries({ queryKey: ["admin-nav-badges", user.id] }))
       .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [adminEnabled, user, qc]);
@@ -144,6 +147,7 @@ export function useClientNavBadges(): Record<string, NavBadge> {
     if (adminData.liftReviews > 0) r["/admin/lift-videos"] = { count: adminData.liftReviews };
     else if (adminData.liftUrgent > 0) r["/admin/lift-videos"] = { dot: true };
     if (adminData.checkIns > 0) r["/admin/check-ins"] = { count: adminData.checkIns };
+    if (adminData.supportAlerts > 0) r["/admin/support-alerts"] = { count: adminData.supportAlerts };
     return r;
   }
 

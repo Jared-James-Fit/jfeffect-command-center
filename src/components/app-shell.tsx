@@ -458,8 +458,9 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
                             : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground border-l-2 border-amber-400/40",
                         )}
                       >
-                        <Icon className="h-4 w-4 shrink-0" />
+                        <div className="relative"><Icon className="h-4 w-4 shrink-0" /><SidebarBadge badge={navBadges[item.to]} isCollapsed={isCollapsed} /></div>
                         {!isCollapsed && <span className="truncate flex-1">{item.label}</span>}
+                        {!isCollapsed && <SidebarBadge badge={navBadges[item.to]} isCollapsed={false} />}
                         {!isCollapsed && (
                           <button
                             type="button"
@@ -529,8 +530,9 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
                                 : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground border-l-2 border-transparent",
                             )}
                           >
-                            <Icon className="h-4 w-4 shrink-0" />
+                            <div className="relative"><Icon className="h-4 w-4 shrink-0" /><SidebarBadge badge={navBadges[item.to]} isCollapsed={isCollapsed} /></div>
                             {!isCollapsed && <span className="truncate flex-1">{item.label}</span>}
+                            {!isCollapsed && <SidebarBadge badge={navBadges[item.to]} isCollapsed={false} />}
                             {!isCollapsed && (
                               <button
                                 type="button"
@@ -883,6 +885,25 @@ function navBadgeFor(item: NavItem, navBadges: Record<string, { count?: number; 
     if (b.dot) dot = true;
   }
   return count > 0 ? { count } : dot ? { dot: true } : undefined;
+}
+
+function SidebarBadge({ badge, isCollapsed }: { badge?: { count?: number; dot?: boolean }; isCollapsed: boolean }) {
+  if (!badge) return null;
+  const count = badge.count ?? 0;
+  if (isCollapsed) {
+    return <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-destructive ring-1 ring-sidebar" />;
+  }
+  if (count > 0) {
+    return (
+      <span className="ml-auto flex h-4 min-w-[16px] items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-destructive-foreground ring-1 ring-destructive/20">
+        {count > 99 ? "99+" : count}
+      </span>
+    );
+  }
+  if (badge.dot) {
+    return <span className="ml-auto h-2 w-2 rounded-full bg-destructive" />;
+  }
+  return null;
 }
 
 function BottomNavBadge({ badge }: { badge?: { count?: number; dot?: boolean } }) {
