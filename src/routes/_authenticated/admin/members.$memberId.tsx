@@ -332,7 +332,71 @@ function MemberProfile() {
             }} placeholder="Internal notes (private)" />
           </Card>
         </TabsContent>
+
+        {/* ───────────── Setup Info ───────────── */}
+        <TabsContent value="setup" className="space-y-5">
+          <MemberSetupInfoCard member={member} memberId={memberId} />
+        </TabsContent>
       </Tabs>
     </div>
+  );
+}
+
+function MemberSetupInfoCard({ member, memberId }: { member: any; memberId: string }) {
+  const save = useServerFn(adminUpdateMemberSetup);
+  const qc = useQueryClient();
+  const [form, setForm] = useState<any>({});
+  const v = (k: string) => (form[k] ?? member[k] ?? "");
+  const set = (k: string, val: any) => setForm((f: any) => ({ ...f, [k]: val }));
+  const flush = async (patch: any) => {
+    try {
+      await save({ data: { memberId, ...patch } });
+      await qc.invalidateQueries({ queryKey: ["admin-member", memberId] });
+      toast.success("Saved");
+    } catch (e: any) { toast.error(e?.message ?? "Save failed"); }
+  };
+  return (
+    <Card className="space-y-4 p-5">
+      <div>
+        <div className="text-xs uppercase tracking-wider text-muted-foreground">Required setup fields</div>
+        <p className="mt-1 text-xs text-muted-foreground">
+          These mirror the client intake. Members are blocked from /m until all required fields are completed.
+        </p>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div>
+          <Label>Phone</Label>
+          <Input defaultValue={member.phone ?? ""} onBlur={(e) => e.target.value !== (member.phone ?? "") && flush({ phone: e.target.value })} />
+        </div>
+        <div>
+          <Label>Date of birth</Label>
+          <Input type="date" defaultValue={member.date_of_birth ?? ""} onBlur={(e) => e.target.value !== (member.date_of_birth ?? "") && flush({ date_of_birth: e.target.value || null })} />
+        </div>
+        <div className="sm:col-span-2">
+          <Label>Street address</Label>
+          <Input defaultValue={member.address_line1 ?? ""} onBlur={(e) => flush({ address_line1: e.target.value })} />
+        </div>
+        <div><Label>City</Label><Input defaultValue={member.address_city ?? ""} onBlur={(e) => flush({ address_city: e.target.value })} /></div>
+        <div><Label>State</Label><Input defaultValue={member.address_state ?? ""} onBlur={(e) => flush({ address_state: e.target.value })} /></div>
+        <div><Label>ZIP</Label><Input defaultValue={member.address_zip ?? ""} onBlur={(e) => flush({ address_zip: e.target.value })} /></div>
+        <div><Label>Country</Label><Input defaultValue={member.address_country ?? ""} onBlur={(e) => flush({ address_country: e.target.value })} /></div>
+        <div><Label>Emergency contact name</Label><Input defaultValue={member.emergency_contact_name ?? ""} onBlur={(e) => flush({ emergency_contact_name: e.target.value })} /></div>
+        <div><Label>Emergency contact phone</Label><Input defaultValue={member.emergency_contact_phone ?? ""} onBlur={(e) => flush({ emergency_contact_phone: e.target.value })} /></div>
+        <div className="sm:col-span-2">
+          <Label>Goals</Label>
+          <Textarea rows={3} defaultValue={member.goals ?? ""} onBlur={(e) => flush({ goals: e.target.value })} />
+        </div>
+        <div className="sm:col-span-2">
+          <Label>Training background</Label>
+          <Textarea rows={3} defaultValue={member.training_background ?? ""} onBlur={(e) => flush({ training_background: e.target.value })} />
+        </div>
+      </div>
+      <div className="flex items-center gap-2 pt-2 text-xs">
+        <span className="text-muted-foreground">Setup complete:</span>
+        <Badge variant={member.setup_completed_at ? "default" : "outline"}>
+          {member.setup_completed_at ? new Date(member.setup_completed_at).toLocaleString() : "Not yet"}
+        </Badge>
+      </div>
+    </Card>
   );
 }
