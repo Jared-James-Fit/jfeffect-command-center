@@ -502,3 +502,135 @@ function NoteCard({ note, selected, onSelect, onChange, onRemove }: {
     </div>
   );
 }
+
+function AssigneesDialog({
+  open, onOpenChange, assignees, setAssignees,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  assignees: Assignee[];
+  setAssignees: React.Dispatch<React.SetStateAction<Assignee[]>>;
+}) {
+  const [newName, setNewName] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState("");
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  const addName = () => {
+    const n = newName.trim();
+    if (!n) return;
+    const id = (typeof crypto !== "undefined" && "randomUUID" in crypto) ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
+    setAssignees((arr) => [...arr, { id, name: n }]);
+    setNewName("");
+  };
+  const startEdit = (a: Assignee) => { setEditingId(a.id); setEditingName(a.name); };
+  const saveEdit = () => {
+    const n = editingName.trim();
+    if (!n || !editingId) { setEditingId(null); return; }
+    setAssignees((arr) => arr.map((a) => a.id === editingId ? { ...a, name: n } : a));
+    setEditingId(null);
+  };
+  const toggleSelect = (id: string, on: boolean) => {
+    setSelected((s) => { const x = new Set(s); if (on) x.add(id); else x.delete(id); return x; });
+  };
+  const allSelected = assignees.length > 0 && selected.size === assignees.length;
+  const someSelected = selected.size > 0 && !allSelected;
+  const toggleAll = (on: boolean) => setSelected(on ? new Set(assignees.map((a) => a.id)) : new Set());
+  const deleteSelected = () => {
+    setAssignees((arr) => arr.filter((a) => !selected.has(a.id)));
+    setSelected(new Set());
+  };
+  const deleteOne = (id: string) => {
+    setAssignees((arr) => arr.filter((a) => a.id !== id));
+    setSelected((s) => { const x = new Set(s); x.delete(id); return x; });
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Manage assignees</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div className="flex gap-2">
+            <Input
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") addName(); }}
+              placeholder="Add a name…"
+              autoFocus
+            />
+            <Button onClick={addName}><Plus className="mr-1 h-4 w-4" />Add</Button>
+          </div>
+
+          {assignees.length > 0 && (
+            <div className="flex items-center justify-between border-t border-border pt-2">
+              <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Checkbox
+                  checked={allSelected ? true : someSelected ? "indeterminate" : false}
+                  onCheckedChange={(v) => toggleAll(!!v)}
+                />
+                Select all
+              </label>
+              {selected.size > 0 && (
+                <Button variant="destructive" size="sm" onClick={deleteSelected}>
+                  <Trash2 className="mr-1 h-3.5 w-3.5" />Delete ({selected.size})
+                </Button>
+              )}
+            </div>
+          )}
+
+          <div className="max-h-72 space-y-1 overflow-y-auto">
+            {assignees.length === 0 ? (
+              <div className="rounded-md border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+                No names yet. Add your first assignee above.
+              </div>
+            ) : (
+              assignees.map((a) => {
+                const isEditing = editingId === a.id;
+                const isSelected = selected.has(a.id);
+                return (
+                  <div
+                    key={a.id}
+                    className={cn(
+                      "flex items-center gap-2 rounded-md border px-2 py-1.5",
+                      isSelected ? "border-primary/60 bg-primary/5" : "border-border/60",
+                    )}
+                  >
+                    <Checkbox checked={isSelected} onCheckedChange={(v) => toggleSelect(a.id, !!v)} />
+                    {isEditing ? (
+                      <Input
+                        value={editingName}
+                        onChange={(e) => setEditingName(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === "Enter") saveEdit(); if (e.key === "Escape") setEditingId(null); }}
+                        autoFocus
+                        className="h-8 flex-1"
+                      />
+                    ) : (
+                      <span className="flex-1 truncate text-sm">{a.name}</span>
+                    )}
+                    {isEditing ? (
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={saveEdit} aria-label="Save">
+                        <Check className="h-4 w-4" />
+                      </Button>
+                    ) : (
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => startEdit(a)} aria-label="Edit">
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
+                    <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => deleteOne(a.id)} aria-label="Delete">
+                      <X className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Done</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
