@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
@@ -17,7 +17,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Copy, Plus, Pencil, Trash2, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 
-export const Route = createFileRoute("/_authenticated/admin/booking-links")({ component: BookingLinksPage });
+export const Route = createFileRoute("/_authenticated/admin/booking-links")({
+  beforeLoad: () => {
+    throw redirect({ to: "/admin/calendar", search: { tab: "booking-links" } as any });
+  },
+});
 
 const APPT_TYPES = [
   "Coaching Call","Check-In Call","Onboarding Call","Strategy Call",
@@ -26,7 +30,7 @@ const APPT_TYPES = [
 ] as const;
 const DAYS = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
 
-function BookingLinksPage() {
+export function BookingLinksPage() {
   const list = useServerFn(listBookingLinks);
   const del = useServerFn(deleteBookingLink);
   const qc = useQueryClient();
