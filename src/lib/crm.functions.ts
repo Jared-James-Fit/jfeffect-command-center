@@ -409,7 +409,7 @@ export const updateCrmContact = createServerFn({ method: "POST" })
     const { data: before } = await supabaseAdmin
       .from("clients").select("lifecycle_stage, lead_temperature, assigned_coach_id, next_follow_up_at, call_booked").eq("id", id).maybeSingle();
 
-    const { error } = await supabaseAdmin.from("clients").update(finalPatch).eq("id", id);
+    const { error } = await supabaseAdmin.from("clients").update(finalPatch as any).eq("id", id);
     if (error) throw new Error(error.message);
 
     // Activity log for meaningful changes
