@@ -302,6 +302,12 @@ function FormEditorDialog({ form, open, onClose, initialTab = "settings" }: { fo
       visibility: local.visibility,
       auto_assign_new_clients: local.auto_assign_new_clients,
       requires_client_identity: local.requires_client_identity,
+      popup_enabled: local.popup_enabled ?? false,
+      popup_weekdays: local.popup_weekdays ?? [],
+      popup_start_time: local.popup_start_time ?? null,
+      popup_end_time: local.popup_end_time ?? null,
+      popup_start_date: local.popup_start_date ?? null,
+      popup_end_date: local.popup_end_date ?? null,
     };
     await upsertForm({ id: form.id, ...patch });
     qc.invalidateQueries({ queryKey: ["nf-forms"] });
