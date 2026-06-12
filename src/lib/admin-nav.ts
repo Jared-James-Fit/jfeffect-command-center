@@ -9,6 +9,7 @@ import {
   ChefHat, Megaphone, Phone, Link2 as LinkIcon,
   ListChecks, LayoutGrid,
   Heart, Flame,
+  Ticket,
 } from "lucide-react";
 import { Sparkles } from "lucide-react";
 import type { NavItem } from "@/components/app-shell";
