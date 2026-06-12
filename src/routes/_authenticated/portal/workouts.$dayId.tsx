@@ -44,6 +44,7 @@ import { WorkoutUndoProvider, useWorkoutUndo, UndoButton } from "@/lib/workout-u
 import { WorkoutSyncBanner } from "@/components/workout-sync-banner";
 import { writePlanCache, cachedInitialData } from "@/lib/workout-plan-cache";
 import { enqueueOfflineWrite, registerQueueHandler } from "@/lib/workout-offline-queue";
+import { WorkoutRestTimer } from "@/components/workout-rest-timer";
 
 export const Route = createFileRoute("/_authenticated/portal/workouts/$dayId")({
   validateSearch: (s: Record<string, unknown>) => ({
@@ -451,13 +452,13 @@ function WorkoutDay() {
   return (
     <>
       {focusMode && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-background">
+        <div className="fixed inset-0 z-[60] overflow-y-auto bg-background">
           <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-background/95 px-4 py-3 backdrop-blur">
-            <div className="font-bold">{day.title || `Day ${day.day_index}`} · Focus mode</div>
+            <div className="font-bold">{day.title || `Day ${day.day_index}`} · Full Screen</div>
             <div className="flex items-center gap-2">
               <UnitToggle unit={unit} onChange={handleGlobalUnitChange} label="Workout Units" />
               <Button size="sm" variant="outline" onClick={() => setFocusMode(false)}>
-                <Minimize2 className="mr-1 h-4 w-4" /> Exit
+                <Minimize2 className="mr-1 h-4 w-4" /> Exit Full Screen
               </Button>
             </div>
           </div>
@@ -521,7 +522,7 @@ function WorkoutDay() {
             {!readonly && <UnitToggle unit={unit} onChange={handleGlobalUnitChange} label="Workout Units" />}
             {!readonly && (
               <Button size="sm" variant="outline" onClick={() => setFocusMode(true)}>
-                <Maximize2 className="mr-1 h-4 w-4" /> Focus
+                <Maximize2 className="mr-1 h-4 w-4" /> Full Screen
               </Button>
             )}
             <SaveStatus state={metaSave.state} savedAt={metaSave.savedAt} />
