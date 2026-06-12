@@ -1066,6 +1066,7 @@ function DayEditor({ day, setDay, exercises, compact }: { day: any; setDay: (d: 
                 isDragging={dragRowIdx === i}
                 exercises={exercises}
                 compact={compact !== false}
+                purposeLabel={purposeLabels[i]}
               />
             </div>
           ))}
