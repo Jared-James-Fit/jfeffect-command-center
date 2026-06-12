@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
+import { ActionButton } from "@/components/action-button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -201,14 +201,14 @@ export function ClientActionRequestComposer({
               {file ? (
                 <div className="mt-1 flex items-center justify-between rounded-md border border-border bg-card px-2 py-1.5 text-xs">
                   <span className="truncate">{file.name}</span>
-                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setFile(null)}>
+                  <ActionButton variant="ghost" size="icon" className="h-6 w-6" onClick={() => setFile(null)}>
                     <X className="h-3.5 w-3.5" />
-                  </Button>
+                  </ActionButton>
                 </div>
               ) : (
-                <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
+                <ActionButton type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
                   <Upload className="mr-1 h-3.5 w-3.5" /> Choose file
-                </Button>
+                </ActionButton>
               )}
             </div>
           </div>
@@ -248,11 +248,11 @@ export function ClientActionRequestComposer({
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={sending}>Cancel</Button>
-          <Button onClick={submit} disabled={sending || !message.trim() || !clientId} className="bg-gradient-primary font-bold">
-            {sending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+          <ActionButton variant="outline" onClick={() => onOpenChange(false)} disabled={sending}>Cancel</ActionButton>
+          <ActionButton onClick={submit} jobLabel="Sending action request" className="bg-gradient-primary font-bold">
+            <Send className="mr-2 h-4 w-4" />
             Send Request
-          </Button>
+          </ActionButton>
         </DialogFooter>
       </DialogContent>
     </Dialog>

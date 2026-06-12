@@ -5,7 +5,7 @@ import { adminGetJfSettings, adminUpdateJfSettings } from "@/lib/jf-billing.func
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Button } from "@/components/ui/button";
+import { ActionButton } from "@/components/action-button";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { Sparkles, AlertTriangle, CheckCircle2, Circle, KeyRound } from "lucide-react";
@@ -192,7 +192,7 @@ export function JfMembershipSettingsCard() {
           <Textarea rows={4} value={form.refund_policy ?? ""} onChange={(e) => setForm({ ...form, refund_policy: e.target.value })} />
         </div>
       </div>
-      <Button onClick={() => save.mutate()} disabled={save.isPending || !canSave}>{save.isPending ? "Saving…" : "Save settings"}</Button>
+      <ActionButton onClick={() => save.mutate()} jobLabel="Saving membership settings">Save settings</ActionButton>
       <p className="text-[11px] text-muted-foreground">
         Public signup link: <code>/join</code>. Webhook endpoint is the same Stripe webhook you already configured.
       </p>

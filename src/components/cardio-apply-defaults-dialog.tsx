@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
+import { ActionButton } from "@/components/action-button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
@@ -107,8 +107,8 @@ export function CardioApplyDefaultsDialog({ open, onOpenChange, clientId, existi
           <div className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning">
             Default cardio targets already exist for one or more day types. Choose how to handle them:
             <div className="mt-2 flex gap-2">
-              <Button size="sm" variant={mode === "update" ? "default" : "outline"} onClick={() => setMode("update")}>Update existing</Button>
-              <Button size="sm" variant={mode === "create" ? "default" : "outline"} onClick={() => setMode("create")}>Keep existing, add missing</Button>
+              <ActionButton size="sm" variant={mode === "update" ? "default" : "outline"} onClick={() => setMode("update")}>Update existing</ActionButton>
+              <ActionButton size="sm" variant={mode === "create" ? "default" : "outline"} onClick={() => setMode("create")}>Keep existing, add missing</ActionButton>
             </div>
           </div>
         )}
@@ -140,10 +140,10 @@ export function CardioApplyDefaultsDialog({ open, onOpenChange, clientId, existi
         </ul>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={apply} disabled={saving} className="bg-gradient-primary font-bold uppercase">
-            {saving ? "Applying…" : "Apply"}
-          </Button>
+          <ActionButton variant="outline" onClick={() => onOpenChange(false)}>Cancel</ActionButton>
+          <ActionButton onClick={apply} jobLabel="Applying default cardio" className="bg-gradient-primary font-bold uppercase">
+            Apply
+          </ActionButton>
         </DialogFooter>
       </DialogContent>
     </Dialog>

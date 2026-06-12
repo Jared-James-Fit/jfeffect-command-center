@@ -189,9 +189,9 @@ export function BroadcastComposer({ open, onOpenChange, initial, quick, onSaved 
       return row;
     }).catch((e: any) => {
       toast.error(e.message ?? "Save failed");
-    }).finally(() => {    } finally {
+    }).finally(() => {
       setSaving(false);
-    }
+    });
   }
 
   const isVoice = type === "Voice Message";

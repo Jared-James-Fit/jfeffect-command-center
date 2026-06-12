@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
+import { ActionButton } from "@/components/action-button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -157,13 +157,13 @@ export function CardioTargetDialog({ open, onOpenChange, clientId, clients = [],
               {formatCalorieTarget(form.calorie_target_min ? Number(form.calorie_target_min) : null, form.calorie_target_max ? Number(form.calorie_target_max) : null) ?? "Optional calorie target"}
             </span>
             <div className="flex gap-1">
-              <Button type="button" size="sm" variant="outline" onClick={() => {
+              <ActionButton type="button" size="sm" variant="outline" onClick={() => {
                 const est = estimateCalorieRange(Number(form.duration_minutes), form.intensity);
                 if (!est) return toast.error("Add duration + intensity first");
                 setForm({ ...form, calorie_target_min: est.min, calorie_target_max: est.max, show_calories_to_client: true });
-              }}><Calculator className="mr-1 h-4 w-4" /> Estimate</Button>
+              }}><Calculator className="mr-1 h-4 w-4" /> Estimate</ActionButton>
               {(form.calorie_target_min || form.calorie_target_max) && (
-                <Button type="button" size="sm" variant="ghost" onClick={() => setForm({ ...form, calorie_target_min: null, calorie_target_max: null, show_calories_to_client: false })}><X className="h-4 w-4" /></Button>
+                <ActionButton type="button" size="sm" variant="ghost" onClick={() => setForm({ ...form, calorie_target_min: null, calorie_target_max: null, show_calories_to_client: false })}><X className="h-4 w-4" /></ActionButton>
               )}
             </div>
           </div>
@@ -186,8 +186,8 @@ export function CardioTargetDialog({ open, onOpenChange, clientId, clients = [],
           <div className="md:col-span-2"><Label>Private admin notes</Label><Textarea rows={2} value={form.admin_notes ?? ""} onChange={(e) => set("admin_notes", e.target.value)} /></div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={save} disabled={saving} className="bg-gradient-primary font-bold uppercase">{saving ? "Saving…" : "Save"}</Button>
+          <ActionButton variant="outline" onClick={() => onOpenChange(false)}>Cancel</ActionButton>
+          <ActionButton onClick={save} jobLabel="Saving cardio target" className="bg-gradient-primary font-bold uppercase">Save</ActionButton>
         </DialogFooter>
       </DialogContent>
     </Dialog>

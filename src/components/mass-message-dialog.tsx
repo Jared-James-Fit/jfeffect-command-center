@@ -74,11 +74,19 @@ export function MassMessageDialog({ open, onOpenChange }: { open: boolean; onOpe
     try {
       if (mode === "group") {
         if (!groupId) { setBusy(false); return toast.error("Pick a group"); }
-        await send({ data: { mode: "group", group_id: groupId, body: body.trim() } as any });
+        await runJob({ title: "Sending group message" }, async () => {
+          await send({ data: { mode: "group", group_id: groupId, body: body.trim() } as any });
+        });
       } else {
-        const payload: any = { mode: "individual", body: body.trim(), audience };
-        if (audience === "selected") payload.client_ids = Object.keys(selected);
-        await send({ data: payload });
+        const recipientIds = audience === "selected" ? Object.keys(selected) : activeClients.map((c: any) => c.id);
+        
+        await runBulkJob({
+          title: "Sending mass messages",
+          items: recipientIds,
+          itemNoun: "recipients",
+        }, async (clientId) => {
+          await send({ data: { mode: "individual", body: body.trim(), audience: "selected", client_ids: [clientId] } as any });
+        });
       }
       toast.success("Sent");
       qc.invalidateQueries({ queryKey: ["last-messages"] });
@@ -86,8 +94,7 @@ export function MassMessageDialog({ open, onOpenChange }: { open: boolean; onOpe
       close();
     } catch (e: any) {
       toast.error(e?.message ?? "Failed to send");
-    } finally { setBusy(false); }
-  };
+    } finally { setBusy(false); }  };
 
   return (
     <Dialog open={open} onOpenChange={(v) => v ? onOpenChange(v) : close()}>

@@ -430,34 +430,36 @@ export function GroupMessageThread({
     if (!user) return;
     const text = body.trim();
     if (!text && attachments.length === 0) return;
-    // Auto-detect plain URLs typed inline
-    const linkAtts: GroupAttachment[] = [];
-    const matches = text.match(LINK_RE);
-    if (matches) {
-      for (const u of matches.slice(0, 3)) {
-        if (attachments.some((a) => a.url === u)) continue;
-        linkAtts.push({ type: "link", url: u });
+    
+    await runJob({ title: "Sending message" }, async () => {
+      // Auto-detect plain URLs typed inline
+      const linkAtts: GroupAttachment[] = [];
+      const matches = text.match(LINK_RE);
+      if (matches) {
+        for (const u of matches.slice(0, 3)) {
+          if (attachments.some((a) => a.url === u)) continue;
+          linkAtts.push({ type: "link", url: u });
+        }
       }
-    }
-    setSending(true);
-    try {
-      await sendGroupMessage({
-        groupId,
-        senderId: user.id,
-        senderRole: canManage ? "admin" : "member",
-        body: text,
-        attachments: [...attachments, ...linkAtts],
-      });
-      setBody("");
-      setAttachments([]);
-      qc.invalidateQueries({ queryKey: ["group-messages", groupId] });
-      qc.invalidateQueries({ queryKey: ["chat-groups"] });
-    } catch (e: any) {
-      toast.error(e?.message ?? "Failed to send");
-    } finally {
-      setSending(false);
-    }
-  };
+      setSending(true);
+      try {
+        await sendGroupMessage({
+          groupId,
+          senderId: user.id,
+          senderRole: canManage ? "admin" : "member",
+          body: text,
+          attachments: [...attachments, ...linkAtts],
+        });
+        setBody("");
+        setAttachments([]);
+        qc.invalidateQueries({ queryKey: ["group-messages", groupId] });
+        qc.invalidateQueries({ queryKey: ["chat-groups"] });
+      } finally {
+        setSending(false);
+      }
+    }).catch((e: any) => {
+       toast.error(e?.message ?? "Failed to send");
+    });  };
 
   /* ---------------- Render ---------------- */
 

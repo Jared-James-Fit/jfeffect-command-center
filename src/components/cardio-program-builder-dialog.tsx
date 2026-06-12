@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
+import { ActionButton } from "@/components/action-button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -161,7 +161,7 @@ export function CardioProgramBuilderDialog({ open, onOpenChange, clientId, clien
         <div className="mt-4 space-y-3">
           <div className="flex items-center justify-between">
             <h4 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">Cardio Rows</h4>
-            <Button size="sm" variant="outline" onClick={() => addRow()}><Plus className="mr-1 h-4 w-4" /> Add row</Button>
+            <ActionButton size="sm" variant="outline" onClick={() => addRow()}><Plus className="mr-1 h-4 w-4" /> Add row</ActionButton>
           </div>
 
           {rows.map((r, i) => {
@@ -224,11 +224,11 @@ export function CardioProgramBuilderDialog({ open, onOpenChange, clientId, clien
                     <Input className="h-9" type="number" value={r.calorie_target_max} onChange={(e) => updateRow(i, { calorie_target_max: e.target.value })} />
                   </div>
                   <div className="flex gap-1">
-                    <Button type="button" size="sm" variant="outline" onClick={() => estimateRow(i)} title="Estimate from duration + intensity">
+                    <ActionButton type="button" size="sm" variant="outline" onClick={() => estimateRow(i)} title="Estimate from duration + intensity">
                       <Calculator className="mr-1 h-4 w-4" /> Estimate
-                    </Button>
+                    </ActionButton>
                     {(r.calorie_target_min || r.calorie_target_max) && (
-                      <Button type="button" size="sm" variant="ghost" onClick={() => clearCalories(i)}><X className="h-4 w-4" /></Button>
+                      <ActionButton type="button" size="sm" variant="ghost" onClick={() => clearCalories(i)}><X className="h-4 w-4" /></ActionButton>
                     )}
                   </div>
                 </div>
@@ -246,8 +246,8 @@ export function CardioProgramBuilderDialog({ open, onOpenChange, clientId, clien
                 <Textarea rows={1} placeholder="Notes for client (optional)" value={r.client_notes} onChange={(e) => updateRow(i, { client_notes: e.target.value })} />
 
                 <div className="flex justify-end gap-1">
-                  <Button size="sm" variant="ghost" onClick={() => duplicateRow(i)}><Copy className="h-4 w-4" /></Button>
-                  <Button size="sm" variant="ghost" className="text-destructive" onClick={() => deleteRow(i)} disabled={rows.length === 1}><Trash2 className="h-4 w-4" /></Button>
+                  <ActionButton size="sm" variant="ghost" onClick={() => duplicateRow(i)}><Copy className="h-4 w-4" /></ActionButton>
+                  <ActionButton size="sm" variant="ghost" className="text-destructive" onClick={() => deleteRow(i)} disabled={rows.length === 1}><Trash2 className="h-4 w-4" /></ActionButton>
                 </div>
               </div>
             );
@@ -264,10 +264,10 @@ export function CardioProgramBuilderDialog({ open, onOpenChange, clientId, clien
         </div>
 
         <DialogFooter className="mt-4">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={save} disabled={saving} className="bg-gradient-primary font-bold uppercase">
-            {saving ? "Saving…" : `Save & Assign (${rows.length})`}
-          </Button>
+          <ActionButton variant="outline" onClick={() => onOpenChange(false)}>Cancel</ActionButton>
+          <ActionButton onClick={save} jobLabel="Saving cardio program" className="bg-gradient-primary font-bold uppercase">
+            Save & Assign ({rows.length})
+          </ActionButton>
         </DialogFooter>
       </DialogContent>
     </Dialog>

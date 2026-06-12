@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getSalesPageAdmin, updateSalesPage } from "@/lib/sales-pages.functions";
 import { ShareToolbar } from "@/components/sales/share-toolbar";
 import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { ActionButton } from "@/components/action-button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -77,12 +77,12 @@ export function SalesPageEditor({ pageKey }: { pageKey: PageKey }) {
             {draft.published ? "Live" : "Unpublished"}
           </div>
           <a href={`/${pageKey}`} target="_blank" rel="noreferrer">
-            <Button size="sm" variant="outline"><ExternalLink className="mr-1 h-3 w-3" />Preview / Open live</Button>
+            <ActionButton size="sm" variant="outline"><ExternalLink className="mr-1 h-3 w-3" />Preview / Open live</ActionButton>
           </a>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={togglePublish}>{draft.published ? "Unpublish" : "Publish"}</Button>
-          <Button onClick={handleSave}>Save changes</Button>
+          <ActionButton variant="outline" onClick={togglePublish} jobLabel="Updating publish status">{draft.published ? "Unpublish" : "Publish"}</ActionButton>
+          <ActionButton onClick={handleSave} jobLabel="Saving sales page">Save changes</ActionButton>
         </div>
       </div>
 
@@ -141,9 +141,9 @@ export function SalesPageEditor({ pageKey }: { pageKey: PageKey }) {
       <Card className="p-5 space-y-3">
         <div className="flex items-center justify-between">
           <div className="text-xs font-bold uppercase tracking-widest text-muted-foreground">FAQ</div>
-          <Button size="sm" variant="outline" onClick={() => updateSection("faq", [...(draft.sections?.faq ?? []), { q: "", a: "" }])}>
+          <ActionButton size="sm" variant="outline" onClick={() => updateSection("faq", [...(draft.sections?.faq ?? []), { q: "", a: "" }])}>
             <Plus className="mr-1 h-3 w-3" />Add
-          </Button>
+          </ActionButton>
         </div>
         <div className="space-y-3">
           {(draft.sections?.faq ?? []).map((f: any, i: number) => (
@@ -155,9 +155,9 @@ export function SalesPageEditor({ pageKey }: { pageKey: PageKey }) {
                 const list = [...draft.sections.faq]; list[i] = { ...list[i], a: e.target.value }; updateSection("faq", list);
               }} />
               <div className="flex justify-end">
-                <Button size="sm" variant="ghost" onClick={() => updateSection("faq", draft.sections.faq.filter((_: any, idx: number) => idx !== i))}>
+                <ActionButton size="sm" variant="ghost" onClick={() => updateSection("faq", draft.sections.faq.filter((_: any, idx: number) => idx !== i))}>
                   <Trash2 className="h-3 w-3" />
-                </Button>
+                </ActionButton>
               </div>
             </div>
           ))}
@@ -171,9 +171,9 @@ export function SalesPageEditor({ pageKey }: { pageKey: PageKey }) {
             <div className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Visuals</div>
             <div className="text-[11px] text-muted-foreground">Paste any image URL. Slots: <code>app_preview</code> for app screenshots, <code>proof</code> for transformation/results images.</div>
           </div>
-          <Button size="sm" variant="outline" onClick={() => update({ visuals: [...(draft.visuals ?? []), { url: "", alt: "", slot: "app_preview", visible: true }] })}>
+          <ActionButton size="sm" variant="outline" onClick={() => update({ visuals: [...(draft.visuals ?? []), { url: "", alt: "", slot: "app_preview", visible: true }] })}>
             <Plus className="mr-1 h-3 w-3" />Add visual
-          </Button>
+          </ActionButton>
         </div>
         <div className="space-y-2">
           {(draft.visuals ?? []).map((v: any, i: number) => (
@@ -192,18 +192,18 @@ export function SalesPageEditor({ pageKey }: { pageKey: PageKey }) {
                 </SelectContent>
               </Select>
               <div className="flex items-center justify-end gap-1">
-                <Button size="sm" variant="ghost" title={v.visible !== false ? "Visible" : "Hidden"} onClick={() => { const list = [...draft.visuals]; list[i] = { ...list[i], visible: !(v.visible !== false) }; update({ visuals: list }); }}>
+                <ActionButton size="sm" variant="ghost" title={v.visible !== false ? "Visible" : "Hidden"} onClick={() => { const list = [...draft.visuals]; list[i] = { ...list[i], visible: !(v.visible !== false) }; update({ visuals: list }); }}>
                   {v.visible !== false ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3 text-muted-foreground" />}
-                </Button>
-                <Button size="sm" variant="ghost" disabled={i === 0} onClick={() => { const list = [...draft.visuals]; [list[i - 1], list[i]] = [list[i], list[i - 1]]; update({ visuals: list }); }}>
+                </ActionButton>
+                <ActionButton size="sm" variant="ghost" disabled={i === 0} onClick={() => { const list = [...draft.visuals]; [list[i - 1], list[i]] = [list[i], list[i - 1]]; update({ visuals: list }); }}>
                   <ArrowUp className="h-3 w-3" />
-                </Button>
-                <Button size="sm" variant="ghost" disabled={i === draft.visuals.length - 1} onClick={() => { const list = [...draft.visuals]; [list[i + 1], list[i]] = [list[i], list[i + 1]]; update({ visuals: list }); }}>
+                </ActionButton>
+                <ActionButton size="sm" variant="ghost" disabled={i === draft.visuals.length - 1} onClick={() => { const list = [...draft.visuals]; [list[i + 1], list[i]] = [list[i], list[i + 1]]; update({ visuals: list }); }}>
                   <ArrowDown className="h-3 w-3" />
-                </Button>
-                <Button size="sm" variant="ghost" onClick={() => update({ visuals: draft.visuals.filter((_: any, idx: number) => idx !== i) })}>
+                </ActionButton>
+                <ActionButton size="sm" variant="ghost" onClick={() => update({ visuals: draft.visuals.filter((_: any, idx: number) => idx !== i) })}>
                   <Trash2 className="h-3 w-3" />
-                </Button>
+                </ActionButton>
               </div>
             </div>
           ))}
@@ -217,9 +217,9 @@ export function SalesPageEditor({ pageKey }: { pageKey: PageKey }) {
       <Card className="p-5 space-y-3">
         <div className="flex items-center justify-between">
           <div className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Testimonials</div>
-          <Button size="sm" variant="outline" onClick={() => update({ testimonials: [...(draft.testimonials ?? []), { name: "", quote: "", image_url: "", visible: true }] })}>
+          <ActionButton size="sm" variant="outline" onClick={() => update({ testimonials: [...(draft.testimonials ?? []), { name: "", quote: "", image_url: "", visible: true }] })}>
             <Plus className="mr-1 h-3 w-3" />Add testimonial
-          </Button>
+          </ActionButton>
         </div>
         <div className="space-y-2">
           {(draft.testimonials ?? []).map((t: any, i: number) => (
@@ -229,9 +229,9 @@ export function SalesPageEditor({ pageKey }: { pageKey: PageKey }) {
               <Input value={t.image_url ?? ""} placeholder="Image URL (optional)" onChange={(e) => { const list = [...draft.testimonials]; list[i] = { ...list[i], image_url: e.target.value }; update({ testimonials: list }); }} />
               <div className="flex items-center justify-end gap-1">
                 <Switch checked={t.visible !== false} onCheckedChange={(c) => { const list = [...draft.testimonials]; list[i] = { ...list[i], visible: c }; update({ testimonials: list }); }} />
-                <Button size="sm" variant="ghost" onClick={() => update({ testimonials: draft.testimonials.filter((_: any, idx: number) => idx !== i) })}>
+                <ActionButton size="sm" variant="ghost" onClick={() => update({ testimonials: draft.testimonials.filter((_: any, idx: number) => idx !== i) })}>
                   <Trash2 className="h-3 w-3" />
-                </Button>
+                </ActionButton>
               </div>
             </div>
           ))}
@@ -246,7 +246,7 @@ export function SalesPageEditor({ pageKey }: { pageKey: PageKey }) {
 
       <div className="sticky bottom-4 z-10 flex justify-end">
         <div className="rounded-lg border border-border bg-card/90 p-2 backdrop-blur shadow-lg">
-          <Button onClick={handleSave} className="font-bold">Save changes</Button>
+          <ActionButton onClick={handleSave} jobLabel="Saving sales page" className="font-bold">Save changes</ActionButton>
         </div>
       </div>
     </div>
@@ -258,17 +258,17 @@ function ListEditor({ title, value, onChange }: { title: string; value: string[]
     <Card className="p-5 space-y-2">
       <div className="flex items-center justify-between">
         <div className="text-xs font-bold uppercase tracking-widest text-muted-foreground">{title}</div>
-        <Button size="sm" variant="outline" onClick={() => onChange([...(value ?? []), ""])}>
+        <ActionButton size="sm" variant="outline" onClick={() => onChange([...(value ?? []), ""])}>
           <Plus className="mr-1 h-3 w-3" />Add
-        </Button>
+        </ActionButton>
       </div>
       <div className="space-y-2">
         {(value ?? []).map((s, i) => (
           <div key={i} className="flex gap-2">
             <Input value={s} onChange={(e) => { const list = [...value]; list[i] = e.target.value; onChange(list); }} />
-            <Button size="sm" variant="ghost" onClick={() => onChange(value.filter((_, idx) => idx !== i))}>
+            <ActionButton size="sm" variant="ghost" onClick={() => onChange(value.filter((_, idx) => idx !== i))}>
               <Trash2 className="h-3 w-3" />
-            </Button>
+            </ActionButton>
           </div>
         ))}
       </div>
