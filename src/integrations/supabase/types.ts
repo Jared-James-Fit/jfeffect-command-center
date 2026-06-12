@@ -5576,6 +5576,35 @@ export type Database = {
           },
         ]
       }
+      nf_form_popup_dismissals: {
+        Row: {
+          dismissed_at: string
+          form_id: string
+          occurrence_date: string
+          user_id: string
+        }
+        Insert: {
+          dismissed_at?: string
+          form_id: string
+          occurrence_date: string
+          user_id: string
+        }
+        Update: {
+          dismissed_at?: string
+          form_id?: string
+          occurrence_date?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nf_form_popup_dismissals_form_id_fkey"
+            columns: ["form_id"]
+            isOneToOne: false
+            referencedRelation: "nf_forms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       nf_forms: {
         Row: {
           active: boolean
@@ -5592,6 +5621,12 @@ export type Database = {
           id: string
           kind: string
           open_style: string
+          popup_enabled: boolean
+          popup_end_date: string | null
+          popup_end_time: string | null
+          popup_start_date: string | null
+          popup_start_time: string | null
+          popup_weekdays: number[]
           recurrence: string
           recurrence_day: string | null
           requires_client_identity: boolean
@@ -5615,6 +5650,12 @@ export type Database = {
           id?: string
           kind?: string
           open_style?: string
+          popup_enabled?: boolean
+          popup_end_date?: string | null
+          popup_end_time?: string | null
+          popup_start_date?: string | null
+          popup_start_time?: string | null
+          popup_weekdays?: number[]
           recurrence?: string
           recurrence_day?: string | null
           requires_client_identity?: boolean
@@ -5638,6 +5679,12 @@ export type Database = {
           id?: string
           kind?: string
           open_style?: string
+          popup_enabled?: boolean
+          popup_end_date?: string | null
+          popup_end_time?: string | null
+          popup_start_date?: string | null
+          popup_start_time?: string | null
+          popup_weekdays?: number[]
           recurrence?: string
           recurrence_day?: string | null
           requires_client_identity?: boolean

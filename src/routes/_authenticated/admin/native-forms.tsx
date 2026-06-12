@@ -302,6 +302,12 @@ function FormEditorDialog({ form, open, onClose, initialTab = "settings" }: { fo
       visibility: local.visibility,
       auto_assign_new_clients: local.auto_assign_new_clients,
       requires_client_identity: local.requires_client_identity,
+      popup_enabled: local.popup_enabled ?? false,
+      popup_weekdays: local.popup_weekdays ?? [],
+      popup_start_time: local.popup_start_time ?? null,
+      popup_end_time: local.popup_end_time ?? null,
+      popup_start_date: local.popup_start_date ?? null,
+      popup_end_date: local.popup_end_date ?? null,
     };
     await upsertForm({ id: form.id, ...patch });
     qc.invalidateQueries({ queryKey: ["nf-forms"] });
@@ -422,6 +428,7 @@ function FormEditorDialog({ form, open, onClose, initialTab = "settings" }: { fo
               <Switch checked={local.active} onCheckedChange={(v) => setLocal({ ...local, active: v })} />
               <Label>Active (clients can submit)</Label>
             </div>
+            <PopupConfigEditor local={local} setLocal={setLocal} />
             <div className="flex justify-end">
               <ActionButton onAction={saveSettings} loadingLabel="Saving…" successLabel="Saved" successToast="Form saved">
                 Save
@@ -785,6 +792,131 @@ function AssignmentsEditor({ formId, form, onFormChange }: { formId: string; for
           );
         })}
       </div>
+    </div>
+  );
+}
+
+/* -------------------- Popup config -------------------- */
+
+const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+function PopupConfigEditor({
+  local,
+  setLocal,
+}: {
+  local: NfForm;
+  setLocal: (f: NfForm) => void;
+}) {
+  const enabled = !!local.popup_enabled;
+  const days = local.popup_weekdays ?? [];
+
+  function toggleDay(d: number) {
+    const set = new Set(days);
+    if (set.has(d)) set.delete(d);
+    else set.add(d);
+    setLocal({ ...local, popup_weekdays: Array.from(set).sort() });
+  }
+
+  function setAllWeek() {
+    setLocal({ ...local, popup_weekdays: [0, 1, 2, 3, 4, 5, 6] });
+  }
+  function clearDays() {
+    setLocal({ ...local, popup_weekdays: [] });
+  }
+
+  return (
+    <div className="space-y-3 rounded-lg border border-border bg-secondary/10 p-3">
+      <div className="flex items-start gap-2">
+        <Switch
+          checked={enabled}
+          onCheckedChange={(v) => setLocal({ ...local, popup_enabled: v })}
+        />
+        <div>
+          <Label className="text-sm font-semibold">Show as in-app popup</Label>
+          <p className="text-[11px] text-muted-foreground">
+            Pops up for all active clients on the schedule below. Each client can dismiss it
+            (X / Not now); it stays hidden until the next scheduled day.
+          </p>
+        </div>
+      </div>
+
+      {enabled && (
+        <div className="space-y-3">
+          <div>
+            <div className="mb-1 flex items-center justify-between">
+              <Label className="text-xs">Days of week</Label>
+              <div className="flex gap-2 text-[11px]">
+                <button type="button" className="text-primary hover:underline" onClick={setAllWeek}>All week</button>
+                <button type="button" className="text-muted-foreground hover:underline" onClick={clearDays}>Clear</button>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {WEEKDAY_LABELS.map((lbl, i) => {
+                const on = days.includes(i);
+                return (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => toggleDay(i)}
+                    className={`rounded-md border px-2.5 py-1 text-xs font-medium transition ${
+                      on
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "border-border bg-background text-muted-foreground hover:bg-accent"
+                    }`}
+                  >
+                    {lbl}
+                  </button>
+                );
+              })}
+            </div>
+            {days.length === 0 && (
+              <p className="mt-1 text-[11px] text-muted-foreground">No days selected — popup will show every day.</p>
+            )}
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label className="text-xs">Earliest time</Label>
+              <Input
+                type="time"
+                value={local.popup_start_time ?? ""}
+                onChange={(e) => setLocal({ ...local, popup_start_time: e.target.value || null })}
+              />
+            </div>
+            <div>
+              <Label className="text-xs">Latest time</Label>
+              <Input
+                type="time"
+                value={local.popup_end_time ?? ""}
+                onChange={(e) => setLocal({ ...local, popup_end_time: e.target.value || null })}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label className="text-xs">Start date (optional)</Label>
+              <Input
+                type="date"
+                value={local.popup_start_date ?? ""}
+                onChange={(e) => setLocal({ ...local, popup_start_date: e.target.value || null })}
+              />
+            </div>
+            <div>
+              <Label className="text-xs">End date (optional)</Label>
+              <Input
+                type="date"
+                value={local.popup_end_date ?? ""}
+                onChange={(e) => setLocal({ ...local, popup_end_date: e.target.value || null })}
+              />
+            </div>
+          </div>
+
+          <p className="text-[11px] text-muted-foreground">
+            Times are evaluated in the client's local timezone.
+          </p>
+        </div>
+      )}
     </div>
   );
 }
