@@ -298,8 +298,7 @@ export const listCrmContacts = createServerFn({ method: "POST" })
         id, full_name, first_name, last_name, email, phone, instagram,
         lifecycle_stage, lead_temperature, lead_score, source, call_booked,
         next_follow_up_at, applied_at, converted_to_client_at,
-        assigned_coach_id, archived, status, user_id, created_at,
-        coaches:assigned_coach_id ( id, full_name )
+        assigned_coach_id, archived, status, user_id, created_at
       `)
       .order("created_at", { ascending: false })
       .limit(data.limit);
@@ -324,7 +323,16 @@ export const listCrmContacts = createServerFn({ method: "POST" })
 
     const { data: rows, error } = await q;
     if (error) throw new Error(error.message);
-    return { contacts: rows ?? [] };
+    const list = rows ?? [];
+    // Enrich with assigned coach name (no FK between clients and coaches).
+    const coachIds = Array.from(new Set(list.map((r: any) => r.assigned_coach_id).filter(Boolean)));
+    let coachMap: Record<string, string> = {};
+    if (coachIds.length) {
+      const { data: cs } = await supabaseAdmin.from("coaches").select("id, full_name").in("id", coachIds as string[]);
+      coachMap = Object.fromEntries((cs ?? []).map((c: any) => [c.id, c.full_name]));
+    }
+    const enriched = list.map((r: any) => ({ ...r, coaches: r.assigned_coach_id ? { id: r.assigned_coach_id, full_name: coachMap[r.assigned_coach_id] ?? null } : null }));
+    return { contacts: enriched };
   });
 
 /* ───── CRM contact profile ───── */
@@ -338,11 +346,18 @@ export const getCrmContact = createServerFn({ method: "POST" })
 
     const { data: contact, error } = await supabaseAdmin
       .from("clients")
-      .select(`*, coaches:assigned_coach_id ( id, full_name )`)
+      .select("*")
       .eq("id", data.id)
       .maybeSingle();
     if (error) throw new Error(error.message);
     if (!contact) throw new Error("Contact not found");
+
+    let coach: any = null;
+    if ((contact as any).assigned_coach_id) {
+      const { data: c } = await supabaseAdmin.from("coaches").select("id, full_name").eq("id", (contact as any).assigned_coach_id).maybeSingle();
+      coach = c ?? null;
+    }
+    (contact as any).coaches = coach;
 
     const [apps, appts, acts] = await Promise.all([
       supabaseAdmin
