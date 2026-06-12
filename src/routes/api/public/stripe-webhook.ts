@@ -5,27 +5,39 @@ import { stripeFetch } from "@/lib/stripe.server";
 // Verify Stripe signature using Web Crypto (HMAC-SHA256).
 // Header format: t=timestamp,v1=sig,v1=sig...
 async function verifyStripeSignature(payload: string, header: string | null, secret: string, toleranceSec = 300) {
-  if (!header) return false;
-  const parts = Object.fromEntries(header.split(",").map((p) => {
-    const [k, ...v] = p.split("=");
-    return [k, v.join("=")];
-  }));
-  const ts = parts.t;
+  if (!header) return { ok: false, reason: "missing signature header", ts: null, sigCount: 0 };
+  const ts = header.split(",").find((p) => p.startsWith("t="))?.slice(2) ?? null;
   const sigs = header
     .split(",")
     .filter((p) => p.startsWith("v1="))
     .map((p) => p.slice(3));
-  if (!ts || sigs.length === 0) return false;
+  if (!ts || sigs.length === 0) return { ok: false, reason: "missing timestamp or v1", ts, sigCount: sigs.length };
+  const now = Math.floor(Date.now() / 1000);
+  if (!Number.isFinite(Number(ts)) || Math.abs(now - Number(ts)) > toleranceSec) {
+    return { ok: false, reason: "bad timestamp", ts, sigCount: sigs.length };
+  }
   const signedPayload = `${ts}.${payload}`;
   const enc = new TextEncoder();
   const key = await crypto.subtle.importKey(
     "raw", enc.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"],
   );
   const sigBuf = await crypto.subtle.sign("HMAC", key, enc.encode(signedPayload));
-  const expected = Array.from(new Uint8Array(sigBuf)).map((b) => b.toString(16).padStart(2, "0")).join("");
-  const now = Math.floor(Date.now() / 1000);
-  if (Math.abs(now - Number(ts)) > toleranceSec) return false;
-  return sigs.some((s) => s === expected);
+  const expected = new Uint8Array(sigBuf);
+  const matches = sigs.some((s) => {
+    if (!/^[a-f0-9]{64}$/i.test(s)) return false;
+    const actual = new Uint8Array(s.match(/.{2}/g)!.map((byte) => Number.parseInt(byte, 16)));
+    if (actual.length !== expected.length) return false;
+    let diff = 0;
+    for (let i = 0; i < expected.length; i += 1) diff |= expected[i] ^ actual[i];
+    return diff === 0;
+  });
+  return { ok: matches, reason: matches ? "matched" : "signature mismatch", ts, sigCount: sigs.length };
+}
+
+async function secretFingerprint(secret: string | null) {
+  if (!secret) return null;
+  const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(secret));
+  return Array.from(new Uint8Array(hash)).slice(0, 6).map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
 function admin() {
@@ -290,22 +302,70 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
         // Accept both test and live webhook secrets so test-mode events from
         // the auto-created test endpoint and live-mode events from the live
         // endpoint both verify against their own signing secret.
-        const liveSecret = process.env.STRIPE_WEBHOOK_SECRET || null;
-        const testSecret = process.env.STRIPE_WEBHOOK_SECRET_TEST || null;
+        const liveSecret = process.env.STRIPE_WEBHOOK_SECRET?.trim() || null;
+        const testSecret = process.env.STRIPE_WEBHOOK_SECRET_TEST?.trim() || null;
         if (!liveSecret && !testSecret) {
+          console.warn("[stripe-webhook] verification failed", { reason: "missing secret", testConfigured: false, liveConfigured: false });
           return new Response("Webhook secret not configured", { status: 503 });
         }
 
         const sig = request.headers.get("stripe-signature");
         const raw = await request.text();
+        const rawByteLength = new TextEncoder().encode(raw).length;
+
+        let parsedPreview: any = null;
+        try { parsedPreview = JSON.parse(raw); } catch { /* parse fully after verification or return Bad JSON */ }
+        const livemode = parsedPreview?.livemode === true ? true : parsedPreview?.livemode === false ? false : null;
+        const candidates = livemode === true
+          ? [{ name: "LIVE", secret: liveSecret }, { name: "TEST", secret: testSecret }]
+          : [{ name: "TEST", secret: testSecret }, { name: "LIVE", secret: liveSecret }];
 
         let ok = false;
-        if (testSecret) ok = await verifyStripeSignature(raw, sig, testSecret);
-        if (!ok && liveSecret) ok = await verifyStripeSignature(raw, sig, liveSecret);
-        if (!ok) return new Response("Invalid signature", { status: 401 });
+        let matchedSecret: "TEST" | "LIVE" | null = null;
+        const attempts: Array<{ name: string; configured: boolean; length: number; startsWithWhsec: boolean; fingerprint: string | null; result: string }> = [];
+        for (const c of candidates) {
+          const configured = !!c.secret;
+          const base = {
+            name: c.name,
+            configured,
+            length: c.secret?.length ?? 0,
+            startsWithWhsec: c.secret?.startsWith("whsec_") ?? false,
+            fingerprint: await secretFingerprint(c.secret),
+          };
+          if (!c.secret) {
+            attempts.push({ ...base, result: "missing secret" });
+            continue;
+          }
+          const result = await verifyStripeSignature(raw, sig, c.secret);
+          attempts.push({ ...base, result: result.reason });
+          if (result.ok) {
+            ok = true;
+            matchedSecret = c.name as "TEST" | "LIVE";
+            break;
+          }
+        }
+        if (!ok) {
+          console.warn("[stripe-webhook] verification failed", {
+            reason: attempts.find((a) => a.result !== "missing secret")?.result ?? "missing secret",
+            eventId: parsedPreview?.id ?? null,
+            eventType: parsedPreview?.type ?? null,
+            livemode,
+            headerExists: !!sig,
+            rawByteLength,
+            attempts,
+          });
+          return new Response("Invalid signature", { status: 401 });
+        }
+        console.info("[stripe-webhook] verification passed", {
+          eventId: parsedPreview?.id ?? null,
+          eventType: parsedPreview?.type ?? null,
+          livemode,
+          matchedSecret,
+          rawByteLength,
+        });
 
         let event: any;
-        try { event = JSON.parse(raw); } catch { return new Response("Bad JSON", { status: 400 }); }
+        try { event = parsedPreview ?? JSON.parse(raw); } catch { return new Response("Bad JSON", { status: 400 }); }
 
         const supabase = admin();
         const obj = event?.data?.object ?? {};
