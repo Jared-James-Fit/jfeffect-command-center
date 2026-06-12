@@ -428,6 +428,7 @@ function FormEditorDialog({ form, open, onClose, initialTab = "settings" }: { fo
               <Switch checked={local.active} onCheckedChange={(v) => setLocal({ ...local, active: v })} />
               <Label>Active (clients can submit)</Label>
             </div>
+            <PopupConfigEditor local={local} setLocal={setLocal} />
             <div className="flex justify-end">
               <ActionButton onAction={saveSettings} loadingLabel="Saving…" successLabel="Saved" successToast="Form saved">
                 Save
