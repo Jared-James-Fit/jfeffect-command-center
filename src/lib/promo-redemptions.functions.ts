@@ -63,7 +63,7 @@ export const backfillPromoFromSession = createServerFn({ method: "POST" })
       fetchExpandedCheckoutSession,
       buildPromoRowFromSession,
       upsertPromoRedemption,
-    } = await import("@/routes/api/public/stripe-webhook");
+    } = await import("@/lib/promo-capture");
     let session: any;
     try {
       session = await fetchExpandedCheckoutSession(data.sessionId);
