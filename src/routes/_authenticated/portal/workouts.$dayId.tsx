@@ -184,6 +184,17 @@ function WorkoutDay() {
     return m;
   }, [exerciseNotes]);
 
+  // Derive ordered purpose labels (Primary/Secondary/.../Assistance) for the day.
+  const purposeLabels = useMemo(
+    () => derivePurposeLabels(rows as any[], (r: any) => (r.exercises as ExerciseMeta | null) ?? null),
+    [rows],
+  );
+  const purposeLabelById = useMemo(() => {
+    const m = new Map<string, string>();
+    (rows as any[]).forEach((r, i) => m.set(r.id, purposeLabels[i]));
+    return m;
+  }, [rows, purposeLabels]);
+
   // Auto-track: started_at on first mount (creates draft row if needed)
   const startedRef = useRef(false);
   useEffect(() => {
@@ -477,6 +488,7 @@ function WorkoutDay() {
                   focusMode
                   onChange={refresh}
                   onNoteChange={refreshNotes}
+                  purposeLabel={purposeLabelById.get(r.id) ?? null}
                 />
               ))}
             </WorkoutLoadBoundary>
@@ -575,6 +587,7 @@ function WorkoutDay() {
                 onUnitChange={(u) => setExerciseUnit(r.exercises?.id ?? null, r.id, u)}
                 onChange={refresh}
                 onNoteChange={refreshNotes}
+                purposeLabel={purposeLabelById.get(r.id) ?? null}
               />
             ))}
           </div>
