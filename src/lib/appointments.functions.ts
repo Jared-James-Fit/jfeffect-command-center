@@ -409,6 +409,12 @@ export const rescheduleAppointment = createServerFn({ method: "POST" })
       appointment_id: data.id, actor_user_id: userId, action: "rescheduled",
       details: { from: existing.starts_at, to: data.starts_at, by_role: isClientOwner ? "client" : isCoach ? "coach" : "admin" },
     });
+    await writeApptCrmActivity({
+      appt: { ...existing, starts_at: data.starts_at, ends_at: data.ends_at },
+      action: "rescheduled",
+      actorUserId: userId,
+      extra: { from: existing.starts_at, to: data.starts_at },
+    });
     return updated;
   });
 
