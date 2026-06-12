@@ -1240,8 +1240,29 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
         <Field className="col-span-1" label="RIR">
           <RowCell className={cn("text-sm font-medium tabular-nums", h)} inputMode="decimal" placeholder="2" value={row.rir} onCommit={(v) => setRow({ ...row, rir: v ?? "" })} />
         </Field>
-        <Field className="col-span-1" label="Rest s">
-          <RowCell className={cn("text-sm font-medium tabular-nums", h)} inputMode="numeric" placeholder="90" value={row.rest_seconds} onCommit={(v) => setRow({ ...row, rest_seconds: parseIntOrNull(v) })} />
+        <Field className="col-span-2 md:col-span-1" label={`Rest s${restIsOverride ? " *" : ""}`}>
+          <RowCell
+            className={cn(
+              "text-sm font-medium tabular-nums",
+              h,
+              restIsOverride && "ring-1 ring-primary/40",
+            )}
+            inputMode="numeric"
+            placeholder={String(restDefault)}
+            value={effectiveRest}
+            onCommit={(v) => {
+              const n = parseIntOrNull(v);
+              // Empty input clears the override; UI falls back to category default.
+              if (n == null) {
+                setRow({ ...row, rest_seconds_override: null, rest_seconds: null });
+              } else {
+                setRow({ ...row, rest_seconds_override: n, rest_seconds: n });
+              }
+            }}
+          />
+          <span className="px-0.5 text-[8px] leading-none text-muted-foreground">
+            {restIsOverride ? "override" : `auto · ${restCat}`}
+          </span>
         </Field>
         <div className="col-span-2 flex justify-end gap-0.5 pb-0.5">
           {onMoveUp && (
