@@ -10,6 +10,7 @@ import { BroadcastPopupGate } from "@/components/broadcast-popup-gate";
 import { ClientBirthdayCard } from "@/components/client-birthday-card";
 import { EventPopupGate } from "@/components/events/event-popup-gate";
 import { HomeScreenSetupGate } from "@/components/home-screen-setup-gate";
+import { FormPopupGate } from "@/components/form-popup-gate";
 
 function PortalLayout() {
   useActivityHeartbeat();
@@ -24,6 +25,7 @@ function PortalLayout() {
               <BroadcastPopupGate />
               <ClientBirthdayCard />
               <EventPopupGate />
+              <FormPopupGate />
               <HomeScreenSetupGate />
             </ClientTrainingScheduleGate>
           </ClientBasicInfoGate>
