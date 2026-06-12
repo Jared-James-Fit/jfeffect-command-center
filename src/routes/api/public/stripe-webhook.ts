@@ -1,6 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { createClient } from "@supabase/supabase-js";
 import { stripeFetch } from "@/lib/stripe.server";
+import {
+  buildPromoRowFromSession,
+  fetchExpandedCheckoutSession,
+  upsertPromoRedemption,
+} from "@/lib/promo-capture";
 
 // Verify Stripe signature using Web Crypto (HMAC-SHA256).
 // Header format: t=timestamp,v1=sig,v1=sig...
@@ -101,93 +106,17 @@ function isTerminalCancelled(purchase: any): boolean {
  * in the Stripe Dashboard — the app just records what was used, regardless of
  * product (JF Membership, coaching, one-time, future products).
  */
-const _UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const _uuidOrNull = (v: any) => (typeof v === "string" && _UUID_RE.test(v) ? v : null);
-
 async function captureCheckoutPromo(supabase: any, obj: any, eventId: string) {
   try {
-    const amountDiscount = Number(obj?.total_details?.amount_discount ?? 0);
-    const hasDiscountArr = Array.isArray(obj?.discounts) && obj.discounts.length > 0;
-    if (!amountDiscount && !hasDiscountArr) return;
-
-    // Refetch the session with promo/coupon expansions; event payload only
-    // includes IDs for `discounts[].coupon` / `discounts[].promotion_code`.
     let full: any = obj;
     try {
-      full = await stripeFetch(
-        `/checkout/sessions/${encodeURIComponent(obj.id)}` +
-          `?expand[]=total_details.breakdown.discounts` +
-          `&expand[]=discounts.promotion_code` +
-          `&expand[]=discounts.coupon`,
-      );
+      full = await fetchExpandedCheckoutSession(obj.id);
     } catch (e) {
-      console.warn("[stripe-webhook] promo expand fetch failed", (e as any)?.message || e);
+      console.warn("[stripe-webhook] session expand fetch failed", (e as any)?.message || e);
     }
-
-    const breakdown = full?.total_details?.breakdown?.discounts?.[0];
-    const discountObj = breakdown?.discount ?? full?.discounts?.[0] ?? null;
-    const coupon = discountObj?.coupon ?? null;
-    const promoCode = discountObj?.promotion_code ?? null;
-    const promoCodeId =
-      typeof promoCode === "string" ? promoCode : promoCode?.id ?? null;
-    const promoCodeText =
-      promoCode && typeof promoCode === "object" ? promoCode?.code ?? null : null;
-
-    const md = full?.metadata ?? obj?.metadata ?? {};
-    const couponObj = coupon && typeof coupon === "object" ? coupon : null;
-
-    const row = {
-      promotion_code: promoCodeText,
-      stripe_promotion_code_id: promoCodeId,
-      stripe_coupon_id: typeof coupon === "string" ? coupon : couponObj?.id ?? null,
-      discount_percent_off: couponObj?.percent_off ?? null,
-      discount_amount_off: couponObj?.amount_off ?? null,
-      discount_currency: couponObj?.currency ?? null,
-      discount_duration: couponObj?.duration ?? null,
-      amount_discount_cents:
-        breakdown?.amount ?? full?.total_details?.amount_discount ?? null,
-      product_type:
-        md.kind || md.source ||
-        (full?.mode === "subscription" ? "subscription" : "one_time"),
-      product_id: _uuidOrNull(md.product_id),
-      product_name: md.product_name || null,
-      checkout_type: full?.mode ?? null,
-      source: md.source || md.kind || null,
-      customer_email:
-        full?.customer_details?.email ?? full?.customer_email ?? null,
-      stripe_customer_id:
-        typeof full?.customer === "string"
-          ? full.customer
-          : full?.customer?.id ?? null,
-      stripe_subscription_id:
-        typeof full?.subscription === "string"
-          ? full.subscription
-          : full?.subscription?.id ?? null,
-      stripe_payment_intent_id:
-        typeof full?.payment_intent === "string"
-          ? full.payment_intent
-          : full?.payment_intent?.id ?? null,
-      stripe_checkout_session_id: full?.id ?? null,
-      client_id: _uuidOrNull(md.client_id),
-      member_id: _uuidOrNull(md.member_id),
-      user_id: _uuidOrNull(md.user_id),
-      stripe_event_id: eventId,
-      raw: { discount: discountObj, total_details: full?.total_details ?? null, metadata: md },
-      redeemed_at: new Date().toISOString(),
-    };
-
-    // Dedupe by checkout session id (partial unique index can't be an
-    // ON CONFLICT target, so check explicitly first).
-    if (row.stripe_checkout_session_id) {
-      const { data: existing } = await supabase
-        .from("promo_code_redemptions")
-        .select("id")
-        .eq("stripe_checkout_session_id", row.stripe_checkout_session_id)
-        .maybeSingle();
-      if (existing) return;
-    }
-    const { error } = await supabase.from("promo_code_redemptions").insert(row);
-    if (error) console.error("[stripe-webhook] promo insert failed", error);
+    const row = await buildPromoRowFromSession(full, eventId);
+    if (!row) return;
+    await upsertPromoRedemption(supabase, row);
   } catch (e) {
     console.error("[stripe-webhook] captureCheckoutPromo error", e);
   }
