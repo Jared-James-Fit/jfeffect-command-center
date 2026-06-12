@@ -870,6 +870,8 @@ function WeekEditor({ week, setWeek, exercises, onCopyDayToFuture, hideHeader, c
 function DayEditor({ day, setDay, exercises, compact }: { day: any; setDay: (d: any) => void; exercises: any[]; compact?: boolean }) {
   const rows = day.rows || [];
   const [dragOver, setDragOver] = useState(false);
+  const [dragRowIdx, setDragRowIdx] = useState<number | null>(null);
+  const [dropTargetIdx, setDropTargetIdx] = useState<number | null>(null);
   const clip = useClip();
   const addRow = () => setDay({ ...day, rows: [...rows, { sort_order: rows.length, sets: 3, reps_text: "8-12", time_profile: "accessory_compound" }] });
   const pasteFromClip = () => {
@@ -887,6 +889,15 @@ function DayEditor({ day, setDay, exercises, compact }: { day: any; setDay: (d: 
     setDay({ ...day, rows: next.map((r: any, i: number) => ({ ...r, sort_order: i })) });
   };
   const dayMin = useMemo(() => estimateDayMinutes(rows), [rows]);
+
+  const moveRow = (from: number, to: number) => {
+    if (from === to || from < 0 || to < 0 || from >= rows.length) return;
+    const next = [...rows];
+    const [moved] = next.splice(from, 1);
+    const insertAt = to > from ? to - 1 : to;
+    next.splice(insertAt, 0, moved);
+    setDay({ ...day, rows: next.map((r: any, i: number) => ({ ...r, sort_order: i })) });
+  };
 
   return (
     <div
@@ -929,16 +940,50 @@ function DayEditor({ day, setDay, exercises, compact }: { day: any; setDay: (d: 
           {dragOver ? "Drop exercise here" : "Drag exercises from the library, or click + Row"}
         </p>
       ) : (
-        <div className="space-y-1">
+        <div className="space-y-1.5">
           {rows.map((r: any, i: number) => (
-            <RowEditor
+            <div
               key={i}
-              row={r}
-              setRow={(nr) => { const copy = [...rows]; copy[i] = nr; setDay({ ...day, rows: copy }); }}
-              onDelete={() => setDay({ ...day, rows: rows.filter((_: any, j: number) => j !== i) })}
-              exercises={exercises}
-              compact={compact !== false}
-            />
+              onDragOver={(e) => {
+                if (dragRowIdx == null) return;
+                e.preventDefault();
+                e.stopPropagation();
+                e.dataTransfer.dropEffect = "move";
+                const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                const before = e.clientY < rect.top + rect.height / 2;
+                setDropTargetIdx(before ? i : i + 1);
+              }}
+              onDrop={(e) => {
+                if (dragRowIdx == null) return;
+                e.preventDefault();
+                e.stopPropagation();
+                const target = dropTargetIdx ?? i;
+                moveRow(dragRowIdx, target);
+                setDragRowIdx(null);
+                setDropTargetIdx(null);
+              }}
+              className={cn(
+                dropTargetIdx === i && "border-t-2 border-t-primary",
+                dropTargetIdx === i + 1 && "border-b-2 border-b-primary",
+              )}
+            >
+              <RowEditor
+                row={r}
+                setRow={(nr) => { const copy = [...rows]; copy[i] = nr; setDay({ ...day, rows: copy }); }}
+                onDelete={() => setDay({ ...day, rows: rows.filter((_: any, j: number) => j !== i) })}
+                onMoveUp={i > 0 ? () => moveRow(i, i - 1) : undefined}
+                onMoveDown={i < rows.length - 1 ? () => moveRow(i, i + 2) : undefined}
+                onDragStartRow={(e) => {
+                  e.dataTransfer.setData("application/x-pb-row-reorder", String(i));
+                  e.dataTransfer.effectAllowed = "move";
+                  setDragRowIdx(i);
+                }}
+                onDragEndRow={() => { setDragRowIdx(null); setDropTargetIdx(null); }}
+                isDragging={dragRowIdx === i}
+                exercises={exercises}
+                compact={compact !== false}
+              />
+            </div>
           ))}
         </div>
       )}
