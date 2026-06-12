@@ -871,14 +871,50 @@ function SetRow({ rowId, workoutId, exerciseId, exerciseName, clientId, setIndex
         actual_rpe_num: rpeNum,
         completed_at: new Date().toISOString(),
       };
+      let savedId: string | null = existing?.id ?? null;
+      // Snapshot "before" in the display unit so the audit diff is meaningful.
+      const before = existing
+        ? {
+            weight: unit === "kg"
+              ? (existing.actual_load_kg ?? existing.actual_load ?? null)
+              : (existing.actual_load_lb ?? existing.actual_load ?? null),
+            reps: existing.actual_reps ?? null,
+            rpe: existing.actual_rpe_num ?? existing.actual_rpe ?? null,
+            unit: existing.actual_load_unit ?? null,
+            status: existing.completed_at ? "completed" : null,
+          }
+        : { weight: null, reps: null, rpe: null, unit: null, status: null };
       if (existing) {
         const { error } = await sb.from("pl_row_results").update(payload).eq("id", existing.id);
         if (error) throw error;
       } else {
-        const { error } = await sb.from("pl_row_results").insert(payload);
+        const { data: inserted, error } = await sb.from("pl_row_results").insert(payload).select("id").maybeSingle();
         if (error) throw error;
+        savedId = inserted?.id ?? null;
       }
       onChange();
+      // Coach/admin POV audit trail. Only writes when impersonating, only the
+      // fields that actually changed, only after the save succeeds.
+      if (isImpersonating && user?.id && povClient?.id === clientId) {
+        const after = {
+          weight: loadNum,
+          reps: repsNum,
+          rpe: rpeNum,
+          unit,
+          status: "completed",
+        };
+        void writeSetEditAudit(before, after, {
+          setLogId: savedId,
+          clientId,
+          workoutId: workoutId ?? null,
+          exerciseId: exerciseId ?? null,
+          exerciseName: exerciseName ?? null,
+          editedByUserId: user.id,
+          editedByRole: "coach_pov",
+          editSource: "coach_pov",
+          pageRoute: typeof window !== "undefined" ? window.location.pathname : null,
+        });
+      }
     },
   });
 
