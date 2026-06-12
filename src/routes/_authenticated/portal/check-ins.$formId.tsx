@@ -266,6 +266,8 @@ function ClientFormRenderer() {
                   loadingLabel="Submitting…"
                   successLabel="Submitted"
                   successToast="Submitted! Coach Jared will reply in messenger."
+                  jobLabel="Submitting onboarding form"
+                  jobDescription={form?.title ?? undefined}
                   className="bg-gradient-primary font-bold"
                   icon={<Send className="h-4 w-4" />}
                 >
@@ -498,6 +500,8 @@ function ExternalFormView({
               loadingLabel="Marking…"
               successLabel="Submitted"
               successToast={submitted ? false : "Marked submitted"}
+              jobLabel="Marking form submitted"
+              jobDescription={form?.title ?? undefined}
               className="bg-gradient-primary font-bold"
               icon={<Check className="h-4 w-4" />}
             >
