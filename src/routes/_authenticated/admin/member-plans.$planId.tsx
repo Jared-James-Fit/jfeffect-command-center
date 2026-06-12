@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { Copy, Trash2 } from "lucide-react";
+import { runJob } from "@/lib/progress-jobs";
 import { useAutosave } from "@/hooks/use-autosave";
 import { SaveStatus } from "@/components/save-status";
 import { useConflictWatch } from "@/hooks/use-conflict-watch";
@@ -147,7 +148,22 @@ function MemberPlanEditor() {
     } catch (e: any) { toast.error(e?.message ?? "Save failed"); }
   };
 
-  const onPublish = async () => { await setStatus({ data: { planId, status: "Published" } }); toast.success("Published"); refresh(); };
+  const onPublish = () => runJob(
+    {
+      title: `Publishing "${plan.name}"`,
+      description: "Member plan",
+      steps: ["Validate content", "Save final content", "Publish to members", "Sync visibility/access", "Finalize"],
+      successToast: "Plan published",
+      successAction: { label: "View published plan", onClick: () => navigate({ to: "/m/plans/$planId", params: { planId } }) },
+    },
+    async (job) => {
+      job.completeStep(0); job.completeStep(1);
+      await setStatus({ data: { planId, status: "Published" } });
+      job.completeStep(2); job.completeStep(3);
+      refresh();
+      job.completeStep(4);
+    },
+  );
   const onUnpublish = async () => { await setStatus({ data: { planId, status: "Draft" } }); toast.success("Moved to draft"); refresh(); };
   const onArchive = async () => { await setStatus({ data: { planId, status: "Archived" } }); toast.success("Archived"); refresh(); };
   const onDuplicate = async () => { const r = await dup({ data: { planId } }); toast.success("Duplicated"); navigate({ to: "/admin/member-plans/$planId", params: { planId: r.plan.id } }); };

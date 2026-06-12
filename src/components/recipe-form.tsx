@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Loader2, Users } from "lucide-react";
 import { useAuth } from "@/lib/auth";
+import { runJob } from "@/lib/progress-jobs";
 import {
   createRecipe,
   updateRecipe,
@@ -90,37 +91,42 @@ export function RecipeForm({ open, onOpenChange, initial, onSaved }: Props) {
     try {
       const finalStatus: RecipeStatus = publish ? "Published" : status;
       const tagList = tags.split(",").map((t) => t.trim()).filter(Boolean);
-      let row: Recipe;
-      if (isEdit && initial) {
-        row = await updateRecipe(initial.id, {
-          title,
-          category,
-          access_scope: access,
-          status: finalStatus,
-          body,
-          video_url: videoUrl || null,
-          tags: tagList,
-        });
-      } else {
-        row = await createRecipe({
-          title,
-          category,
-          access_scope: access,
-          status: finalStatus,
-          body,
-          video_url: videoUrl || null,
-          tags: tagList,
-          authorId: user?.id,
-        });
-      }
-      if (access === "selected_clients") {
-        await setRecipeSelectedClients(row.id, selectedClients);
-      }
-      toast.success(publish ? "Published" : "Saved");
+      const row = await runJob<Recipe>(
+        {
+          title: publish ? `Publishing "${title}"` : `Saving "${title}"`,
+          description: category,
+          steps: ["Validate content", "Save content", "Publish to members", "Sync visibility", "Finalize"],
+          successToast: publish ? "Recipe published" : "Recipe saved",
+        },
+        async (job) => {
+          job.completeStep(0);
+          let saved: Recipe;
+          if (isEdit && initial) {
+            saved = await updateRecipe(initial.id, {
+              title, category, access_scope: access, status: finalStatus,
+              body, video_url: videoUrl || null, tags: tagList,
+            });
+          } else {
+            saved = await createRecipe({
+              title, category, access_scope: access, status: finalStatus,
+              body, video_url: videoUrl || null, tags: tagList,
+              authorId: user?.id,
+            });
+          }
+          job.completeStep(1);
+          job.completeStep(2);
+          if (access === "selected_clients") {
+            await setRecipeSelectedClients(saved.id, selectedClients);
+          }
+          job.completeStep(3);
+          job.completeStep(4);
+          return saved;
+        },
+      );
       onSaved?.(row);
       onOpenChange(false);
     } catch (e: any) {
-      toast.error(e.message ?? "Save failed");
+      // runJob handled the toast
     } finally {
       setSaving(false);
     }

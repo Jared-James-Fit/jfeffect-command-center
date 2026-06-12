@@ -16,6 +16,7 @@ import { DoubleConfirmDeleteDialog } from "@/components/double-confirm-delete-di
 import { AssignOfferDialog } from "@/components/assign-offer-dialog";
 import { OfferDetailDialog } from "@/components/offer-detail-dialog";
 import { toast } from "sonner";
+import { runJob } from "@/lib/progress-jobs";
 import { Copy, ExternalLink, Loader2, Plus, Trash2, ImagePlus, Pencil, Archive, ArchiveRestore, FileSignature, AlertTriangle, CheckCircle2, Search, X, ListChecks, Sparkles, Eye, CreditCard, Link2, Share2, Wand2 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
@@ -201,13 +202,37 @@ function PaymentLinksPage() {
       return;
     }
     setGeneratingLink(p.id);
+    let linkUrl = "";
     try {
-      const res = await generateLinkFn({ data: { id: p.id } });
-      toast.success("Payment link ready — copy and share anywhere.");
-      qc.invalidateQueries({ queryKey: ["coaching-products"] });
-      try { await navigator.clipboard.writeText(res.url); } catch {}
-    } catch (e: any) {
-      toast.error(e?.message ?? "Failed to generate payment link");
+      await runJob<{ url: string }>(
+        {
+          title: "Creating Stripe checkout link",
+          description: p.name,
+          steps: ["Validate product", "Create Stripe checkout session", "Save purchase record", "Generate checkout link", "Finalize"],
+          successToast: "Payment link ready — copied to clipboard",
+        },
+        async (job) => {
+          job.completeStep(0);
+          const res = await generateLinkFn({ data: { id: p.id } });
+          linkUrl = res.url;
+          job.completeStep(1); job.completeStep(2); job.completeStep(3);
+          qc.invalidateQueries({ queryKey: ["coaching-products"] });
+          try { await navigator.clipboard.writeText(res.url); } catch {}
+          job.completeStep(4);
+          return res;
+        },
+      );
+      // After success: attach success CTAs (Open / Copy) to the just-completed job.
+      const { jobStore } = await import("@/lib/progress-jobs");
+      const latest = jobStore.getSnapshot().find((j) => j.title === "Creating Stripe checkout link" && j.status === "success");
+      if (latest && linkUrl) {
+        jobStore.succeed(latest.id, {
+          statusText: "Link ready",
+          successAction: { label: "Open checkout link", onClick: () => window.open(linkUrl, "_blank", "noopener,noreferrer") },
+        });
+      }
+    } catch {
+      // runJob handled the toast
     } finally {
       setGeneratingLink(null);
     }
@@ -230,13 +255,23 @@ function PaymentLinksPage() {
     }
     setPreviewingCheckout(p.id);
     try {
-      const res = await previewCheckoutFn({
-        data: { productId: p.id, origin: window.location.origin },
-      });
-      window.open(res.url, "_blank", "noopener,noreferrer");
-      toast.success("Opened Stripe checkout preview in a new tab.");
-    } catch (e: any) {
-      toast.error(e?.message ?? "Failed to generate preview");
+      await runJob(
+        {
+          title: "Creating Stripe checkout preview",
+          description: p.name,
+          steps: ["Validate product", "Create Stripe checkout session", "Open preview"],
+          successToast: "Stripe checkout preview opened",
+        },
+        async (job) => {
+          job.completeStep(0);
+          const res = await previewCheckoutFn({ data: { productId: p.id, origin: window.location.origin } });
+          job.completeStep(1);
+          window.open(res.url, "_blank", "noopener,noreferrer");
+          job.completeStep(2);
+        },
+      );
+    } catch {
+      // runJob handled the toast
     } finally {
       setPreviewingCheckout(null);
     }
