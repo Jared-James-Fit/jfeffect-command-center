@@ -6847,10 +6847,13 @@ export type Database = {
       pl_row_results: {
         Row: {
           actual_load: number | null
+          actual_load_kg: number | null
+          actual_load_lb: number | null
           actual_load_unit: string | null
           actual_reps: number | null
           actual_rir: string | null
           actual_rpe: string | null
+          actual_rpe_num: number | null
           client_id: string
           completed_at: string | null
           created_at: string
@@ -6863,10 +6866,13 @@ export type Database = {
         }
         Insert: {
           actual_load?: number | null
+          actual_load_kg?: number | null
+          actual_load_lb?: number | null
           actual_load_unit?: string | null
           actual_reps?: number | null
           actual_rir?: string | null
           actual_rpe?: string | null
+          actual_rpe_num?: number | null
           client_id: string
           completed_at?: string | null
           created_at?: string
@@ -6879,10 +6885,13 @@ export type Database = {
         }
         Update: {
           actual_load?: number | null
+          actual_load_kg?: number | null
+          actual_load_lb?: number | null
           actual_load_unit?: string | null
           actual_reps?: number | null
           actual_rir?: string | null
           actual_rpe?: string | null
+          actual_rpe_num?: number | null
           client_id?: string
           completed_at?: string | null
           created_at?: string
@@ -8315,6 +8324,78 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      support_alerts: {
+        Row: {
+          client_id: string | null
+          coach_id: string | null
+          created_at: string
+          details: Json | null
+          device_info: Json | null
+          error_message: string | null
+          error_type: string
+          id: string
+          notified_via: string[]
+          page_route: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          status: string
+          updated_at: string
+          workout_date: string | null
+          workout_id: string | null
+        }
+        Insert: {
+          client_id?: string | null
+          coach_id?: string | null
+          created_at?: string
+          details?: Json | null
+          device_info?: Json | null
+          error_message?: string | null
+          error_type?: string
+          id?: string
+          notified_via?: string[]
+          page_route?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          status?: string
+          updated_at?: string
+          workout_date?: string | null
+          workout_id?: string | null
+        }
+        Update: {
+          client_id?: string | null
+          coach_id?: string | null
+          created_at?: string
+          details?: Json | null
+          device_info?: Json | null
+          error_message?: string | null
+          error_type?: string
+          id?: string
+          notified_via?: string[]
+          page_route?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          status?: string
+          updated_at?: string
+          workout_date?: string | null
+          workout_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "support_alerts_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "support_alerts_coach_id_fkey"
+            columns: ["coach_id"]
+            isOneToOne: false
+            referencedRelation: "coaches"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       suppressed_emails: {
         Row: {
