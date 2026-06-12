@@ -447,7 +447,7 @@ function WorkoutDay() {
   );
 }
 
-function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResults, existingNote, readonly = false, onChange, onNoteChange }: { row: any; dayId: string; dayTitle: string; clientId: string | undefined; blockId?: string | null; existingResults: any[]; existingNote?: any; readonly?: boolean; onChange: () => void; onNoteChange: () => void }) {
+function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResults, existingNote, readonly = false, unit = "kg", focusMode = false, onChange, onNoteChange }: { row: any; dayId: string; dayTitle: string; clientId: string | undefined; blockId?: string | null; existingResults: any[]; existingNote?: any; readonly?: boolean; unit?: "kg" | "lb"; focusMode?: boolean; onChange: () => void; onNoteChange: () => void }) {
   const name = row.exercises?.name ?? row.exercise_name_override ?? "Exercise";
   const exercise = row.exercises ?? null;
   const exerciseId = exercise?.id ?? null;
@@ -536,10 +536,31 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
         </p>
       )}
 
-      <div className="mt-3 space-y-2">
+      <div className={cn("mt-3 overflow-hidden rounded-md border border-border", focusMode && "text-base")}>
+        <div className={cn("grid items-center gap-2 border-b border-border bg-muted/40 px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground", focusMode ? "grid-cols-[44px_1fr_1fr_1fr_64px] text-xs" : "grid-cols-[36px_1fr_1fr_1fr_56px]")}>
+          <span>Set</span>
+          <span>Weight ({unit})</span>
+          <span>Reps</span>
+          <span>RPE</span>
+          <span className="text-right">Status</span>
+        </div>
         {Array.from({ length: setCount }).map((_, i) => {
           const existing = existingResults.find((x) => x.set_index === i + 1);
-          return <SetRow key={i} rowId={row.id} clientId={clientId} setIndex={i + 1} existing={existing} targetReps={row.reps_text} targetRpe={row.rpe} readonly={readonly} onChange={onChange} />;
+          return (
+            <SetRow
+              key={i}
+              rowId={row.id}
+              clientId={clientId}
+              setIndex={i + 1}
+              existing={existing}
+              targetReps={row.reps_text}
+              targetRpe={row.rpe}
+              readonly={readonly}
+              unit={unit}
+              focusMode={focusMode}
+              onChange={onChange}
+            />
+          );
         })}
       </div>
       <HowToSheet open={howToOpen} onOpenChange={setHowToOpen} exercise={exercise} fallbackName={name} fallbackVideo={video} />
@@ -750,10 +771,22 @@ function ExerciseNotesSheet({ open, onOpenChange, clientId, dayId, dayTitle, row
   );
 }
 
-function SetRow({ rowId, clientId, setIndex, existing, targetReps, targetRpe, readonly = false, onChange }: { rowId: string; clientId: string | undefined; setIndex: number; existing?: any; targetReps?: string | null; targetRpe?: string | null; readonly?: boolean; onChange: () => void }) {
-  const [load, setLoad] = useState(existing?.actual_load?.toString() ?? "");
+function SetRow({ rowId, clientId, setIndex, existing, targetReps, targetRpe, readonly = false, unit = "kg", focusMode = false, onChange }: { rowId: string; clientId: string | undefined; setIndex: number; existing?: any; targetReps?: string | null; targetRpe?: string | null; readonly?: boolean; unit?: "kg" | "lb"; focusMode?: boolean; onChange: () => void }) {
+  // Display weight is always shown in the active unit.
+  // existing stores normalized kg + lb columns (Stage 1 trigger keeps them in sync),
+  // plus the original actual_load/actual_load_unit pair. We pick whichever matches `unit`.
+  const initialDisplayLoad = (() => {
+    if (!existing) return "";
+    const kg = existing.actual_load_kg;
+    const lb = existing.actual_load_lb;
+    if (unit === "kg" && kg != null) return String(kg);
+    if (unit === "lb" && lb != null) return String(lb);
+    // Fallback to raw actual_load when normalized columns aren't populated yet.
+    return existing.actual_load != null ? String(existing.actual_load) : "";
+  })();
+  const [load, setLoad] = useState(initialDisplayLoad);
   const [reps, setReps] = useState(existing?.actual_reps?.toString() ?? "");
-  const [rpe, setRpe] = useState(existing?.actual_rpe ?? "");
+  const [rpe, setRpe] = useState(existing?.actual_rpe_num != null ? String(existing.actual_rpe_num) : (existing?.actual_rpe ?? ""));
   // Hydrate from any unsynced local draft on first mount for this set
   const draftKey = clientId ? `workout-set:${rowId}:${clientId}:${setIndex}` : null;
   const [hydrated, setHydrated] = useState(false);
@@ -773,28 +806,42 @@ function SetRow({ rowId, clientId, setIndex, existing, targetReps, targetRpe, re
 
   // Reset from server when the persisted result changes (but never while typing)
   useEffect(() => {
-    setLoad(existing?.actual_load?.toString() ?? "");
+    const kg = existing?.actual_load_kg;
+    const lb = existing?.actual_load_lb;
+    const display = unit === "kg"
+      ? (kg != null ? String(kg) : (existing?.actual_load != null ? String(existing.actual_load) : ""))
+      : (lb != null ? String(lb) : (existing?.actual_load != null ? String(existing.actual_load) : ""));
+    setLoad(display);
     setReps(existing?.actual_reps?.toString() ?? "");
-    setRpe(existing?.actual_rpe ?? "");
-  }, [existing?.id, existing?.actual_load, existing?.actual_reps, existing?.actual_rpe]);
+    setRpe(existing?.actual_rpe_num != null ? String(existing.actual_rpe_num) : (existing?.actual_rpe ?? ""));
+  }, [existing?.id, existing?.actual_load_kg, existing?.actual_load_lb, existing?.actual_load, existing?.actual_reps, existing?.actual_rpe_num, existing?.actual_rpe, unit]);
 
-  const value = useMemo(() => ({ load, reps, rpe }), [load, reps, rpe]);
+  const value = useMemo(() => ({ load, reps, rpe, unit }), [load, reps, rpe, unit]);
   const save = useAutosave({
     key: draftKey,
     value,
     delay: 800,
     enabled: !readonly && !!clientId && hydrated && (load.length > 0 || reps.length > 0 || rpe.length > 0 || !!existing),
-    onSave: async ({ load, reps, rpe }) => {
+    onSave: async ({ load, reps, rpe, unit }) => {
       if (readonly) return;
       if (!clientId) return;
       if (!load && !reps && !rpe && !existing) return;
+      // Validate numerics; silently skip persistence for invalid values (input stays).
+      const loadNum = load ? Number(load) : null;
+      const repsNum = reps ? parseInt(reps, 10) : null;
+      const rpeNum = rpe ? Number(rpe) : null;
+      if (load && (loadNum == null || !isFinite(loadNum) || loadNum < 0)) throw new Error("Weight must be a number");
+      if (reps && (repsNum == null || !isFinite(repsNum) || repsNum < 0)) throw new Error("Reps must be a whole number");
+      if (rpe && (rpeNum == null || !isFinite(rpeNum) || rpeNum < 0 || rpeNum > 10)) throw new Error("RPE must be 0–10");
       const payload = {
         row_id: rowId,
         client_id: clientId,
         set_index: setIndex,
-        actual_load: load ? parseFloat(load) : null,
-        actual_reps: reps ? parseInt(reps) : null,
+        actual_load: loadNum,
+        actual_load_unit: unit,
+        actual_reps: repsNum,
         actual_rpe: rpe || null,
+        actual_rpe_num: rpeNum,
         completed_at: new Date().toISOString(),
       };
       if (existing) {
@@ -808,14 +855,184 @@ function SetRow({ rowId, clientId, setIndex, existing, targetReps, targetRpe, re
     },
   });
 
+  const onEnter: React.KeyboardEventHandler<HTMLInputElement> = (e) => {
+    if (e.key === "Enter") { e.preventDefault(); (e.target as HTMLInputElement).blur(); save.flush(); }
+  };
+
   return (
-    <div className="flex items-center gap-2 text-xs">
-      <span className="w-10 font-mono text-muted-foreground">Set {setIndex}</span>
-      <Input className="h-9 w-20" inputMode="decimal" placeholder="kg" value={load} onChange={(e) => setLoad(e.target.value)} onBlur={() => save.flush()} readOnly={readonly} disabled={readonly} />
-      <Input className="h-9 w-16" inputMode="numeric" placeholder={targetReps || "reps"} value={reps} onChange={(e) => setReps(e.target.value)} onBlur={() => save.flush()} readOnly={readonly} disabled={readonly} />
-      <Input className="h-9 w-16" inputMode="decimal" placeholder={targetRpe ? `@${targetRpe}` : "RPE"} value={rpe} onChange={(e) => setRpe(e.target.value)} onBlur={() => save.flush()} readOnly={readonly} disabled={readonly} />
-      {!readonly && <SaveStatus state={save.state} savedAt={save.savedAt} compact className="ml-1" />}
-      {existing?.completed_at && <CheckCircle2 className="h-4 w-4 text-green-500" />}
+    <div className={cn(
+      "grid items-center gap-2 border-t border-border/60 px-3 py-2",
+      focusMode ? "grid-cols-[44px_1fr_1fr_1fr_64px]" : "grid-cols-[36px_1fr_1fr_1fr_56px]",
+      existing?.completed_at && "bg-green-500/5",
+    )}>
+      <span className={cn("font-mono text-muted-foreground", focusMode ? "text-sm" : "text-xs")}>{setIndex}</span>
+      <Input
+        className={cn(focusMode ? "h-11 text-base" : "h-9 text-sm")}
+        inputMode="decimal"
+        type="text"
+        pattern="[0-9]*\.?[0-9]*"
+        placeholder="—"
+        aria-label={`Set ${setIndex} weight in ${unit}`}
+        value={load}
+        onChange={(e) => setLoad(e.target.value.replace(/[^0-9.]/g, ""))}
+        onKeyDown={onEnter}
+        onBlur={() => save.flush()}
+        readOnly={readonly}
+        disabled={readonly}
+      />
+      <Input
+        className={cn(focusMode ? "h-11 text-base" : "h-9 text-sm")}
+        inputMode="numeric"
+        type="text"
+        pattern="[0-9]*"
+        placeholder={targetReps || "—"}
+        aria-label={`Set ${setIndex} reps`}
+        value={reps}
+        onChange={(e) => setReps(e.target.value.replace(/[^0-9]/g, ""))}
+        onKeyDown={onEnter}
+        onBlur={() => save.flush()}
+        readOnly={readonly}
+        disabled={readonly}
+      />
+      <Input
+        className={cn(focusMode ? "h-11 text-base" : "h-9 text-sm")}
+        inputMode="decimal"
+        type="text"
+        pattern="[0-9]*\.?[0-9]*"
+        placeholder={targetRpe ? String(targetRpe) : "—"}
+        aria-label={`Set ${setIndex} RPE`}
+        value={rpe}
+        onChange={(e) => setRpe(e.target.value.replace(/[^0-9.]/g, ""))}
+        onKeyDown={onEnter}
+        onBlur={() => save.flush()}
+        readOnly={readonly}
+        disabled={readonly}
+      />
+      <div className="flex items-center justify-end gap-1">
+        {!readonly && <SaveStatus state={save.state} savedAt={save.savedAt} compact />}
+        {existing?.completed_at && <CheckCircle2 className="h-4 w-4 text-green-500" />}
+      </div>
     </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* kg/lb toggle                                                                */
+/* -------------------------------------------------------------------------- */
+
+function UnitToggle({ unit, onChange }: { unit: "kg" | "lb"; onChange: (u: "kg" | "lb") => void }) {
+  return (
+    <div className="inline-flex items-center overflow-hidden rounded-md border border-border bg-secondary/40 text-xs">
+      {(["kg", "lb"] as const).map((u) => (
+        <button
+          key={u}
+          type="button"
+          onClick={() => unit !== u && onChange(u)}
+          aria-pressed={unit === u}
+          className={cn(
+            "px-3 py-1.5 font-bold uppercase tracking-wider transition-colors",
+            unit === u ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground",
+          )}
+        >
+          {u}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Workout load-failure boundary                                               */
+/* -------------------------------------------------------------------------- */
+
+class WorkoutLoadBoundary extends Component<
+  { children: ReactNode; clientId: string | null; clientName: string | null; dayId: string; route: string },
+  { hasError: boolean; error: Error | null }
+> {
+  state = { hasError: false, error: null as Error | null };
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error: Error, info: { componentStack: string }) {
+    console.error("[workout-load] error", error, info);
+  }
+  reset = () => this.setState({ hasError: false, error: null });
+  render() {
+    if (!this.state.hasError) return this.props.children as any;
+    return (
+      <WorkoutLoadFailureCard
+        clientId={this.props.clientId}
+        clientName={this.props.clientName}
+        dayId={this.props.dayId}
+        route={this.props.route}
+        error={this.state.error}
+        onRetry={this.reset}
+      />
+    );
+  }
+}
+
+function WorkoutLoadFailureCard({
+  clientId, clientName, dayId, route, error, onRetry,
+}: {
+  clientId: string | null;
+  clientName: string | null;
+  dayId: string;
+  route: string;
+  error: Error | null;
+  onRetry: () => void;
+}) {
+  const notifyFn = useServerFn(notifyCoachOfWorkoutFailure);
+  return (
+    <Card className="border-destructive/40 bg-destructive/5 p-6 space-y-4">
+      <div className="flex items-start gap-3">
+        <AlertTriangle className="mt-1 h-6 w-6 shrink-0 text-destructive" />
+        <div className="space-y-1">
+          <div className="text-base font-bold">Workout didn’t load properly.</div>
+          <div className="text-sm text-muted-foreground">Please contact your coach so we can fix this fast.</div>
+        </div>
+      </div>
+      {error?.message && (
+        <div className="rounded border border-border/60 bg-background/60 p-2 font-mono text-[11px] text-muted-foreground">
+          {error.message}
+        </div>
+      )}
+      <div className="flex flex-wrap gap-2">
+        <ActionButton
+          jobLabel="Notifying coach"
+          jobDescription={clientName ?? undefined}
+          loadingLabel="Notifying…"
+          successLabel="Coach notified"
+          icon={<Send className="h-4 w-4" />}
+          onAction={async () => {
+            await runJob(
+              { title: "Notifying coach", description: clientName ?? "Workout load failure", steps: ["Capturing context", "Creating alert", "Sending SMS", "Done"], successToast: "Coach has been notified" },
+              async (job) => {
+                job.completeStep(0);
+                const device = typeof navigator !== "undefined" ? { userAgent: navigator.userAgent } : null;
+                job.completeStep(1);
+                const res: any = await notifyFn({ data: {
+                  client_id: clientId ?? undefined,
+                  workout_id: dayId,
+                  page_route: route,
+                  error_type: "workout_load_failure",
+                  error_message: error?.message ?? null,
+                  device_info: device,
+                  details: { stack: error?.stack ?? null },
+                } });
+                job.completeStep(2);
+                job.completeStep(3);
+                return res;
+              },
+            );
+          }}
+        >
+          Notify Coach
+        </ActionButton>
+        <Button variant="outline" onClick={onRetry}>
+          <RefreshCw className="mr-2 h-4 w-4" /> Try Again
+        </Button>
+      </div>
+    </Card>
   );
 }

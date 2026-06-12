@@ -80,6 +80,7 @@ import { Route as AuthenticatedAdminTrainingPhasesRouteImport } from './routes/_
 import { Route as AuthenticatedAdminTrainingIntelligenceRouteImport } from './routes/_authenticated/admin/training-intelligence'
 import { Route as AuthenticatedAdminTestimonialsRouteImport } from './routes/_authenticated/admin/testimonials'
 import { Route as AuthenticatedAdminTasksRouteImport } from './routes/_authenticated/admin/tasks'
+import { Route as AuthenticatedAdminSupportAlertsRouteImport } from './routes/_authenticated/admin/support-alerts'
 import { Route as AuthenticatedAdminStaffRouteImport } from './routes/_authenticated/admin/staff'
 import { Route as AuthenticatedAdminSopsRouteImport } from './routes/_authenticated/admin/sops'
 import { Route as AuthenticatedAdminSettingsRouteImport } from './routes/_authenticated/admin/settings'
@@ -584,6 +585,12 @@ const AuthenticatedAdminTasksRoute = AuthenticatedAdminTasksRouteImport.update({
   path: '/tasks',
   getParentRoute: () => AuthenticatedAdminRouteRoute,
 } as any)
+const AuthenticatedAdminSupportAlertsRoute =
+  AuthenticatedAdminSupportAlertsRouteImport.update({
+    id: '/support-alerts',
+    path: '/support-alerts',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
 const AuthenticatedAdminStaffRoute = AuthenticatedAdminStaffRouteImport.update({
   id: '/staff',
   path: '/staff',
@@ -1315,6 +1322,7 @@ export interface FileRoutesByFullPath {
   '/admin/settings': typeof AuthenticatedAdminSettingsRoute
   '/admin/sops': typeof AuthenticatedAdminSopsRoute
   '/admin/staff': typeof AuthenticatedAdminStaffRoute
+  '/admin/support-alerts': typeof AuthenticatedAdminSupportAlertsRoute
   '/admin/tasks': typeof AuthenticatedAdminTasksRoute
   '/admin/testimonials': typeof AuthenticatedAdminTestimonialsRoute
   '/admin/training-intelligence': typeof AuthenticatedAdminTrainingIntelligenceRoute
@@ -1494,6 +1502,7 @@ export interface FileRoutesByTo {
   '/admin/settings': typeof AuthenticatedAdminSettingsRoute
   '/admin/sops': typeof AuthenticatedAdminSopsRoute
   '/admin/staff': typeof AuthenticatedAdminStaffRoute
+  '/admin/support-alerts': typeof AuthenticatedAdminSupportAlertsRoute
   '/admin/tasks': typeof AuthenticatedAdminTasksRoute
   '/admin/testimonials': typeof AuthenticatedAdminTestimonialsRoute
   '/admin/training-intelligence': typeof AuthenticatedAdminTrainingIntelligenceRoute
@@ -1680,6 +1689,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/settings': typeof AuthenticatedAdminSettingsRoute
   '/_authenticated/admin/sops': typeof AuthenticatedAdminSopsRoute
   '/_authenticated/admin/staff': typeof AuthenticatedAdminStaffRoute
+  '/_authenticated/admin/support-alerts': typeof AuthenticatedAdminSupportAlertsRoute
   '/_authenticated/admin/tasks': typeof AuthenticatedAdminTasksRoute
   '/_authenticated/admin/testimonials': typeof AuthenticatedAdminTestimonialsRoute
   '/_authenticated/admin/training-intelligence': typeof AuthenticatedAdminTrainingIntelligenceRoute
@@ -1866,6 +1876,7 @@ export interface FileRouteTypes {
     | '/admin/settings'
     | '/admin/sops'
     | '/admin/staff'
+    | '/admin/support-alerts'
     | '/admin/tasks'
     | '/admin/testimonials'
     | '/admin/training-intelligence'
@@ -2045,6 +2056,7 @@ export interface FileRouteTypes {
     | '/admin/settings'
     | '/admin/sops'
     | '/admin/staff'
+    | '/admin/support-alerts'
     | '/admin/tasks'
     | '/admin/testimonials'
     | '/admin/training-intelligence'
@@ -2230,6 +2242,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/settings'
     | '/_authenticated/admin/sops'
     | '/_authenticated/admin/staff'
+    | '/_authenticated/admin/support-alerts'
     | '/_authenticated/admin/tasks'
     | '/_authenticated/admin/testimonials'
     | '/_authenticated/admin/training-intelligence'
@@ -2877,6 +2890,13 @@ declare module '@tanstack/react-router' {
       path: '/tasks'
       fullPath: '/admin/tasks'
       preLoaderRoute: typeof AuthenticatedAdminTasksRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
+    '/_authenticated/admin/support-alerts': {
+      id: '/_authenticated/admin/support-alerts'
+      path: '/support-alerts'
+      fullPath: '/admin/support-alerts'
+      preLoaderRoute: typeof AuthenticatedAdminSupportAlertsRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
     '/_authenticated/admin/staff': {
@@ -3798,6 +3818,7 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminSettingsRoute: typeof AuthenticatedAdminSettingsRoute
   AuthenticatedAdminSopsRoute: typeof AuthenticatedAdminSopsRoute
   AuthenticatedAdminStaffRoute: typeof AuthenticatedAdminStaffRoute
+  AuthenticatedAdminSupportAlertsRoute: typeof AuthenticatedAdminSupportAlertsRoute
   AuthenticatedAdminTasksRoute: typeof AuthenticatedAdminTasksRoute
   AuthenticatedAdminTestimonialsRoute: typeof AuthenticatedAdminTestimonialsRoute
   AuthenticatedAdminTrainingIntelligenceRoute: typeof AuthenticatedAdminTrainingIntelligenceRoute
@@ -3891,6 +3912,7 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
     AuthenticatedAdminSettingsRoute: AuthenticatedAdminSettingsRoute,
     AuthenticatedAdminSopsRoute: AuthenticatedAdminSopsRoute,
     AuthenticatedAdminStaffRoute: AuthenticatedAdminStaffRoute,
+    AuthenticatedAdminSupportAlertsRoute: AuthenticatedAdminSupportAlertsRoute,
     AuthenticatedAdminTasksRoute: AuthenticatedAdminTasksRoute,
     AuthenticatedAdminTestimonialsRoute: AuthenticatedAdminTestimonialsRoute,
     AuthenticatedAdminTrainingIntelligenceRoute:
