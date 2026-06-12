@@ -987,6 +987,20 @@ function DayEditor({ day, setDay, exercises, compact }: { day: any; setDay: (d: 
           {rows.map((r: any, i: number) => (
             <div
               key={i}
+              draggable
+              onDragStart={(e) => {
+                // Don't start a row-drag when the user is interacting with
+                // a form control or button inside the row.
+                const target = e.target as HTMLElement;
+                if (target.closest('input, textarea, select, button, [role="combobox"], [contenteditable="true"]')) {
+                  e.preventDefault();
+                  return;
+                }
+                e.dataTransfer.setData("application/x-pb-row-reorder", String(i));
+                e.dataTransfer.effectAllowed = "move";
+                setDragRowIdx(i);
+              }}
+              onDragEnd={() => { setDragRowIdx(null); setDropTargetIdx(null); }}
               onDragOver={(e) => {
                 if (dragRowIdx == null) return;
                 e.preventDefault();
@@ -1006,6 +1020,7 @@ function DayEditor({ day, setDay, exercises, compact }: { day: any; setDay: (d: 
                 setDropTargetIdx(null);
               }}
               className={cn(
+                "cursor-grab active:cursor-grabbing",
                 dropTargetIdx === i && "border-t-2 border-t-primary",
                 dropTargetIdx === i + 1 && "border-b-2 border-b-primary",
               )}
@@ -1014,8 +1029,10 @@ function DayEditor({ day, setDay, exercises, compact }: { day: any; setDay: (d: 
                 row={r}
                 setRow={(nr) => { const copy = [...rows]; copy[i] = nr; setDay({ ...day, rows: copy }); }}
                 onDelete={() => setDay({ ...day, rows: rows.filter((_: any, j: number) => j !== i) })}
-                onMoveUp={i > 0 ? () => moveRow(i, i - 1) : undefined}
-                onMoveDown={i < rows.length - 1 ? () => moveRow(i, i + 2) : undefined}
+                canMoveUp={i > 0}
+                canMoveDown={i < rows.length - 1}
+                onMoveUp={() => moveRow(i, i - 1)}
+                onMoveDown={() => moveRow(i, i + 2)}
                 onDragStartRow={(e) => {
                   e.dataTransfer.setData("application/x-pb-row-reorder", String(i));
                   e.dataTransfer.effectAllowed = "move";
@@ -1035,7 +1052,7 @@ function DayEditor({ day, setDay, exercises, compact }: { day: any; setDay: (d: 
   );
 }
 
-function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMoveDown, onDragStartRow, onDragEndRow, isDragging }: { row: any; setRow: (r: any) => void; onDelete?: () => void; exercises: any[]; compact?: boolean; onMoveUp?: () => void; onMoveDown?: () => void; onDragStartRow?: (e: React.DragEvent) => void; onDragEndRow?: () => void; isDragging?: boolean }) {
+function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMoveDown, canMoveUp, canMoveDown, onDragStartRow, onDragEndRow, isDragging }: { row: any; setRow: (r: any) => void; onDelete?: () => void; exercises: any[]; compact?: boolean; onMoveUp?: () => void; onMoveDown?: () => void; canMoveUp?: boolean; canMoveDown?: boolean; onDragStartRow?: (e: React.DragEvent) => void; onDragEndRow?: () => void; isDragging?: boolean }) {
   const Field = ({ label, className, children }: { label: string; className?: string; children: React.ReactNode }) => (
     <div className={cn("flex flex-col gap-0.5 min-w-0", className)}>
       <span className="px-0.5 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground leading-none">{label}</span>
@@ -1139,12 +1156,26 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
         </Field>
         <div className="col-span-2 flex justify-end gap-0.5 pb-0.5">
           {onMoveUp && (
-            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={onMoveUp} title="Move up">
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-7 w-7"
+              onClick={onMoveUp}
+              disabled={canMoveUp === false}
+              title="Move up"
+            >
               <ChevronUp className="h-3.5 w-3.5" />
             </Button>
           )}
           {onMoveDown && (
-            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={onMoveDown} title="Move down">
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-7 w-7"
+              onClick={onMoveDown}
+              disabled={canMoveDown === false}
+              title="Move down"
+            >
               <ChevronDown className="h-3.5 w-3.5" />
             </Button>
           )}
