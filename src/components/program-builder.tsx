@@ -784,14 +784,35 @@ export function inferPriority(timeProfile?: string | null, name?: string | null)
   return "Accessory";
 }
 
-/** Tailwind color for a movement family (used as a left edge accent). */
-export function movementAccent(name?: string | null): string {
-  const n = (name ?? "").toLowerCase();
-  if (/squat/.test(n)) return "bg-yellow-500/70";
-  if (/bench|press/.test(n)) return "bg-sky-500/70";
-  if (/deadlift|pull|row/.test(n)) return "bg-emerald-500/70";
-  if (/curl|tricep|arm/.test(n)) return "bg-purple-500/60";
-  return "bg-muted-foreground/40";
+/** Selectable card-color palette for exercise rows. */
+export const EXERCISE_CARD_COLORS: { value: string; label: string; cls: string; swatch: string }[] = [
+  { value: "red",     label: "Red",     cls: "bg-red-500/70",     swatch: "bg-red-500" },
+  { value: "amber",   label: "Amber",   cls: "bg-amber-500/70",   swatch: "bg-amber-500" },
+  { value: "yellow",  label: "Yellow",  cls: "bg-yellow-500/70",  swatch: "bg-yellow-500" },
+  { value: "emerald", label: "Green",   cls: "bg-emerald-500/70", swatch: "bg-emerald-500" },
+  { value: "sky",     label: "Blue",    cls: "bg-sky-500/70",     swatch: "bg-sky-500" },
+  { value: "violet",  label: "Violet",  cls: "bg-violet-500/70",  swatch: "bg-violet-500" },
+  { value: "purple",  label: "Purple",  cls: "bg-purple-500/70",  swatch: "bg-purple-500" },
+  { value: "pink",    label: "Pink",    cls: "bg-pink-500/70",    swatch: "bg-pink-500" },
+  { value: "slate",   label: "Slate",   cls: "bg-slate-500/70",   swatch: "bg-slate-500" },
+];
+
+/**
+ * Tailwind color for an exercise card's left edge accent.
+ * - Competition Squat / Bench / Deadlift keep their distinctive colors.
+ * - Everything else defaults to red.
+ * - A per-row `override` (e.g. row.card_color) takes precedence.
+ */
+export function movementAccent(name?: string | null, override?: string | null): string {
+  if (override) {
+    const found = EXERCISE_CARD_COLORS.find((c) => c.value === override);
+    if (found) return found.cls;
+  }
+  const n = (name ?? "").toLowerCase().trim();
+  if (/^comp(etition)?\s+squat\b/.test(n)) return "bg-yellow-500/70";
+  if (/^comp(etition)?\s+bench(\s+press)?\b/.test(n)) return "bg-sky-500/70";
+  if (/^comp(etition)?\s+deadlift\b/.test(n)) return "bg-emerald-500/70";
+  return "bg-red-500/70";
 }
 
 // ---------------- Edit scope dialog ----------------

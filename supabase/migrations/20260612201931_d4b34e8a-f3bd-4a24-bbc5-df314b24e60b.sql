@@ -1,0 +1,1 @@
+ALTER TABLE public.pl_exercise_rows ADD COLUMN IF NOT EXISTS card_color text;
