@@ -346,6 +346,7 @@ function NewExerciseDialog({ onClose, onCreated }: { onClose: () => void; onCrea
   const [form, setForm] = useState({
     name: "", category: CATEGORIES[0], muscle_group: "", equipment: "",
     youtube_url: "", cues: "", common_mistakes: "", difficulty: "Intermediate",
+    default_load_unit: "lb" as "kg" | "lb",
   });
   const [busy, setBusy] = useState(false);
 
@@ -376,6 +377,16 @@ function NewExerciseDialog({ onClose, onCreated }: { onClose: () => void; onCrea
           <div><Label>Muscle group</Label><Input value={form.muscle_group} onChange={(e) => setForm({ ...form, muscle_group: e.target.value })} /></div>
           <div><Label>Equipment</Label><Input value={form.equipment} onChange={(e) => setForm({ ...form, equipment: e.target.value })} /></div>
           <div><Label>Difficulty</Label><Input value={form.difficulty} onChange={(e) => setForm({ ...form, difficulty: e.target.value })} /></div>
+          <div>
+            <Label>Default unit</Label>
+            <Select value={form.default_load_unit} onValueChange={(v) => setForm({ ...form, default_load_unit: v as "kg" | "lb" })}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="lb">lb (pounds)</SelectItem>
+                <SelectItem value="kg">kg (kilograms)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
         <div><Label>YouTube URL</Label><Input value={form.youtube_url} onChange={(e) => setForm({ ...form, youtube_url: e.target.value })} /></div>
         <div><Label>Coaching cues</Label><Textarea rows={2} value={form.cues} onChange={(e) => setForm({ ...form, cues: e.target.value })} /></div>
