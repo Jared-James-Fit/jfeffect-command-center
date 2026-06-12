@@ -530,8 +530,13 @@ export function ClientLiftVideoUploader({ clientId, clientName, userId, onSaved 
             <span className="text-xs font-medium">Paste Link</span>
           </Button>
         </div>
-        <div className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
-          Record Now is usually fastest. Short clips send fastest. Videos stored in iCloud may take a moment to prepare before this screen opens.
+        <div className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground space-y-1">
+          <div>
+            <span className="font-semibold text-foreground">Record Now</span> opens your phone's camera app. If your phone's screen locks mid-recording, the camera app may stop and the clip can be lost.
+          </div>
+          <div>
+            For longer lifts, <span className="font-semibold text-foreground">record with your normal phone camera</span> and then tap <span className="font-semibold text-foreground">Photos</span> here to upload it. Videos stored in iCloud may take a moment to prepare before this screen opens.
+          </div>
         </div>
 
         {showLinkInput && (
