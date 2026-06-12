@@ -1162,6 +1162,10 @@ function SetRow({ rowId, workoutId, exerciseId, exerciseName, clientId, setIndex
       const loadNum = value.load ? Number(value.load) : null;
       const repsNum = value.reps ? parseInt(value.reps, 10) : null;
       const rpeNum = value.rpe ? Number(value.rpe) : null;
+      const allValid =
+        loadNum != null && isFinite(loadNum) && loadNum >= 0 &&
+        repsNum != null && isFinite(repsNum) && repsNum > 0 &&
+        rpeNum != null && isFinite(rpeNum) && rpeNum >= 0 && rpeNum <= 10;
       enqueueOfflineWrite({
         id: `portal_set:${rowId}:${clientId}:${setIndex}`,
         label: `Saved set ${setIndex}`,
@@ -1178,7 +1182,7 @@ function SetRow({ rowId, workoutId, exerciseId, exerciseName, clientId, setIndex
             actual_reps: repsNum,
             actual_rpe: value.rpe || null,
             actual_rpe_num: rpeNum,
-            completed_at: new Date().toISOString(),
+            completed_at: allValid ? new Date().toISOString() : null,
           },
         },
       });
@@ -1194,6 +1198,10 @@ function SetRow({ rowId, workoutId, exerciseId, exerciseName, clientId, setIndex
       if (load && (loadNum == null || !isFinite(loadNum) || loadNum < 0)) throw new Error("Weight must be a number");
       if (reps && (repsNum == null || !isFinite(repsNum) || repsNum < 0)) throw new Error("Reps must be a whole number");
       if (rpe && (rpeNum == null || !isFinite(rpeNum) || rpeNum < 0 || rpeNum > 10)) throw new Error("RPE must be 0–10");
+      const allValid =
+        loadNum != null && loadNum >= 0 &&
+        repsNum != null && repsNum > 0 &&
+        rpeNum != null && rpeNum >= 0 && rpeNum <= 10;
       const payload = {
         row_id: rowId,
         client_id: clientId,
@@ -1203,7 +1211,7 @@ function SetRow({ rowId, workoutId, exerciseId, exerciseName, clientId, setIndex
         actual_reps: repsNum,
         actual_rpe: rpe || null,
         actual_rpe_num: rpeNum,
-        completed_at: new Date().toISOString(),
+        completed_at: allValid ? new Date().toISOString() : null,
       };
       let savedId: string | null = existing?.id ?? null;
       // Snapshot "before" in the display unit so the audit diff is meaningful.
