@@ -255,13 +255,23 @@ function PaymentLinksPage() {
     }
     setPreviewingCheckout(p.id);
     try {
-      const res = await previewCheckoutFn({
-        data: { productId: p.id, origin: window.location.origin },
-      });
-      window.open(res.url, "_blank", "noopener,noreferrer");
-      toast.success("Opened Stripe checkout preview in a new tab.");
-    } catch (e: any) {
-      toast.error(e?.message ?? "Failed to generate preview");
+      await runJob(
+        {
+          title: "Creating Stripe checkout preview",
+          description: p.name,
+          steps: ["Validate product", "Create Stripe checkout session", "Open preview"],
+          successToast: "Stripe checkout preview opened",
+        },
+        async (job) => {
+          job.completeStep(0);
+          const res = await previewCheckoutFn({ data: { productId: p.id, origin: window.location.origin } });
+          job.completeStep(1);
+          window.open(res.url, "_blank", "noopener,noreferrer");
+          job.completeStep(2);
+        },
+      );
+    } catch {
+      // runJob handled the toast
     } finally {
       setPreviewingCheckout(null);
     }
