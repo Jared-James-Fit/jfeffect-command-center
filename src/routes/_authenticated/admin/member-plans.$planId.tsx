@@ -11,7 +11,6 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
-import { toast } from "sonner";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { Copy, Trash2 } from "lucide-react";
 import { runJob } from "@/lib/progress-jobs";
