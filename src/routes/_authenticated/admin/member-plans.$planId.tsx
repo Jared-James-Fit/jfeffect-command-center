@@ -140,13 +140,28 @@ function MemberPlanEditor() {
 
   if (!plan) return <div className="p-6 text-sm text-muted-foreground">Loading…</div>;
 
-  const save = async () => {
-    try {
-      await autosave.flush();
-      await update({ data: { planId, patch: buildPatch(metaSnapshot) } });
-      toast.success("Saved"); refresh();
-    } catch (e: any) { toast.error(e?.message ?? "Save failed"); }
-  };
+  const [busy, setBusy] = useState(false);
+
+  const save = () => runJob(
+    {
+      title: `Saving "${name || plan.name}"`,
+      description: "Member plan",
+      steps: ["Validate plan", "Save changes", "Sync visibility", "Finalize"],
+      successToast: "Saved",
+    },
+    async (job) => {
+      setBusy(true);
+      try {
+        job.completeStep(0);
+        await autosave.flush();
+        await update({ data: { planId, patch: buildPatch(metaSnapshot) } });
+        job.completeStep(1);
+        job.completeStep(2);
+        refresh();
+        job.completeStep(3);
+      } finally { setBusy(false); }
+    },
+  );
 
   const onPublish = () => runJob(
     {
@@ -164,10 +179,87 @@ function MemberPlanEditor() {
       job.completeStep(4);
     },
   );
-  const onUnpublish = async () => { await setStatus({ data: { planId, status: "Draft" } }); toast.success("Moved to draft"); refresh(); };
-  const onArchive = async () => { await setStatus({ data: { planId, status: "Archived" } }); toast.success("Archived"); refresh(); };
-  const onDuplicate = async () => { const r = await dup({ data: { planId } }); toast.success("Duplicated"); navigate({ to: "/admin/member-plans/$planId", params: { planId: r.plan.id } }); };
-  const onDelete = async () => { if (!confirm("Delete this plan? This can't be undone.")) return; await del({ data: { planId } }); toast.success("Deleted"); navigate({ to: "/admin/member-plans" }); };
+  const onUnpublish = () => runJob(
+    {
+      title: `Unpublishing "${plan.name}"`,
+      description: "Member plan",
+      steps: ["Confirm plan", "Remove from published access", "Update visibility", "Finalize"],
+      successToast: "Moved to draft",
+      successAction: { label: "View plans", onClick: () => navigate({ to: "/admin/member-plans" }) },
+    },
+    async (job) => {
+      setBusy(true);
+      try {
+        job.completeStep(0);
+        await setStatus({ data: { planId, status: "Draft" } });
+        job.completeStep(1); job.completeStep(2);
+        refresh();
+        job.completeStep(3);
+      } finally { setBusy(false); }
+    },
+  );
+  const onArchive = () => runJob(
+    {
+      title: `Archiving "${plan.name}"`,
+      description: "Member plan",
+      steps: ["Confirm archive", "Update status", "Remove from active lists", "Finalize"],
+      successToast: "Archived",
+      successAction: { label: "View plans", onClick: () => navigate({ to: "/admin/member-plans" }) },
+    },
+    async (job) => {
+      setBusy(true);
+      try {
+        job.completeStep(0);
+        await setStatus({ data: { planId, status: "Archived" } });
+        job.completeStep(1); job.completeStep(2);
+        refresh();
+        job.completeStep(3);
+      } finally { setBusy(false); }
+    },
+  );
+  const onDuplicate = () => runJob<{ planId: string }>(
+    {
+      title: `Duplicating "${plan.name}"`,
+      description: "Member plan",
+      steps: ["Copy plan", "Copy sections/content", "Save duplicate", "Open duplicate"],
+      successToast: "Duplicated",
+    },
+    async (job) => {
+      setBusy(true);
+      try {
+        job.completeStep(0);
+        const r = await dup({ data: { planId } });
+        job.completeStep(1); job.completeStep(2);
+        const newId = r.plan.id;
+        job.setSuccessAction({ label: "Open duplicate", onClick: () => navigate({ to: "/admin/member-plans/$planId", params: { planId: newId } }) });
+        navigate({ to: "/admin/member-plans/$planId", params: { planId: newId } });
+        job.completeStep(3);
+        return { planId: newId };
+      } finally { setBusy(false); }
+    },
+  );
+  const onDelete = () => {
+    if (!confirm("Delete this plan? This can't be undone.")) return;
+    return runJob(
+      {
+        title: `Deleting "${plan.name}"`,
+        description: "Member plan",
+        steps: ["Confirm delete", "Remove plan", "Clean related references", "Finalize"],
+        successToast: "Deleted",
+        retry: false,
+      },
+      async (job) => {
+        setBusy(true);
+        try {
+          job.completeStep(0);
+          await del({ data: { planId } });
+          job.completeStep(1); job.completeStep(2);
+          navigate({ to: "/admin/member-plans" });
+          job.completeStep(3);
+        } finally { setBusy(false); }
+      },
+    );
+  };
 
   return (
     <div className="space-y-5">
@@ -182,11 +274,11 @@ function MemberPlanEditor() {
             <span className="self-center"><SaveStatus state={autosave.state} savedAt={autosave.savedAt} /></span>
             <Badge variant={plan.status === "Published" ? "default" : "secondary"}>{plan.status}</Badge>
             {plan.status === "Published"
-              ? <Button size="sm" variant="outline" onClick={onUnpublish}>Move to Draft</Button>
-              : <Button size="sm" onClick={onPublish}>Publish</Button>}
-            <Button size="sm" variant="outline" onClick={onDuplicate}><Copy className="mr-1 h-4 w-4" />Duplicate</Button>
-            {plan.status !== "Archived" && <Button size="sm" variant="ghost" onClick={onArchive}>Archive</Button>}
-            <Button size="sm" variant="ghost" onClick={onDelete}><Trash2 className="h-4 w-4" /></Button>
+              ? <Button size="sm" variant="outline" disabled={busy} onClick={onUnpublish}>Move to Draft</Button>
+              : <Button size="sm" disabled={busy} onClick={onPublish}>Publish</Button>}
+            <Button size="sm" variant="outline" disabled={busy} onClick={onDuplicate}><Copy className="mr-1 h-4 w-4" />Duplicate</Button>
+            {plan.status !== "Archived" && <Button size="sm" variant="ghost" disabled={busy} onClick={onArchive}>Archive</Button>}
+            <Button size="sm" variant="ghost" disabled={busy} onClick={onDelete}><Trash2 className="h-4 w-4" /></Button>
           </div>
         }
       />
@@ -244,7 +336,7 @@ function MemberPlanEditor() {
           <label className="flex items-center gap-2"><Switch checked={tracking} onCheckedChange={setTracking} />Tracking enabled</label>
           <label className="flex items-center gap-2"><Switch checked={logging} onCheckedChange={setLogging} />Set logging enabled</label>
         </div>
-        <div><Button onClick={save}>Save changes</Button></div>
+        <div><Button onClick={save} disabled={busy}>Save changes</Button></div>
       </Card>
 
       <Card className="space-y-3 p-5">
