@@ -539,6 +539,7 @@ function TemplateTreeView({ tpl }: { tpl: any }) {
 // ------- Assign dialog with placement -------
 function AssignDialog({ template, onClose }: { template: any; onClose: () => void }) {
   const qc = useQueryClient();
+  const navigate = useNavigate();
   const [clientId, setClientId] = useState<string>("");
   const [mode, setMode] = useState<string>("");
   const [prepId, setPrepId] = useState<string>("");
@@ -632,6 +633,7 @@ function AssignDialog({ template, onClose }: { template: any; onClose: () => voi
       qc.invalidateQueries({ queryKey: ["assigned-blocks", clientId] });
       qc.invalidateQueries({ queryKey: ["my-workouts"] });
       onClose();
+      navigate({ to: "/admin/client-programs/$clientId", params: { clientId } });
     } catch (e: any) {
       toast.error(e.message);
     }
