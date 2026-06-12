@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { ArrowLeft, Plus, Calendar, Target, Layers, History, BarChart3, BookOpen } from "lucide-react";
+import { ArrowLeft, Plus, Calendar, Target, Layers, History, BarChart3, BookOpen, CalendarClock } from "lucide-react";
 import { toast } from "sonner";
 import { listClientPreps, listClientBlocks, createPrep, createBlock, countdownLabel, updatePrep, updateBlock, GOAL_TYPES, TRAINING_FOCUSES, PREP_STATUSES, BLOCK_STATUSES, type PrepStatus, type BlockStatus } from "@/lib/pl-programs";
 import { ClientTrainingIntelCard } from "@/components/client-training-intel-card";
@@ -155,12 +155,18 @@ function ClientProgramsPage() {
 
 function BlocksSection({ blocks, templateLookup, onRefresh }: { blocks: any[]; templateLookup: any; onRefresh: () => void }) {
   const today = new Date();
+  const todayISO = today.toISOString().slice(0, 10);
   const isPrevious = (b: any) => {
     if (b.status === "Completed" || b.status === "Archived") return true;
     if (b.end_date && new Date(b.end_date) < today) return true;
     return false;
   };
-  const current = blocks.filter((b) => !isPrevious(b));
+  const isUpcoming = (b: any) =>
+    !isPrevious(b) && !!b.start_date && b.start_date > todayISO;
+  const upcoming = blocks
+    .filter(isUpcoming)
+    .sort((a, b) => (a.start_date ?? "").localeCompare(b.start_date ?? ""));
+  const current = blocks.filter((b) => !isPrevious(b) && !isUpcoming(b));
   const previous = blocks.filter(isPrevious);
 
   if (blocks.length === 0) {
@@ -179,6 +185,29 @@ function BlocksSection({ blocks, templateLookup, onRefresh }: { blocks: any[]; t
           </div>
         )}
       </div>
+      {upcoming.length > 0 && (
+        <div>
+          <h2 className="mb-3 flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-muted-foreground">
+            <CalendarClock className="h-3.5 w-3.5" /> Upcoming Blocks ({upcoming.length})
+          </h2>
+          <div className="grid gap-2">
+            {upcoming.map((b) => {
+              const daysUntil = Math.max(
+                0,
+                Math.ceil((new Date(b.start_date + "T00:00:00").getTime() - today.getTime()) / 86400000),
+              );
+              return (
+                <div key={b.id} className="relative">
+                  <BlockRow b={b} templateLookup={templateLookup} onRefresh={onRefresh} />
+                  <Badge variant="secondary" className="absolute right-32 top-3 text-[10px]">
+                    Starts in {daysUntil}d
+                  </Badge>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
       {previous.length > 0 && (
         <div>
           <h2 className="mb-3 flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-muted-foreground">
