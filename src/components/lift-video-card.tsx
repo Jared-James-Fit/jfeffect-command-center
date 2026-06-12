@@ -157,16 +157,16 @@ export function LiftVideoCard({ video, role, userId, onChanged, onEdit, clientNa
       steps: ["Upload complete", "Preparing archive", "Sending to Google Drive", "Saving archive status", "Finalized"],
       successToast: "Archived to Drive",
     }, async (job) => {
-      job.completeStep(); // Upload complete
+      job.completeStep(0); // Upload complete
       job.setStatusText("Preparing archive...");
       
       const r: any = await retryArchive({ data: { videoId: video.id } });
       if (!r?.ok) throw new Error(r?.reason ?? "Drive archive failed");
       
-      job.completeStep(); // Preparing archive
-      job.completeStep(); // Sending to Google Drive
-      job.completeStep(); // Saving archive status
-      job.completeStep(); // Finalized
+      job.completeStep(1); // Preparing archive
+      job.completeStep(2); // Sending to Google Drive
+      job.completeStep(3); // Saving archive status
+      job.completeStep(4); // Finalized
       
       onChanged?.();
     });
@@ -370,7 +370,7 @@ export function LiftVideoCard({ video, role, userId, onChanged, onEdit, clientNa
             <DebugLine label="Preview status" value={video.preview_status || (playablePreviewUrl ? "ready" : "not_generated")} good={!!playablePreviewUrl || video.preview_status === "ready"} />
             <DebugLine label="Thumbnail URL" value={video.thumbnail_url || "Missing"} good={!!video.thumbnail_url} />
             <DebugLine label="File type" value={video.file_type || "Unknown"} good={!!video.file_type} />
-            <DebugLine label="File size" value={formatBytes(video.file_size_bytes)} good={!!video.file_size_bytes} />
+            <DebugLine label="File size" value={formatBytes(video.file_size_bytes ?? 0)} good={!!video.file_size_bytes} />
             <DebugLine label="Upload status" value={video.upload_status || "Unknown"} good={video.upload_status === "Drive uploaded" || video.upload_status === "App storage fallback"} />
             <DebugLine label="Playback error" value={lastPlaybackError || video.playback_error || "None"} good={!(lastPlaybackError || video.playback_error)} />
           </div>
