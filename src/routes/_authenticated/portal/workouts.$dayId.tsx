@@ -564,7 +564,7 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
   const hasGuide = Boolean(exerciseId || video);
   const cues = exercise?.cues ?? null;
   const setCount = Math.max(1, row.sets ?? 1);
-  const accent = movementAccent(name);
+  const accent = movementAccent(name, row.card_color);
   const [howToOpen, setHowToOpen] = useState(false);
   const [notesOpen, setNotesOpen] = useState(false);
   const hasNote = Boolean(existingNote?.id);
