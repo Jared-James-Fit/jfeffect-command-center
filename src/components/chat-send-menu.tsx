@@ -202,9 +202,11 @@ function FormPickerDialog({
         {
           kind: "form_request",
           type: "link",
-          url: form?.kind === "external" && form?.external_url
-            ? form.external_url
-            : `/portal/check-ins/${selectedId}`,
+          // Always route through the portal page so the client's identity
+          // (client_id / first_name / last_name / email) gets appended to
+          // Fillout URLs via buildFilloutUrl(). Sending the raw external_url
+          // skips that and leaves the form blank for the client.
+          url: `/portal/check-ins/${selectedId}`,
           form_id: selectedId,
           assignment_client_ids: clientIds,
           request_title: form?.title ?? "Form",

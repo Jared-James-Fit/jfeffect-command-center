@@ -2,6 +2,7 @@ import { useMemo, useRef, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { ChatSoundCard } from "@/components/chat-sound-card";
 import { GifThumb } from "@/components/gif-thumb";
@@ -770,6 +771,11 @@ function PerClientRows({
 function FormRequestCard({ att, mine }: { att: SharedAttachment; mine: boolean }) {
   const formId = att.form_id;
   const clientIds = att.assignment_client_ids ?? [];
+  // Admin/coach jump straight to the form management page; clients open the
+  // portal URL we stored on the attachment (which carries identity params
+  // for external Fillout forms via the portal page's buildFilloutUrl()).
+  const { role } = useAuth();
+  const isStaff = role === "admin" || role === "coach" || role === "media_manager";
   const { data: form } = useQuery({
     queryKey: ["chat-req-form", formId],
     enabled: !!formId,
@@ -823,7 +829,13 @@ function FormRequestCard({ att, mine }: { att: SharedAttachment; mine: boolean }
       subtitle={att.request_note || `Form to fill${form?.title ? `: ${form.title}` : ""}`}
       chip={{ label: rollup }}
       mine={mine}
-      onOpen={() => formId && window.open(`/admin/native-forms`, "_blank")}
+      onOpen={() => {
+        if (isStaff) {
+          if (formId) window.open(`/admin/native-forms`, "_blank");
+          return;
+        }
+        if (att.url) window.open(att.url, "_blank");
+      }}
     >
       <PerClientRows clientIds={clientIds} rowFor={(cid) => statusFor(cid)} />
     </RequestShell>
