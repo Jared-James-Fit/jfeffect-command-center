@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
+import { Eye, EyeOff } from "lucide-react";
 import { SalesPageShell, Section } from "@/components/sales/sales-page-shell";
 import { SalesHero, HeroCta, HeroCtaGhost } from "@/components/sales/sales-hero";
 import { AppPreviewGrid } from "@/components/sales/app-preview-grid";
@@ -60,6 +61,8 @@ function SignupJf() {
     password: "", confirm: "", terms: false, sms_consent: false,
   });
   const [busy, setBusy] = useState(false);
+  const [showPw, setShowPw] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
 
   const cancelled = typeof window !== "undefined" && new URLSearchParams(window.location.search).has("cancelled");
 
@@ -162,8 +165,50 @@ function SignupJf() {
             </div>
             <div><Label>Email</Label><Input type="email" required value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
             <div><Label>Phone (optional)</Label><Input type="tel" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></div>
-            <div><Label>Password</Label><Input type="password" required minLength={8} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} /></div>
-            <div><Label>Confirm password</Label><Input type="password" required minLength={8} value={form.confirm} onChange={(e) => setForm({ ...form, confirm: e.target.value })} /></div>
+            <div>
+              <Label>Password</Label>
+              <div className="relative">
+                <Input
+                  type={showPw ? "text" : "password"}
+                  required minLength={8}
+                  autoComplete="new-password"
+                  value={form.password}
+                  onChange={(e) => setForm({ ...form, password: e.target.value })}
+                  className="pr-10"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPw((v) => !v)}
+                  aria-label={showPw ? "Hide password" : "Show password"}
+                  className="absolute inset-y-0 right-0 flex items-center px-3 text-muted-foreground hover:text-foreground"
+                  tabIndex={-1}
+                >
+                  {showPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+            </div>
+            <div>
+              <Label>Confirm password</Label>
+              <div className="relative">
+                <Input
+                  type={showConfirm ? "text" : "password"}
+                  required minLength={8}
+                  autoComplete="new-password"
+                  value={form.confirm}
+                  onChange={(e) => setForm({ ...form, confirm: e.target.value })}
+                  className="pr-10"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirm((v) => !v)}
+                  aria-label={showConfirm ? "Hide password" : "Show password"}
+                  className="absolute inset-y-0 right-0 flex items-center px-3 text-muted-foreground hover:text-foreground"
+                  tabIndex={-1}
+                >
+                  {showConfirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+            </div>
             <label className="flex items-start gap-2 text-xs text-muted-foreground">
               <Checkbox checked={form.terms} onCheckedChange={(c) => setForm({ ...form, terms: !!c })} />
               <span>I agree to the terms and refund/cancellation policy.</span>
