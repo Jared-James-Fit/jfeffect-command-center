@@ -11,7 +11,7 @@ import { jobStore } from "@/lib/progress-jobs";
  */
 export type ActionState = "idle" | "pending" | "success" | "error";
 
-export interface ActionButtonProps extends Omit<ButtonProps, "onClick"> {
+export interface ActionButtonProps extends ButtonProps {
   /** Async handler. While pending, the button is disabled and shows the loading label. */
   onAction?: (event: React.MouseEvent<HTMLButtonElement>) => unknown | Promise<unknown>;
   /** Default label / children when idle. */
@@ -60,6 +60,7 @@ export const ActionButton = React.forwardRef<HTMLButtonElement, ActionButtonProp
   function ActionButton(
     {
       onAction,
+      onClick,
       children,
       loadingLabel,
       successLabel,
@@ -102,7 +103,11 @@ export const ActionButton = React.forwardRef<HTMLButtonElement, ActionButtonProp
     }, [resetMs]);
 
     const handleClick = async (event: React.MouseEvent<HTMLButtonElement>) => {
-      if (!onAction) return;
+      if (!onAction) {
+        // Fallback: behave like a regular Button when only onClick is provided.
+        if (onClick) onClick(event);
+        return;
+      }
       if (inflightRef.current || isPending) {
         event.preventDefault();
         return;
