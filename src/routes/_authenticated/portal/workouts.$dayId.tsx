@@ -729,7 +729,7 @@ function SuggestedLoadBadge({ load, unit, exerciseName }: { load: number; unit: 
   );
 }
 
-function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResults, existingNote, readonly = false, unit = "kg", onUnitChange, focusMode = false, onChange, onNoteChange }: { row: any; dayId: string; dayTitle: string; clientId: string | undefined; blockId?: string | null; existingResults: any[]; existingNote?: any; readonly?: boolean; unit?: "kg" | "lb"; onUnitChange?: (u: "kg" | "lb") => void; focusMode?: boolean; onChange: () => void; onNoteChange: () => void }) {
+function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResults, existingNote, readonly = false, unit = "kg", onUnitChange, focusMode = false, onChange, onNoteChange, purposeLabel = null }: { row: any; dayId: string; dayTitle: string; clientId: string | undefined; blockId?: string | null; existingResults: any[]; existingNote?: any; readonly?: boolean; unit?: "kg" | "lb"; onUnitChange?: (u: "kg" | "lb") => void; focusMode?: boolean; onChange: () => void; onNoteChange: () => void; purposeLabel?: string | null }) {
   const name = row.exercises?.name ?? row.exercise_name_override ?? "Exercise";
   const exercise = row.exercises ?? null;
   const exerciseId = exercise?.id ?? null;
@@ -737,7 +737,37 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
   const hasGuide = Boolean(exerciseId || video);
   const cues = exercise?.cues ?? null;
   const setCount = Math.max(1, row.sets ?? 1);
-  const accent = movementAccent(name, row.card_color);
+  const exMeta: ExerciseMeta | null = exercise
+    ? {
+        exercise_category: exercise.exercise_category ?? null,
+        is_competition_lift: exercise.is_competition_lift ?? null,
+        competition_lift_type: exercise.competition_lift_type ?? null,
+        name: exercise.name ?? null,
+      }
+    : null;
+  const accent = exerciseAccent(exMeta, row.card_color);
+  const category = resolveCategory(exMeta);
+  const effectiveRest = effectiveRestSeconds(
+    { rest_seconds_override: row.rest_seconds_override, rest_seconds: row.rest_seconds },
+    exMeta,
+  );
+  const restDisplay = (() => {
+    if (row.rest_seconds_override != null) {
+      const s = row.rest_seconds_override as number;
+      return s >= 60 ? `${Math.round(s / 60)} min` : `${s}s`;
+    }
+    if (row.rest_seconds != null) {
+      const s = row.rest_seconds as number;
+      return s >= 60 ? `${Math.round(s / 60)} min` : `${s}s`;
+    }
+    return restRangeLabel(category);
+  })();
+  const categoryBadgeClass =
+    category === "competition"
+      ? "border-primary/30 bg-primary/10 text-primary"
+      : category === "variation"
+        ? "border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400"
+        : "border-muted-foreground/30 bg-muted text-muted-foreground";
   const [howToOpen, setHowToOpen] = useState(false);
   const [notesOpen, setNotesOpen] = useState(false);
   const hasNote = Boolean(existingNote?.id);
@@ -764,9 +794,17 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
     <Card className="relative overflow-hidden p-4 pl-5">
       <div className={`absolute left-0 top-0 h-full w-1.5 ${accent}`} aria-hidden />
       <div className="flex items-start justify-between gap-2">
-        <div>
-          <div className="flex items-center gap-2">
-            <div className="font-bold">{name}</div>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <div className="font-bold leading-snug break-words pr-1">{name}</div>
+            {purposeLabel && (
+              <Badge variant="outline" className={cn("text-[10px] font-bold uppercase tracking-wider", categoryBadgeClass)}>
+                {purposeLabel}
+              </Badge>
+            )}
+            <Badge variant="outline" className="text-[10px] font-bold uppercase tracking-wider capitalize">
+              {category}
+            </Badge>
             {hasNote && (
               <span title="You saved a note for this exercise" className="inline-flex items-center gap-1 rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] font-bold text-primary">
                 <StickyNote className="h-2.5 w-2.5" /> Note
@@ -780,7 +818,10 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
             {row.percentage && !row.manual_override && row.percentage_basis !== "none" && ` · ${row.percentage}%`}
             {row.load_kg && ` · ${row.load_kg} kg`}
             {row.tempo && ` · tempo ${row.tempo}`}
-            {row.rest_seconds && ` · rest ${row.rest_seconds}s`}
+            {` · rest ${restDisplay}`}
+            {effectiveRest != null && row.rest_seconds_override == null && row.rest_seconds == null && (
+              <span className="ml-1 opacity-70">(category default)</span>
+            )}
           </div>
           {row.manual_override && (row.load_kg || row.load_lb) && (
             <SuggestedLoadBadge
