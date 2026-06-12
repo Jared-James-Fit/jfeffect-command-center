@@ -263,6 +263,7 @@ export const cancelAppointment = createServerFn({ method: "POST" })
       appointment_id: data.id, actor_user_id: userId, action: "cancelled",
       details: { reason: data.reason || null },
     });
+    await writeApptCrmActivity({ appt: existing, action: "cancelled", actorUserId: userId, extra: { reason: data.reason || null } });
     return { ok: true };
   });
 
