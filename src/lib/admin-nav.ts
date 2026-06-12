@@ -112,6 +112,8 @@ export const coachingAdminNav: NavItem[] = [
   // BUSINESS
   { to: "/admin/sales/coaching", label: "Coaching Sales Page", icon: Sparkles, group: "Business" },
   { to: "/admin/sales/coaching-applications", label: "Coaching Applications", icon: ClipboardList, group: "Business" },
+  { to: "/admin/crm", label: "CRM Dashboard", icon: UserCheck, group: "Business" },
+  { to: "/admin/crm/contacts", label: "CRM Contacts", icon: Users, group: "Business" },
   { to: "/admin/payment-links", label: "Products", icon: CreditCard, group: "Business" },
   { to: "/admin/payments", label: "Payments", icon: DollarSign, group: "Business" },
   { to: "/admin/promo-codes", label: "Promo Codes", icon: Ticket, group: "Business" },
