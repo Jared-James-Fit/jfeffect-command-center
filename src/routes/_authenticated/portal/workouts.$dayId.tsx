@@ -1243,7 +1243,7 @@ function SetRow({ rowId, workoutId, exerciseId, exerciseName, clientId, setIndex
           reps: repsNum,
           rpe: rpeNum,
           unit,
-          status: "completed",
+          status: allValid ? "completed" : "saved",
         };
         void writeSetEditAudit(before, after, {
           setLogId: savedId,
