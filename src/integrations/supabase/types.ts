@@ -5579,11 +5579,15 @@ export type Database = {
           created_at: string
           day_index: number
           enrollment_id: string
+          entered_unit: string | null
+          entered_value: number | null
           exercise_index: number
           id: string
           load_kg: number | null
           load_lb: number | null
           logged_at: string
+          normalized_kg: number | null
+          normalized_lb: number | null
           notes: string | null
           reps: number | null
           rir: number | null
@@ -5596,11 +5600,15 @@ export type Database = {
           created_at?: string
           day_index: number
           enrollment_id: string
+          entered_unit?: string | null
+          entered_value?: number | null
           exercise_index: number
           id?: string
           load_kg?: number | null
           load_lb?: number | null
           logged_at?: string
+          normalized_kg?: number | null
+          normalized_lb?: number | null
           notes?: string | null
           reps?: number | null
           rir?: number | null
@@ -5613,11 +5621,15 @@ export type Database = {
           created_at?: string
           day_index?: number
           enrollment_id?: string
+          entered_unit?: string | null
+          entered_value?: number | null
           exercise_index?: number
           id?: string
           load_kg?: number | null
           load_lb?: number | null
           logged_at?: string
+          normalized_kg?: number | null
+          normalized_lb?: number | null
           notes?: string | null
           reps?: number | null
           rir?: number | null
@@ -7302,7 +7314,11 @@ export type Database = {
           client_id: string
           completed_at: string | null
           created_at: string
+          entered_unit: string | null
+          entered_value: number | null
           id: string
+          normalized_kg: number | null
+          normalized_lb: number | null
           notes: string | null
           row_id: string
           set_index: number
@@ -7321,7 +7337,11 @@ export type Database = {
           client_id: string
           completed_at?: string | null
           created_at?: string
+          entered_unit?: string | null
+          entered_value?: number | null
           id?: string
+          normalized_kg?: number | null
+          normalized_lb?: number | null
           notes?: string | null
           row_id: string
           set_index: number
@@ -7340,7 +7360,11 @@ export type Database = {
           client_id?: string
           completed_at?: string | null
           created_at?: string
+          entered_unit?: string | null
+          entered_value?: number | null
           id?: string
+          normalized_kg?: number | null
+          normalized_lb?: number | null
           notes?: string | null
           row_id?: string
           set_index?: number
