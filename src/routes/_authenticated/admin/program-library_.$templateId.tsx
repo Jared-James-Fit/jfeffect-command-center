@@ -15,7 +15,8 @@ import {
   getTemplate, updateTemplate, summarizeTemplatePayload, TIME_PROFILES,
   estimateDayMinutes, durationRange, PERCENTAGE_BASES, type TrainingStyle,
 } from "@/lib/pl-programs";
-import { ExerciseLibraryPanel, type ExerciseRef, DND_EXERCISE, readDrop, movementAccent, EXERCISE_CARD_COLORS } from "@/components/program-builder";
+import { ExerciseLibraryPanel, type ExerciseRef, DND_EXERCISE, readDrop, exerciseAccent, EXERCISE_CARD_COLORS } from "@/components/program-builder";
+import { derivePurposeLabels, defaultRestSeconds, effectiveRestSeconds, PURPOSE_LABEL_OPTIONS, resolveCategory } from "@/lib/exercise-metadata";
 import { ProgramBuilderShortcutsButton } from "@/components/program-builder-shortcuts";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Palette } from "lucide-react";
@@ -922,7 +923,15 @@ function DayEditor({ day, setDay, exercises, compact }: { day: any; setDay: (d: 
   const [dragRowIdx, setDragRowIdx] = useState<number | null>(null);
   const [dropTargetIdx, setDropTargetIdx] = useState<number | null>(null);
   const clip = useClip();
-  const addRow = () => setDay({ ...day, rows: [...rows, { sort_order: rows.length, sets: 3, reps_text: "8-12", time_profile: "accessory_compound", percentage_basis: "none" }] });
+  const addRow = () => setDay({
+    ...day,
+    rows: [...rows, {
+      sort_order: rows.length,
+      // Leave sets/reps/rpe/rir empty — placeholders only. Coach fills in.
+      time_profile: "accessory_compound",
+      percentage_basis: "none",
+    }],
+  });
   const pasteFromClip = () => {
     if (!clip || clip.kind !== "rows") return;
     const cloned = JSON.parse(JSON.stringify(clip.rows));
@@ -932,7 +941,15 @@ function DayEditor({ day, setDay, exercises, compact }: { day: any; setDay: (d: 
   const insertExercise = (exId: string, atIndex?: number) => {
     const ex = (exercises as any[]).find((x) => x.id === exId);
     // Default: NO suggested load. Coach opts in explicitly per row.
-    const newRow = { sort_order: 0, sets: 3, reps_text: "8-12", time_profile: "accessory_compound", percentage_basis: "none", exercise_id: exId, exercise_name_override: ex?.name };
+    // Prescription fields stay empty. Rest auto-fills from exercise category.
+    const newRow = {
+      sort_order: 0,
+      time_profile: "accessory_compound",
+      percentage_basis: "none",
+      exercise_id: exId,
+      exercise_name_override: ex?.name,
+      rest_seconds: defaultRestSeconds(ex as any),
+    };
     const next = [...rows];
     const idx = atIndex ?? next.length;
     next.splice(idx, 0, newRow);
