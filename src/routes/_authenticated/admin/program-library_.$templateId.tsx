@@ -551,6 +551,7 @@ export function StructureCanvas({ type, payload, setP, exercises, appendRowToFir
           </Button>
           <BlockMaxesButton clientId={clientId ?? null} blockId={blockId ?? null} />
           {toolbarExtras}
+          <ProgramBuilderShortcutsButton />
         </div>
       </div>
 
