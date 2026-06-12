@@ -265,12 +265,13 @@ export const syncSignNowTemplates = createServerFn({ method: "POST" })
         created += 1;
       }
     }
-    // Deactivate (but do not archive) any previously-synced rows whose remote
-    // template no longer exists in SignNow, so admins can still see history.
+    // Archive + deactivate any previously-synced rows whose remote template no
+    // longer exists in SignNow (deleted, trashed, or never a real template).
+    // Historical agreements already created from them are untouched.
     for (const [sid, row] of byId.entries()) {
-      if (!seenRemoteIds.has(sid) && row.is_active) {
+      if (!seenRemoteIds.has(sid) && (row.is_active || !row.archived)) {
         await supabase.from("agreement_templates")
-          .update({ is_active: false } as any).eq("id", row.id);
+          .update({ is_active: false, archived: true } as any).eq("id", row.id);
         skipped += 1;
       }
     }
