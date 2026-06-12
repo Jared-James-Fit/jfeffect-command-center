@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   Plus, BookOpen, UserPlus, Eye, Pencil, Copy, Archive as ArchiveIcon,
-  ArchiveRestore, Trash2, Clock, Calendar, Layers, MoreVertical, Search, Users,
+  ArchiveRestore, Trash2, Clock, Calendar, Layers, MoreVertical, Search, Users, AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -24,6 +24,7 @@ import {
   type TemplateType, type TrainingStyle, type TemplatePlacement,
 } from "@/lib/pl-programs";
 import { supabase } from "@/integrations/supabase/client";
+import { findOverlappingBlock, suggestNextStartISO } from "@/lib/block-schedule";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuSeparator, DropdownMenuTrigger,
