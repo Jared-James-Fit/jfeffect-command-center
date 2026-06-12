@@ -1084,15 +1084,20 @@ function DayEditor({ day, setDay, exercises, compact }: { day: any; setDay: (d: 
   );
 }
 
-function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMoveDown, canMoveUp, canMoveDown, onDragStartRow, onDragEndRow, isDragging }: { row: any; setRow: (r: any) => void; onDelete?: () => void; exercises: any[]; compact?: boolean; onMoveUp?: () => void; onMoveDown?: () => void; canMoveUp?: boolean; canMoveDown?: boolean; onDragStartRow?: (e: React.DragEvent) => void; onDragEndRow?: () => void; isDragging?: boolean }) {
+function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMoveDown, canMoveUp, canMoveDown, onDragStartRow, onDragEndRow, isDragging, purposeLabel }: { row: any; setRow: (r: any) => void; onDelete?: () => void; exercises: any[]; compact?: boolean; onMoveUp?: () => void; onMoveDown?: () => void; canMoveUp?: boolean; canMoveDown?: boolean; onDragStartRow?: (e: React.DragEvent) => void; onDragEndRow?: () => void; isDragging?: boolean; purposeLabel?: string }) {
   const Field = ({ label, className, children }: { label: string; className?: string; children: React.ReactNode }) => (
     <div className={cn("flex flex-col gap-0.5 min-w-0", className)}>
       <span className="px-0.5 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground leading-none">{label}</span>
       {children}
     </div>
   );
-  const exName = (exercises as any[]).find((e) => e.id === row.exercise_id)?.name ?? row.exercise_name_override ?? "";
-  const accent = movementAccent(exName, row.card_color);
+  const exMeta = (exercises as any[]).find((e) => e.id === row.exercise_id) ?? null;
+  const exName = exMeta?.name ?? row.exercise_name_override ?? "";
+  const accent = exerciseAccent(exMeta, row.card_color);
+  const restCat = resolveCategory(exMeta);
+  const restDefault = defaultRestSeconds(exMeta);
+  const effectiveRest = effectiveRestSeconds(row, exMeta);
+  const restIsOverride = row.rest_seconds_override != null && row.rest_seconds_override !== restDefault;
   const [expanded, setExpanded] = useState(!compact);
   useEffect(() => { if (!compact) setExpanded(true); }, [compact]);
   const h = compact ? "h-7" : "h-8";
