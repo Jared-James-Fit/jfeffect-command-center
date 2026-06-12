@@ -42,7 +42,7 @@ function ContactProfile() {
   const [followUp, setFollowUp] = useState("");
 
   if (isLoading || !data) return <div className="p-6 text-sm text-muted-foreground">Loading…</div>;
-  const c = data.contact;
+  const c: any = data.contact;
   const isActive = c.lifecycle_stage === "active_client";
 
   async function patch(p: any) {
