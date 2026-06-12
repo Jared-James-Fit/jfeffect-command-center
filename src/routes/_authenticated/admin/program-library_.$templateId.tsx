@@ -1242,11 +1242,28 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
       </div>
       {expanded && (
       <div className="grid grid-cols-12 items-end gap-1">
-        <Field className="col-span-3" label="Load mode">
-          <div className="inline-flex rounded-md border border-border p-0.5">
-            <button type="button" onClick={() => setLoadMode("pct")} className={cn("rounded px-1.5 py-0.5 text-[10px] font-semibold", loadMode === "pct" ? "bg-primary text-primary-foreground" : "text-muted-foreground")}>%</button>
-            <button type="button" onClick={() => setLoadMode("manual")} className={cn("rounded px-1.5 py-0.5 text-[10px] font-semibold", loadMode === "manual" ? "bg-primary text-primary-foreground" : "text-muted-foreground")}>Manual</button>
-            <button type="button" onClick={() => setLoadMode("none")} className={cn("rounded px-1.5 py-0.5 text-[10px] font-semibold", loadMode === "none" ? "bg-primary text-primary-foreground" : "text-muted-foreground")}>No load</button>
+        <Field className="col-span-3" label="Include Suggested Load">
+          <div className="flex items-center gap-2 h-8">
+            <button
+              type="button"
+              role="switch"
+              aria-checked={suggestedOn}
+              onClick={() => setLoadMode(suggestedOn ? "none" : "manual")}
+              className={cn(
+                "relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors",
+                suggestedOn ? "bg-primary" : "bg-muted",
+              )}
+              title={suggestedOn ? "Click to remove suggested load" : "Click to add a suggested load"}
+            >
+              <span className={cn("inline-block h-4 w-4 transform rounded-full bg-background shadow transition-transform", suggestedOn ? "translate-x-4" : "translate-x-0.5")} />
+            </button>
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{suggestedOn ? "On" : "Off"}</span>
+            {suggestedOn && (
+              <div className="ml-1 inline-flex rounded-md border border-border p-0.5">
+                <button type="button" onClick={() => setLoadMode("manual")} className={cn("rounded px-1.5 py-0.5 text-[10px] font-semibold", loadMode === "manual" ? "bg-primary text-primary-foreground" : "text-muted-foreground")} title="Fixed weight">Weight</button>
+                <button type="button" onClick={() => setLoadMode("pct")} className={cn("rounded px-1.5 py-0.5 text-[10px] font-semibold", loadMode === "pct" ? "bg-primary text-primary-foreground" : "text-muted-foreground")} title="Percentage of max">%</button>
+              </div>
+            )}
           </div>
         </Field>
         {loadMode === "pct" && (
@@ -1263,12 +1280,12 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
         </Field>
         )}
         {loadMode !== "none" && (
-        <Field className={cn(loadMode === "pct" ? "col-span-2" : "col-span-3")} label={`Load (${rowUnit})`}>
+        <Field className={cn(loadMode === "pct" ? "col-span-2" : "col-span-3")} label={`Suggested Load (${rowUnit})`}>
           <div className="flex gap-1">
             <RowCell
               className={cn("text-xs flex-1", h)}
               inputMode="decimal"
-              placeholder={loadMode === "pct" ? "auto" : "100"}
+              placeholder={loadMode === "pct" ? "auto" : "weight"}
               value={rowUnit === "kg" ? row.load_kg : row.load_lb}
               onCommit={(v) => setRow({ ...row, [rowUnit === "kg" ? "load_kg" : "load_lb"]: parseFloatOrNull(v) })}
             />
@@ -1303,7 +1320,7 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
         </div>
       )}
       {expanded && loadMode === "none" && (
-        <p className="text-[11px] text-muted-foreground italic">Client logs the load used — no target prescribed.</p>
+        <p className="text-[11px] text-muted-foreground italic">No suggested load — client will log the weight they use.</p>
       )}
       {expanded && clientId && computed && computed.status !== "manual" && (
         <div className="flex flex-wrap items-center gap-1.5 pt-0.5 text-[11px]">
