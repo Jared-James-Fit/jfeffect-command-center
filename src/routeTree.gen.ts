@@ -117,7 +117,6 @@ import { Route as AuthenticatedAdminChatSoundsRouteImport } from './routes/_auth
 import { Route as AuthenticatedAdminChatGifsRouteImport } from './routes/_authenticated/admin/chat-gifs'
 import { Route as AuthenticatedAdminCardioTargetsRouteImport } from './routes/_authenticated/admin/cardio-targets'
 import { Route as AuthenticatedAdminCallAccessRouteImport } from './routes/_authenticated/admin/call-access'
-import { Route as AuthenticatedAdminCalendarRouteImport } from './routes/_authenticated/admin/calendar'
 import { Route as AuthenticatedAdminBusinessSystemsRouteImport } from './routes/_authenticated/admin/business-systems'
 import { Route as AuthenticatedAdminBroadcastsRouteImport } from './routes/_authenticated/admin/broadcasts'
 import { Route as AuthenticatedAdminBookingLinksRouteImport } from './routes/_authenticated/admin/booking-links'
@@ -807,12 +806,6 @@ const AuthenticatedAdminCallAccessRoute =
     path: '/call-access',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
-const AuthenticatedAdminCalendarRoute =
-  AuthenticatedAdminCalendarRouteImport.update({
-    id: '/calendar',
-    path: '/calendar',
-    getParentRoute: () => AuthenticatedAdminRouteRoute,
-  } as any)
 const AuthenticatedAdminBusinessSystemsRoute =
   AuthenticatedAdminBusinessSystemsRouteImport.update({
     id: '/business-systems',
@@ -1320,7 +1313,6 @@ export interface FileRoutesByFullPath {
   '/admin/booking-links': typeof AuthenticatedAdminBookingLinksRoute
   '/admin/broadcasts': typeof AuthenticatedAdminBroadcastsRouteWithChildren
   '/admin/business-systems': typeof AuthenticatedAdminBusinessSystemsRoute
-  '/admin/calendar': typeof AuthenticatedAdminCalendarRoute
   '/admin/call-access': typeof AuthenticatedAdminCallAccessRoute
   '/admin/cardio-targets': typeof AuthenticatedAdminCardioTargetsRoute
   '/admin/chat-gifs': typeof AuthenticatedAdminChatGifsRoute
@@ -1506,7 +1498,6 @@ export interface FileRoutesByTo {
   '/admin/booking-links': typeof AuthenticatedAdminBookingLinksRoute
   '/admin/broadcasts': typeof AuthenticatedAdminBroadcastsRouteWithChildren
   '/admin/business-systems': typeof AuthenticatedAdminBusinessSystemsRoute
-  '/admin/calendar': typeof AuthenticatedAdminCalendarRoute
   '/admin/call-access': typeof AuthenticatedAdminCallAccessRoute
   '/admin/cardio-targets': typeof AuthenticatedAdminCardioTargetsRoute
   '/admin/chat-gifs': typeof AuthenticatedAdminChatGifsRoute
@@ -1697,7 +1688,6 @@ export interface FileRoutesById {
   '/_authenticated/admin/booking-links': typeof AuthenticatedAdminBookingLinksRoute
   '/_authenticated/admin/broadcasts': typeof AuthenticatedAdminBroadcastsRouteWithChildren
   '/_authenticated/admin/business-systems': typeof AuthenticatedAdminBusinessSystemsRoute
-  '/_authenticated/admin/calendar': typeof AuthenticatedAdminCalendarRoute
   '/_authenticated/admin/call-access': typeof AuthenticatedAdminCallAccessRoute
   '/_authenticated/admin/cardio-targets': typeof AuthenticatedAdminCardioTargetsRoute
   '/_authenticated/admin/chat-gifs': typeof AuthenticatedAdminChatGifsRoute
@@ -1889,7 +1879,6 @@ export interface FileRouteTypes {
     | '/admin/booking-links'
     | '/admin/broadcasts'
     | '/admin/business-systems'
-    | '/admin/calendar'
     | '/admin/call-access'
     | '/admin/cardio-targets'
     | '/admin/chat-gifs'
@@ -2075,7 +2064,6 @@ export interface FileRouteTypes {
     | '/admin/booking-links'
     | '/admin/broadcasts'
     | '/admin/business-systems'
-    | '/admin/calendar'
     | '/admin/call-access'
     | '/admin/cardio-targets'
     | '/admin/chat-gifs'
@@ -2265,7 +2253,6 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/booking-links'
     | '/_authenticated/admin/broadcasts'
     | '/_authenticated/admin/business-systems'
-    | '/_authenticated/admin/calendar'
     | '/_authenticated/admin/call-access'
     | '/_authenticated/admin/cardio-targets'
     | '/_authenticated/admin/chat-gifs'
@@ -3215,13 +3202,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminCallAccessRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
-    '/_authenticated/admin/calendar': {
-      id: '/_authenticated/admin/calendar'
-      path: '/calendar'
-      fullPath: '/admin/calendar'
-      preLoaderRoute: typeof AuthenticatedAdminCalendarRouteImport
-      parentRoute: typeof AuthenticatedAdminRouteRoute
-    }
     '/_authenticated/admin/business-systems': {
       id: '/_authenticated/admin/business-systems'
       path: '/business-systems'
@@ -3884,7 +3864,6 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminBookingLinksRoute: typeof AuthenticatedAdminBookingLinksRoute
   AuthenticatedAdminBroadcastsRoute: typeof AuthenticatedAdminBroadcastsRouteWithChildren
   AuthenticatedAdminBusinessSystemsRoute: typeof AuthenticatedAdminBusinessSystemsRoute
-  AuthenticatedAdminCalendarRoute: typeof AuthenticatedAdminCalendarRoute
   AuthenticatedAdminCallAccessRoute: typeof AuthenticatedAdminCallAccessRoute
   AuthenticatedAdminCardioTargetsRoute: typeof AuthenticatedAdminCardioTargetsRoute
   AuthenticatedAdminChatGifsRoute: typeof AuthenticatedAdminChatGifsRoute
@@ -3973,7 +3952,6 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
       AuthenticatedAdminBroadcastsRouteWithChildren,
     AuthenticatedAdminBusinessSystemsRoute:
       AuthenticatedAdminBusinessSystemsRoute,
-    AuthenticatedAdminCalendarRoute: AuthenticatedAdminCalendarRoute,
     AuthenticatedAdminCallAccessRoute: AuthenticatedAdminCallAccessRoute,
     AuthenticatedAdminCardioTargetsRoute: AuthenticatedAdminCardioTargetsRoute,
     AuthenticatedAdminChatGifsRoute: AuthenticatedAdminChatGifsRoute,
