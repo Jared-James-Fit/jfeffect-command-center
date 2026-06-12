@@ -770,6 +770,11 @@ function PerClientRows({
 function FormRequestCard({ att, mine }: { att: SharedAttachment; mine: boolean }) {
   const formId = att.form_id;
   const clientIds = att.assignment_client_ids ?? [];
+  // Admin/coach jump straight to the form management page; clients open the
+  // portal URL we stored on the attachment (which carries identity params
+  // for external Fillout forms via the portal page's buildFilloutUrl()).
+  const { role } = useAuth();
+  const isStaff = role === "admin" || role === "coach" || role === "media_manager";
   const { data: form } = useQuery({
     queryKey: ["chat-req-form", formId],
     enabled: !!formId,
