@@ -473,6 +473,32 @@ export function ExerciseLibraryPanel({
     return () => window.removeEventListener("keydown", onKey);
   }, [collapsed, onToggleCollapse]);
 
+  // Custom events from <ProgramBuilderShortcutsButton />
+  useEffect(() => {
+    const focus = () => {
+      if (collapsed) onToggleCollapse?.();
+      setTimeout(() => inputRef.current?.focus(), 0);
+    };
+    const clear = () => {
+      setQ("");
+      inputRef.current?.focus();
+    };
+    const close = () => {
+      if (document.activeElement === inputRef.current) {
+        (document.activeElement as HTMLElement)?.blur();
+      }
+      if (!collapsed) onToggleCollapse?.();
+    };
+    window.addEventListener("pb:focus-search", focus);
+    window.addEventListener("pb:clear-search", clear);
+    window.addEventListener("pb:close-search", close);
+    return () => {
+      window.removeEventListener("pb:focus-search", focus);
+      window.removeEventListener("pb:clear-search", clear);
+      window.removeEventListener("pb:close-search", close);
+    };
+  }, [collapsed, onToggleCollapse]);
+
   const toggleFav = (id: string) => {
     const next = new Set(favs);
     if (next.has(id)) next.delete(id);

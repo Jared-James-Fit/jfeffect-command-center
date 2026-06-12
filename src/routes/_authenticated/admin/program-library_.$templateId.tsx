@@ -16,6 +16,7 @@ import {
   estimateDayMinutes, durationRange, PERCENTAGE_BASES, type TrainingStyle,
 } from "@/lib/pl-programs";
 import { ExerciseLibraryPanel, type ExerciseRef, DND_EXERCISE, readDrop, movementAccent, EXERCISE_CARD_COLORS } from "@/components/program-builder";
+import { ProgramBuilderShortcutsButton } from "@/components/program-builder-shortcuts";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Palette } from "lucide-react";
 import { GripVertical } from "lucide-react";
@@ -550,6 +551,7 @@ export function StructureCanvas({ type, payload, setP, exercises, appendRowToFir
           </Button>
           <BlockMaxesButton clientId={clientId ?? null} blockId={blockId ?? null} />
           {toolbarExtras}
+          <ProgramBuilderShortcutsButton />
         </div>
       </div>
 
