@@ -55,6 +55,12 @@ export type NfForm = {
   visibility: NfVisibility;
   auto_assign_new_clients: boolean;
   requires_client_identity: boolean;
+  popup_enabled?: boolean;
+  popup_weekdays?: number[];
+  popup_start_time?: string | null;
+  popup_end_time?: string | null;
+  popup_start_date?: string | null;
+  popup_end_date?: string | null;
 };
 
 export type NfConditionalRule = {
