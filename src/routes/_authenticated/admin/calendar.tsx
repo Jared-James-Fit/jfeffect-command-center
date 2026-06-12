@@ -1,119 +1,96 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { createFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
+import { useEffect } from "react";
+import { z } from "zod";
 import { PageHeader } from "@/components/app-shell";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Pencil } from "lucide-react";
-import { PtSessionDialog } from "@/components/pt-session-dialog";
-import { SESSION_TYPES, SESSION_STATUSES, statusTone, fmtTimeRange } from "@/lib/pt-sessions";
+import { AppointmentsPage } from "./appointments";
+import { BookingLinksPage } from "./booking-links";
+import { GoogleCalendarPage } from "./google-calendar";
+import { PtCalendarPanel } from "@/components/admin-calendar/pt-calendar-panel";
 
-export const Route = createFileRoute("/_authenticated/admin/calendar")({ component: AdminCalendar });
+const TAB_VALUES = ["upcoming", "availability", "booking-links", "pt-calendar", "google-calendar"] as const;
+type TabValue = typeof TAB_VALUES[number];
+const LS_KEY = "admin.calendar.lastTab";
 
-function AdminCalendar() {
-  const [open, setOpen] = useState(false);
-  const [editing, setEditing] = useState<any>(null);
-  const [filters, setFilters] = useState({ client: "all", type: "all", status: "all", location: "", from: "", to: "" });
+const searchSchema = z.object({
+  tab: z.enum(TAB_VALUES).optional().catch(undefined),
+  connected: z.string().optional(),
+  error: z.string().optional(),
+});
 
-  const { data: clients = [] } = useQuery({
-    queryKey: ["clients-min"],
-    queryFn: async () => {
-      const { data } = await supabase.from("clients").select("id, full_name, timezone, default_session_location").eq("archived", false).order("full_name");
-      return data ?? [];
-    },
-  });
+export const Route = createFileRoute("/_authenticated/admin/calendar")({
+  validateSearch: searchSchema.parse,
+  component: AdminCalendarShell,
+});
 
-  const { data: sessions = [] } = useQuery({
-    queryKey: ["pt-sessions"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("pt_sessions")
-        .select("*, clients(id, full_name)")
-        .order("session_date", { ascending: true })
-        .order("start_time", { ascending: true });
-      if (error) throw error;
-      return data ?? [];
-    },
-  });
+function AdminCalendarShell() {
+  const search = useSearch({ from: "/_authenticated/admin/calendar" });
+  const navigate = useNavigate({ from: "/admin/calendar" });
 
-  const filtered = useMemo(() => sessions.filter((s) => {
-    if (filters.client !== "all" && s.client_id !== filters.client) return false;
-    if (filters.type !== "all" && s.session_type !== filters.type) return false;
-    if (filters.status !== "all" && s.status !== filters.status) return false;
-    if (filters.location && !s.location?.toLowerCase().includes(filters.location.toLowerCase())) return false;
-    if (filters.from && s.session_date < filters.from) return false;
-    if (filters.to && s.session_date > filters.to) return false;
-    return true;
-  }), [sessions, filters]);
+  // Resolve active tab: URL > localStorage > default
+  let active: TabValue = "upcoming";
+  if (search.tab) {
+    active = search.tab;
+  } else if (typeof window !== "undefined") {
+    const stored = window.localStorage.getItem(LS_KEY);
+    if (stored && (TAB_VALUES as readonly string[]).includes(stored)) {
+      active = stored as TabValue;
+    }
+  }
+
+  // Sync URL when missing/invalid tab so refresh + back/forward work cleanly
+  useEffect(() => {
+    if (search.tab !== active) {
+      navigate({ search: (prev: any) => ({ ...prev, tab: active }), replace: true });
+    }
+  }, [active, search.tab, navigate]);
+
+  // Persist last tab
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(LS_KEY, active);
+    }
+  }, [active]);
+
+  function setTab(t: string) {
+    if (!(TAB_VALUES as readonly string[]).includes(t)) return;
+    navigate({ search: (prev: any) => ({ ...prev, tab: t as TabValue }) });
+  }
 
   return (
     <>
-      <PageHeader title="PT Calendar" subtitle="All personal training sessions across clients." actions={
-        <Button size="sm" className="bg-gradient-primary font-bold uppercase" onClick={() => { setEditing(null); setOpen(true); }}>
-          <Plus className="mr-2 h-4 w-4" /> Book Session
-        </Button>
-      } />
-      <div className="p-6 md:p-8 space-y-4">
-        <Card className="border-border bg-card p-4 grid gap-3 md:grid-cols-6">
-          <Select value={filters.client} onValueChange={(v) => setFilters({ ...filters, client: v })}>
-            <SelectTrigger><SelectValue placeholder="Client" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All clients</SelectItem>
-              {clients.map((c) => <SelectItem key={c.id} value={c.id}>{c.full_name}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          <Select value={filters.type} onValueChange={(v) => setFilters({ ...filters, type: v })}>
-            <SelectTrigger><SelectValue placeholder="Type" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All types</SelectItem>
-              {SESSION_TYPES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          <Select value={filters.status} onValueChange={(v) => setFilters({ ...filters, status: v })}>
-            <SelectTrigger><SelectValue placeholder="Status" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All statuses</SelectItem>
-              {SESSION_STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          <Input placeholder="Location contains…" value={filters.location} onChange={(e) => setFilters({ ...filters, location: e.target.value })} />
-          <Input type="date" value={filters.from} onChange={(e) => setFilters({ ...filters, from: e.target.value })} />
-          <Input type="date" value={filters.to} onChange={(e) => setFilters({ ...filters, to: e.target.value })} />
-        </Card>
+      <div className="border-b border-border bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-20">
+        <div className="px-6 md:px-8 py-3 overflow-x-auto">
+          <Tabs value={active} onValueChange={setTab}>
+            <TabsList className="flex w-max gap-1">
+              <TabsTrigger value="upcoming">Upcoming</TabsTrigger>
+              <TabsTrigger value="availability">Availability</TabsTrigger>
+              <TabsTrigger value="booking-links">Booking Links</TabsTrigger>
+              <TabsTrigger value="pt-calendar">PT Calendar</TabsTrigger>
+              <TabsTrigger value="google-calendar">Google Calendar</TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </div>
+      </div>
+      {active === "upcoming" && <AppointmentsPage />}
+      {active === "availability" && <AvailabilityPlaceholder />}
+      {active === "booking-links" && <BookingLinksPage />}
+      {active === "pt-calendar" && <PtCalendarPanel />}
+      {active === "google-calendar" && <GoogleCalendarPage />}
+    </>
+  );
+}
 
-        <Card className="border-border bg-card p-4">
-          {filtered.length === 0 ? (
-            <div className="rounded-md border border-dashed border-border p-10 text-center text-sm text-muted-foreground">No sessions match those filters.</div>
-          ) : (
-            <ul className="divide-y divide-border">
-              {filtered.map((s: any) => (
-                <li key={s.id} className="flex flex-wrap items-center justify-between gap-2 py-3">
-                  <div className="flex items-center gap-3">
-                    <Badge variant="outline" className={statusTone(s.status)}>{s.status}</Badge>
-                    <div>
-                      <div className="text-sm font-semibold">{s.title}</div>
-                      <div className="text-xs text-muted-foreground">
-                        {new Date(s.session_date + "T00:00:00").toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })} · {fmtTimeRange(s.start_time, s.end_time)} · {s.location}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {s.clients && (
-                      <Link to="/admin/clients/$id" params={{ id: s.clients.id }} className="text-sm font-semibold text-primary hover:underline">{s.clients.full_name}</Link>
-                    )}
-                    <Button size="sm" variant="ghost" onClick={() => { setEditing(s); setOpen(true); }}><Pencil className="h-4 w-4" /></Button>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
+function AvailabilityPlaceholder() {
+  return (
+    <>
+      <PageHeader title="Availability" subtitle="Manage your weekly hours, blackouts, and buffers." />
+      <div className="p-6 md:p-8">
+        <Card className="border border-dashed border-border bg-card p-10 text-center text-sm text-muted-foreground">
+          Availability management will be added in the next calendar update.
         </Card>
       </div>
-      <PtSessionDialog open={open} onOpenChange={setOpen} clients={clients} initial={editing ?? undefined} />
     </>
   );
 }

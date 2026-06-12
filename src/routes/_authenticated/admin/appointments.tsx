@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
@@ -26,7 +26,11 @@ import { SlotPicker } from "@/components/appointments/slot-picker";
 import { tzWallToUtcISO } from "@/lib/tz";
 import { buildAppointmentIcs, downloadIcs } from "@/lib/appointments-ics";
 
-export const Route = createFileRoute("/_authenticated/admin/appointments")({ component: AppointmentsPage });
+export const Route = createFileRoute("/_authenticated/admin/appointments")({
+  beforeLoad: () => {
+    throw redirect({ to: "/admin/calendar", search: { tab: "upcoming" } as any });
+  },
+});
 
 const APPT_TYPES = [
   "Coaching Call","Check-In Call","Onboarding Call","Strategy Call",
@@ -34,7 +38,7 @@ const APPT_TYPES = [
   "Program Review","Custom",
 ] as const;
 
-function AppointmentsPage() {
+export function AppointmentsPage() {
   const [tab, setTab] = useState<"today" | "upcoming" | "past" | "calendar">("upcoming");
   const [open, setOpen] = useState(false);
   const [presetDate, setPresetDate] = useState<string | undefined>(undefined);

@@ -1,4 +1,4 @@
-import { createFileRoute, useSearch } from "@tanstack/react-router";
+import { createFileRoute, redirect, useSearch } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { useServerFn } from "@tanstack/react-start";
@@ -15,12 +15,17 @@ import { CheckCircle2, RefreshCw, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/admin/google-calendar")({
-  component: Page,
   validateSearch: z.object({ connected: z.string().optional(), error: z.string().optional() }).parse,
+  beforeLoad: ({ search }) => {
+    throw redirect({
+      to: "/admin/calendar",
+      search: { tab: "google-calendar", connected: search.connected, error: search.error } as any,
+    });
+  },
 });
 
-function Page() {
-  const search = useSearch({ from: "/_authenticated/admin/google-calendar" });
+export function GoogleCalendarPage() {
+  const search = useSearch({ strict: false }) as { connected?: string; error?: string };
   const qc = useQueryClient();
   const statusFn = useServerFn(getGoogleConnectionStatus);
   const calsFn = useServerFn(listMyCalendars);
