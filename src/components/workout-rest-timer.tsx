@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Pause, Play, RotateCcw, Timer } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { restRangeForCategory, type ExerciseCategory } from "@/lib/exercise-metadata";
+import { defaultRestRange, type ExerciseCategory } from "@/lib/exercise-metadata";
 
 /**
  * Workout rest timer.
@@ -29,8 +29,7 @@ export function WorkoutRestTimer({
   // Pick a sensible default: programmed/override seconds, else midpoint of category range.
   const defaultSeconds = (() => {
     if (effectiveSeconds != null && effectiveSeconds > 0) return effectiveSeconds;
-    const [min, max] = restRangeForCategory(category);
-    return Math.round(((min + max) / 2) * 60);
+    return defaultRestRange(category).suggested;
   })();
 
   const [remaining, setRemaining] = useState<number>(defaultSeconds);
