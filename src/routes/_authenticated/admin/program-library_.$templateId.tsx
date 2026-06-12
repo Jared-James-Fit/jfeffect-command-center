@@ -992,7 +992,7 @@ function DayEditor({ day, setDay, exercises, compact }: { day: any; setDay: (d: 
   );
 }
 
-function RowEditor({ row, setRow, onDelete, exercises, compact }: { row: any; setRow: (r: any) => void; onDelete?: () => void; exercises: any[]; compact?: boolean }) {
+function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMoveDown, onDragStartRow, onDragEndRow, isDragging }: { row: any; setRow: (r: any) => void; onDelete?: () => void; exercises: any[]; compact?: boolean; onMoveUp?: () => void; onMoveDown?: () => void; onDragStartRow?: (e: React.DragEvent) => void; onDragEndRow?: () => void; isDragging?: boolean }) {
   const Field = ({ label, className, children }: { label: string; className?: string; children: React.ReactNode }) => (
     <div className={cn("flex flex-col gap-0.5 min-w-0", className)}>
       <span className="px-0.5 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground leading-none">{label}</span>
@@ -1045,37 +1045,66 @@ function RowEditor({ row, setRow, onDelete, exercises, compact }: { row: any; se
     setRow({ ...row, manual_override: false, load_kg: null, load_lb: null });
   };
   return (
-    <div className={cn("relative overflow-hidden rounded-md border border-border bg-secondary/20 pl-3", compact ? "p-1.5 space-y-1" : "p-2 space-y-1")}>
-      <div className={`absolute left-0 top-0 h-full w-1.5 ${accent}`} aria-hidden />
+    <div
+      className={cn(
+        "relative overflow-hidden rounded-md border-2 border-border bg-card shadow-sm transition-shadow hover:border-foreground/30 hover:shadow",
+        isDragging && "opacity-50 ring-2 ring-primary",
+        compact ? "p-1.5 pl-4 space-y-1" : "p-2 pl-5 space-y-1",
+      )}
+    >
+      <div className={`absolute left-0 top-0 h-full w-2 ${accent}`} aria-hidden />
       <div className="grid grid-cols-12 items-end gap-1">
         <Field className="col-span-4" label="Exercise">
+        <div className="flex items-center gap-1">
+          <span
+            draggable={!!onDragStartRow}
+            onDragStart={onDragStartRow}
+            onDragEnd={onDragEndRow}
+            title="Drag to reorder"
+            className="cursor-grab active:cursor-grabbing rounded p-0.5 text-muted-foreground hover:bg-secondary hover:text-foreground"
+          >
+            <GripVertical className="h-4 w-4" />
+          </span>
+          <div className="min-w-0 flex-1">
         <Select value={row.exercise_id ?? "__custom"} onValueChange={(v) => setRow({ ...row, exercise_id: v === "__custom" ? null : v })}>
-          <SelectTrigger className={cn(h, "text-xs")}><SelectValue placeholder="Exercise" /></SelectTrigger>
+          <SelectTrigger className={cn(h, "text-sm font-semibold")}><SelectValue placeholder="Exercise" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="__custom">— Custom name —</SelectItem>
             {(exercises as any[]).map((e) => <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>)}
           </SelectContent>
         </Select>
         {!row.exercise_id && (
-          <RowCell className="mt-1 h-7 text-xs" placeholder="Custom name" value={row.exercise_name_override} onCommit={(v) => setRow({ ...row, exercise_name_override: v })} />
+          <RowCell className="mt-1 h-7 text-sm font-semibold" placeholder="Custom name" value={row.exercise_name_override} onCommit={(v) => setRow({ ...row, exercise_name_override: v })} />
         )}
+          </div>
+        </div>
         </Field>
         <Field className="col-span-1" label="Sets">
-          <RowCell className={cn("text-xs", h)} inputMode="numeric" placeholder="3" value={row.sets} onCommit={(v) => setRow({ ...row, sets: parseIntOrNull(v) })} />
+          <RowCell className={cn("text-sm font-medium tabular-nums", h)} inputMode="numeric" placeholder="3" value={row.sets} onCommit={(v) => setRow({ ...row, sets: parseIntOrNull(v) })} />
         </Field>
         <Field className="col-span-2" label="Reps">
-          <RowCell className={cn("text-xs", h)} placeholder="8-12" value={row.reps_text} onCommit={(v) => setRow({ ...row, reps_text: v ?? "" })} />
+          <RowCell className={cn("text-sm font-medium tabular-nums", h)} placeholder="8-12" value={row.reps_text} onCommit={(v) => setRow({ ...row, reps_text: v ?? "" })} />
         </Field>
         <Field className="col-span-1" label="RPE">
-          <RowCell className={cn("text-xs", h)} inputMode="decimal" placeholder="8" value={row.rpe} onCommit={(v) => setRow({ ...row, rpe: v ?? "" })} />
+          <RowCell className={cn("text-sm font-medium tabular-nums", h)} inputMode="decimal" placeholder="8" value={row.rpe} onCommit={(v) => setRow({ ...row, rpe: v ?? "" })} />
         </Field>
         <Field className="col-span-1" label="RIR">
-          <RowCell className={cn("text-xs", h)} inputMode="decimal" placeholder="2" value={row.rir} onCommit={(v) => setRow({ ...row, rir: v ?? "" })} />
+          <RowCell className={cn("text-sm font-medium tabular-nums", h)} inputMode="decimal" placeholder="2" value={row.rir} onCommit={(v) => setRow({ ...row, rir: v ?? "" })} />
         </Field>
         <Field className="col-span-1" label="Rest s">
-          <RowCell className={cn("text-xs", h)} inputMode="numeric" placeholder="90" value={row.rest_seconds} onCommit={(v) => setRow({ ...row, rest_seconds: parseIntOrNull(v) })} />
+          <RowCell className={cn("text-sm font-medium tabular-nums", h)} inputMode="numeric" placeholder="90" value={row.rest_seconds} onCommit={(v) => setRow({ ...row, rest_seconds: parseIntOrNull(v) })} />
         </Field>
         <div className="col-span-2 flex justify-end gap-0.5 pb-0.5">
+          {onMoveUp && (
+            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={onMoveUp} title="Move up">
+              <ChevronUp className="h-3.5 w-3.5" />
+            </Button>
+          )}
+          {onMoveDown && (
+            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={onMoveDown} title="Move down">
+              <ChevronDown className="h-3.5 w-3.5" />
+            </Button>
+          )}
           <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => { copyRows([row]); toast.success("Exercise copied"); }} title="Copy exercise">
             <ClipboardCopy className="h-3.5 w-3.5" />
           </Button>
