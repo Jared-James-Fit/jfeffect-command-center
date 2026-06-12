@@ -231,7 +231,6 @@ function MemberPlanEditor() {
         const r = await dup({ data: { planId } });
         job.completeStep(1); job.completeStep(2);
         const newId = r.plan.id;
-        job.setSuccessAction({ label: "Open duplicate", onClick: () => navigate({ to: "/admin/member-plans/$planId", params: { planId: newId } }) });
         navigate({ to: "/admin/member-plans/$planId", params: { planId: newId } });
         job.completeStep(3);
         return { planId: newId };
@@ -246,7 +245,6 @@ function MemberPlanEditor() {
         description: "Member plan",
         steps: ["Confirm delete", "Remove plan", "Clean related references", "Finalize"],
         successToast: "Deleted",
-        retry: false,
       },
       async (job) => {
         setBusy(true);
