@@ -1822,6 +1822,63 @@ export type Database = {
         }
         Relationships: []
       }
+      client_crm_activities: {
+        Row: {
+          activity_type: string
+          actor_user_id: string | null
+          application_id: string | null
+          appointment_id: string | null
+          client_id: string
+          created_at: string
+          dedupe_key: string | null
+          details: Json
+          id: string
+          source: string | null
+          title: string
+        }
+        Insert: {
+          activity_type: string
+          actor_user_id?: string | null
+          application_id?: string | null
+          appointment_id?: string | null
+          client_id: string
+          created_at?: string
+          dedupe_key?: string | null
+          details?: Json
+          id?: string
+          source?: string | null
+          title: string
+        }
+        Update: {
+          activity_type?: string
+          actor_user_id?: string | null
+          application_id?: string | null
+          appointment_id?: string | null
+          client_id?: string
+          created_at?: string
+          dedupe_key?: string | null
+          details?: Json
+          id?: string
+          source?: string | null
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_crm_activities_application_id_fkey"
+            columns: ["application_id"]
+            isOneToOne: false
+            referencedRelation: "coaching_applications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_crm_activities_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       client_drive_folders: {
         Row: {
           client_id: string
@@ -1977,6 +2034,7 @@ export type Database = {
           agreement_status: string
           agreement_version: string | null
           allow_phone_calls: boolean | null
+          applied_at: string | null
           archived: boolean
           archived_at: string | null
           archived_by: string | null
@@ -1994,6 +2052,7 @@ export type Database = {
           bodyweight_goal_value_max: number | null
           calendar_link: string | null
           call_access_enabled: boolean
+          call_booked: boolean
           checkin_allow_photos: boolean
           checkin_allow_video: boolean
           checkin_due_day: string | null
@@ -2014,6 +2073,7 @@ export type Database = {
           compliance_status_reasons: Json
           compliance_status_updated_at: string | null
           compliance_tracking_enabled: boolean
+          converted_to_client_at: string | null
           country: string | null
           created_at: string
           date_of_birth: string | null
@@ -2051,10 +2111,18 @@ export type Database = {
           last_name: string | null
           last_program_update: string | null
           last_signed_in_at: string | null
+          lead_score: number | null
+          lead_temperature: string | null
+          lifecycle_stage: string | null
           lifestyle_notes: string | null
           linkedin: string | null
+          lost_at: string | null
+          lost_reason: string | null
           needs_admin_help: boolean
+          next_follow_up_at: string | null
           next_program_update: string | null
+          normalized_email: string | null
+          normalized_phone: string | null
           nutrition_notes: string | null
           onboarded_by_coach_id: string | null
           openpowerlifting_url: string | null
@@ -2085,6 +2153,7 @@ export type Database = {
           program_phase: string | null
           program_sheet_link: string | null
           province: string | null
+          recommended_offer: string | null
           renewal_date: string | null
           schedule_changes_weekly: boolean | null
           schedule_notes: string | null
@@ -2092,6 +2161,7 @@ export type Database = {
           sessions_purchased: number
           sessions_used: number
           sms_opt_out: boolean
+          source: string | null
           start_date: string | null
           status: string
           stripe_customer_id: string | null
@@ -2123,6 +2193,7 @@ export type Database = {
           agreement_status?: string
           agreement_version?: string | null
           allow_phone_calls?: boolean | null
+          applied_at?: string | null
           archived?: boolean
           archived_at?: string | null
           archived_by?: string | null
@@ -2140,6 +2211,7 @@ export type Database = {
           bodyweight_goal_value_max?: number | null
           calendar_link?: string | null
           call_access_enabled?: boolean
+          call_booked?: boolean
           checkin_allow_photos?: boolean
           checkin_allow_video?: boolean
           checkin_due_day?: string | null
@@ -2160,6 +2232,7 @@ export type Database = {
           compliance_status_reasons?: Json
           compliance_status_updated_at?: string | null
           compliance_tracking_enabled?: boolean
+          converted_to_client_at?: string | null
           country?: string | null
           created_at?: string
           date_of_birth?: string | null
@@ -2197,10 +2270,18 @@ export type Database = {
           last_name?: string | null
           last_program_update?: string | null
           last_signed_in_at?: string | null
+          lead_score?: number | null
+          lead_temperature?: string | null
+          lifecycle_stage?: string | null
           lifestyle_notes?: string | null
           linkedin?: string | null
+          lost_at?: string | null
+          lost_reason?: string | null
           needs_admin_help?: boolean
+          next_follow_up_at?: string | null
           next_program_update?: string | null
+          normalized_email?: string | null
+          normalized_phone?: string | null
           nutrition_notes?: string | null
           onboarded_by_coach_id?: string | null
           openpowerlifting_url?: string | null
@@ -2231,6 +2312,7 @@ export type Database = {
           program_phase?: string | null
           program_sheet_link?: string | null
           province?: string | null
+          recommended_offer?: string | null
           renewal_date?: string | null
           schedule_changes_weekly?: boolean | null
           schedule_notes?: string | null
@@ -2238,6 +2320,7 @@ export type Database = {
           sessions_purchased?: number
           sessions_used?: number
           sms_opt_out?: boolean
+          source?: string | null
           start_date?: string | null
           status?: string
           stripe_customer_id?: string | null
@@ -2269,6 +2352,7 @@ export type Database = {
           agreement_status?: string
           agreement_version?: string | null
           allow_phone_calls?: boolean | null
+          applied_at?: string | null
           archived?: boolean
           archived_at?: string | null
           archived_by?: string | null
@@ -2286,6 +2370,7 @@ export type Database = {
           bodyweight_goal_value_max?: number | null
           calendar_link?: string | null
           call_access_enabled?: boolean
+          call_booked?: boolean
           checkin_allow_photos?: boolean
           checkin_allow_video?: boolean
           checkin_due_day?: string | null
@@ -2306,6 +2391,7 @@ export type Database = {
           compliance_status_reasons?: Json
           compliance_status_updated_at?: string | null
           compliance_tracking_enabled?: boolean
+          converted_to_client_at?: string | null
           country?: string | null
           created_at?: string
           date_of_birth?: string | null
@@ -2343,10 +2429,18 @@ export type Database = {
           last_name?: string | null
           last_program_update?: string | null
           last_signed_in_at?: string | null
+          lead_score?: number | null
+          lead_temperature?: string | null
+          lifecycle_stage?: string | null
           lifestyle_notes?: string | null
           linkedin?: string | null
+          lost_at?: string | null
+          lost_reason?: string | null
           needs_admin_help?: boolean
+          next_follow_up_at?: string | null
           next_program_update?: string | null
+          normalized_email?: string | null
+          normalized_phone?: string | null
           nutrition_notes?: string | null
           onboarded_by_coach_id?: string | null
           openpowerlifting_url?: string | null
@@ -2377,6 +2471,7 @@ export type Database = {
           program_phase?: string | null
           program_sheet_link?: string | null
           province?: string | null
+          recommended_offer?: string | null
           renewal_date?: string | null
           schedule_changes_weekly?: boolean | null
           schedule_notes?: string | null
@@ -2384,6 +2479,7 @@ export type Database = {
           sessions_purchased?: number
           sessions_used?: number
           sms_opt_out?: boolean
+          source?: string | null
           start_date?: string | null
           status?: string
           stripe_customer_id?: string | null
@@ -2720,6 +2816,7 @@ export type Database = {
           booking_link_slug: string | null
           budget_range: string | null
           can_follow_plan: boolean | null
+          client_id: string | null
           created_at: string
           current_weight: string | null
           days_per_week: number | null
@@ -2762,6 +2859,7 @@ export type Database = {
           booking_link_slug?: string | null
           budget_range?: string | null
           can_follow_plan?: boolean | null
+          client_id?: string | null
           created_at?: string
           current_weight?: string | null
           days_per_week?: number | null
@@ -2804,6 +2902,7 @@ export type Database = {
           booking_link_slug?: string | null
           budget_range?: string | null
           can_follow_plan?: boolean | null
+          client_id?: string | null
           created_at?: string
           current_weight?: string | null
           days_per_week?: number | null
@@ -2839,7 +2938,15 @@ export type Database = {
           why_now?: string | null
           win_90_days?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "coaching_applications_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       coaching_products: {
         Row: {
