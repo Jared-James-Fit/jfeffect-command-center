@@ -380,14 +380,23 @@ export type Database = {
       app_members: {
         Row: {
           account_type: string
+          address_city: string | null
+          address_country: string | null
+          address_line1: string | null
+          address_state: string | null
+          address_zip: string | null
           admin_notes: string | null
           avatar_url: string | null
           cancel_at: string | null
           cancelled_at: string | null
           created_at: string
           current_period_end: string | null
+          date_of_birth: string | null
           email: string
+          emergency_contact_name: string | null
+          emergency_contact_phone: string | null
           full_name: string | null
+          goals: string | null
           hold_plan_started_at: string | null
           id: string
           is_admin_sandbox: boolean
@@ -399,30 +408,42 @@ export type Database = {
           paused_until: string | null
           phone: string | null
           profile_picture_required: boolean
+          setup_completed_at: string | null
           setup_token: string | null
           setup_token_expires_at: string | null
           signup_ip: string | null
           signup_user_agent: string | null
+          sms_consent_at: string | null
           sms_opt_out: boolean
           status: string
           stripe_customer_id: string | null
           stripe_price_id: string | null
           stripe_subscription_id: string | null
           subscription_status: string | null
+          training_background: string | null
           trial_end_at: string | null
           updated_at: string
           user_id: string | null
         }
         Insert: {
           account_type?: string
+          address_city?: string | null
+          address_country?: string | null
+          address_line1?: string | null
+          address_state?: string | null
+          address_zip?: string | null
           admin_notes?: string | null
           avatar_url?: string | null
           cancel_at?: string | null
           cancelled_at?: string | null
           created_at?: string
           current_period_end?: string | null
+          date_of_birth?: string | null
           email: string
+          emergency_contact_name?: string | null
+          emergency_contact_phone?: string | null
           full_name?: string | null
+          goals?: string | null
           hold_plan_started_at?: string | null
           id?: string
           is_admin_sandbox?: boolean
@@ -434,30 +455,42 @@ export type Database = {
           paused_until?: string | null
           phone?: string | null
           profile_picture_required?: boolean
+          setup_completed_at?: string | null
           setup_token?: string | null
           setup_token_expires_at?: string | null
           signup_ip?: string | null
           signup_user_agent?: string | null
+          sms_consent_at?: string | null
           sms_opt_out?: boolean
           status?: string
           stripe_customer_id?: string | null
           stripe_price_id?: string | null
           stripe_subscription_id?: string | null
           subscription_status?: string | null
+          training_background?: string | null
           trial_end_at?: string | null
           updated_at?: string
           user_id?: string | null
         }
         Update: {
           account_type?: string
+          address_city?: string | null
+          address_country?: string | null
+          address_line1?: string | null
+          address_state?: string | null
+          address_zip?: string | null
           admin_notes?: string | null
           avatar_url?: string | null
           cancel_at?: string | null
           cancelled_at?: string | null
           created_at?: string
           current_period_end?: string | null
+          date_of_birth?: string | null
           email?: string
+          emergency_contact_name?: string | null
+          emergency_contact_phone?: string | null
           full_name?: string | null
+          goals?: string | null
           hold_plan_started_at?: string | null
           id?: string
           is_admin_sandbox?: boolean
@@ -469,16 +502,19 @@ export type Database = {
           paused_until?: string | null
           phone?: string | null
           profile_picture_required?: boolean
+          setup_completed_at?: string | null
           setup_token?: string | null
           setup_token_expires_at?: string | null
           signup_ip?: string | null
           signup_user_agent?: string | null
+          sms_consent_at?: string | null
           sms_opt_out?: boolean
           status?: string
           stripe_customer_id?: string | null
           stripe_price_id?: string | null
           stripe_subscription_id?: string | null
           subscription_status?: string | null
+          training_background?: string | null
           trial_end_at?: string | null
           updated_at?: string
           user_id?: string | null
@@ -5361,6 +5397,104 @@ export type Database = {
           },
         ]
       }
+      member_support_messages: {
+        Row: {
+          attachments: Json
+          body: string
+          category: string
+          created_at: string
+          id: string
+          member_id: string
+          read_at: string | null
+          sender_role: string
+          sender_user_id: string | null
+          thread_id: string
+        }
+        Insert: {
+          attachments?: Json
+          body: string
+          category?: string
+          created_at?: string
+          id?: string
+          member_id: string
+          read_at?: string | null
+          sender_role: string
+          sender_user_id?: string | null
+          thread_id: string
+        }
+        Update: {
+          attachments?: Json
+          body?: string
+          category?: string
+          created_at?: string
+          id?: string
+          member_id?: string
+          read_at?: string | null
+          sender_role?: string
+          sender_user_id?: string | null
+          thread_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "member_support_messages_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "app_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "member_support_messages_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "member_support_threads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      member_support_threads: {
+        Row: {
+          created_at: string
+          id: string
+          last_member_message_at: string | null
+          last_team_message_at: string | null
+          member_id: string
+          status: string
+          unread_for_member: number
+          unread_for_team: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          last_member_message_at?: string | null
+          last_team_message_at?: string | null
+          member_id: string
+          status?: string
+          unread_for_member?: number
+          unread_for_team?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          last_member_message_at?: string | null
+          last_team_message_at?: string | null
+          member_id?: string
+          status?: string
+          unread_for_member?: number
+          unread_for_team?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "member_support_threads_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: true
+            referencedRelation: "app_members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       member_workout_completions: {
         Row: {
           completed_at: string
@@ -8849,6 +8983,7 @@ export type Database = {
         Args: { _key: string; _member_id: string }
         Returns: boolean
       }
+      member_setup_complete: { Args: { _member_id: string }; Returns: boolean }
       move_to_dlq: {
         Args: {
           dlq_name: string

@@ -7,6 +7,7 @@ import { PovQuickToggle, getPovFlag } from "@/components/pov-quick-toggle";
 import { BroadcastPopupGate } from "@/components/broadcast-popup-gate";
 import { SubscriptionRestrictedBanner } from "@/components/subscription-restricted-banner";
 import { useMemberAccess } from "@/lib/member-access";
+import { MemberSetupGate } from "@/components/member/member-setup-gate";
 
 function MemberLayout() {
   const { role, loading } = useAuth();
@@ -49,6 +50,7 @@ function MemberLayout() {
       )}
       <Outlet />
       <BroadcastPopupGate />
+      <MemberSetupGate />
     </AppShell>
   );
 }

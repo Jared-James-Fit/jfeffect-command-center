@@ -69,6 +69,7 @@ import { Route as AuthenticatedMediaActionItemsRouteImport } from './routes/_aut
 import { Route as AuthenticatedMediaAccountRouteImport } from './routes/_authenticated/media/account'
 import { Route as AuthenticatedMUpgradeRouteImport } from './routes/_authenticated/m/upgrade'
 import { Route as AuthenticatedMToolsRouteImport } from './routes/_authenticated/m/tools'
+import { Route as AuthenticatedMSupportRouteImport } from './routes/_authenticated/m/support'
 import { Route as AuthenticatedMResourcesRouteImport } from './routes/_authenticated/m/resources'
 import { Route as AuthenticatedMPlansRouteImport } from './routes/_authenticated/m/plans'
 import { Route as AuthenticatedMMyPlansRouteImport } from './routes/_authenticated/m/my-plans'
@@ -162,6 +163,7 @@ import { Route as AuthenticatedAdminSalesCoachingRouteImport } from './routes/_a
 import { Route as AuthenticatedAdminPurchasesIdRouteImport } from './routes/_authenticated/admin/purchases.$id'
 import { Route as AuthenticatedAdminProgramLibraryTemplateIdRouteImport } from './routes/_authenticated/admin/program-library_.$templateId'
 import { Route as AuthenticatedAdminMembershipWelcomeMessagesRouteImport } from './routes/_authenticated/admin/membership.welcome-messages'
+import { Route as AuthenticatedAdminMembershipSupportRouteImport } from './routes/_authenticated/admin/membership.support'
 import { Route as AuthenticatedAdminMembershipStripeSyncRouteImport } from './routes/_authenticated/admin/membership.stripe-sync'
 import { Route as AuthenticatedAdminMembershipSmsEmailRouteImport } from './routes/_authenticated/admin/membership.sms-email'
 import { Route as AuthenticatedAdminMembershipSignupStatsRouteImport } from './routes/_authenticated/admin/membership.signup-stats'
@@ -523,6 +525,11 @@ const AuthenticatedMUpgradeRoute = AuthenticatedMUpgradeRouteImport.update({
 const AuthenticatedMToolsRoute = AuthenticatedMToolsRouteImport.update({
   id: '/tools',
   path: '/tools',
+  getParentRoute: () => AuthenticatedMRouteRoute,
+} as any)
+const AuthenticatedMSupportRoute = AuthenticatedMSupportRouteImport.update({
+  id: '/support',
+  path: '/support',
   getParentRoute: () => AuthenticatedMRouteRoute,
 } as any)
 const AuthenticatedMResourcesRoute = AuthenticatedMResourcesRouteImport.update({
@@ -1069,6 +1076,12 @@ const AuthenticatedAdminMembershipWelcomeMessagesRoute =
     path: '/welcome-messages',
     getParentRoute: () => AuthenticatedAdminMembershipRoute,
   } as any)
+const AuthenticatedAdminMembershipSupportRoute =
+  AuthenticatedAdminMembershipSupportRouteImport.update({
+    id: '/support',
+    path: '/support',
+    getParentRoute: () => AuthenticatedAdminMembershipRoute,
+  } as any)
 const AuthenticatedAdminMembershipStripeSyncRoute =
   AuthenticatedAdminMembershipStripeSyncRouteImport.update({
     id: '/stripe-sync',
@@ -1334,6 +1347,7 @@ export interface FileRoutesByFullPath {
   '/m/my-plans': typeof AuthenticatedMMyPlansRouteWithChildren
   '/m/plans': typeof AuthenticatedMPlansRouteWithChildren
   '/m/resources': typeof AuthenticatedMResourcesRouteWithChildren
+  '/m/support': typeof AuthenticatedMSupportRoute
   '/m/tools': typeof AuthenticatedMToolsRoute
   '/m/upgrade': typeof AuthenticatedMUpgradeRoute
   '/media/account': typeof AuthenticatedMediaAccountRoute
@@ -1400,6 +1414,7 @@ export interface FileRoutesByFullPath {
   '/admin/membership/signup-stats': typeof AuthenticatedAdminMembershipSignupStatsRoute
   '/admin/membership/sms-email': typeof AuthenticatedAdminMembershipSmsEmailRoute
   '/admin/membership/stripe-sync': typeof AuthenticatedAdminMembershipStripeSyncRoute
+  '/admin/membership/support': typeof AuthenticatedAdminMembershipSupportRoute
   '/admin/membership/welcome-messages': typeof AuthenticatedAdminMembershipWelcomeMessagesRoute
   '/admin/program-library/$templateId': typeof AuthenticatedAdminProgramLibraryTemplateIdRoute
   '/admin/purchases/$id': typeof AuthenticatedAdminPurchasesIdRoute
@@ -1514,6 +1529,7 @@ export interface FileRoutesByTo {
   '/m/my-plans': typeof AuthenticatedMMyPlansRouteWithChildren
   '/m/plans': typeof AuthenticatedMPlansRouteWithChildren
   '/m/resources': typeof AuthenticatedMResourcesRouteWithChildren
+  '/m/support': typeof AuthenticatedMSupportRoute
   '/m/tools': typeof AuthenticatedMToolsRoute
   '/m/upgrade': typeof AuthenticatedMUpgradeRoute
   '/media/account': typeof AuthenticatedMediaAccountRoute
@@ -1580,6 +1596,7 @@ export interface FileRoutesByTo {
   '/admin/membership/signup-stats': typeof AuthenticatedAdminMembershipSignupStatsRoute
   '/admin/membership/sms-email': typeof AuthenticatedAdminMembershipSmsEmailRoute
   '/admin/membership/stripe-sync': typeof AuthenticatedAdminMembershipStripeSyncRoute
+  '/admin/membership/support': typeof AuthenticatedAdminMembershipSupportRoute
   '/admin/membership/welcome-messages': typeof AuthenticatedAdminMembershipWelcomeMessagesRoute
   '/admin/program-library/$templateId': typeof AuthenticatedAdminProgramLibraryTemplateIdRoute
   '/admin/purchases/$id': typeof AuthenticatedAdminPurchasesIdRoute
@@ -1701,6 +1718,7 @@ export interface FileRoutesById {
   '/_authenticated/m/my-plans': typeof AuthenticatedMMyPlansRouteWithChildren
   '/_authenticated/m/plans': typeof AuthenticatedMPlansRouteWithChildren
   '/_authenticated/m/resources': typeof AuthenticatedMResourcesRouteWithChildren
+  '/_authenticated/m/support': typeof AuthenticatedMSupportRoute
   '/_authenticated/m/tools': typeof AuthenticatedMToolsRoute
   '/_authenticated/m/upgrade': typeof AuthenticatedMUpgradeRoute
   '/_authenticated/media/account': typeof AuthenticatedMediaAccountRoute
@@ -1767,6 +1785,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/membership/signup-stats': typeof AuthenticatedAdminMembershipSignupStatsRoute
   '/_authenticated/admin/membership/sms-email': typeof AuthenticatedAdminMembershipSmsEmailRoute
   '/_authenticated/admin/membership/stripe-sync': typeof AuthenticatedAdminMembershipStripeSyncRoute
+  '/_authenticated/admin/membership/support': typeof AuthenticatedAdminMembershipSupportRoute
   '/_authenticated/admin/membership/welcome-messages': typeof AuthenticatedAdminMembershipWelcomeMessagesRoute
   '/_authenticated/admin/program-library_/$templateId': typeof AuthenticatedAdminProgramLibraryTemplateIdRoute
   '/_authenticated/admin/purchases/$id': typeof AuthenticatedAdminPurchasesIdRoute
@@ -1888,6 +1907,7 @@ export interface FileRouteTypes {
     | '/m/my-plans'
     | '/m/plans'
     | '/m/resources'
+    | '/m/support'
     | '/m/tools'
     | '/m/upgrade'
     | '/media/account'
@@ -1954,6 +1974,7 @@ export interface FileRouteTypes {
     | '/admin/membership/signup-stats'
     | '/admin/membership/sms-email'
     | '/admin/membership/stripe-sync'
+    | '/admin/membership/support'
     | '/admin/membership/welcome-messages'
     | '/admin/program-library/$templateId'
     | '/admin/purchases/$id'
@@ -2068,6 +2089,7 @@ export interface FileRouteTypes {
     | '/m/my-plans'
     | '/m/plans'
     | '/m/resources'
+    | '/m/support'
     | '/m/tools'
     | '/m/upgrade'
     | '/media/account'
@@ -2134,6 +2156,7 @@ export interface FileRouteTypes {
     | '/admin/membership/signup-stats'
     | '/admin/membership/sms-email'
     | '/admin/membership/stripe-sync'
+    | '/admin/membership/support'
     | '/admin/membership/welcome-messages'
     | '/admin/program-library/$templateId'
     | '/admin/purchases/$id'
@@ -2254,6 +2277,7 @@ export interface FileRouteTypes {
     | '/_authenticated/m/my-plans'
     | '/_authenticated/m/plans'
     | '/_authenticated/m/resources'
+    | '/_authenticated/m/support'
     | '/_authenticated/m/tools'
     | '/_authenticated/m/upgrade'
     | '/_authenticated/media/account'
@@ -2320,6 +2344,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/membership/signup-stats'
     | '/_authenticated/admin/membership/sms-email'
     | '/_authenticated/admin/membership/stripe-sync'
+    | '/_authenticated/admin/membership/support'
     | '/_authenticated/admin/membership/welcome-messages'
     | '/_authenticated/admin/program-library_/$templateId'
     | '/_authenticated/admin/purchases/$id'
@@ -2813,6 +2838,13 @@ declare module '@tanstack/react-router' {
       path: '/tools'
       fullPath: '/m/tools'
       preLoaderRoute: typeof AuthenticatedMToolsRouteImport
+      parentRoute: typeof AuthenticatedMRouteRoute
+    }
+    '/_authenticated/m/support': {
+      id: '/_authenticated/m/support'
+      path: '/support'
+      fullPath: '/m/support'
+      preLoaderRoute: typeof AuthenticatedMSupportRouteImport
       parentRoute: typeof AuthenticatedMRouteRoute
     }
     '/_authenticated/m/resources': {
@@ -3466,6 +3498,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminMembershipWelcomeMessagesRouteImport
       parentRoute: typeof AuthenticatedAdminMembershipRoute
     }
+    '/_authenticated/admin/membership/support': {
+      id: '/_authenticated/admin/membership/support'
+      path: '/support'
+      fullPath: '/admin/membership/support'
+      preLoaderRoute: typeof AuthenticatedAdminMembershipSupportRouteImport
+      parentRoute: typeof AuthenticatedAdminMembershipRoute
+    }
     '/_authenticated/admin/membership/stripe-sync': {
       id: '/_authenticated/admin/membership/stripe-sync'
       path: '/stripe-sync'
@@ -3715,6 +3754,7 @@ interface AuthenticatedAdminMembershipRouteChildren {
   AuthenticatedAdminMembershipSignupStatsRoute: typeof AuthenticatedAdminMembershipSignupStatsRoute
   AuthenticatedAdminMembershipSmsEmailRoute: typeof AuthenticatedAdminMembershipSmsEmailRoute
   AuthenticatedAdminMembershipStripeSyncRoute: typeof AuthenticatedAdminMembershipStripeSyncRoute
+  AuthenticatedAdminMembershipSupportRoute: typeof AuthenticatedAdminMembershipSupportRoute
   AuthenticatedAdminMembershipWelcomeMessagesRoute: typeof AuthenticatedAdminMembershipWelcomeMessagesRoute
   AuthenticatedAdminMembershipIndexRoute: typeof AuthenticatedAdminMembershipIndexRoute
 }
@@ -3747,6 +3787,8 @@ const AuthenticatedAdminMembershipRouteChildren: AuthenticatedAdminMembershipRou
       AuthenticatedAdminMembershipSmsEmailRoute,
     AuthenticatedAdminMembershipStripeSyncRoute:
       AuthenticatedAdminMembershipStripeSyncRoute,
+    AuthenticatedAdminMembershipSupportRoute:
+      AuthenticatedAdminMembershipSupportRoute,
     AuthenticatedAdminMembershipWelcomeMessagesRoute:
       AuthenticatedAdminMembershipWelcomeMessagesRoute,
     AuthenticatedAdminMembershipIndexRoute:
@@ -4019,6 +4061,7 @@ interface AuthenticatedMRouteRouteChildren {
   AuthenticatedMMyPlansRoute: typeof AuthenticatedMMyPlansRouteWithChildren
   AuthenticatedMPlansRoute: typeof AuthenticatedMPlansRouteWithChildren
   AuthenticatedMResourcesRoute: typeof AuthenticatedMResourcesRouteWithChildren
+  AuthenticatedMSupportRoute: typeof AuthenticatedMSupportRoute
   AuthenticatedMToolsRoute: typeof AuthenticatedMToolsRoute
   AuthenticatedMUpgradeRoute: typeof AuthenticatedMUpgradeRoute
   AuthenticatedMIndexRoute: typeof AuthenticatedMIndexRoute
@@ -4032,6 +4075,7 @@ const AuthenticatedMRouteRouteChildren: AuthenticatedMRouteRouteChildren = {
   AuthenticatedMMyPlansRoute: AuthenticatedMMyPlansRouteWithChildren,
   AuthenticatedMPlansRoute: AuthenticatedMPlansRouteWithChildren,
   AuthenticatedMResourcesRoute: AuthenticatedMResourcesRouteWithChildren,
+  AuthenticatedMSupportRoute: AuthenticatedMSupportRoute,
   AuthenticatedMToolsRoute: AuthenticatedMToolsRoute,
   AuthenticatedMUpgradeRoute: AuthenticatedMUpgradeRoute,
   AuthenticatedMIndexRoute: AuthenticatedMIndexRoute,

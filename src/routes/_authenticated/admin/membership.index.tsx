@@ -1,6 +1,12 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
+import { useNavigate } from "@tanstack/react-router";
+import { useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
+import { toast } from "sonner";
+import { setPovPersona } from "@/lib/pov.functions";
+import { setPovFlag } from "@/components/pov-quick-toggle";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -8,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import {
   Users, Sparkles, AlertCircle, CreditCard, Camera, Phone, MessageCircle,
   Pause, ListChecks, XCircle, TrendingUp, Clock,
+  Eye,
 } from "lucide-react";
 import { getMembershipStats } from "@/lib/membership-admin.functions";
 
@@ -41,6 +48,27 @@ function MembershipDashboard() {
   const fetch = useServerFn(getMembershipStats);
   const { data, isLoading } = useQuery({ queryKey: ["jf-membership-stats"], queryFn: () => fetch(), refetchInterval: 60_000 });
   const c = data?.counts;
+  const navigate = useNavigate();
+  const qc = useQueryClient();
+  const setPersona = useServerFn(setPovPersona);
+  const [povBusy, setPovBusy] = useState(false);
+
+  const enterPov = async () => {
+    if (povBusy) return;
+    setPovBusy(true);
+    try {
+      await setPersona({ data: { persona: "app_member" } as any });
+      setPovFlag("app_member");
+      await qc.invalidateQueries({ queryKey: ["m-me"] });
+      await qc.invalidateQueries({ queryKey: ["current-member-access"] });
+      toast.success("Now viewing as a member");
+      navigate({ to: "/m" });
+    } catch (e: any) {
+      toast.error(e?.message ?? "Could not enter POV");
+    } finally {
+      setPovBusy(false);
+    }
+  };
 
   return (
     <div className="space-y-5">
@@ -48,7 +76,12 @@ function MembershipDashboard() {
         title="Membership Admin Dashboard"
         subtitle="JF Membership signups, subscriptions, setup health & content."
         actions={
-          <Link to="/admin/membership/action-needed"><Button variant="outline"><AlertCircle className="mr-2 h-4 w-4" />Action Needed</Button></Link>
+          <div className="flex items-center gap-2">
+            <Button onClick={enterPov} disabled={povBusy} className="bg-emerald-600 hover:bg-emerald-700">
+              <Eye className="mr-2 h-4 w-4" /> Enter Membership POV
+            </Button>
+            <Link to="/admin/membership/action-needed"><Button variant="outline"><AlertCircle className="mr-2 h-4 w-4" />Action Needed</Button></Link>
+          </div>
         }
       />
 
