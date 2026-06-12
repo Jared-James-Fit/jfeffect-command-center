@@ -59,8 +59,8 @@ export function AppointmentsPage() {
         actions={
           <div className="flex gap-2">
             <Button size="sm" variant="outline" onClick={() => setSendOpen(true)}><Link2 className="mr-2 h-4 w-4" /> Send Booking Link</Button>
-            <Link to="/admin/google-calendar"><Button size="sm" variant="outline">Google Calendar</Button></Link>
-            <Link to="/admin/booking-links"><Button size="sm" variant="outline">Booking Links</Button></Link>
+            <Link to="/admin/calendar" search={{ tab: "google-calendar" } as any}><Button size="sm" variant="outline">Google Calendar</Button></Link>
+            <Link to="/admin/calendar" search={{ tab: "booking-links" } as any}><Button size="sm" variant="outline">Booking Links</Button></Link>
             <Button size="sm" className="bg-gradient-primary font-bold uppercase" onClick={() => setOpen(true)}>
               <Plus className="mr-2 h-4 w-4" /> New Appointment
             </Button>
