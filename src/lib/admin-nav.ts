@@ -80,11 +80,8 @@ export const adminNav: NavItem[] = [
   { to: "/admin/floating-bar", label: "Floating Bar", icon: LayoutGrid, group: "Account" },
 ];
 
-// Coaching-focused admin nav (the same as adminNav minus membership-only items,
-// with a single shortcut to the Membership Admin Dashboard at the top).
+// Coaching-focused admin nav (the same as adminNav minus membership-only items).
 export const coachingAdminNav: NavItem[] = [
-  // SHORTCUT to membership mode
-  { to: "/admin/membership", label: "JF Membership Dashboard", icon: Sparkles, group: "Core" },
   // CORE
   { to: "/admin", label: "Dashboard", icon: LayoutDashboard, group: "Core" },
   { to: "/admin/clients", label: "Coaching Clients", icon: Users, group: "Core" },
