@@ -29,6 +29,11 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  isTaskPopupEnabled, setTaskPopupEnabled,
+  readQuadStyles, writeQuadStyles, DEFAULT_QUAD_STYLES, type QuadStyle,
+} from "@/components/tasks/task-popup-gate";
+import type { TaskQuadrant } from "@/lib/tasks";
 
 const sb = supabase as any;
 
@@ -236,6 +241,33 @@ function OverviewPanel({ onJumpToTab }: { onJumpToTab: (tab: string) => void }) 
   const [typeFilter, setTypeFilter] = useState<"all" | PopupType>("all");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "off">("all");
 
+  // Per-browser toggles + quadrant titles for the Daily Task Summary popup.
+  const [taskAdminOn, setTaskAdminOn] = useState(true);
+  const [taskMmOn, setTaskMmOn] = useState(true);
+  const [quadEditorOpen, setQuadEditorOpen] = useState(false);
+  const [quadDraft, setQuadDraft] = useState<Record<TaskQuadrant, QuadStyle>>(DEFAULT_QUAD_STYLES);
+  useEffect(() => {
+    setTaskAdminOn(isTaskPopupEnabled("admin"));
+    setTaskMmOn(isTaskPopupEnabled("media_manager"));
+  }, []);
+  function toggleTaskPopup(forMM: boolean, next: boolean) {
+    setTaskPopupEnabled(forMM ? "media_manager" : "admin", next);
+    if (forMM) setTaskMmOn(next); else setTaskAdminOn(next);
+    toast.success(next ? "Daily Task Summary enabled" : "Daily Task Summary disabled", {
+      description: forMM ? "Media Manager (this browser)" : "Admin / Coach (this browser)",
+    });
+  }
+  function openQuadEditor() {
+    setQuadDraft(readQuadStyles());
+    setQuadEditorOpen(true);
+  }
+  function saveQuadEditor() {
+    writeQuadStyles(quadDraft);
+    setQuadEditorOpen(false);
+    toast.success("Matrix labels saved");
+  }
+  function resetQuadEditor() { setQuadDraft(DEFAULT_QUAD_STYLES); }
+
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
     return rows.filter((r) => {
@@ -399,15 +431,31 @@ function OverviewPanel({ onJumpToTab }: { onJumpToTab: (tab: string) => void }) 
                     <TableCell className="text-center">
                       {r.canToggle ? (
                         <Switch checked={r.enabled} onCheckedChange={(v) => handleToggle(r, v)} />
+                      ) : r.popupType === "task" ? (
+                        <Switch
+                          checked={r.id === "system:mm" ? taskMmOn : taskAdminOn}
+                          onCheckedChange={(v) => toggleTaskPopup(r.id === "system:mm", v)}
+                        />
                       ) : (
                         <Badge variant="outline" className="text-[10px]">system</Badge>
                       )}
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button size="sm" variant="outline" onClick={() => handleEdit(r)}>
-                        <ExternalLink className="mr-1 h-3.5 w-3.5" />
-                        {r.popupType === "install" ? "Edit" : "Open"}
-                      </Button>
+                      {r.popupType === "task" ? (
+                        <div className="flex justify-end gap-1">
+                          <Button size="sm" variant="outline" onClick={openQuadEditor}>
+                            <Pencil className="mr-1 h-3.5 w-3.5" /> Edit
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => handleEdit(r)}>
+                            <ExternalLink className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <Button size="sm" variant="outline" onClick={() => handleEdit(r)}>
+                          <ExternalLink className="mr-1 h-3.5 w-3.5" />
+                          {r.popupType === "install" ? "Edit" : "Open"}
+                        </Button>
+                      )}
                     </TableCell>
                   </TableRow>
                 );
@@ -416,6 +464,50 @@ function OverviewPanel({ onJumpToTab }: { onJumpToTab: (tab: string) => void }) 
           </Table>
         </div>
       </Card>
+
+      <Dialog open={quadEditorOpen} onOpenChange={setQuadEditorOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Edit Task Matrix Labels</DialogTitle>
+          </DialogHeader>
+          <p className="text-xs text-muted-foreground">
+            These titles appear in the daily Task Summary popup and across task quadrants.
+            Saved on this browser.
+          </p>
+          <div className="space-y-3">
+            {(Object.keys(DEFAULT_QUAD_STYLES) as TaskQuadrant[]).map((k) => (
+              <div key={k} className="rounded-md border p-3 space-y-2"
+                   style={{ borderColor: `${quadDraft[k].color}66`, backgroundColor: `${quadDraft[k].color}0d` }}>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="color"
+                    value={quadDraft[k].color}
+                    onChange={(e) => setQuadDraft((d) => ({ ...d, [k]: { ...d[k], color: e.target.value } }))}
+                    className="h-7 w-10 cursor-pointer rounded border bg-transparent"
+                    aria-label={`${k} color`}
+                  />
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{k}</span>
+                </div>
+                <Input
+                  value={quadDraft[k].title}
+                  onChange={(e) => setQuadDraft((d) => ({ ...d, [k]: { ...d[k], title: e.target.value } }))}
+                  placeholder="Title"
+                />
+                <Input
+                  value={quadDraft[k].subtitle}
+                  onChange={(e) => setQuadDraft((d) => ({ ...d, [k]: { ...d[k], subtitle: e.target.value } }))}
+                  placeholder="Subtitle"
+                />
+              </div>
+            ))}
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="ghost" onClick={resetQuadEditor}>Reset to defaults</Button>
+            <Button variant="outline" onClick={() => setQuadEditorOpen(false)}>Cancel</Button>
+            <Button onClick={saveQuadEditor}>Save</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
