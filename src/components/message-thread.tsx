@@ -48,6 +48,7 @@ import {
   CheckCircle2, Circle, CheckSquare, Copy,
 } from "lucide-react";
 import { format, parseISO, isToday, isYesterday } from "date-fns";
+import { runJob } from "@/lib/progress-jobs";
 import { toast } from "sonner";
 
 function attachIcon(t: MessageAttachment["type"]) {

@@ -42,6 +42,7 @@ import {
   Mic, Trash2, Play, Pause, Square, Loader2, MoreHorizontal, Pencil, Check,
   CheckCircle2, Circle, CheckSquare, Copy,
 } from "lucide-react";
+import { runJob } from "@/lib/progress-jobs";
 import { toast } from "sonner";
 
 async function uploadGroupFile(groupId: string, file: File): Promise<GroupAttachment> {
