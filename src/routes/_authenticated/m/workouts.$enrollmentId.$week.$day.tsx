@@ -177,7 +177,13 @@ function WorkoutTracker() {
         }
       />
       {rows.length === 0 && (
-        <Card className="p-6 text-sm text-muted-foreground">No exercises configured for this workout.</Card>
+        <WorkoutEmptyCard
+          clientId={null}
+          clientName={null}
+          workoutId={null}
+          route={route}
+          onRetry={() => qc.invalidateQueries({ queryKey: ["m-enrollment", enrollmentId] })}
+        />
       )}
       {rows.map((row: any, ei: number) => {
         const setCount = Math.max(1, Number(row.sets) || 1);
