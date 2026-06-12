@@ -163,6 +163,7 @@ import { Route as AuthenticatedAdminSalesCoachingRouteImport } from './routes/_a
 import { Route as AuthenticatedAdminPurchasesIdRouteImport } from './routes/_authenticated/admin/purchases.$id'
 import { Route as AuthenticatedAdminProgramLibraryTemplateIdRouteImport } from './routes/_authenticated/admin/program-library_.$templateId'
 import { Route as AuthenticatedAdminMembershipWelcomeMessagesRouteImport } from './routes/_authenticated/admin/membership.welcome-messages'
+import { Route as AuthenticatedAdminMembershipSupportRouteImport } from './routes/_authenticated/admin/membership.support'
 import { Route as AuthenticatedAdminMembershipStripeSyncRouteImport } from './routes/_authenticated/admin/membership.stripe-sync'
 import { Route as AuthenticatedAdminMembershipSmsEmailRouteImport } from './routes/_authenticated/admin/membership.sms-email'
 import { Route as AuthenticatedAdminMembershipSignupStatsRouteImport } from './routes/_authenticated/admin/membership.signup-stats'
@@ -1075,6 +1076,12 @@ const AuthenticatedAdminMembershipWelcomeMessagesRoute =
     path: '/welcome-messages',
     getParentRoute: () => AuthenticatedAdminMembershipRoute,
   } as any)
+const AuthenticatedAdminMembershipSupportRoute =
+  AuthenticatedAdminMembershipSupportRouteImport.update({
+    id: '/support',
+    path: '/support',
+    getParentRoute: () => AuthenticatedAdminMembershipRoute,
+  } as any)
 const AuthenticatedAdminMembershipStripeSyncRoute =
   AuthenticatedAdminMembershipStripeSyncRouteImport.update({
     id: '/stripe-sync',
@@ -1407,6 +1414,7 @@ export interface FileRoutesByFullPath {
   '/admin/membership/signup-stats': typeof AuthenticatedAdminMembershipSignupStatsRoute
   '/admin/membership/sms-email': typeof AuthenticatedAdminMembershipSmsEmailRoute
   '/admin/membership/stripe-sync': typeof AuthenticatedAdminMembershipStripeSyncRoute
+  '/admin/membership/support': typeof AuthenticatedAdminMembershipSupportRoute
   '/admin/membership/welcome-messages': typeof AuthenticatedAdminMembershipWelcomeMessagesRoute
   '/admin/program-library/$templateId': typeof AuthenticatedAdminProgramLibraryTemplateIdRoute
   '/admin/purchases/$id': typeof AuthenticatedAdminPurchasesIdRoute
@@ -1588,6 +1596,7 @@ export interface FileRoutesByTo {
   '/admin/membership/signup-stats': typeof AuthenticatedAdminMembershipSignupStatsRoute
   '/admin/membership/sms-email': typeof AuthenticatedAdminMembershipSmsEmailRoute
   '/admin/membership/stripe-sync': typeof AuthenticatedAdminMembershipStripeSyncRoute
+  '/admin/membership/support': typeof AuthenticatedAdminMembershipSupportRoute
   '/admin/membership/welcome-messages': typeof AuthenticatedAdminMembershipWelcomeMessagesRoute
   '/admin/program-library/$templateId': typeof AuthenticatedAdminProgramLibraryTemplateIdRoute
   '/admin/purchases/$id': typeof AuthenticatedAdminPurchasesIdRoute
@@ -1776,6 +1785,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/membership/signup-stats': typeof AuthenticatedAdminMembershipSignupStatsRoute
   '/_authenticated/admin/membership/sms-email': typeof AuthenticatedAdminMembershipSmsEmailRoute
   '/_authenticated/admin/membership/stripe-sync': typeof AuthenticatedAdminMembershipStripeSyncRoute
+  '/_authenticated/admin/membership/support': typeof AuthenticatedAdminMembershipSupportRoute
   '/_authenticated/admin/membership/welcome-messages': typeof AuthenticatedAdminMembershipWelcomeMessagesRoute
   '/_authenticated/admin/program-library_/$templateId': typeof AuthenticatedAdminProgramLibraryTemplateIdRoute
   '/_authenticated/admin/purchases/$id': typeof AuthenticatedAdminPurchasesIdRoute
@@ -1964,6 +1974,7 @@ export interface FileRouteTypes {
     | '/admin/membership/signup-stats'
     | '/admin/membership/sms-email'
     | '/admin/membership/stripe-sync'
+    | '/admin/membership/support'
     | '/admin/membership/welcome-messages'
     | '/admin/program-library/$templateId'
     | '/admin/purchases/$id'
@@ -2145,6 +2156,7 @@ export interface FileRouteTypes {
     | '/admin/membership/signup-stats'
     | '/admin/membership/sms-email'
     | '/admin/membership/stripe-sync'
+    | '/admin/membership/support'
     | '/admin/membership/welcome-messages'
     | '/admin/program-library/$templateId'
     | '/admin/purchases/$id'
@@ -2332,6 +2344,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/membership/signup-stats'
     | '/_authenticated/admin/membership/sms-email'
     | '/_authenticated/admin/membership/stripe-sync'
+    | '/_authenticated/admin/membership/support'
     | '/_authenticated/admin/membership/welcome-messages'
     | '/_authenticated/admin/program-library_/$templateId'
     | '/_authenticated/admin/purchases/$id'
@@ -3485,6 +3498,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminMembershipWelcomeMessagesRouteImport
       parentRoute: typeof AuthenticatedAdminMembershipRoute
     }
+    '/_authenticated/admin/membership/support': {
+      id: '/_authenticated/admin/membership/support'
+      path: '/support'
+      fullPath: '/admin/membership/support'
+      preLoaderRoute: typeof AuthenticatedAdminMembershipSupportRouteImport
+      parentRoute: typeof AuthenticatedAdminMembershipRoute
+    }
     '/_authenticated/admin/membership/stripe-sync': {
       id: '/_authenticated/admin/membership/stripe-sync'
       path: '/stripe-sync'
@@ -3734,6 +3754,7 @@ interface AuthenticatedAdminMembershipRouteChildren {
   AuthenticatedAdminMembershipSignupStatsRoute: typeof AuthenticatedAdminMembershipSignupStatsRoute
   AuthenticatedAdminMembershipSmsEmailRoute: typeof AuthenticatedAdminMembershipSmsEmailRoute
   AuthenticatedAdminMembershipStripeSyncRoute: typeof AuthenticatedAdminMembershipStripeSyncRoute
+  AuthenticatedAdminMembershipSupportRoute: typeof AuthenticatedAdminMembershipSupportRoute
   AuthenticatedAdminMembershipWelcomeMessagesRoute: typeof AuthenticatedAdminMembershipWelcomeMessagesRoute
   AuthenticatedAdminMembershipIndexRoute: typeof AuthenticatedAdminMembershipIndexRoute
 }
@@ -3766,6 +3787,8 @@ const AuthenticatedAdminMembershipRouteChildren: AuthenticatedAdminMembershipRou
       AuthenticatedAdminMembershipSmsEmailRoute,
     AuthenticatedAdminMembershipStripeSyncRoute:
       AuthenticatedAdminMembershipStripeSyncRoute,
+    AuthenticatedAdminMembershipSupportRoute:
+      AuthenticatedAdminMembershipSupportRoute,
     AuthenticatedAdminMembershipWelcomeMessagesRoute:
       AuthenticatedAdminMembershipWelcomeMessagesRoute,
     AuthenticatedAdminMembershipIndexRoute:
