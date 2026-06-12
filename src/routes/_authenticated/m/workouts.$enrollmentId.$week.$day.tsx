@@ -19,8 +19,21 @@ import { runJob } from "@/lib/progress-jobs";
 import { useAuth } from "@/lib/auth";
 import { useClientImpersonation } from "@/lib/client-impersonation";
 import { writeSetEditAudit } from "@/lib/logged-set-audit";
+import { WorkoutUndoProvider, useWorkoutUndo, UndoButton } from "@/lib/workout-undo";
+import { WorkoutSyncBanner } from "@/components/workout-sync-banner";
+import {
+  enqueueOfflineWrite,
+  registerQueueHandler,
+} from "@/lib/workout-offline-queue";
+import { writePlanCache, cachedInitialData } from "@/lib/workout-plan-cache";
 
-export const Route = createFileRoute("/_authenticated/m/workouts/$enrollmentId/$week/$day")({ component: WorkoutTracker });
+export const Route = createFileRoute("/_authenticated/m/workouts/$enrollmentId/$week/$day")({
+  component: () => (
+    <WorkoutUndoProvider>
+      <WorkoutTracker />
+    </WorkoutUndoProvider>
+  ),
+});
 
 type SetLog = { reps?: number | null; load_lb?: number | null; rpe?: number | null; rir?: number | null; notes?: string | null };
 
@@ -34,36 +47,56 @@ function WorkoutTracker() {
   const logFn = useServerFn(logSet);
   const { user } = useAuth();
   const { isImpersonating, client: povClient } = useClientImpersonation();
+  const undo = useWorkoutUndo();
   const [notes, setNotes] = useState("");
   const [logs, setLogs] = useState<Record<string, SetLog>>({});
 
+  const cacheScope = `m:${enrollmentId}`;
+  const route = `/m/workouts/${enrollmentId}/${week}/${day}`;
+
+  // Register offline handlers once. These are the queue's only access to the
+  // server fns — saveLog() etc. push payloads here instead of calling RPC
+  // directly, so a flaky connection never loses data.
+  useEffect(() => {
+    registerQueueHandler("m_log_set", async (payload: any) => { await logFn({ data: payload }); });
+    registerQueueHandler("m_complete_workout", async (payload: any) => { await completeFn({ data: payload }); });
+    registerQueueHandler("m_uncomplete_workout", async (payload: any) => { await uncompleteFn({ data: payload }); });
+  }, [logFn, completeFn, uncompleteFn]);
+
   const { data: enr, isError: enrError, isSuccess: enrLoaded, refetch: refetchEnr } = useQuery({
     queryKey: ["m-enrollment", enrollmentId],
+    initialData: cachedInitialData<any>(cacheScope, "enrollment"),
     queryFn: async () => {
       const { data } = await supabase
         .from("member_plan_enrollments").select("*, member_plans(*)")
         .eq("id", enrollmentId).maybeSingle();
+      if (data) writePlanCache(cacheScope, "enrollment", data);
       return data as any;
     },
   });
 
   const { data: completion } = useQuery({
     queryKey: ["m-completion", enrollmentId, weekIndex, dayIndex],
+    initialData: cachedInitialData<any>(cacheScope, `completion:${weekIndex}:${dayIndex}`),
     queryFn: async () => {
       const { data } = await supabase
         .from("member_workout_completions").select("*")
         .eq("enrollment_id", enrollmentId).eq("week_index", weekIndex).eq("day_index", dayIndex).maybeSingle();
+      writePlanCache(cacheScope, `completion:${weekIndex}:${dayIndex}`, data);
       return data;
     },
   });
 
   const { data: existingLogs = [] } = useQuery({
     queryKey: ["m-set-logs", enrollmentId, weekIndex, dayIndex],
+    initialData: cachedInitialData<any[]>(cacheScope, `set-logs:${weekIndex}:${dayIndex}`),
     queryFn: async () => {
       const { data } = await supabase
         .from("member_set_logs").select("*")
         .eq("enrollment_id", enrollmentId).eq("week_index", weekIndex).eq("day_index", dayIndex);
-      return (data ?? []) as any[];
+      const out = (data ?? []) as any[];
+      writePlanCache(cacheScope, `set-logs:${weekIndex}:${dayIndex}`, out);
+      return out;
     },
   });
 
@@ -81,7 +114,6 @@ function WorkoutTracker() {
   const plan = enr?.member_plans;
   const dayObj = plan?.published_payload?.weeks_data?.[weekIndex - 1]?.days?.[dayIndex - 1];
   const rows: any[] = dayObj?.rows ?? [];
-  const route = `/m/workouts/${enrollmentId}/${week}/${day}`;
   if (enrError || (enrLoaded && !enr)) {
     return (
       <div className="space-y-5">
@@ -99,15 +131,58 @@ function WorkoutTracker() {
   const loggingEnabled = plan?.logging_enabled !== false;
   const isComplete = !!completion;
 
-  const updateLog = (key: string, patch: Partial<SetLog>) => setLogs((m) => ({ ...m, [key]: { ...m[key], ...patch } }));
+  const updateLog = (key: string, patch: Partial<SetLog>) => {
+    setLogs((prev) => {
+      const before = prev[key] ? { ...prev[key] } : {};
+      const next = { ...prev, [key]: { ...prev[key], ...patch } };
+      const field = Object.keys(patch)[0] ?? "field";
+      undo.push({
+        label: `Edited ${field}`,
+        coalesceKey: `edit:${key}:${field}`,
+        coalesceMs: 800,
+        undo: () => setLogs((m) => ({ ...m, [key]: before })),
+      });
+      return next;
+    });
+  };
 
   const saveLog = async (exerciseIndex: number, setIndex: number) => {
     const key = `${exerciseIndex}:${setIndex}`;
     const v = logs[key] ?? {};
     const before = (existingLogs as any[]).find((l) => l.exercise_index === exerciseIndex && l.set_index === setIndex) ?? null;
-    await logFn({ data: { enrollmentId, weekIndex, dayIndex, exerciseIndex, setIndex,
-      reps: v.reps ?? null, load_lb: v.load_lb ?? null, rpe: v.rpe ?? null, rir: v.rir ?? null, notes: v.notes ?? null } });
-    qc.invalidateQueries({ queryKey: ["m-set-logs", enrollmentId, weekIndex, dayIndex] });
+    const payload = {
+      enrollmentId, weekIndex, dayIndex, exerciseIndex, setIndex,
+      reps: v.reps ?? null, load_lb: v.load_lb ?? null, rpe: v.rpe ?? null, rir: v.rir ?? null, notes: v.notes ?? null,
+    };
+    // Always go through the queue so weak-connection writes don't fail silently.
+    enqueueOfflineWrite({
+      id: `m_set:${enrollmentId}:${weekIndex}:${dayIndex}:${exerciseIndex}:${setIndex}`,
+      label: "Saved set",
+      handlerKey: "m_log_set",
+      payload,
+    });
+    // Optimistic local sync of existingLogs cache so the UI feels instant.
+    qc.setQueryData(["m-set-logs", enrollmentId, weekIndex, dayIndex], (old: any[] = []) => {
+      const filtered = old.filter((l) => !(l.exercise_index === exerciseIndex && l.set_index === setIndex));
+      return [...filtered, { ...(before ?? {}), ...payload, _optimistic: true }];
+    });
+    // Push an undo entry that reverses to the previous saved value.
+    undo.push({
+      label: "Saved set",
+      undo: () => {
+        if (before) {
+          enqueueOfflineWrite({
+            id: `m_set:${enrollmentId}:${weekIndex}:${dayIndex}:${exerciseIndex}:${setIndex}`,
+            label: "Reverted set",
+            handlerKey: "m_log_set",
+            payload: { enrollmentId, weekIndex, dayIndex, exerciseIndex, setIndex,
+              reps: before.reps ?? null, load_lb: before.load_lb ?? null,
+              rpe: before.rpe ?? null, rir: before.rir ?? null, notes: before.notes ?? null },
+          });
+          setLogs((m) => ({ ...m, [key]: { reps: before.reps, load_lb: before.load_lb, rpe: before.rpe, rir: before.rir, notes: before.notes } }));
+        }
+      },
+    });
     // Audit if coach/admin POV is editing on the member's behalf.
     if (isImpersonating && user?.id && povClient?.id) {
       const row = rows[exerciseIndex];
@@ -143,25 +218,52 @@ function WorkoutTracker() {
   };
 
   const handleComplete = async () => {
-    await runJob(
-      { title: "Completing workout", description: dayObj?.title || `Week ${weekIndex} · Day ${dayIndex}`, steps: ["Saving notes", "Marking complete", "Refreshing"], successToast: "Workout complete" },
-      async (job) => {
-        job.completeStep(0);
-        await completeFn({ data: { enrollmentId, weekIndex, dayIndex, notes } });
-        job.completeStep(1);
-        qc.invalidateQueries({ queryKey: ["m-completion", enrollmentId, weekIndex, dayIndex] });
-        qc.invalidateQueries({ queryKey: ["m-completions", enrollmentId] });
-        qc.invalidateQueries({ queryKey: ["m-enrollment", enrollmentId] });
-        job.completeStep(2);
+    const wasComplete = isComplete;
+    enqueueOfflineWrite({
+      id: `m_complete:${enrollmentId}:${weekIndex}:${dayIndex}`,
+      label: "Marked workout complete",
+      handlerKey: "m_complete_workout",
+      payload: { enrollmentId, weekIndex, dayIndex, notes },
+    });
+    toast.success("Workout complete", { description: "Syncing in background." });
+    qc.setQueryData(["m-completion", enrollmentId, weekIndex, dayIndex],
+      (old: any) => old ?? { enrollment_id: enrollmentId, week_index: weekIndex, day_index: dayIndex, completed_at: new Date().toISOString(), _optimistic: true });
+    undo.push({
+      label: "Marked workout complete",
+      undo: () => {
+        if (wasComplete) return;
+        enqueueOfflineWrite({
+          id: `m_complete:${enrollmentId}:${weekIndex}:${dayIndex}`,
+          label: "Reverted completion",
+          handlerKey: "m_uncomplete_workout",
+          payload: { enrollmentId, weekIndex, dayIndex },
+        });
+        qc.setQueryData(["m-completion", enrollmentId, weekIndex, dayIndex], null);
       },
-    );
+    });
   };
 
   const handleUncomplete = async () => {
-    await uncompleteFn({ data: { enrollmentId, weekIndex, dayIndex } });
-    qc.invalidateQueries({ queryKey: ["m-completion", enrollmentId, weekIndex, dayIndex] });
-    qc.invalidateQueries({ queryKey: ["m-completions", enrollmentId] });
-    qc.invalidateQueries({ queryKey: ["m-enrollment", enrollmentId] });
+    const prev = completion;
+    enqueueOfflineWrite({
+      id: `m_complete:${enrollmentId}:${weekIndex}:${dayIndex}`,
+      label: "Marked workout incomplete",
+      handlerKey: "m_uncomplete_workout",
+      payload: { enrollmentId, weekIndex, dayIndex },
+    });
+    qc.setQueryData(["m-completion", enrollmentId, weekIndex, dayIndex], null);
+    undo.push({
+      label: "Marked workout incomplete",
+      undo: () => {
+        enqueueOfflineWrite({
+          id: `m_complete:${enrollmentId}:${weekIndex}:${dayIndex}`,
+          label: "Restored completion",
+          handlerKey: "m_complete_workout",
+          payload: { enrollmentId, weekIndex, dayIndex, notes },
+        });
+        qc.setQueryData(["m-completion", enrollmentId, weekIndex, dayIndex], prev ?? null);
+      },
+    });
   };
 
   return (
@@ -171,10 +273,16 @@ function WorkoutTracker() {
         subtitle={plan?.name}
         actions={
           <div className="flex items-center gap-2">
+            <UndoButton />
             <TrainingHelpButton size="sm" variant="outline" />
             {isComplete ? <Badge>Complete</Badge> : null}
           </div>
         }
+      />
+      <WorkoutSyncBanner
+        clientId={povClient?.id ?? null}
+        workoutId={null}
+        pageRoute={route}
       />
       {rows.length === 0 && (
         <WorkoutEmptyCard
