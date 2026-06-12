@@ -88,6 +88,7 @@ import { Route as AuthenticatedAdminSettingsRouteImport } from './routes/_authen
 import { Route as AuthenticatedAdminResourcesRouteImport } from './routes/_authenticated/admin/resources'
 import { Route as AuthenticatedAdminRecipesRouteImport } from './routes/_authenticated/admin/recipes'
 import { Route as AuthenticatedAdminPurchasesRouteImport } from './routes/_authenticated/admin/purchases'
+import { Route as AuthenticatedAdminPtCalendarRouteImport } from './routes/_authenticated/admin/pt-calendar'
 import { Route as AuthenticatedAdminPromoCodesRouteImport } from './routes/_authenticated/admin/promo-codes'
 import { Route as AuthenticatedAdminProgramsRouteImport } from './routes/_authenticated/admin/programs'
 import { Route as AuthenticatedAdminProgramLibraryRouteImport } from './routes/_authenticated/admin/program-library'
@@ -633,6 +634,12 @@ const AuthenticatedAdminPurchasesRoute =
   AuthenticatedAdminPurchasesRouteImport.update({
     id: '/purchases',
     path: '/purchases',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
+const AuthenticatedAdminPtCalendarRoute =
+  AuthenticatedAdminPtCalendarRouteImport.update({
+    id: '/pt-calendar',
+    path: '/pt-calendar',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
 const AuthenticatedAdminPromoCodesRoute =
@@ -1350,6 +1357,7 @@ export interface FileRoutesByFullPath {
   '/admin/program-library': typeof AuthenticatedAdminProgramLibraryRoute
   '/admin/programs': typeof AuthenticatedAdminProgramsRoute
   '/admin/promo-codes': typeof AuthenticatedAdminPromoCodesRoute
+  '/admin/pt-calendar': typeof AuthenticatedAdminPtCalendarRoute
   '/admin/purchases': typeof AuthenticatedAdminPurchasesRouteWithChildren
   '/admin/recipes': typeof AuthenticatedAdminRecipesRoute
   '/admin/resources': typeof AuthenticatedAdminResourcesRoute
@@ -1535,6 +1543,7 @@ export interface FileRoutesByTo {
   '/admin/program-library': typeof AuthenticatedAdminProgramLibraryRoute
   '/admin/programs': typeof AuthenticatedAdminProgramsRoute
   '/admin/promo-codes': typeof AuthenticatedAdminPromoCodesRoute
+  '/admin/pt-calendar': typeof AuthenticatedAdminPtCalendarRoute
   '/admin/purchases': typeof AuthenticatedAdminPurchasesRouteWithChildren
   '/admin/recipes': typeof AuthenticatedAdminRecipesRoute
   '/admin/resources': typeof AuthenticatedAdminResourcesRoute
@@ -1727,6 +1736,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/program-library': typeof AuthenticatedAdminProgramLibraryRoute
   '/_authenticated/admin/programs': typeof AuthenticatedAdminProgramsRoute
   '/_authenticated/admin/promo-codes': typeof AuthenticatedAdminPromoCodesRoute
+  '/_authenticated/admin/pt-calendar': typeof AuthenticatedAdminPtCalendarRoute
   '/_authenticated/admin/purchases': typeof AuthenticatedAdminPurchasesRouteWithChildren
   '/_authenticated/admin/recipes': typeof AuthenticatedAdminRecipesRoute
   '/_authenticated/admin/resources': typeof AuthenticatedAdminResourcesRoute
@@ -1919,6 +1929,7 @@ export interface FileRouteTypes {
     | '/admin/program-library'
     | '/admin/programs'
     | '/admin/promo-codes'
+    | '/admin/pt-calendar'
     | '/admin/purchases'
     | '/admin/recipes'
     | '/admin/resources'
@@ -2104,6 +2115,7 @@ export interface FileRouteTypes {
     | '/admin/program-library'
     | '/admin/programs'
     | '/admin/promo-codes'
+    | '/admin/pt-calendar'
     | '/admin/purchases'
     | '/admin/recipes'
     | '/admin/resources'
@@ -2295,6 +2307,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/program-library'
     | '/_authenticated/admin/programs'
     | '/_authenticated/admin/promo-codes'
+    | '/_authenticated/admin/pt-calendar'
     | '/_authenticated/admin/purchases'
     | '/_authenticated/admin/recipes'
     | '/_authenticated/admin/resources'
@@ -3010,6 +3023,13 @@ declare module '@tanstack/react-router' {
       path: '/purchases'
       fullPath: '/admin/purchases'
       preLoaderRoute: typeof AuthenticatedAdminPurchasesRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
+    '/_authenticated/admin/pt-calendar': {
+      id: '/_authenticated/admin/pt-calendar'
+      path: '/pt-calendar'
+      fullPath: '/admin/pt-calendar'
+      preLoaderRoute: typeof AuthenticatedAdminPtCalendarRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
     '/_authenticated/admin/promo-codes': {
@@ -3914,6 +3934,7 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminProgramLibraryRoute: typeof AuthenticatedAdminProgramLibraryRoute
   AuthenticatedAdminProgramsRoute: typeof AuthenticatedAdminProgramsRoute
   AuthenticatedAdminPromoCodesRoute: typeof AuthenticatedAdminPromoCodesRoute
+  AuthenticatedAdminPtCalendarRoute: typeof AuthenticatedAdminPtCalendarRoute
   AuthenticatedAdminPurchasesRoute: typeof AuthenticatedAdminPurchasesRouteWithChildren
   AuthenticatedAdminRecipesRoute: typeof AuthenticatedAdminRecipesRoute
   AuthenticatedAdminResourcesRoute: typeof AuthenticatedAdminResourcesRoute
@@ -4010,6 +4031,7 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
       AuthenticatedAdminProgramLibraryRoute,
     AuthenticatedAdminProgramsRoute: AuthenticatedAdminProgramsRoute,
     AuthenticatedAdminPromoCodesRoute: AuthenticatedAdminPromoCodesRoute,
+    AuthenticatedAdminPtCalendarRoute: AuthenticatedAdminPtCalendarRoute,
     AuthenticatedAdminPurchasesRoute:
       AuthenticatedAdminPurchasesRouteWithChildren,
     AuthenticatedAdminRecipesRoute: AuthenticatedAdminRecipesRoute,

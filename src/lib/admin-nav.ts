@@ -57,10 +57,7 @@ export const adminNav: NavItem[] = [
   { to: "/admin/payments", label: "Payments", icon: DollarSign, group: "Business" },
   { to: "/admin/promo-codes", label: "Promo Codes", icon: Ticket, group: "Business" },
   { to: "/admin/purchases", label: "Purchases", icon: ClipboardCheck, group: "Business" },
-  { to: "/admin/calendar", label: "PT Calendar", icon: Calendar, group: "Business" },
-  { to: "/admin/appointments", label: "Appointments", icon: Calendar, group: "Business" },
-  { to: "/admin/booking-links", label: "Booking Links", icon: LinkIcon, group: "Business" },
-  { to: "/admin/google-calendar", label: "Google Calendar", icon: Calendar, group: "Business" },
+  { to: "/admin/calendar", label: "Calendar", icon: Calendar, group: "Business", keywords: ["calendar", "appointments", "booking", "booking links", "pt calendar", "google calendar", "availability", "schedule"] },
   { to: "/admin/events", label: "Events", icon: Calendar, group: "Business" },
   // DOCUMENTS
   { to: "/admin/agreements", label: "Agreements", icon: FileSignature, group: "Documents" },
