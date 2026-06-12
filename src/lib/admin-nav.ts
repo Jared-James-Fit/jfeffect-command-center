@@ -197,6 +197,7 @@ export const memberNav: NavItem[] = [
   { to: "/m/resources", label: "Resources", icon: FolderOpen },
   { to: "/m/tools", label: "Tools", icon: Wrench },
   { to: "/m/announcements", label: "Announcements", icon: Megaphone },
+  { to: "/m/support", label: "Support", icon: HelpCircle },
   { to: "/m/billing", label: "Billing", icon: CreditCard },
   { to: "/m/account", label: "My Account", icon: UserCog },
 ];
