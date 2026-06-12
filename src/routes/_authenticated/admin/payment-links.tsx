@@ -202,29 +202,35 @@ function PaymentLinksPage() {
       return;
     }
     setGeneratingLink(p.id);
+    let linkUrl = "";
     try {
       await runJob<{ url: string }>(
         {
           title: "Creating Stripe checkout link",
           description: p.name,
           steps: ["Validate product", "Create Stripe checkout session", "Save purchase record", "Generate checkout link", "Finalize"],
-          successToast: "Payment link ready",
+          successToast: "Payment link ready — copied to clipboard",
         },
         async (job) => {
           job.completeStep(0);
           const res = await generateLinkFn({ data: { id: p.id } });
+          linkUrl = res.url;
           job.completeStep(1); job.completeStep(2); job.completeStep(3);
           qc.invalidateQueries({ queryKey: ["coaching-products"] });
           try { await navigator.clipboard.writeText(res.url); } catch {}
           job.completeStep(4);
-          // Attach success CTAs after completion
-          (job as any).id && (await import("@/lib/progress-jobs")).jobStore.succeed((job as any).id, {
-            statusText: "Link ready",
-            successAction: { label: "Open checkout link", onClick: () => window.open(res.url, "_blank", "noopener,noreferrer") },
-          });
           return res;
         },
       );
+      // After success: attach success CTAs (Open / Copy) to the just-completed job.
+      const { jobStore } = await import("@/lib/progress-jobs");
+      const latest = jobStore.getSnapshot().find((j) => j.title === "Creating Stripe checkout link" && j.status === "success");
+      if (latest && linkUrl) {
+        jobStore.succeed(latest.id, {
+          statusText: "Link ready",
+          successAction: { label: "Open checkout link", onClick: () => window.open(linkUrl, "_blank", "noopener,noreferrer") },
+        });
+      }
     } catch {
       // runJob handled the toast
     } finally {
