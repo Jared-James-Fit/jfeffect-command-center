@@ -143,7 +143,7 @@ function TempBadge({ t }: { t: string | null }) {
   const tone = t === "hot" ? "bg-red-500/15 text-red-500" : t === "warm" ? "bg-amber-500/15 text-amber-500" : "bg-sky-500/15 text-sky-500";
   return <Badge variant="outline" className={`capitalize ${tone}`}>{t}</Badge>;
 }
-function FilterSelect({ label, value, onChange, options }: any) {
+function FilterSelect({ label, value, onChange, options }: { label: string; value: any; onChange: (v: any) => void; options: any[] }) {
   return (
     <Select value={value ?? "_any"} onValueChange={(v) => onChange(v === "_any" ? undefined : v)}>
       <SelectTrigger className="w-[160px]"><SelectValue placeholder={label} /></SelectTrigger>
