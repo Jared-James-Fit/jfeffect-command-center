@@ -46,7 +46,7 @@ function WorkoutDay() {
   const { data: client } = useQuery({
     queryKey: ["my-client", portalUserId],
     enabled: !!portalUserId,
-    queryFn: async () => (await supabase.from("clients").select("id").eq("user_id", portalUserId!).maybeSingle()).data,
+    queryFn: async () => (await supabase.from("clients").select("id, full_name, preferred_weight_unit").eq("user_id", portalUserId!).maybeSingle()).data,
   });
 
   const { data: day } = useQuery({
@@ -159,6 +159,38 @@ function WorkoutDay() {
   const [notes, setNotes] = useState("");
   const [actualMin, setActualMin] = useState<string>("");
 
+  // Weight unit preference: client choice persists to clients.preferred_weight_unit.
+  // Falls back to the builder's load_kg/load_lb shape (kg if any row has load_kg).
+  const builderDefaultUnit: "kg" | "lb" = useMemo(() => {
+    const r = (rows as any[]).find((x) => x.load_kg || x.load_lb);
+    if (r?.load_lb && !r?.load_kg) return "lb";
+    return "kg";
+  }, [rows]);
+  const [unit, setUnit] = useState<"kg" | "lb">("kg");
+  const [unitHydrated, setUnitHydrated] = useState(false);
+  useEffect(() => {
+    if (unitHydrated) return;
+    const pref = (client as any)?.preferred_weight_unit as "kg" | "lb" | undefined;
+    setUnit(pref ?? builderDefaultUnit);
+    setUnitHydrated(true);
+  }, [client, builderDefaultUnit, unitHydrated]);
+
+  const persistUnit = async (next: "kg" | "lb") => {
+    setUnit(next);
+    if (!client?.id) return;
+    await sb.from("clients").update({ preferred_weight_unit: next }).eq("id", client.id);
+    qc.invalidateQueries({ queryKey: ["my-client", portalUserId] });
+  };
+
+  // Focus / full-screen logging mode.
+  const [focusMode, setFocusMode] = useState(false);
+  useEffect(() => {
+    if (!focusMode) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
+  }, [focusMode]);
+
   // Restore any unsynced draft for this workout's notes/duration before render.
   const draftKey = client?.id ? `workout:${dayId}:${client.id}:meta` : null;
   const [draftHydrated, setDraftHydrated] = useState(false);
@@ -222,6 +254,40 @@ function WorkoutDay() {
 
   return (
     <>
+      {focusMode && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-background">
+          <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-background/95 px-4 py-3 backdrop-blur">
+            <div className="font-bold">{day.title || `Day ${day.day_index}`} · Focus mode</div>
+            <div className="flex items-center gap-2">
+              <UnitToggle unit={unit} onChange={persistUnit} />
+              <Button size="sm" variant="outline" onClick={() => setFocusMode(false)}>
+                <Minimize2 className="mr-1 h-4 w-4" /> Exit
+              </Button>
+            </div>
+          </div>
+          <div className="mx-auto max-w-3xl space-y-4 p-4 md:p-6">
+            <WorkoutLoadBoundary clientId={client?.id ?? null} clientName={(client as any)?.full_name ?? null} dayId={dayId} route={`/portal/workouts/${dayId}`}>
+              {(rows as any[]).map((r) => (
+                <ExerciseBlock
+                  key={r.id}
+                  row={r}
+                  dayId={dayId}
+                  dayTitle={day.title || `Day ${day.day_index}`}
+                  clientId={client?.id}
+                  blockId={blockId}
+                  existingResults={(results as any[]).filter((x) => x.row_id === r.id)}
+                  existingNote={notesByRowId.get(r.id)}
+                  readonly={readonly}
+                  unit={unit}
+                  focusMode
+                  onChange={refresh}
+                  onNoteChange={refreshNotes}
+                />
+              ))}
+            </WorkoutLoadBoundary>
+          </div>
+        </div>
+      )}
       <PageHeader
         backTo="/portal/workouts"
         backLabel="Back to Workouts"
@@ -237,7 +303,15 @@ function WorkoutDay() {
           <Badge variant="outline"><Clock className="mr-1 h-3 w-3" /> {durationRange(day.duration_override_min ?? day.duration_estimate_min ?? 60)}</Badge>
           {completion && <Badge variant="outline" className="text-green-500 border-green-500/30 bg-green-500/10"><CheckCircle2 className="mr-1 h-3 w-3" /> Completed</Badge>}
           {readonly && <Badge variant="outline" className="border-muted-foreground/30 bg-muted/30 text-muted-foreground"><Lock className="mr-1 h-3 w-3" /> Read-only</Badge>}
-          <div className="ml-auto"><SaveStatus state={metaSave.state} savedAt={metaSave.savedAt} /></div>
+          <div className="ml-auto flex items-center gap-2">
+            {!readonly && <UnitToggle unit={unit} onChange={persistUnit} />}
+            {!readonly && (
+              <Button size="sm" variant="outline" onClick={() => setFocusMode(true)}>
+                <Maximize2 className="mr-1 h-4 w-4" /> Focus
+              </Button>
+            )}
+            <SaveStatus state={metaSave.state} savedAt={metaSave.savedAt} />
+          </div>
         </div>
 
         {client?.id && (
@@ -273,23 +347,26 @@ function WorkoutDay() {
 
         {day.notes && <Card className="p-4 text-sm whitespace-pre-wrap bg-secondary/30">{day.notes}</Card>}
 
-        <div className="space-y-3">
-          {(rows as any[]).map((r) => (
-            <ExerciseBlock
-              key={r.id}
-              row={r}
-              dayId={dayId}
-              dayTitle={day.title || `Day ${day.day_index}`}
-              clientId={client?.id}
-              blockId={blockId}
-              existingResults={(results as any[]).filter((x) => x.row_id === r.id)}
-              existingNote={notesByRowId.get(r.id)}
-              readonly={readonly}
-              onChange={refresh}
-              onNoteChange={refreshNotes}
-            />
-          ))}
-        </div>
+        <WorkoutLoadBoundary clientId={client?.id ?? null} clientName={(client as any)?.full_name ?? null} dayId={dayId} route={`/portal/workouts/${dayId}`}>
+          <div className="space-y-3">
+            {(rows as any[]).map((r) => (
+              <ExerciseBlock
+                key={r.id}
+                row={r}
+                dayId={dayId}
+                dayTitle={day.title || `Day ${day.day_index}`}
+                clientId={client?.id}
+                blockId={blockId}
+                existingResults={(results as any[]).filter((x) => x.row_id === r.id)}
+                existingNote={notesByRowId.get(r.id)}
+                readonly={readonly}
+                unit={unit}
+                onChange={refresh}
+                onNoteChange={refreshNotes}
+              />
+            ))}
+          </div>
+        </WorkoutLoadBoundary>
 
         {!readonly && (
         <Card ref={generalNotesRef} className="p-4 space-y-3">
