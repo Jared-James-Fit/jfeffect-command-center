@@ -922,7 +922,7 @@ function DayEditor({ day, setDay, exercises, compact }: { day: any; setDay: (d: 
   const [dragRowIdx, setDragRowIdx] = useState<number | null>(null);
   const [dropTargetIdx, setDropTargetIdx] = useState<number | null>(null);
   const clip = useClip();
-  const addRow = () => setDay({ ...day, rows: [...rows, { sort_order: rows.length, sets: 3, reps_text: "8-12", time_profile: "accessory_compound" }] });
+  const addRow = () => setDay({ ...day, rows: [...rows, { sort_order: rows.length, sets: 3, reps_text: "8-12", time_profile: "accessory_compound", percentage_basis: "none" }] });
   const pasteFromClip = () => {
     if (!clip || clip.kind !== "rows") return;
     const cloned = JSON.parse(JSON.stringify(clip.rows));
@@ -931,7 +931,8 @@ function DayEditor({ day, setDay, exercises, compact }: { day: any; setDay: (d: 
   };
   const insertExercise = (exId: string, atIndex?: number) => {
     const ex = (exercises as any[]).find((x) => x.id === exId);
-    const newRow = { sort_order: 0, sets: 3, reps_text: "8-12", time_profile: "accessory_compound", exercise_id: exId, exercise_name_override: ex?.name };
+    // Default: NO suggested load. Coach opts in explicitly per row.
+    const newRow = { sort_order: 0, sets: 3, reps_text: "8-12", time_profile: "accessory_compound", percentage_basis: "none", exercise_id: exId, exercise_name_override: ex?.name };
     const next = [...rows];
     const idx = atIndex ?? next.length;
     next.splice(idx, 0, newRow);
