@@ -6,6 +6,7 @@ import {
   grantAccess, revokeAccess,
 } from "@/lib/members.functions";
 import { copyPovFromMember } from "@/lib/pov.functions";
+import { adminUpdateMemberSetup } from "@/lib/member-setup.functions";
 import { setPovFlag } from "@/components/pov-quick-toggle";
 import { useNavigate } from "@tanstack/react-router";
 import { PageHeader } from "@/components/app-shell";
@@ -112,6 +113,7 @@ function MemberProfile() {
           <TabsTrigger value="summary">Summary</TabsTrigger>
           <TabsTrigger value="subscription">Subscription</TabsTrigger>
           <TabsTrigger value="access">Access</TabsTrigger>
+          <TabsTrigger value="setup">Setup Info</TabsTrigger>
           <TabsTrigger value="sms">SMS Activity</TabsTrigger>
           <TabsTrigger value="notes">Notes</TabsTrigger>
         </TabsList>
