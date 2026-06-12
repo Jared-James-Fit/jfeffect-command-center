@@ -231,3 +231,10 @@ html[data-keyboard-open="true"] { --bottom-nav-clearance: 0px; }
   0%   { background-position: 200% 0; }
   100% { background-position: -200% 0; }
 }
+
+/* Global progress drawer — indeterminate bar */
+@keyframes indeterminate {
+  0%   { transform: translateX(-100%); }
+  50%  { transform: translateX(50%); }
+  100% { transform: translateX(300%); }
+}
