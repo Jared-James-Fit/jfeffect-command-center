@@ -655,7 +655,6 @@ function WorkoutDay() {
 function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResults, existingNote, readonly = false, unit = "kg", onUnitChange, focusMode = false, onChange, onNoteChange }: { row: any; dayId: string; dayTitle: string; clientId: string | undefined; blockId?: string | null; existingResults: any[]; existingNote?: any; readonly?: boolean; unit?: "kg" | "lb"; onUnitChange?: (u: "kg" | "lb") => void; focusMode?: boolean; onChange: () => void; onNoteChange: () => void }) {
   const name = row.exercises?.name ?? row.exercise_name_override ?? "Exercise";
   const exercise = row.exercises ?? null;
-  // unused marker to anchor patch
   const exerciseId = exercise?.id ?? null;
   const video = exercise?.video_url ?? exercise?.vimeo_embed_url ?? null;
   const hasGuide = Boolean(exerciseId || video);
