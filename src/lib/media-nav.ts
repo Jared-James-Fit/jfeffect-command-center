@@ -16,6 +16,7 @@ export const mediaNav: NavItem[] = [
   { to: "/media/inbox", label: "Media Inbox", icon: ImageIcon, group: "Media" },
   { to: "/media/archives", label: "Media Archives", icon: Folder, group: "Media" },
   { to: "/media/uploads", label: "Uploads", icon: Upload, group: "Media" },
+  { to: "/media/resources", label: "Resource Library", icon: Folder, group: "Media" },
   { to: "/media/testimonials", label: "Testimonials / Proof", icon: Star, group: "Media" },
   // Public pages
   { to: "/media/sales/membership", label: "JF Membership Page", icon: ExternalLink, group: "Public Pages" },

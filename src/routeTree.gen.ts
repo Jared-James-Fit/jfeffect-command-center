@@ -55,6 +55,7 @@ import { Route as AuthenticatedPortalAnnouncementsRouteImport } from './routes/_
 import { Route as AuthenticatedPortalAccountRouteImport } from './routes/_authenticated/portal/account'
 import { Route as AuthenticatedMediaUploadsRouteImport } from './routes/_authenticated/media/uploads'
 import { Route as AuthenticatedMediaTestimonialsRouteImport } from './routes/_authenticated/media/testimonials'
+import { Route as AuthenticatedMediaResourcesRouteImport } from './routes/_authenticated/media/resources'
 import { Route as AuthenticatedMediaPromoLinksRouteImport } from './routes/_authenticated/media/promo-links'
 import { Route as AuthenticatedMediaInboxRouteImport } from './routes/_authenticated/media/inbox'
 import { Route as AuthenticatedMediaEventsRouteImport } from './routes/_authenticated/media/events'
@@ -438,6 +439,12 @@ const AuthenticatedMediaTestimonialsRoute =
   AuthenticatedMediaTestimonialsRouteImport.update({
     id: '/testimonials',
     path: '/testimonials',
+    getParentRoute: () => AuthenticatedMediaRouteRoute,
+  } as any)
+const AuthenticatedMediaResourcesRoute =
+  AuthenticatedMediaResourcesRouteImport.update({
+    id: '/resources',
+    path: '/resources',
     getParentRoute: () => AuthenticatedMediaRouteRoute,
   } as any)
 const AuthenticatedMediaPromoLinksRoute =
@@ -1316,6 +1323,7 @@ export interface FileRoutesByFullPath {
   '/media/events': typeof AuthenticatedMediaEventsRoute
   '/media/inbox': typeof AuthenticatedMediaInboxRoute
   '/media/promo-links': typeof AuthenticatedMediaPromoLinksRoute
+  '/media/resources': typeof AuthenticatedMediaResourcesRoute
   '/media/testimonials': typeof AuthenticatedMediaTestimonialsRoute
   '/media/uploads': typeof AuthenticatedMediaUploadsRoute
   '/portal/account': typeof AuthenticatedPortalAccountRoute
@@ -1492,6 +1500,7 @@ export interface FileRoutesByTo {
   '/media/events': typeof AuthenticatedMediaEventsRoute
   '/media/inbox': typeof AuthenticatedMediaInboxRoute
   '/media/promo-links': typeof AuthenticatedMediaPromoLinksRoute
+  '/media/resources': typeof AuthenticatedMediaResourcesRoute
   '/media/testimonials': typeof AuthenticatedMediaTestimonialsRoute
   '/media/uploads': typeof AuthenticatedMediaUploadsRoute
   '/portal/account': typeof AuthenticatedPortalAccountRoute
@@ -1675,6 +1684,7 @@ export interface FileRoutesById {
   '/_authenticated/media/events': typeof AuthenticatedMediaEventsRoute
   '/_authenticated/media/inbox': typeof AuthenticatedMediaInboxRoute
   '/_authenticated/media/promo-links': typeof AuthenticatedMediaPromoLinksRoute
+  '/_authenticated/media/resources': typeof AuthenticatedMediaResourcesRoute
   '/_authenticated/media/testimonials': typeof AuthenticatedMediaTestimonialsRoute
   '/_authenticated/media/uploads': typeof AuthenticatedMediaUploadsRoute
   '/_authenticated/portal/account': typeof AuthenticatedPortalAccountRoute
@@ -1858,6 +1868,7 @@ export interface FileRouteTypes {
     | '/media/events'
     | '/media/inbox'
     | '/media/promo-links'
+    | '/media/resources'
     | '/media/testimonials'
     | '/media/uploads'
     | '/portal/account'
@@ -2034,6 +2045,7 @@ export interface FileRouteTypes {
     | '/media/events'
     | '/media/inbox'
     | '/media/promo-links'
+    | '/media/resources'
     | '/media/testimonials'
     | '/media/uploads'
     | '/portal/account'
@@ -2216,6 +2228,7 @@ export interface FileRouteTypes {
     | '/_authenticated/media/events'
     | '/_authenticated/media/inbox'
     | '/_authenticated/media/promo-links'
+    | '/_authenticated/media/resources'
     | '/_authenticated/media/testimonials'
     | '/_authenticated/media/uploads'
     | '/_authenticated/portal/account'
@@ -2662,6 +2675,13 @@ declare module '@tanstack/react-router' {
       path: '/testimonials'
       fullPath: '/media/testimonials'
       preLoaderRoute: typeof AuthenticatedMediaTestimonialsRouteImport
+      parentRoute: typeof AuthenticatedMediaRouteRoute
+    }
+    '/_authenticated/media/resources': {
+      id: '/_authenticated/media/resources'
+      path: '/resources'
+      fullPath: '/media/resources'
+      preLoaderRoute: typeof AuthenticatedMediaResourcesRouteImport
       parentRoute: typeof AuthenticatedMediaRouteRoute
     }
     '/_authenticated/media/promo-links': {
@@ -3968,6 +3988,7 @@ interface AuthenticatedMediaRouteRouteChildren {
   AuthenticatedMediaEventsRoute: typeof AuthenticatedMediaEventsRoute
   AuthenticatedMediaInboxRoute: typeof AuthenticatedMediaInboxRoute
   AuthenticatedMediaPromoLinksRoute: typeof AuthenticatedMediaPromoLinksRoute
+  AuthenticatedMediaResourcesRoute: typeof AuthenticatedMediaResourcesRoute
   AuthenticatedMediaTestimonialsRoute: typeof AuthenticatedMediaTestimonialsRoute
   AuthenticatedMediaUploadsRoute: typeof AuthenticatedMediaUploadsRoute
   AuthenticatedMediaIndexRoute: typeof AuthenticatedMediaIndexRoute
@@ -3987,6 +4008,7 @@ const AuthenticatedMediaRouteRouteChildren: AuthenticatedMediaRouteRouteChildren
     AuthenticatedMediaEventsRoute: AuthenticatedMediaEventsRoute,
     AuthenticatedMediaInboxRoute: AuthenticatedMediaInboxRoute,
     AuthenticatedMediaPromoLinksRoute: AuthenticatedMediaPromoLinksRoute,
+    AuthenticatedMediaResourcesRoute: AuthenticatedMediaResourcesRoute,
     AuthenticatedMediaTestimonialsRoute: AuthenticatedMediaTestimonialsRoute,
     AuthenticatedMediaUploadsRoute: AuthenticatedMediaUploadsRoute,
     AuthenticatedMediaIndexRoute: AuthenticatedMediaIndexRoute,
@@ -4183,13 +4205,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
