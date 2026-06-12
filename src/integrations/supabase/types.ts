@@ -2714,52 +2714,130 @@ export type Database = {
       }
       coaching_applications: {
         Row: {
+          application_status: string | null
+          appointment_id: string | null
+          biggest_struggle: string | null
+          booking_link_slug: string | null
           budget_range: string | null
+          can_follow_plan: boolean | null
           created_at: string
+          current_weight: string | null
+          days_per_week: number | null
           email: string
+          first_name: string | null
           full_name: string
           goals: string | null
+          gym_access: string | null
           id: string
+          injuries: string | null
+          instagram: string | null
+          last_name: string | null
+          lead_score: number | null
+          lead_temperature: string | null
+          location_timezone: string | null
+          main_goal: string | null
+          monthly_investment: string | null
           notes_admin: string | null
           phone: string | null
+          ready_to_invest: boolean | null
+          recommended_offer: string | null
           schedule: string | null
+          seriousness: number | null
           source: string
           status: string
+          submitted_at: string | null
+          summary: string | null
+          target_outcome: string | null
           timeline: string | null
           training_history: string | null
+          tried_before: string | null
           updated_at: string
+          why_now: string | null
+          win_90_days: string | null
         }
         Insert: {
+          application_status?: string | null
+          appointment_id?: string | null
+          biggest_struggle?: string | null
+          booking_link_slug?: string | null
           budget_range?: string | null
+          can_follow_plan?: boolean | null
           created_at?: string
+          current_weight?: string | null
+          days_per_week?: number | null
           email: string
+          first_name?: string | null
           full_name: string
           goals?: string | null
+          gym_access?: string | null
           id?: string
+          injuries?: string | null
+          instagram?: string | null
+          last_name?: string | null
+          lead_score?: number | null
+          lead_temperature?: string | null
+          location_timezone?: string | null
+          main_goal?: string | null
+          monthly_investment?: string | null
           notes_admin?: string | null
           phone?: string | null
+          ready_to_invest?: boolean | null
+          recommended_offer?: string | null
           schedule?: string | null
+          seriousness?: number | null
           source?: string
           status?: string
+          submitted_at?: string | null
+          summary?: string | null
+          target_outcome?: string | null
           timeline?: string | null
           training_history?: string | null
+          tried_before?: string | null
           updated_at?: string
+          why_now?: string | null
+          win_90_days?: string | null
         }
         Update: {
+          application_status?: string | null
+          appointment_id?: string | null
+          biggest_struggle?: string | null
+          booking_link_slug?: string | null
           budget_range?: string | null
+          can_follow_plan?: boolean | null
           created_at?: string
+          current_weight?: string | null
+          days_per_week?: number | null
           email?: string
+          first_name?: string | null
           full_name?: string
           goals?: string | null
+          gym_access?: string | null
           id?: string
+          injuries?: string | null
+          instagram?: string | null
+          last_name?: string | null
+          lead_score?: number | null
+          lead_temperature?: string | null
+          location_timezone?: string | null
+          main_goal?: string | null
+          monthly_investment?: string | null
           notes_admin?: string | null
           phone?: string | null
+          ready_to_invest?: boolean | null
+          recommended_offer?: string | null
           schedule?: string | null
+          seriousness?: number | null
           source?: string
           status?: string
+          submitted_at?: string | null
+          summary?: string | null
+          target_outcome?: string | null
           timeline?: string | null
           training_history?: string | null
+          tried_before?: string | null
           updated_at?: string
+          why_now?: string | null
+          win_90_days?: string | null
         }
         Relationships: []
       }
