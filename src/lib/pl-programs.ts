@@ -220,7 +220,12 @@ export async function addDay(weekId: string, dayIndex: number, title: string) {
 }
 
 export async function addRow(dayId: string, sortOrder: number) {
-  const { data, error } = await sb.from("pl_exercise_rows").insert({ day_id: dayId, sort_order: sortOrder, sets: 3, reps_text: "8-12", time_profile: "accessory_compound" }).select("*").single();
+  // Blank rows are left empty — coach fills in sets/reps/rpe/etc.
+  // Placeholders in the UI show example values but nothing is saved here.
+  const { data, error } = await sb
+    .from("pl_exercise_rows")
+    .insert({ day_id: dayId, sort_order: sortOrder, time_profile: "accessory_compound" })
+    .select("*").single();
   if (error) throw error;
   return data;
 }
@@ -358,11 +363,13 @@ export async function addRowFromExercise(dayId: string, exerciseId: string, posi
   // Look up the exercise so we can seed sensible defaults (time profile + rest)
   const { data: ex } = await sb
     .from("exercises")
-    .select("name, category, muscle_group")
+    .select("name, category, muscle_group, exercise_category, is_competition_lift, competition_lift_type")
     .eq("id", exerciseId)
     .maybeSingle();
   const profile = inferTimeProfileFromExercise(ex);
   const prof = TIME_PROFILES.find((p) => p.value === profile) ?? TIME_PROFILES[2];
+  const { defaultRestSeconds } = await import("@/lib/exercise-metadata");
+  const restDefault = defaultRestSeconds(ex as any);
   const { data: existing } = await sb
     .from("pl_exercise_rows")
     .select("id, sort_order")
@@ -381,10 +388,11 @@ export async function addRowFromExercise(dayId: string, exerciseId: string, posi
       day_id: dayId,
       sort_order: pos,
       exercise_id: exerciseId,
-      sets: 3,
-      reps_text: profile === "main_lift" ? "3-5" : "8-12",
       time_profile: profile,
-      rest_seconds: prof.defaultRest,
+      // sets / reps / rpe / rir intentionally left null — coach fills them in.
+      // Rest seconds are seeded from the exercise's category default.
+      rest_seconds: restDefault,
+      rest_seconds_override: null,
     })
     .select("*")
     .single();

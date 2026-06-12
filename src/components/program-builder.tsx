@@ -834,10 +834,35 @@ export function movementAccent(name?: string | null, override?: string | null): 
     const found = EXERCISE_CARD_COLORS.find((c) => c.value === override);
     if (found) return found.cls;
   }
-  const n = (name ?? "").toLowerCase().trim();
-  if (/^comp(etition)?\s+squat\b/.test(n)) return "bg-yellow-500/70";
-  if (/^comp(etition)?\s+bench(\s+press)?\b/.test(n)) return "bg-sky-500/70";
-  if (/^comp(etition)?\s+deadlift\b/.test(n)) return "bg-emerald-500/70";
+  void name;
+  return "bg-red-500/70";
+}
+
+/**
+ * Metadata-driven card accent. Uses exercise category and competition-lift
+ * type — never matches on the exercise name. Prefer this over `movementAccent`
+ * in new code. A per-row `override` (row.card_color) still wins.
+ */
+export function exerciseAccent(
+  ex?: {
+    is_competition_lift?: boolean | null;
+    competition_lift_type?: "squat" | "bench" | "deadlift" | null;
+    exercise_category?: "competition" | "variation" | "assistance" | null;
+  } | null,
+  override?: string | null,
+): string {
+  if (override) {
+    const found = EXERCISE_CARD_COLORS.find((c) => c.value === override);
+    if (found) return found.cls;
+  }
+  if (ex?.is_competition_lift) {
+    switch (ex.competition_lift_type) {
+      case "squat":    return "bg-yellow-500/70";
+      case "bench":    return "bg-sky-500/70";
+      case "deadlift": return "bg-emerald-500/70";
+    }
+  }
+  if (ex?.exercise_category === "variation") return "bg-amber-500/70";
   return "bg-red-500/70";
 }
 

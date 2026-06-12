@@ -1,12 +1,14 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { usePortalUserId } from "@/lib/client-impersonation";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Activity, FileText, Dumbbell, Loader2, ExternalLink, Video, Calendar as CalendarIcon, History, ListChecks, Sun } from "lucide-react";
+import { Activity, FileText, Dumbbell, Loader2, ExternalLink, Video, Calendar as CalendarIcon, History, ListChecks, Sun, Maximize2, Minimize2 } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { getClientWorkouts } from "@/lib/pl-programs";
 import { derivePhase, type TrainingPhase } from "@/lib/training-phases";
 import { WorkoutArchiveSection } from "@/components/workout-archive-section";
@@ -201,14 +203,50 @@ function BlockSection({ block, weeks }: { block: any; weeks: { week: any; entrie
       if (today > e) bannerText = `Ended ${format(e, "MMM d, yyyy")}`;
     }
   }
-  return (
-    <section className="space-y-3">
-      {bannerText && <Badge variant="outline" className="text-[10px]">{bannerText}</Badge>}
+  const [fullscreen, setFullscreen] = useState(false);
+  // Lock body scroll while in fullscreen overlay so iPad/mobile feel native.
+  useEffect(() => {
+    if (!fullscreen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setFullscreen(false); };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = prev;
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [fullscreen]);
+
+  const content = (
+    <section className={cn("space-y-3", fullscreen && "h-full overflow-y-auto p-4 md:p-6")}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          {bannerText && <Badge variant="outline" className="text-[10px]">{bannerText}</Badge>}
+          <h2 className="truncate text-base font-black sm:text-lg">
+            {block?.name ?? "Training Block"}
+          </h2>
+        </div>
+        <Button
+          size="sm"
+          variant={fullscreen ? "default" : "outline"}
+          onClick={() => setFullscreen((v) => !v)}
+          className="h-8"
+        >
+          {fullscreen ? <><Minimize2 className="mr-1.5 h-3.5 w-3.5" /> Exit Full Screen</> : <><Maximize2 className="mr-1.5 h-3.5 w-3.5" /> Full Screen</>}
+        </Button>
+      </div>
       {block?.id && <BlockSummaryCard blockId={block.id} mode="client" />}
       <Card className="p-3">
         <div className="mb-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">Weeks</div>
         <BlockWeekColumns block={block} weeks={weeks} mode="client" />
       </Card>
     </section>
+  );
+
+  if (!fullscreen) return content;
+  return (
+    <div className="fixed inset-0 z-[100] bg-background">
+      {content}
+    </div>
   );
 }

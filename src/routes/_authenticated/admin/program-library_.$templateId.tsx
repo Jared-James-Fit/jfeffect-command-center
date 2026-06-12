@@ -15,7 +15,8 @@ import {
   getTemplate, updateTemplate, summarizeTemplatePayload, TIME_PROFILES,
   estimateDayMinutes, durationRange, PERCENTAGE_BASES, type TrainingStyle,
 } from "@/lib/pl-programs";
-import { ExerciseLibraryPanel, type ExerciseRef, DND_EXERCISE, readDrop, movementAccent, EXERCISE_CARD_COLORS } from "@/components/program-builder";
+import { ExerciseLibraryPanel, type ExerciseRef, DND_EXERCISE, readDrop, exerciseAccent, EXERCISE_CARD_COLORS } from "@/components/program-builder";
+import { derivePurposeLabels, defaultRestSeconds, effectiveRestSeconds, PURPOSE_LABEL_OPTIONS, resolveCategory } from "@/lib/exercise-metadata";
 import { ProgramBuilderShortcutsButton } from "@/components/program-builder-shortcuts";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Palette } from "lucide-react";
@@ -918,11 +919,26 @@ function WeekEditor({ week, setWeek, exercises, onCopyDayToFuture, hideHeader, c
 
 function DayEditor({ day, setDay, exercises, compact }: { day: any; setDay: (d: any) => void; exercises: any[]; compact?: boolean }) {
   const rows = day.rows || [];
+  // Derive ordered purpose labels (Primary / Secondary / Tertiary / Quaternary
+  // for competition + variation rows; Assistance for everything else). Manual
+  // `purpose_label` on a row wins. Recomputes whenever rows are reordered.
+  const purposeLabels = useMemo(() => {
+    const exById = new Map<string, any>((exercises as any[]).map((e) => [e.id, e]));
+    return derivePurposeLabels(rows, (r: any) => (r.exercise_id ? exById.get(r.exercise_id) : null));
+  }, [rows, exercises]);
   const [dragOver, setDragOver] = useState(false);
   const [dragRowIdx, setDragRowIdx] = useState<number | null>(null);
   const [dropTargetIdx, setDropTargetIdx] = useState<number | null>(null);
   const clip = useClip();
-  const addRow = () => setDay({ ...day, rows: [...rows, { sort_order: rows.length, sets: 3, reps_text: "8-12", time_profile: "accessory_compound", percentage_basis: "none" }] });
+  const addRow = () => setDay({
+    ...day,
+    rows: [...rows, {
+      sort_order: rows.length,
+      // Leave sets/reps/rpe/rir empty — placeholders only. Coach fills in.
+      time_profile: "accessory_compound",
+      percentage_basis: "none",
+    }],
+  });
   const pasteFromClip = () => {
     if (!clip || clip.kind !== "rows") return;
     const cloned = JSON.parse(JSON.stringify(clip.rows));
@@ -932,7 +948,15 @@ function DayEditor({ day, setDay, exercises, compact }: { day: any; setDay: (d: 
   const insertExercise = (exId: string, atIndex?: number) => {
     const ex = (exercises as any[]).find((x) => x.id === exId);
     // Default: NO suggested load. Coach opts in explicitly per row.
-    const newRow = { sort_order: 0, sets: 3, reps_text: "8-12", time_profile: "accessory_compound", percentage_basis: "none", exercise_id: exId, exercise_name_override: ex?.name };
+    // Prescription fields stay empty. Rest auto-fills from exercise category.
+    const newRow = {
+      sort_order: 0,
+      time_profile: "accessory_compound",
+      percentage_basis: "none",
+      exercise_id: exId,
+      exercise_name_override: ex?.name,
+      rest_seconds: defaultRestSeconds(ex as any),
+    };
     const next = [...rows];
     const idx = atIndex ?? next.length;
     next.splice(idx, 0, newRow);
@@ -1049,6 +1073,7 @@ function DayEditor({ day, setDay, exercises, compact }: { day: any; setDay: (d: 
                 isDragging={dragRowIdx === i}
                 exercises={exercises}
                 compact={compact !== false}
+                purposeLabel={purposeLabels[i]}
               />
             </div>
           ))}
@@ -1059,15 +1084,20 @@ function DayEditor({ day, setDay, exercises, compact }: { day: any; setDay: (d: 
   );
 }
 
-function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMoveDown, canMoveUp, canMoveDown, onDragStartRow, onDragEndRow, isDragging }: { row: any; setRow: (r: any) => void; onDelete?: () => void; exercises: any[]; compact?: boolean; onMoveUp?: () => void; onMoveDown?: () => void; canMoveUp?: boolean; canMoveDown?: boolean; onDragStartRow?: (e: React.DragEvent) => void; onDragEndRow?: () => void; isDragging?: boolean }) {
+function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMoveDown, canMoveUp, canMoveDown, onDragStartRow, onDragEndRow, isDragging, purposeLabel }: { row: any; setRow: (r: any) => void; onDelete?: () => void; exercises: any[]; compact?: boolean; onMoveUp?: () => void; onMoveDown?: () => void; canMoveUp?: boolean; canMoveDown?: boolean; onDragStartRow?: (e: React.DragEvent) => void; onDragEndRow?: () => void; isDragging?: boolean; purposeLabel?: string }) {
   const Field = ({ label, className, children }: { label: string; className?: string; children: React.ReactNode }) => (
     <div className={cn("flex flex-col gap-0.5 min-w-0", className)}>
       <span className="px-0.5 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground leading-none">{label}</span>
       {children}
     </div>
   );
-  const exName = (exercises as any[]).find((e) => e.id === row.exercise_id)?.name ?? row.exercise_name_override ?? "";
-  const accent = movementAccent(exName, row.card_color);
+  const exMeta = (exercises as any[]).find((e) => e.id === row.exercise_id) ?? null;
+  const exName = exMeta?.name ?? row.exercise_name_override ?? "";
+  const accent = exerciseAccent(exMeta, row.card_color);
+  const restCat = resolveCategory(exMeta);
+  const restDefault = defaultRestSeconds(exMeta);
+  const effectiveRest = effectiveRestSeconds(row, exMeta);
+  const restIsOverride = row.rest_seconds_override != null && row.rest_seconds_override !== restDefault;
   const [expanded, setExpanded] = useState(!compact);
   useEffect(() => { if (!compact) setExpanded(true); }, [compact]);
   const h = compact ? "h-7" : "h-8";
@@ -1127,7 +1157,7 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
     >
       <div className={`absolute left-0 top-0 h-full w-2 ${accent}`} aria-hidden />
       <div className="grid grid-cols-12 items-end gap-1">
-        <Field className="col-span-4" label="Exercise">
+        <Field className="col-span-12 md:col-span-4" label="Exercise">
         <div className="flex items-center gap-1">
           <span
             draggable={!!onDragStartRow}
@@ -1140,7 +1170,9 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
           </span>
           <div className="min-w-0 flex-1">
         <Select value={row.exercise_id ?? "__custom"} onValueChange={(v) => setRow({ ...row, exercise_id: v === "__custom" ? null : v })}>
-          <SelectTrigger className={cn(h, "text-sm font-semibold")}><SelectValue placeholder="Exercise" /></SelectTrigger>
+          <SelectTrigger className={cn("min-h-8 h-auto py-1 text-sm font-semibold [&>span]:line-clamp-2 [&>span]:whitespace-normal [&>span]:text-left")}>
+            <SelectValue placeholder="Exercise" />
+          </SelectTrigger>
           <SelectContent>
             <SelectItem value="__custom">— Custom name —</SelectItem>
             {(exercises as any[]).map((e) => <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>)}
@@ -1148,6 +1180,50 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
         </Select>
         {!row.exercise_id && (
           <RowCell className="mt-1 h-7 text-sm font-semibold" placeholder="Custom name" value={row.exercise_name_override} onCommit={(v) => setRow({ ...row, exercise_name_override: v })} />
+        )}
+        {purposeLabel && (
+          <div className="mt-1 flex items-center gap-1">
+            <Popover>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  className={cn(
+                    "inline-flex items-center gap-1 rounded-full border px-1.5 py-0 text-[9px] font-bold uppercase tracking-wide transition hover:bg-secondary",
+                    row.purpose_label
+                      ? "border-primary/40 bg-primary/10 text-primary"
+                      : "border-border bg-muted/30 text-muted-foreground",
+                  )}
+                  title={row.purpose_label ? "Manual purpose label — click to change" : "Auto purpose label — click to override"}
+                >
+                  {purposeLabel}
+                </button>
+              </PopoverTrigger>
+              <PopoverContent className="w-44 p-2" align="start">
+                <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Purpose label</div>
+                <div className="grid gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setRow({ ...row, purpose_label: null })}
+                    className={cn("rounded px-2 py-1 text-left text-xs hover:bg-muted",
+                      !row.purpose_label && "bg-muted/60 font-semibold")}
+                  >
+                    Auto (from position)
+                  </button>
+                  {PURPOSE_LABEL_OPTIONS.map((opt) => (
+                    <button
+                      key={opt}
+                      type="button"
+                      onClick={() => setRow({ ...row, purpose_label: opt })}
+                      className={cn("rounded px-2 py-1 text-left text-xs hover:bg-muted",
+                        row.purpose_label === opt && "bg-primary/10 font-semibold text-primary")}
+                    >
+                      {opt}
+                    </button>
+                  ))}
+                </div>
+              </PopoverContent>
+            </Popover>
+          </div>
         )}
           </div>
         </div>
@@ -1164,8 +1240,29 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
         <Field className="col-span-1" label="RIR">
           <RowCell className={cn("text-sm font-medium tabular-nums", h)} inputMode="decimal" placeholder="2" value={row.rir} onCommit={(v) => setRow({ ...row, rir: v ?? "" })} />
         </Field>
-        <Field className="col-span-1" label="Rest s">
-          <RowCell className={cn("text-sm font-medium tabular-nums", h)} inputMode="numeric" placeholder="90" value={row.rest_seconds} onCommit={(v) => setRow({ ...row, rest_seconds: parseIntOrNull(v) })} />
+        <Field className="col-span-2 md:col-span-1" label={`Rest s${restIsOverride ? " *" : ""}`}>
+          <RowCell
+            className={cn(
+              "text-sm font-medium tabular-nums",
+              h,
+              restIsOverride && "ring-1 ring-primary/40",
+            )}
+            inputMode="numeric"
+            placeholder={String(restDefault)}
+            value={effectiveRest}
+            onCommit={(v) => {
+              const n = parseIntOrNull(v);
+              // Empty input clears the override; UI falls back to category default.
+              if (n == null) {
+                setRow({ ...row, rest_seconds_override: null, rest_seconds: null });
+              } else {
+                setRow({ ...row, rest_seconds_override: n, rest_seconds: n });
+              }
+            }}
+          />
+          <span className="px-0.5 text-[8px] leading-none text-muted-foreground">
+            {restIsOverride ? "override" : `auto · ${restCat}`}
+          </span>
         </Field>
         <div className="col-span-2 flex justify-end gap-0.5 pb-0.5">
           {onMoveUp && (
