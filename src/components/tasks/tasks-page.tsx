@@ -116,7 +116,8 @@ export function TasksPage({
 }: TasksPageProps = {}) {
   const qc = useQueryClient();
   const { data: tasks = [] } = useQuery({ queryKey: ["tasks", scope], queryFn: () => fetchTasks(scope) });
-  const { data: coaches = [] } = useQuery({ queryKey: ["coaches-lite"], queryFn: fetchCoachesLite });
+  const [assignees, setAssignees] = useAssignees(`${storagePrefix}-task-assignees`);
+  const [assigneesOpen, setAssigneesOpen] = useState(false);
   const { styles: quadStyles, update: updateQuadStyle, reset: resetQuadStyle } =
     useQuadrantStyles(`${storagePrefix}-quadrant-styles`);
 
@@ -138,8 +139,6 @@ export function TasksPage({
     for (const t of open) m[t.quadrant].push(t);
     return m;
   }, [open]);
-
-  const coachName = (id: string | null) => coaches.find((c) => c.id === id)?.full_name ?? null;
 
   async function handleAdd() {
     const title = newTitle.trim();
