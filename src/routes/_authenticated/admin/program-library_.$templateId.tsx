@@ -1184,6 +1184,43 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
           <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => { copyRows([row]); toast.success("Exercise copied"); }} title="Copy exercise">
             <ClipboardCopy className="h-3.5 w-3.5" />
           </Button>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button size="icon" variant="ghost" className="h-7 w-7" title="Card color">
+                <Palette className="h-3.5 w-3.5" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-2" align="end">
+              <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Card color</div>
+              <div className="grid grid-cols-5 gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setRow({ ...row, card_color: null })}
+                  className={cn(
+                    "h-6 w-6 rounded-full border-2 bg-background text-[10px] leading-none text-muted-foreground hover:border-foreground",
+                    !row.card_color ? "border-foreground" : "border-border",
+                  )}
+                  title="Default (auto)"
+                >
+                  A
+                </button>
+                {EXERCISE_CARD_COLORS.map((c) => (
+                  <button
+                    key={c.value}
+                    type="button"
+                    onClick={() => setRow({ ...row, card_color: c.value })}
+                    className={cn(
+                      "h-6 w-6 rounded-full border-2 transition",
+                      c.swatch,
+                      row.card_color === c.value ? "border-foreground" : "border-transparent hover:border-foreground/50",
+                    )}
+                    title={c.label}
+                    aria-label={c.label}
+                  />
+                ))}
+              </div>
+            </PopoverContent>
+          </Popover>
           {compact && (
             <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setExpanded((v) => !v)} title={expanded ? "Hide advanced" : "Show advanced"}>
               {expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
