@@ -15,7 +15,14 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "
 import { getExerciseVideoSource } from "@/lib/exercise-video";
 import { toast } from "sonner";
 import { durationRange } from "@/lib/pl-programs";
-import { movementAccent } from "@/components/program-builder";
+import { exerciseAccent } from "@/components/program-builder";
+import {
+  derivePurposeLabels,
+  effectiveRestSeconds,
+  resolveCategory,
+  restRangeLabel,
+  type ExerciseMeta,
+} from "@/lib/exercise-metadata";
 import { listClientMaxes, buildMaxIndex, computeRowLoad } from "@/lib/pl-maxes";
 import { useAutosave, readLocalDraft, clearLocalDraft } from "@/hooks/use-autosave";
 import { SaveStatus } from "@/components/save-status";
@@ -129,7 +136,7 @@ function WorkoutDay() {
     queryKey: ["pl-day-rows", dayId],
     initialData: cachedInitialData<any[]>(cacheScope, "rows"),
     queryFn: async () => {
-      const r = (await sb.from("pl_exercise_rows").select("*, exercises(id,name,video_url,vimeo_embed_url,thumbnail_url,cues,common_mistakes,muscle_group,category,pl_lift_group,warmup_protocol_id,is_powerlifting,warmup_notes,default_load_unit)").eq("day_id", dayId).order("sort_order")).data ?? [];
+      const r = (await sb.from("pl_exercise_rows").select("*, exercises(id,name,video_url,vimeo_embed_url,thumbnail_url,cues,common_mistakes,muscle_group,category,pl_lift_group,warmup_protocol_id,is_powerlifting,warmup_notes,default_load_unit,exercise_category,is_competition_lift,competition_lift_type)").eq("day_id", dayId).order("sort_order")).data ?? [];
       writePlanCache(cacheScope, "rows", r);
       return r;
     },
