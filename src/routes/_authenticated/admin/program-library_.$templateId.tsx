@@ -1156,12 +1156,26 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
         </Field>
         <div className="col-span-2 flex justify-end gap-0.5 pb-0.5">
           {onMoveUp && (
-            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={onMoveUp} title="Move up">
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-7 w-7"
+              onClick={onMoveUp}
+              disabled={canMoveUp === false}
+              title="Move up"
+            >
               <ChevronUp className="h-3.5 w-3.5" />
             </Button>
           )}
           {onMoveDown && (
-            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={onMoveDown} title="Move down">
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-7 w-7"
+              onClick={onMoveDown}
+              disabled={canMoveDown === false}
+              title="Move down"
+            >
               <ChevronDown className="h-3.5 w-3.5" />
             </Button>
           )}
