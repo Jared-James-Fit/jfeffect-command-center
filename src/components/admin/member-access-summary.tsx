@@ -3,7 +3,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { applyDefaultMemberAccess } from "@/lib/members.functions";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { ActionButton } from "@/components/action-button";
 import { CheckCircle2, XCircle, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { ACCOUNT_TYPES, COACHING_FEATURES, DEFAULT_ACCESS_LABELS, isSubscriptionActive, type AccountType } from "@/lib/membership";
@@ -50,10 +50,10 @@ export function MemberAccessSummary({
             </Badge>
           </div>
         </div>
-        <Button size="sm" variant="outline" onClick={() => apply.mutate()} disabled={apply.isPending}>
-          <RefreshCw className={`mr-1 h-3.5 w-3.5 ${apply.isPending ? "animate-spin" : ""}`} />
+        <ActionButton size="sm" variant="outline" onClick={() => apply.mutate()} jobLabel="Applying default access">
+          <RefreshCw className={`mr-1 h-3.5 w-3.5 ""`} />
           Apply defaults
-        </Button>
+        </ActionButton>
       </div>
 
       <div className="grid gap-1 sm:grid-cols-2">

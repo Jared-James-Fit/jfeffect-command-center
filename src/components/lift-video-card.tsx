@@ -1,3 +1,5 @@
+import { formatBytes } from '@/lib/upload-with-progress';
+import { runJob } from "@/lib/progress-jobs";
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { Card } from "@/components/ui/card";
@@ -150,17 +152,24 @@ export function LiftVideoCard({ video, role, userId, onChanged, onEdit, clientNa
   };
 
   const handleRetryArchive = async () => {
-    setRetryingArchive(true);
-    try {
-      const r = await retryArchive({ data: { videoId: video.id } });
-      if (r?.ok) toast.success("Archived to Drive");
-      else toast.error(r?.reason ?? "Drive archive failed");
+    await runJob({
+      title: "Archiving to Drive",
+      steps: ["Upload complete", "Preparing archive", "Sending to Google Drive", "Saving archive status", "Finalized"],
+      successToast: "Archived to Drive",
+    }, async (job) => {
+      job.completeStep(0); // Upload complete
+      job.setStatusText("Preparing archive...");
+      
+      const r: any = await retryArchive({ data: { videoId: video.id } });
+      if (!r?.ok) throw new Error(r?.reason ?? "Drive archive failed");
+      
+      job.completeStep(1); // Preparing archive
+      job.completeStep(2); // Sending to Google Drive
+      job.completeStep(3); // Saving archive status
+      job.completeStep(4); // Finalized
+      
       onChanged?.();
-    } catch (e: any) {
-      toast.error(e?.message ?? "Drive archive failed");
-    } finally {
-      setRetryingArchive(false);
-    }
+    });
   };
 
   const dayLabel = video.training_day === "Custom" ? video.custom_training_day : video.training_day;
@@ -361,7 +370,7 @@ export function LiftVideoCard({ video, role, userId, onChanged, onEdit, clientNa
             <DebugLine label="Preview status" value={video.preview_status || (playablePreviewUrl ? "ready" : "not_generated")} good={!!playablePreviewUrl || video.preview_status === "ready"} />
             <DebugLine label="Thumbnail URL" value={video.thumbnail_url || "Missing"} good={!!video.thumbnail_url} />
             <DebugLine label="File type" value={video.file_type || "Unknown"} good={!!video.file_type} />
-            <DebugLine label="File size" value={formatBytes(video.file_size_bytes)} good={!!video.file_size_bytes} />
+            <DebugLine label="File size" value={formatBytes(video.file_size_bytes ?? 0)} good={!!video.file_size_bytes} />
             <DebugLine label="Upload status" value={video.upload_status || "Unknown"} good={video.upload_status === "Drive uploaded" || video.upload_status === "App storage fallback"} />
             <DebugLine label="Playback error" value={lastPlaybackError || video.playback_error || "None"} good={!(lastPlaybackError || video.playback_error)} />
           </div>
@@ -503,13 +512,6 @@ function DebugLine({ label, value, good }: { label: string; value: string; good?
   );
 }
 
-function formatBytes(value: number | null | undefined) {
-  if (!value) return "Unknown";
-  if (value < 1024) return `${value} B`;
-  const mb = value / 1024 / 1024;
-  if (mb < 1024) return `${mb.toFixed(1)} MB`;
-  return `${(mb / 1024).toFixed(2)} GB`;
-}
 
 function ArchiveStatusBadge({
   status, onRetry, retrying, error,

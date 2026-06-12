@@ -22,6 +22,7 @@ import {
   type BroadcastStatus,
   type BroadcastType,
 } from "@/lib/broadcasts";
+import { runJob } from "@/lib/progress-jobs";
 import { RecipeAccessPicker } from "@/components/recipe-access-picker";
 
 type Props = {
@@ -126,11 +127,18 @@ export function BroadcastComposer({ open, onOpenChange, initial, quick, onSaved 
   async function save(asStatus: BroadcastStatus) {
     if (!title.trim()) { toast.error("Title is required"); return; }
     setSaving(true);
-    try {
+    
+    const steps = ["Preparing", "Sending", "Saving delivery record", "Completed"];
+    
+    await runJob({ 
+      title: isEdit ? "Updating broadcast" : "Creating broadcast", 
+      steps 
+    }, async (job) => {
+      job.completeStep(0); // Preparing
       let voicePath: string | null = initial?.voice_path ?? null;
       let videoPath: string | null = initial?.video_path ?? null;
       if (voiceBlob) {
-        const f = new File([voiceBlob], `voice-${Date.now()}.webm`, { type: "audio/webm" });
+        const f = new File([voiceBlob], "voice-"+Date.now()+".webm", { type: "audio/webm" });
         voicePath = await uploadBroadcastFile(f, "voice");
       }
       if (videoFile) {
@@ -161,23 +169,29 @@ export function BroadcastComposer({ open, onOpenChange, initial, quick, onSaved 
         status: finalStatus,
       };
 
+      job.completeStep(1); // Sending
       let row: Broadcast;
       if (isEdit && initial) {
         row = await updateBroadcast(initial.id, payload);
       } else {
         row = await createBroadcast({ ...payload, authorId: user?.id });
       }
+      
+      job.completeStep(2); // Saving delivery record
       if (audience === "selected_clients") {
         await setBroadcastSelectedClients(row.id, selectedClients);
       }
+      
+      job.completeStep(3); // Completed
       toast.success(finalStatus === "Active" ? "Published" : finalStatus);
       onSaved?.(row);
       onOpenChange(false);
-    } catch (e: any) {
+      return row;
+    }).catch((e: any) => {
       toast.error(e.message ?? "Save failed");
-    } finally {
+    }).finally(() => {
       setSaving(false);
-    }
+    });
   }
 
   const isVoice = type === "Voice Message";

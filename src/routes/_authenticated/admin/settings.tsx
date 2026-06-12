@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useAuth } from "@/lib/auth";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { ActionButton } from "@/components/action-button";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useState } from "react";
@@ -112,11 +112,11 @@ function SettingsPage() {
         <Card className="border-primary/30 bg-primary/5 p-6 space-y-3">
           <h3 className="text-xs uppercase tracking-widest text-primary">Admin Access</h3>
           <p className="text-xs text-muted-foreground">First-time setup: promote yourself to admin to unlock the full command center.</p>
-          <Button onClick={promoteSelfToAdmin} disabled={busy} className="w-full bg-gradient-primary font-bold uppercase">Make me admin</Button>
+          <ActionButton onClick={promoteSelfToAdmin} jobLabel="Promoting self to admin" className="w-full bg-gradient-primary font-bold uppercase">Make me admin</ActionButton>
           <div className="pt-4 border-t border-border/50 space-y-2">
             <Label>Promote another user (by email)</Label>
             <Input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="user@example.com" />
-            <Button variant="outline" onClick={inviteAsAdmin} className="w-full">Promote to admin</Button>
+            <ActionButton variant="outline" onClick={inviteAsAdmin} jobLabel="Promoting user to admin" className="w-full">Promote to admin</ActionButton>
           </div>
         </Card>
 
@@ -187,11 +187,11 @@ function SettingsPage() {
           </div>
 
           <div className="flex items-center gap-2 pt-2 border-t border-border/50 flex-wrap">
-            <Button onClick={saveSender} className="bg-gradient-primary uppercase font-bold">Save sender settings</Button>
+            <ActionButton onClick={saveSender} jobLabel="Saving sender settings" className="bg-gradient-primary uppercase font-bold">Save sender settings</ActionButton>
             {current?.provider === "gmail" && (
-              <Button variant="outline" asChild>
+              <ActionButton variant="outline" asChild>
                 <a href="/admin/apps">Connect Gmail account</a>
-              </Button>
+              </ActionButton>
             )}
           </div>
 
@@ -199,7 +199,7 @@ function SettingsPage() {
             <Label>Test email recipient</Label>
             <div className="flex gap-2 flex-wrap">
               <Input className="flex-1 min-w-[200px]" type="email" value={testTo} onChange={(e) => setTestTo(e.target.value)} placeholder="you@example.com" />
-              <Button onClick={sendTest} disabled={testing} variant="outline"><Send className="mr-2 h-4 w-4" />{testing ? "Sending…" : "Send test email"}</Button>
+              <ActionButton onClick={sendTest} jobLabel="Sending test email" variant="outline"><Send className="mr-2 h-4 w-4" />Send test email</ActionButton>
             </div>
             {current?.last_test_at && (
               <p className="text-xs text-muted-foreground">
@@ -282,9 +282,9 @@ function DriveIntegrationCard() {
               <div className="text-xs text-muted-foreground">Root folder ID: {(drive as any).root_folder_id}</div>
             </div>
             {(drive as any).root_folder_url && (
-              <Button asChild size="sm" variant="outline">
+              <ActionButton asChild size="sm" variant="outline">
                 <a href={(drive as any).root_folder_url} target="_blank" rel="noopener noreferrer">Open <ExternalLink className="ml-1 h-3 w-3" /></a>
-              </Button>
+              </ActionButton>
             )}
           </div>
         </div>
@@ -302,10 +302,10 @@ function DriveIntegrationCard() {
       )}
       <div className="flex flex-wrap items-center gap-3">
         {!(drive as any)?.root_folder_id && (
-          <Button onClick={run} disabled={busy}>Create root folder</Button>
+          <ActionButton onClick={run} jobLabel="Setting up Drive folder">Create root folder</ActionButton>
         )}
         {(drive as any)?.root_folder_id && (
-          <Button onClick={test} disabled={testing} variant="outline">{testing ? "Testing…" : "Test connection"}</Button>
+          <ActionButton onClick={test} jobLabel="Testing Drive connection" variant="outline">Test connection</ActionButton>
         )}
         <label className="flex items-center gap-2 text-xs">
           <Switch checked={!!(drive as any)?.share_uploads_with_link} onCheckedChange={toggleShare} />
@@ -428,9 +428,9 @@ function ArchiveSettingsCard() {
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <Button variant="outline" size="sm" onClick={runNow} disabled={running}>
-          {running ? "Running…" : "Run sweep now"}
-        </Button>
+        <ActionButton variant="outline" size="sm" onClick={runNow} jobLabel="Running auto-archive sweep">
+          Run sweep now
+        </ActionButton>
         {cur.last_run_at && (
           <span className="text-xs text-muted-foreground">
             Last run: {new Date(cur.last_run_at).toLocaleString()} — {cur.last_run_summary}
@@ -598,12 +598,12 @@ function SignNowIntegrationCard() {
       </div>
 
       <div className="flex flex-wrap gap-2 pt-2 border-t border-border/50">
-        <Button onClick={save} disabled={busy} className="bg-gradient-primary uppercase font-bold">Save SignNow settings</Button>
-        <Button onClick={test} disabled={busy} variant="outline"><Send className="mr-2 h-4 w-4" />Test connection</Button>
+        <ActionButton onClick={save} disabled={busy} className="bg-gradient-primary uppercase font-bold">Save SignNow settings</ActionButton>
+        <ActionButton onClick={test} disabled={busy} variant="outline"><Send className="mr-2 h-4 w-4" />Test connection</ActionButton>
         {cur.signnow_dashboard_url && (
-          <Button asChild variant="ghost">
+          <ActionButton asChild variant="ghost">
             <a href={cur.signnow_dashboard_url} target="_blank" rel="noreferrer">Open SignNow <ExternalLink className="ml-1 h-3 w-3" /></a>
-          </Button>
+          </ActionButton>
         )}
       </div>
       {cur.last_test_at && (

@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
+import { ActionButton } from "@/components/action-button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -11,7 +11,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { createManualReview, type ManualReviewSource } from "@/lib/manual-check-in-reviews";
 import { toast } from "sonner";
-import { Loader2, Send } from "lucide-react";
+import { Send } from "lucide-react";
+import { runJob } from "@/lib/progress-jobs";
 
 export function ManualCheckInReviewComposer({
   open,
@@ -35,7 +36,6 @@ export function ManualCheckInReviewComposer({
   const [internalNotes, setInternalNotes] = useState("");
   const [externalLink, setExternalLink] = useState("");
   const [notify, setNotify] = useState(true);
-  const [sending, setSending] = useState(false);
 
   useEffect(() => { if (defaultClientId) setClientId(defaultClientId); }, [defaultClientId]);
 
@@ -55,8 +55,14 @@ export function ManualCheckInReviewComposer({
     if (!user) return;
     if (!clientId) { toast.error("Pick a client"); return; }
     if (!message.trim()) { toast.error("Write a review message"); return; }
-    setSending(true);
-    try {
+    
+    runJob({
+      title: "Submitting review",
+      description: `Sending check-in review to client`,
+      steps: ["Submitting check-in", "Saving answers", "Updating status", "Notifying coach", "Completed"],
+    }, async (job) => {
+      job.completeStep(0); // Submitting check-in
+      
       await createManualReview({
         clientId,
         coachUserId: user.id,
@@ -70,17 +76,20 @@ export function ManualCheckInReviewComposer({
         externalLink: externalLink.trim() || null,
         notifyClient: notify,
       });
-      toast.success("Review sent" + (notify ? " — client will be notified" : ""));
+      
+      job.completeStep(1); // Saving answers
+      job.completeStep(2); // Updating status
+      job.completeStep(3); // Notifying coach (implied in the createManualReview or separate notification)
+      
       qc.invalidateQueries({ queryKey: ["manual-check-in-reviews"] });
       qc.invalidateQueries({ queryKey: ["manual-reviews-for-client"] });
+      
       // reset
       setMessage(""); setActionItems(""); setInternalNotes(""); setExternalLink("");
+      
+      job.completeStep(4); // Completed
       onOpenChange(false);
-    } catch (e: any) {
-      toast.error(e.message ?? "Could not send review");
-    } finally {
-      setSending(false);
-    }
+    });
   }
 
   return (
@@ -177,11 +186,11 @@ export function ManualCheckInReviewComposer({
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={sending}>Cancel</Button>
-          <Button onClick={submit} disabled={sending || !message.trim() || !clientId} className="bg-gradient-primary font-bold">
-            {sending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+          <ActionButton variant="outline" onClick={() => onOpenChange(false)}>Cancel</ActionButton>
+          <ActionButton onClick={submit} disabled={!message.trim() || !clientId} className="bg-gradient-primary font-bold">
+            <Send className="mr-2 h-4 w-4" />
             Send Review
-          </Button>
+          </ActionButton>
         </DialogFooter>
       </DialogContent>
     </Dialog>

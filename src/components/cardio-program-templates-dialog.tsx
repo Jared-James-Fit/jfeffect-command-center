@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
+import { ActionButton } from "@/components/action-button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -108,8 +108,8 @@ export function CardioProgramTemplatesDialog({ open, onOpenChange, clientId }: P
                       <div className="text-xs text-muted-foreground">{(t.rows ?? []).length} rows</div>
                     </div>
                     <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
-                      <Button size="sm" variant="ghost" onClick={() => archive(t.id)}><Archive className="h-4 w-4" /></Button>
-                      <Button size="sm" variant="ghost" className="text-destructive" onClick={() => remove(t.id)}><Trash2 className="h-4 w-4" /></Button>
+                      <ActionButton size="sm" variant="ghost" onClick={() => archive(t.id)} jobLabel="Archiving template"><Archive className="h-4 w-4" /></ActionButton>
+                      <ActionButton size="sm" variant="ghost" className="text-destructive" onClick={() => remove(t.id)} jobLabel="Deleting template"><Trash2 className="h-4 w-4" /></ActionButton>
                     </div>
                   </div>
                   {isSel && (t.rows ?? []).length > 0 && (
@@ -146,10 +146,10 @@ export function CardioProgramTemplatesDialog({ open, onOpenChange, clientId }: P
         )}
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={assign} disabled={!selected || assigning} className="bg-gradient-primary font-bold uppercase">
-            {assigning ? "Assigning…" : "Assign to Client"}
-          </Button>
+          <ActionButton variant="outline" onClick={() => onOpenChange(false)}>Cancel</ActionButton>
+          <ActionButton onClick={assign} jobLabel="Assigning cardio program" className="bg-gradient-primary font-bold uppercase">
+            Assign to Client
+          </ActionButton>
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -1,3 +1,5 @@
+import { formatBytes } from '@/lib/upload-with-progress';
+import { runJob } from "@/lib/progress-jobs";
 import { useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -63,9 +65,10 @@ export function MediaUploadDialog({
 
   async function submit() {
     if (files.length === 0) { toast.error("Add at least one file"); return; }
-    setUploading(true);
-    setProgress(files.map(() => 0));
-    try {
+    await runJob({
+      title: "Uploading media",
+      description: files.length === 1 ? files[0].name : `${files.length} files`,
+    }, async (job) => {
       const sub = await createSubFn({ data: {
         clientId, submissionType: mediaType, batchNote: mode === "batch" ? batchNote : null,
         urgent, painNote: urgent ? painNote : null, clipCount: files.length, role,
@@ -75,12 +78,19 @@ export function MediaUploadDialog({
         const displayName = buildDriveDisplayName({
           clientName, type: mediaType, index: i + 1, total: files.length,
         });
+        job.setStatusText(`Preparing ${f.name}`);
         const init = await initFn({ data: {
           clientId, mediaType, fileName: f.name, mimeType: f.type || "application/octet-stream", sizeBytes: f.size, displayName,
         }});
+        job.setStatusText(`Uploading ${f.name}`);
         const uploaded = await uploadToDrive(init.uploadUrl, f, (pct) => {
-          setProgress((prev) => { const c = [...prev]; c[i] = pct; return c; });
+          const fileWeight = 100 / files.length;
+          const overallBase = (i * 100) / files.length;
+          const currentProgress = (pct * fileWeight) / 100;
+          job.setPercent(overallBase + currentProgress);
+          job.setStatusText(`Uploading ${f.name} (${pct}%)`);
         });
+        job.setStatusText(`Finalizing ${f.name}`);
         await finalizeFn({ data: {
           clientId, submissionId: sub.id, mediaType, driveFileId: uploaded.id,
           driveFolderId: init.driveFolderId ?? null,
@@ -93,12 +103,7 @@ export function MediaUploadDialog({
       }
       setSent(true);
       onUploaded?.();
-    } catch (err: any) {
-      console.error(err);
-      toast.error(friendlyDriveError(err, role));
-    } finally {
-      setUploading(false);
-    }
+    });
   }
 
   return (

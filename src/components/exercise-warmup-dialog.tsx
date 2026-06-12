@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
+import { ActionButton } from "@/components/action-button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
@@ -110,8 +110,8 @@ export function ExerciseWarmupDialog({
           />
         </div>
         <DialogFooter>
-          <Button variant="ghost" onClick={onClose}>Cancel</Button>
-          <Button onClick={save} disabled={saving || (mode === "custom" && !protocolId)}>{saving ? "Saving…" : "Save"}</Button>
+          <ActionButton variant="ghost" onClick={onClose}>Cancel</ActionButton>
+          <ActionButton onClick={save} jobLabel="Saving warmup protocol">Save</ActionButton>
         </DialogFooter>
       </DialogContent>
     </Dialog>

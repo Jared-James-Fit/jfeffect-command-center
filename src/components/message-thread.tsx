@@ -48,6 +48,7 @@ import {
   CheckCircle2, Circle, CheckSquare, Copy,
 } from "lucide-react";
 import { format, parseISO, isToday, isYesterday } from "date-fns";
+import { runJob } from "@/lib/progress-jobs";
 import { toast } from "sonner";
 
 function attachIcon(t: MessageAttachment["type"]) {
@@ -933,39 +934,41 @@ export function MessageThread({
     const text = (opts?.body ?? body).trim();
     const atts = [...attachments, ...(opts?.extraAttachments ?? [])];
     if (!text && atts.length === 0) return null;
-    // Auto-detect plain URLs typed inline → optional link attachments
-    const linkAtts: MessageAttachment[] = [];
-    const matches = text.match(LINK_RE);
-    if (matches) {
-      for (const u of matches.slice(0, 3)) {
-        if (atts.some((a) => a.url === u)) continue;
-        linkAtts.push({ type: detectAttachmentType(u), url: u });
+    
+    return runJob({ title: "Sending message" }, async () => {
+      // Auto-detect plain URLs typed inline → optional link attachments
+      const linkAtts: MessageAttachment[] = [];
+      const matches = text.match(LINK_RE);
+      if (matches) {
+        for (const u of matches.slice(0, 3)) {
+          if (atts.some((a) => a.url === u)) continue;
+          linkAtts.push({ type: detectAttachmentType(u), url: u });
+        }
       }
-    }
-    setSending(true);
-    try {
-      const sent = await sendMessage({
-        clientId,
-        senderId: user.id,
-        senderRole: role,
-        body: text,
-        attachments: [...atts, ...linkAtts],
-        messageType,
-        isInternalNote: role === "admin" ? internalNote : false,
-        priority: role === "admin" ? priority : undefined,
-      });
-      setBody("");
-      setAttachments([]);
-      setInternalNote(false);
-      qc.invalidateQueries({ queryKey: ["messages", clientId, role] });
-      return sent;
-    } catch (e: any) {
+      setSending(true);
+      try {
+        const sent = await sendMessage({
+          clientId,
+          senderId: user.id,
+          senderRole: role,
+          body: text,
+          attachments: [...atts, ...linkAtts],
+          messageType,
+          isInternalNote: role === "admin" ? internalNote : false,
+          priority: role === "admin" ? priority : undefined,
+        });
+        setBody("");
+        setAttachments([]);
+        setInternalNote(false);
+        qc.invalidateQueries({ queryKey: ["messages", clientId, role] });
+        return sent;
+      } finally {
+        setSending(false);
+      }
+    }).catch((e: any) => {
       toast.error(e?.message ?? "Failed to send");
       return null;
-    } finally {
-      setSending(false);
-    }
-  };
+    });  };
 
   const onSend = () => doSend();
 

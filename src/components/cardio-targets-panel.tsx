@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { ActionButton } from "@/components/action-button";
 import { Badge } from "@/components/ui/badge";
 import { Heart, Plus, Pencil, Trash2, Copy, EyeOff, LayoutList, BookOpen, Sparkles, RefreshCw, Link2, Link2Off, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
@@ -123,20 +123,20 @@ export function CardioTargetsPanel({ clientId }: { clientId: string }) {
           <Heart className="h-4 w-4 shrink-0" /> Cardio Targets
         </h3>
         <div className="flex flex-wrap gap-2">
-          <Button size="sm" className="flex-1 bg-gradient-primary font-bold uppercase sm:flex-none" onClick={() => setDefaultsOpen(true)}>
+          <ActionButton size="sm" className="flex-1 bg-gradient-primary font-bold uppercase sm:flex-none" onClick={() => setDefaultsOpen(true)}>
             <Sparkles className="mr-1 h-4 w-4" /> Apply Default Cardio
-          </Button>
-          <Button size="sm" variant="outline" className="flex-1 sm:flex-none" onClick={syncWithNutrition}>
+          </ActionButton>
+          <ActionButton size="sm" variant="outline" className="flex-1 sm:flex-none" onClick={syncWithNutrition} jobLabel="Syncing with nutrition">
             <RefreshCw className="mr-1 h-4 w-4" /> Sync With Nutrition
-          </Button>
-          <Button size="sm" variant="outline" className="flex-1 sm:flex-none" onClick={() => setTemplatesOpen(true)}>
+          </ActionButton>
+          <ActionButton size="sm" variant="outline" className="flex-1 sm:flex-none" onClick={() => setTemplatesOpen(true)}>
             <BookOpen className="mr-1 h-4 w-4" /> Assign Saved
-          </Button>
+          </ActionButton>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button size="sm" variant="outline" className="flex-1 sm:flex-none">
+              <ActionButton size="sm" variant="outline" className="flex-1 sm:flex-none">
                 <Plus className="mr-1 h-4 w-4" /> Create Custom
-              </Button>
+              </ActionButton>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem onClick={() => { setEditing(null); setDefaultDayType("General"); setOpen(true); }}>Simple / General</DropdownMenuItem>
@@ -162,8 +162,8 @@ export function CardioTargetsPanel({ clientId }: { clientId: string }) {
             </span>
           </div>
           <div className="flex gap-2">
-            <Button size="sm" variant="outline" onClick={() => setBannerDismissed(true)}>Dismiss</Button>
-            <Button size="sm" onClick={() => setRenameOpen(true)}>Sync Names</Button>
+            <ActionButton size="sm" variant="outline" onClick={() => setBannerDismissed(true)}>Dismiss</ActionButton>
+            <ActionButton size="sm" onClick={() => setRenameOpen(true)}>Sync Names</ActionButton>
           </div>
         </div>
       )}
@@ -213,9 +213,9 @@ export function CardioTargetsPanel({ clientId }: { clientId: string }) {
                         )}
                       </div>
                       <div className="flex shrink-0 gap-0.5">
-                        <Button size="icon" variant="ghost" className="h-9 w-9" onClick={() => duplicate(t)} aria-label="Duplicate"><Copy className="h-4 w-4" /></Button>
-                        <Button size="icon" variant="ghost" className="h-9 w-9" onClick={() => { setEditing(t); setDefaultDayType(undefined); setOpen(true); }} aria-label="Edit"><Pencil className="h-4 w-4" /></Button>
-                        <Button size="icon" variant="ghost" className="h-9 w-9 text-destructive" onClick={() => del(t)} aria-label="Delete"><Trash2 className="h-4 w-4" /></Button>
+                        <ActionButton size="icon" variant="ghost" className="h-9 w-9" onClick={() => duplicate(t)} jobLabel="Duplicating cardio target" aria-label="Duplicate"><Copy className="h-4 w-4" /></ActionButton>
+                        <ActionButton size="icon" variant="ghost" className="h-9 w-9" onClick={() => { setEditing(t); setDefaultDayType(undefined); setOpen(true); }} aria-label="Edit"><Pencil className="h-4 w-4" /></ActionButton>
+                        <ActionButton size="icon" variant="ghost" className="h-9 w-9 text-destructive" onClick={() => del(t)} jobLabel="Deleting cardio target" aria-label="Delete"><Trash2 className="h-4 w-4" /></ActionButton>
                       </div>
                     </li>
                   );
