@@ -27,6 +27,10 @@ import { useServerFn } from "@tanstack/react-start";
 import { notifyCoachOfWorkoutFailure } from "@/lib/support-alerts.functions";
 import { runJob } from "@/lib/progress-jobs";
 import { cn } from "@/lib/utils";
+import { WorkoutEmptyCard } from "@/components/workout-empty-state";
+import { useAuth } from "@/lib/auth";
+import { useClientImpersonation } from "@/lib/client-impersonation";
+import { writeSetEditAudit } from "@/lib/logged-set-audit";
 
 export const Route = createFileRoute("/_authenticated/portal/workouts/$dayId")({
   validateSearch: (s: Record<string, unknown>) => ({
@@ -93,9 +97,9 @@ function WorkoutDay() {
   });
 
   useEffect(() => {
-    if (rowsLoaded && rows.length === 0) {
-      toast.info("This workout is empty — no exercises have been added yet.");
-    }
+    // Empty state is now rendered inline (see WorkoutEmptyCard below) so we
+    // no longer fire the misleading "empty workout" toast — that read like a
+    // crash to clients. Failed loads are still caught by WorkoutLoadBoundary.
   }, [rowsLoaded, rows.length]);
 
   const { data: results = [] } = useQuery({
