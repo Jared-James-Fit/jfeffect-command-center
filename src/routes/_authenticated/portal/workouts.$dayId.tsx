@@ -1254,6 +1254,11 @@ function SetRow({ rowId, workoutId, exerciseId, exerciseName, clientId, setIndex
         savedId = inserted?.id ?? null;
       }
       onChange();
+      // Auto-start the per-exercise rest timer when this set transitions
+      // into a fully-valid completed state. Avoid re-triggering on idempotent
+      // updates that were already completed.
+      const wasCompleted = Boolean(existing?.completed_at);
+      if (allValid && !wasCompleted) onSetCompleted?.();
       // Coach/admin POV audit trail. Only writes when impersonating, only the
       // fields that actually changed, only after the save succeeds.
       if (isImpersonating && user?.id && povClient?.id === clientId) {
