@@ -6,7 +6,7 @@ import {
   ClipboardList, FileEdit,
   Scale, BookOpen, Activity, Archive,
   UserPlus, Library, Wrench, HelpCircle,
-  ChefHat, Megaphone, Phone, Link2 as LinkIcon,
+  ChefHat, Megaphone, Phone,
   ListChecks, LayoutGrid,
   Heart, Flame,
   Ticket,
