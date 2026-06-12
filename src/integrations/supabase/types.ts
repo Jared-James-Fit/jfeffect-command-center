@@ -1861,6 +1861,48 @@ export type Database = {
         }
         Relationships: []
       }
+      client_exercise_unit_prefs: {
+        Row: {
+          client_id: string
+          created_at: string
+          exercise_id: string
+          id: string
+          unit: string
+          updated_at: string
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          exercise_id: string
+          id?: string
+          unit: string
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          exercise_id?: string
+          id?: string
+          unit?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_exercise_unit_prefs_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_exercise_unit_prefs_exercise_id_fkey"
+            columns: ["exercise_id"]
+            isOneToOne: false
+            referencedRelation: "exercises"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       client_quick_links: {
         Row: {
           archived: boolean
@@ -3392,6 +3434,7 @@ export type Database = {
           common_mistakes: string | null
           created_at: string
           cues: string | null
+          default_load_unit: string | null
           difficulty: string | null
           equipment: string | null
           id: string
@@ -3429,6 +3472,7 @@ export type Database = {
           common_mistakes?: string | null
           created_at?: string
           cues?: string | null
+          default_load_unit?: string | null
           difficulty?: string | null
           equipment?: string | null
           id?: string
@@ -3466,6 +3510,7 @@ export type Database = {
           common_mistakes?: string | null
           created_at?: string
           cues?: string | null
+          default_load_unit?: string | null
           difficulty?: string | null
           equipment?: string | null
           id?: string

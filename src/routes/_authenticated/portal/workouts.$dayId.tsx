@@ -31,6 +31,7 @@ import { WorkoutEmptyCard } from "@/components/workout-empty-state";
 import { useAuth } from "@/lib/auth";
 import { useClientImpersonation } from "@/lib/client-impersonation";
 import { writeSetEditAudit } from "@/lib/logged-set-audit";
+import { resolveExerciseUnit, modeUnit, saveExerciseUnitPref, saveExerciseUnitPrefsBulk, type WUnit } from "@/lib/exercise-unit-prefs";
 
 export const Route = createFileRoute("/_authenticated/portal/workouts/$dayId")({
   validateSearch: (s: Record<string, unknown>) => ({
@@ -93,7 +94,7 @@ function WorkoutDay() {
 
   const { data: rows = [], isSuccess: rowsLoaded } = useQuery({
     queryKey: ["pl-day-rows", dayId],
-   queryFn: async () => (await sb.from("pl_exercise_rows").select("*, exercises(id,name,video_url,vimeo_embed_url,thumbnail_url,cues,common_mistakes,muscle_group,category,pl_lift_group,warmup_protocol_id,is_powerlifting,warmup_notes)").eq("day_id", dayId).order("sort_order")).data ?? [],
+   queryFn: async () => (await sb.from("pl_exercise_rows").select("*, exercises(id,name,video_url,vimeo_embed_url,thumbnail_url,cues,common_mistakes,muscle_group,category,pl_lift_group,warmup_protocol_id,is_powerlifting,warmup_notes,default_load_unit)").eq("day_id", dayId).order("sort_order")).data ?? [],
   });
 
   useEffect(() => {
@@ -186,6 +187,90 @@ function WorkoutDay() {
     qc.invalidateQueries({ queryKey: ["my-client", portalUserId] });
   };
 
+  // ----------------------------------------------------------------
+  // Per-exercise unit overrides (client preference + history detection)
+  // ----------------------------------------------------------------
+  const exerciseIds = useMemo(
+    () => Array.from(new Set((rows as any[]).map((r) => r.exercises?.id).filter(Boolean) as string[])),
+    [rows],
+  );
+
+  const { data: prefRows = [] } = useQuery({
+    queryKey: ["client-exercise-unit-prefs", client?.id, exerciseIds.join(",")],
+    enabled: !!client?.id && exerciseIds.length > 0,
+    queryFn: async () => (await sb.from("client_exercise_unit_prefs").select("exercise_id, unit").eq("client_id", client!.id).in("exercise_id", exerciseIds)).data ?? [],
+  });
+
+  const { data: historyRows = [] } = useQuery({
+    queryKey: ["client-exercise-unit-history", client?.id, exerciseIds.join(",")],
+    enabled: !!client?.id && exerciseIds.length > 0,
+    queryFn: async () => (await sb
+      .from("pl_row_results")
+      .select("actual_load_unit, pl_exercise_rows!inner(exercise_id)")
+      .eq("client_id", client!.id)
+      .in("pl_exercise_rows.exercise_id", exerciseIds)
+      .not("actual_load_unit", "is", null)
+      .order("created_at", { ascending: false })
+      .limit(500)).data ?? [],
+  });
+
+  // Map exercise_id -> resolved unit, recomputed when inputs change.
+  const [unitOverrides, setUnitOverrides] = useState<Record<string, WUnit>>({});
+  const resolvedUnitMap = useMemo(() => {
+    const prefByEx: Record<string, WUnit> = {};
+    for (const p of prefRows as any[]) {
+      if (p.exercise_id && (p.unit === "kg" || p.unit === "lb")) prefByEx[p.exercise_id] = p.unit;
+    }
+    const historyByEx: Record<string, string[]> = {};
+    for (const h of historyRows as any[]) {
+      const exId = h.pl_exercise_rows?.exercise_id;
+      if (!exId) continue;
+      (historyByEx[exId] ||= []).push(h.actual_load_unit);
+    }
+    const map: Record<string, WUnit> = {};
+    for (const r of rows as any[]) {
+      const exId = r.exercises?.id;
+      const key = exId ?? `row:${r.id}`;
+      const local = exId ? unitOverrides[exId] : undefined;
+      map[key] = local ?? resolveExerciseUnit({
+        prefUnit: exId ? prefByEx[exId] ?? null : null,
+        historyUnit: exId ? modeUnit(historyByEx[exId] ?? []) : null,
+        rowLoadUnit: (r.load_unit === "kg" || r.load_unit === "lb") ? r.load_unit : null,
+        exerciseDefault: (r.exercises?.default_load_unit === "kg" || r.exercises?.default_load_unit === "lb") ? r.exercises.default_load_unit : null,
+        workoutUnit: unit,
+      });
+    }
+    return map;
+  }, [rows, prefRows, historyRows, unitOverrides, unit]);
+
+  const setExerciseUnit = async (exerciseId: string | null, rowId: string, next: WUnit) => {
+    const key = exerciseId ?? `row:${rowId}`;
+    if (exerciseId) setUnitOverrides((m) => ({ ...m, [exerciseId]: next }));
+    else setUnitOverrides((m) => ({ ...m, [key]: next } as any));
+    if (client?.id && exerciseId) {
+      try { await saveExerciseUnitPref(client.id, exerciseId, next); } catch { /* non-blocking */ }
+      qc.invalidateQueries({ queryKey: ["client-exercise-unit-prefs", client.id] });
+    }
+  };
+
+  // Global toggle: change workout-level pref AND bulk-set every exercise in this
+  // workout so the choice sticks per-exercise too.
+  const handleGlobalUnitChange = async (next: WUnit) => {
+    await persistUnit(next);
+    const overrides: Record<string, WUnit> = {};
+    for (const id of exerciseIds) overrides[id] = next;
+    setUnitOverrides((m) => ({ ...m, ...overrides }));
+    if (client?.id && exerciseIds.length > 0) {
+      try { await saveExerciseUnitPrefsBulk(client.id, exerciseIds, next); } catch { /* non-blocking */ }
+      qc.invalidateQueries({ queryKey: ["client-exercise-unit-prefs", client.id] });
+    }
+  };
+
+  const unitForRow = (r: any): WUnit => {
+    const exId = r.exercises?.id;
+    return resolvedUnitMap[exId ?? `row:${r.id}`] ?? unit;
+  };
+
   // Focus / full-screen logging mode.
   const [focusMode, setFocusMode] = useState(false);
   useEffect(() => {
@@ -263,7 +348,7 @@ function WorkoutDay() {
           <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-background/95 px-4 py-3 backdrop-blur">
             <div className="font-bold">{day.title || `Day ${day.day_index}`} · Focus mode</div>
             <div className="flex items-center gap-2">
-              <UnitToggle unit={unit} onChange={persistUnit} />
+              <UnitToggle unit={unit} onChange={handleGlobalUnitChange} label="Workout Units" />
               <Button size="sm" variant="outline" onClick={() => setFocusMode(false)}>
                 <Minimize2 className="mr-1 h-4 w-4" /> Exit
               </Button>
@@ -291,7 +376,8 @@ function WorkoutDay() {
                   existingResults={(results as any[]).filter((x) => x.row_id === r.id)}
                   existingNote={notesByRowId.get(r.id)}
                   readonly={readonly}
-                  unit={unit}
+                  unit={unitForRow(r)}
+                  onUnitChange={(u) => setExerciseUnit(r.exercises?.id ?? null, r.id, u)}
                   focusMode
                   onChange={refresh}
                   onNoteChange={refreshNotes}
@@ -317,7 +403,7 @@ function WorkoutDay() {
           {completion && <Badge variant="outline" className="text-green-500 border-green-500/30 bg-green-500/10"><CheckCircle2 className="mr-1 h-3 w-3" /> Completed</Badge>}
           {readonly && <Badge variant="outline" className="border-muted-foreground/30 bg-muted/30 text-muted-foreground"><Lock className="mr-1 h-3 w-3" /> Read-only</Badge>}
           <div className="ml-auto flex items-center gap-2">
-            {!readonly && <UnitToggle unit={unit} onChange={persistUnit} />}
+            {!readonly && <UnitToggle unit={unit} onChange={handleGlobalUnitChange} label="Workout Units" />}
             {!readonly && (
               <Button size="sm" variant="outline" onClick={() => setFocusMode(true)}>
                 <Maximize2 className="mr-1 h-4 w-4" /> Focus
@@ -382,7 +468,8 @@ function WorkoutDay() {
                 existingResults={(results as any[]).filter((x) => x.row_id === r.id)}
                 existingNote={notesByRowId.get(r.id)}
                 readonly={readonly}
-                unit={unit}
+                unit={unitForRow(r)}
+                onUnitChange={(u) => setExerciseUnit(r.exercises?.id ?? null, r.id, u)}
                 onChange={refresh}
                 onNoteChange={refreshNotes}
               />
@@ -469,7 +556,7 @@ function WorkoutDay() {
   );
 }
 
-function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResults, existingNote, readonly = false, unit = "kg", focusMode = false, onChange, onNoteChange }: { row: any; dayId: string; dayTitle: string; clientId: string | undefined; blockId?: string | null; existingResults: any[]; existingNote?: any; readonly?: boolean; unit?: "kg" | "lb"; focusMode?: boolean; onChange: () => void; onNoteChange: () => void }) {
+function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResults, existingNote, readonly = false, unit = "kg", onUnitChange, focusMode = false, onChange, onNoteChange }: { row: any; dayId: string; dayTitle: string; clientId: string | undefined; blockId?: string | null; existingResults: any[]; existingNote?: any; readonly?: boolean; unit?: "kg" | "lb"; onUnitChange?: (u: "kg" | "lb") => void; focusMode?: boolean; onChange: () => void; onNoteChange: () => void }) {
   const name = row.exercises?.name ?? row.exercise_name_override ?? "Exercise";
   const exercise = row.exercises ?? null;
   const exerciseId = exercise?.id ?? null;
@@ -540,6 +627,9 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
           {row.notes && <p className="mt-1 text-xs text-muted-foreground italic">{row.notes}</p>}
         </div>
         <div className="flex shrink-0 flex-col items-end gap-1">
+          {!readonly && onUnitChange && (
+            <UnitToggle unit={unit} onChange={onUnitChange} compact />
+          )}
           {hasGuide && (
             <Button size="sm" variant="outline" onClick={() => setHowToOpen(true)} className="w-full">
               <Play className="mr-1 h-3 w-3 fill-current" /> How To
@@ -983,9 +1073,17 @@ function SetRow({ rowId, workoutId, exerciseId, exerciseName, clientId, setIndex
 /* kg/lb toggle                                                                */
 /* -------------------------------------------------------------------------- */
 
-function UnitToggle({ unit, onChange }: { unit: "kg" | "lb"; onChange: (u: "kg" | "lb") => void }) {
+function UnitToggle({ unit, onChange, label, compact = false }: { unit: "kg" | "lb"; onChange: (u: "kg" | "lb") => void; label?: string; compact?: boolean }) {
   return (
-    <div className="inline-flex items-center overflow-hidden rounded-md border border-border bg-secondary/40 text-xs">
+    <div className="inline-flex items-center gap-1.5">
+      {label && (
+        <span className="hidden sm:inline text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+          {label}
+        </span>
+      )}
+      <div className={cn("inline-flex items-center overflow-hidden rounded-md border border-border bg-secondary/40", compact ? "text-[11px]" : "text-xs")}
+           role="group"
+           aria-label={label ?? "Unit toggle"}>
       {(["kg", "lb"] as const).map((u) => (
         <button
           key={u}
@@ -993,13 +1091,15 @@ function UnitToggle({ unit, onChange }: { unit: "kg" | "lb"; onChange: (u: "kg" 
           onClick={() => unit !== u && onChange(u)}
           aria-pressed={unit === u}
           className={cn(
-            "px-3 py-1.5 font-bold uppercase tracking-wider transition-colors",
+            "font-bold uppercase tracking-wider transition-colors",
+            compact ? "px-2 py-1 min-w-[34px]" : "px-3 py-1.5",
             unit === u ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground",
           )}
         >
           {u}
         </button>
       ))}
+      </div>
     </div>
   );
 }
