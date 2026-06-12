@@ -24,6 +24,9 @@ export const Route = createFileRoute("/coaching/apply")({
 });
 
 function CoachingApply() {
+  if (typeof window !== "undefined") {
+    window.location.replace("https://jaredjamesfit.com");
+  }
   const submit = useServerFn(submitCoachingApplication);
   const navigate = useNavigate();
   const [done, setDone] = useState(false);
