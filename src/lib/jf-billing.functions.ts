@@ -187,6 +187,17 @@ export const createJfSignupCheckout = createServerFn({ method: "POST" })
       success_url: `${data.origin}/m/welcome?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${data.origin}/join?cancelled=1`,
       allow_promotion_codes: "true",
+      // Stripe Tax: calculate tax automatically based on customer location.
+      // Tax is added on top of the price (prices stay tax-exclusive).
+      "automatic_tax[enabled]": "true",
+      // Required for Stripe Tax to determine the customer's jurisdiction.
+      billing_address_collection: "required",
+      // Persist the collected address + name on the Customer so the
+      // subscription continues to calculate tax on every renewal.
+      "customer_update[address]": "auto",
+      "customer_update[name]": "auto",
+      // Optionally let the customer enter a tax ID (e.g. business GST/HST number).
+      "tax_id_collection[enabled]": "true",
       "metadata[kind]": "jf_membership",
       "metadata[full_name]": fullName,
       "metadata[phone]": data.phone || "",
