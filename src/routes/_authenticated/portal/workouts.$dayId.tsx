@@ -572,6 +572,9 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
             <SetRow
               key={i}
               rowId={row.id}
+              workoutId={dayId}
+              exerciseId={exerciseId ?? null}
+              exerciseName={name}
               clientId={clientId}
               setIndex={i + 1}
               existing={existing}
