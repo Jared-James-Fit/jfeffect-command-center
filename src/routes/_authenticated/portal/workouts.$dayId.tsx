@@ -706,14 +706,18 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
             {row.rest_seconds && ` · rest ${row.rest_seconds}s`}
           </div>
           {row.manual_override && (row.load_kg || row.load_lb) && (
-            <div className="mt-1 inline-flex items-center gap-1 rounded-md bg-primary/10 px-2 py-0.5 text-xs font-bold text-primary">
-              Target load: {row.load_kg ?? row.load_lb} {row.load_kg ? "kg" : "lb"}
-            </div>
+            <SuggestedLoadBadge
+              load={(row.load_kg ?? row.load_lb) as number}
+              unit={row.load_kg ? "kg" : "lb"}
+              exerciseName={name}
+            />
           )}
-          {!row.manual_override && computed && computed.status === "ok" && (
-            <div className="mt-1 inline-flex items-center gap-1 rounded-md bg-primary/10 px-2 py-0.5 text-xs font-bold text-primary">
-              Target load: {computed.load} {computed.unit}
-            </div>
+          {!row.manual_override && computed && computed.status === "ok" && computed.load != null && (
+            <SuggestedLoadBadge
+              load={computed.load}
+              unit={computed.unit}
+              exerciseName={name}
+            />
           )}
           {row.percentage_basis === "none" && (
             <div className="mt-1 inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5 text-xs text-muted-foreground">
