@@ -160,6 +160,8 @@ export function ClientLiftVideoUploader({ clientId, clientName, userId, onSaved 
   const multiRecordRef = useRef<HTMLInputElement | null>(null);
   const carouselRef = useRef<HTMLDivElement | null>(null);
   const pickerOpenedAtRef = useRef<{ source: "photos" | "record"; at: number } | null>(null);
+  const wakeLockRef = useRef<any>(null);
+  const recordWarnedRef = useRef(false);
   const diagEnabled = useDiagnosticsEnabled();
   const [diag, setDiag] = useState<DiagSample>({
     pickerOpenedAt: null,
@@ -219,11 +221,47 @@ export function ClientLiftVideoUploader({ clientId, clientName, userId, onSaved 
         handoffToDetailsMs: null,
       }));
     }
-    if (source === "photos") multiUploadRef.current?.click();
-    else multiRecordRef.current?.click();
+    if (source === "photos") {
+      multiUploadRef.current?.click();
+      return;
+    }
+    // Record Now: native phone camera will open. Attempt a screen wake lock
+    // (only helps while this page is visible) and warn the client once per
+    // session that the phone may sleep and stop the recording.
+    try {
+      const nav: any = typeof navigator !== "undefined" ? navigator : null;
+      if (nav?.wakeLock?.request) {
+        nav.wakeLock.request("screen").then((lock: any) => {
+          wakeLockRef.current = lock;
+          lock.addEventListener?.("release", () => { wakeLockRef.current = null; });
+        }).catch(() => { /* ignore — best effort */ });
+      } else if (!recordWarnedRef.current) {
+        toast.warning("Keep this screen awake while recording. If your phone locks, the recording may stop. For longer clips, record with your phone's camera app and upload the video here.", { duration: 8000 });
+      }
+      if (!recordWarnedRef.current) {
+        recordWarnedRef.current = true;
+      }
+    } catch { /* ignore */ }
+    multiRecordRef.current?.click();
   };
 
+  // Release wake lock whenever the page is hidden or this component unmounts.
+  useEffect(() => {
+    const release = () => {
+      try { wakeLockRef.current?.release?.(); } catch { /* ignore */ }
+      wakeLockRef.current = null;
+    };
+    const onVis = () => { if (document.visibilityState === "hidden") release(); };
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      document.removeEventListener("visibilitychange", onVis);
+      release();
+    };
+  }, []);
+
   const addFiles = (files: FileList | null) => {
+    // Best-effort: release any wake lock we acquired for Record Now.
+    try { wakeLockRef.current?.release?.(); wakeLockRef.current = null; } catch { /* ignore */ }
     if (!files || files.length === 0) return;
     const handoff = pickerOpenedAtRef.current;
     if (handoff) {
@@ -492,8 +530,13 @@ export function ClientLiftVideoUploader({ clientId, clientName, userId, onSaved 
             <span className="text-xs font-medium">Paste Link</span>
           </Button>
         </div>
-        <div className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
-          Record Now is usually fastest. Short clips send fastest. Videos stored in iCloud may take a moment to prepare before this screen opens.
+        <div className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground space-y-1">
+          <div>
+            <span className="font-semibold text-foreground">Record Now</span> opens your phone's camera app. If your phone's screen locks mid-recording, the camera app may stop and the clip can be lost.
+          </div>
+          <div>
+            For longer lifts, <span className="font-semibold text-foreground">record with your normal phone camera</span> and then tap <span className="font-semibold text-foreground">Photos</span> here to upload it. Videos stored in iCloud may take a moment to prepare before this screen opens.
+          </div>
         </div>
 
         {showLinkInput && (
