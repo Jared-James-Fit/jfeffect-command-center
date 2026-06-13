@@ -1031,7 +1031,7 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
                     style={{ borderLeftWidth: 6, borderLeftColor: "var(--primary)" }}
                   >
                     <div className={cn(
-                      "grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 border-b border-primary/20 bg-[color-mix(in_oklab,var(--primary)_8%,var(--card))] shadow-sm sm:grid-cols-[auto_minmax(0,1fr)_auto]",
+                      "grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 border-b border-primary/20 bg-[color-mix(in_oklab,var(--primary)_8%,var(--card))] shadow-sm sm:grid-cols-[auto_auto_minmax(120px,1fr)_auto]",
                       compact ? "px-2 py-1" : "px-3 py-2",
                     )}>
                       <span className={cn("inline-flex shrink-0 items-center rounded-md bg-primary px-2 text-[10px] font-bold uppercase tracking-wide text-primary-foreground", compact ? "h-5" : "h-6 text-[11px]")}> 
