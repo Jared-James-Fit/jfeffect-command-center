@@ -922,24 +922,34 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
             {purposeLabel}
           </Badge>
         )}
-        <Badge variant="outline" className="h-4 px-1 text-[10px] font-bold uppercase tracking-wider capitalize">
-          {category}
-        </Badge>
+        {!purposeLabel && (
+          <Badge variant="outline" className={cn("h-4 px-1 text-[10px] font-bold uppercase tracking-wider", categoryBadgeClass)}>
+            {category}
+          </Badge>
+        )}
         {hasNote && (
           <span title="You saved a note for this exercise" className="inline-flex h-4 items-center gap-1 rounded-full bg-primary/15 px-1.5 text-[10px] font-bold text-primary">
             <StickyNote className="h-2.5 w-2.5" /> Note
           </span>
         )}
-        <span className="font-semibold text-foreground">
-          {row.sets ?? "?"} × {row.reps_text ?? "?"}
-        </span>
-        {row.rpe && <span>@ RPE {row.rpe}</span>}
-        {row.rir && <span>· {row.rir} RIR</span>}
-        {row.percentage && !row.manual_override && row.percentage_basis !== "none" && <span>· {row.percentage}%</span>}
-        {row.tempo && <span>· tempo {row.tempo}</span>}
         <span className="ml-auto inline-flex items-center gap-1 rounded-md bg-secondary/40 px-1.5 py-0.5 font-semibold text-foreground">
           <Clock className="h-3 w-3" /> Rest: {restDisplay}
         </span>
+      </div>
+      {/* Standardized prescription line: Sets × Reps @ Weight | RPE */}
+      <div className="mt-1 text-sm font-semibold text-foreground leading-snug break-words">
+        {formatPrescription({
+          sets: row.sets,
+          repsText: row.reps_text,
+          suggestedWeight,
+          unit,
+          percentage: row.percentage,
+          percentageBasis: row.percentage_basis,
+          manualOverride: row.manual_override,
+          rpe: row.rpe,
+          rir: row.rir,
+        })}
+        {row.tempo && <span className="ml-2 text-xs font-normal text-muted-foreground">tempo {row.tempo}</span>}
       </div>
       {/* Suggested load badges */}
       {row.manual_override && (row.load_kg || row.load_lb) && (
