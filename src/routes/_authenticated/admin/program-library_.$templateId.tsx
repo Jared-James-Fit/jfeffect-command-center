@@ -1180,11 +1180,16 @@ function WeekEditor({ week, setWeek, exercises, onCopyDayToFuture, hideHeader, c
       {hideHeader && days.length === 0 && (
         <Button size="sm" variant="outline" onClick={addDay}><Plus className="mr-1 h-3 w-3" /> Day</Button>
       )}
-      {days.map((d: any, i: number) => (
+      {days.map((d: any, i: number) => {
+        const dayMinutes = estimateDayMinutes(d.rows || []);
+        return (
         <Card key={i} className={cn("border-l-[3px] border-l-primary/40", compact ? "p-2" : "p-3")}>
           <div className={cn("flex items-center gap-2", compact ? "mb-1" : "mb-2")}>
             <Input className={cn("max-w-xs font-bold", compact && "h-7 text-xs")} value={d.title ?? ""} onChange={(e) => { const copy = [...days]; copy[i] = { ...d, title: e.target.value }; setWeek({ ...week, days: copy }); }} />
             <Input className={cn("max-w-xs", compact && "h-7 text-xs")} placeholder="Focus" value={d.focus ?? ""} onChange={(e) => { const copy = [...days]; copy[i] = { ...d, focus: e.target.value }; setWeek({ ...week, days: copy }); }} />
+            <span className="inline-flex items-center gap-1 rounded-full bg-secondary px-2 py-0.5 text-xs text-secondary-foreground">
+              <Clock className="h-3 w-3" /> {durationRange(dayMinutes)}
+            </span>
             <div className="ml-auto flex gap-0.5">
               {onCopyDayToFuture && (
                 <Button size="sm" variant="ghost" className="h-7 px-2 text-[10px]" onClick={() => onCopyDayToFuture(i)} title="Copy this day → same day in future weeks">
