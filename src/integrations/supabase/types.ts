@@ -4764,44 +4764,89 @@ export type Database = {
       }
       legal_documents: {
         Row: {
+          applies_to_new_users_only: boolean
           archived: boolean
           audience: Database["public"]["Enums"]["legal_audience"]
+          audience_form_ids: string[]
+          audience_offer_ids: string[]
+          audience_product_ids: string[]
+          audience_user_ids: string[]
           created_at: string
           created_by: string | null
           current_version_id: string | null
           doc_type: Database["public"]["Enums"]["legal_doc_type"]
+          effective_at: string | null
+          emergency_disabled: boolean
+          emergency_disabled_at: string | null
+          emergency_disabled_by: string | null
+          emergency_disabled_reason: string | null
+          enforcement_enabled: boolean
+          enforcement_mode: Database["public"]["Enums"]["legal_enforcement_mode"]
+          grace_period_days: number
           id: string
           is_optional_consent: boolean
           is_required: boolean
+          public_read_allowed: boolean
           slug: string
+          test_mode: boolean
           title: string
           updated_at: string
         }
         Insert: {
+          applies_to_new_users_only?: boolean
           archived?: boolean
           audience?: Database["public"]["Enums"]["legal_audience"]
+          audience_form_ids?: string[]
+          audience_offer_ids?: string[]
+          audience_product_ids?: string[]
+          audience_user_ids?: string[]
           created_at?: string
           created_by?: string | null
           current_version_id?: string | null
           doc_type: Database["public"]["Enums"]["legal_doc_type"]
+          effective_at?: string | null
+          emergency_disabled?: boolean
+          emergency_disabled_at?: string | null
+          emergency_disabled_by?: string | null
+          emergency_disabled_reason?: string | null
+          enforcement_enabled?: boolean
+          enforcement_mode?: Database["public"]["Enums"]["legal_enforcement_mode"]
+          grace_period_days?: number
           id?: string
           is_optional_consent?: boolean
           is_required?: boolean
+          public_read_allowed?: boolean
           slug: string
+          test_mode?: boolean
           title: string
           updated_at?: string
         }
         Update: {
+          applies_to_new_users_only?: boolean
           archived?: boolean
           audience?: Database["public"]["Enums"]["legal_audience"]
+          audience_form_ids?: string[]
+          audience_offer_ids?: string[]
+          audience_product_ids?: string[]
+          audience_user_ids?: string[]
           created_at?: string
           created_by?: string | null
           current_version_id?: string | null
           doc_type?: Database["public"]["Enums"]["legal_doc_type"]
+          effective_at?: string | null
+          emergency_disabled?: boolean
+          emergency_disabled_at?: string | null
+          emergency_disabled_by?: string | null
+          emergency_disabled_reason?: string | null
+          enforcement_enabled?: boolean
+          enforcement_mode?: Database["public"]["Enums"]["legal_enforcement_mode"]
+          grace_period_days?: number
           id?: string
           is_optional_consent?: boolean
           is_required?: boolean
+          public_read_allowed?: boolean
           slug?: string
+          test_mode?: boolean
           title?: string
           updated_at?: string
         }
@@ -4809,6 +4854,57 @@ export type Database = {
           {
             foreignKeyName: "fk_legal_documents_current_version"
             columns: ["current_version_id"]
+            isOneToOne: false
+            referencedRelation: "legal_document_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      legal_enforcement_audit: {
+        Row: {
+          actor_user_id: string | null
+          created_at: string
+          document_id: string
+          event: string
+          id: string
+          new_value: Json | null
+          note: string | null
+          previous_value: Json | null
+          version_id: string | null
+        }
+        Insert: {
+          actor_user_id?: string | null
+          created_at?: string
+          document_id: string
+          event: string
+          id?: string
+          new_value?: Json | null
+          note?: string | null
+          previous_value?: Json | null
+          version_id?: string | null
+        }
+        Update: {
+          actor_user_id?: string | null
+          created_at?: string
+          document_id?: string
+          event?: string
+          id?: string
+          new_value?: Json | null
+          note?: string | null
+          previous_value?: Json | null
+          version_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "legal_enforcement_audit_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "legal_documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "legal_enforcement_audit_version_id_fkey"
+            columns: ["version_id"]
             isOneToOne: false
             referencedRelation: "legal_document_versions"
             referencedColumns: ["id"]
@@ -10066,6 +10162,11 @@ export type Database = {
         Args: { _user_id: string }
         Returns: boolean
       }
+      legal_effective_enforcement: {
+        Args: { _doc_id: string; _user_id: string }
+        Returns: string
+      }
+      legal_kill_switch_active: { Args: never; Returns: boolean }
       mark_client_signed_in: { Args: never; Returns: undefined }
       mark_stale_lift_uploads: { Args: never; Returns: number }
       member_can_consume: { Args: { _user_id: string }; Returns: boolean }
@@ -10208,6 +10309,11 @@ export type Database = {
         | "communication_consent"
         | "cancellation_policy"
         | "custom"
+      legal_enforcement_mode:
+        | "notice_only"
+        | "workflow_gate"
+        | "onboarding_gate"
+        | "full_portal_gate"
       legal_placement_surface:
         | "onboarding"
         | "account_centre"
@@ -10467,6 +10573,12 @@ export const Constants = {
         "communication_consent",
         "cancellation_policy",
         "custom",
+      ],
+      legal_enforcement_mode: [
+        "notice_only",
+        "workflow_gate",
+        "onboarding_gate",
+        "full_portal_gate",
       ],
       legal_placement_surface: [
         "onboarding",

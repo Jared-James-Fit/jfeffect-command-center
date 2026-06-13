@@ -23,6 +23,7 @@ import {
 } from "@/lib/submission-reviews";
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
+import { AiAssistanceLabel, deriveAiAssistance } from "@/components/legal/ai-assistance-label";
 
 const STATUS_FILTERS: Array<{ value: "" | ReviewStatus; label: string }> = [
   { value: "", label: "All" },
@@ -312,6 +313,17 @@ function ReviewDetail({ reviewId, onDeleted }: { reviewId: string; onDeleted: ()
               {REVIEW_STATUS_LABELS[review.review_status as ReviewStatus] ?? review.review_status}
             </Badge>
             <Badge variant="outline" className="text-[10px]">AI: {AI_STATUS_LABELS[review.ai_status as keyof typeof AI_STATUS_LABELS]}</Badge>
+            {/* Accurate client-facing disclosure label preview — same component
+                that will render on the delivered message. Never claims
+                "coach-reviewed" unless approved_by + approved_at exist. */}
+            <AiAssistanceLabel
+              state={deriveAiAssistance({
+                ai_used: ["draft_ready","approved","sent","scheduled","processing"].includes(review.ai_status),
+                coach_edited: !!review.approved_response && review.approved_response !== review.ai_response,
+                approved_by: review.approved_by ?? null,
+                approved_at: review.approved_at ?? null,
+              })}
+            />
             <Select
               value={review.priority}
               onValueChange={(v) => setPriority({ data: { reviewId, priority: v as ReviewPriority } }).then(invalidate)}

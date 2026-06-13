@@ -9,10 +9,12 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as TermsRouteImport } from './routes/terms'
 import { Route as StaffSetupRouteImport } from './routes/staff-setup'
 import { Route as SitemapRouteImport } from './routes/sitemap'
 import { Route as SetupRouteImport } from './routes/setup'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
+import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as MembershipRouteImport } from './routes/membership'
 import { Route as MemberSetupRouteImport } from './routes/member-setup'
 import { Route as JoinRouteImport } from './routes/join'
@@ -23,6 +25,7 @@ import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SignupJfRouteImport } from './routes/signup.jf'
 import { Route as MWelcomeRouteImport } from './routes/m.welcome'
+import { Route as LegalSlugRouteImport } from './routes/legal.$slug'
 import { Route as CoachingApplyRouteImport } from './routes/coaching.apply'
 import { Route as BookSlugRouteImport } from './routes/book.$slug'
 import { Route as ApiDriveUploadRouteImport } from './routes/api/drive-upload'
@@ -211,6 +214,11 @@ import { Route as AuthenticatedAdminClientProgramsClientIdHistoryRouteImport } f
 import { Route as AuthenticatedAdminClientProgramsClientIdAnalyticsRouteImport } from './routes/_authenticated/admin/client-programs.$clientId.analytics'
 import { Route as AuthenticatedMWorkoutsEnrollmentIdWeekDayRouteImport } from './routes/_authenticated/m/workouts.$enrollmentId.$week.$day'
 
+const TermsRoute = TermsRouteImport.update({
+  id: '/terms',
+  path: '/terms',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const StaffSetupRoute = StaffSetupRouteImport.update({
   id: '/staff-setup',
   path: '/staff-setup',
@@ -229,6 +237,11 @@ const SetupRoute = SetupRouteImport.update({
 const ResetPasswordRoute = ResetPasswordRouteImport.update({
   id: '/reset-password',
   path: '/reset-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PrivacyRoute = PrivacyRouteImport.update({
+  id: '/privacy',
+  path: '/privacy',
   getParentRoute: () => rootRouteImport,
 } as any)
 const MembershipRoute = MembershipRouteImport.update({
@@ -278,6 +291,11 @@ const SignupJfRoute = SignupJfRouteImport.update({
 const MWelcomeRoute = MWelcomeRouteImport.update({
   id: '/m/welcome',
   path: '/m/welcome',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LegalSlugRoute = LegalSlugRouteImport.update({
+  id: '/legal/$slug',
+  path: '/legal/$slug',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CoachingApplyRoute = CoachingApplyRouteImport.update({
@@ -1380,10 +1398,12 @@ export interface FileRoutesByFullPath {
   '/join': typeof JoinRoute
   '/member-setup': typeof MemberSetupRoute
   '/membership': typeof MembershipRoute
+  '/privacy': typeof PrivacyRoute
   '/reset-password': typeof ResetPasswordRoute
   '/setup': typeof SetupRoute
   '/sitemap': typeof SitemapRoute
   '/staff-setup': typeof StaffSetupRoute
+  '/terms': typeof TermsRoute
   '/admin': typeof AuthenticatedAdminRouteRouteWithChildren
   '/m': typeof AuthenticatedMRouteRouteWithChildren
   '/media': typeof AuthenticatedMediaRouteRouteWithChildren
@@ -1391,6 +1411,7 @@ export interface FileRoutesByFullPath {
   '/api/drive-upload': typeof ApiDriveUploadRoute
   '/book/$slug': typeof BookSlugRoute
   '/coaching/apply': typeof CoachingApplyRoute
+  '/legal/$slug': typeof LegalSlugRoute
   '/m/welcome': typeof MWelcomeRoute
   '/signup/jf': typeof SignupJfRoute
   '/admin/account': typeof AuthenticatedAdminAccountRoute
@@ -1582,13 +1603,16 @@ export interface FileRoutesByTo {
   '/join': typeof JoinRoute
   '/member-setup': typeof MemberSetupRoute
   '/membership': typeof MembershipRoute
+  '/privacy': typeof PrivacyRoute
   '/reset-password': typeof ResetPasswordRoute
   '/setup': typeof SetupRoute
   '/sitemap': typeof SitemapRoute
   '/staff-setup': typeof StaffSetupRoute
+  '/terms': typeof TermsRoute
   '/api/drive-upload': typeof ApiDriveUploadRoute
   '/book/$slug': typeof BookSlugRoute
   '/coaching/apply': typeof CoachingApplyRoute
+  '/legal/$slug': typeof LegalSlugRoute
   '/m/welcome': typeof MWelcomeRoute
   '/signup/jf': typeof SignupJfRoute
   '/admin/account': typeof AuthenticatedAdminAccountRoute
@@ -1781,10 +1805,12 @@ export interface FileRoutesById {
   '/join': typeof JoinRoute
   '/member-setup': typeof MemberSetupRoute
   '/membership': typeof MembershipRoute
+  '/privacy': typeof PrivacyRoute
   '/reset-password': typeof ResetPasswordRoute
   '/setup': typeof SetupRoute
   '/sitemap': typeof SitemapRoute
   '/staff-setup': typeof StaffSetupRoute
+  '/terms': typeof TermsRoute
   '/_authenticated/admin': typeof AuthenticatedAdminRouteRouteWithChildren
   '/_authenticated/m': typeof AuthenticatedMRouteRouteWithChildren
   '/_authenticated/media': typeof AuthenticatedMediaRouteRouteWithChildren
@@ -1792,6 +1818,7 @@ export interface FileRoutesById {
   '/api/drive-upload': typeof ApiDriveUploadRoute
   '/book/$slug': typeof BookSlugRoute
   '/coaching/apply': typeof CoachingApplyRoute
+  '/legal/$slug': typeof LegalSlugRoute
   '/m/welcome': typeof MWelcomeRoute
   '/signup/jf': typeof SignupJfRoute
   '/_authenticated/admin/account': typeof AuthenticatedAdminAccountRoute
@@ -1985,10 +2012,12 @@ export interface FileRouteTypes {
     | '/join'
     | '/member-setup'
     | '/membership'
+    | '/privacy'
     | '/reset-password'
     | '/setup'
     | '/sitemap'
     | '/staff-setup'
+    | '/terms'
     | '/admin'
     | '/m'
     | '/media'
@@ -1996,6 +2025,7 @@ export interface FileRouteTypes {
     | '/api/drive-upload'
     | '/book/$slug'
     | '/coaching/apply'
+    | '/legal/$slug'
     | '/m/welcome'
     | '/signup/jf'
     | '/admin/account'
@@ -2187,13 +2217,16 @@ export interface FileRouteTypes {
     | '/join'
     | '/member-setup'
     | '/membership'
+    | '/privacy'
     | '/reset-password'
     | '/setup'
     | '/sitemap'
     | '/staff-setup'
+    | '/terms'
     | '/api/drive-upload'
     | '/book/$slug'
     | '/coaching/apply'
+    | '/legal/$slug'
     | '/m/welcome'
     | '/signup/jf'
     | '/admin/account'
@@ -2385,10 +2418,12 @@ export interface FileRouteTypes {
     | '/join'
     | '/member-setup'
     | '/membership'
+    | '/privacy'
     | '/reset-password'
     | '/setup'
     | '/sitemap'
     | '/staff-setup'
+    | '/terms'
     | '/_authenticated/admin'
     | '/_authenticated/m'
     | '/_authenticated/media'
@@ -2396,6 +2431,7 @@ export interface FileRouteTypes {
     | '/api/drive-upload'
     | '/book/$slug'
     | '/coaching/apply'
+    | '/legal/$slug'
     | '/m/welcome'
     | '/signup/jf'
     | '/_authenticated/admin/account'
@@ -2589,12 +2625,15 @@ export interface RootRouteChildren {
   JoinRoute: typeof JoinRoute
   MemberSetupRoute: typeof MemberSetupRoute
   MembershipRoute: typeof MembershipRoute
+  PrivacyRoute: typeof PrivacyRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   SetupRoute: typeof SetupRoute
   SitemapRoute: typeof SitemapRoute
   StaffSetupRoute: typeof StaffSetupRoute
+  TermsRoute: typeof TermsRoute
   ApiDriveUploadRoute: typeof ApiDriveUploadRoute
   BookSlugRoute: typeof BookSlugRoute
+  LegalSlugRoute: typeof LegalSlugRoute
   MWelcomeRoute: typeof MWelcomeRoute
   SignupJfRoute: typeof SignupJfRoute
   ApiPublic_replay73ae9c8e4bcdc04ea9fd65f84f0752daRoute: typeof ApiPublic_replay73ae9c8e4bcdc04ea9fd65f84f0752daRoute
@@ -2613,6 +2652,13 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/terms': {
+      id: '/terms'
+      path: '/terms'
+      fullPath: '/terms'
+      preLoaderRoute: typeof TermsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/staff-setup': {
       id: '/staff-setup'
       path: '/staff-setup'
@@ -2639,6 +2685,13 @@ declare module '@tanstack/react-router' {
       path: '/reset-password'
       fullPath: '/reset-password'
       preLoaderRoute: typeof ResetPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/privacy': {
+      id: '/privacy'
+      path: '/privacy'
+      fullPath: '/privacy'
+      preLoaderRoute: typeof PrivacyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/membership': {
@@ -2709,6 +2762,13 @@ declare module '@tanstack/react-router' {
       path: '/m/welcome'
       fullPath: '/m/welcome'
       preLoaderRoute: typeof MWelcomeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/legal/$slug': {
+      id: '/legal/$slug'
+      path: '/legal/$slug'
+      fullPath: '/legal/$slug'
+      preLoaderRoute: typeof LegalSlugRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/coaching/apply': {
@@ -4620,12 +4680,15 @@ const rootRouteChildren: RootRouteChildren = {
   JoinRoute: JoinRoute,
   MemberSetupRoute: MemberSetupRoute,
   MembershipRoute: MembershipRoute,
+  PrivacyRoute: PrivacyRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   SetupRoute: SetupRoute,
   SitemapRoute: SitemapRoute,
   StaffSetupRoute: StaffSetupRoute,
+  TermsRoute: TermsRoute,
   ApiDriveUploadRoute: ApiDriveUploadRoute,
   BookSlugRoute: BookSlugRoute,
+  LegalSlugRoute: LegalSlugRoute,
   MWelcomeRoute: MWelcomeRoute,
   SignupJfRoute: SignupJfRoute,
   ApiPublic_replay73ae9c8e4bcdc04ea9fd65f84f0752daRoute:

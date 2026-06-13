@@ -85,7 +85,7 @@ export const listMyLegalStatus = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     const { data: docs, error: e1 } = await context.supabase
       .from("legal_documents")
-      .select("id, doc_type, slug, title, audience, is_required, is_optional_consent, current_version_id, current_version:legal_document_versions!legal_documents_current_version_id_fkey(id, version_number, title, summary, body, signature_method, requires_reacceptance, effective_date, status, needs_legal_review)")
+      .select("id, doc_type, slug, title, audience, is_required, is_optional_consent, enforcement_mode, enforcement_enabled, emergency_disabled, effective_at, grace_period_days, current_version_id, current_version:legal_document_versions!legal_documents_current_version_id_fkey(id, version_number, title, summary, body, signature_method, requires_reacceptance, effective_date, status, needs_legal_review)")
       .eq("archived", false);
     if (e1) throw new Error(e1.message);
     const published = (docs ?? []).filter((d: any) => d.current_version && d.current_version.status === "published" && !d.current_version.needs_legal_review);
@@ -102,8 +102,18 @@ export const listMyLegalStatus = createServerFn({ method: "GET" })
       acceptances = acc ?? [];
     }
 
+    // Resolve effective enforcement per doc for THIS user (kill switch,
+    // emergency disable, audience, effective date, grace period).
+    const effective = await Promise.all(published.map(async (d: any) => {
+      const { data: eff } = await context.supabase.rpc("legal_effective_enforcement", {
+        _doc_id: d.id, _user_id: context.userId,
+      });
+      return { id: d.id, effective: (eff as string) ?? "inactive" };
+    }));
+
     return published.map((d: any) => {
       const accepted = acceptances.find((a) => a.version_id === d.current_version.id && !a.revoked_at);
+      const eff = effective.find((e) => e.id === d.id)?.effective ?? "inactive";
       return {
         document_id: d.id,
         doc_type: d.doc_type,
@@ -112,6 +122,10 @@ export const listMyLegalStatus = createServerFn({ method: "GET" })
         audience: d.audience,
         is_required: d.is_required,
         is_optional_consent: d.is_optional_consent,
+        enforcement_mode: d.enforcement_mode,
+        enforcement_enabled: d.enforcement_enabled,
+        emergency_disabled: d.emergency_disabled,
+        effective_enforcement: eff, // 'inactive'|'notice_only'|'workflow_gate'|'onboarding_gate'|'full_portal_gate'
         version: d.current_version,
         accepted_at: accepted?.accepted_at ?? null,
         acceptance_id: accepted?.id ?? null,
@@ -370,6 +384,59 @@ export const listMyConsents = createServerFn({ method: "GET" })
       .from("legal_consent_preferences")
       .select("*")
       .eq("user_id", context.userId);
+    if (error) throw new Error(error.message);
+    return data ?? [];
+  });
+
+// ----------------------------------------------------------------------------
+// Public (anon) Terms / Privacy reader — only returns docs explicitly marked
+// public_read_allowed, not archived, not emergency-disabled, with a published
+// current version. RLS on legal_documents / legal_document_versions enforces
+// the same constraints server-side.
+// ----------------------------------------------------------------------------
+export const getPublicLegalDocument = createServerFn({ method: "GET" })
+  .inputValidator((d: { slug: string }) => z.object({ slug: z.string().min(1).max(120) }).parse(d))
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: doc, error } = await supabaseAdmin
+      .from("legal_documents")
+      .select("id, slug, title, doc_type, public_read_allowed, archived, emergency_disabled, current_version_id, current_version:legal_document_versions!legal_documents_current_version_id_fkey(id, version_number, title, summary, body, effective_date, status, needs_legal_review, published_at)")
+      .eq("slug", data.slug)
+      .eq("public_read_allowed", true)
+      .eq("archived", false)
+      .eq("emergency_disabled", false)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!doc || !doc.current_version || (doc.current_version as any).status !== "published") {
+      return null;
+    }
+    const v: any = doc.current_version;
+    return {
+      slug: doc.slug,
+      title: doc.title,
+      doc_type: doc.doc_type,
+      version: {
+        version_number: v.version_number,
+        title: v.title,
+        summary: v.summary,
+        body: v.body,
+        effective_date: v.effective_date,
+        published_at: v.published_at,
+        needs_legal_review: v.needs_legal_review,
+      },
+    };
+  });
+
+export const listPublicLegalDocuments = createServerFn({ method: "GET" })
+  .handler(async () => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data, error } = await supabaseAdmin
+      .from("legal_documents")
+      .select("slug, title, doc_type")
+      .eq("public_read_allowed", true)
+      .eq("archived", false)
+      .eq("emergency_disabled", false)
+      .order("doc_type");
     if (error) throw new Error(error.message);
     return data ?? [];
   });
