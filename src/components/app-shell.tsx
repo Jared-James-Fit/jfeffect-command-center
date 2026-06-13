@@ -418,14 +418,20 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
-                    onClick={onRestoreDefaults}
+                    onClick={toggleAllOpen}
                     className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-foreground"
-                    aria-label="Restore sidebar defaults"
+                    aria-label={allCollapsed ? "Open all sections" : "Close all sections"}
                   >
-                    <RotateCcw className="h-3.5 w-3.5" />
+                    {allCollapsed ? (
+                      <ChevronsUpDown className="h-3.5 w-3.5" />
+                    ) : (
+                      <ChevronsDownUp className="h-3.5 w-3.5" />
+                    )}
                   </button>
                 </TooltipTrigger>
-                <TooltipContent side="top">Restore defaults</TooltipContent>
+                <TooltipContent side="top">
+                  {allCollapsed ? "Open all (⌘⇧E)" : "Close all (⌘⇧E)"}
+                </TooltipContent>
               </Tooltip>
               <Tooltip>
                 <TooltipTrigger asChild>
