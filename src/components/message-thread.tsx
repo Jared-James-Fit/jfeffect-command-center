@@ -1365,6 +1365,11 @@ export function MessageThread({
         })}
       </div>
 
+      {/* Phase 4A — admin strip showing scheduled & failed messages with
+          cancel/retry. RLS hides these rows from clients, so it's only
+          rendered for the admin role. */}
+      {role === "admin" && clientId && <ScheduledStrip clientId={clientId} />}
+
       <div
         className={cn(
           "space-y-2 border-t border-border",
