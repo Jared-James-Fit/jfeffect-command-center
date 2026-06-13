@@ -49,21 +49,33 @@ function groupNavItems(items: NavItem[]) {
     map.set(key, list);
   }
   const order = [
+    // ── New consolidated IA (11 workspaces). Listed first so they always
+    // render in the intended order when the sidebar is driven by
+    // `buildInternalNav()` from `@/lib/internal-nav`. Legacy groups remain
+    // below for back-compat with any nav source still using the old labels.
+    "Home",
+    "Clients",
+    "Coaching",
+    "Programming",
+    "Forms",
+    "Communication",
+    "Sales",
+    "Calendar",
+    "Content",
+    "Team",
+    "Settings",
+    // ── Legacy group labels (kept for back-compat — `membershipNav`,
+    // `floating-bar.tsx`, `sitemap.tsx` still reference some of these).
     "Core",
     "Overview",
-    "Sales",
     "Members",
     "Billing",
     "Setup Tools",
-    "Content",
     "Community",
-    "Communication",
     "Membership",
-    "Programming",
     "Business",
     "Documents",
     "Team / Ops",
-    "Settings",
     "Account",
   ];
   const result: { label: string | undefined; items: NavItem[] }[] = [];
