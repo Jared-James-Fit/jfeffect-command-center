@@ -27,6 +27,7 @@ import { SaveStatus } from "@/components/save-status";
 import { useConflictWatch } from "@/hooks/use-conflict-watch";
 import { usePersistentUndoStack } from "@/lib/persistent-undo";
 import { useScrollRestoration } from "@/lib/scroll-restore";
+import { TemplateBuilderIdentityBadge } from "@/components/builder-identity-header";
 import { ActionButton } from "@/components/action-button";
 import { copyRows, useClip } from "@/lib/program-builder-clipboard";
 import { createContext, useContext } from "react";
@@ -625,6 +626,7 @@ function EditorChrome({ meta, summary, typeLabel, autosave, save, dirty, childre
         <Link to="/admin/program-library" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
           <ArrowLeft className="h-3.5 w-3.5" /> Library
         </Link>
+        <TemplateBuilderIdentityBadge templateName={meta.name || "Template"} />
         <div className="min-w-0 flex items-baseline gap-2">
           <span className="truncate text-sm font-bold">{meta.name || "Template"}</span>
           <span className="hidden md:inline text-[11px] text-muted-foreground whitespace-nowrap">
