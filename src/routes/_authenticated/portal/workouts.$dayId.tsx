@@ -1445,11 +1445,47 @@ function SetRow({
     if (e.key === "Enter") { e.preventDefault(); (e.target as HTMLInputElement).blur(); save.flush(); }
   };
 
+  // State labels: Suggested (no draft, no confirm), Draft (typed but not all valid yet
+  // OR explicitly saved with completed_at=null), Confirmed (existing.completed_at set).
+  const isConfirmed = Boolean(existing?.completed_at);
+  const hasAnyEntry = load.length > 0 || reps.length > 0 || rpe.length > 0;
+  const isDraft = !isConfirmed && (hasAnyEntry || (existing && !existing.completed_at));
+
+  // Quick-fill helpers — these only update local state, never auto-confirm.
+  const applySuggestedWeight = () => { if (suggestedWeight != null) setLoad(fmtNum(suggestedWeight)); };
+  const bumpWeight = (delta: number) => {
+    const base = load ? Number(load) : (suggestedWeight ?? 0);
+    const next = Math.max(0, base + delta);
+    setLoad(fmtNum(Math.round(next / weightIncrement(unit)) * weightIncrement(unit)));
+  };
+  const useTargets = () => {
+    if (suggestedWeight != null) setLoad(fmtNum(suggestedWeight));
+    if (repTarget?.exact != null) setReps(String(repTarget.exact));
+    else if (repTarget?.min != null) setReps(String(repTarget.min));
+    if (rpeTarget?.exact != null) setRpe(String(rpeTarget.exact));
+    else if (rpeTarget?.min != null) setRpe(String(rpeTarget.min));
+  };
+  const copyPrevious = () => {
+    if (!prevExisting) return;
+    const pkg = unit === "kg" ? (prevExisting.actual_load_kg ?? prevExisting.actual_load) : (prevExisting.actual_load_lb ?? prevExisting.actual_load);
+    if (pkg != null) setLoad(String(pkg));
+    if (prevExisting.actual_reps != null) setReps(String(prevExisting.actual_reps));
+    const prevRpe = prevExisting.actual_rpe_num ?? prevExisting.actual_rpe;
+    if (prevRpe != null) setRpe(String(prevRpe));
+  };
+
+  const repChipValues = useMemo(() => (repTarget ? repChips(repTarget) : []), [repTarget]);
+  const rpeChipValues = useMemo(() => (rpeTarget ? rpeChips(rpeTarget) : []), [rpeTarget]);
+  const rirChipValues = useMemo(() => (rirTarget ? rirChips(rirTarget) : []), [rirTarget]);
+  const showRir = !!targetRir && !targetRpe;
+
+  const hasAnyTarget = suggestedWeight != null || repChipValues.length > 0 || rpeChipValues.length > 0 || rirChipValues.length > 0;
+
   return (
+    <div className={cn("border-t border-border/60", isConfirmed && "bg-green-500/5", isDraft && "bg-amber-500/5")}>
     <div className={cn(
       "grid items-center gap-2 border-t border-border/60 px-3 py-2",
       focusMode ? "grid-cols-[44px_1fr_1fr_1fr_64px]" : "grid-cols-[36px_1fr_1fr_1fr_56px]",
-      existing?.completed_at && "bg-green-500/5",
     )}>
       <span className={cn("font-mono text-muted-foreground", focusMode ? "text-sm" : "text-xs")}>{setIndex}</span>
       <Input
@@ -1496,8 +1532,125 @@ function SetRow({
       />
       <div className="flex items-center justify-end gap-1">
         {!readonly && <SaveStatus state={save.state} savedAt={save.savedAt} compact />}
-        {existing?.completed_at && <CheckCircle2 className="h-4 w-4 text-green-500" />}
+        {isConfirmed && <CheckCircle2 className="h-4 w-4 text-green-500" />}
       </div>
+    </div>
+
+    {/* Quick-fill chip row — Suggested values are visible but never auto-confirm */}
+    {!readonly && !isConfirmed && hasAnyTarget && (
+      <div className="px-3 pb-2 space-y-1.5">
+        {/* Weight quick controls */}
+        {suggestedWeight != null && (
+          <div className="flex flex-wrap items-center gap-1">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mr-1">Weight</span>
+            <button type="button" onClick={() => bumpWeight(-weightIncrement(unit))}
+              aria-label={`Decrease weight by ${weightIncrement(unit)} ${unit}`}
+              className="h-7 min-w-[36px] rounded-md border border-border bg-background px-2 text-xs font-bold hover:bg-secondary">
+              −{weightIncrement(unit)}
+            </button>
+            <button type="button" onClick={applySuggestedWeight}
+              aria-label={`Use suggested ${suggestedWeight} ${unit} — programmed target`}
+              className="h-7 rounded-md border border-primary/40 bg-primary/10 px-2 text-xs font-bold text-primary hover:bg-primary/20">
+              Use {fmtNum(suggestedWeight)} {unit}
+            </button>
+            <button type="button" onClick={() => bumpWeight(weightIncrement(unit))}
+              aria-label={`Increase weight by ${weightIncrement(unit)} ${unit}`}
+              className="h-7 min-w-[36px] rounded-md border border-border bg-background px-2 text-xs font-bold hover:bg-secondary">
+              +{weightIncrement(unit)}
+            </button>
+          </div>
+        )}
+
+        {/* Reps quick controls */}
+        {repChipValues.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mr-1">Reps</span>
+            {repChipValues.map((v) => {
+              const isTarget = repTarget?.exact === v;
+              return (
+                <button key={v} type="button" onClick={() => setReps(String(v))}
+                  aria-label={`Select ${v} reps${isTarget ? " — programmed target" : ""}`}
+                  className={cn(
+                    "h-7 min-w-[34px] rounded-md border px-2 text-xs font-bold hover:bg-secondary",
+                    isTarget ? "border-primary/40 bg-primary/10 text-primary" : "border-border bg-background",
+                  )}>
+                  {v}{isTarget && <span className="ml-1 text-[9px] font-normal opacity-70">★</span>}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* RPE quick controls */}
+        {rpeChipValues.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mr-1">RPE</span>
+            {rpeChipValues.map((v) => {
+              const isTarget = rpeTarget?.exact === v;
+              return (
+                <button key={v} type="button" onClick={() => setRpe(String(v))}
+                  aria-label={`Select RPE ${v}${isTarget ? " — programmed target" : ""}`}
+                  className={cn(
+                    "h-7 min-w-[34px] rounded-md border px-2 text-xs font-bold hover:bg-secondary",
+                    isTarget ? "border-primary/40 bg-primary/10 text-primary" : "border-border bg-background",
+                  )}>
+                  {fmtNum(v)}{isTarget && <span className="ml-1 text-[9px] font-normal opacity-70">★</span>}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* RIR quick controls (only when RIR is programmed and RPE isn't) */}
+        {showRir && rirChipValues.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mr-1">RIR</span>
+            {rirChipValues.map((v) => {
+              const isTarget = rirTarget?.exact === v;
+              return (
+                <button key={v} type="button" onClick={() => setRpe(String(Math.max(0, 10 - v)))}
+                  aria-label={`Select ${v} RIR${isTarget ? " — programmed target" : ""}`}
+                  className={cn(
+                    "h-7 min-w-[34px] rounded-md border px-2 text-xs font-bold hover:bg-secondary",
+                    isTarget ? "border-primary/40 bg-primary/10 text-primary" : "border-border bg-background",
+                  )}>
+                  {v}{isTarget && <span className="ml-1 text-[9px] font-normal opacity-70">★</span>}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Row actions */}
+        <div className="flex flex-wrap items-center gap-1 pt-0.5">
+          <Button size="sm" variant="outline" onClick={useTargets} className="h-7 px-2 text-[11px]">
+            Use Targets
+          </Button>
+          {setIndex > 1 && prevExisting?.completed_at && (
+            <Button size="sm" variant="outline" onClick={copyPrevious} className="h-7 px-2 text-[11px]">
+              Copy Previous
+            </Button>
+          )}
+        </div>
+      </div>
+    )}
+
+    {/* Apply to remaining sets (visible after this set is confirmed) */}
+    {!readonly && isConfirmed && hasUncompletedAfter && onApplyToRemaining && (
+      <div className="px-3 pb-2">
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-7 px-2 text-[11px] text-muted-foreground hover:text-foreground"
+          onClick={async () => {
+            const ok = typeof window !== "undefined" ? window.confirm("Apply this result to the remaining sets as drafts?") : true;
+            if (!ok) return;
+            await onApplyToRemaining(setIndex, { load, reps, rpe, unit });
+          }}>
+            Apply to remaining sets
+        </Button>
+      </div>
+    )}
     </div>
   );
 }
