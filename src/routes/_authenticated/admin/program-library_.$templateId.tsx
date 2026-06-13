@@ -1076,6 +1076,12 @@ function MultiBlockStructureEditor({ type, payload, setPayload, exercises, compa
         </div>
       ) : (
         <Card className="p-8 text-center text-sm text-muted-foreground">
+          Add a block to start building this program.
+        </Card>
+      )}
+    </div>
+  );
+}
 
 export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact }: { weeksData: any[]; setWeeksData: (wd: any[]) => void; exercises: any[]; compact?: boolean }) {
   // Persist the coach's editing position (active week + view mode) across
