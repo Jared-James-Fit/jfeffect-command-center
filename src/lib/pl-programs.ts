@@ -1219,12 +1219,34 @@ export type TemplatePlacement =
   | { mode: "into_week"; weekId: string }
   | { mode: "into_day"; dayId: string };
 
-export async function applyTemplateToClient(opts: { templateId: string; clientId: string; placement?: TemplatePlacement; prepId?: string | null; name?: string; clientVisible?: boolean; startDate?: string | null; endDate?: string | null }) {
-  const { data: tpl, error: te } = await sb.from("pl_templates").select("*").eq("id", opts.templateId).maybeSingle();
-  if (te) throw te;
-  if (!tpl) throw new Error("Template not found");
-  const payload = tpl.payload || {};
-  const placement: TemplatePlacement = opts.placement ?? (opts.prepId ? { mode: "existing_prep", prepId: opts.prepId } : { mode: "standalone_block" });
+export async function applyTemplateToClient(opts: { templateId: string; clientId: string; placement?: TemplatePlacement; prepId?: string | null; name?: string; clientVisible?: boolean; startDate?: string | null; endDate?: string | null; selectedBlockIds?: string[]; startFromBlockId?: string | null }) {
+  // Hardened path: client-side browser code MUST NOT mutate program tables.
+  // All assignment goes through the protected server function backed by an
+  // atomic RPC. This re-export keeps existing import sites compiling while
+  // ensuring there is exactly one assignment path on the server.
+  const { applyTemplateToClientFn } = await import("@/lib/pl-programs.functions");
+  const placement: TemplatePlacement | undefined = opts.placement ?? (opts.prepId ? { mode: "existing_prep", prepId: opts.prepId } : undefined);
+  return applyTemplateToClientFn({
+    data: {
+      templateId: opts.templateId,
+      clientId: opts.clientId,
+      placement,
+      name: opts.name ?? null,
+      clientVisible: opts.clientVisible,
+      startDate: opts.startDate ?? null,
+      endDate: opts.endDate ?? null,
+      selectedBlockIds: opts.selectedBlockIds ?? null,
+      startFromBlockId: opts.startFromBlockId ?? null,
+    },
+  });
+}
+
+// Legacy in-process implementation retained as `_applyTemplateToClient_legacy`
+// only to satisfy unreachable code below. Calling it raises immediately.
+async function _legacy_unused_unreachable_(opts: any) {
+  if (opts) throw new Error("Client-side template assignment path is disabled; use applyTemplateToClientFn server function.");
+  const payload: any = {};
+  const placement: TemplatePlacement = opts;
 
   // ---- v2 multi-block "block" template: expand selected (or all active) blocks
   // into N pl_blocks. Single active block keeps the legacy standalone path
