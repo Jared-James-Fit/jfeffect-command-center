@@ -18,10 +18,11 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Download, ExternalLink, RefreshCw, FileText, Loader2, Search, User, Mail, DownloadCloud } from "lucide-react";
+import { Download, ExternalLink, RefreshCw, FileText, Loader2, Search, User, Mail, DownloadCloud, Trash2 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
-import { getSignedAgreementUrl, refreshAllPendingAgreements, refreshAgreementStatus, importSignNowSignedDocuments } from "@/lib/agreements.functions";
+import { getSignedAgreementUrl, refreshAllPendingAgreements, refreshAgreementStatus, importSignNowSignedDocuments, bulkDeleteAgreements } from "@/lib/agreements.functions";
 import { AgreementStatusBadge } from "@/components/agreement-status-badge";
 import { VERIFICATION_BADGE } from "@/lib/agreements";
 
@@ -98,10 +99,14 @@ function SignedAgreementsPage() {
   const [importConfirmOpen, setImportConfirmOpen] = useState(false);
   const [downloading, setDownloading] = useState<string | null>(null);
   const [rowRefreshing, setRowRefreshing] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const getUrlFn = useServerFn(getSignedAgreementUrl);
   const refreshAllFn = useServerFn(refreshAllPendingAgreements);
   const refreshOneFn = useServerFn(refreshAgreementStatus);
   const importFn = useServerFn(importSignNowSignedDocuments);
+  const bulkDeleteFn = useServerFn(bulkDeleteAgreements);
 
   const importMutation = useMutation({
     mutationFn: async (): Promise<ImportSummary> => {
@@ -264,6 +269,59 @@ function SignedAgreementsPage() {
     importMutation.mutate();
   }
 
+  const filteredIds = useMemo(() => filtered.map((r) => r.id), [filtered]);
+  const allFilteredSelected = filteredIds.length > 0 && filteredIds.every((id) => selected.has(id));
+  const someFilteredSelected = filteredIds.some((id) => selected.has(id));
+
+  function toggleOne(id: string, on: boolean) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (on) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }
+  function toggleGroup(ids: string[], on: boolean) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      for (const id of ids) {
+        if (on) next.add(id);
+        else next.delete(id);
+      }
+      return next;
+    });
+  }
+  function toggleAllFiltered(on: boolean) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      for (const id of filteredIds) {
+        if (on) next.add(id);
+        else next.delete(id);
+      }
+      return next;
+    });
+  }
+  function clearSelection() {
+    setSelected(new Set());
+  }
+
+  async function handleBulkDelete() {
+    const ids = Array.from(selected);
+    if (ids.length === 0) return;
+    setDeleting(true);
+    try {
+      const res: any = await bulkDeleteFn({ data: { ids } });
+      toast.success(`Deleted ${res?.count ?? ids.length} document${(res?.count ?? ids.length) === 1 ? "" : "s"}`);
+      clearSelection();
+      setDeleteOpen(false);
+      refetch();
+    } catch (e: any) {
+      toast.error(e?.message ?? "Bulk delete failed");
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   return (
     <>
       <PageHeader
@@ -363,6 +421,31 @@ function SignedAgreementsPage() {
         )}
 
         <Card className="p-5">
+          <div className="flex flex-wrap items-center justify-between gap-3 pb-3 mb-3 border-b border-border">
+            <div className="flex items-center gap-2 text-sm">
+              <Checkbox
+                checked={allFilteredSelected ? true : someFilteredSelected ? "indeterminate" : false}
+                onCheckedChange={(v) => toggleAllFiltered(v === true)}
+                aria-label="Select all filtered documents"
+              />
+              <span className="text-muted-foreground">
+                {selected.size > 0
+                  ? `${selected.size} selected`
+                  : `Select all (${filteredIds.length})`}
+              </span>
+              {selected.size > 0 && (
+                <Button size="sm" variant="ghost" onClick={clearSelection}>Clear</Button>
+              )}
+            </div>
+            <Button
+              size="sm"
+              variant="destructive"
+              disabled={selected.size === 0}
+              onClick={() => setDeleteOpen(true)}
+            >
+              <Trash2 className="h-3.5 w-3.5 mr-1" /> Delete selected
+            </Button>
+          </div>
           {isLoading ? (
             <div className="py-12 text-center text-sm text-muted-foreground">
               <Loader2 className="h-5 w-5 inline animate-spin mr-2" /> Loading signed documents…
@@ -377,14 +460,26 @@ function SignedAgreementsPage() {
               {grouped.map((g) => (
                 <div key={g.clientId}>
                   <div className="flex items-center justify-between border-b border-border pb-2 mb-2">
-                    <Link
-                      to="/admin/clients/$id"
-                      params={{ id: g.clientId }}
-                      className="flex items-center gap-2 font-semibold hover:underline"
-                    >
-                      <User className="h-4 w-4 text-muted-foreground" />
-                      {g.clientName}
-                    </Link>
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        checked={(() => {
+                          const ids = g.items.map((i) => i.id);
+                          const all = ids.every((id) => selected.has(id));
+                          const some = ids.some((id) => selected.has(id));
+                          return all ? true : some ? "indeterminate" : false;
+                        })()}
+                        onCheckedChange={(v) => toggleGroup(g.items.map((i) => i.id), v === true)}
+                        aria-label={`Select all documents for ${g.clientName}`}
+                      />
+                      <Link
+                        to="/admin/clients/$id"
+                        params={{ id: g.clientId }}
+                        className="flex items-center gap-2 font-semibold hover:underline"
+                      >
+                        <User className="h-4 w-4 text-muted-foreground" />
+                        {g.clientName}
+                      </Link>
+                    </div>
                     <span className="text-xs text-muted-foreground">
                       {g.items.length} document{g.items.length === 1 ? "" : "s"}
                     </span>
@@ -396,6 +491,11 @@ function SignedAgreementsPage() {
                       const email = a.clients?.email ?? a.client_email ?? null;
                       return (
                         <li key={a.id} className="flex flex-wrap items-center gap-3 py-3 text-sm">
+                          <Checkbox
+                            checked={selected.has(a.id)}
+                            onCheckedChange={(v) => toggleOne(a.id, v === true)}
+                            aria-label="Select document"
+                          />
                           <FileText className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                           <div className="min-w-0 flex-1">
                             <div className="font-medium truncate">
@@ -481,6 +581,28 @@ function SignedAgreementsPage() {
           )}
         </Card>
       </div>
+      <AlertDialog open={deleteOpen} onOpenChange={(o) => !deleting && setDeleteOpen(o)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete {selected.size} signed document{selected.size === 1 ? "" : "s"}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This permanently removes the selected agreement records and any signed PDF files stored for them.
+              Audit entries are written before deletion. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => { e.preventDefault(); handleBulkDelete(); }}
+              disabled={deleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleting && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
+              Delete permanently
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
