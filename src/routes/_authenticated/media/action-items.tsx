@@ -1,17 +1,9 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { TasksPage as SharedTasksPage } from "@/components/tasks/tasks-page";
-
-function MediaTasksRoute() {
-  return (
-    <SharedTasksPage
-      title="Tasks"
-      subtitle="Plan, prioritize, and knock out media work."
-      storagePrefix="jf-media"
-      scope="media"
-    />
-  );
-}
-
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useEffect } from "react";
 export const Route = createFileRoute("/_authenticated/media/action-items")({
-  component: MediaTasksRoute,
+  component: () => {
+    const navigate = useNavigate();
+    useEffect(() => { navigate({ to: "/media/content", search: { tab: "tasks" }, replace: true }); }, [navigate]);
+    return null;
+  },
 });
