@@ -112,9 +112,11 @@ export function PromoCodesPage({ embedded = false }: { embedded?: boolean } = {}
     <div className={embedded ? "mx-auto max-w-7xl space-y-4 p-4 md:p-6" : "mx-auto max-w-7xl space-y-4 p-4 md:p-6"}>
       <div className="flex items-center justify-between gap-2">
         <div>
-          <h1 className="text-2xl font-black flex items-center gap-2">
-            <Ticket className="h-5 w-5" /> Promo Codes
-          </h1>
+          {!embedded && (
+            <h1 className="text-2xl font-black flex items-center gap-2">
+              <Ticket className="h-5 w-5" /> Promo Codes
+            </h1>
+          )}
           <p className="text-sm text-muted-foreground">
             Promo codes are created in Stripe. The app accepts any valid code at checkout
             and records every redemption across JF Membership, coaching, and future products.
