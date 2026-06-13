@@ -46,8 +46,6 @@ import { enqueueOfflineWrite, registerQueueHandler } from "@/lib/workout-offline
 import { ActiveRestTimerProvider, useRestTimer } from "@/components/active-rest-timer";
 import { ExerciseHistoryButton } from "@/components/exercise-history-sheet";
 
-export const Route = createFileRoute("/_authenticated/portal/workouts/$dayId")({
-
 /* -------------------------------------------------------------------------- */
 /* Target-parsing helpers (Suggested → Draft → Confirmed fast-logging)         */
 /* -------------------------------------------------------------------------- */
@@ -118,9 +116,7 @@ function fmtNum(n: number): string {
   return Number.isInteger(n) ? String(n) : String(Math.round(n * 100) / 100);
 }
 
-export const RouteSentinel = null;
-
-const _Route = createFileRoute("/_authenticated/portal/workouts/$dayId")({
+export const Route = createFileRoute("/_authenticated/portal/workouts/$dayId")({
   validateSearch: (s: Record<string, unknown>) => ({
     readonly: s.readonly === 1 || s.readonly === "1" || s.readonly === true ? 1 : undefined,
   }),
