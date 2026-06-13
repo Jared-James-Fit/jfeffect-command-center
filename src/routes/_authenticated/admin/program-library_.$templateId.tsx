@@ -655,8 +655,36 @@ function FullPrepEditor({ payload, setPayload, exercises, compact }: any) {
 }
 
 export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact }: { weeksData: any[]; setWeeksData: (wd: any[]) => void; exercises: any[]; compact?: boolean }) {
-  const [activeIdx, setActiveIdx] = useState(0);
-  const [view, setView] = useState<"block" | "week">("block");
+  // Persist the coach's editing position (active week + view mode) across
+  // refreshes via localStorage so they return to exactly where they left off.
+  const POS_KEY = "pb.block-editor.pos:v1";
+  const readPos = (): { view: "block" | "week"; activeIdx: number } => {
+    if (typeof window === "undefined") return { view: "block", activeIdx: 0 };
+    try {
+      const raw = window.localStorage.getItem(POS_KEY);
+      if (!raw) return { view: "block", activeIdx: 0 };
+      const p = JSON.parse(raw);
+      return {
+        view: p.view === "week" ? "week" : "block",
+        activeIdx: Number.isFinite(p.activeIdx) ? p.activeIdx : 0,
+      };
+    } catch { return { view: "block", activeIdx: 0 }; }
+  };
+  const initialPos = readPos();
+  const [activeIdx, _setActiveIdx] = useState(initialPos.activeIdx);
+  const [view, _setView] = useState<"block" | "week">(initialPos.view);
+  const writePos = (next: { view: "block" | "week"; activeIdx: number }) => {
+    if (typeof window === "undefined") return;
+    try { window.localStorage.setItem(POS_KEY, JSON.stringify(next)); } catch {}
+  };
+  const setActiveIdx = (idx: number) => { _setActiveIdx(idx); writePos({ view, activeIdx: idx }); };
+  const setView = (v: "block" | "week") => { _setView(v); writePos({ view: v, activeIdx }); };
+  // Clamp activeIdx if weeks were removed since last visit.
+  useEffect(() => {
+    if (weeksData.length === 0) return;
+    if (activeIdx >= weeksData.length) _setActiveIdx(weeksData.length - 1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [weeksData.length]);
   const { clientId: ctxClientId, blockId: ctxBlockId } = useClientMaxesCtx();
   const weekStats = useMemo(() => weeksData.map((w: any) => {
     const days = w.days || [];
