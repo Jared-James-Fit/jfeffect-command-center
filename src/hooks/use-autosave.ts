@@ -165,7 +165,15 @@ export function useAutosave<T>({
     await doSave();
   }, [doSave]);
 
-  return { state, savedAt, online, flush };
+  // Stable read of "is there any unsaved change pending right now?". Used by
+  // manual Save buttons so they can avoid issuing a second persist() after
+  // flush() has already drained the queue.
+  const hasPending = useCallback(() => {
+    if (!lastSavedSet.current) return false;
+    return !equals(lastSaved.current, pendingValue.current);
+  }, [equals]);
+
+  return { state, savedAt, online, flush, hasPending };
 }
 
 /** Read a previously-saved local draft for the given key. */
