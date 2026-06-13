@@ -10,6 +10,60 @@
 
 const GATEWAY_URL = "https://connector-gateway.lovable.dev/twilio";
 
+/**
+ * Triggers governed by the membership notification safety mode.
+ * Anything starting with `subscription_` plus the explicit set below.
+ * `account_created` is intentionally NOT gated — it's used for non-membership
+ * account creation flows too.
+ */
+const MEMBERSHIP_TRIGGERS = new Set<string>([
+  "subscription_purchased",
+  "subscription_trial_ending",
+  "subscription_payment_failed",
+  "subscription_payment_recovered",
+  "subscription_grace_warning",
+  "subscription_cancelled",
+  "subscription_ended",
+  "subscription_restarted",
+]);
+
+type SafetyMode = "dry_run" | "allowlist" | "live";
+type SafetyConfig = {
+  mode: SafetyMode;
+  allowlist_phones: string[];
+  allowlist_emails: string[];
+};
+
+function isMembershipTrigger(trigger: string): boolean {
+  return MEMBERSHIP_TRIGGERS.has(trigger) || trigger.startsWith("subscription_");
+}
+
+async function readSafetyConfig(supabaseAdmin: any): Promise<SafetyConfig> {
+  const fallback: SafetyConfig = { mode: "dry_run", allowlist_phones: [], allowlist_emails: [] };
+  try {
+    const { data } = await supabaseAdmin
+      .from("app_settings").select("value")
+      .eq("key", "jf_membership_notifications").maybeSingle();
+    if (!data?.value) return fallback;
+    const parsed = typeof data.value === "string" ? JSON.parse(data.value) : data.value;
+    const mode = (["dry_run", "allowlist", "live"] as const).includes(parsed?.mode) ? parsed.mode : "dry_run";
+    const phones = Array.isArray(parsed?.allowlist_phones) ? parsed.allowlist_phones.map((p: any) => String(p)) : [];
+    const emails = Array.isArray(parsed?.allowlist_emails) ? parsed.allowlist_emails.map((e: any) => String(e).toLowerCase()) : [];
+    return { mode, allowlist_phones: phones, allowlist_emails: emails };
+  } catch (e) {
+    console.warn("[sms-trigger] failed to read jf_membership_notifications, defaulting to dry_run", e);
+    return fallback;
+  }
+}
+
+async function recordAttempt(supabaseAdmin: any, row: Record<string, any>) {
+  try {
+    await supabaseAdmin.from("jf_notification_attempts").insert(row);
+  } catch (e) {
+    console.warn("[sms-trigger] failed to record notification attempt", e);
+  }
+}
+
 function normalizePhone(raw: string | null | undefined): string | null {
   if (!raw) return null;
   const cleaned = String(raw).replace(/[^\d+]/g, "");
@@ -71,11 +125,20 @@ export async function fireAutomationTrigger(supabaseAdmin: any, ctx: AutomationC
       .eq("trigger_type", ctx.trigger).eq("active", true);
     if (!automations || automations.length === 0) return { fired: 0, reason: "no_automation" };
 
+    // --- Membership notification safety gate ---------------------------
+    // For any membership-lifecycle trigger, the configured mode in
+    // app_settings.jf_membership_notifications decides whether we actually
+    // call Twilio. Default is dry_run so nothing ships until an admin
+    // explicitly switches to allowlist or live.
+    const gated = isMembershipTrigger(ctx.trigger);
+    const safety = gated ? await readSafetyConfig(supabaseAdmin) : null;
+
     // Resolve recipient
     let toPhone = normalizePhone(ctx.phone ?? null);
     let firstName = "there";
     let fullName = "";
     let optOut = false;
+    let memberEmail: string | null = null;
 
     if (ctx.memberId) {
       const { data: m } = await supabaseAdmin
@@ -85,6 +148,7 @@ export async function fireAutomationTrigger(supabaseAdmin: any, ctx: AutomationC
         fullName = m.full_name ?? "";
         firstName = (m.full_name?.split(" ")[0]) || (m.email?.split("@")[0]) || "there";
         optOut = !!m.sms_opt_out;
+        memberEmail = m.email ?? null;
       }
     } else if (ctx.clientId) {
       const { data: c } = await supabaseAdmin
@@ -117,20 +181,87 @@ export async function fireAutomationTrigger(supabaseAdmin: any, ctx: AutomationC
         automation_id: auto.id,
         automation_trigger: ctx.trigger,
       };
+      const attemptBase: Record<string, any> = {
+        channel: "sms",
+        trigger_key: ctx.trigger,
+        mode: safety?.mode ?? "live",
+        member_id: ctx.memberId ?? null,
+        client_id: ctx.clientId ?? null,
+        recipient: toPhone,
+        rendered_body: body,
+        automation_id: auto.id,
+        metadata: { email: memberEmail },
+      };
+
       if (optOut) {
         await supabaseAdmin.from("sms_log").insert({ ...logBase, status: "skipped", error: "opted_out" });
+        if (gated) await recordAttempt(supabaseAdmin, { ...attemptBase, decision: "skipped", reason: "opted_out" });
         continue;
       }
       if (!toPhone) {
         await supabaseAdmin.from("sms_log").insert({ ...logBase, status: "skipped", error: "no_phone" });
+        if (gated) await recordAttempt(supabaseAdmin, { ...attemptBase, decision: "skipped", reason: "no_phone" });
         continue;
       }
+
+      // --- Safety mode enforcement (membership only) -------------------
+      if (gated && safety) {
+        if (safety.mode === "dry_run") {
+          const { data: logRow } = await supabaseAdmin
+            .from("sms_log")
+            .insert({ ...logBase, status: "skipped", error: "dry_run_mode" })
+            .select("id").maybeSingle();
+          await recordAttempt(supabaseAdmin, {
+            ...attemptBase,
+            decision: "dry_run",
+            reason: "safety_mode_dry_run",
+            sms_log_id: logRow?.id ?? null,
+          });
+          continue;
+        }
+        if (safety.mode === "allowlist") {
+          const allowed = safety.allowlist_phones.map(normalizePhone).includes(toPhone);
+          if (!allowed) {
+            const { data: logRow } = await supabaseAdmin
+              .from("sms_log")
+              .insert({ ...logBase, status: "skipped", error: "not_on_allowlist" })
+              .select("id").maybeSingle();
+            await recordAttempt(supabaseAdmin, {
+              ...attemptBase,
+              decision: "suppressed",
+              reason: "not_on_allowlist",
+              sms_log_id: logRow?.id ?? null,
+            });
+            continue;
+          }
+        }
+        // live mode: fall through to actual send
+      }
+
       try {
         const { sid } = await sendViaTwilio(toPhone, settings.from_phone, body);
-        await supabaseAdmin.from("sms_log").insert({ ...logBase, status: "sent", twilio_sid: sid });
+        const { data: logRow } = await supabaseAdmin
+          .from("sms_log")
+          .insert({ ...logBase, status: "sent", twilio_sid: sid })
+          .select("id").maybeSingle();
+        if (gated) await recordAttempt(supabaseAdmin, {
+          ...attemptBase,
+          decision: "sent",
+          reason: safety?.mode === "allowlist" ? "allowlisted" : "live_mode",
+          sms_log_id: logRow?.id ?? null,
+        });
         fired++;
       } catch (e: any) {
-        await supabaseAdmin.from("sms_log").insert({ ...logBase, status: "failed", error: e?.message ?? String(e) });
+        const { data: logRow } = await supabaseAdmin
+          .from("sms_log")
+          .insert({ ...logBase, status: "failed", error: e?.message ?? String(e) })
+          .select("id").maybeSingle();
+        if (gated) await recordAttempt(supabaseAdmin, {
+          ...attemptBase,
+          decision: "failed",
+          reason: e?.message ?? String(e),
+          sms_log_id: logRow?.id ?? null,
+        });
       }
     }
     return { fired };
