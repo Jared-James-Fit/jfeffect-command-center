@@ -1,6 +1,6 @@
 import { runJob } from "@/lib/progress-jobs";
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
@@ -15,12 +15,20 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { listMediaArchives, retryArchive, setArchiveVisibility } from "@/lib/media-archive.functions";
 
 export const Route = createFileRoute("/_authenticated/admin/media-archives")({
-  component: MediaArchivesPage,
+  component: MediaArchivesRedirect,
   errorComponent: ({ error }) => (
     <div className="p-8 text-sm text-destructive">Couldn't load media archives: {error.message}</div>
   ),
   notFoundComponent: () => <div className="p-8">Not found.</div>,
 });
+
+function MediaArchivesRedirect() {
+  const navigate = useNavigate();
+  useEffect(() => {
+    navigate({ to: "/admin/content", search: { tab: "archive" } as any, replace: true });
+  }, [navigate]);
+  return null;
+}
 
 const STATUS_COLOR: Record<string, string> = {
   queued: "outline",
@@ -36,7 +44,7 @@ const SOURCE_LABEL: Record<string, string> = {
   media_item: "Media Item",
 };
 
-function MediaArchivesPage() {
+export function MediaArchivesPage({ embedded = false }: { embedded?: boolean } = {}) {
   const qc = useQueryClient();
   const [status, setStatus] = useState("all");
   const [source, setSource] = useState("all");
@@ -77,10 +85,10 @@ function MediaArchivesPage() {
 
   return (
     <>
-      <PageHeader
+      {!embedded && <PageHeader
         title="Media Archives"
         subtitle="Every media file that has been offloaded to Google Drive."
-      />
+      />}
       <div className="p-6 space-y-4">
         <Card className="p-3">
           <div className="flex flex-wrap items-center gap-2">
