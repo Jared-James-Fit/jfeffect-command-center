@@ -1357,8 +1357,9 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
       )}
     >
       <div className={`absolute left-0 top-0 h-full w-2 ${accent}`} aria-hidden />
-      <div className="grid grid-cols-12 items-end gap-1">
-        <Field className="col-span-12 md:col-span-3" label="Exercise">
+      {/* ---- Header row: identity (left) + actions (right) ---- */}
+      <div className="flex items-start gap-2">
+        <Field className="min-w-0 flex-1" label="Exercise">
         <div className="flex items-center gap-1">
           <span
             draggable={!!onDragStartRow}
@@ -1371,7 +1372,7 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
           </span>
           <div className="min-w-0 flex-1">
         <Select value={row.exercise_id ?? "__custom"} onValueChange={(v) => setRow({ ...row, exercise_id: v === "__custom" ? null : v })}>
-          <SelectTrigger className={cn("min-h-8 h-auto py-1 text-sm font-semibold [&>span]:line-clamp-2 [&>span]:whitespace-normal [&>span]:text-left")}>
+          <SelectTrigger className={cn("min-h-8 h-auto py-1 text-sm font-semibold [&>span]:line-clamp-2 [&>span]:whitespace-normal [&>span]:text-left [&>span]:leading-tight")}>
             <SelectValue placeholder="Exercise" />
           </SelectTrigger>
           <SelectContent>
@@ -1429,99 +1430,7 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
           </div>
         </div>
         </Field>
-        <Field className="col-span-1" label="Sets">
-          <RowCell dataField="sets" className={cn("text-sm font-semibold tabular-nums text-center", h, inputCls)} inputMode="numeric" placeholder="3" value={row.sets} onCommit={(v) => setRow({ ...row, sets: parseIntOrNull(v) })} />
-        </Field>
-        <Field className="col-span-2" label="Reps">
-          <RowCell dataField="reps" className={cn("text-sm font-semibold tabular-nums text-center", h, inputCls)} placeholder="8-12" value={row.reps_text} onCommit={(v) => setRow({ ...row, reps_text: v ?? "" })} />
-        </Field>
-        <Field className="col-span-1" label="RPE">
-          <RowCell dataField="rpe" className={cn("text-sm font-semibold tabular-nums text-center", h, inputCls)} inputMode="decimal" placeholder="—" value={row.rpe} onCommit={(v) => setRow({ ...row, rpe: v ?? "" })} />
-        </Field>
-        <Field className="col-span-1" label="RIR">
-          <RowCell dataField="rir" className={cn("text-sm font-semibold tabular-nums text-center", h, inputCls)} inputMode="decimal" placeholder="—" value={row.rir} onCommit={(v) => setRow({ ...row, rir: v ?? "" })} />
-        </Field>
-        <Field className="col-span-2 md:col-span-2" label={`Rest time${restIsOverride ? " *" : ""}`}>
-          {(() => {
-            const REST_PRESETS: { v: number; label: string }[] = [
-              { v: 30, label: "30 sec" },
-              { v: 60, label: "60 sec" },
-              { v: 90, label: "90 sec" },
-              { v: 120, label: "2 min" },
-              { v: 180, label: "3 min" },
-              { v: 240, label: "4 min" },
-              { v: 300, label: "5 min" },
-              { v: 480, label: "8 min" },
-              { v: 600, label: "10 min" },
-            ];
-            const override = row.rest_seconds_override as number | null | undefined;
-            const presetMatch = override != null && REST_PRESETS.some((p) => p.v === override);
-            const selectValue = override == null ? "auto" : presetMatch ? String(override) : "custom";
-            const onChange = (v: string) => {
-              if (v === "auto") {
-                setRow({ ...row, rest_seconds_override: null, rest_seconds: null });
-              } else if (v === "custom") {
-                const init = override ?? restDefault ?? 60;
-                setRow({ ...row, rest_seconds_override: init, rest_seconds: init });
-              } else {
-                const n = parseInt(v, 10);
-                setRow({ ...row, rest_seconds_override: n, rest_seconds: n });
-              }
-            };
-            return (
-              <>
-                <Select value={selectValue} onValueChange={onChange}>
-                  <SelectTrigger
-                    className={cn(
-                      "text-xs font-semibold tabular-nums px-2",
-                      h,
-                      inputCls,
-                      restIsOverride && "ring-1 ring-primary/40",
-                    )}
-                  >
-                    <SelectValue>
-                      {selectValue === "auto"
-                        ? `Auto · ${fmtRestSeconds(restDefault)}`
-                        : selectValue === "custom"
-                          ? `Custom · ${fmtRestSeconds(override ?? null)}`
-                          : fmtRestSeconds(parseInt(selectValue, 10))}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="auto">Auto · {fmtRestSeconds(restDefault)}</SelectItem>
-                    {REST_PRESETS.map((p) => (
-                      <SelectItem key={p.v} value={String(p.v)}>{p.label}</SelectItem>
-                    ))}
-                    <SelectItem value="custom">Custom…</SelectItem>
-                  </SelectContent>
-                </Select>
-                {selectValue === "custom" && (
-                  <RowCell
-                    dataField="rest"
-                    className={cn("mt-1 text-xs font-semibold tabular-nums text-center", h, inputCls)}
-                    inputMode="numeric"
-                    placeholder="Custom rest (seconds)"
-                    value={override ?? ""}
-                    onCommit={(v) => {
-                      const n = parseIntOrNull(v);
-                      if (n == null || n <= 0) {
-                        setRow({ ...row, rest_seconds_override: null, rest_seconds: null });
-                      } else {
-                        setRow({ ...row, rest_seconds_override: n, rest_seconds: n });
-                      }
-                    }}
-                  />
-                )}
-                <span className="px-0.5 text-[10px] leading-tight text-foreground/70">
-                  {selectValue === "auto"
-                    ? `Auto · ${restCat} · ${fmtRestSeconds(effectiveRest)}`
-                    : `${fmtRestSeconds(effectiveRest)} programmed`}
-                </span>
-              </>
-            );
-          })()}
-        </Field>
-        <div className="col-span-2 flex justify-end gap-0.5 pb-0.5">
+        <div className="flex shrink-0 items-center gap-0.5 pt-4">
           {onMoveUp && (
             <Button
               size="icon"
@@ -1556,8 +1465,8 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-72 p-3" align="end">
-              <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-foreground/80">Exercise classification</div>
-              <p className="mb-2 text-[11px] leading-snug text-foreground/70">
+              <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-foreground">Exercise classification</div>
+              <p className="mb-2 text-[11px] leading-snug text-foreground/80">
                 Controls automatic rest defaults, workout-duration estimates, and warm-up buffer. Inferred automatically — override only when needed.
               </p>
               <Select value={row.time_profile ?? "accessory_compound"} onValueChange={(v) => setRow({ ...row, time_profile: v })}>
@@ -1568,8 +1477,8 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
                 </SelectTrigger>
                 <SelectContent>{TIME_PROFILES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}</SelectContent>
               </Select>
-              <div className="mt-2 text-[10px] text-foreground/60">
-                Current: <span className="font-semibold text-foreground/80">{TIME_PROFILE_LABEL[row.time_profile ?? "accessory_compound"] ?? (row.time_profile ?? "Accessory compound")}</span>
+              <div className="mt-2 text-[10px] text-foreground/70">
+                Current: <span className="font-semibold text-foreground">{TIME_PROFILE_LABEL[row.time_profile ?? "accessory_compound"] ?? (row.time_profile ?? "Accessory compound")}</span>
               </div>
             </PopoverContent>
           </Popover>
@@ -1617,6 +1526,108 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
           )}
           {onDelete && <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={onDelete}><Trash2 className="h-3.5 w-3.5" /></Button>}
         </div>
+      </div>
+      {/* ---- Primary programming row ---- */}
+      <div className="grid grid-cols-12 items-end gap-1">
+        <Field className="col-span-2" label="Sets">
+          <RowCell dataField="sets" className={cn("text-sm font-semibold tabular-nums text-center", h, inputCls)} inputMode="numeric" placeholder="3" value={row.sets} onCommit={(v) => setRow({ ...row, sets: parseIntOrNull(v) })} />
+        </Field>
+        <Field className="col-span-3" label="Reps">
+          <RowCell dataField="reps" className={cn("text-sm font-semibold tabular-nums text-center", h, inputCls)} placeholder="8-12" value={row.reps_text} onCommit={(v) => setRow({ ...row, reps_text: v ?? "" })} />
+        </Field>
+        <Field className="col-span-2" label="RPE">
+          <RowCell dataField="rpe" className={cn("text-sm font-semibold tabular-nums text-center", h, inputCls)} inputMode="decimal" placeholder="—" value={row.rpe} onCommit={(v) => setRow({ ...row, rpe: v ?? "" })} />
+        </Field>
+        <Field className="col-span-2" label="RIR">
+          <RowCell dataField="rir" className={cn("text-sm font-semibold tabular-nums text-center", h, inputCls)} inputMode="decimal" placeholder="—" value={row.rir} onCommit={(v) => setRow({ ...row, rir: v ?? "" })} />
+        </Field>
+        <Field className="col-span-3" label={`Rest time${restIsOverride ? " *" : ""}`}>
+          {(() => {
+            const REST_PRESETS: { v: number; label: string }[] = [
+              { v: 30, label: "30 sec" },
+              { v: 60, label: "60 sec" },
+              { v: 90, label: "90 sec" },
+              { v: 120, label: "2 min" },
+              { v: 180, label: "3 min" },
+              { v: 240, label: "4 min" },
+              { v: 300, label: "5 min" },
+              { v: 480, label: "8 min" },
+              { v: 600, label: "10 min" },
+            ];
+            const override = row.rest_seconds_override as number | null | undefined;
+            const presetMatch = override != null && REST_PRESETS.some((p) => p.v === override);
+            const selectValue = override == null ? "auto" : presetMatch ? String(override) : "custom";
+            const onChange = (v: string) => {
+              if (v === "auto") {
+                setRow({ ...row, rest_seconds_override: null, rest_seconds: null });
+              } else if (v === "custom") {
+                const init = override ?? restDefault ?? 60;
+                setRow({ ...row, rest_seconds_override: init, rest_seconds: init });
+              } else {
+                const n = parseInt(v, 10);
+                setRow({ ...row, rest_seconds_override: n, rest_seconds: n });
+              }
+            };
+            return (
+              <>
+                <Select value={selectValue} onValueChange={onChange}>
+                  <SelectTrigger
+                    className={cn(
+                      "text-xs font-semibold tabular-nums px-2 [&>span]:truncate",
+                      h,
+                      inputCls,
+                      restIsOverride && "ring-1 ring-primary/40",
+                    )}
+                  >
+                    <SelectValue>
+                      {selectValue === "auto"
+                        ? `Auto · ${fmtRestSeconds(restDefault)}`
+                        : selectValue === "custom"
+                          ? `Custom · ${fmtRestSeconds(override ?? null)}`
+                          : fmtRestSeconds(parseInt(selectValue, 10))}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="auto">Auto · {fmtRestSeconds(restDefault)}</SelectItem>
+                    {REST_PRESETS.map((p) => (
+                      <SelectItem key={p.v} value={String(p.v)}>{p.label}</SelectItem>
+                    ))}
+                    <SelectItem value="custom">Custom…</SelectItem>
+                  </SelectContent>
+                </Select>
+                {selectValue === "custom" && (
+                  <RowCell
+                    dataField="rest"
+                    className={cn("mt-1 text-xs font-semibold tabular-nums text-center", h, inputCls)}
+                    inputMode="numeric"
+                    placeholder="Custom rest (seconds)"
+                    value={override ?? ""}
+                    onCommit={(v) => {
+                      const n = parseIntOrNull(v);
+                      if (n == null || n <= 0) {
+                        setRow({ ...row, rest_seconds_override: null, rest_seconds: null });
+                      } else {
+                        setRow({ ...row, rest_seconds_override: n, rest_seconds: n });
+                      }
+                    }}
+                  />
+                )}
+                <span
+                  className="px-0.5 text-[10px] leading-tight text-foreground/80 truncate"
+                  title={
+                    selectValue === "auto"
+                      ? `Auto · ${restCat} default · ${fmtRestSeconds(effectiveRest)}`
+                      : `${fmtRestSeconds(effectiveRest)} programmed`
+                  }
+                >
+                  {selectValue === "auto"
+                    ? `Auto · ${restCat} · ${fmtRestSeconds(effectiveRest)}`
+                    : `${fmtRestSeconds(effectiveRest)} programmed`}
+                </span>
+              </>
+            );
+          })()}
+        </Field>
       </div>
       {expanded && (
       <div className="grid grid-cols-12 items-end gap-1">
