@@ -207,14 +207,22 @@ const EXERCISE_ROW_CLONE_FIELDS = [
   "percentage_basis",
   "load_kg",
   "load_lb",
+  "load_unit",
   "rest_seconds",
+  "rest_seconds_override",
   "tempo",
   "time_profile",
+  "intensity_techniques",
+  "progression_method",
   "notes",
-  "purpose",
-  "is_competition_lift",
-  "warmup_mode",
-  "auto_rest_enabled",
+  "purpose_label",
+  "card_color",
+  "manual_override",
+  "override_of_pct",
+  "estimated_seconds",
+  "estimated_seconds_override",
+  // basis_row_id intentionally excluded — it references another row's id
+  // which won't exist in the clone target. Caller should remap if needed.
 ] as const;
 
 /** Clone all rows from sourceDayId into newDayId. Programming columns only. */
