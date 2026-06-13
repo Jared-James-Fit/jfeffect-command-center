@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useMemo, useState } from "react";
@@ -33,8 +33,16 @@ import { ProductAccessGrantDialog } from "@/components/product-access-grant-dial
 import { Lock as LockIcon } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/admin/payment-links")({
-  component: PaymentLinksPage,
+  component: PaymentLinksRedirect,
 });
+
+function PaymentLinksRedirect() {
+  const navigate = useNavigate();
+  useEffect(() => {
+    navigate({ to: "/admin/sales", search: { tab: "products-payments", sub: "products" } as any, replace: true });
+  }, [navigate]);
+  return null;
+}
 
 const PRODUCT_TYPES = [
   "Online Coaching", "In-Person Personal Training", "In-Person Session Package",
