@@ -18,7 +18,6 @@ import { useServerFn } from "@tanstack/react-start";
 import { createTemplate, updateTemplate, archiveTemplate, setTemplateActive, createAgreement, syncSignNowTemplates } from "@/lib/agreements.functions";
 import { AGREEMENT_TYPES, type AgreementTemplate } from "@/lib/agreements";
 import { AgreementStatusBadge } from "@/components/agreement-status-badge";
-import { useNavigate } from "@tanstack/react-router";
 import { SentAgreementsManager } from "@/components/sent-agreements-manager";
 
 export const Route = createFileRoute("/_authenticated/admin/agreements/")({
