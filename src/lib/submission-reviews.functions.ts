@@ -709,18 +709,35 @@ export const saveCoachDraft = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => SaveDraftInput.parse(d))
   .handler(async ({ data, context }) => {
-    await assertCanTouchReview(context.supabase, context.userId, data.reviewId);
+    const { row } = await assertCanTouchReview(context.supabase, context.userId, data.reviewId);
     const sb = await admin();
-    await sb
-      .from("submission_reviews")
-      .update({
-        coach_draft: data.coachDraft,
-        review_status: "coach_editing",
-      })
-      .eq("id", data.reviewId);
+    // If the draft materially differs from the previously approved content,
+    // clear the approval. Send-now / schedule will refuse to deliver until
+    // an authorized user re-approves.
+    const prevApproved = (row.approved_response ?? "").trim();
+    const newDraft = (data.coachDraft ?? "").trim();
+    const approvalCleared = !!row.approved_at && prevApproved !== newDraft;
+    const patch: Record<string, unknown> = {
+      coach_draft: data.coachDraft,
+    };
+    if (row.review_status !== "no_response" && row.review_status !== "sent") {
+      patch.review_status = "coach_editing";
+    }
+    if (approvalCleared) {
+      patch.approved_at = null;
+      patch.approved_by = null;
+      patch.approved_response = null;
+    }
+    await sb.from("submission_reviews").update(patch).eq("id", data.reviewId);
     await audit(data.reviewId, "coach_draft_saved", context.userId, "coach", {
       length: data.coachDraft.length,
+      approval_cleared: approvalCleared,
     });
+    if (approvalCleared) {
+      await audit(data.reviewId, "approval_reset", context.userId, "coach", {
+        reason: "draft_edited",
+      });
+    }
     return { ok: true };
   });
 
