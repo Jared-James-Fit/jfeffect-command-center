@@ -1,0 +1,1 @@
+REVOKE EXECUTE ON FUNCTION public.legal_kill_switch_active() FROM anon;
