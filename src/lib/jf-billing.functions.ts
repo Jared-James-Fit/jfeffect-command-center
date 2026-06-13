@@ -175,6 +175,16 @@ const SignupInput = z.object({
   password: z.string().min(8).max(200),
   sms_consent: z.boolean().optional(),
   origin: z.string().url(),
+  /**
+   * Server-validated legal acceptances. Each entry must match a currently
+   * required + currently published membership_checkout document version,
+   * or checkout is rejected. (Phase 4 launch gate.)
+   */
+  legal_acceptances: z.array(z.object({
+    document_id: z.string().uuid(),
+    version_id: z.string().uuid(),
+  })).min(1),
+  acknowledgement_text: z.string().trim().min(1).max(500).default("I agree to the JF Membership terms shown at checkout."),
 });
 
 export const createJfSignupCheckout = createServerFn({ method: "POST" })
@@ -183,6 +193,27 @@ export const createJfSignupCheckout = createServerFn({ method: "POST" })
     const s = await loadSettings();
     if (!s.monthly_price_id) throw new Error("Membership pricing isn't configured yet. Please contact support.");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    // Phase 4 — Launch Gate: refuse session creation when not launch-ready.
+    const { resolveMembershipLaunchGate } = await import("@/lib/membership-launch-gate.functions");
+    const gate = await resolveMembershipLaunchGate({ admin: false });
+    if (!gate.ok) {
+      throw new Error(gate.message ?? "Membership checkout is temporarily unavailable.");
+    }
+
+    // Phase 4 — Acceptance validation. The submitted (document_id, version_id)
+    // pairs MUST match the current required published versions exactly. Stale,
+    // draft, or missing acceptances are rejected server-side; browser checkbox
+    // state alone is never trusted.
+    const requiredByDoc = new Map(gate.required_docs.map((d) => [d.document_id, d]));
+    const submittedByDoc = new Map(data.legal_acceptances.map((a) => [a.document_id, a]));
+    for (const [documentId, req] of requiredByDoc) {
+      const sub = submittedByDoc.get(documentId);
+      if (!sub) throw new Error(`Please accept ${req.title} to continue.`);
+      if (sub.version_id !== req.version_id) {
+        throw new Error(`The ${req.title} has been updated. Please reload the page and accept the latest version.`);
+      }
+    }
 
     // Resolve Stripe mode + key
     const mode: StripeMode = (s.stripe_mode === "test" ? "test" : "live");
@@ -265,6 +296,10 @@ export const createJfSignupCheckout = createServerFn({ method: "POST" })
       phone: data.phone || null,
       password_hash: passwordHash,
       sms_consent: !!data.sms_consent,
+      // Phase 4 — remember which legal versions were accepted at /join.
+      // These are turned into legal_acceptances rows in completeJfSignup once
+      // we have the auth user_id to attach to.
+      legal_acceptance_ids: data.legal_acceptances.map((a) => a.version_id),
     });
 
     return { url: session.url as string, used_trial: useTrial };
@@ -373,6 +408,44 @@ export const completeJfSignup = createServerFn({ method: "POST" })
 
     // Apply Stripe state
     await applyStripeStateToMember(memberId, subscription, s.hold_price_id);
+
+    // Phase 4 — persist legal acceptances captured at /join, now that we have
+    // an auth user. Each row references the exact version that was current
+    // and required at the time of /join. Best-effort: an acceptance write
+    // failure must not block account activation (we audit and continue).
+    try {
+      const versionIds: string[] = Array.isArray(pending?.legal_acceptance_ids) ? pending!.legal_acceptance_ids : [];
+      if (userId && versionIds.length) {
+        const { data: versions } = await supabaseAdmin
+          .from("legal_document_versions")
+          .select("id, document_id, body, status")
+          .in("id", versionIds);
+        for (const v of versions ?? []) {
+          if ((v as any).status !== "published") continue;
+          await supabaseAdmin
+            .from("legal_acceptances")
+            .insert({
+              user_id: userId,
+              document_id: (v as any).document_id,
+              version_id: (v as any).id,
+              context: "signup",
+              context_ref: session.id,
+              signature_method: "checkbox",
+              checkbox_checked: true,
+              acknowledgement_text: "Accepted at JF Membership checkout",
+              rendered_snapshot: (v as any).body,
+            })
+            .then(({ error }) => {
+              // Idempotent: duplicates from a retried complete are fine.
+              if (error && (error as any).code !== "23505") {
+                console.error("[jf-billing] legal_acceptance insert failed", error);
+              }
+            });
+        }
+      }
+    } catch (e) {
+      console.error("[jf-billing] legal acceptance persistence failed", e);
+    }
 
     // Mark trial email used (only on first trial)
     if (subscription?.trial_end) {

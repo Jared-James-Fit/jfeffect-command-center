@@ -4,13 +4,14 @@ import { useQuery } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 import { createJfSignupCheckout, getJfPublicSettings } from "@/lib/jf-billing.functions";
 import { getPublicSalesPage } from "@/lib/sales-pages.functions";
+import { getMembershipLaunchGate } from "@/lib/membership-launch-gate.functions";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, Lock, Receipt } from "lucide-react";
 import { SalesPageShell, Section } from "@/components/sales/sales-page-shell";
 import { SalesHero, HeroCta, HeroCtaGhost } from "@/components/sales/sales-hero";
 import { AppPreviewGrid } from "@/components/sales/app-preview-grid";
@@ -49,29 +50,36 @@ function SignupJf() {
   const getSettings = useServerFn(getJfPublicSettings);
   const createCheckout = useServerFn(createJfSignupCheckout);
   const fetchPage = useServerFn(getPublicSalesPage);
+  const fetchGate = useServerFn(getMembershipLaunchGate);
 
   const { data: settings } = useQuery({ queryKey: ["jf-public-settings"], queryFn: () => getSettings() });
   const { data: p } = useQuery({ queryKey: ["public-sales-page", "join"], queryFn: () => fetchPage({ data: { page_key: "join" } }) });
+  const { data: gate } = useQuery({ queryKey: ["jf-launch-gate"], queryFn: () => fetchGate() });
 
   const formRef = useRef<HTMLDivElement>(null);
   const scrollToForm = () => formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
 
   const [form, setForm] = useState({
     first_name: "", last_name: "", email: "", phone: "",
-    password: "", confirm: "", terms: false, sms_consent: false,
+    password: "", confirm: "", sms_consent: false,
   });
+  // Per-document acceptance state. Keyed by document_id.
+  const [accepted, setAccepted] = useState<Record<string, boolean>>({});
   const [busy, setBusy] = useState(false);
   const [showPw, setShowPw] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
 
   const cancelled = typeof window !== "undefined" && new URLSearchParams(window.location.search).has("cancelled");
+  const checkoutBlocked = (settings && !settings.has_monthly_price) || (gate && !gate.ok);
+  const requiredDocs = gate?.required_docs ?? [];
+  const allAccepted = requiredDocs.length > 0 && requiredDocs.every((d) => accepted[d.document_id]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (settings && !settings.has_monthly_price) {
+    if (checkoutBlocked) {
       return toast.error("Membership checkout is temporarily unavailable. Please contact support.");
     }
-    if (!form.terms) return toast.error("Please accept the terms.");
+    if (!allAccepted) return toast.error("Please accept each required document to continue.");
     if (form.password.length < 8) return toast.error("Password must be at least 8 characters.");
     if (form.password !== form.confirm) return toast.error("Passwords don't match.");
     setBusy(true);
@@ -81,6 +89,11 @@ function SignupJf() {
         phone: form.phone || undefined, password: form.password,
         sms_consent: !!(form.phone && form.sms_consent),
         origin: window.location.origin,
+        legal_acceptances: requiredDocs.map((d) => ({
+          document_id: d.document_id,
+          version_id: d.version_id,
+        })),
+        acknowledgement_text: "I have read and agree to the documents listed at JF Membership checkout.",
       }});
       window.location.assign(r.url);
     } catch (e: any) {
@@ -153,9 +166,26 @@ function SignupJf() {
               Checkout was cancelled. You can try again below.
             </div>
           )}
-          {settings && !settings.has_monthly_price && (
+          {checkoutBlocked && (
             <div className="mt-3 rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-200">
-              Membership checkout is temporarily unavailable. Please contact support.
+              Membership checkout is temporarily unavailable.
+              {settings?.support_email ? <> Please contact <a className="underline" href={`mailto:${settings.support_email}`}>{settings.support_email}</a>.</> : null}
+            </div>
+          )}
+
+          {/* Phase 4 — Recurring billing disclosure (always visible above legal acceptances) */}
+          {!checkoutBlocked && requiredDocs.length > 0 && (
+            <div className="mt-4 rounded-lg border border-border bg-muted/30 p-4">
+              <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                <Receipt className="h-3.5 w-3.5" /> Recurring billing
+              </div>
+              <ul className="mt-2 space-y-1 text-xs text-foreground">
+                <li>· {settings?.monthly_price_display ?? "$29/month USD"} after a {trialDays}-day free trial</li>
+                <li>· Due today: $0 (you won't be charged until your trial ends)</li>
+                <li>· First charge: {new Date(Date.now() + trialDays * 24 * 60 * 60 * 1000).toLocaleDateString()}</li>
+                <li>· Billing renews automatically every month until you cancel</li>
+                <li>· Cancel anytime — access continues until the end of your current billing period</li>
+              </ul>
             </div>
           )}
           <form onSubmit={submit} className="mt-4 grid gap-3">
@@ -209,17 +239,45 @@ function SignupJf() {
                 </button>
               </div>
             </div>
-            <label className="flex items-start gap-2 text-xs text-muted-foreground">
-              <Checkbox checked={form.terms} onCheckedChange={(c) => setForm({ ...form, terms: !!c })} />
-              <span>I agree to the terms and refund/cancellation policy.</span>
-            </label>
+            {/* Phase 4 — per-document legal acceptances (server-validated). */}
+            {requiredDocs.length > 0 && (
+              <div className="rounded-md border border-border p-3 space-y-2">
+                <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                  <Lock className="h-3.5 w-3.5" /> Required agreements
+                </div>
+                {requiredDocs.map((d) => (
+                  <label key={d.document_id} className="flex items-start gap-2 text-xs text-foreground">
+                    <Checkbox
+                      checked={!!accepted[d.document_id]}
+                      onCheckedChange={(c) => setAccepted((s) => ({ ...s, [d.document_id]: !!c }))}
+                    />
+                    <span>
+                      I agree to the{" "}
+                      {d.public_read_allowed ? (
+                        <Link to="/legal/$slug" params={{ slug: d.slug }} target="_blank" className="underline">
+                          {d.title}
+                        </Link>
+                      ) : (
+                        <span className="font-medium">{d.title}</span>
+                      )}
+                      <span className="ml-1 text-muted-foreground">(v{d.version_number})</span>.
+                    </span>
+                  </label>
+                ))}
+              </div>
+            )}
             {form.phone && (
               <label className="flex items-start gap-2 text-xs text-muted-foreground">
                 <Checkbox checked={form.sms_consent} onCheckedChange={(c) => setForm({ ...form, sms_consent: !!c })} />
                 <span>I agree to receive transactional and marketing SMS. Msg/data rates may apply. Reply STOP to opt out.</span>
               </label>
             )}
-            <Button type="submit" size="lg" disabled={busy || (settings && !settings.has_monthly_price)} className="mt-2 h-12 text-base font-bold">
+            <Button
+              type="submit"
+              size="lg"
+              disabled={busy || !!checkoutBlocked || !allAccepted}
+              className="mt-2 h-12 text-base font-bold"
+            >
               {busy ? "Starting checkout…" : ctaLabel}
             </Button>
             <p className="text-[11px] text-center text-muted-foreground">
