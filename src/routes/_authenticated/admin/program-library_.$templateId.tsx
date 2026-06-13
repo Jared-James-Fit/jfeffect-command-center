@@ -50,7 +50,7 @@ import {
   type TemplatePayloadV2,
   type TemplateBlockV2,
 } from "@/lib/pl-template-blocks";
-import { useNavigate } from "@tanstack/react-router";
+import { useNavigate, useSearch } from "@tanstack/react-router";
 import { ArchiveRestore, Archive as ArchiveIcon, Pencil } from "lucide-react";
 
 // ---------------- Fast local-state cell (instant typing, debounced commit) ---
