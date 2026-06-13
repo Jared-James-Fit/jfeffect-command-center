@@ -190,7 +190,7 @@ function productToForm(p: Product): FormState {
   };
 }
 
-function PaymentLinksPage() {
+export function PaymentLinksPage({ embedded = false }: { embedded?: boolean } = {}) {
   const qc = useQueryClient();
   const listFn = useServerFn(listCoachingProducts);
   const createFn = useServerFn(createCoachingProduct);
