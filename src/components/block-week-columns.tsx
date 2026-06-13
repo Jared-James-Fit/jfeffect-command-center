@@ -124,7 +124,9 @@ export function BlockWeekColumns({
           {computed.map((sel) => (
             <div
               key={sel.week?.id ?? Math.random()}
-              ref={(el) => { if (sel.week?.id) weekRefs.current[sel.week.id] = el; }}
+              ref={(el) => {
+                if (sel.week?.id) weekRefs.current[sel.week.id] = el;
+              }}
               className={cn(
                 "w-full min-w-0 scroll-mt-24 space-y-2 rounded-md border p-3 md:w-[360px] md:max-w-[400px] md:shrink-0 lg:w-[390px]",
                 sel.now ? "border-primary/50 bg-primary/5" : "border-border bg-card/40",
@@ -136,13 +138,17 @@ export function BlockWeekColumns({
                   <div className="shrink-0 text-xs font-bold uppercase tracking-widest text-muted-foreground">
                     Week {sel.week?.week_index ?? "—"}
                   </div>
-                  <Badge variant="outline" className={cn("h-4 px-1 text-[9px]", weekStatusTone(sel.status))}>
+                  <Badge
+                    variant="outline"
+                    className={cn("h-4 px-1 text-[9px]", weekStatusTone(sel.status))}
+                  >
                     {sel.status === "Locked" && <Lock className="mr-0.5 h-2.5 w-2.5" />}
                     {sel.status}
                   </Badge>
                   {sel.now && (
                     <Badge className="h-4 border-primary/40 bg-primary/15 px-1 text-[9px] font-bold text-primary hover:bg-primary/20">
-                      <Crosshair className="mr-0.5 h-2.5 w-2.5" />Now
+                      <Crosshair className="mr-0.5 h-2.5 w-2.5" />
+                      Now
                     </Badge>
                   )}
                 </div>
@@ -153,7 +159,9 @@ export function BlockWeekColumns({
                   </div>
                 )}
               </div>
-              {sel.week?.notes && <p className="text-[11px] text-muted-foreground">{sel.week.notes}</p>}
+              {sel.week?.notes && (
+                <p className="text-[11px] text-muted-foreground">{sel.week.notes}</p>
+              )}
               <div className="space-y-1.5">
                 {sel.entries.map((it) => {
                   const done = !!it.completion?.completed_at;
