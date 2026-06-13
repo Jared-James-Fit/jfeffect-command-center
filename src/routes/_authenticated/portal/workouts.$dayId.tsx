@@ -849,12 +849,6 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
   const restDisplay = effectiveRest != null
     ? (restIsExplicit ? fmtRest(effectiveRest) : `Auto · ${fmtRest(effectiveRest)}`)
     : "Auto";
-  const categoryBadgeClass =
-    category === "competition"
-      ? "border-primary/30 bg-primary/10 text-primary"
-      : category === "variation"
-        ? "border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400"
-        : "border-muted-foreground/30 bg-muted text-muted-foreground";
   const [howToOpen, setHowToOpen] = useState(false);
   const [notesOpen, setNotesOpen] = useState(false);
   const [cuesOpen, setCuesOpen] = useState(false);
