@@ -91,10 +91,39 @@ export function detectAttachmentType(url: string): MessageAttachment["type"] {
 
 const db = supabase as any;
 
+/**
+ * List delivered messages for a conversation.
+ *
+ * Bubble timeline only — excludes scheduled, failed, and cancelled rows so
+ * they never appear in either the admin or client thread as normal bubbles.
+ * Those are surfaced separately by listPendingMessages() in the admin strip.
+ */
 export async function listMessages(clientId: string, opts: { includeInternal?: boolean } = {}) {
-  let q = db.from("messages").select("*").eq("client_id", clientId).order("created_at", { ascending: true });
+  let q = db
+    .from("messages")
+    .select("*")
+    .eq("client_id", clientId)
+    .in("delivery_status", ["sent", "sending"])
+    .order("created_at", { ascending: true });
   if (!opts.includeInternal) q = q.eq("is_internal_note", false);
   const { data, error } = await q;
+  if (error) throw error;
+  return (data ?? []) as Message[];
+}
+
+/**
+ * Admin-only: scheduled / failed / cancelled rows for a conversation.
+ * RLS already restricts non-delivered rows to admin, assigned coach, and the
+ * original sender, so this is safe to call from the admin thread.
+ */
+export async function listPendingMessages(clientId: string) {
+  const { data, error } = await db
+    .from("messages")
+    .select("*")
+    .eq("client_id", clientId)
+    .in("delivery_status", ["scheduled", "failed", "cancelled", "pending"])
+    .order("scheduled_at", { ascending: true, nullsFirst: false })
+    .order("created_at", { ascending: true });
   if (error) throw error;
   return (data ?? []) as Message[];
 }
