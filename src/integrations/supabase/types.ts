@@ -4400,6 +4400,86 @@ export type Database = {
         }
         Relationships: []
       }
+      jf_notification_attempts: {
+        Row: {
+          automation_id: string | null
+          channel: string
+          client_id: string | null
+          created_at: string
+          decision: string
+          id: string
+          member_id: string | null
+          metadata: Json
+          mode: string
+          reason: string | null
+          recipient: string | null
+          rendered_body: string | null
+          sms_log_id: string | null
+          trigger_key: string
+        }
+        Insert: {
+          automation_id?: string | null
+          channel: string
+          client_id?: string | null
+          created_at?: string
+          decision: string
+          id?: string
+          member_id?: string | null
+          metadata?: Json
+          mode: string
+          reason?: string | null
+          recipient?: string | null
+          rendered_body?: string | null
+          sms_log_id?: string | null
+          trigger_key: string
+        }
+        Update: {
+          automation_id?: string | null
+          channel?: string
+          client_id?: string | null
+          created_at?: string
+          decision?: string
+          id?: string
+          member_id?: string | null
+          metadata?: Json
+          mode?: string
+          reason?: string | null
+          recipient?: string | null
+          rendered_body?: string | null
+          sms_log_id?: string | null
+          trigger_key?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "jf_notification_attempts_automation_id_fkey"
+            columns: ["automation_id"]
+            isOneToOne: false
+            referencedRelation: "sms_automations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "jf_notification_attempts_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "jf_notification_attempts_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "app_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "jf_notification_attempts_sms_log_id_fkey"
+            columns: ["sms_log_id"]
+            isOneToOne: false
+            referencedRelation: "sms_log"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       jf_pending_signups: {
         Row: {
           created_at: string
