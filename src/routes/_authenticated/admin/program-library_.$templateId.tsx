@@ -62,6 +62,7 @@ function RowCell({
   const focusedRef = useRef(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastCommittedRef = useRef(stringify(value));
+  const inputRef = useRef<HTMLInputElement | null>(null);
 
   // Pull in remote changes only when the input isn't being edited.
   useEffect(() => {
@@ -79,7 +80,9 @@ function RowCell({
   };
 
   return (
+    <span className="group/cell relative inline-block w-full align-middle">
     <Input
+      ref={inputRef as any}
       className={className}
       placeholder={placeholder}
       inputMode={inputMode}
@@ -109,6 +112,27 @@ function RowCell({
         }
       }}
     />
+    {dataField ? (
+      <button
+        type="button"
+        tabIndex={-1}
+        title="Fill down (⌘/Ctrl + ↓)"
+        aria-label="Fill down"
+        onMouseDown={(e) => { e.preventDefault(); }}
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          // Commit any pending edit first so the source value is current.
+          if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
+          doCommit(local);
+          fillDownFromCell(inputRef.current, local);
+        }}
+        className="absolute -bottom-2 left-1/2 -translate-x-1/2 z-10 hidden group-hover/cell:flex items-center justify-center h-4 w-4 rounded-sm bg-primary text-primary-foreground shadow ring-1 ring-background hover:bg-primary/90"
+      >
+        <ChevronDown className="h-3 w-3" />
+      </button>
+    ) : null}
+    </span>
   );
 }
 
