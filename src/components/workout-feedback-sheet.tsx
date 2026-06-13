@@ -85,14 +85,23 @@ export function WorkoutFeedbackSheet({ open, onOpenChange, completionId, clientI
       pain_note: pain && painNote.trim() ? painNote.trim() : null,
       client_note: note.trim() ? note.trim() : null,
     };
-    // Upsert on completion_id so a stuck double-tap can't create dupes
-    // (DB also enforces UNIQUE on completion_id).
+    // INSERT only — never overwrite an existing submission. UNIQUE(completion_id)
+    // is the source of truth; on duplicate (23505) treat as "already submitted".
     const { error } = await (supabase as any)
       .from("pl_workout_feedback")
-      .upsert(payload, { onConflict: "completion_id" });
+      .insert(payload);
     if (error) {
+      const isDup =
+        (error as any).code === "23505" ||
+        /duplicate key|unique/i.test(String((error as any).message ?? ""));
       setSubmitting(false);
-      toast.error("Couldn't save feedback", { description: error.message });
+      if (isDup) {
+        toast.message("Feedback already submitted for this workout.");
+        onSubmitted?.();
+        onOpenChange(false);
+        return;
+      }
+      toast.error("Couldn't save feedback", { description: (error as any).message });
       return;
     }
     toast.success("Workout logged. Feedback sent to your coach.");
