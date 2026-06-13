@@ -143,7 +143,8 @@ export const listAcceptancesForVersion = createServerFn({ method: "GET" })
       .order("accepted_at", { ascending: false })
       .limit(1000);
     if (error) throw new Error(error.message);
-    return rows ?? [];
+    // Cast `inet` to string for serializability across the RPC boundary.
+    return ((rows ?? []) as any[]).map((r) => ({ ...r, ip_address: r.ip_address ? String(r.ip_address) : null })) as Array<Record<string, any>>;
   });
 
 // ----------------------------------------------------------------------------
