@@ -71,6 +71,8 @@ function HistoryPage() {
           <ArrowLeft className="mr-1 h-4 w-4" /> Back to programs
         </Link>
 
+        <WorkoutFeedbackSection clientId={clientId} />
+
         <section>
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">Exercise Set History</h2>
