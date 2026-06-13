@@ -271,6 +271,14 @@ export const listSubmissionReviews = createServerFn({ method: "POST" })
     if (data.source) q = q.eq("source_type", data.source);
     if (data.clientId) q = q.eq("client_id", data.clientId);
     if (data.formId) q = q.eq("form_id", data.formId);
+    if (data.priority) q = q.eq("priority", data.priority);
+    if (data.assignedCoachUserId === null) {
+      q = q.is("assigned_coach_user_id", null);
+    } else if (data.assignedCoachUserId) {
+      q = q.eq("assigned_coach_user_id", data.assignedCoachUserId);
+    }
+    if (data.dateFrom) q = q.gte("submitted_at", data.dateFrom);
+    if (data.dateTo) q = q.lte("submitted_at", data.dateTo);
 
     const { data: rows, error } = await q;
     if (error) throw error;
