@@ -45,11 +45,15 @@ export function ClientBlockView({
   block,
   selectedWeekIndex,
   onWeekChange,
+  selectedDayId,
+  onDayChange,
   mode = "client",
 }: {
   block: any;
   selectedWeekIndex: number | null;
   onWeekChange: (idx: number) => void;
+  selectedDayId?: string | null;
+  onDayChange?: (dayId: string) => void;
   mode?: Mode;
 }) {
   const blockId: string | null = block?.id ?? null;
@@ -138,20 +142,68 @@ export function ClientBlockView({
     return startOfDay(dt);
   };
 
-  // ── Mobile selected day index (in-memory; week change resets to today/0) ──
-  const [activeDayIdx, setActiveDayIdx] = useState(0);
-  useEffect(() => {
-    if (!days.length) { setActiveDayIdx(0); return; }
-    // Prefer today, then the first not-completed, then 0.
+  // ── Selected day (URL-persisted via parent). Falls back to today, then the
+  // first not-yet-completed day, then index 0. Invalid IDs fall back safely. ──
+  const activeDayIdx = useMemo(() => {
+    if (!days.length) return 0;
+    if (selectedDayId) {
+      const idx = days.findIndex((d: any) => d.id === selectedDayId);
+      if (idx >= 0) return idx;
+    }
     const tIdx = days.findIndex((d: any) => {
       const dd = dayDate(d);
       return !!dd && dd.getTime() === today.getTime();
     });
-    if (tIdx >= 0) { setActiveDayIdx(tIdx); return; }
+    if (tIdx >= 0) return tIdx;
     const firstOpen = days.findIndex((d: any) => !completionByDay.get(d.id)?.completed_at);
-    setActiveDayIdx(firstOpen >= 0 ? firstOpen : 0);
+    return firstOpen >= 0 ? firstOpen : 0;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [resolvedWeek?.id, days.length]);
+  }, [days, selectedDayId, completionByDay, today.getTime()]);
+
+  const selectDay = (dayId: string, idx: number) => {
+    onDayChange?.(dayId);
+    const el = document.getElementById(`cbv-day-${dayId}`);
+    el?.scrollIntoView({ behavior: "smooth", inline: "start", block: "nearest" });
+    void idx;
+  };
+
+  // Scroll the active day into view on mount / when activeDayIdx changes (mobile).
+  const carouselRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!days.length) return;
+    const d = days[activeDayIdx];
+    if (!d) return;
+    const el = document.getElementById(`cbv-day-${d.id}`);
+    if (el && carouselRef.current && window.innerWidth < 768) {
+      el.scrollIntoView({ behavior: "auto", inline: "start", block: "nearest" });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resolvedWeek?.id]);
+
+  // Observe which day is most-visible in the mobile carousel and sync the URL.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const root = carouselRef.current;
+    if (!root || !days.length) return;
+    if (window.innerWidth >= 768) return; // desktop scrolls horizontally too but no chip sync needed
+    const io = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((e) => e.isIntersecting)
+          .sort((a, b) => b.intersectionRatio - a.intersectionRatio);
+        const top = visible[0];
+        if (!top) return;
+        const id = (top.target as HTMLElement).dataset.dayId;
+        if (id && id !== days[activeDayIdx]?.id) {
+          onDayChange?.(id);
+        }
+      },
+      { root, threshold: [0.55, 0.75] },
+    );
+    const cards = root.querySelectorAll<HTMLElement>("[data-day-id]");
+    cards.forEach((c) => io.observe(c));
+    return () => io.disconnect();
+  }, [days, activeDayIdx, onDayChange]);
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -186,7 +238,7 @@ export function ClientBlockView({
   return (
     <section className="space-y-3">
       {/* Sticky week selector — sits below the app header */}
-      <div className="sticky top-[56px] z-20 -mx-3 border-b border-border bg-background/95 px-3 py-2 backdrop-blur md:top-[64px]">
+      <div className="sticky top-0 z-30 -mx-3 border-b border-border bg-background/95 px-3 py-2 backdrop-blur">
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex items-center gap-1">
             <Button
@@ -261,11 +313,7 @@ export function ClientBlockView({
                 <button
                   key={d.id}
                   type="button"
-                  onClick={() => {
-                    setActiveDayIdx(i);
-                    const el = document.getElementById(`cbv-day-${d.id}`);
-                    el?.scrollIntoView({ behavior: "smooth", inline: "start", block: "nearest" });
-                  }}
+                  onClick={() => selectDay(d.id, i)}
                   className={cn(
                     "shrink-0 rounded-full border px-2.5 py-1 text-xs font-semibold whitespace-nowrap",
                     activeDayIdx === i
@@ -291,13 +339,14 @@ export function ClientBlockView({
         </Card>
       ) : (
         <div
+          ref={carouselRef}
           className={cn(
             // Mobile = snap carousel, one day mostly fills viewport with a peek.
             // md+   = horizontal scroll of side-by-side columns.
             "-mx-3 flex snap-x snap-mandatory gap-3 overflow-x-auto px-3 pb-6",
             "md:snap-none",
-            // Safe-area bottom padding so floating bottom nav never covers content.
-            "pb-[max(env(safe-area-inset-bottom),24px)]",
+            // Clearance so the fixed mobile bottom nav never covers the final card.
+            "pb-[calc(var(--bottom-nav-clearance,0px)+env(safe-area-inset-bottom)+16px)]",
           )}
           style={{ scrollPaddingLeft: 12, scrollPaddingRight: 12 }}
         >
@@ -340,6 +389,7 @@ export function ClientBlockView({
               <div
                 key={d.id}
                 id={`cbv-day-${d.id}`}
+                data-day-id={d.id}
                 className={cn(
                   "flex snap-start flex-col rounded-lg border bg-card",
                   // Mobile: ~85vw per card with a small peek of the next day.
@@ -350,7 +400,7 @@ export function ClientBlockView({
                 )}
               >
                 {/* Sticky day header inside the column */}
-                <div className="sticky top-0 z-10 rounded-t-lg border-b border-border bg-card/95 p-3 backdrop-blur">
+                <div className="sticky top-[64px] z-10 rounded-t-lg border-b border-border bg-card/95 p-3 backdrop-blur">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
