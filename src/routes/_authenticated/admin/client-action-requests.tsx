@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
@@ -21,10 +21,18 @@ import {
 import { ClientActionRequestComposer } from "@/components/client-action-request-composer";
 
 export const Route = createFileRoute("/_authenticated/admin/client-action-requests")({
-  component: AdminClientActionRequests,
+  component: ClientActionRequestsRedirect,
 });
 
-function AdminClientActionRequests() {
+function ClientActionRequestsRedirect() {
+  const navigate = useNavigate();
+  useEffect(() => {
+    navigate({ to: "/admin/coaching", search: { tab: "requests" } as any, replace: true });
+  }, [navigate]);
+  return null;
+}
+
+export function AdminClientActionRequests({ embedded = false }: { embedded?: boolean } = {}) {
   const [tab, setTab] = useState<string>("open");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [composerOpen, setComposerOpen] = useState(false);
@@ -40,7 +48,7 @@ function AdminClientActionRequests() {
 
   return (
     <>
-      <PageHeader
+      {!embedded && <PageHeader
         title="Client Action Requests"
         subtitle="Send forms, links, and files. Pops up for the client until they confirm complete."
         actions={
@@ -48,7 +56,14 @@ function AdminClientActionRequests() {
             <Plus className="mr-1 h-4 w-4" /> New Action Request
           </Button>
         }
-      />
+      />}
+      {embedded && (
+        <div className="flex justify-end px-4 pt-4 md:px-6">
+          <Button onClick={() => setComposerOpen(true)} className="bg-gradient-primary font-bold">
+            <Plus className="mr-1 h-4 w-4" /> New Action Request
+          </Button>
+        </div>
+      )}
       <div className="grid gap-4 p-4 md:grid-cols-[360px_1fr] md:p-6">
         <div>
           <Tabs value={tab} onValueChange={(v) => { setTab(v); setSelectedId(null); }}>
