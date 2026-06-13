@@ -1233,7 +1233,8 @@ export async function applyTemplateToClient(opts: { templateId: string; clientId
   if (tpl.template_type === "block" && payload?.schema_version === 2 && Array.isArray(payload.blocks)) {
     const { toAssignmentBlocks } = await import("@/lib/pl-template-blocks");
     const selectedIds = (opts as any).selectedBlockIds as string[] | undefined;
-    const assignBlocks = toAssignmentBlocks(payload, { selectedIds });
+    const startFromId = (opts as any).startFromBlockId as string | null | undefined;
+    const assignBlocks = toAssignmentBlocks(payload, { selectedIds, startFromId });
     if (assignBlocks.length > 1) {
       // Multi-block standalone: wrap in a new prep so the blocks group together.
       const prep = await createPrep({

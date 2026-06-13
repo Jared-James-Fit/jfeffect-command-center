@@ -46,6 +46,7 @@ import {
   purgeTrashedBlock,
   cloneTemplateBlock,
   BLOCK_PHASE_OPTIONS,
+  isPayloadInRecovery,
   type TemplatePayloadV2,
   type TemplateBlockV2,
 } from "@/lib/pl-template-blocks";
@@ -478,13 +479,28 @@ function TemplateEditor() {
   };
 
   const autosaveValue = useMemo(() => ({ meta, payload }), [meta, payload]);
+  // Recovery gate: when the normalized payload is in __recovery mode, the
+  // raw original payload is malformed. Block autosave so we never overwrite
+  // it with an empty v2 shell. The structure editor also disables
+  // destructive ops while recovery is active.
+  const isRecovery = useMemo(() => {
+    if (!payload) return false;
+    const type = (tpl as any)?.template_type;
+    if (type !== "block" && type !== "full_prep") return false;
+    try {
+      return isPayloadInRecovery(
+        normalizeTemplatePayload(payload, { templateType: type, templateId }),
+      );
+    } catch { return false; }
+  }, [payload, tpl, templateId]);
   const autosave = useAutosave({
     key: `template:${templateId}:editor`,
     value: autosaveValue,
     delay: 8000,
-    enabled: !!meta && !!payload && hydratedRef.current && dirty,
+    enabled: !!meta && !!payload && hydratedRef.current && dirty && !isRecovery,
     onSave: async ({ meta: m, payload: p }) => {
       if (!m || !p) return;
+      if (isRecovery) return; // belt-and-braces: never autosave recovery state
       await persist(m, p);
     },
   });
@@ -829,13 +845,6 @@ function StructureEditor({ type, payload, setPayload, exercises, compact, templa
   );
 }
 
-function FullPrepEditor({ payload, setPayload, exercises, compact }: any) {
-  // Retained for backward-compat; the active editor path now goes through
-  // MultiBlockStructureEditor for both `block` and `full_prep` template types.
-  void payload; void setPayload; void exercises; void compact;
-  return null as any;
-}
-
 // ---------- Multi-block (v2 payload) structure editor -----------------------
 function MultiBlockStructureEditor({ type, payload, setPayload, exercises, compact, templateId }: {
   type: "block" | "full_prep" | string;
@@ -851,6 +860,7 @@ function MultiBlockStructureEditor({ type, payload, setPayload, exercises, compa
     () => normalizeTemplatePayload(payload, { templateType: type, templateId }),
     [payload, type, templateId],
   );
+  const inRecovery = isPayloadInRecovery(v2);
   const active = getActiveTemplateBlocks(v2);
   const archived = getArchivedTemplateBlocks(v2);
   const trashed = getTrashedTemplateBlocks(v2);
@@ -866,6 +876,11 @@ function MultiBlockStructureEditor({ type, payload, setPayload, exercises, compa
     navigate({ search: (prev: any) => ({ ...prev, block: id }), replace: true } as any);
   };
   const commit = (nextV2: TemplatePayloadV2) => {
+    if (inRecovery) {
+      // eslint-disable-next-line no-console
+      console.warn("[template-builder] mutation blocked: payload in recovery mode");
+      return;
+    }
     try {
       setPayload(serializeTemplatePayload(nextV2));
     } catch (e: any) {
@@ -969,13 +984,32 @@ function MultiBlockStructureEditor({ type, payload, setPayload, exercises, compa
       )}
 
       {/* Program overview */}
+      {inRecovery && (
+        <Card className="border-amber-500/50 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-300">
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            <div className="space-y-1">
+              <div className="font-semibold">This template payload is malformed.</div>
+              <div>
+                The raw payload has been preserved untouched. Autosave and all
+                destructive block operations (add, archive, trash, reorder,
+                purge, assignment) are disabled until an admin reviews and
+                explicitly confirms a recovery action.
+              </div>
+              <div className="opacity-80">
+                Reason: {String((v2 as any).__recovery?.reason || "Unknown")}
+              </div>
+            </div>
+          </div>
+        </Card>
+      )}
       <Card className="flex flex-wrap items-center gap-3 p-2 text-xs">
         <span className="font-bold uppercase tracking-wide text-muted-foreground">Program</span>
         <span>{active.length} active block{active.length === 1 ? "" : "s"}</span>
         {archived.length > 0 && <span className="text-muted-foreground">· {archived.length} archived</span>}
         {trashed.length > 0 && <span className="text-muted-foreground">· {trashed.length} in trash</span>}
         <span className="ml-auto" />
-        <Button size="sm" variant="outline" className="h-7" onClick={handleAddBlock}>
+        <Button size="sm" variant="outline" className="h-7" onClick={handleAddBlock} disabled={inRecovery}>
           <Plus className="mr-1 h-3 w-3" /> Add block
         </Button>
       </Card>
@@ -1085,48 +1119,6 @@ function MultiBlockStructureEditor({ type, payload, setPayload, exercises, compa
           Add a block to start building this program.
         </Card>
       )}
-    </div>
-  );
-}
-
-function _LegacyFullPrepEditor({ payload, setPayload, exercises, compact }: any) {
-  const prep = payload.prep || {};
-  const blocks = payload.blocks_data || [];
-  const setPrep = (patch: any) => setPayload({ ...payload, prep: { ...prep, ...patch } });
-  const setBlocks = (b: any[]) => setPayload({ ...payload, blocks_data: b });
-  return (
-    <div className="space-y-4">
-      <Card className="p-4 max-w-2xl">
-        <div className="mb-2 text-sm font-bold">Prep details</div>
-        <div className="grid grid-cols-2 gap-2">
-          <div><Label>Event name</Label><Input value={prep.event_name ?? ""} onChange={(e) => setPrep({ event_name: e.target.value || null })} /></div>
-          <div><Label>Event date</Label><Input type="date" value={prep.event_date ?? ""} onChange={(e) => setPrep({ event_date: e.target.value || null })} /></div>
-          <div><Label>Goal type</Label><Input value={prep.goal_type ?? ""} onChange={(e) => setPrep({ goal_type: e.target.value })} /></div>
-          <div><Label>Total weeks</Label><Input type="number" inputMode="numeric" value={prep.total_weeks ?? ""} onChange={(e) => setPrep({ total_weeks: parseInt(e.target.value) || null })} /></div>
-        </div>
-      </Card>
-
-      <div className="flex items-center justify-between">
-        <h3 className="text-sm font-bold">Blocks</h3>
-        <Button size="sm" onClick={() => setBlocks([...blocks, { name: `Block ${blocks.length + 1}`, training_focus: "", weeks_data: [] }])}>
-          <Plus className="mr-1 h-3 w-3" /> Add block
-        </Button>
-      </div>
-      {blocks.map((b: any, i: number) => (
-        <Card key={i} className="p-3 space-y-2">
-          <div className="flex items-center gap-2">
-            <Input className="max-w-xs font-bold" value={b.name ?? ""} onChange={(e) => { const copy = [...blocks]; copy[i] = { ...b, name: e.target.value }; setBlocks(copy); }} />
-            <Input className="max-w-xs" placeholder="Focus" value={b.training_focus ?? ""} onChange={(e) => { const copy = [...blocks]; copy[i] = { ...b, training_focus: e.target.value }; setBlocks(copy); }} />
-            <Button size="icon" variant="ghost" className="ml-auto text-destructive" onClick={() => { if (confirm("Remove block?")) setBlocks(blocks.filter((_: any, j: number) => j !== i)); }}><Trash2 className="h-4 w-4" /></Button>
-          </div>
-          <BlockPayloadEditor
-            weeksData={b.weeks_data || []}
-            setWeeksData={(wd) => { const copy = [...blocks]; copy[i] = { ...b, weeks_data: wd }; setBlocks(copy); }}
-            exercises={exercises}
-            compact={compact}
-          />
-        </Card>
-      ))}
     </div>
   );
 }

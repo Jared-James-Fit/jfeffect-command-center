@@ -54,8 +54,13 @@ export function QuickAssignTemplateDialog({ open, onOpenChange, clientId, client
     return getActiveTemplateBlocks(normalizeTemplatePayload(p, { templateType: "block" }));
   })();
   const [selectedBlockIds, setSelectedBlockIds] = useState<string[]>([]);
+  type AssignMode = "entire" | "selected" | "start_from";
+  const [assignMode, setAssignMode] = useState<AssignMode>("entire");
+  const [startFromBlockId, setStartFromBlockId] = useState<string>("");
   useEffect(() => {
     setSelectedBlockIds(v2Blocks.map((b) => b.id));
+    setAssignMode("entire");
+    setStartFromBlockId(v2Blocks[0]?.id ?? "");
   }, [templateId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const { data: existingBlocks = [] } = useQuery({
@@ -92,6 +97,20 @@ export function QuickAssignTemplateDialog({ open, onOpenChange, clientId, client
       const placement = selected?.template_type === "full_prep"
         ? { mode: "new_prep" as const, prep: {} }
         : { mode: "standalone_block" as const };
+      // Resolve the per-mode selected/start-from intent for v2 multi-block templates.
+      let effectiveSelectedIds: string[] | undefined;
+      let effectiveStartFromId: string | null | undefined;
+      if (v2Blocks.length > 0) {
+        if (assignMode === "entire") {
+          effectiveSelectedIds = v2Blocks.map((b) => b.id);
+        } else if (assignMode === "selected") {
+          effectiveSelectedIds = selectedBlockIds;
+        } else {
+          // start_from: assign chosen block + every active block after it
+          effectiveStartFromId = startFromBlockId || v2Blocks[0]?.id || null;
+          effectiveSelectedIds = v2Blocks.map((b) => b.id);
+        }
+      }
       await runJob(
         {
           title: "Assigning program template",
@@ -110,7 +129,8 @@ export function QuickAssignTemplateDialog({ open, onOpenChange, clientId, client
             clientVisible: visible,
             startDate: startDate || null,
             endDate: endDate || null,
-            ...(v2Blocks.length > 0 ? { selectedBlockIds } as any : {}),
+            ...(effectiveSelectedIds ? { selectedBlockIds: effectiveSelectedIds } as any : {}),
+            ...(effectiveStartFromId ? { startFromBlockId: effectiveStartFromId } as any : {}),
           } as any);
           job.completeStep(1);
           qc.invalidateQueries({ queryKey: ["pl-blocks", clientId] });
@@ -151,37 +171,91 @@ export function QuickAssignTemplateDialog({ open, onOpenChange, clientId, client
               </SelectContent>
             </Select>
           </div>
-          {v2Blocks.length > 1 && (
-            <div className="rounded-md border border-border bg-secondary/20 p-2">
-              <div className="mb-1 flex items-center justify-between">
-                <Label className="text-xs">Blocks to assign</Label>
-                <div className="flex gap-1">
-                  <button type="button" className="text-[10px] underline" onClick={() => setSelectedBlockIds(v2Blocks.map((b) => b.id))}>All</button>
-                  <button type="button" className="text-[10px] underline" onClick={() => setSelectedBlockIds([])}>None</button>
+          {v2Blocks.length > 1 && (() => {
+            // Compute the preview of which blocks will be assigned given the mode.
+            let preview = v2Blocks;
+            if (assignMode === "selected") preview = v2Blocks.filter((b) => selectedBlockIds.includes(b.id));
+            if (assignMode === "start_from") {
+              const idx = v2Blocks.findIndex((b) => b.id === startFromBlockId);
+              preview = idx >= 0 ? v2Blocks.slice(idx) : v2Blocks;
+            }
+            const totalWeeks = preview.reduce((n, b) => n + (b.weeks?.length ?? 0), 0);
+            return (
+              <div className="rounded-md border border-border bg-secondary/20 p-2">
+                <Label className="text-xs">Assignment mode</Label>
+                <div className="mt-1 grid grid-cols-3 gap-1 rounded-md border border-border bg-background p-0.5 text-[11px]">
+                  {(["entire","selected","start_from"] as AssignMode[]).map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => setAssignMode(m)}
+                      className={
+                        "rounded px-2 py-1 " +
+                        (assignMode === m ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-secondary")
+                      }
+                    >
+                      {m === "entire" ? "Entire program" : m === "selected" ? "Selected blocks" : "Start from block"}
+                    </button>
+                  ))}
+                </div>
+
+                {assignMode === "selected" && (
+                  <div className="mt-2">
+                    <div className="mb-1 flex items-center justify-between">
+                      <Label className="text-[10px] uppercase tracking-wide text-muted-foreground">Pick blocks</Label>
+                      <div className="flex gap-1">
+                        <button type="button" className="text-[10px] underline" onClick={() => setSelectedBlockIds(v2Blocks.map((b) => b.id))}>All</button>
+                        <button type="button" className="text-[10px] underline" onClick={() => setSelectedBlockIds([])}>None</button>
+                      </div>
+                    </div>
+                    <ul className="space-y-1">
+                      {v2Blocks.map((b) => (
+                        <li key={b.id}>
+                          <label className="flex cursor-pointer items-center gap-2 text-xs">
+                            <input
+                              type="checkbox"
+                              checked={selectedBlockIds.includes(b.id)}
+                              onChange={(e) =>
+                                setSelectedBlockIds((prev) =>
+                                  e.target.checked ? [...prev, b.id] : prev.filter((id) => id !== b.id),
+                                )
+                              }
+                            />
+                            <span className="font-medium">{b.name}</span>
+                            <span className="ml-auto text-[10px] text-muted-foreground">{b.weeks?.length ?? 0}w</span>
+                          </label>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {assignMode === "start_from" && (
+                  <div className="mt-2">
+                    <Label className="text-[10px] uppercase tracking-wide text-muted-foreground">Start at</Label>
+                    <Select value={startFromBlockId} onValueChange={setStartFromBlockId}>
+                      <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Pick a block" /></SelectTrigger>
+                      <SelectContent>
+                        {v2Blocks.map((b) => (
+                          <SelectItem key={b.id} value={b.id} className="text-xs">
+                            {b.name} · {b.weeks?.length ?? 0}w
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+                <div className="mt-2 rounded-md bg-background/60 p-1.5 text-[10px] text-muted-foreground">
+                  Preview: <span className="font-medium text-foreground">{preview.length}</span> of {v2Blocks.length} block{v2Blocks.length === 1 ? "" : "s"}
+                  {totalWeeks > 0 && <> · {totalWeeks} week{totalWeeks === 1 ? "" : "s"}</>}
+                  {preview.length > 0 && (
+                    <> · {preview.map((b) => b.name).join(" → ")}</>
+                  )}
                 </div>
               </div>
-              <ul className="space-y-1">
-                {v2Blocks.map((b) => (
-                  <li key={b.id}>
-                    <label className="flex cursor-pointer items-center gap-2 text-xs">
-                      <input
-                        type="checkbox"
-                        checked={selectedBlockIds.includes(b.id)}
-                        onChange={(e) => {
-                          setSelectedBlockIds((prev) =>
-                            e.target.checked ? [...prev, b.id] : prev.filter((id) => id !== b.id),
-                          );
-                        }}
-                      />
-                      <span className="font-medium">{b.name}</span>
-                      <span className="ml-auto text-[10px] text-muted-foreground">{b.weeks?.length ?? 0}w</span>
-                    </label>
-                  </li>
-                ))}
-              </ul>
-              <p className="mt-1 text-[10px] text-muted-foreground">{selectedBlockIds.length} of {v2Blocks.length} block{v2Blocks.length === 1 ? "" : "s"} selected</p>
-            </div>
-          )}
+            );
+          })()}
           <div className="grid grid-cols-2 gap-2">
             <div>
               <Label className="text-xs">Start date</Label>
