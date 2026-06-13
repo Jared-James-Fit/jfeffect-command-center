@@ -18,6 +18,8 @@ import {
 } from "@/routes/_authenticated/admin/program-library_.$templateId";
 import { BlockWarmupPanel } from "@/components/block-warmup-panel";
 import { AutoSchedulePanel } from "@/components/auto-schedule-panel";
+import { usePersistentUndoStack } from "@/lib/persistent-undo";
+import { useScrollRestoration } from "@/lib/scroll-restore";
 
 export const Route = createFileRoute("/_authenticated/admin/blocks/$blockId")({ component: BlockEditor });
 
@@ -209,21 +211,21 @@ function BlockEditor() {
   const originalTreeRef = useRef<any>(null);
   const hydratedRef = useRef(false);
 
-  // Undo / redo history
-  const histRef = useRef<string[]>([]);
-  const futureRef = useRef<string[]>([]);
+  // Durable per-block undo/redo. Baseline = the block's server `updated_at`;
+  // mismatches drop stale history without applying it. See persistent-undo.
+  const undoStack = usePersistentUndoStack({
+    scope: `block:${blockId}`,
+    baseline: (tree?.block as any)?.updated_at ?? null,
+    enabled: hydratedRef.current,
+  });
   const lastPushTs = useRef(0);
-  const [, bumpHist] = useState(0);
 
   useEffect(() => {
     if (tree && !hydratedRef.current) {
       originalTreeRef.current = tree;
       setName(tree.block.name ?? "");
       setPayload(treeToPayload(tree));
-      histRef.current = [];
-      futureRef.current = [];
       hydratedRef.current = true;
-      bumpHist((n) => n + 1);
     }
   }, [tree]);
 
@@ -231,33 +233,28 @@ function BlockEditor() {
     if (!opts?.skipHistory && payload != null) {
       const now = Date.now();
       if (now - lastPushTs.current > 600) {
-        histRef.current.push(JSON.stringify(payload));
-        if (histRef.current.length > 100) histRef.current.shift();
+        undoStack.pushSnapshot(JSON.stringify(payload));
       }
       lastPushTs.current = now;
-      futureRef.current = [];
-      bumpHist((n) => n + 1);
     }
     setPayload(next);
     setDirty(true);
   };
   const undo = () => {
-    const prev = histRef.current.pop();
+    if (payload == null) return;
+    const prev = undoStack.undo(JSON.stringify(payload));
     if (!prev) return;
-    futureRef.current.push(JSON.stringify(payload));
     setPayload(JSON.parse(prev));
     setDirty(true);
     lastPushTs.current = 0;
-    bumpHist((n) => n + 1);
   };
   const redo = () => {
-    const next = futureRef.current.pop();
+    if (payload == null) return;
+    const next = undoStack.redo(JSON.stringify(payload));
     if (!next) return;
-    histRef.current.push(JSON.stringify(payload));
     setPayload(JSON.parse(next));
     setDirty(true);
     lastPushTs.current = 0;
-    bumpHist((n) => n + 1);
   };
 
   const persist = async () => {
