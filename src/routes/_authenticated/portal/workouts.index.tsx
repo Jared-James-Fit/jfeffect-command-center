@@ -16,6 +16,7 @@ import { format, parseISO } from "date-fns";
 import { TrainingScheduleCard } from "@/components/training-schedule-card";
 import { BlockSummaryCard } from "@/components/block-summary-card";
 import { BlockWeekColumns } from "@/components/block-week-columns";
+import { ClientBlockView } from "@/components/client-block-view";
 import { SmartTodayCard } from "@/components/smart-today-card";
 import { FaqWidget } from "@/components/faq-widget";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -27,6 +28,8 @@ import { ProgressComparison } from "@/components/progress-comparison";
 export const Route = createFileRoute("/_authenticated/portal/workouts/")({
   validateSearch: (s: Record<string, unknown>) => ({
     view: s.view === "block" || s.view === "day" ? (s.view as "block" | "day") : undefined,
+    week: typeof s.week === "string" ? parseInt(s.week, 10) || undefined
+      : typeof s.week === "number" ? s.week : undefined,
   }),
   component: WorkoutsPage,
 });
@@ -206,7 +209,7 @@ function WorkoutsPage() {
             <TabsList className="grid w-full grid-cols-4">
               <TabsTrigger value="today" className="text-xs sm:text-sm"><Sun className="mr-1 h-3.5 w-3.5" /><span className="hidden sm:inline">Today</span><span className="sm:hidden">Today</span></TabsTrigger>
               <TabsTrigger value="all" className="text-xs sm:text-sm"><ListChecks className="mr-1 h-3.5 w-3.5" /><span className="hidden sm:inline">All Workouts</span><span className="sm:hidden">All</span></TabsTrigger>
-              <TabsTrigger value="calendar" className="text-xs sm:text-sm"><CalendarIcon className="mr-1 h-3.5 w-3.5" /><span className="hidden sm:inline">Calendar</span><span className="sm:hidden">Cal</span></TabsTrigger>
+              <TabsTrigger value="calendar" className="text-xs sm:text-sm"><CalendarIcon className="mr-1 h-3.5 w-3.5" /><span className="hidden sm:inline">Block</span><span className="sm:hidden">Block</span></TabsTrigger>
               <TabsTrigger value="history" className="text-xs sm:text-sm"><History className="mr-1 h-3.5 w-3.5" /><span className="hidden sm:inline">History</span><span className="sm:hidden">Hist</span></TabsTrigger>
             </TabsList>
 
@@ -235,14 +238,33 @@ function WorkoutsPage() {
 
             <TabsContent value="calendar" className="space-y-4">
               <div id="client-block-view" className="scroll-mt-24" />
-              {client?.id && (
-                <WeekScheduleView clientId={client.id} blockId={currentBlockId} mode="client" />
-              )}
-              {currentGroup && (
-                <Card className="p-3">
-                  <div className="mb-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">Block overview</div>
-                  <BlockWeekColumns block={currentGroup.block} weeks={[...currentGroup.weeks.values()]} mode="client" />
+              {currentGroup ? (
+                <ClientBlockView
+                  block={currentGroup.block}
+                  selectedWeekIndex={search?.week ?? null}
+                  onWeekChange={(idx) => {
+                    navigate({
+                      search: (prev: any) => ({ ...prev, view: "block", week: idx }),
+                      replace: true,
+                    });
+                  }}
+                  mode="client"
+                />
+              ) : (
+                <Card className="p-6 text-sm text-muted-foreground">
+                  No assigned block.
                 </Card>
+              )}
+              {client?.id && (
+                <details className="rounded-md border border-border bg-card p-3 text-xs text-muted-foreground">
+                  <summary className="cursor-pointer font-semibold uppercase tracking-wide">Calendar view</summary>
+                  <div className="pt-3 space-y-3">
+                    <WeekScheduleView clientId={client.id} blockId={currentBlockId} mode="client" />
+                    {currentGroup && (
+                      <BlockWeekColumns block={currentGroup.block} weeks={[...currentGroup.weeks.values()]} mode="client" />
+                    )}
+                  </div>
+                </details>
               )}
             </TabsContent>
 
