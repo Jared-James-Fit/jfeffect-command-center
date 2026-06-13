@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { createClient } from "@supabase/supabase-js";
-import { stripeFetch } from "@/lib/stripe.server";
+import { stripeFetch, getStripeKeyForMode, type StripeMode } from "@/lib/stripe.server";
 import {
   buildPromoRowFromSession,
   fetchExpandedCheckoutSession,
