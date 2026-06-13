@@ -185,7 +185,10 @@ function TemplateEditor() {
   const { data: exercises = [] } = useQuery({
     queryKey: ["exercises-min"],
     queryFn: async () =>
-      (await supabase.from("exercises").select("id, name, muscle_group, category, tags").order("name")).data ?? [],
+      (await supabase
+        .from("exercises")
+        .select("id, name, muscle_group, category, tags, exercise_category, is_competition_lift, competition_lift_type")
+        .order("name")).data ?? [],
   });
 
   // local working state
@@ -652,8 +655,36 @@ function FullPrepEditor({ payload, setPayload, exercises, compact }: any) {
 }
 
 export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact }: { weeksData: any[]; setWeeksData: (wd: any[]) => void; exercises: any[]; compact?: boolean }) {
-  const [activeIdx, setActiveIdx] = useState(0);
-  const [view, setView] = useState<"block" | "week">("block");
+  // Persist the coach's editing position (active week + view mode) across
+  // refreshes via localStorage so they return to exactly where they left off.
+  const POS_KEY = "pb.block-editor.pos:v1";
+  const readPos = (): { view: "block" | "week"; activeIdx: number } => {
+    if (typeof window === "undefined") return { view: "block", activeIdx: 0 };
+    try {
+      const raw = window.localStorage.getItem(POS_KEY);
+      if (!raw) return { view: "block", activeIdx: 0 };
+      const p = JSON.parse(raw);
+      return {
+        view: p.view === "week" ? "week" : "block",
+        activeIdx: Number.isFinite(p.activeIdx) ? p.activeIdx : 0,
+      };
+    } catch { return { view: "block", activeIdx: 0 }; }
+  };
+  const initialPos = readPos();
+  const [activeIdx, _setActiveIdx] = useState(initialPos.activeIdx);
+  const [view, _setView] = useState<"block" | "week">(initialPos.view);
+  const writePos = (next: { view: "block" | "week"; activeIdx: number }) => {
+    if (typeof window === "undefined") return;
+    try { window.localStorage.setItem(POS_KEY, JSON.stringify(next)); } catch {}
+  };
+  const setActiveIdx = (idx: number) => { _setActiveIdx(idx); writePos({ view, activeIdx: idx }); };
+  const setView = (v: "block" | "week") => { _setView(v); writePos({ view: v, activeIdx }); };
+  // Clamp activeIdx if weeks were removed since last visit.
+  useEffect(() => {
+    if (weeksData.length === 0) return;
+    if (activeIdx >= weeksData.length) _setActiveIdx(weeksData.length - 1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [weeksData.length]);
   const { clientId: ctxClientId, blockId: ctxBlockId } = useClientMaxesCtx();
   const weekStats = useMemo(() => weeksData.map((w: any) => {
     const days = w.days || [];
@@ -725,9 +756,40 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
             <CalendarRange className="h-3 w-3" /> Weekly
           </button>
         </div>
+        {/* Active editing context — always visible while scrolling deep into a week */}
+        {view === "week" && weeksData[activeIdx] && (() => {
+          const aw = weeksData[activeIdx];
+          const s = weekStats[activeIdx] ?? { days: 0, rows: 0, minutes: 0 };
+          return (
+            <div className="inline-flex items-center gap-1.5 rounded-md border border-primary/40 bg-primary/5 px-2 py-1 text-[11px] text-foreground">
+              <span className="rounded bg-primary px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-primary-foreground">
+                Editing · Week {aw.week_index}
+              </span>
+              <span className="text-muted-foreground">
+                {s.days}d · {s.rows} rows · Est {fmtDur(s.minutes)}
+              </span>
+              {aw.notes ? (
+                <span className="hidden md:inline max-w-[220px] truncate italic text-muted-foreground" title={aw.notes}>
+                  “{aw.notes}”
+                </span>
+              ) : null}
+            </div>
+          );
+        })()}
         {view === "block" && weeksData.length > 1 && (
           <Button size="sm" variant="outline" onClick={copyWeek1ToAll}>
             <Copy className="mr-1 h-3 w-3" /> Copy Week 1 → all weeks
+          </Button>
+        )}
+        {view === "week" && weeksData[activeIdx] && (
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-7 text-[11px]"
+            onClick={() => copyWeekToFuture(activeIdx)}
+            title="Copy this week's prescriptions into every later week"
+          >
+            <ArrowRight className="mr-1 h-3 w-3" /> Apply → future
           </Button>
         )}
         <BlockMaxesButton clientId={ctxClientId} blockId={ctxBlockId} />
