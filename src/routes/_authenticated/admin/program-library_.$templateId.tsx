@@ -952,7 +952,9 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
       ) : (
         <div className="space-y-3">
           {weeksData.length > 0 && (
-            <div className="sticky top-12 z-10 -mx-2 overflow-x-auto border-b border-primary/20 bg-[color-mix(in_oklab,var(--primary)_6%,var(--background))] px-2 py-2 backdrop-blur">
+            // Quick-jump strip: NOT sticky. The frozen global Week overlay
+            // is gone; each column's own Week header handles sticky behaviour.
+            <div className="-mx-2 overflow-x-auto border-b border-primary/20 bg-[color-mix(in_oklab,var(--primary)_6%,var(--background))] px-2 py-2">
               <div className="flex w-max items-center gap-1.5">
                 <span className="mr-1 shrink-0 text-[11px] font-semibold uppercase tracking-wide text-primary">
                   Full Block · {weeksData.length} week{weeksData.length === 1 ? "" : "s"}
@@ -995,7 +997,12 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
                     style={{ borderLeftWidth: 6, borderLeftColor: "var(--primary)" }}
                   >
                     <div className={cn(
-                      "sticky top-[96px] z-[9] flex flex-wrap items-center gap-1.5 border-b border-primary/20 bg-[color-mix(in_oklab,var(--primary)_8%,var(--card))] shadow-sm",
+                      // Each column owns its own sticky Week header. It sticks
+                      // directly below the EditorChrome toolbar (sticky top-0,
+                      // ~42px) — no global Week bar above it. The per-column
+                      // sticky is scoped to its own card so headers never
+                      // float over a neighbouring column.
+                      "sticky top-[44px] z-[9] flex flex-wrap items-center gap-1.5 border-b border-primary/20 bg-[color-mix(in_oklab,var(--primary)_8%,var(--card))] shadow-sm",
                       compact ? "px-2 py-1" : "px-3 py-2",
                     )}>
                       <span className={cn("inline-flex items-center rounded-md bg-primary px-2 text-[10px] font-bold uppercase tracking-wide text-primary-foreground", compact ? "h-5" : "h-6 text-[11px]")}>
