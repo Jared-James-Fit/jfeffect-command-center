@@ -2,7 +2,7 @@ import {
   LayoutDashboard, Users, CreditCard, AlertCircle, FolderOpen, Calendar, Megaphone, UserPlus,
   HelpCircle, ChefHat, BookOpen, Settings, ListChecks, KeyRound,
   Link2 as LinkIcon, BarChart3, RefreshCw, ShoppingBag, Tag, MessagesSquare, Trophy, ShieldCheck,
-  Rocket, Bell, Activity,
+  Rocket, Bell, Activity, PowerOff,
 } from "lucide-react";
 import type { NavItem } from "@/components/app-shell";
 
@@ -42,6 +42,7 @@ export const membershipNav: NavItem[] = [
   { to: "/admin/membership/challenges", label: "Challenges", icon: Trophy, group: "Community" },
   // SETTINGS
   { to: "/admin/settings", label: "Membership Settings", icon: Settings, group: "Settings" },
+  { to: "/admin/membership/checkout-settings", label: "Checkout Kill-Switch", icon: PowerOff, group: "Settings" },
   { to: "/admin/membership/access-checklist", label: "Access Checklist", icon: ShieldCheck, group: "Settings" },
   { to: "/admin/membership/refund-policy", label: "Refund / Cancellation Policy", icon: HelpCircle, group: "Settings" },
   { to: "/admin/staff", label: "Staff & Media Manager", icon: UserPlus, group: "Settings" },
