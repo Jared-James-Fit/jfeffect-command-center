@@ -64,7 +64,7 @@ function FileTypeIcon({ mime, className = "h-5 w-5" }: { mime: string | null; cl
   return <FileIcon className={className} />;
 }
 
-function ResourceLibrary() {
+export function ResourceLibrary({ embedded = false }: { embedded?: boolean } = {}) {
   const qc = useQueryClient();
   const foldersFn = useServerFn(listFolders);
   const resourcesFn = useServerFn(listResources);
@@ -180,7 +180,7 @@ function ResourceLibrary() {
 
   return (
     <div className="space-y-4">
-      <PageHeader
+      {!embedded && <PageHeader
         title="Resource Library"
         subtitle="Private files for coaching, admin, and website work."
         actions={
@@ -197,7 +197,7 @@ function ResourceLibrary() {
             </label>
           </div>
         }
-      />
+      />}
 
       <div className="grid gap-4 lg:grid-cols-[260px_1fr]">
         {/* Sidebar */}
