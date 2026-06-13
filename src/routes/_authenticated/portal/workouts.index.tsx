@@ -101,33 +101,73 @@ function WorkoutsPage() {
   useEffect(() => {
     try { window.localStorage.setItem(STORAGE_KEY, viewMode); } catch {}
   }, [viewMode]);
+  // Per-view scroll memory, scoped to this client + block + view, session only.
+  const scrollKey = (v: "day" | "block") =>
+    `workouts-${v}-view-scroll:${client?.id ?? "anon"}:${currentBlockId ?? "none"}`;
+  const saveScroll = (v: "day" | "block") => {
+    try { sessionStorage.setItem(scrollKey(v), String(window.scrollY)); } catch {}
+  };
+  const restoreScroll = (v: "day" | "block") => {
+    try {
+      const raw = sessionStorage.getItem(scrollKey(v));
+      if (raw == null) return false;
+      const y = parseInt(raw, 10);
+      if (Number.isFinite(y)) {
+        window.scrollTo({ top: y, behavior: "auto" });
+        return true;
+      }
+    } catch {}
+    return false;
+  };
   const setViewMode = (v: "day" | "block") => {
+    if (v === viewMode) return;
+    // Remember where we were in the current view before switching.
+    saveScroll(viewMode);
+    const prevY = window.scrollY;
     setViewModeState(v);
+    // Update URL state without resetting scroll. resetScroll:false is the
+    // TanStack Router opt-out for default scroll restoration.
     navigate({
       search: (prev: any) => {
         const next: any = { ...prev, view: v };
-        // Drop block-only params when leaving Block View.
         if (v === "day") { delete next.day; }
         return next;
       },
       replace: true,
+      resetScroll: false,
+    } as any);
+    // After the new view renders, restore that view's saved scroll if any,
+    // otherwise keep the viewport where it was (no jump to top, no anchor).
+    requestAnimationFrame(() => {
+      if (!restoreScroll(v)) {
+        window.scrollTo({ top: prevY, behavior: "auto" });
+      }
     });
-    if (v === "block") {
-      // Scroll to the block view anchor after the tab switch renders.
-      setTimeout(() => {
-        document.getElementById("client-block-view")?.scrollIntoView({ behavior: "smooth", block: "start" });
-      }, 50);
-    }
   };
-  // If we landed with ?view=block, scroll on mount.
+  // Open Block from elsewhere passes #client-block-view in the URL. Only then
+  // do we scroll to the Block View anchor on mount. Plain ?view=block (e.g.
+  // refresh) preserves whatever scroll the browser restores.
   useEffect(() => {
-    if (viewMode === "block") {
-      setTimeout(() => {
-        document.getElementById("client-block-view")?.scrollIntoView({ behavior: "smooth", block: "start" });
-      }, 150);
-    }
+    if (typeof window === "undefined") return;
+    if (viewMode !== "block") return;
+    if (window.location.hash !== "#client-block-view") return;
+    requestAnimationFrame(() => {
+      document.getElementById("client-block-view")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      // Clear the hash so future toggles don't re-scroll.
+      try { history.replaceState(null, "", window.location.pathname + window.location.search); } catch {}
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  // Persist the current view's scroll on unmount / page hide for restoration.
+  useEffect(() => {
+    const onHide = () => saveScroll(viewMode);
+    window.addEventListener("pagehide", onHide);
+    return () => {
+      onHide();
+      window.removeEventListener("pagehide", onHide);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewMode, client?.id, currentBlockId]);
 
   return (
     <>
