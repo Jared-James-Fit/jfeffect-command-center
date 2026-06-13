@@ -197,7 +197,10 @@ function BlockEditor() {
   const { data: exercises = [] } = useQuery<ExerciseRef[]>({
     queryKey: ["exercises-min"],
     queryFn: async () =>
-      ((await supabase.from("exercises").select("id, name, muscle_group, category, tags, equipment").order("name")).data ?? []) as any,
+      ((await supabase
+        .from("exercises")
+        .select("id, name, muscle_group, category, tags, equipment, exercise_category, is_competition_lift, competition_lift_type")
+        .order("name")).data ?? []) as any,
   });
 
   const [name, setName] = useState<string>("");

@@ -185,7 +185,10 @@ function TemplateEditor() {
   const { data: exercises = [] } = useQuery({
     queryKey: ["exercises-min"],
     queryFn: async () =>
-      (await supabase.from("exercises").select("id, name, muscle_group, category, tags").order("name")).data ?? [],
+      (await supabase
+        .from("exercises")
+        .select("id, name, muscle_group, category, tags, exercise_category, is_competition_lift, competition_lift_type")
+        .order("name")).data ?? [],
   });
 
   // local working state
