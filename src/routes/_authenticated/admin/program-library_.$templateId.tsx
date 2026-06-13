@@ -1688,7 +1688,7 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
         </div>
       )}
       {expanded && loadMode === "none" && (
-        <p className="text-[11px] text-muted-foreground italic">No suggested load — client will log the weight they use.</p>
+        <p className="text-[11px] text-foreground/70 italic">No suggested load — client will log the weight they use.</p>
       )}
       {expanded && clientId && computed && computed.status !== "manual" && (
         <div className="flex flex-wrap items-center gap-1.5 pt-0.5 text-[11px]">
