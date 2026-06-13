@@ -3,6 +3,7 @@ import { useMemo } from "react";
 import { useAuth } from "@/lib/auth";
 import { PageHeader } from "@/components/app-shell";
 import { FloatingBarCustomizer } from "@/components/floating-bar-customizer";
+import { SettingsTabs } from "@/components/settings/settings-tabs";
 import { buildInternalNav, resolveStaffRoleTag } from "@/lib/internal-nav";
 import { useDashboardMode } from "@/lib/dashboard-mode";
 import { withBarActionItems } from "@/lib/floating-bar";
@@ -59,6 +60,7 @@ function FloatingBarPage() {
 
   return (
     <>
+      <SettingsTabs />
       <PageHeader
         title="Floating Bar"
         subtitle="Customize your mobile bottom navigation. Add toggles, reorder, and stack hold-to-open options."

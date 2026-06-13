@@ -56,10 +56,13 @@ import { Route as AuthenticatedPortalAnnouncementsRouteImport } from './routes/_
 import { Route as AuthenticatedPortalAccountRouteImport } from './routes/_authenticated/portal/account'
 import { Route as AuthenticatedMediaUploadsRouteImport } from './routes/_authenticated/media/uploads'
 import { Route as AuthenticatedMediaTestimonialsRouteImport } from './routes/_authenticated/media/testimonials'
+import { Route as AuthenticatedMediaSettingsRouteImport } from './routes/_authenticated/media/settings'
 import { Route as AuthenticatedMediaResourcesRouteImport } from './routes/_authenticated/media/resources'
 import { Route as AuthenticatedMediaPromoLinksRouteImport } from './routes/_authenticated/media/promo-links'
 import { Route as AuthenticatedMediaInboxRouteImport } from './routes/_authenticated/media/inbox'
 import { Route as AuthenticatedMediaEventsRouteImport } from './routes/_authenticated/media/events'
+import { Route as AuthenticatedMediaContentRouteImport } from './routes/_authenticated/media/content'
+import { Route as AuthenticatedMediaCommunicationRouteImport } from './routes/_authenticated/media/communication'
 import { Route as AuthenticatedMediaCampaignsRouteImport } from './routes/_authenticated/media/campaigns'
 import { Route as AuthenticatedMediaCalendarRouteImport } from './routes/_authenticated/media/calendar'
 import { Route as AuthenticatedMediaBroadcastsRouteImport } from './routes/_authenticated/media/broadcasts'
@@ -463,6 +466,12 @@ const AuthenticatedMediaTestimonialsRoute =
     path: '/testimonials',
     getParentRoute: () => AuthenticatedMediaRouteRoute,
   } as any)
+const AuthenticatedMediaSettingsRoute =
+  AuthenticatedMediaSettingsRouteImport.update({
+    id: '/settings',
+    path: '/settings',
+    getParentRoute: () => AuthenticatedMediaRouteRoute,
+  } as any)
 const AuthenticatedMediaResourcesRoute =
   AuthenticatedMediaResourcesRouteImport.update({
     id: '/resources',
@@ -484,6 +493,18 @@ const AuthenticatedMediaEventsRoute =
   AuthenticatedMediaEventsRouteImport.update({
     id: '/events',
     path: '/events',
+    getParentRoute: () => AuthenticatedMediaRouteRoute,
+  } as any)
+const AuthenticatedMediaContentRoute =
+  AuthenticatedMediaContentRouteImport.update({
+    id: '/content',
+    path: '/content',
+    getParentRoute: () => AuthenticatedMediaRouteRoute,
+  } as any)
+const AuthenticatedMediaCommunicationRoute =
+  AuthenticatedMediaCommunicationRouteImport.update({
+    id: '/communication',
+    path: '/communication',
     getParentRoute: () => AuthenticatedMediaRouteRoute,
   } as any)
 const AuthenticatedMediaCampaignsRoute =
@@ -1439,10 +1460,13 @@ export interface FileRoutesByFullPath {
   '/media/broadcasts': typeof AuthenticatedMediaBroadcastsRoute
   '/media/calendar': typeof AuthenticatedMediaCalendarRoute
   '/media/campaigns': typeof AuthenticatedMediaCampaignsRoute
+  '/media/communication': typeof AuthenticatedMediaCommunicationRoute
+  '/media/content': typeof AuthenticatedMediaContentRoute
   '/media/events': typeof AuthenticatedMediaEventsRoute
   '/media/inbox': typeof AuthenticatedMediaInboxRoute
   '/media/promo-links': typeof AuthenticatedMediaPromoLinksRoute
   '/media/resources': typeof AuthenticatedMediaResourcesRoute
+  '/media/settings': typeof AuthenticatedMediaSettingsRoute
   '/media/testimonials': typeof AuthenticatedMediaTestimonialsRoute
   '/media/uploads': typeof AuthenticatedMediaUploadsRoute
   '/portal/account': typeof AuthenticatedPortalAccountRoute
@@ -1632,10 +1656,13 @@ export interface FileRoutesByTo {
   '/media/broadcasts': typeof AuthenticatedMediaBroadcastsRoute
   '/media/calendar': typeof AuthenticatedMediaCalendarRoute
   '/media/campaigns': typeof AuthenticatedMediaCampaignsRoute
+  '/media/communication': typeof AuthenticatedMediaCommunicationRoute
+  '/media/content': typeof AuthenticatedMediaContentRoute
   '/media/events': typeof AuthenticatedMediaEventsRoute
   '/media/inbox': typeof AuthenticatedMediaInboxRoute
   '/media/promo-links': typeof AuthenticatedMediaPromoLinksRoute
   '/media/resources': typeof AuthenticatedMediaResourcesRoute
+  '/media/settings': typeof AuthenticatedMediaSettingsRoute
   '/media/testimonials': typeof AuthenticatedMediaTestimonialsRoute
   '/media/uploads': typeof AuthenticatedMediaUploadsRoute
   '/portal/account': typeof AuthenticatedPortalAccountRoute
@@ -1832,10 +1859,13 @@ export interface FileRoutesById {
   '/_authenticated/media/broadcasts': typeof AuthenticatedMediaBroadcastsRoute
   '/_authenticated/media/calendar': typeof AuthenticatedMediaCalendarRoute
   '/_authenticated/media/campaigns': typeof AuthenticatedMediaCampaignsRoute
+  '/_authenticated/media/communication': typeof AuthenticatedMediaCommunicationRoute
+  '/_authenticated/media/content': typeof AuthenticatedMediaContentRoute
   '/_authenticated/media/events': typeof AuthenticatedMediaEventsRoute
   '/_authenticated/media/inbox': typeof AuthenticatedMediaInboxRoute
   '/_authenticated/media/promo-links': typeof AuthenticatedMediaPromoLinksRoute
   '/_authenticated/media/resources': typeof AuthenticatedMediaResourcesRoute
+  '/_authenticated/media/settings': typeof AuthenticatedMediaSettingsRoute
   '/_authenticated/media/testimonials': typeof AuthenticatedMediaTestimonialsRoute
   '/_authenticated/media/uploads': typeof AuthenticatedMediaUploadsRoute
   '/_authenticated/portal/account': typeof AuthenticatedPortalAccountRoute
@@ -2032,10 +2062,13 @@ export interface FileRouteTypes {
     | '/media/broadcasts'
     | '/media/calendar'
     | '/media/campaigns'
+    | '/media/communication'
+    | '/media/content'
     | '/media/events'
     | '/media/inbox'
     | '/media/promo-links'
     | '/media/resources'
+    | '/media/settings'
     | '/media/testimonials'
     | '/media/uploads'
     | '/portal/account'
@@ -2225,10 +2258,13 @@ export interface FileRouteTypes {
     | '/media/broadcasts'
     | '/media/calendar'
     | '/media/campaigns'
+    | '/media/communication'
+    | '/media/content'
     | '/media/events'
     | '/media/inbox'
     | '/media/promo-links'
     | '/media/resources'
+    | '/media/settings'
     | '/media/testimonials'
     | '/media/uploads'
     | '/portal/account'
@@ -2424,10 +2460,13 @@ export interface FileRouteTypes {
     | '/_authenticated/media/broadcasts'
     | '/_authenticated/media/calendar'
     | '/_authenticated/media/campaigns'
+    | '/_authenticated/media/communication'
+    | '/_authenticated/media/content'
     | '/_authenticated/media/events'
     | '/_authenticated/media/inbox'
     | '/_authenticated/media/promo-links'
     | '/_authenticated/media/resources'
+    | '/_authenticated/media/settings'
     | '/_authenticated/media/testimonials'
     | '/_authenticated/media/uploads'
     | '/_authenticated/portal/account'
@@ -2891,6 +2930,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedMediaTestimonialsRouteImport
       parentRoute: typeof AuthenticatedMediaRouteRoute
     }
+    '/_authenticated/media/settings': {
+      id: '/_authenticated/media/settings'
+      path: '/settings'
+      fullPath: '/media/settings'
+      preLoaderRoute: typeof AuthenticatedMediaSettingsRouteImport
+      parentRoute: typeof AuthenticatedMediaRouteRoute
+    }
     '/_authenticated/media/resources': {
       id: '/_authenticated/media/resources'
       path: '/resources'
@@ -2917,6 +2963,20 @@ declare module '@tanstack/react-router' {
       path: '/events'
       fullPath: '/media/events'
       preLoaderRoute: typeof AuthenticatedMediaEventsRouteImport
+      parentRoute: typeof AuthenticatedMediaRouteRoute
+    }
+    '/_authenticated/media/content': {
+      id: '/_authenticated/media/content'
+      path: '/content'
+      fullPath: '/media/content'
+      preLoaderRoute: typeof AuthenticatedMediaContentRouteImport
+      parentRoute: typeof AuthenticatedMediaRouteRoute
+    }
+    '/_authenticated/media/communication': {
+      id: '/_authenticated/media/communication'
+      path: '/communication'
+      fullPath: '/media/communication'
+      preLoaderRoute: typeof AuthenticatedMediaCommunicationRouteImport
       parentRoute: typeof AuthenticatedMediaRouteRoute
     }
     '/_authenticated/media/campaigns': {
@@ -4334,10 +4394,13 @@ interface AuthenticatedMediaRouteRouteChildren {
   AuthenticatedMediaBroadcastsRoute: typeof AuthenticatedMediaBroadcastsRoute
   AuthenticatedMediaCalendarRoute: typeof AuthenticatedMediaCalendarRoute
   AuthenticatedMediaCampaignsRoute: typeof AuthenticatedMediaCampaignsRoute
+  AuthenticatedMediaCommunicationRoute: typeof AuthenticatedMediaCommunicationRoute
+  AuthenticatedMediaContentRoute: typeof AuthenticatedMediaContentRoute
   AuthenticatedMediaEventsRoute: typeof AuthenticatedMediaEventsRoute
   AuthenticatedMediaInboxRoute: typeof AuthenticatedMediaInboxRoute
   AuthenticatedMediaPromoLinksRoute: typeof AuthenticatedMediaPromoLinksRoute
   AuthenticatedMediaResourcesRoute: typeof AuthenticatedMediaResourcesRoute
+  AuthenticatedMediaSettingsRoute: typeof AuthenticatedMediaSettingsRoute
   AuthenticatedMediaTestimonialsRoute: typeof AuthenticatedMediaTestimonialsRoute
   AuthenticatedMediaUploadsRoute: typeof AuthenticatedMediaUploadsRoute
   AuthenticatedMediaIndexRoute: typeof AuthenticatedMediaIndexRoute
@@ -4354,10 +4417,13 @@ const AuthenticatedMediaRouteRouteChildren: AuthenticatedMediaRouteRouteChildren
     AuthenticatedMediaBroadcastsRoute: AuthenticatedMediaBroadcastsRoute,
     AuthenticatedMediaCalendarRoute: AuthenticatedMediaCalendarRoute,
     AuthenticatedMediaCampaignsRoute: AuthenticatedMediaCampaignsRoute,
+    AuthenticatedMediaCommunicationRoute: AuthenticatedMediaCommunicationRoute,
+    AuthenticatedMediaContentRoute: AuthenticatedMediaContentRoute,
     AuthenticatedMediaEventsRoute: AuthenticatedMediaEventsRoute,
     AuthenticatedMediaInboxRoute: AuthenticatedMediaInboxRoute,
     AuthenticatedMediaPromoLinksRoute: AuthenticatedMediaPromoLinksRoute,
     AuthenticatedMediaResourcesRoute: AuthenticatedMediaResourcesRoute,
+    AuthenticatedMediaSettingsRoute: AuthenticatedMediaSettingsRoute,
     AuthenticatedMediaTestimonialsRoute: AuthenticatedMediaTestimonialsRoute,
     AuthenticatedMediaUploadsRoute: AuthenticatedMediaUploadsRoute,
     AuthenticatedMediaIndexRoute: AuthenticatedMediaIndexRoute,

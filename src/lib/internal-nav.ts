@@ -155,19 +155,14 @@ const REGISTRY: Entry[] = [
     visibleTo: ["admin", "operations"],
     keywords: ["team", "people", "coaches", "staff", "media manager invites", "operations", "business systems"] },
 
-  // ── SETTINGS ────────────────────────────────────────────────────────
-  { to: "/admin/settings", label: "Workspace Settings", icon: Settings, group: "Settings",
-    visibleTo: ["admin"] },
-  { to: "/admin/apps", label: "Integrations", icon: Layers, group: "Settings",
-    visibleTo: ["admin"] },
-  { to: "/admin/floating-bar", label: "Floating Bar", icon: LayoutGrid, group: "Settings",
-    visibleTo: ["admin", "coach", "media_manager"] },
-  { to: "/admin/faqs", label: "FAQ Manager", icon: HelpCircle, group: "Settings",
-    visibleTo: ["admin", "coach"] },
-  { to: "/admin/archives", label: "Archive Manager", icon: Archive, group: "Settings",
-    visibleTo: ["admin", "operations"] },
-  { to: "/admin/account", label: "My Account", icon: UserCog, group: "Settings",
-    visibleTo: ["admin", "coach", "assistant_coach", "media_manager", "sales", "support", "operations", "staff"] },
+  // ── SETTINGS (consolidated; tabs handle sub-views) ──────────────────
+  { to: "/admin/settings", label: "Settings", icon: Settings, group: "Settings",
+    visibleTo: ["admin", "coach", "assistant_coach", "sales", "support", "operations", "staff"],
+    keywords: [
+      "settings", "account", "workspace", "integrations", "apps", "floating bar",
+      "faq", "faqs", "archive", "archives", "automations", "sops", "branding",
+      "notifications", "roles", "permissions", "navigation",
+    ] },
 ];
 
 /** Membership-mode overrides (admin viewing the JF Membership workspace).
@@ -205,28 +200,19 @@ const MEMBERSHIP_OVERLAY: Entry[] = [
  * mirrors the IA without changing any route or permission boundary.
  */
 const MEDIA_REGISTRY: NavItem[] = [
-  // Home
-  { to: "/media", label: "Media Dashboard", icon: LayoutDashboard, group: "Home" },
-  { to: "/media/action-items", label: "Action Items", icon: ListChecks, group: "Home" },
-  // Communication
-  { to: "/media/broadcasts", label: "Broadcast Drafts", icon: Megaphone, group: "Communication" },
-  { to: "/media/announcements", label: "Announcement Drafts", icon: FileText, group: "Communication" },
-  // Sales
-  { to: "/media/sales/coaching", label: "Coaching Page", icon: ExternalLink, group: "Sales" },
-  { to: "/media/sales/membership", label: "JF Membership Page", icon: ExternalLink, group: "Sales" },
-  { to: "/media/campaigns", label: "Campaigns / Promos", icon: Sparkles, group: "Sales" },
-  { to: "/media/promo-links", label: "Promo Links", icon: LinkIcon, group: "Sales" },
-  // Calendar
-  { to: "/media/calendar", label: "Content Calendar", icon: Calendar, group: "Calendar" },
-  { to: "/media/events", label: "Events", icon: Calendar, group: "Calendar" },
-  // Content
-  { to: "/media/inbox", label: "Media Inbox", icon: ImageIcon, group: "Content" },
-  { to: "/media/archives", label: "Media Archives", icon: FolderOpen, group: "Content" },
-  { to: "/media/uploads", label: "Uploads", icon: Upload, group: "Content" },
-  { to: "/media/resources", label: "Resource Library", icon: FolderOpen, group: "Content" },
-  { to: "/media/testimonials", label: "Testimonials / Proof", icon: Star, group: "Content" },
-  // Settings
-  { to: "/media/account", label: "My Account", icon: UserCog, group: "Settings" },
+  { to: "/media", label: "Home", icon: HomeIcon, group: "Home" },
+  { to: "/media/content", label: "Content", icon: Film, group: "Content",
+    keywords: [
+      "content", "media", "inbox", "tasks", "action items", "campaigns",
+      "promo links", "pages", "library", "uploads", "resources", "resource library",
+      "testimonials", "proof", "archive", "archives",
+    ] },
+  { to: "/media/communication", label: "Communication", icon: MessageCircle, group: "Communication",
+    keywords: ["communication", "broadcasts", "broadcast drafts", "announcements", "drafts"] },
+  { to: "/media/calendar", label: "Calendar", icon: Calendar, group: "Calendar",
+    keywords: ["calendar", "content calendar", "events"] },
+  { to: "/media/settings", label: "Settings", icon: Settings, group: "Settings",
+    keywords: ["settings", "account", "my account", "preferences"] },
 ];
 
 /**

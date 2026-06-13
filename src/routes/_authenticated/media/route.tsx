@@ -38,10 +38,10 @@ function MediaLayout() {
     const pick = (to: string) => nav.find((i) => i.to === to);
     return [
       pick("/media"),
-      pick("/media/action-items"),
-      pick("/media/inbox"),
-      pick("/media/uploads"),
+      pick("/media/content"),
+      pick("/media/communication"),
       pick("/media/calendar"),
+      pick("/media/settings"),
     ].filter(Boolean) as typeof nav;
   }, [nav]);
 

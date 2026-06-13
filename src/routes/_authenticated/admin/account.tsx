@@ -4,6 +4,7 @@ import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { ChangePasswordCard } from "@/components/change-password-card";
 import { UserCog } from "lucide-react";
+import { SettingsTabs } from "@/components/settings/settings-tabs";
 
 export const Route = createFileRoute("/_authenticated/admin/account")({
   component: AdminAccountPage,
@@ -15,6 +16,7 @@ function AdminAccountPage() {
 
   return (
     <>
+      <SettingsTabs />
       <PageHeader title="My Account" subtitle="Manage your sign-in credentials." />
       <div className="grid gap-6 p-6 md:p-8">
         <Card className="border-border bg-card p-6 space-y-2">
