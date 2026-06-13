@@ -10715,6 +10715,10 @@ export type Database = {
         Args: { _group_id: string; _user_id: string }
         Returns: boolean
       }
+      cancel_scheduled_response_safe: {
+        Args: { _review_id: string }
+        Returns: string
+      }
       claim_scheduled_responses: {
         Args: {
           _batch_size?: number
@@ -10757,6 +10761,10 @@ export type Database = {
       enqueue_email: {
         Args: { payload: Json; queue_name: string }
         Returns: number
+      }
+      finalize_schedule_send: {
+        Args: { _error?: string; _schedule_id: string; _status: string }
+        Returns: undefined
       }
       get_group_member_profiles: {
         Args: { _group_id: string }
@@ -10807,6 +10815,34 @@ export type Database = {
       }
       legal_kill_switch_active: { Args: never; Returns: boolean }
       mark_client_signed_in: { Args: never; Returns: undefined }
+      mark_schedule_sending: {
+        Args: { _schedule_id: string }
+        Returns: {
+          attempts: number
+          claimed_at: string | null
+          claimed_by_worker: string | null
+          created_at: string
+          created_by: string | null
+          dry_run_summary: Json | null
+          dry_run_validated_at: string | null
+          id: string
+          idempotency_key: string
+          last_attempt_at: string | null
+          last_error: string | null
+          lease_until: string | null
+          review_id: string
+          scheduled_at: string
+          status: string
+          test_mode: boolean
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "scheduled_submission_responses"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       mark_stale_lift_uploads: { Args: never; Returns: number }
       member_can_consume: { Args: { _user_id: string }; Returns: boolean }
       member_has_access: {
@@ -10913,6 +10949,34 @@ export type Database = {
       release_scheduled_claim: {
         Args: { _schedule_id: string; _validated?: boolean }
         Returns: undefined
+      }
+      retry_failed_schedule: {
+        Args: { _actor: string; _schedule_id: string }
+        Returns: {
+          attempts: number
+          claimed_at: string | null
+          claimed_by_worker: string | null
+          created_at: string
+          created_by: string | null
+          dry_run_summary: Json | null
+          dry_run_validated_at: string | null
+          id: string
+          idempotency_key: string
+          last_attempt_at: string | null
+          last_error: string | null
+          lease_until: string | null
+          review_id: string
+          scheduled_at: string
+          status: string
+          test_mode: boolean
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "scheduled_submission_responses"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       user_can_see_broadcast: {
         Args: { _broadcast_id: string; _user_id: string }
