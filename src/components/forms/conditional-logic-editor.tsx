@@ -133,7 +133,7 @@ export function ConditionalLogicEditor({
               <SelectTrigger className="h-7 w-36 text-xs"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {ops.map((op) => (
-                  <SelectItem key={op} value={op} className="text-xs">{OP_LABEL[op]}</SelectItem>
+                  <SelectItem key={op} value={op} className="text-xs">{OP_LABEL[op as Op]}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
