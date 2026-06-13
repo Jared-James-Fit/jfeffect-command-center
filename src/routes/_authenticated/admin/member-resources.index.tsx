@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { adminListResources, adminUpdateResource, adminDeleteResource } from "@/lib/member-resources.functions";
@@ -11,12 +11,20 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Plus, Star, ArrowUp, ArrowDown, Trash2, FileText, Wrench } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
-export const Route = createFileRoute("/_authenticated/admin/member-resources/")({ component: MemberResourcesAdmin });
+export const Route = createFileRoute("/_authenticated/admin/member-resources/")({ component: MemberResourcesRedirect });
 
-function MemberResourcesAdmin() {
+function MemberResourcesRedirect() {
+  const navigate = useNavigate();
+  useEffect(() => {
+    navigate({ to: "/admin/content", search: { tab: "member-resources" } as any, replace: true });
+  }, [navigate]);
+  return null;
+}
+
+export function MemberResourcesAdmin({ embedded = false }: { embedded?: boolean } = {}) {
   const [tab, setTab] = useState("all");
   const fetchList = useServerFn(adminListResources);
   const updateFn = useServerFn(adminUpdateResource);
@@ -32,11 +40,16 @@ function MemberResourcesAdmin() {
 
   return (
     <div className="space-y-5">
-      <PageHeader
+      {!embedded && <PageHeader
         title="Resources & Tools"
         subtitle="Guides, PDFs, videos, links, and calculators for App Members."
         actions={<Link to="/admin/member-resources/new"><Button><Plus className="mr-2 h-4 w-4" />New</Button></Link>}
-      />
+      />}
+      {embedded && (
+        <div className="flex justify-end">
+          <Link to="/admin/member-resources/new"><Button><Plus className="mr-2 h-4 w-4" />New</Button></Link>
+        </div>
+      )}
       <FeaturedResourcesManager items={items} />
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList>
