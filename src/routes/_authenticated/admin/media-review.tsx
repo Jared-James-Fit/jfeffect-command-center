@@ -110,7 +110,7 @@ export function AdminMediaReview({ embedded = false }: { embedded?: boolean } = 
 
   return (
     <>
-      <PageHeader title="Media Review Inbox" subtitle="All client uploads needing coach attention." />
+      {!embedded && <PageHeader title="Media Review Inbox" subtitle="All client uploads needing coach attention." />}
       <div className="space-y-4 p-4 md:p-8">
         <Card className="border-border bg-card p-4 flex flex-wrap items-center gap-3">
           <Input className="max-w-xs" placeholder="Search client, file…" value={search} onChange={(e) => setSearch(e.target.value)} />
