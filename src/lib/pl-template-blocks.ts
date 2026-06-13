@@ -43,6 +43,19 @@
 
 export const TEMPLATE_SCHEMA_VERSION = 2 as const;
 
+/** Marker stored on blocks that came from a legacy payload and have never
+ * been intentionally saved as v2. They get deterministic temporary IDs
+ * derived from the template id + their legacy position so that refresh,
+ * URL ?block=, and Back/Forward all keep pointing at the same block. */
+const LEGACY_ID_PREFIX = "legacy:";
+function legacyBlockId(templateId: string | undefined, position: number, sourceKey: string): string {
+  const tid = templateId && templateId.length > 0 ? templateId : "anon";
+  return `${LEGACY_ID_PREFIX}${tid}:${sourceKey}:${position}`;
+}
+export function isTemporaryLegacyBlockId(id: string | undefined | null): boolean {
+  return typeof id === "string" && id.startsWith(LEGACY_ID_PREFIX);
+}
+
 export interface TemplateBlockV2 {
   id: string;
   name: string;
@@ -64,8 +77,14 @@ export interface TemplateBlockV2 {
 export interface TemplatePayloadV2 {
   schema_version: 2;
   blocks: TemplateBlockV2[];
-  /** Preserved verbatim from legacy payloads so other features keep working. */
+  /** Snapshot of every unknown top-level key from the source payload. A
+   * safety backup ONLY — unknown keys are ALSO preserved at their original
+   * top-level positions so existing readers (e.g. `payload.prep`) keep
+   * working. Never the sole location for live fields. */
   __legacy?: Record<string, any>;
+  /** Recovery state for malformed payloads. When set, destructive block ops
+   * MUST be disabled and the raw original payload is preserved verbatim. */
+  __recovery?: { reason: string; raw: any };
   /** Allow forward-compatible extras (e.g. prep info on full_prep). */
   [extra: string]: any;
 }
@@ -80,9 +99,13 @@ function deepClone<T>(v: T): T {
   return JSON.parse(JSON.stringify(v));
 }
 
-function makeBlock(partial: Partial<TemplateBlockV2> & { weeks?: any[] }, orderIndex: number): TemplateBlockV2 {
+function makeBlock(
+  partial: Partial<TemplateBlockV2> & { weeks?: any[] },
+  orderIndex: number,
+  fallbackId?: string,
+): TemplateBlockV2 {
   return {
-    id: partial.id || newId(),
+    id: partial.id || fallbackId || newId(),
     name: partial.name || `Block ${orderIndex + 1}`,
     phase: partial.phase ?? null,
     notes: partial.notes ?? "",
@@ -98,15 +121,46 @@ function makeBlock(partial: Partial<TemplateBlockV2> & { weeks?: any[] }, orderI
   };
 }
 
+/** Reserved keys we extract; everything else is preserved verbatim
+ * at its original top-level position AND snapshotted in __legacy. */
+const V2_RESERVED_KEYS = new Set([
+  "schema_version",
+  "blocks",
+  "blocks_data",
+  "weeks_data",
+  "block_name",
+  "__legacy",
+  "__recovery",
+]);
+
+function pickUnknownTopLevel(payload: Record<string, any>): Record<string, any> {
+  const out: Record<string, any> = {};
+  for (const k of Object.keys(payload)) {
+    if (!V2_RESERVED_KEYS.has(k)) out[k] = payload[k];
+  }
+  return out;
+}
+
 /**
  * Normalize any incoming payload to the v2 in-memory shape WITHOUT mutating
  * the input. Safe to call on legacy, v2, full_prep, or completely empty payloads.
  *
- * NOTE: only `block` and `full_prep` template types should be passed here.
- * Leaf types (week/day/exercise_row) should be edited via their existing editors.
+ * Normalization priority (explicit, no silent merging across sources):
+ *   1. valid schema_version: 2 with valid blocks array  → trust v2.blocks
+ *   2. legacy blocks_data (or templateType === full_prep) → expand
+ *   3. legacy weeks_data (or templateType === block)     → single block
+ *   4. malformed/unreadable                              → __recovery mode
+ *
+ * Pass `templateId` so legacy blocks get deterministic temporary IDs that
+ * are stable across refreshes (legacy:<templateId>:<sourceKey>:<position>).
  */
-export function normalizeTemplatePayload(rawPayload: any, opts?: { templateType?: string }): TemplatePayloadV2 {
+export function normalizeTemplatePayload(
+  rawPayload: any,
+  opts?: { templateType?: string; templateId?: string },
+): TemplatePayloadV2 {
   const payload = rawPayload && typeof rawPayload === "object" ? deepClone(rawPayload) : {};
+  const templateId = opts?.templateId;
+  const unknownTop = pickUnknownTopLevel(payload);
 
   // Already v2 — trust the shape but defensively re-make each block so
   // any missing field is filled in with safe defaults.
@@ -116,17 +170,28 @@ export function normalizeTemplatePayload(rawPayload: any, opts?: { templateType?
       // Stable order: explicit order_index first, fall back to original index.
       .sort((a: TemplateBlockV2, b: TemplateBlockV2) => a.order_index - b.order_index)
       .map((b: TemplateBlockV2, i: number) => ({ ...b, order_index: i }));
-    return { ...payload, schema_version: 2, blocks };
+    return { ...unknownTop, schema_version: 2, blocks, __legacy: unknownTop };
   }
 
   // full_prep legacy: payload.blocks_data → blocks
   if (opts?.templateType === "full_prep" || Array.isArray(payload.blocks_data)) {
-    const src = Array.isArray(payload.blocks_data) ? payload.blocks_data : [];
+    const srcRaw = Array.isArray(payload.blocks_data) ? payload.blocks_data : [];
+    // Validate each entry; reject if any are not objects.
+    const src = srcRaw.every((b: any) => b && typeof b === "object") ? srcRaw : [];
+    if (srcRaw.length > 0 && src.length === 0) {
+      return {
+        schema_version: 2,
+        blocks: [makeBlock({ name: "Block 1" }, 0, legacyBlockId(templateId, 0, "recovery"))],
+        ...unknownTop,
+        __legacy: unknownTop,
+        __recovery: { reason: "blocks_data contained non-object entries", raw: rawPayload },
+      };
+    }
     const blocks: TemplateBlockV2[] = src.length
       ? src.map((b: any, i: number) =>
           makeBlock(
             {
-              id: b.id, // may be undefined → newId()
+              id: b.id, // may be undefined → deterministic legacy id
               name: b.name,
               phase: b.phase ?? b.training_focus ?? null,
               notes: b.notes ?? "",
@@ -136,59 +201,91 @@ export function normalizeTemplatePayload(rawPayload: any, opts?: { templateType?
               goal: b.goal ?? null,
             },
             i,
+            legacyBlockId(templateId, i, "blocks_data"),
           ),
         )
-      : [makeBlock({ name: "Block 1" }, 0)];
-
-    const { blocks_data: _bd, ...legacyRest } = payload;
-    return { schema_version: 2, blocks, __legacy: legacyRest };
+      : [makeBlock({ name: "Block 1" }, 0, legacyBlockId(templateId, 0, "blocks_data"))];
+    return { ...unknownTop, schema_version: 2, blocks, __legacy: unknownTop };
   }
 
   // "block" legacy: payload.weeks_data → single block
   if (Array.isArray(payload.weeks_data) || (!payload.blocks && !payload.blocks_data)) {
-    const weeks_data = Array.isArray(payload.weeks_data) ? payload.weeks_data : [];
+    const weeksRaw = Array.isArray(payload.weeks_data) ? payload.weeks_data : [];
+    // weeks_data must be an array of objects (or empty). Otherwise recover.
+    if (weeksRaw.length > 0 && !weeksRaw.every((w: any) => w && typeof w === "object")) {
+      return {
+        schema_version: 2,
+        blocks: [makeBlock({ name: "Block 1" }, 0, legacyBlockId(templateId, 0, "recovery"))],
+        ...unknownTop,
+        __legacy: unknownTop,
+        __recovery: { reason: "weeks_data contained non-object entries", raw: rawPayload },
+      };
+    }
     const onlyBlock = makeBlock(
       {
         name: payload.block_name || payload.name || "Block 1",
         notes: payload.notes ?? "",
-        weeks: weeks_data,
+        weeks: weeksRaw,
       },
       0,
+      legacyBlockId(templateId, 0, "weeks_data"),
     );
-    const { weeks_data: _wd, block_name: _bn, ...legacyRest } = payload;
-    return { schema_version: 2, blocks: [onlyBlock], __legacy: legacyRest };
+    return { ...unknownTop, schema_version: 2, blocks: [onlyBlock], __legacy: unknownTop };
   }
 
-  // Truly unknown shape — preserve the original under __legacy and seed a
-  // single empty block so the UI can still open it. validateTemplatePayload
-  // surfaces the recovery warning.
+  // Truly unknown shape — RECOVERY MODE. Preserve raw payload verbatim,
+  // seed a single empty block so the UI can render, and disable destructive
+  // ops at callsites that respect __recovery.
   return {
     schema_version: 2,
-    blocks: [makeBlock({ name: "Block 1" }, 0)],
-    __legacy: payload,
+    blocks: [makeBlock({ name: "Block 1" }, 0, legacyBlockId(templateId, 0, "recovery"))],
+    ...unknownTop,
+    __legacy: unknownTop,
+    __recovery: { reason: "Unrecognized payload shape", raw: rawPayload },
   };
+}
+
+/** True when a normalized payload is in recovery mode and destructive
+ * operations (purge, archive, reorder) MUST be disabled in the UI. */
+export function isPayloadInRecovery(v2: TemplatePayloadV2): boolean {
+  return Boolean(v2.__recovery);
 }
 
 /**
  * Convert a v2 in-memory payload back into the JSONB shape that gets
- * persisted. We keep the v2 shape AND mirror the first non-archived,
- * non-trashed block's weeks back into `weeks_data` so any reader that still
- * looks at legacy fields (assignment fallbacks, reports) continues to work
- * until they migrate. The blocks array is the source of truth.
+ * persisted.
+ *
+ * Canonical source of truth: `blocks`. The `weeks_data` and `blocks_data`
+ * fields are GENERATED COMPATIBILITY MIRRORS for legacy readers and must
+ * never be merged back over canonical data on the next read (the v2 branch
+ * of normalizeTemplatePayload ignores them entirely when blocks is valid).
+ *
+ * Mirror filtering rules:
+ *   - `blocks_data` mirrors ACTIVE assignable blocks only (no archived, no trashed).
+ *   - `weeks_data` mirrors the FIRST active block only, for single-block readers.
+ *   - Trashed blocks are NEVER mirrored.
+ *   - Archived blocks are NEVER mirrored into assignment-shaped fields.
  */
 export function serializeTemplatePayload(v2: TemplatePayloadV2): Record<string, any> {
+  if (v2.__recovery) {
+    // Refuse to overwrite a malformed payload with an empty v2 shell.
+    // Caller must explicitly opt in to recovery-save.
+    throw new Error("serializeTemplatePayload: payload is in recovery mode; refusing to overwrite raw data.");
+  }
   const blocks = v2.blocks.map((b, i) => ({ ...b, order_index: i }));
   const activeBlocks = blocks.filter((b) => !b.archived && !b.deleted_at);
   const primary = activeBlocks[0] ?? blocks[0];
-  const legacy = v2.__legacy ?? {};
+  // Re-include unknown top-level keys from CURRENT v2 state (not the
+  // snapshot), so live edits to e.g. `prep` survive the round-trip.
+  const current = pickUnknownTopLevel(v2 as any);
 
   return {
-    ...legacy, // first so v2 fields below win
+    ...current, // first so v2 fields below win
     schema_version: 2,
     blocks,
-    // Legacy mirrors for backward-compat readers:
-    weeks_data: primary?.weeks ?? [],
-    blocks_data: blocks.map((b) => ({
+    // Compatibility mirrors — ACTIVE blocks only, never trashed/archived.
+    weeks_data: (primary && !primary.archived && !primary.deleted_at) ? (primary.weeks ?? []) : [],
+    blocks_data: activeBlocks.map((b) => ({
       id: b.id,
       name: b.name,
       phase: b.phase,
