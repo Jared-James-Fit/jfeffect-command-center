@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
@@ -14,7 +14,7 @@ import { cn } from "@/lib/utils";
 import { AlertCircle, Clock, CheckCircle2, Hammer } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/admin/support-alerts")({
-  component: SupportAlertsPage,
+  component: SupportAlertsRedirect,
 });
 
 const alertsQueryOptions = {
