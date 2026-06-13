@@ -399,7 +399,7 @@ export function PaymentLinksPage({ embedded = false }: { embedded?: boolean } = 
 
   return (
     <>
-      <PageHeader
+      {!embedded && <PageHeader
         title="Products & Payments"
         subtitle="Create coaching products, connect Stripe checkout, assign products to clients, and track purchases."
         actions={
@@ -418,7 +418,23 @@ export function PaymentLinksPage({ embedded = false }: { embedded?: boolean } = 
             )}
           </div>
         }
-      />
+      />}
+      {embedded && (
+        <div className="flex justify-end gap-2 px-6 pt-4 md:px-8">
+          {!manageMode ? (
+            <>
+              <Button variant="outline" onClick={() => setManageMode(true)}>
+                <ListChecks className="mr-2 h-4 w-4" /> Manage products
+              </Button>
+              <Button className="bg-gradient-primary font-bold uppercase tracking-wide" onClick={() => setEditing({ open: true, product: null })}>
+                <Plus className="mr-2 h-4 w-4" /> New product
+              </Button>
+            </>
+          ) : (
+            <Button variant="outline" onClick={exitManage}>Cancel</Button>
+          )}
+        </div>
+      )}
       <div className="p-6 md:p-8 space-y-6">
         {manageMode && (
           <Card className="border-primary/30 bg-primary/5 p-3 flex flex-wrap items-center gap-3">
