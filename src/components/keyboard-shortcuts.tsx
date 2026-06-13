@@ -26,6 +26,7 @@ const SHORTCUT_GROUPS: Group[] = [
       { keys: ["⌘", "K"], label: "Open command palette / quick search" },
       { keys: ["⌘", "B"], label: "Toggle sidebar" },
       { keys: ["⌘", "⇧", "M"], label: "Toggle client preview (POV)" },
+      { keys: ["⌘", "⇧", "E"], label: "Open / close all sidebar sections" },
       { keys: ["Esc"], label: "Close dialogs & popovers" },
     ],
   },
