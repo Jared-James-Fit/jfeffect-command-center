@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { applyTemplateToClient, getTemplateWeeks, computeEndDateFromStart } from "@/lib/pl-programs";
+import { normalizeTemplatePayload, getActiveTemplateBlocks } from "@/lib/pl-template-blocks";
 import { toast } from "sonner";
 import { findOverlappingBlock, suggestNextStartISO } from "@/lib/block-schedule";
 import { AlertTriangle } from "lucide-react";
@@ -36,7 +37,7 @@ export function QuickAssignTemplateDialog({ open, onOpenChange, clientId, client
     enabled: open,
     queryFn: async () => (await (supabase as any)
       .from("pl_templates")
-      .select("id, name, template_type, weeks, training_style, training_focus")
+      .select("id, name, template_type, weeks, training_style, training_focus, payload")
       .in("template_type", ["block", "full_prep"])
       .eq("archived", false)
       .order("updated_at", { ascending: false })).data ?? [],
@@ -44,6 +45,18 @@ export function QuickAssignTemplateDialog({ open, onOpenChange, clientId, client
 
   const selected = (templates as any[]).find((t) => t.id === templateId);
   const selectedWeeks = selected ? getTemplateWeeks(selected) : 0;
+
+  // v2 multi-block "block" templates expose individual blocks for selective assignment.
+  const v2Blocks = (() => {
+    if (!selected || selected.template_type !== "block") return [];
+    const p = selected.payload;
+    if (!p || p.schema_version !== 2 || !Array.isArray(p.blocks)) return [];
+    return getActiveTemplateBlocks(normalizeTemplatePayload(p, { templateType: "block" }));
+  })();
+  const [selectedBlockIds, setSelectedBlockIds] = useState<string[]>([]);
+  useEffect(() => {
+    setSelectedBlockIds(v2Blocks.map((b) => b.id));
+  }, [templateId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const { data: existingBlocks = [] } = useQuery({
     queryKey: ["pl-blocks-schedule", clientId],
@@ -97,7 +110,8 @@ export function QuickAssignTemplateDialog({ open, onOpenChange, clientId, client
             clientVisible: visible,
             startDate: startDate || null,
             endDate: endDate || null,
-          });
+            ...(v2Blocks.length > 0 ? { selectedBlockIds } as any : {}),
+          } as any);
           job.completeStep(1);
           qc.invalidateQueries({ queryKey: ["pl-blocks", clientId] });
           qc.invalidateQueries({ queryKey: ["pl-preps", clientId] });
@@ -137,6 +151,37 @@ export function QuickAssignTemplateDialog({ open, onOpenChange, clientId, client
               </SelectContent>
             </Select>
           </div>
+          {v2Blocks.length > 1 && (
+            <div className="rounded-md border border-border bg-secondary/20 p-2">
+              <div className="mb-1 flex items-center justify-between">
+                <Label className="text-xs">Blocks to assign</Label>
+                <div className="flex gap-1">
+                  <button type="button" className="text-[10px] underline" onClick={() => setSelectedBlockIds(v2Blocks.map((b) => b.id))}>All</button>
+                  <button type="button" className="text-[10px] underline" onClick={() => setSelectedBlockIds([])}>None</button>
+                </div>
+              </div>
+              <ul className="space-y-1">
+                {v2Blocks.map((b) => (
+                  <li key={b.id}>
+                    <label className="flex cursor-pointer items-center gap-2 text-xs">
+                      <input
+                        type="checkbox"
+                        checked={selectedBlockIds.includes(b.id)}
+                        onChange={(e) => {
+                          setSelectedBlockIds((prev) =>
+                            e.target.checked ? [...prev, b.id] : prev.filter((id) => id !== b.id),
+                          );
+                        }}
+                      />
+                      <span className="font-medium">{b.name}</span>
+                      <span className="ml-auto text-[10px] text-muted-foreground">{b.weeks?.length ?? 0}w</span>
+                    </label>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-1 text-[10px] text-muted-foreground">{selectedBlockIds.length} of {v2Blocks.length} block{v2Blocks.length === 1 ? "" : "s"} selected</p>
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-2">
             <div>
               <Label className="text-xs">Start date</Label>
