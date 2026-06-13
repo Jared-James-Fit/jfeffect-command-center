@@ -75,7 +75,7 @@ function DraftsTab() {
   return (
     <div className="space-y-4">
       <Card className="p-4 space-y-3">
-        <h3 className="font-semibold text-sm">New {kind === "broadcast" ? "Broadcast" : "Announcement"} Draft</h3>
+        <h3 className="font-semibold text-sm">New Draft</h3>
         <Input placeholder="Title" value={title} onChange={(e) => setTitle(e.target.value)} />
         <Textarea placeholder="Body" value={body} onChange={(e) => setBody(e.target.value)} rows={4} />
         <div className="flex items-center gap-2">
