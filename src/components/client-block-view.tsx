@@ -391,9 +391,9 @@ export function ClientBlockView({
                 id={`cbv-day-${d.id}`}
                 data-day-id={d.id}
                 className={cn(
-                  "flex snap-start flex-col rounded-lg border bg-card",
+                  "flex min-w-0 snap-start flex-col rounded-lg border bg-card",
                   // Mobile: ~85vw per card with a small peek of the next day.
-                  "w-[85vw] shrink-0",
+                  "w-[calc(100vw-3rem)] max-w-[360px] shrink-0",
                   // Tablet/desktop: fixed-width columns; horizontal scroll if overflow.
                   "md:w-[320px] lg:w-[340px] xl:w-[360px]",
                   isToday && !done && "border-primary ring-2 ring-primary/40",
@@ -401,14 +401,14 @@ export function ClientBlockView({
               >
                 {/* Sticky day header inside the column */}
                 <div className="sticky top-[64px] z-10 rounded-t-lg border-b border-border bg-card/95 p-3 backdrop-blur">
-                  <div className="flex items-start justify-between gap-2">
+                  <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2">
                     <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <h3 className="truncate text-sm font-black uppercase tracking-wide">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <h3 className="min-w-0 truncate text-sm font-black uppercase tracking-wide">
                           {d.title || `Day ${d.day_index}`}
                         </h3>
                         {isToday && !done && (
-                          <Badge className="h-4 border-primary/40 bg-primary/15 px-1 text-[9px] font-bold text-primary hover:bg-primary/20">
+                          <Badge className="h-4 shrink-0 whitespace-nowrap border-primary/40 bg-primary/15 px-1 text-[9px] font-bold text-primary hover:bg-primary/20">
                             Today
                           </Badge>
                         )}
@@ -416,13 +416,13 @@ export function ClientBlockView({
                       {d.focus && (
                         <p className="mt-0.5 truncate text-[11px] text-foreground/70">{d.focus}</p>
                       )}
-                      <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-foreground/70">
-                        {dd && <span>{format(dd, "EEE · MMM d")}</span>}
-                        <span className="inline-flex items-center gap-1"><Clock className="h-3 w-3" />{duration}</span>
-                        <span className="inline-flex items-center gap-1"><Dumbbell className="h-3 w-3" />{rows.length} ex</span>
+                      <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-foreground/70">
+                        {dd && <span className="shrink-0 whitespace-nowrap">{format(dd, "EEE · MMM d")}</span>}
+                        <span className="inline-flex min-w-0 items-center gap-1 whitespace-nowrap"><Clock className="h-3 w-3 shrink-0" />{duration}</span>
+                        <span className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap"><Dumbbell className="h-3 w-3 shrink-0" />{rows.length} ex</span>
                       </div>
                     </div>
-                    <div className="shrink-0">
+                    <div className="shrink-0 whitespace-nowrap">
                       {done ? (
                         <Badge variant="outline" className="border-emerald-500/40 bg-emerald-500/10 text-[10px] text-emerald-500">
                           <CheckCircle2 className="mr-0.5 h-3 w-3" /> Done
