@@ -1703,7 +1703,7 @@ function SetRow({
         {/* Row actions */}
         <div className="flex flex-wrap items-center gap-1 pt-0.5">
           <Button size="sm" variant="outline" onClick={useTargets} className="h-7 px-2 text-[11px]">
-            Use Targets
+            Quick Inputs
           </Button>
           {setIndex > 1 && prevExisting?.completed_at && (
             <Button size="sm" variant="outline" onClick={copyPrevious} className="h-7 px-2 text-[11px]">
