@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -22,6 +22,18 @@ import { toast } from "sonner";
 import { useBulkSelection } from "@/hooks/use-bulk-selection";
 
 export const Route = createFileRoute("/_authenticated/admin/events/")({
+  component: EventsRedirect,
+});
+
+function EventsRedirect() {
+  const navigate = useNavigate();
+  useEffect(() => {
+    navigate({ to: "/admin/calendar", search: { tab: "events" } as any, replace: true });
+  }, [navigate]);
+  return null;
+}
+
+const _LegacyEventsRoute = createFileRoute("/_authenticated/admin/events/")({
   component: AdminEventsPage,
 });
 
