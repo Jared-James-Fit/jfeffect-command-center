@@ -1,4 +1,5 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -13,9 +14,17 @@ import { CardioTargetDialog } from "@/components/cardio-target-dialog";
 import { CARDIO_TYPES, deriveTarget } from "@/lib/nutrition-cardio";
 import { dayTypeLabel, dayTypeTone } from "@/lib/training-schedule";
 
-export const Route = createFileRoute("/_authenticated/admin/cardio-targets")({ component: CardioDashboard });
+export const Route = createFileRoute("/_authenticated/admin/cardio-targets")({ component: CardioRedirect });
 
-function CardioDashboard() {
+function CardioRedirect() {
+  const navigate = useNavigate();
+  useEffect(() => {
+    navigate({ to: "/admin/programming", search: { tab: "cardio" } as any, replace: true });
+  }, [navigate]);
+  return null;
+}
+
+export function CardioDashboard({ embedded = false }: { embedded?: boolean } = {}) {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<any>(null);
   const [filters, setFilters] = useState({ client: "all", type: "all", state: "all", search: "" });
@@ -47,11 +56,18 @@ function CardioDashboard() {
 
   return (
     <>
-      <PageHeader title="Cardio Targets" subtitle="All client cardio targets in one place." actions={
+      {!embedded && <PageHeader title="Cardio Targets" subtitle="All client cardio targets in one place." actions={
         <Button size="sm" className="bg-gradient-primary font-bold uppercase w-full sm:w-auto" onClick={() => { setEditing(null); setOpen(true); }}>
           <Plus className="mr-2 h-4 w-4" /> Add Cardio
         </Button>
-      } />
+      } />}
+      {embedded && (
+        <div className="flex justify-end px-3 pt-3 sm:px-6 md:px-8">
+          <Button size="sm" className="bg-gradient-primary font-bold uppercase" onClick={() => { setEditing(null); setOpen(true); }}>
+            <Plus className="mr-2 h-4 w-4" /> Add Cardio
+          </Button>
+        </div>
+      )}
       <div className="p-3 sm:p-6 md:p-8 space-y-4 overflow-x-hidden">
         <Card className="border-border bg-card p-3 sm:p-4 grid gap-3 md:grid-cols-4">
           <Input placeholder="Search client" value={filters.search} onChange={(e) => setFilters({ ...filters, search: e.target.value })} />
