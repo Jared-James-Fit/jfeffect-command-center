@@ -36,6 +36,30 @@ let running = false;
 let timer: ReturnType<typeof setTimeout> | null = null;
 const listeners = new Set<() => void>();
 
+// Cached snapshot for useSyncExternalStore. We MUST return a stable
+// reference whenever underlying state hasn't changed, otherwise React
+// re-renders forever ("Maximum update depth exceeded").
+type AggregateSnapshot = { status: QueueStatus; pending: number; stuck: QueueItem[] };
+let cachedSnapshot: AggregateSnapshot | null = null;
+let cachedItemsRef: QueueItem[] | null = null;
+let cachedRunning = false;
+
+function getAggregateSnapshot(): AggregateSnapshot {
+  if (cachedSnapshot && cachedItemsRef === items && cachedRunning === running) {
+    return cachedSnapshot;
+  }
+  cachedItemsRef = items;
+  cachedRunning = running;
+  cachedSnapshot = {
+    status: getAggregateStatus(),
+    pending: items.length,
+    stuck: items.filter((i) => i.attempts >= STUCK_AFTER),
+  };
+  return cachedSnapshot;
+}
+
+const SERVER_SNAPSHOT: AggregateSnapshot = { status: "synced", pending: 0, stuck: [] };
+
 function load(): QueueItem[] {
   if (typeof window === "undefined") return [];
   try {
@@ -56,6 +80,8 @@ function persist() {
 }
 
 function notify() {
+  // Invalidate cache so the next getSnapshot() recomputes once.
+  cachedSnapshot = null;
   for (const l of listeners) l();
 }
 
@@ -178,12 +204,8 @@ export function useQueueAggregateStatus(): {
 } {
   return useSyncExternalStore(
     subscribe,
-    () => ({
-      status: getAggregateStatus(),
-      pending: items.length,
-      stuck: items.filter((i) => i.attempts >= STUCK_AFTER),
-    }),
-    () => ({ status: "synced" as QueueStatus, pending: 0, stuck: [] }),
+    getAggregateSnapshot,
+    () => SERVER_SNAPSHOT,
   );
 }
 
