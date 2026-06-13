@@ -28,6 +28,9 @@ import { syncFilloutForms } from "@/lib/fillout-sync.functions";
 import { useBulkSelection } from "@/hooks/use-bulk-selection";
 import { useClientImpersonation } from "@/lib/client-impersonation";
 import { ActionButton } from "@/components/action-button";
+import { NativeFormPreviewDialog } from "@/components/forms/native-form-preview";
+import { ConditionalLogicEditor } from "@/components/forms/conditional-logic-editor";
+import { FormVersionHistory } from "@/components/forms/form-version-history";
 
 const EMPTY_ARRAY: any[] = [];
 
@@ -219,6 +222,7 @@ function FormRow({
     enabled: form.kind === "native",
   });
   const { data: assignments = [] } = useQuery({ queryKey: ["nf-assignments", form.id], queryFn: () => listAssignments(form.id) });
+  const [preview, setPreview] = useState(false);
 
   const hasAudience = form.visibility === "all_active_clients" || assignments.length > 0;
   const hasContent = form.kind === "external" ? !!form.external_url : questions.length > 0;
@@ -277,6 +281,11 @@ function FormRow({
           <Button size="sm" onClick={onSend} className="bg-gradient-primary font-bold">
             <Send className="mr-1 h-4 w-4" /> Share
           </Button>
+          {form.kind === "native" && (
+            <Button variant="outline" size="sm" onClick={() => setPreview(true)}>
+              <Eye className="mr-1 h-4 w-4" /> Preview
+            </Button>
+          )}
           <Button variant="outline" size="sm" onClick={onEdit}><FileEdit className="mr-1 h-4 w-4" /> Edit</Button>
           <Button variant="outline" size="sm" onClick={async () => {
             await duplicateForm(form.id);
@@ -289,6 +298,14 @@ function FormRow({
           }}><Archive className="mr-1 h-4 w-4" /> {form.archived ? "Unarchive" : "Archive"}</Button>
         </div>
       </div>
+      {preview && form.kind === "native" && (
+        <NativeFormPreviewDialog
+          open={preview}
+          onClose={() => setPreview(false)}
+          form={form}
+          questions={questions}
+        />
+      )}
     </Card>
   );
 }
