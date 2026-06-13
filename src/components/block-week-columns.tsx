@@ -2,7 +2,15 @@ import { useMemo, useRef } from "react";
 import { Link } from "@tanstack/react-router";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Clock, CheckCircle2, Play, ChevronRight, CalendarRange, Crosshair, Lock } from "lucide-react";
+import {
+  Clock,
+  CheckCircle2,
+  Play,
+  ChevronRight,
+  CalendarRange,
+  Crosshair,
+  Lock,
+} from "lucide-react";
 import { startOfDay, format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { durationRange } from "@/lib/pl-programs";
@@ -18,7 +26,9 @@ type WeekEntry = { week: any; entries: { day: any; week: any; block: any; comple
  * The full block stays visible as side-by-side week columns with horizontal scroll.
  */
 export function BlockWeekColumns({
-  block, weeks, mode,
+  block,
+  weeks,
+  mode,
 }: {
   block: any;
   weeks: WeekEntry[];
@@ -27,15 +37,19 @@ export function BlockWeekColumns({
   const today = startOfDay(new Date());
 
   // Pre-compute per-week metadata once.
-  const computed = useMemo(() => weeks.map(({ week, entries }) => {
-    const range = week ? weekDisplayRange(block, week) : null;
-    const now = isCurrentWeek(range);
-    const locked = mode === "client" && week ? isWeekLocked(block, week) : false;
-    const doneCount = entries.filter((it) => it.completion?.completed_at).length;
-    const baseStatus = displayWeekStatus(week?.status);
-    const status = locked && doneCount === 0 && baseStatus === "Not Started" ? "Locked" : baseStatus;
-    return { week, entries, range, now, locked, doneCount, status };
-  }), [weeks, block, mode]);
+  const computed = useMemo(
+    () =>
+      weeks.map(({ week, entries }) => {
+        const range = week ? weekDisplayRange(block, week) : null;
+        const now = isCurrentWeek(range);
+        const locked = mode === "client" && week ? isWeekLocked(block, week) : false;
+        const doneCount = entries.filter((it) => it.completion?.completed_at).length;
+        const baseStatus = displayWeekStatus(week?.status);
+        const status = locked && doneCount === 0 && baseStatus === "Not Started" ? "Locked" : baseStatus;
+        return { week, entries, range, now, locked, doneCount, status };
+      }),
+    [weeks, block, mode],
+  );
 
   const weekRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const scrollToWeek = (id: string) => {
