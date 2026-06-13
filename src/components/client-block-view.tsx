@@ -393,9 +393,9 @@ export function ClientBlockView({
                 className={cn(
                   "flex min-w-0 snap-start flex-col rounded-lg border bg-card",
                   // Mobile: ~85vw per card with a small peek of the next day.
-                  "w-[calc(100vw-3rem)] max-w-[360px] shrink-0",
-                  // Tablet/desktop: fixed-width columns; horizontal scroll if overflow.
-                  "md:w-[320px] lg:w-[340px] xl:w-[360px]",
+                  "w-[calc(100vw-3rem)] max-w-[380px] shrink-0",
+                  // Tablet/desktop: roomier columns so exercise names wrap cleanly without clipping.
+                  "md:w-[360px] lg:w-[380px] xl:w-[400px]",
                   isToday && !done && "border-primary ring-2 ring-primary/40",
                 )}
               >
@@ -404,7 +404,7 @@ export function ClientBlockView({
                   <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2">
                     <div className="min-w-0">
                       <div className="flex min-w-0 items-center gap-2">
-                        <h3 className="min-w-0 truncate text-sm font-black uppercase tracking-wide">
+                        <h3 className="min-w-0 break-words text-sm font-black uppercase tracking-wide">
                           {d.title || `Day ${d.day_index}`}
                         </h3>
                         {isToday && !done && (
@@ -414,7 +414,7 @@ export function ClientBlockView({
                         )}
                       </div>
                       {d.focus && (
-                        <p className="mt-0.5 truncate text-[11px] text-foreground/70">{d.focus}</p>
+                        <p className="mt-0.5 break-words text-[11px] text-foreground/70">{d.focus}</p>
                       )}
                       <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-foreground/70">
                         {dd && <span className="shrink-0 whitespace-nowrap">{format(dd, "EEE · MMM d")}</span>}
@@ -470,11 +470,11 @@ export function ClientBlockView({
                       )}>
                         <div className="grid grid-cols-1 gap-2">
                           <div className="min-w-0">
-                            <div className="truncate text-[13px] font-bold leading-tight">{name}</div>
+                            <div className="break-words text-[13px] font-bold leading-snug">{name}</div>
                             <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[10px] font-semibold uppercase tracking-wide text-foreground/70">
-                              <span className="max-w-full truncate">{purpose[i]}</span>
+                              <span className="break-words">{purpose[i]}</span>
                               {isComp && <span className="shrink-0 rounded bg-primary/15 px-1 text-primary">Comp</span>}
-                              <span className="max-w-full truncate text-foreground/50">· {cat}</span>
+                              <span className="break-words text-foreground/50">· {cat}</span>
                             </div>
                           </div>
                         </div>
