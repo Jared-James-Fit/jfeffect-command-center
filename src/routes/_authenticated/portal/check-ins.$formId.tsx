@@ -325,15 +325,21 @@ function QuestionInput({
   value,
   files,
   readOnly,
+  busy,
   onChange,
   onUpload,
+  onRemove,
+  onReplace,
 }: {
   q: NfQuestion;
   value: any;
   files: any[];
   readOnly: boolean;
+  busy?: "uploading" | "removing" | "replacing";
   onChange: (v: any) => void;
   onUpload: (f: File) => void;
+  onRemove: (fileId: string) => void;
+  onReplace: (fileId: string, file: File) => void;
 }) {
   const opts = (q.options ?? []) as string[];
   if (q.question_type === "short_text") {
@@ -414,20 +420,60 @@ function QuestionInput({
     return (
       <div className="space-y-3">
         {files.length > 0 && (
-          <ul className="space-y-1 text-sm">
+          <ul className="space-y-2 text-sm">
             {files.map((f) => (
-              <li key={f.id} className="rounded bg-muted/30 px-2 py-1">{f.original_name}</li>
+              <li
+                key={f.id}
+                className="flex flex-wrap items-center justify-between gap-2 rounded bg-muted/30 px-3 py-2"
+              >
+                <span className="truncate">{f.original_name}</span>
+                {!readOnly && (
+                  <div className="flex items-center gap-2">
+                    <label className="inline-flex cursor-pointer items-center gap-1 rounded border border-border bg-background px-2 py-1 text-xs hover:bg-muted">
+                      <RotateCcw className="h-3.5 w-3.5" />
+                      <span>{busy === "replacing" ? "Replacing…" : "Replace"}</span>
+                      <input
+                        type="file"
+                        accept={accept}
+                        className="hidden"
+                        disabled={!!busy}
+                        onChange={(e) => {
+                          const nf = e.target.files?.[0];
+                          if (nf) onReplace(f.id, nf);
+                          e.target.value = "";
+                        }}
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      disabled={!!busy}
+                      onClick={() => {
+                        if (confirm("Remove this file?")) onRemove(f.id);
+                      }}
+                      className="inline-flex items-center gap-1 rounded border border-destructive/40 bg-destructive/10 px-2 py-1 text-xs text-destructive hover:bg-destructive/20 disabled:opacity-50"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                      {busy === "removing" ? "Removing…" : "Remove"}
+                    </button>
+                  </div>
+                )}
+              </li>
             ))}
           </ul>
         )}
         {!readOnly && (
-          <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-dashed border-border bg-muted/20 px-3 py-2 text-sm hover:bg-muted/40">
-            <Upload className="h-4 w-4" />
-            <span>Upload {q.question_type === "video" ? "video" : "file"}</span>
+          <label className={`inline-flex cursor-pointer items-center gap-2 rounded-md border border-dashed border-border bg-muted/20 px-3 py-2 text-sm hover:bg-muted/40 ${busy ? "pointer-events-none opacity-60" : ""}`}>
+            {busy === "uploading" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+            <span>
+              {busy === "uploading"
+                ? "Uploading…"
+                : `Upload ${q.question_type === "video" ? "video" : "file"}`}
+            </span>
             <input
               type="file"
               accept={accept}
               className="hidden"
+              disabled={!!busy}
               onChange={(e) => {
                 const f = e.target.files?.[0];
                 if (f) onUpload(f);
