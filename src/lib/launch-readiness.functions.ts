@@ -20,6 +20,18 @@ export type ReadinessCheck = {
   state: ReadinessState;
   detail?: string | null;
   group: string;
+  /** Who can clear this blocker. */
+  owner?: "Jared" | "Lovable" | "Manual";
+  /** Does this prevent Checkout Session creation right now? */
+  blocks_checkout?: boolean;
+  /** Does this prevent safely promoting the membership to the public? */
+  blocks_promotion?: boolean;
+  /** Short imperative action label, e.g. "Open Membership Settings". */
+  action_label?: string | null;
+  /** In-app route OR external URL (https://). UI decides how to render. */
+  action_href?: string | null;
+  /** Smallest concrete next step, written for a non-engineer. */
+  next_step?: string | null;
 };
 
 export type ReadinessSummary =
@@ -63,6 +75,12 @@ export const getLaunchReadiness = createServerFn({ method: "GET" })
       label: "Monthly price ID configured",
       state: settings?.monthly_price_id ? "ready" : "blocked",
       detail: settings?.monthly_price_id ? "Price ID set" : "Configure in Membership Settings",
+      owner: "Jared",
+      blocks_checkout: !settings?.monthly_price_id,
+      blocks_promotion: !settings?.monthly_price_id,
+      action_label: "Open Membership Settings",
+      action_href: "/admin/settings",
+      next_step: settings?.monthly_price_id ? null : "Paste the live monthly price ID (price_…) from Stripe → Products.",
     });
     push({
       key: "monthly_display",
@@ -70,6 +88,12 @@ export const getLaunchReadiness = createServerFn({ method: "GET" })
       label: "Display price matches $29 USD/month",
       state: /\$?29.*month/i.test(settings?.monthly_price_display ?? "") ? "ready" : "warning",
       detail: settings?.monthly_price_display ?? "(unset)",
+      owner: "Jared",
+      blocks_checkout: false,
+      blocks_promotion: false,
+      action_label: "Open Membership Settings",
+      action_href: "/admin/settings",
+      next_step: /\$?29.*month/i.test(settings?.monthly_price_display ?? "") ? null : "Set display label, e.g. \"$29 USD/month\".",
     });
     push({
       key: "trial_days",
@@ -77,6 +101,12 @@ export const getLaunchReadiness = createServerFn({ method: "GET" })
       label: "3-day trial configured",
       state: settings?.trial_days === 3 ? "ready" : "warning",
       detail: `${settings?.trial_days ?? 0} day(s)`,
+      owner: "Jared",
+      blocks_checkout: false,
+      blocks_promotion: false,
+      action_label: "Open Membership Settings",
+      action_href: "/admin/settings",
+      next_step: settings?.trial_days === 3 ? null : "Set trial_days = 3.",
     });
     const mode = settings?.stripe_mode === "test" ? "test" : "live";
     push({
@@ -85,6 +115,11 @@ export const getLaunchReadiness = createServerFn({ method: "GET" })
       label: `Stripe mode: ${mode}`,
       state: "ready",
       detail: mode === "live" ? "Live mode — real cards will be charged" : "Test mode — safe for QA",
+      owner: "Jared",
+      blocks_checkout: false,
+      blocks_promotion: false,
+      action_label: "Open Membership Settings",
+      action_href: "/admin/settings",
     });
     push({
       key: "grace_period",
@@ -92,6 +127,11 @@ export const getLaunchReadiness = createServerFn({ method: "GET" })
       label: "5-day grace period configured",
       state: settings?.grace_period_days === 5 ? "ready" : "warning",
       detail: `${settings?.grace_period_days ?? 0} day(s)`,
+      owner: "Jared",
+      blocks_checkout: false,
+      blocks_promotion: false,
+      action_label: "Open Membership Settings",
+      action_href: "/admin/settings",
     });
 
     // 2. Webhook secrets ----------------------------------------------------
@@ -103,6 +143,12 @@ export const getLaunchReadiness = createServerFn({ method: "GET" })
       label: "Live webhook secret detected",
       state: liveWh ? "ready" : (mode === "live" ? "blocked" : "warning"),
       detail: liveWh ? "STRIPE_WEBHOOK_SECRET set" : "Missing STRIPE_WEBHOOK_SECRET",
+      owner: "Jared",
+      blocks_checkout: !liveWh && mode === "live",
+      blocks_promotion: !liveWh,
+      action_label: "Open Stripe Dashboard → Webhooks",
+      action_href: "https://dashboard.stripe.com/webhooks",
+      next_step: liveWh ? null : "Create live webhook endpoint, copy signing secret into Lovable Cloud Secrets as STRIPE_WEBHOOK_SECRET.",
     });
     push({
       key: "webhook_secret_test",
@@ -110,6 +156,12 @@ export const getLaunchReadiness = createServerFn({ method: "GET" })
       label: "Test webhook secret detected",
       state: testWh ? "ready" : (mode === "test" ? "blocked" : "warning"),
       detail: testWh ? "STRIPE_WEBHOOK_SECRET_TEST set" : "Missing STRIPE_WEBHOOK_SECRET_TEST",
+      owner: "Jared",
+      blocks_checkout: !testWh && mode === "test",
+      blocks_promotion: false,
+      action_label: "Open Stripe Dashboard → Webhooks (Test)",
+      action_href: "https://dashboard.stripe.com/test/webhooks",
+      next_step: testWh ? null : "Optional but recommended: add a test webhook for safe QA.",
     });
     const diag = getStripeKeyDiagnostics();
     push({
@@ -117,7 +169,15 @@ export const getLaunchReadiness = createServerFn({ method: "GET" })
       group: "Stripe",
       label: `Stripe API keys present for ${mode}`,
       state: (mode === "live" ? diag.live_key_available : diag.test_key_available) ? "ready" : "blocked",
-      detail: JSON.stringify(diag),
+      detail: `live=${diag.live_key_available ? "yes" : "missing"}, test=${diag.test_key_available ? "yes" : "missing"}`,
+      owner: "Jared",
+      blocks_checkout: (mode === "live" ? !diag.live_key_available : !diag.test_key_available),
+      blocks_promotion: !diag.live_key_available,
+      action_label: "Open Lovable Cloud Secrets",
+      action_href: null,
+      next_step: (mode === "live" ? diag.live_key_available : diag.test_key_available)
+        ? null
+        : `Add STRIPE_SECRET_KEY (live) ${mode === "test" ? "and/or STRIPE_SECRET_KEY_TEST" : ""} via Project → Backend → Secrets.`,
     });
 
     // 3. Recent webhook processing -----------------------------------------
@@ -131,6 +191,12 @@ export const getLaunchReadiness = createServerFn({ method: "GET" })
       label: "Recent webhook processing successful",
       state: (recentEvents ?? 0) > 0 ? "ready" : "warning",
       detail: `${recentEvents ?? 0} events in last 7 days`,
+      owner: "Manual",
+      blocks_checkout: false,
+      blocks_promotion: false,
+      action_label: "Open Billing Events",
+      action_href: "/admin/membership/billing-events",
+      next_step: (recentEvents ?? 0) > 0 ? null : "Send one test webhook (or take any Stripe action) and confirm an event lands here.",
     });
     push({
       key: "event_idempotency",
@@ -138,6 +204,9 @@ export const getLaunchReadiness = createServerFn({ method: "GET" })
       label: "Event idempotency available",
       state: "ready",
       detail: "processed_stripe_events table active",
+      owner: "Lovable",
+      blocks_checkout: false,
+      blocks_promotion: false,
     });
 
     // 4. Notification mode --------------------------------------------------
@@ -162,6 +231,16 @@ export const getLaunchReadiness = createServerFn({ method: "GET" })
         : notifMode === "allowlist"
           ? `Allowlist (${phones.length} phones, ${emails.length} emails)`
           : "Dry run — no provider calls",
+      owner: "Jared",
+      blocks_checkout: false,
+      blocks_promotion: notifMode === "dry_run",
+      action_label: "Open Notification Settings",
+      action_href: "/admin/membership/notifications",
+      next_step: notifMode === "live"
+        ? null
+        : notifMode === "allowlist"
+          ? "After successful allowlisted test, switch to Live before promoting."
+          : "Move to Allowlist for QA, then Live before promoting.",
     });
 
     // 5. Legal --------------------------------------------------------------
@@ -169,49 +248,39 @@ export const getLaunchReadiness = createServerFn({ method: "GET" })
     const legalBlockers = (gate.admin_blockers ?? []).filter((b) =>
       /terms|privacy|membership-agreement|recurring|cancellation|placement|legal/i.test(b),
     );
-    push({
-      key: "legal_terms",
-      group: "Legal",
-      label: "Terms published",
-      state: legalBlockers.some((b) => /terms/i.test(b)) ? "blocked" : "ready",
-    });
-    push({
-      key: "legal_privacy",
-      group: "Legal",
-      label: "Privacy published",
-      state: legalBlockers.some((b) => /privacy/i.test(b)) ? "blocked" : "ready",
-    });
-    push({
-      key: "legal_agreement",
-      group: "Legal",
-      label: "Membership Agreement published",
-      state: legalBlockers.some((b) => /membership-agreement/i.test(b)) ? "blocked" : "ready",
-    });
-    push({
-      key: "legal_billing_disclosure",
-      group: "Legal",
-      label: "Recurring billing disclosure active",
-      state: legalBlockers.some((b) => /recurring/i.test(b)) ? "blocked" : "ready",
-    });
-    push({
-      key: "legal_refund",
-      group: "Legal",
-      label: "Cancellation/refund policy active",
-      state: legalBlockers.some((b) => /cancellation/i.test(b)) ? "blocked" : "ready",
-    });
-    push({
-      key: "legal_placement",
-      group: "Legal",
-      label: "Legal checkout placement complete",
-      state: legalBlockers.some((b) => /placement/i.test(b)) ? "blocked" : "ready",
-      detail: legalBlockers.find((b) => /placement/i.test(b)) ?? null,
-    });
+    const legalDoc = (key: string, label: string, match: RegExp) => {
+      const failingBlocker = legalBlockers.find((b) => match.test(b));
+      push({
+        key,
+        group: "Legal",
+        label,
+        state: failingBlocker ? "blocked" : "ready",
+        detail: failingBlocker ?? null,
+        owner: "Jared",
+        blocks_checkout: !!failingBlocker,
+        blocks_promotion: !!failingBlocker,
+        action_label: "Open Legal Workspace",
+        action_href: "/admin/legal",
+        next_step: failingBlocker
+          ? "Review the current draft, publish a version, enable public-read where required, and activate the membership-checkout placement."
+          : null,
+      });
+    };
+    legalDoc("legal_terms", "Terms published", /terms/i);
+    legalDoc("legal_privacy", "Privacy published", /privacy/i);
+    legalDoc("legal_agreement", "Membership Agreement published", /membership-agreement/i);
+    legalDoc("legal_billing_disclosure", "Recurring billing disclosure active", /recurring/i);
+    legalDoc("legal_refund", "Cancellation/refund policy active", /cancellation/i);
+    legalDoc("legal_placement", "Legal checkout placement complete", /placement/i);
     push({
       key: "legal_persistence",
       group: "Legal",
       label: "Legal acceptance persistence working",
       state: "ready",
       detail: "legal_acceptances table active",
+      owner: "Lovable",
+      blocks_checkout: false,
+      blocks_promotion: false,
     });
 
     // 6. Support email & sales page ----------------------------------------
@@ -221,6 +290,12 @@ export const getLaunchReadiness = createServerFn({ method: "GET" })
       label: "Support email configured",
       state: settings?.support_email ? "ready" : "blocked",
       detail: settings?.support_email ? "Configured" : "Configure in Membership Settings",
+      owner: "Jared",
+      blocks_checkout: !settings?.support_email,
+      blocks_promotion: !settings?.support_email,
+      action_label: "Open Membership Settings",
+      action_href: "/admin/settings",
+      next_step: settings?.support_email ? null : "Enter the address members should email for help (e.g. support@jfeffect.com).",
     });
 
     const { data: sales } = await supabaseAdmin
@@ -231,6 +306,11 @@ export const getLaunchReadiness = createServerFn({ method: "GET" })
       group: "Sales",
       label: "Sales page published",
       state: (sales as any)?.published ? "ready" : "warning",
+      owner: "Jared",
+      blocks_checkout: false,
+      blocks_promotion: !(sales as any)?.published,
+      action_label: "Open Membership Sales Page",
+      action_href: "/admin/membership/sales-page",
     });
     push({
       key: "join_cta",
@@ -238,13 +318,22 @@ export const getLaunchReadiness = createServerFn({ method: "GET" })
       label: "/join CTA connected",
       state: "ready",
       detail: "Route /join present",
+      owner: "Lovable",
+      blocks_checkout: false,
+      blocks_promotion: false,
     });
     push({
       key: "checkout_gate",
       group: "Sales",
       label: "Checkout launch gate passing",
       state: gate.ok ? "ready" : "blocked",
-      detail: gate.ok ? null : `${(gate.admin_blockers ?? []).length} blocker(s)`,
+      detail: gate.ok ? null : (gate.admin_blockers ?? []).slice(0, 8).join("; "),
+      owner: "Jared",
+      blocks_checkout: !gate.ok,
+      blocks_promotion: !gate.ok,
+      action_label: "Open Legal Workspace",
+      action_href: "/admin/legal",
+      next_step: gate.ok ? null : "Clear every blocker listed above to allow Checkout Session creation.",
     });
 
     // 7. Manual verifications ----------------------------------------------
@@ -254,13 +343,53 @@ export const getLaunchReadiness = createServerFn({ method: "GET" })
       label: "Stripe Customer Portal manually verified",
       state: "manual",
       detail: "Confirm in Stripe Dashboard → Settings → Billing → Customer Portal",
+      owner: "Jared",
+      blocks_checkout: false,
+      blocks_promotion: true,
+      action_label: "Open Stripe Customer Portal Settings",
+      action_href: "https://dashboard.stripe.com/settings/billing/portal",
+      next_step: "Enable Update Payment Method + Cancel at period end, confirm Membership product visible, open Portal from a test member, then check this off in your launch notes.",
     });
 
     // 8. Lifecycle flows ----------------------------------------------------
-    push({ key: "restart_flow", group: "Lifecycle", label: "Expired-member Restart flow available", state: "ready" });
-    push({ key: "keep_flow", group: "Lifecycle", label: "Keep Membership flow available", state: "ready" });
+    push({ key: "restart_flow", group: "Lifecycle", label: "Expired-member Restart flow available", state: "ready", owner: "Lovable", blocks_checkout: false, blocks_promotion: false });
+    push({ key: "keep_flow", group: "Lifecycle", label: "Keep Membership flow available", state: "ready", owner: "Lovable", blocks_checkout: false, blocks_promotion: false });
 
     // 9. Cleanup / safety ---------------------------------------------------
+    // 9a. Is the cleanup actually scheduled in pg_cron? Service role can read cron.job.
+    let cronScheduled = false;
+    let cronDetail = "Unable to inspect pg_cron";
+    try {
+      const { data: cronRows } = await (supabaseAdmin as any)
+        .schema("cron")
+        .from("job")
+        .select("jobname, schedule, active, command");
+      const match = (cronRows ?? []).find((j: any) =>
+        /cleanup-pending-signups|pending_signups/i.test(`${j.jobname ?? ""} ${j.command ?? ""}`),
+      );
+      if (match) {
+        cronScheduled = !!match.active;
+        cronDetail = `${match.jobname} — ${match.schedule} (${match.active ? "active" : "disabled"})`;
+      } else {
+        cronDetail = "No pg_cron job targets the pending-signups cleanup endpoint";
+      }
+    } catch (e: any) {
+      cronDetail = `pg_cron inspection skipped: ${e?.message ?? "unknown"}`;
+    }
+    push({
+      key: "pending_cleanup_cron",
+      group: "Safety",
+      label: "Pending-signup cleanup cron scheduled",
+      state: cronScheduled ? "ready" : "blocked",
+      detail: cronDetail,
+      owner: "Lovable",
+      blocks_checkout: false,
+      blocks_promotion: !cronScheduled,
+      action_label: null,
+      action_href: null,
+      next_step: cronScheduled ? null : "Lovable will schedule this via a small additive migration (Increment 2).",
+    });
+
     const { count: pendingCount } = await supabaseAdmin
       .from("jf_pending_signups")
       .select("id", { count: "exact", head: true })
@@ -268,9 +397,12 @@ export const getLaunchReadiness = createServerFn({ method: "GET" })
     push({
       key: "pending_cleanup",
       group: "Safety",
-      label: "Pending-signup cleanup active",
+      label: "Pending-signup expired backlog",
       state: (pendingCount ?? 0) > 50 ? "warning" : "ready",
       detail: `${pendingCount ?? 0} expired pending signup(s) awaiting cleanup`,
+      owner: "Lovable",
+      blocks_checkout: false,
+      blocks_promotion: false,
     });
 
     const { count: crossLocked } = await supabaseAdmin
@@ -283,6 +415,11 @@ export const getLaunchReadiness = createServerFn({ method: "GET" })
       label: "Cross-account Stripe warnings reviewed",
       state: (crossLocked ?? 0) === 0 ? "ready" : "manual",
       detail: `${crossLocked ?? 0} member(s) flagged for manual review`,
+      owner: "Jared",
+      blocks_checkout: false,
+      blocks_promotion: (crossLocked ?? 0) > 0,
+      action_label: "Open Members",
+      action_href: "/admin/members",
     });
     push({
       key: "comp_provenance",
@@ -290,6 +427,9 @@ export const getLaunchReadiness = createServerFn({ method: "GET" })
       label: "Complimentary provenance available",
       state: "ready",
       detail: "Complimentary records tagged via adminCompAccess",
+      owner: "Lovable",
+      blocks_checkout: false,
+      blocks_promotion: false,
     });
 
     // ── Summary ───────────────────────────────────────────────────────────
