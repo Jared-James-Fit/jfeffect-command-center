@@ -30,6 +30,7 @@ export const Route = createFileRoute("/_authenticated/portal/workouts/")({
     view: s.view === "block" || s.view === "day" ? (s.view as "block" | "day") : undefined,
     week: typeof s.week === "string" ? parseInt(s.week, 10) || undefined
       : typeof s.week === "number" ? s.week : undefined,
+    day: typeof s.day === "string" && s.day ? s.day : undefined,
   }),
   component: WorkoutsPage,
 });
@@ -102,7 +103,15 @@ function WorkoutsPage() {
   }, [viewMode]);
   const setViewMode = (v: "day" | "block") => {
     setViewModeState(v);
-    navigate({ search: (prev: any) => ({ ...prev, view: v }), replace: true });
+    navigate({
+      search: (prev: any) => {
+        const next: any = { ...prev, view: v };
+        // Drop block-only params when leaving Block View.
+        if (v === "day") { delete next.day; }
+        return next;
+      },
+      replace: true,
+    });
     if (v === "block") {
       // Scroll to the block view anchor after the tab switch renders.
       setTimeout(() => {
@@ -177,11 +186,7 @@ function WorkoutsPage() {
             <p className="mt-3 text-sm text-muted-foreground">No workouts assigned yet. Your coach will publish your block soon.</p>
           </Card>
         ) : (
-          <Tabs
-            value={viewMode === "block" ? "calendar" : "today"}
-            onValueChange={(v) => setViewMode(v === "calendar" ? "block" : "day")}
-            className="space-y-4"
-          >
+          <div className="space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="inline-flex rounded-md border border-border bg-card p-0.5 text-xs">
                 <button
@@ -206,80 +211,103 @@ function WorkoutsPage() {
                 </button>
               </div>
             </div>
-            <TabsList className="grid w-full grid-cols-4">
-              <TabsTrigger value="today" className="text-xs sm:text-sm"><Sun className="mr-1 h-3.5 w-3.5" /><span className="hidden sm:inline">Today</span><span className="sm:hidden">Today</span></TabsTrigger>
-              <TabsTrigger value="all" className="text-xs sm:text-sm"><ListChecks className="mr-1 h-3.5 w-3.5" /><span className="hidden sm:inline">All Workouts</span><span className="sm:hidden">All</span></TabsTrigger>
-              <TabsTrigger value="calendar" className="text-xs sm:text-sm"><CalendarIcon className="mr-1 h-3.5 w-3.5" /><span className="hidden sm:inline">Block</span><span className="sm:hidden">Block</span></TabsTrigger>
-              <TabsTrigger value="history" className="text-xs sm:text-sm"><History className="mr-1 h-3.5 w-3.5" /><span className="hidden sm:inline">History</span><span className="sm:hidden">Hist</span></TabsTrigger>
-            </TabsList>
 
-            <TabsContent value="today" className="space-y-4">
-              {currentGroup ? (
-                <BlockSection block={currentGroup.block} weeks={[...currentGroup.weeks.values()]} />
-              ) : (
-                <Card className="p-6 text-sm text-muted-foreground">No active block.</Card>
-              )}
-            </TabsContent>
-
-            <TabsContent value="all" className="space-y-3">
-              {currentBlockItems.length === 0 ? (
-                <Card className="p-6 text-sm text-muted-foreground">No workouts assigned in your current block.</Card>
-              ) : (
-                <>
-                  <p className="text-xs text-muted-foreground">
-                    Every workout in your current block — tap any to start, even if it isn't today.
-                  </p>
-                  {currentBlockItems.map((it) => (
-                    <WorkoutListCard key={it.day.id} item={it} />
-                  ))}
-                </>
-              )}
-            </TabsContent>
-
-            <TabsContent value="calendar" className="space-y-4">
-              <div id="client-block-view" className="scroll-mt-24" />
-              {currentGroup ? (
-                <ClientBlockView
-                  block={currentGroup.block}
-                  selectedWeekIndex={search?.week ?? null}
-                  onWeekChange={(idx) => {
-                    navigate({
-                      search: (prev: any) => ({ ...prev, view: "block", week: idx }),
-                      replace: true,
-                    });
-                  }}
-                  mode="client"
-                />
-              ) : (
-                <Card className="p-6 text-sm text-muted-foreground">
-                  No assigned block.
-                </Card>
-              )}
-              {client?.id && (
-                <details className="rounded-md border border-border bg-card p-3 text-xs text-muted-foreground">
-                  <summary className="cursor-pointer font-semibold uppercase tracking-wide">Calendar view</summary>
-                  <div className="pt-3 space-y-3">
-                    <WeekScheduleView clientId={client.id} blockId={currentBlockId} mode="client" />
-                    {currentGroup && (
-                      <BlockWeekColumns block={currentGroup.block} weeks={[...currentGroup.weeks.values()]} mode="client" />
-                    )}
-                  </div>
-                </details>
-              )}
-            </TabsContent>
-
-            <TabsContent value="history" className="space-y-3">
-              {client?.id && (
-                <>
-                  <Card className="p-4">
-                    <div className="mb-2 text-sm font-bold uppercase tracking-widest text-muted-foreground">Compare Progress</div>
-                    <ProgressComparison clientId={client.id} />
+            {viewMode === "block" ? (
+              <>
+                <div id="client-block-view" className="scroll-mt-24" />
+                {currentGroup ? (
+                  <ClientBlockView
+                    block={currentGroup.block}
+                    selectedWeekIndex={search?.week ?? null}
+                    selectedDayId={search?.day ?? null}
+                    onWeekChange={(idx) => {
+                      navigate({
+                        search: (prev: any) => ({ ...prev, view: "block", week: idx, day: undefined }),
+                        replace: true,
+                      });
+                    }}
+                    onDayChange={(dayId) => {
+                      navigate({
+                        search: (prev: any) => ({ ...prev, view: "block", day: dayId }),
+                        replace: true,
+                      });
+                    }}
+                    mode="client"
+                  />
+                ) : (
+                  <Card className="p-6 text-sm text-muted-foreground">
+                    No assigned block.
                   </Card>
-                  <ClientPreviousBlocks clientId={client.id} mode="client" />
-                </>
-              )}
-            </TabsContent>
-          </Tabs>
+                )}
+                {client?.id && (
+                  <details className="rounded-md border border-border bg-card p-3 text-xs text-muted-foreground">
+                    <summary className="cursor-pointer font-semibold uppercase tracking-wide">Show calendar schedule</summary>
+                    <div className="pt-3 space-y-3">
+                      <WeekScheduleView clientId={client.id} blockId={currentBlockId} mode="client" />
+                      {currentGroup && (
+                        <BlockWeekColumns block={currentGroup.block} weeks={[...currentGroup.weeks.values()]} mode="client" />
+                      )}
+                    </div>
+                  </details>
+                )}
+              </>
+            ) : (
+              <Tabs defaultValue="today" className="space-y-4">
+                <TabsList className="grid w-full grid-cols-4">
+                  <TabsTrigger value="today" className="text-xs sm:text-sm"><Sun className="mr-1 h-3.5 w-3.5" /><span className="hidden sm:inline">Today</span><span className="sm:hidden">Today</span></TabsTrigger>
+                  <TabsTrigger value="all" className="text-xs sm:text-sm"><ListChecks className="mr-1 h-3.5 w-3.5" /><span className="hidden sm:inline">All Workouts</span><span className="sm:hidden">All</span></TabsTrigger>
+                  <TabsTrigger value="calendar" className="text-xs sm:text-sm"><CalendarIcon className="mr-1 h-3.5 w-3.5" /><span className="hidden sm:inline">Calendar</span><span className="sm:hidden">Cal</span></TabsTrigger>
+                  <TabsTrigger value="history" className="text-xs sm:text-sm"><History className="mr-1 h-3.5 w-3.5" /><span className="hidden sm:inline">History</span><span className="sm:hidden">Hist</span></TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="today" className="space-y-4">
+                  {currentGroup ? (
+                    <BlockSection block={currentGroup.block} weeks={[...currentGroup.weeks.values()]} />
+                  ) : (
+                    <Card className="p-6 text-sm text-muted-foreground">No active block.</Card>
+                  )}
+                </TabsContent>
+
+                <TabsContent value="all" className="space-y-3">
+                  {currentBlockItems.length === 0 ? (
+                    <Card className="p-6 text-sm text-muted-foreground">No workouts assigned in your current block.</Card>
+                  ) : (
+                    <>
+                      <p className="text-xs text-muted-foreground">
+                        Every workout in your current block — tap any to start, even if it isn't today.
+                      </p>
+                      {currentBlockItems.map((it) => (
+                        <WorkoutListCard key={it.day.id} item={it} />
+                      ))}
+                    </>
+                  )}
+                </TabsContent>
+
+                <TabsContent value="calendar" className="space-y-4">
+                  {client?.id && (
+                    <>
+                      <WeekScheduleView clientId={client.id} blockId={currentBlockId} mode="client" />
+                      {currentGroup && (
+                        <BlockWeekColumns block={currentGroup.block} weeks={[...currentGroup.weeks.values()]} mode="client" />
+                      )}
+                    </>
+                  )}
+                </TabsContent>
+
+                <TabsContent value="history" className="space-y-3">
+                  {client?.id && (
+                    <>
+                      <Card className="p-4">
+                        <div className="mb-2 text-sm font-bold uppercase tracking-widest text-muted-foreground">Compare Progress</div>
+                        <ProgressComparison clientId={client.id} />
+                      </Card>
+                      <ClientPreviousBlocks clientId={client.id} mode="client" />
+                    </>
+                  )}
+                </TabsContent>
+              </Tabs>
+            )}
+          </div>
         )}
 
         {client?.id && <WorkoutArchiveSection clientId={client.id} mode="client" />}
