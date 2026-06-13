@@ -1,0 +1,479 @@
+
+-- ============================================================
+-- pl_move_row: atomic swap of two adjacent rows' sort_order
+-- ============================================================
+CREATE OR REPLACE FUNCTION public.pl_move_row(p_row_id uuid, p_direction text)
+RETURNS TABLE(id uuid, sort_order integer)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_row pl_exercise_rows%ROWTYPE;
+  v_other pl_exercise_rows%ROWTYPE;
+  v_client_id uuid;
+  v_tmp integer;
+BEGIN
+  IF p_direction NOT IN ('up','down') THEN
+    RAISE EXCEPTION 'direction must be up or down';
+  END IF;
+
+  SELECT * INTO v_row FROM pl_exercise_rows WHERE pl_exercise_rows.id = p_row_id;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Row not found';
+  END IF;
+
+  -- Resolve owning client_id through day -> week -> block
+  SELECT b.client_id INTO v_client_id
+  FROM pl_days d
+  JOIN pl_weeks w ON w.id = d.week_id
+  JOIN pl_blocks b ON b.id = w.block_id
+  WHERE d.id = v_row.day_id;
+
+  -- Authorization: admin or assigned coach for the owning client
+  IF NOT (public.has_role(auth.uid(), 'admin'::app_role)
+          OR (v_client_id IS NOT NULL AND public.is_assigned_coach(v_client_id))) THEN
+    RAISE EXCEPTION 'Not authorized to reorder this row';
+  END IF;
+
+  -- Find adjacent sibling in the same day
+  IF p_direction = 'up' THEN
+    SELECT * INTO v_other
+    FROM pl_exercise_rows
+    WHERE day_id = v_row.day_id AND sort_order < v_row.sort_order
+    ORDER BY sort_order DESC
+    LIMIT 1;
+  ELSE
+    SELECT * INTO v_other
+    FROM pl_exercise_rows
+    WHERE day_id = v_row.day_id AND sort_order > v_row.sort_order
+    ORDER BY sort_order ASC
+    LIMIT 1;
+  END IF;
+
+  IF NOT FOUND THEN
+    -- No-op; return current order
+    RETURN QUERY
+      SELECT r.id, r.sort_order FROM pl_exercise_rows r
+      WHERE r.day_id = v_row.day_id ORDER BY r.sort_order;
+    RETURN;
+  END IF;
+
+  -- Two-step swap inside one transaction (function body is one txn) avoiding
+  -- any temporary collision on unique (day_id, sort_order) if present.
+  v_tmp := -1 - (extract(epoch from now())::int);
+  UPDATE pl_exercise_rows SET sort_order = v_tmp WHERE pl_exercise_rows.id = v_row.id;
+  UPDATE pl_exercise_rows SET sort_order = v_row.sort_order WHERE pl_exercise_rows.id = v_other.id;
+  UPDATE pl_exercise_rows SET sort_order = v_other.sort_order WHERE pl_exercise_rows.id = v_row.id;
+
+  RETURN QUERY
+    SELECT r.id, r.sort_order FROM pl_exercise_rows r
+    WHERE r.day_id = v_row.day_id ORDER BY r.sort_order;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.pl_move_row(uuid, text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.pl_move_row(uuid, text) TO authenticated, service_role;
+
+-- ============================================================
+-- pl_assign_template_to_client: atomic template -> client expand
+-- ============================================================
+CREATE OR REPLACE FUNCTION public.pl_assign_template_to_client(
+  p_template_id uuid,
+  p_client_id uuid,
+  p_placement jsonb,
+  p_name text,
+  p_client_visible boolean,
+  p_start_date date,
+  p_end_date date,
+  p_selected_block_ids text[],
+  p_start_from_block_id text
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_tpl pl_templates%ROWTYPE;
+  v_payload jsonb;
+  v_type text;
+  v_mode text;
+  v_name text;
+  v_visible boolean := COALESCE(p_client_visible, true);
+  v_prep_id uuid;
+  v_block_id uuid;
+  v_week_id uuid;
+  v_day_id uuid;
+  v_assignable jsonb;
+  v_b jsonb;
+  v_weeks_data jsonb;
+  v_w jsonb;
+  v_d jsonb;
+  v_r jsonb;
+  v_widx integer;
+  v_didx integer;
+  v_sort integer;
+  v_count integer;
+  v_start_idx integer;
+  v_target_block_id uuid;
+  v_target_week_id uuid;
+  v_target_day_id uuid;
+  v_max_idx integer;
+BEGIN
+  -- Authorization first
+  IF NOT (public.has_role(auth.uid(), 'admin'::app_role)
+          OR public.is_assigned_coach(p_client_id)) THEN
+    RAISE EXCEPTION 'Not authorized to assign programs to this client';
+  END IF;
+
+  SELECT * INTO v_tpl FROM pl_templates WHERE id = p_template_id;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Template not found';
+  END IF;
+
+  v_payload := COALESCE(v_tpl.payload, '{}'::jsonb);
+  v_type := v_tpl.template_type;
+  v_mode := COALESCE(p_placement->>'mode', 'standalone_block');
+  v_name := COALESCE(NULLIF(p_name, ''), v_tpl.name);
+
+  ----------------------------------------------------------------
+  -- v2 multi-block "block" template
+  ----------------------------------------------------------------
+  IF v_type = 'block'
+     AND (v_payload->>'schema_version') = '2'
+     AND jsonb_typeof(v_payload->'blocks') = 'array' THEN
+
+    SELECT COALESCE(jsonb_agg(b ORDER BY COALESCE((b->>'order_index')::int, 0)), '[]'::jsonb)
+      INTO v_assignable
+    FROM jsonb_array_elements(v_payload->'blocks') b
+    WHERE COALESCE((b->>'archived')::boolean, false) = false
+      AND (b->>'deleted_at') IS NULL
+      AND (
+        p_selected_block_ids IS NULL
+        OR array_length(p_selected_block_ids, 1) IS NULL
+        OR (b->>'id') = ANY(p_selected_block_ids)
+      );
+
+    -- start_from slicing
+    IF p_start_from_block_id IS NOT NULL AND jsonb_array_length(v_assignable) > 0 THEN
+      SELECT MIN(idx) INTO v_start_idx
+      FROM (
+        SELECT (row_number() OVER () - 1)::int AS idx, val
+        FROM jsonb_array_elements(v_assignable) WITH ORDINALITY AS t(val, ord)
+      ) s
+      WHERE (s.val->>'id') = p_start_from_block_id;
+      IF v_start_idx IS NOT NULL AND v_start_idx > 0 THEN
+        SELECT COALESCE(jsonb_agg(val), '[]'::jsonb) INTO v_assignable
+        FROM (
+          SELECT val, (row_number() OVER () - 1)::int AS idx
+          FROM jsonb_array_elements(v_assignable) val
+        ) s WHERE s.idx >= v_start_idx;
+      END IF;
+    END IF;
+
+    IF v_assignable IS NULL OR jsonb_array_length(v_assignable) = 0 THEN
+      RAISE EXCEPTION 'At least one block must be selected for assignment';
+    END IF;
+
+    IF jsonb_array_length(v_assignable) > 1 THEN
+      INSERT INTO pl_preps (client_id, title, status, client_visible, source_template_id, start_date, end_date)
+      VALUES (p_client_id, v_name, 'Active', v_visible, v_tpl.id, p_start_date, p_end_date)
+      RETURNING id INTO v_prep_id;
+
+      FOR v_b IN SELECT * FROM jsonb_array_elements(v_assignable) LOOP
+        v_weeks_data := COALESCE(v_b->'weeks_data', '[]'::jsonb);
+        INSERT INTO pl_blocks (client_id, prep_id, name, weeks, training_focus, status, client_visible, source_template_id, start_date, end_date)
+        VALUES (
+          p_client_id, v_prep_id, COALESCE(NULLIF(v_b->>'name',''), 'Block'),
+          GREATEST(jsonb_array_length(v_weeks_data), 1),
+          NULLIF(v_b->>'training_focus',''),
+          'Active', v_visible, v_tpl.id, p_start_date, p_end_date
+        ) RETURNING id INTO v_block_id;
+
+        v_widx := 0;
+        FOR v_w IN SELECT * FROM jsonb_array_elements(v_weeks_data) LOOP
+          v_widx := v_widx + 1;
+          INSERT INTO pl_weeks (block_id, week_index, notes)
+          VALUES (v_block_id, COALESCE((v_w->>'week_index')::int, v_widx), NULLIF(v_w->>'notes',''))
+          RETURNING id INTO v_week_id;
+          v_didx := 0;
+          FOR v_d IN SELECT * FROM jsonb_array_elements(COALESCE(v_w->'days','[]'::jsonb)) LOOP
+            v_didx := v_didx + 1;
+            INSERT INTO pl_days (week_id, day_index, title, focus, notes)
+            VALUES (v_week_id, COALESCE((v_d->>'day_index')::int, v_didx), NULLIF(v_d->>'title',''), NULLIF(v_d->>'focus',''), NULLIF(v_d->>'notes',''))
+            RETURNING id INTO v_day_id;
+            v_sort := 0;
+            FOR v_r IN SELECT * FROM jsonb_array_elements(COALESCE(v_d->'rows','[]'::jsonb)) LOOP
+              INSERT INTO pl_exercise_rows (
+                day_id, sort_order, exercise_id, exercise_name_override, sets, reps_text,
+                rpe, rir, percentage, percentage_basis, load_kg, load_lb, rest_seconds, tempo, time_profile, notes
+              ) VALUES (
+                v_day_id,
+                COALESCE((v_r->>'sort_order')::int, v_sort),
+                NULLIF(v_r->>'exercise_id','')::uuid,
+                NULLIF(v_r->>'exercise_name_override',''),
+                NULLIF(v_r->>'sets','')::int,
+                NULLIF(v_r->>'reps_text',''),
+                NULLIF(v_r->>'rpe',''),
+                NULLIF(v_r->>'rir',''),
+                NULLIF(v_r->>'percentage','')::numeric,
+                NULLIF(v_r->>'percentage_basis',''),
+                NULLIF(v_r->>'load_kg','')::numeric,
+                NULLIF(v_r->>'load_lb','')::numeric,
+                NULLIF(v_r->>'rest_seconds','')::int,
+                NULLIF(v_r->>'tempo',''),
+                COALESCE(NULLIF(v_r->>'time_profile',''), 'accessory_compound'),
+                NULLIF(v_r->>'notes','')
+              );
+              v_sort := v_sort + 1;
+            END LOOP;
+          END LOOP;
+        END LOOP;
+      END LOOP;
+
+      RETURN jsonb_build_object('prep_id', v_prep_id);
+    ELSE
+      -- single selected block — fall through using its weeks_data
+      v_payload := jsonb_set(v_payload, '{weeks_data}',
+        COALESCE(v_assignable->0->'weeks_data', '[]'::jsonb), true);
+    END IF;
+  END IF;
+
+  ----------------------------------------------------------------
+  -- full_prep
+  ----------------------------------------------------------------
+  IF v_type = 'full_prep' THEN
+    INSERT INTO pl_preps (
+      client_id, title, goal_type, event_name, event_date, total_weeks,
+      status, client_visible, source_template_id, start_date, end_date
+    ) VALUES (
+      p_client_id,
+      COALESCE(NULLIF(p_placement->'prep'->>'title',''), v_name),
+      COALESCE(NULLIF(p_placement->'prep'->>'goal_type',''), NULLIF(v_payload->'prep'->>'goal_type',''), 'Custom'),
+      COALESCE(NULLIF(p_placement->'prep'->>'event_name',''), NULLIF(v_payload->'prep'->>'event_name','')),
+      NULLIF(COALESCE(p_placement->'prep'->>'event_date', v_payload->'prep'->>'event_date'),'')::date,
+      NULLIF(v_payload->'prep'->>'total_weeks','')::int,
+      'Active', v_visible, v_tpl.id, p_start_date, p_end_date
+    ) RETURNING id INTO v_prep_id;
+
+    FOR v_b IN SELECT * FROM jsonb_array_elements(COALESCE(v_payload->'blocks_data','[]'::jsonb)) LOOP
+      v_weeks_data := COALESCE(v_b->'weeks_data', '[]'::jsonb);
+      INSERT INTO pl_blocks (client_id, prep_id, name, weeks, training_focus, status, client_visible, source_template_id, start_date, end_date)
+      VALUES (
+        p_client_id, v_prep_id, COALESCE(NULLIF(v_b->>'name',''), 'Block'),
+        GREATEST(COALESCE(jsonb_array_length(v_weeks_data), COALESCE((v_b->>'weeks')::int, 4)), 1),
+        NULLIF(v_b->>'training_focus',''),
+        'Active', v_visible, v_tpl.id, p_start_date, p_end_date
+      ) RETURNING id INTO v_block_id;
+      v_widx := 0;
+      FOR v_w IN SELECT * FROM jsonb_array_elements(v_weeks_data) LOOP
+        v_widx := v_widx + 1;
+        INSERT INTO pl_weeks (block_id, week_index, notes)
+        VALUES (v_block_id, COALESCE((v_w->>'week_index')::int, v_widx), NULLIF(v_w->>'notes',''))
+        RETURNING id INTO v_week_id;
+        v_didx := 0;
+        FOR v_d IN SELECT * FROM jsonb_array_elements(COALESCE(v_w->'days','[]'::jsonb)) LOOP
+          v_didx := v_didx + 1;
+          INSERT INTO pl_days (week_id, day_index, title, focus, notes)
+          VALUES (v_week_id, COALESCE((v_d->>'day_index')::int, v_didx), NULLIF(v_d->>'title',''), NULLIF(v_d->>'focus',''), NULLIF(v_d->>'notes',''))
+          RETURNING id INTO v_day_id;
+          v_sort := 0;
+          FOR v_r IN SELECT * FROM jsonb_array_elements(COALESCE(v_d->'rows','[]'::jsonb)) LOOP
+            INSERT INTO pl_exercise_rows (
+              day_id, sort_order, exercise_id, exercise_name_override, sets, reps_text,
+              rpe, rir, percentage, percentage_basis, load_kg, load_lb, rest_seconds, tempo, time_profile, notes
+            ) VALUES (
+              v_day_id,
+              COALESCE((v_r->>'sort_order')::int, v_sort),
+              NULLIF(v_r->>'exercise_id','')::uuid,
+              NULLIF(v_r->>'exercise_name_override',''),
+              NULLIF(v_r->>'sets','')::int,
+              NULLIF(v_r->>'reps_text',''),
+              NULLIF(v_r->>'rpe',''),
+              NULLIF(v_r->>'rir',''),
+              NULLIF(v_r->>'percentage','')::numeric,
+              NULLIF(v_r->>'percentage_basis',''),
+              NULLIF(v_r->>'load_kg','')::numeric,
+              NULLIF(v_r->>'load_lb','')::numeric,
+              NULLIF(v_r->>'rest_seconds','')::int,
+              NULLIF(v_r->>'tempo',''),
+              COALESCE(NULLIF(v_r->>'time_profile',''), 'accessory_compound'),
+              NULLIF(v_r->>'notes','')
+            );
+            v_sort := v_sort + 1;
+          END LOOP;
+        END LOOP;
+      END LOOP;
+    END LOOP;
+
+    RETURN jsonb_build_object('prep_id', v_prep_id);
+  END IF;
+
+  ----------------------------------------------------------------
+  -- week template — append into existing block
+  ----------------------------------------------------------------
+  IF v_type = 'week' THEN
+    IF v_mode <> 'into_block' OR (p_placement->>'blockId') IS NULL THEN
+      RAISE EXCEPTION 'Week templates require a target block';
+    END IF;
+    v_target_block_id := (p_placement->>'blockId')::uuid;
+    SELECT COALESCE(MAX(week_index), 0) + 1 INTO v_widx FROM pl_weeks WHERE block_id = v_target_block_id;
+    INSERT INTO pl_weeks (block_id, week_index, notes)
+    VALUES (v_target_block_id, v_widx, NULLIF(v_payload->>'notes',''))
+    RETURNING id INTO v_week_id;
+    v_didx := 0;
+    FOR v_d IN SELECT * FROM jsonb_array_elements(COALESCE(v_payload->'days','[]'::jsonb)) LOOP
+      v_didx := v_didx + 1;
+      INSERT INTO pl_days (week_id, day_index, title, focus, notes)
+      VALUES (v_week_id, COALESCE((v_d->>'day_index')::int, v_didx), NULLIF(v_d->>'title',''), NULLIF(v_d->>'focus',''), NULLIF(v_d->>'notes',''))
+      RETURNING id INTO v_day_id;
+      v_sort := 0;
+      FOR v_r IN SELECT * FROM jsonb_array_elements(COALESCE(v_d->'rows','[]'::jsonb)) LOOP
+        INSERT INTO pl_exercise_rows (
+          day_id, sort_order, exercise_id, exercise_name_override, sets, reps_text,
+          rpe, rir, percentage, percentage_basis, load_kg, load_lb, rest_seconds, tempo, time_profile, notes
+        ) VALUES (
+          v_day_id, COALESCE((v_r->>'sort_order')::int, v_sort),
+          NULLIF(v_r->>'exercise_id','')::uuid, NULLIF(v_r->>'exercise_name_override',''),
+          NULLIF(v_r->>'sets','')::int, NULLIF(v_r->>'reps_text',''),
+          NULLIF(v_r->>'rpe',''), NULLIF(v_r->>'rir',''),
+          NULLIF(v_r->>'percentage','')::numeric, NULLIF(v_r->>'percentage_basis',''),
+          NULLIF(v_r->>'load_kg','')::numeric, NULLIF(v_r->>'load_lb','')::numeric,
+          NULLIF(v_r->>'rest_seconds','')::int, NULLIF(v_r->>'tempo',''),
+          COALESCE(NULLIF(v_r->>'time_profile',''), 'accessory_compound'),
+          NULLIF(v_r->>'notes','')
+        );
+        v_sort := v_sort + 1;
+      END LOOP;
+    END LOOP;
+    UPDATE pl_blocks SET weeks = v_widx WHERE id = v_target_block_id AND weeks < v_widx;
+    RETURN jsonb_build_object('block_id', v_target_block_id, 'week_id', v_week_id);
+  END IF;
+
+  ----------------------------------------------------------------
+  -- day template
+  ----------------------------------------------------------------
+  IF v_type = 'day' THEN
+    IF v_mode <> 'into_week' OR (p_placement->>'weekId') IS NULL THEN
+      RAISE EXCEPTION 'Day templates require a target week';
+    END IF;
+    v_target_week_id := (p_placement->>'weekId')::uuid;
+    SELECT COALESCE(MAX(day_index), 0) + 1 INTO v_didx FROM pl_days WHERE week_id = v_target_week_id;
+    INSERT INTO pl_days (week_id, day_index, title, focus, notes)
+    VALUES (v_target_week_id, v_didx, NULLIF(v_payload->>'title',''), NULLIF(v_payload->>'focus',''), NULLIF(v_payload->>'notes',''))
+    RETURNING id INTO v_day_id;
+    v_sort := 0;
+    FOR v_r IN SELECT * FROM jsonb_array_elements(COALESCE(v_payload->'rows','[]'::jsonb)) LOOP
+      INSERT INTO pl_exercise_rows (
+        day_id, sort_order, exercise_id, exercise_name_override, sets, reps_text,
+        rpe, rir, percentage, percentage_basis, load_kg, load_lb, rest_seconds, tempo, time_profile, notes
+      ) VALUES (
+        v_day_id, COALESCE((v_r->>'sort_order')::int, v_sort),
+        NULLIF(v_r->>'exercise_id','')::uuid, NULLIF(v_r->>'exercise_name_override',''),
+        NULLIF(v_r->>'sets','')::int, NULLIF(v_r->>'reps_text',''),
+        NULLIF(v_r->>'rpe',''), NULLIF(v_r->>'rir',''),
+        NULLIF(v_r->>'percentage','')::numeric, NULLIF(v_r->>'percentage_basis',''),
+        NULLIF(v_r->>'load_kg','')::numeric, NULLIF(v_r->>'load_lb','')::numeric,
+        NULLIF(v_r->>'rest_seconds','')::int, NULLIF(v_r->>'tempo',''),
+        COALESCE(NULLIF(v_r->>'time_profile',''), 'accessory_compound'),
+        NULLIF(v_r->>'notes','')
+      );
+      v_sort := v_sort + 1;
+    END LOOP;
+    RETURN jsonb_build_object('week_id', v_target_week_id, 'day_id', v_day_id);
+  END IF;
+
+  ----------------------------------------------------------------
+  -- exercise_row template
+  ----------------------------------------------------------------
+  IF v_type = 'exercise_row' THEN
+    IF v_mode <> 'into_day' OR (p_placement->>'dayId') IS NULL THEN
+      RAISE EXCEPTION 'Row templates require a target day';
+    END IF;
+    v_target_day_id := (p_placement->>'dayId')::uuid;
+    SELECT COALESCE(MAX(sort_order), -1) + 1 INTO v_sort FROM pl_exercise_rows WHERE day_id = v_target_day_id;
+    INSERT INTO pl_exercise_rows (
+      day_id, sort_order, exercise_id, exercise_name_override, sets, reps_text,
+      rpe, rir, percentage, percentage_basis, load_kg, load_lb, rest_seconds, tempo, time_profile, notes
+    ) VALUES (
+      v_target_day_id, v_sort,
+      NULLIF(v_payload->>'exercise_id','')::uuid, NULLIF(v_payload->>'exercise_name_override',''),
+      NULLIF(v_payload->>'sets','')::int, NULLIF(v_payload->>'reps_text',''),
+      NULLIF(v_payload->>'rpe',''), NULLIF(v_payload->>'rir',''),
+      NULLIF(v_payload->>'percentage','')::numeric, NULLIF(v_payload->>'percentage_basis',''),
+      NULLIF(v_payload->>'load_kg','')::numeric, NULLIF(v_payload->>'load_lb','')::numeric,
+      NULLIF(v_payload->>'rest_seconds','')::int, NULLIF(v_payload->>'tempo',''),
+      COALESCE(NULLIF(v_payload->>'time_profile',''), 'accessory_compound'),
+      NULLIF(v_payload->>'notes','')
+    );
+    RETURN jsonb_build_object('day_id', v_target_day_id);
+  END IF;
+
+  ----------------------------------------------------------------
+  -- block (default / single)
+  ----------------------------------------------------------------
+  IF v_mode = 'existing_prep' THEN
+    v_prep_id := (p_placement->>'prepId')::uuid;
+  ELSIF v_mode = 'new_prep' THEN
+    INSERT INTO pl_preps (
+      client_id, title, goal_type, event_name, event_date,
+      status, client_visible, source_template_id, start_date, end_date
+    ) VALUES (
+      p_client_id,
+      COALESCE(NULLIF(p_placement->'prep'->>'title',''), v_name || ' Prep'),
+      COALESCE(NULLIF(p_placement->'prep'->>'goal_type',''), 'Custom'),
+      NULLIF(p_placement->'prep'->>'event_name',''),
+      NULLIF(p_placement->'prep'->>'event_date','')::date,
+      'Active', v_visible, v_tpl.id, p_start_date, p_end_date
+    ) RETURNING id INTO v_prep_id;
+  END IF;
+
+  v_weeks_data := COALESCE(v_payload->'weeks_data', '[]'::jsonb);
+  INSERT INTO pl_blocks (client_id, prep_id, name, weeks, training_focus, status, client_visible, source_template_id, start_date, end_date)
+  VALUES (
+    p_client_id, v_prep_id, v_name,
+    GREATEST(COALESCE(jsonb_array_length(v_weeks_data), v_tpl.weeks, 4), 1),
+    v_tpl.training_focus,
+    'Active', v_visible, v_tpl.id, p_start_date, p_end_date
+  ) RETURNING id INTO v_block_id;
+
+  v_widx := 0;
+  FOR v_w IN SELECT * FROM jsonb_array_elements(v_weeks_data) LOOP
+    v_widx := v_widx + 1;
+    INSERT INTO pl_weeks (block_id, week_index, notes)
+    VALUES (v_block_id, COALESCE((v_w->>'week_index')::int, v_widx), NULLIF(v_w->>'notes',''))
+    RETURNING id INTO v_week_id;
+    v_didx := 0;
+    FOR v_d IN SELECT * FROM jsonb_array_elements(COALESCE(v_w->'days','[]'::jsonb)) LOOP
+      v_didx := v_didx + 1;
+      INSERT INTO pl_days (week_id, day_index, title, focus, notes)
+      VALUES (v_week_id, COALESCE((v_d->>'day_index')::int, v_didx), NULLIF(v_d->>'title',''), NULLIF(v_d->>'focus',''), NULLIF(v_d->>'notes',''))
+      RETURNING id INTO v_day_id;
+      v_sort := 0;
+      FOR v_r IN SELECT * FROM jsonb_array_elements(COALESCE(v_d->'rows','[]'::jsonb)) LOOP
+        INSERT INTO pl_exercise_rows (
+          day_id, sort_order, exercise_id, exercise_name_override, sets, reps_text,
+          rpe, rir, percentage, percentage_basis, load_kg, load_lb, rest_seconds, tempo, time_profile, notes
+        ) VALUES (
+          v_day_id, COALESCE((v_r->>'sort_order')::int, v_sort),
+          NULLIF(v_r->>'exercise_id','')::uuid, NULLIF(v_r->>'exercise_name_override',''),
+          NULLIF(v_r->>'sets','')::int, NULLIF(v_r->>'reps_text',''),
+          NULLIF(v_r->>'rpe',''), NULLIF(v_r->>'rir',''),
+          NULLIF(v_r->>'percentage','')::numeric, NULLIF(v_r->>'percentage_basis',''),
+          NULLIF(v_r->>'load_kg','')::numeric, NULLIF(v_r->>'load_lb','')::numeric,
+          NULLIF(v_r->>'rest_seconds','')::int, NULLIF(v_r->>'tempo',''),
+          COALESCE(NULLIF(v_r->>'time_profile',''), 'accessory_compound'),
+          NULLIF(v_r->>'notes','')
+        );
+        v_sort := v_sort + 1;
+      END LOOP;
+    END LOOP;
+  END LOOP;
+
+  RETURN jsonb_build_object('block_id', v_block_id, 'prep_id', v_prep_id);
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.pl_assign_template_to_client(uuid, uuid, jsonb, text, boolean, date, date, text[], text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.pl_assign_template_to_client(uuid, uuid, jsonb, text, boolean, date, date, text[], text) TO authenticated, service_role;
