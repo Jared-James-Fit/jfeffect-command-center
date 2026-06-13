@@ -85,7 +85,7 @@ export function BlockSummaryCard({
   const toBlock =
     mode === "admin"
       ? { to: "/admin/blocks/$blockId" as const, params: { blockId } }
-      : { to: "/portal/workouts" as const, params: {} as any };
+      : { to: "/portal/workouts" as const, params: {} as any, search: { view: "block" } as any, hash: "client-block-view" };
 
   return (
     <Card className="p-4 space-y-3">
