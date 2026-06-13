@@ -254,7 +254,7 @@ function SignedAgreementsPage() {
     e.preventDefault();
     e.stopPropagation();
     if (importMutation.isPending) return;
-    setImportConfirmOpen(true);
+    importMutation.mutate();
   }
 
   function confirmImportHistorical(e: React.MouseEvent<HTMLButtonElement>) {
