@@ -11,6 +11,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Plus, Trash2, Save, GripVertical, ChevronUp, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
+import { SettingsTabs } from "@/components/settings/settings-tabs";
 
 export const Route = createFileRoute("/_authenticated/admin/faqs")({ component: FaqsAdmin });
 
@@ -34,6 +35,7 @@ const TRAINING_HELP_SUBCATEGORIES = [
 function FaqsAdmin() {
   return (
     <>
+      <SettingsTabs />
       <PageHeader title="FAQ Manager" subtitle="Create and curate FAQs shown to clients at the top of each section. Only categories with entries appear in the portal." />
       <div className="p-4 md:p-8">
         <Tabs defaultValue="nutrition">
