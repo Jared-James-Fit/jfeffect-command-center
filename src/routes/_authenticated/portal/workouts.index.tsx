@@ -114,6 +114,9 @@ function WorkoutsPage() {
             <Link to="/portal/exercises">
               <Button variant="outline" size="sm"><Dumbbell className="mr-1 h-4 w-4" /> Exercise Library</Button>
             </Link>
+            <Link to="/portal/workouts/analytics">
+              <Button variant="outline" size="sm"><Activity className="mr-1 h-4 w-4" /> My Analytics</Button>
+            </Link>
           </div>
         </Card>
 
