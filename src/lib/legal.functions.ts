@@ -333,11 +333,13 @@ export const recordAcceptance = createServerFn({ method: "POST" })
           .eq("context", data.context)
           .is("revoked_at", null)
           .maybeSingle();
-        return existing;
+        return existing
+          ? ({ ...(existing as any), ip_address: (existing as any).ip_address ? String((existing as any).ip_address) : null } as Record<string, any>)
+          : null;
       }
       throw new Error(error.message);
     }
-    return row;
+    return { ...(row as any), ip_address: (row as any)?.ip_address ? String((row as any).ip_address) : null } as Record<string, any>;
   });
 
 // ----------------------------------------------------------------------------
