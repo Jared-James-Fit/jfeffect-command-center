@@ -130,11 +130,11 @@ export function UpcomingPanel() {
           </Button>
         }
       />
-      <div className="p-6 md:p-8 space-y-4">
+      <div className="p-3 sm:p-6 md:p-8 space-y-4">
         {/* Filters */}
         <Card className="border-border bg-card p-3 md:p-4 space-y-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="relative flex-1 min-w-[220px]">
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+            <div className="relative w-full sm:flex-1 sm:min-w-[220px]">
               <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
               <Input
                 placeholder="Search name, email, phone, title"
@@ -143,8 +143,9 @@ export function UpcomingPanel() {
                 className="pl-7 h-8 text-sm"
               />
             </div>
+            <div className="grid grid-cols-2 gap-2 sm:contents">
             <Select value={fSource} onValueChange={(v) => setSearch("source", v)}>
-              <SelectTrigger className="h-8 w-[140px] text-xs"><SelectValue placeholder="Source" /></SelectTrigger>
+              <SelectTrigger className="h-8 w-full sm:w-[140px] text-xs"><SelectValue placeholder="Source" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All sources</SelectItem>
                 <SelectItem value="appointment">Appointments</SelectItem>
@@ -153,7 +154,7 @@ export function UpcomingPanel() {
               </SelectContent>
             </Select>
             <Select value={fStatus} onValueChange={(v) => setSearch("status", v)}>
-              <SelectTrigger className="h-8 w-[140px] text-xs"><SelectValue placeholder="Status" /></SelectTrigger>
+              <SelectTrigger className="h-8 w-full sm:w-[140px] text-xs"><SelectValue placeholder="Status" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Any status</SelectItem>
                 <SelectItem value="Scheduled">Scheduled</SelectItem>
@@ -163,14 +164,14 @@ export function UpcomingPanel() {
               </SelectContent>
             </Select>
             <Select value={fType} onValueChange={(v) => setSearch("type", v)}>
-              <SelectTrigger className="h-8 w-[160px] text-xs"><SelectValue placeholder="Type" /></SelectTrigger>
+              <SelectTrigger className="h-8 w-full sm:w-[160px] text-xs"><SelectValue placeholder="Type" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All types</SelectItem>
                 {apptTypes.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
               </SelectContent>
             </Select>
             <Select value={fLink} onValueChange={(v) => setSearch("link", v)}>
-              <SelectTrigger className="h-8 w-[150px] text-xs"><SelectValue placeholder="CRM Link" /></SelectTrigger>
+              <SelectTrigger className="h-8 w-full sm:w-[150px] text-xs"><SelectValue placeholder="CRM Link" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All rows</SelectItem>
                 <SelectItem value="linked">CRM-linked</SelectItem>
@@ -178,12 +179,15 @@ export function UpcomingPanel() {
                 <SelectItem value="google_only">Google-only</SelectItem>
               </SelectContent>
             </Select>
+            </div>
+            <div className="flex items-center justify-between gap-2 sm:ml-auto sm:contents">
             {activeFilters > 0 && (
               <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={clearFilters}>
                 <Filter className="mr-1 h-3 w-3" /> Clear ({activeFilters})
               </Button>
             )}
             <span className="ml-auto text-xs text-muted-foreground">{total} result{total === 1 ? "" : "s"}</span>
+            </div>
           </div>
         </Card>
 
