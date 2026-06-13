@@ -28,6 +28,10 @@ const ListInput = z.object({
   formId: z.string().uuid().optional(),
   search: z.string().optional(),
   limit: z.number().int().min(1).max(200).optional(),
+  assignedCoachUserId: z.string().uuid().nullable().optional(),
+  priority: z.enum(["low", "normal", "high", "urgent"]).optional(),
+  dateFrom: z.string().optional(),
+  dateTo: z.string().optional(),
 }).partial();
 
 const GetInput = z.object({ id: z.string().uuid() });
