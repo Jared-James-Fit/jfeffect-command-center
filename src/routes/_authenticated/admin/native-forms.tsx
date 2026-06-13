@@ -28,6 +28,9 @@ import { syncFilloutForms } from "@/lib/fillout-sync.functions";
 import { useBulkSelection } from "@/hooks/use-bulk-selection";
 import { useClientImpersonation } from "@/lib/client-impersonation";
 import { ActionButton } from "@/components/action-button";
+import { NativeFormPreviewDialog } from "@/components/forms/native-form-preview";
+import { ConditionalLogicEditor } from "@/components/forms/conditional-logic-editor";
+import { FormVersionHistory } from "@/components/forms/form-version-history";
 
 const EMPTY_ARRAY: any[] = [];
 
@@ -219,6 +222,7 @@ function FormRow({
     enabled: form.kind === "native",
   });
   const { data: assignments = [] } = useQuery({ queryKey: ["nf-assignments", form.id], queryFn: () => listAssignments(form.id) });
+  const [preview, setPreview] = useState(false);
 
   const hasAudience = form.visibility === "all_active_clients" || assignments.length > 0;
   const hasContent = form.kind === "external" ? !!form.external_url : questions.length > 0;
@@ -277,6 +281,11 @@ function FormRow({
           <Button size="sm" onClick={onSend} className="bg-gradient-primary font-bold">
             <Send className="mr-1 h-4 w-4" /> Share
           </Button>
+          {form.kind === "native" && (
+            <Button variant="outline" size="sm" onClick={() => setPreview(true)}>
+              <Eye className="mr-1 h-4 w-4" /> Preview
+            </Button>
+          )}
           <Button variant="outline" size="sm" onClick={onEdit}><FileEdit className="mr-1 h-4 w-4" /> Edit</Button>
           <Button variant="outline" size="sm" onClick={async () => {
             await duplicateForm(form.id);
@@ -289,14 +298,23 @@ function FormRow({
           }}><Archive className="mr-1 h-4 w-4" /> {form.archived ? "Unarchive" : "Archive"}</Button>
         </div>
       </div>
+      {preview && form.kind === "native" && (
+        <NativeFormPreviewDialog
+          open={preview}
+          onClose={() => setPreview(false)}
+          form={form}
+          questions={questions}
+        />
+      )}
     </Card>
   );
 }
 
-function FormEditorDialog({ form, open, onClose, initialTab = "settings" }: { form: NfForm; open: boolean; onClose: () => void; initialTab?: "settings" | "questions" | "shared" }) {
+function FormEditorDialog({ form, open, onClose, initialTab = "settings" }: { form: NfForm; open: boolean; onClose: () => void; initialTab?: "settings" | "questions" | "shared" | "versions" }) {
   const qc = useQueryClient();
   const [local, setLocal] = useState<NfForm>(form);
-  const [activeTab, setActiveTab] = useState<"settings" | "questions" | "shared">(initialTab);
+  const [activeTab, setActiveTab] = useState<"settings" | "questions" | "shared" | "versions">(initialTab);
+  const [preview, setPreview] = useState(false);
 
   const { data: questions = [] } = useQuery({
     queryKey: ["nf-questions", form.id],
@@ -348,6 +366,14 @@ function FormEditorDialog({ form, open, onClose, initialTab = "settings" }: { fo
             <Button type="button" size="sm" variant={activeTab === "questions" ? "default" : "ghost"} onClick={() => setActiveTab("questions")}>Questions ({questions.length})</Button>
           )}
           <Button type="button" size="sm" variant={activeTab === "shared" ? "default" : "ghost"} onClick={() => setActiveTab("shared")}>Shared with</Button>
+          {form.kind === "native" && (
+            <Button type="button" size="sm" variant={activeTab === "versions" ? "default" : "ghost"} onClick={() => setActiveTab("versions")}>Versions</Button>
+          )}
+          {form.kind === "native" && (
+            <Button type="button" size="sm" variant="ghost" className="ml-auto" onClick={() => setPreview(true)}>
+              <Eye className="mr-1 h-4 w-4" /> Preview
+            </Button>
+          )}
         </div>
 
           {activeTab === "settings" && <div className="space-y-3">
@@ -463,7 +489,19 @@ function FormEditorDialog({ form, open, onClose, initialTab = "settings" }: { fo
           {activeTab === "shared" && <div>
             <AssignmentsEditor formId={form.id} form={local} onFormChange={setLocal} />
           </div>}
+
+          {activeTab === "versions" && form.kind === "native" && (
+            <FormVersionHistory formId={form.id} />
+          )}
       </DialogContent>
+      {preview && form.kind === "native" && (
+        <NativeFormPreviewDialog
+          open={preview}
+          onClose={() => setPreview(false)}
+          form={local}
+          questions={questions}
+        />
+      )}
     </Dialog>
   );
 }
@@ -497,14 +535,14 @@ function QuestionsEditor({ formId, questions }: { formId: string; questions: NfQ
   return (
     <div className="space-y-2">
       {questions.map((q, idx) => (
-        <QuestionRow key={q.id} q={q} formId={formId} onMoveUp={() => move(idx, -1)} onMoveDown={() => move(idx, 1)} />
+        <QuestionRow key={q.id} q={q} formId={formId} allQuestions={questions} onMoveUp={() => move(idx, -1)} onMoveDown={() => move(idx, 1)} />
       ))}
       <Button variant="outline" onClick={addQuestion}><Plus className="mr-1 h-4 w-4" /> Add Question</Button>
     </div>
   );
 }
 
-function QuestionRow({ q, formId, onMoveUp, onMoveDown }: { q: NfQuestion; formId: string; onMoveUp: () => void; onMoveDown: () => void }) {
+function QuestionRow({ q, formId, allQuestions, onMoveUp, onMoveDown }: { q: NfQuestion; formId: string; allQuestions: NfQuestion[]; onMoveUp: () => void; onMoveDown: () => void }) {
   const qc = useQueryClient();
   const [local, setLocal] = useState<NfQuestion>(q);
 
@@ -554,6 +592,11 @@ function QuestionRow({ q, formId, onMoveUp, onMoveDown }: { q: NfQuestion; formI
               qc.invalidateQueries({ queryKey: ["nf-questions", formId] });
             }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
           </div>
+          <ConditionalLogicEditor
+            question={local}
+            allQuestions={allQuestions}
+            onChange={(cl) => save({ conditional_logic: cl })}
+          />
         </div>
       </div>
     </Card>

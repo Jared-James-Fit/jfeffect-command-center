@@ -65,7 +65,7 @@ export type NfForm = {
 
 export type NfConditionalRule = {
   question_id: string;
-  op: "equals" | "not_equals" | "contains" | "gt" | "lt";
+  op: "equals" | "not_equals" | "contains" | "not_contains" | "gt" | "lt" | "is_empty" | "is_not_empty";
   value: string | number;
 };
 
@@ -79,7 +79,12 @@ export type NfQuestion = {
   required: boolean;
   options: string[];
   validation: Record<string, unknown>;
-  conditional_logic: { show_if?: NfConditionalRule[]; match?: "all" | "any" };
+  conditional_logic: {
+    show_if?: NfConditionalRule[];
+    hide_if?: NfConditionalRule[];
+    match?: "all" | "any";
+  };
+  archived_at?: string | null;
 };
 
 export type NfAssignment = {
@@ -207,6 +212,7 @@ export async function listQuestions(formId: string) {
     .from("nf_questions")
     .select("*")
     .eq("form_id", formId)
+    .is("archived_at", null)
     .order("order_index", { ascending: true });
   if (error) throw error;
   return (data ?? []) as NfQuestion[];
@@ -224,8 +230,22 @@ export async function upsertQuestion(input: Partial<NfQuestion> & { form_id: str
 }
 
 export async function deleteQuestion(id: string) {
-  const { error } = await db.from("nf_questions").delete().eq("id", id);
+  // Soft-archive so historical submissions keep the original label/type/answer readable.
+  const { error } = await db
+    .from("nf_questions")
+    .update({ archived_at: new Date().toISOString() })
+    .eq("id", id);
   if (error) throw error;
+}
+
+export async function listQuestionsIncludingArchived(formId: string) {
+  const { data, error } = await db
+    .from("nf_questions")
+    .select("*")
+    .eq("form_id", formId)
+    .order("order_index", { ascending: true });
+  if (error) throw error;
+  return (data ?? []) as NfQuestion[];
 }
 
 export async function reorderQuestions(updates: { id: string; order_index: number }[]) {
@@ -364,9 +384,30 @@ export async function getOrCreateCurrentSubmission(form: NfForm, clientId: strin
   const found = existing?.[0];
   if (found && (found.status === "in_progress" || form.recurrence !== "none")) return found as NfSubmission;
 
+  // Stamp current published form version (if any) onto the submission.
+  let formVersionId: string | null = null;
+  let formVersionNumber: number | null = null;
+  const { data: vrows } = await db
+    .from("nf_form_versions")
+    .select("id, version_number")
+    .eq("form_id", form.id)
+    .order("version_number", { ascending: false })
+    .limit(1);
+  if (vrows && vrows[0]) {
+    formVersionId = vrows[0].id;
+    formVersionNumber = vrows[0].version_number;
+  }
+
   const { data: created, error } = await db
     .from("nf_submissions")
-    .insert({ form_id: form.id, client_id: clientId, period_start: period, status: "in_progress" })
+    .insert({
+      form_id: form.id,
+      client_id: clientId,
+      period_start: period,
+      status: "in_progress",
+      form_version_id: formVersionId,
+      form_version_number: formVersionNumber,
+    })
     .select("*")
     .single();
   if (error) throw error;
@@ -552,19 +593,109 @@ export function statusTone(s: NfSubmissionStatus | "not_started") {
 }
 
 export function shouldShowQuestion(q: NfQuestion, answers: Record<string, NfAnswer | undefined>): boolean {
-  const rules = q.conditional_logic?.show_if;
-  if (!rules || rules.length === 0) return true;
-  const match = q.conditional_logic?.match ?? "all";
-  const evals = rules.map((r) => {
+  const cl = q.conditional_logic ?? {};
+  const match = cl.match ?? "all";
+  const evalRule = (r: NfConditionalRule): boolean => {
     const ans = answers[r.question_id];
-    const v = ans?.value_text ?? ans?.value_number ?? "";
+    const raw = ans?.value_text ?? (ans?.value_number != null ? String(ans.value_number) : "")
+      ?? (Array.isArray(ans?.value_json) ? (ans!.value_json as any[]).join(",") : "");
+    const v = String(raw ?? "");
     switch (r.op) {
-      case "equals": return String(v) === String(r.value);
-      case "not_equals": return String(v) !== String(r.value);
-      case "contains": return String(v).toLowerCase().includes(String(r.value).toLowerCase());
+      case "equals": return v === String(r.value);
+      case "not_equals": return v !== String(r.value);
+      case "contains": return v.toLowerCase().includes(String(r.value).toLowerCase());
+      case "not_contains": return !v.toLowerCase().includes(String(r.value).toLowerCase());
       case "gt": return Number(v) > Number(r.value);
       case "lt": return Number(v) < Number(r.value);
+      case "is_empty": return v.trim() === "";
+      case "is_not_empty": return v.trim() !== "";
+      default: return true;
     }
-  });
-  return match === "all" ? evals.every(Boolean) : evals.some(Boolean);
+  };
+  const combine = (rules: NfConditionalRule[]) =>
+    match === "all" ? rules.every(evalRule) : rules.some(evalRule);
+  const showRules = cl.show_if ?? [];
+  const hideRules = cl.hide_if ?? [];
+  if (showRules.length > 0 && !combine(showRules)) return false;
+  if (hideRules.length > 0 && combine(hideRules)) return false;
+  return true;
+}
+
+/* -------------------------- Versions -------------------------- */
+
+export type NfFormVersion = {
+  id: string;
+  form_id: string;
+  version_number: number;
+  form_snapshot: any;
+  questions_snapshot: NfQuestion[];
+  change_reason: string | null;
+  created_at: string;
+  created_by: string | null;
+};
+
+export async function listFormVersions(formId: string) {
+  const { data, error } = await db
+    .from("nf_form_versions")
+    .select("*")
+    .eq("form_id", formId)
+    .order("version_number", { ascending: false });
+  if (error) throw error;
+  return (data ?? []) as NfFormVersion[];
+}
+
+export async function getFormVersion(versionId: string) {
+  const { data, error } = await db
+    .from("nf_form_versions").select("*").eq("id", versionId).maybeSingle();
+  if (error) throw error;
+  return data as NfFormVersion | null;
+}
+
+/**
+ * Validate a conditional-logic config against the question set.
+ * Returns null on success, otherwise a human-readable error message.
+ */
+export function validateConditionalLogic(
+  question: NfQuestion,
+  allQuestions: NfQuestion[],
+): string | null {
+  const cl = question.conditional_logic ?? {};
+  const rules = [...(cl.show_if ?? []), ...(cl.hide_if ?? [])];
+  if (rules.length === 0) return null;
+
+  const byId = new Map(allQuestions.map((q) => [q.id, q]));
+  const myIndex = allQuestions.findIndex((q) => q.id === question.id);
+
+  for (const r of rules) {
+    if (!r.question_id) return "Select a source question for every rule.";
+    if (r.question_id === question.id) return "A question cannot reference itself.";
+    const src = byId.get(r.question_id);
+    if (!src) return "A rule references a question that no longer exists.";
+    if (src.archived_at) return `Rule source "${src.label}" has been deleted/archived.`;
+    const srcIndex = allQuestions.findIndex((q) => q.id === src.id);
+    if (srcIndex > myIndex && myIndex >= 0) {
+      return `Rule source "${src.label}" appears AFTER this question — it must come before.`;
+    }
+    // Circular: walk the dependency graph from src.
+    const seen = new Set<string>([question.id]);
+    const stack = [src.id];
+    while (stack.length) {
+      const cur = stack.pop()!;
+      if (seen.has(cur)) return "Circular conditional reference detected.";
+      seen.add(cur);
+      const q2 = byId.get(cur);
+      if (!q2) continue;
+      const more = [
+        ...(q2.conditional_logic?.show_if ?? []),
+        ...(q2.conditional_logic?.hide_if ?? []),
+      ];
+      for (const rr of more) if (rr.question_id) stack.push(rr.question_id);
+    }
+    if (["gt", "lt"].includes(r.op) && Number.isNaN(Number(r.value))) {
+      return `Operator "${r.op}" needs a numeric value.`;
+    }
+    if (["is_empty", "is_not_empty"].includes(r.op)) continue;
+    if (r.value === "" || r.value == null) return "Every rule needs a value.";
+  }
+  return null;
 }
