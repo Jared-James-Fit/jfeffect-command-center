@@ -45,6 +45,7 @@ import { writePlanCache, cachedInitialData } from "@/lib/workout-plan-cache";
 import { enqueueOfflineWrite, registerQueueHandler } from "@/lib/workout-offline-queue";
 import { ActiveRestTimerProvider, useRestTimer } from "@/components/active-rest-timer";
 import { ExerciseHistoryButton } from "@/components/exercise-history-sheet";
+import { convertWeight } from "@/lib/progress-metrics";
 
 /* -------------------------------------------------------------------------- */
 /* Target-parsing helpers (Suggested → Draft → Confirmed fast-logging)         */
@@ -137,7 +138,7 @@ function formatPrescription(p: {
   const sets = p.sets ?? 1;
   // Normalize "8-12" → "8–12" for readability; leave AMRAP / Max / other text untouched.
   const repsRaw = (p.repsText ?? "").toString().trim();
-  const reps = repsRaw ? repsRaw.replace(/\s*-\s*/, "–") : "?";
+  const reps = repsRaw ? repsRaw.replace(/\s*-\s*/g, "–") : "?";
   let load = "";
   if (p.suggestedWeight != null) {
     load = `@ ${fmtNum(p.suggestedWeight)} ${p.unit}`;
@@ -994,15 +995,21 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
       {/* Suggested load badges */}
       {row.manual_override && (row.load_kg || row.load_lb) && (
         <SuggestedLoadBadge
-          load={(row.load_kg ?? row.load_lb) as number}
-          unit={row.load_kg ? "kg" : "lb"}
+          load={Number(
+            convertWeight(
+              (row.load_kg ?? row.load_lb) as number,
+              row.load_kg ? "kg" : "lb",
+              unit,
+            ).toFixed(1),
+          )}
+          unit={unit}
           exerciseName={name}
         />
       )}
       {!row.manual_override && computed && computed.status === "ok" && computed.load != null && (
         <SuggestedLoadBadge
-          load={computed.load}
-          unit={computed.unit}
+          load={Number(convertWeight(computed.load, computed.unit, unit).toFixed(1))}
+          unit={unit}
           exerciseName={name}
         />
       )}
@@ -1049,7 +1056,7 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
         <div className={cn("grid items-center gap-2 border-b border-border bg-muted/40 px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground", focusMode ? "grid-cols-[44px_1fr_1fr_1fr_64px] text-xs" : "grid-cols-[36px_1fr_1fr_1fr_56px]")}>
           <span>Set</span>
           <span>Reps</span>
-          <span>Weight ({unit.toUpperCase()})</span>
+          <span className="truncate">Wt ({unit.toUpperCase()})</span>
           <span>RPE</span>
           <span className="text-right">Status</span>
         </div>
@@ -1514,6 +1521,8 @@ function SetRow({
     else if (repTarget?.min != null) setReps(String(repTarget.min));
     if (rpeTarget?.exact != null) setRpe(String(rpeTarget.exact));
     else if (rpeTarget?.min != null) setRpe(String(rpeTarget.min));
+    else if (rirTarget?.exact != null) setRpe(String(Math.min(10, Math.max(0, 10 - rirTarget.exact))));
+    else if (rirTarget?.min != null) setRpe(String(Math.min(10, Math.max(0, 10 - rirTarget.min))));
   };
   const copyPrevious = () => {
     if (!prevExisting) return;

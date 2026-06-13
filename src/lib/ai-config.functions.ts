@@ -23,7 +23,8 @@ async function requireAdmin(supabase: any, userId: string) {
 
 export const getGlobalAiConfig = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .handler(async () => {
+  .handler(async ({ context }) => {
+    await requireAdmin(context.supabase, context.userId);
     const sb = await admin();
     const { data } = await sb.from("global_ai_config").select("*").limit(1).maybeSingle();
     return data;
@@ -69,7 +70,8 @@ const FormConfigGetInput = z.object({ formId: z.string().uuid() });
 export const getFormAiConfig = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => FormConfigGetInput.parse(d))
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
+    await requireAdmin(context.supabase, context.userId);
     const sb = await admin();
     const { data: row } = await sb
       .from("form_ai_configs")
