@@ -1,7 +1,12 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { PageHeader } from "@/components/app-shell";
+import { cn } from "@/lib/utils";
+import { AdminNativeForms } from "./native-forms";
+import { FilloutSubmissionsPage } from "./fillout-submissions";
+import { ApplicationsInbox } from "./sales.coaching-applications";
+import { AgreementsAdminPage } from "./agreements.index";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -16,9 +21,92 @@ import { DoubleConfirmDeleteDialog } from "@/components/double-confirm-delete-di
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ActionButton } from "@/components/action-button";
 
-export const Route = createFileRoute("/_authenticated/admin/forms")({ component: FormsPage });
+const TABS = [
+  { value: "native-forms", label: "Native Forms" },
+  { value: "document-forms", label: "Document Forms" },
+  { value: "fillout-submissions", label: "Fillout Submissions" },
+  { value: "coaching-applications", label: "Coaching Applications" },
+  { value: "agreements", label: "Agreements" },
+] as const;
+type TabKey = typeof TABS[number]["value"];
 
-function FormsPage() {
+const LAST_TAB_KEY = "jf-admin-forms-last-tab";
+
+function isTab(v: unknown): v is TabKey {
+  return typeof v === "string" && TABS.some((t) => t.value === v);
+}
+
+export const Route = createFileRoute("/_authenticated/admin/forms")({
+  validateSearch: (raw: Record<string, unknown>): { tab: TabKey } => {
+    const t = raw?.tab;
+    if (isTab(t)) return { tab: t };
+    // URL takes priority; only consult localStorage when search is missing.
+    if (typeof t === "undefined" && typeof window !== "undefined") {
+      try {
+        const stored = window.localStorage.getItem(LAST_TAB_KEY);
+        if (isTab(stored)) return { tab: stored };
+      } catch {}
+    }
+    return { tab: "native-forms" };
+  },
+  component: FormsWorkspacePage,
+});
+
+function FormsWorkspacePage() {
+  const { tab } = Route.useSearch();
+  const navigate = useNavigate();
+
+  // Persist last tab so direct /admin/forms hits remember the choice, while
+  // explicit `?tab=` URLs always win (handled in validateSearch above).
+  useMemo(() => {
+    try { window.localStorage.setItem(LAST_TAB_KEY, tab); } catch {}
+  }, [tab]);
+
+  const setTab = (next: TabKey) => {
+    navigate({ to: "/admin/forms", search: { tab: next }, replace: false });
+  };
+
+  return (
+    <>
+      <PageHeader
+        title="Forms"
+        subtitle="Create, review, and manage forms, submissions, applications, and agreements."
+      />
+      <div className="border-b border-border bg-background/50">
+        <div className="-mb-px flex gap-1 overflow-x-auto px-2 md:px-4">
+          {TABS.map((t) => {
+            const active = t.value === tab;
+            return (
+              <button
+                key={t.value}
+                type="button"
+                onClick={() => setTab(t.value)}
+                className={cn(
+                  "shrink-0 whitespace-nowrap border-b-2 px-3 py-3 text-sm font-semibold transition-colors",
+                  active
+                    ? "border-primary text-foreground"
+                    : "border-transparent text-muted-foreground hover:text-foreground",
+                )}
+                aria-current={active ? "page" : undefined}
+              >
+                {t.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+      <div>
+        {tab === "native-forms" && <AdminNativeForms embedded />}
+        {tab === "document-forms" && <DocumentFormsPanel embedded />}
+        {tab === "fillout-submissions" && <FilloutSubmissionsPage embedded />}
+        {tab === "coaching-applications" && <ApplicationsInbox embedded />}
+        {tab === "agreements" && <AgreementsAdminPage embedded />}
+      </div>
+    </>
+  );
+}
+
+export function DocumentFormsPanel({ embedded = false }: { embedded?: boolean } = {}) {
   const qc = useQueryClient();
   const [showArchived, setShowArchived] = useState(false);
   const [editing, setEditing] = useState<FormLink | null>(null);
@@ -39,7 +127,9 @@ function FormsPage() {
 
   return (
     <>
-      <PageHeader title="Forms" subtitle="Store and organize Fillout-style forms. Assign them to clients." />
+      {!embedded && (
+        <PageHeader title="Forms" subtitle="Store and organize Fillout-style forms. Assign them to clients." />
+      )}
       <div className="p-4 md:p-8 space-y-4">
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <div className="flex items-center gap-2">
