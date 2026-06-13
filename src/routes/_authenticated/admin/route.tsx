@@ -5,8 +5,7 @@ import { AppShell } from "@/components/app-shell";
 import { coachingAdminNav, coachNav } from "@/lib/admin-nav";
 import { buildInternalNav, resolveStaffRoleTag } from "@/lib/internal-nav";
 import { useDashboardMode, setDashboardMode } from "@/lib/dashboard-mode";
-import { DashboardModeSwitcher } from "@/components/dashboard-mode-switcher";
-import { PovQuickToggle } from "@/components/pov-quick-toggle";
+import { AdminTopBar } from "@/components/admin-top-bar";
 import { TaskPopupGate } from "@/components/tasks/task-popup-gate";
 import { ClipboardList } from "lucide-react";
 import { useBarLayout, resolveLayout, withBarActionItems } from "@/lib/floating-bar";
@@ -108,8 +107,7 @@ function AdminLayout() {
 
   return (
     <AppShell items={nav} bottomItems={bottomItems} title={title}>
-      {!isCoach && <DashboardModeSwitcher />}
-      <PovQuickToggle variant="banner" />
+      <AdminTopBar showDashboardMode={!isCoach} />
       <Outlet />
       <TaskPopupGate />
     </AppShell>
