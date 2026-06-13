@@ -12,7 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
-import { format } from "date-fns";
+import { format, formatDistanceToNow, parseISO } from "date-fns";
 import {
   getCrmContact, updateCrmContact, addCrmNote, convertCrmContact, listCoachOptions,
 } from "@/lib/crm.functions";
@@ -44,6 +44,15 @@ function ContactProfile() {
   if (isLoading || !data) return <div className="p-6 text-sm text-muted-foreground">Loading…</div>;
   const c: any = data.contact;
   const isActive = c.lifecycle_stage === "active_client";
+  const followups: any[] = data.followups ?? [];
+  const openFollowups = followups.filter((f) => f.status === "open");
+  const upcomingFollowup = openFollowups
+    .filter((f) => f.due_date)
+    .sort((a, b) => (a.due_date < b.due_date ? -1 : 1))[0];
+  const upcomingAppt = (data.appointments ?? [])
+    .filter((a: any) => a.starts_at && new Date(a.starts_at).getTime() > Date.now() && a.status !== "Cancelled")
+    .sort((a: any, b: any) => new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime())[0];
+  const mostRecentAppt = (data.appointments ?? [])[0];
 
   async function patch(p: any) {
     try {
@@ -65,7 +74,13 @@ function ContactProfile() {
     <div className="space-y-4">
       <PageHeader
         title={c.full_name || c.email}
-        subtitle={c.email + (c.phone ? ` · ${c.phone}` : "")}
+        subtitle={
+          c.email +
+          (c.phone ? ` · ${c.phone}` : "") +
+          (data.last_contacted_at
+            ? ` · Last contacted ${formatDistanceToNow(new Date(data.last_contacted_at), { addSuffix: true })}`
+            : " · Never contacted")
+        }
         actions={
           <div className="flex flex-wrap gap-2">
             {isActive ? (
@@ -106,11 +121,52 @@ function ContactProfile() {
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="applications">Applications ({data.applications.length})</TabsTrigger>
           <TabsTrigger value="appointments">Appointments ({data.appointments.length})</TabsTrigger>
+          <TabsTrigger value="followups">Follow-ups ({openFollowups.length})</TabsTrigger>
           <TabsTrigger value="activity">Activity ({data.activities.length})</TabsTrigger>
           <TabsTrigger value="coaching">Coaching</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="space-y-4">
+          {(upcomingFollowup || upcomingAppt || mostRecentAppt) && (
+            <div className="grid gap-3 lg:grid-cols-3">
+              {upcomingFollowup && (
+                <SummaryCard title="Upcoming follow-up" tone="amber">
+                  <div className="font-medium">{upcomingFollowup.reason}</div>
+                  <div className="text-xs text-muted-foreground">
+                    Due {format(parseISO(upcomingFollowup.due_date), "PP")}
+                  </div>
+                  {upcomingFollowup.notes && <div className="text-xs">{upcomingFollowup.notes}</div>}
+                </SummaryCard>
+              )}
+              {upcomingAppt && (
+                <SummaryCard title="Upcoming booked call" tone="emerald">
+                  <div className="font-medium">{upcomingAppt.title ?? upcomingAppt.appointment_type ?? "Appointment"}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {format(new Date(upcomingAppt.starts_at), "PP p")} — {upcomingAppt.status}
+                  </div>
+                  {upcomingAppt.meet_link && (
+                    <a
+                      href={upcomingAppt.meet_link}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-xs underline"
+                    >
+                      Meet link
+                    </a>
+                  )}
+                </SummaryCard>
+              )}
+              {!upcomingAppt && mostRecentAppt && (
+                <SummaryCard title="Most recent call" tone="sky">
+                  <div className="font-medium">{mostRecentAppt.title ?? mostRecentAppt.appointment_type ?? "Appointment"}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {format(new Date(mostRecentAppt.starts_at), "PP p")} — {mostRecentAppt.status}
+                  </div>
+                </SummaryCard>
+              )}
+            </div>
+          )}
+
           <div className="grid gap-4 lg:grid-cols-3">
             <Card className="space-y-3 p-4 lg:col-span-2">
               <SectionTitle>Contact</SectionTitle>
@@ -221,17 +277,46 @@ function ContactProfile() {
           </Card>
         </TabsContent>
 
+        <TabsContent value="followups">
+          <Card className="divide-y divide-border">
+            {followups.length === 0 && <Empty>No follow-ups yet.</Empty>}
+            {followups.map((f) => (
+              <div key={f.id} className="p-3 text-sm">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge
+                    variant="outline"
+                    className={`capitalize ${
+                      f.status === "open"
+                        ? "bg-amber-500/15 text-amber-500"
+                        : "bg-emerald-500/15 text-emerald-500"
+                    }`}
+                  >
+                    {f.status}
+                  </Badge>
+                  <span className="font-medium">{f.reason}</span>
+                  {f.source && (
+                    <span className="text-[10px] uppercase tracking-widest text-muted-foreground">{f.source}</span>
+                  )}
+                  <span className="ml-auto text-xs text-muted-foreground">
+                    {f.due_date ? `Due ${format(parseISO(f.due_date), "PP")}` : "No due date"}
+                  </span>
+                </div>
+                {f.notes && <div className="mt-1 text-xs">{f.notes}</div>}
+                {f.completed_at && (
+                  <div className="mt-1 text-[10px] text-muted-foreground">
+                    Completed {format(new Date(f.completed_at), "PP p")}
+                  </div>
+                )}
+              </div>
+            ))}
+          </Card>
+        </TabsContent>
+
         <TabsContent value="activity">
           <Card className="divide-y divide-border">
             {data.activities.length === 0 && <Empty>No activity yet.</Empty>}
             {data.activities.map((act: any) => (
-              <div key={act.id} className="p-3 text-sm">
-                <div className="flex items-center justify-between">
-                  <div className="font-medium">{act.title ?? act.activity_type}</div>
-                  <div className="text-xs text-muted-foreground">{format(new Date(act.created_at), "PP p")}</div>
-                </div>
-                {act.details && <pre className="mt-1 whitespace-pre-wrap text-[11px] text-muted-foreground">{JSON.stringify(act.details, null, 2)}</pre>}
-              </div>
+              <ActivityRow key={act.id} act={act} />
             ))}
           </Card>
         </TabsContent>
@@ -256,6 +341,106 @@ function ContactProfile() {
 }
 
 function SectionTitle({ children }: any) { return <div className="text-xs font-bold uppercase tracking-widest text-muted-foreground">{children}</div>; }
+function SummaryCard({ title, tone, children }: { title: string; tone?: "amber" | "emerald" | "sky"; children: React.ReactNode }) {
+  const toneCls =
+    tone === "amber" ? "border-amber-500/30 bg-amber-500/5" :
+    tone === "emerald" ? "border-emerald-500/30 bg-emerald-500/5" :
+    tone === "sky" ? "border-sky-500/30 bg-sky-500/5" : "";
+  return (
+    <Card className={`space-y-1 border p-3 ${toneCls}`}>
+      <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{title}</div>
+      <div className="space-y-1 text-sm">{children}</div>
+    </Card>
+  );
+}
+
+function humanizeKey(k: string) {
+  return k.replace(/_/g, " ").replace(/\b\w/g, (m) => m.toUpperCase());
+}
+function humanizeValue(v: unknown): string {
+  if (v === null || v === undefined || v === "") return "—";
+  if (typeof v === "boolean") return v ? "Yes" : "No";
+  if (typeof v === "string") {
+    // ISO date heuristic
+    if (/^\d{4}-\d{2}-\d{2}T/.test(v)) {
+      try { return format(new Date(v), "PP p"); } catch { return v; }
+    }
+    return v.replace(/_/g, " ");
+  }
+  if (typeof v === "number") return String(v);
+  try { return JSON.stringify(v); } catch { return String(v); }
+}
+
+function ActivityRow({ act }: { act: any }) {
+  const when = act.created_at ? format(new Date(act.created_at), "PP p") : "";
+  const type = act.activity_type as string | undefined;
+  const title = act.title || (type ? humanizeKey(type) : "Activity");
+  const details = act.details ?? {};
+
+  return (
+    <div className="p-3 text-sm">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <Badge variant="outline" className="text-[10px] uppercase tracking-widest">
+            {type ? humanizeKey(type) : "Activity"}
+          </Badge>
+          <span className="font-medium">{title}</span>
+        </div>
+        <div className="text-xs text-muted-foreground">{when}</div>
+      </div>
+
+      {type === "note_added" && typeof details?.note === "string" && (
+        <div className="mt-1 whitespace-pre-wrap text-xs">{details.note}</div>
+      )}
+
+      {type === "contact_updated" && details && typeof details === "object" && (
+        <div className="mt-1 space-y-0.5 text-xs">
+          {Object.entries(details).map(([field, change]: [string, any]) => {
+            if (change && typeof change === "object" && "from" in change && "to" in change) {
+              return (
+                <div key={field} className="flex flex-wrap items-baseline gap-1">
+                  <span className="text-muted-foreground">{humanizeKey(field)}:</span>
+                  <span className="line-through opacity-60">{humanizeValue(change.from)}</span>
+                  <span>→</span>
+                  <span className="font-medium">{humanizeValue(change.to)}</span>
+                </div>
+              );
+            }
+            return (
+              <div key={field} className="text-muted-foreground">
+                {humanizeKey(field)}: {humanizeValue(change)}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {type === "converted" && (
+        <div className="mt-1 text-xs text-muted-foreground">
+          {details?.previous_stage
+            ? `Previous stage: ${humanizeValue(details.previous_stage)}`
+            : "Marked as active client"}
+        </div>
+      )}
+
+      {/* Unknown activity types: render any present details as a readable list. */}
+      {!(type === "note_added" || type === "contact_updated" || type === "converted") &&
+        details &&
+        typeof details === "object" &&
+        !Array.isArray(details) &&
+        Object.keys(details).length > 0 && (
+          <div className="mt-1 space-y-0.5 text-xs">
+            {Object.entries(details).map(([k, v]) => (
+              <div key={k} className="text-muted-foreground">
+                <span className="font-medium text-foreground">{humanizeKey(k)}:</span> {humanizeValue(v)}
+              </div>
+            ))}
+          </div>
+        )}
+    </div>
+  );
+}
+
 function Field({ label, value }: { label: string; value?: string | null }) {
   return (
     <div className="flex items-baseline gap-2 text-sm">

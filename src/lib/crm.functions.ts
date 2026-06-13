@@ -283,7 +283,24 @@ const listSchema = z.object({
   scope: z.enum(["all","prospects","active","applicants"]).optional().default("all"),
   applied_from: z.string().optional(),
   applied_to: z.string().optional(),
-  limit: z.number().int().min(1).max(500).optional().default(200),
+  // Pagination
+  page: z.number().int().min(1).optional().default(1),
+  pageSize: z.number().int().min(10).max(100).optional().default(50),
+  // Sorting — whitelisted column names only. Anything else falls back to created_at desc.
+  sort: z
+    .enum([
+      "full_name",
+      "created_at",
+      "lead_temperature",
+      "lead_score",
+      "next_follow_up_at",
+      "last_contacted_at",
+      "lifecycle_stage",
+      "applied_at",
+    ])
+    .optional()
+    .default("created_at"),
+  dir: z.enum(["asc", "desc"]).optional().default("desc"),
 });
 
 export const listCrmContacts = createServerFn({ method: "POST" })
@@ -292,16 +309,32 @@ export const listCrmContacts = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    // last_contacted_at is enriched after the page is fetched, so when the user
+    // sorts by it we fall back to created_at for the SQL ORDER BY and re-sort the
+    // page locally. Everything else is a real column on `clients`.
+    const sortColumn =
+      data.sort === "last_contacted_at" ? "created_at" : data.sort;
+    const ascending = data.dir === "asc";
+
+    const from = (data.page - 1) * data.pageSize;
+    const to = from + data.pageSize - 1;
+
     let q = supabaseAdmin
       .from("clients")
-      .select(`
+      .select(
+        `
         id, full_name, first_name, last_name, email, phone, instagram,
         lifecycle_stage, lead_temperature, lead_score, source, call_booked,
         next_follow_up_at, applied_at, converted_to_client_at,
         assigned_coach_id, archived, status, user_id, created_at
-      `)
-      .order("created_at", { ascending: false })
-      .limit(data.limit);
+      `,
+        { count: "exact" },
+      )
+      .order(sortColumn, { ascending, nullsFirst: false })
+      // Stable tiebreaker so pages don't reshuffle on ties.
+      .order("id", { ascending: true })
+      .range(from, to);
 
     if (data.scope === "prospects") q = q.in("lifecycle_stage", PROSPECT_STAGES).eq("archived", false);
     else if (data.scope === "active") q = q.eq("lifecycle_stage", "active_client").eq("archived", false);
@@ -321,9 +354,10 @@ export const listCrmContacts = createServerFn({ method: "POST" })
       q = q.or(`full_name.ilike.%${s}%,email.ilike.%${s}%,phone.ilike.%${s}%,instagram.ilike.%${s}%`);
     }
 
-    const { data: rows, error } = await q;
+    const { data: rows, count, error } = await q;
     if (error) throw new Error(error.message);
     const list = rows ?? [];
+
     // Enrich with assigned coach name (no FK between clients and coaches).
     const coachIds = Array.from(new Set(list.map((r: any) => r.assigned_coach_id).filter(Boolean)));
     let coachMap: Record<string, string> = {};
@@ -331,8 +365,46 @@ export const listCrmContacts = createServerFn({ method: "POST" })
       const { data: cs } = await supabaseAdmin.from("coaches").select("id, full_name").in("id", coachIds as string[]);
       coachMap = Object.fromEntries((cs ?? []).map((c: any) => [c.id, c.full_name]));
     }
-    const enriched = list.map((r: any) => ({ ...r, coaches: r.assigned_coach_id ? { id: r.assigned_coach_id, full_name: coachMap[r.assigned_coach_id] ?? null } : null }));
-    return { contacts: enriched };
+
+    // Batch last_contacted_at via the RPC (one query for the whole page).
+    const ids = list.map((r: any) => r.id as string);
+    let lastMap: Record<string, string | null> = {};
+    if (ids.length) {
+      const { data: lc } = await supabaseAdmin.rpc("crm_last_contacted_map", { _ids: ids });
+      lastMap = Object.fromEntries(
+        ((lc ?? []) as Array<{ client_id: string; last_contacted_at: string | null }>).map((r) => [
+          r.client_id,
+          r.last_contacted_at,
+        ]),
+      );
+    }
+
+    let enriched = list.map((r: any) => ({
+      ...r,
+      coaches: r.assigned_coach_id
+        ? { id: r.assigned_coach_id, full_name: coachMap[r.assigned_coach_id] ?? null }
+        : null,
+      last_contacted_at: lastMap[r.id] ?? null,
+    }));
+
+    // If sorting by last_contacted_at, sort the current page locally.
+    if (data.sort === "last_contacted_at") {
+      enriched = enriched.slice().sort((a: any, b: any) => {
+        const av = a.last_contacted_at ? new Date(a.last_contacted_at).getTime() : -Infinity;
+        const bv = b.last_contacted_at ? new Date(b.last_contacted_at).getTime() : -Infinity;
+        return ascending ? av - bv : bv - av;
+      });
+    }
+
+    const total = count ?? enriched.length;
+    return {
+      contacts: enriched,
+      total,
+      page: data.page,
+      pageSize: data.pageSize,
+      sort: data.sort,
+      dir: data.dir,
+    };
   });
 
 /* ───── CRM contact profile ───── */
@@ -379,11 +451,27 @@ export const getCrmContact = createServerFn({ method: "POST" })
         .limit(100),
     ]);
 
+    // Open follow-ups (newest open first), plus a small lookback of recently completed.
+    const { data: followups } = await supabaseAdmin
+      .from("coach_followups")
+      .select("id, reason, source, due_date, status, notes, created_at, completed_at")
+      .eq("client_id", data.id)
+      .order("status", { ascending: true })
+      .order("due_date", { ascending: true, nullsFirst: false })
+      .limit(25);
+
+    // Last staff-side contact summary for the header.
+    const { data: lc } = await supabaseAdmin.rpc("crm_last_contacted_map", { _ids: [data.id] });
+    const last_contacted_at =
+      (lc && lc[0] && (lc[0] as any).last_contacted_at) || null;
+
     return {
       contact,
       applications: apps.data ?? [],
       appointments: appts.data ?? [],
       activities: acts.data ?? [],
+      followups: followups ?? [],
+      last_contacted_at,
     };
   });
 
