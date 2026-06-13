@@ -62,6 +62,7 @@ function RowCell({
   const focusedRef = useRef(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastCommittedRef = useRef(stringify(value));
+  const inputRef = useRef<HTMLInputElement | null>(null);
 
   // Pull in remote changes only when the input isn't being edited.
   useEffect(() => {
@@ -79,7 +80,9 @@ function RowCell({
   };
 
   return (
+    <span className="group/cell relative inline-block w-full align-middle">
     <Input
+      ref={inputRef as any}
       className={className}
       placeholder={placeholder}
       inputMode={inputMode}
@@ -109,6 +112,27 @@ function RowCell({
         }
       }}
     />
+    {dataField ? (
+      <button
+        type="button"
+        tabIndex={-1}
+        title="Fill down (⌘/Ctrl + ↓)"
+        aria-label="Fill down"
+        onMouseDown={(e) => { e.preventDefault(); }}
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          // Commit any pending edit first so the source value is current.
+          if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
+          doCommit(local);
+          fillDownFromCell(inputRef.current, local);
+        }}
+        className="absolute -bottom-2 left-1/2 -translate-x-1/2 z-10 hidden group-hover/cell:flex items-center justify-center h-4 w-4 rounded-sm bg-primary text-primary-foreground shadow ring-1 ring-background hover:bg-primary/90"
+      >
+        <ChevronDown className="h-3 w-3" />
+      </button>
+    ) : null}
+    </span>
   );
 }
 
@@ -131,6 +155,39 @@ function focusField(el: HTMLElement | null) {
 function fieldsInRow(row: Element): HTMLElement[] {
   return Array.from(row.querySelectorAll<HTMLElement>("[data-pb-field]"))
     .filter((el) => !(el as any).disabled && el.offsetParent !== null);
+}
+
+/**
+ * Fill the given value into every input with the same data-pb-field
+ * in rows BELOW the source cell, scoped to the same day. Uses the
+ * native input value setter so React's onChange fires and the row's
+ * debounced commit pipeline persists each new value.
+ */
+function fillDownFromCell(source: HTMLInputElement | null, value: string) {
+  if (!source) return 0;
+  const fieldName = source.getAttribute("data-pb-field");
+  if (!fieldName) return 0;
+  const row = source.closest("[data-pb-row]");
+  const day = source.closest("[data-pb-day]");
+  if (!row || !day) return 0;
+  const rows = Array.from(day.querySelectorAll<HTMLElement>("[data-pb-row]"));
+  const ri = rows.indexOf(row as HTMLElement);
+  if (ri < 0) return 0;
+  const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set;
+  let count = 0;
+  for (let i = ri + 1; i < rows.length; i++) {
+    const peer = rows[i].querySelector<HTMLInputElement>(`input[data-pb-field="${fieldName}"]`);
+    if (!peer || (peer as any).disabled) continue;
+    if (peer.value === value) continue;
+    setter?.call(peer, value);
+    peer.dispatchEvent(new Event("input", { bubbles: true }));
+    peer.dispatchEvent(new Event("change", { bubbles: true }));
+    count++;
+  }
+  if (count > 0) {
+    try { toast.success(`Filled "${value || "—"}" into ${count} row${count === 1 ? "" : "s"} below`); } catch {}
+  }
+  return count;
 }
 
 /**
@@ -205,6 +262,11 @@ export function handleRowFieldNav(
   }
   if (e.key === "ArrowUp" && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey) {
     return moveVertical(-1);
+  }
+  if (e.key === "ArrowDown" && (e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey) {
+    e.preventDefault();
+    fillDownFromCell(target, opts?.value ?? target.value ?? "");
+    return true;
   }
   return false;
 }
