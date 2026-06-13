@@ -67,21 +67,21 @@ function AdminCalendarShell() {
   return (
     <>
       <div className="border-b border-border bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-20">
-        <div className="px-6 md:px-8 py-3 overflow-x-auto">
+        <div className="px-3 sm:px-6 md:px-8 py-2 sm:py-3 overflow-x-auto">
           <Tabs value={active} onValueChange={setTab}>
-            <TabsList className="flex w-max gap-1">
+            <TabsList className="flex w-max gap-1 h-auto flex-nowrap">
               <TabsTrigger value="upcoming">Upcoming</TabsTrigger>
               <TabsTrigger value="events">Events</TabsTrigger>
               <TabsTrigger value="availability">Availability</TabsTrigger>
-              <TabsTrigger value="booking-links">Booking Links</TabsTrigger>
-              <TabsTrigger value="pt-calendar">PT Calendar</TabsTrigger>
-              <TabsTrigger value="google-calendar">Google Calendar</TabsTrigger>
+              <TabsTrigger value="booking-links" className="whitespace-nowrap">Booking Links</TabsTrigger>
+              <TabsTrigger value="pt-calendar" className="whitespace-nowrap">PT Calendar</TabsTrigger>
+              <TabsTrigger value="google-calendar" className="whitespace-nowrap">Google Calendar</TabsTrigger>
             </TabsList>
           </Tabs>
         </div>
       </div>
       {active === "upcoming" && <UpcomingPanel />}
-      {active === "events" && <div className="p-4 md:p-6"><AdminEventsPage embedded /></div>}
+      {active === "events" && <div className="p-3 sm:p-4 md:p-6"><AdminEventsPage embedded /></div>}
       {active === "availability" && <AvailabilityPlaceholder />}
       {active === "booking-links" && <BookingLinksPage />}
       {active === "pt-calendar" && <PtCalendarPanel />}
