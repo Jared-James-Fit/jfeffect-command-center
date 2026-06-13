@@ -107,11 +107,10 @@ function groupSubmissions(videos: LiftVideo[]): Submission[] {
   return subs;
 }
 
-function AdminLiftVideos() {
+export function AdminLiftVideos({ embedded = false, initialOpen }: { embedded?: boolean; initialOpen?: string } = {}) {
   const { user } = useAuth();
   const qc = useQueryClient();
-  const search_ = Route.useSearch();
-  const navigate = Route.useNavigate();
+  const [openParam, setOpenParam] = useState<string | undefined>(initialOpen);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<FilterKey>("new");
   const [openKey, setOpenKey] = useState<string | null>(null);
