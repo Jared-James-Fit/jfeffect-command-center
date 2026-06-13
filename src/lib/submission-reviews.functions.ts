@@ -591,25 +591,46 @@ export const generateSubmissionDraft = createServerFn({ method: "POST" })
 
     await audit(row.id, "ai_generation_started", context.userId, "coach", { generation_id: gen.id });
 
-    // 6. Call AI
+    // 6. Call AI (prompt-based JSON — Lovable AI Gateway's Gemini binding
+    // doesn't support AI SDK's responseFormat protocol, so we instruct the
+    // model to return JSON directly and parse + validate with Zod.)
     try {
       const { createLovableAiGateway, DEFAULT_AI_MODEL } = await import("@/lib/ai-gateway.server");
-      const { generateText, Output } = await import("ai");
+      const { generateText } = await import("ai");
       const gateway = createLovableAiGateway();
       const modelId = gen.model || DEFAULT_AI_MODEL;
 
+      const jsonInstruction = [
+        "",
+        "Reply with a single JSON object ONLY (no markdown fences, no commentary)",
+        "matching exactly this shape:",
+        '{ "summary": string, "wins": string[], "concerns": string[], "risks": string[],',
+        '  "recommendations": string[], "follow_up_questions": string[],',
+        '  "suggested_actions": string[],',
+        '  "urgency": "low"|"normal"|"high"|"urgent",',
+        '  "client_response": string }',
+      ].join("\n");
+
       const result = await generateText({
         model: gateway(modelId),
-        system: systemPrompt,
+        system: systemPrompt + jsonInstruction,
         prompt: userPrompt,
-        experimental_output: Output.object({ schema: AiOutputSchema }),
       });
 
-      const parsed = (result as any).experimental_output ?? null;
-      if (!parsed) {
-        throw new Error("AI returned no structured output");
+      const stripped = (result.text ?? "")
+        .replace(/^```(?:json)?\s*/i, "")
+        .replace(/```\s*$/i, "")
+        .trim();
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(stripped);
+      } catch (e) {
+        // Fallback: extract the first {...} block
+        const m = stripped.match(/\{[\s\S]*\}/);
+        if (!m) throw new Error("AI did not return JSON");
+        parsed = JSON.parse(m[0]);
       }
-      // Re-validate to be safe (constrained decoding may still drift)
+      // Validate strictly with Zod (rejects malformed/missing fields)
       const safe = AiOutputSchema.parse(parsed);
 
       const updated = await sb
