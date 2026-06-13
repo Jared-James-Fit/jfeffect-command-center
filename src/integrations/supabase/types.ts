@@ -7490,7 +7490,9 @@ export type Database = {
           name: string
           prep_id: string | null
           sort_order: number
+          source_template_block_key: string | null
           source_template_id: string | null
+          source_template_schema_version: number | null
           start_date: string | null
           status: string
           training_focus: string | null
@@ -7520,7 +7522,9 @@ export type Database = {
           name: string
           prep_id?: string | null
           sort_order?: number
+          source_template_block_key?: string | null
           source_template_id?: string | null
+          source_template_schema_version?: number | null
           start_date?: string | null
           status?: string
           training_focus?: string | null
@@ -7550,7 +7554,9 @@ export type Database = {
           name?: string
           prep_id?: string | null
           sort_order?: number
+          source_template_block_key?: string | null
           source_template_id?: string | null
+          source_template_schema_version?: number | null
           start_date?: string | null
           status?: string
           training_focus?: string | null
@@ -8265,6 +8271,7 @@ export type Database = {
           name: string
           notes: string | null
           payload: Json
+          payload_revision: number
           status: string
           tags: string[]
           template_type: string
@@ -8286,6 +8293,7 @@ export type Database = {
           name: string
           notes?: string | null
           payload?: Json
+          payload_revision?: number
           status?: string
           tags?: string[]
           template_type?: string
@@ -8307,6 +8315,7 @@ export type Database = {
           name?: string
           notes?: string | null
           payload?: Json
+          payload_revision?: number
           status?: string
           tags?: string[]
           template_type?: string
