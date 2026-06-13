@@ -341,10 +341,10 @@ export function ClientBlockView({
         <div
           ref={carouselRef}
           className={cn(
-            // Mobile = snap carousel, one day mostly fills viewport with a peek.
-            // md+   = horizontal scroll of side-by-side columns.
-            "-mx-3 flex snap-x snap-mandatory gap-3 overflow-x-auto px-3 pb-6",
-            "md:snap-none",
+            // Mobile = snap carousel. Desktop/tablet = wrapped grid so no day/exercise
+            // column is clipped off the right edge of the Block View.
+            "-mx-3 flex snap-x snap-mandatory gap-3 overflow-x-auto px-3",
+            "md:mx-0 md:grid md:grid-cols-2 md:items-start md:overflow-visible md:px-0 md:snap-none xl:grid-cols-3",
             // Clearance so the fixed mobile bottom nav never covers the final card.
             "pb-[calc(var(--bottom-nav-clearance,0px)+env(safe-area-inset-bottom)+16px)]",
           )}
@@ -394,8 +394,8 @@ export function ClientBlockView({
                   "flex min-w-0 snap-start flex-col rounded-lg border bg-card",
                   // Mobile: ~85vw per card with a small peek of the next day.
                   "w-[calc(100vw-3rem)] max-w-[380px] shrink-0",
-                  // Tablet/desktop: roomier columns so exercise names wrap cleanly without clipping.
-                  "md:w-[360px] lg:w-[380px] xl:w-[400px]",
+                  // Desktop/tablet grid cards fill their column instead of forcing horizontal overflow.
+                  "md:w-full md:max-w-none md:shrink md:snap-none",
                   isToday && !done && "border-primary ring-2 ring-primary/40",
                 )}
               >
