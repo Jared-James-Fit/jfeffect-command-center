@@ -654,7 +654,20 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
             // ── Invoice paid (subscription renewal) ─────────────────────────
             case "invoice.payment_succeeded": {
               if (obj.subscription) {
-                const sub = await stripeFetch(`/subscriptions/${obj.subscription}`);
+                let sub: any;
+                try {
+                  sub = await stripeFetch(`/subscriptions/${obj.subscription}`, { apiKey: eventApiKey ?? undefined });
+                } catch (err: any) {
+                  console.error("[stripe-webhook] subscription.lookup.failed", {
+                    eventId: event?.id ?? null,
+                    eventType: event?.type ?? null,
+                    eventMode,
+                    subscriptionId: obj.subscription,
+                    keyAvailable: !!eventApiKey,
+                    message: err?.message ?? String(err),
+                  });
+                  throw err;
+                }
                 if (await isJfMembershipSubscription(supabase, sub)) {
                   const member = await findJfMemberBySub(supabase, sub);
                   if (member) {
@@ -692,7 +705,20 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
             // ── Invoice failed (payment issue) ──────────────────────────────
             case "invoice.payment_failed": {
               if (obj.subscription) {
-                const sub = await stripeFetch(`/subscriptions/${obj.subscription}`);
+                let sub: any;
+                try {
+                  sub = await stripeFetch(`/subscriptions/${obj.subscription}`, { apiKey: eventApiKey ?? undefined });
+                } catch (err: any) {
+                  console.error("[stripe-webhook] subscription.lookup.failed", {
+                    eventId: event?.id ?? null,
+                    eventType: event?.type ?? null,
+                    eventMode,
+                    subscriptionId: obj.subscription,
+                    keyAvailable: !!eventApiKey,
+                    message: err?.message ?? String(err),
+                  });
+                  throw err;
+                }
                 if (await isJfMembershipSubscription(supabase, sub)) {
                   const member = await findJfMemberBySub(supabase, sub);
                   if (member) {
