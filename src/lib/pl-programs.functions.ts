@@ -71,7 +71,7 @@ export const applyTemplateToClientFn = createServerFn({ method: "POST" })
       p_end_date: data.endDate ?? null,
       p_selected_block_ids: data.selectedBlockIds ?? null,
       p_start_from_block_id: data.startFromBlockId ?? null,
-    });
+    } as any);
     if (error) throw new Error(error.message);
     return (result ?? {}) as Record<string, string | null>;
   });
