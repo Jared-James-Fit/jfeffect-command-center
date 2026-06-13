@@ -479,13 +479,28 @@ function TemplateEditor() {
   };
 
   const autosaveValue = useMemo(() => ({ meta, payload }), [meta, payload]);
+  // Recovery gate: when the normalized payload is in __recovery mode, the
+  // raw original payload is malformed. Block autosave so we never overwrite
+  // it with an empty v2 shell. The structure editor also disables
+  // destructive ops while recovery is active.
+  const isRecovery = useMemo(() => {
+    if (!payload) return false;
+    const type = (tpl as any)?.template_type;
+    if (type !== "block" && type !== "full_prep") return false;
+    try {
+      return isPayloadInRecovery(
+        normalizeTemplatePayload(payload, { templateType: type, templateId }),
+      );
+    } catch { return false; }
+  }, [payload, tpl, templateId]);
   const autosave = useAutosave({
     key: `template:${templateId}:editor`,
     value: autosaveValue,
     delay: 8000,
-    enabled: !!meta && !!payload && hydratedRef.current && dirty,
+    enabled: !!meta && !!payload && hydratedRef.current && dirty && !isRecovery,
     onSave: async ({ meta: m, payload: p }) => {
       if (!m || !p) return;
+      if (isRecovery) return; // belt-and-braces: never autosave recovery state
       await persist(m, p);
     },
   });
