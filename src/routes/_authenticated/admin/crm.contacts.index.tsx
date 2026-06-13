@@ -9,8 +9,20 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { listCrmContacts, listCoachOptions } from "@/lib/crm.functions";
-import { format } from "date-fns";
-import { Search, X } from "lucide-react";
+import { format, formatDistanceToNow } from "date-fns";
+import { Search, X, ArrowUp, ArrowDown, ChevronLeft, ChevronRight } from "lucide-react";
+
+const SORTABLE = [
+  "full_name",
+  "created_at",
+  "lead_temperature",
+  "lead_score",
+  "next_follow_up_at",
+  "last_contacted_at",
+  "lifecycle_stage",
+  "applied_at",
+] as const;
+type SortKey = (typeof SORTABLE)[number];
 
 const searchSchema = z.object({
   q: z.string().optional(),
@@ -21,6 +33,10 @@ const searchSchema = z.object({
   call_booked: z.enum(["true","false"]).optional(),
   assigned_coach_id: z.string().optional(),
   overdue: z.enum(["true","false"]).optional(),
+  sort: z.enum(SORTABLE).optional(),
+  dir: z.enum(["asc", "desc"]).optional(),
+  page: z.coerce.number().int().min(1).optional(),
+  pageSize: z.coerce.number().int().min(10).max(100).optional(),
 });
 
 export const Route = createFileRoute("/_authenticated/admin/crm/contacts/")({
@@ -36,6 +52,11 @@ function ContactsList() {
   const fetchList = useServerFn(listCrmContacts);
   const fetchCoaches = useServerFn(listCoachOptions);
 
+  const sort: SortKey = (search.sort as SortKey) ?? "created_at";
+  const dir: "asc" | "desc" = (search.dir as "asc" | "desc") ?? "desc";
+  const page = search.page ?? 1;
+  const pageSize = search.pageSize ?? 50;
+
   const filters: any = {
     search: search.q || "",
     scope: search.scope || "all",
@@ -45,6 +66,10 @@ function ContactsList() {
     call_booked: search.call_booked,
     assigned_coach_id: search.assigned_coach_id,
     overdue: search.overdue,
+    sort,
+    dir,
+    page,
+    pageSize,
   };
 
   const { data, isLoading } = useQuery({
@@ -54,16 +79,50 @@ function ContactsList() {
   const { data: coachData } = useQuery({ queryKey: ["crm","coaches"], queryFn: () => fetchCoaches() });
 
   const rows = data?.contacts ?? [];
+  const total = data?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const showingFrom = total === 0 ? 0 : (page - 1) * pageSize + 1;
+  const showingTo = Math.min(page * pageSize, total);
+
   function setSearch(patch: any) {
-    nav({ search: (prev: any) => ({ ...prev, ...patch }), replace: true });
+    // Any filter/search change resets to page 1.
+    nav({
+      search: (prev: any) => ({ ...prev, ...patch, page: undefined }),
+      replace: true,
+    });
   }
   function clearFilters() {
     nav({ search: {} as any, replace: true });
   }
+  function toggleSort(key: SortKey) {
+    nav({
+      search: (prev: any) => {
+        if (prev.sort === key) {
+          return { ...prev, dir: prev.dir === "asc" ? "desc" : "asc", page: undefined };
+        }
+        // First click: sensible default direction per field.
+        const defaultDir: "asc" | "desc" =
+          key === "full_name" || key === "lifecycle_stage" ? "asc" : "desc";
+        return { ...prev, sort: key, dir: defaultDir, page: undefined };
+      },
+      replace: true,
+    });
+  }
+  function setPage(p: number) {
+    nav({ search: (prev: any) => ({ ...prev, page: p }), replace: true });
+  }
 
   return (
     <div className="space-y-4">
-      <PageHeader title="CRM Contacts" subtitle="Leads, applicants, prospects, and active coaching clients." />
+      <PageHeader
+        title="CRM Contacts"
+        subtitle="Leads, applicants, prospects, and active coaching clients."
+        actions={
+          <Link to="/admin/crm">
+            <Button size="sm" variant="outline">Dashboard</Button>
+          </Link>
+        }
+      />
 
       <Card className="p-3">
         <div className="flex flex-wrap items-center gap-2">
@@ -100,14 +159,24 @@ function ContactsList() {
         <table className="w-full text-sm">
           <thead className="bg-muted/40 text-left text-[11px] uppercase tracking-wider text-muted-foreground">
             <tr>
-              <Th>Name</Th><Th>Email</Th><Th>Phone</Th><Th>Stage</Th><Th>Temp</Th><Th>Score</Th>
-              <Th>Source</Th><Th>Call</Th><Th>Follow-up</Th><Th>Coach</Th><Th>Created</Th>
+              <SortTh k="full_name" sort={sort} dir={dir} onSort={toggleSort}>Name</SortTh>
+              <Th>Email</Th>
+              <Th>Phone</Th>
+              <SortTh k="lifecycle_stage" sort={sort} dir={dir} onSort={toggleSort}>Stage</SortTh>
+              <SortTh k="lead_temperature" sort={sort} dir={dir} onSort={toggleSort}>Temp</SortTh>
+              <SortTh k="lead_score" sort={sort} dir={dir} onSort={toggleSort}>Score</SortTh>
+              <Th>Source</Th>
+              <Th>Call</Th>
+              <SortTh k="next_follow_up_at" sort={sort} dir={dir} onSort={toggleSort}>Follow-up</SortTh>
+              <SortTh k="last_contacted_at" sort={sort} dir={dir} onSort={toggleSort}>Last contacted</SortTh>
+              <Th>Coach</Th>
+              <SortTh k="created_at" sort={sort} dir={dir} onSort={toggleSort}>Created</SortTh>
             </tr>
           </thead>
           <tbody>
-            {isLoading && <tr><td colSpan={11} className="p-6 text-center text-muted-foreground">Loading…</td></tr>}
+            {isLoading && <tr><td colSpan={12} className="p-6 text-center text-muted-foreground">Loading…</td></tr>}
             {!isLoading && rows.length === 0 && (
-              <tr><td colSpan={11} className="p-6 text-center text-sm text-muted-foreground">
+              <tr><td colSpan={12} className="p-6 text-center text-sm text-muted-foreground">
                 No contacts match these filters. Adjust filters or wait for new applications to come in.
               </td></tr>
             )}
@@ -125,18 +194,82 @@ function ContactsList() {
                 <Td className="text-xs">{r.source ?? "—"}</Td>
                 <Td>{r.call_booked ? "✓" : "—"}</Td>
                 <Td className="text-xs">{r.next_follow_up_at ? format(new Date(r.next_follow_up_at), "MMM d") : "—"}</Td>
+                <Td className="text-xs">
+                  {r.last_contacted_at ? (
+                    <span title={format(new Date(r.last_contacted_at), "PP p")}>
+                      {formatDistanceToNow(new Date(r.last_contacted_at), { addSuffix: true })}
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground">Never</span>
+                  )}
+                </Td>
                 <Td className="text-xs">{r.coaches?.full_name ?? "—"}</Td>
                 <Td className="text-xs">{format(new Date(r.created_at), "MMM d")}</Td>
               </tr>
             ))}
           </tbody>
         </table>
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border px-3 py-2 text-xs text-muted-foreground">
+          <div>
+            {total > 0
+              ? `Showing ${showingFrom.toLocaleString()}–${showingTo.toLocaleString()} of ${total.toLocaleString()}`
+              : "No contacts"}
+          </div>
+          <div className="flex items-center gap-2">
+            <Select
+              value={String(pageSize)}
+              onValueChange={(v) => nav({ search: (prev: any) => ({ ...prev, pageSize: Number(v), page: undefined }), replace: true })}
+            >
+              <SelectTrigger className="h-7 w-[90px]"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {[25, 50, 100].map((n) => (
+                  <SelectItem key={n} value={String(n)}>{n} / page</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button size="sm" variant="outline" disabled={page <= 1} onClick={() => setPage(page - 1)}>
+              <ChevronLeft className="h-3.5 w-3.5" /> Prev
+            </Button>
+            <span className="tabular-nums">Page {page} of {totalPages}</span>
+            <Button size="sm" variant="outline" disabled={page >= totalPages} onClick={() => setPage(page + 1)}>
+              Next <ChevronRight className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        </div>
       </Card>
     </div>
   );
 }
 
 function Th({ children }: any) { return <th className="px-3 py-2">{children}</th>; }
+function SortTh({
+  k,
+  sort,
+  dir,
+  onSort,
+  children,
+}: {
+  k: SortKey;
+  sort: SortKey;
+  dir: "asc" | "desc";
+  onSort: (k: SortKey) => void;
+  children: React.ReactNode;
+}) {
+  const active = sort === k;
+  return (
+    <th className="px-3 py-2">
+      <button
+        type="button"
+        onClick={() => onSort(k)}
+        className={`inline-flex items-center gap-1 hover:text-foreground ${active ? "text-foreground" : ""}`}
+        aria-sort={active ? (dir === "asc" ? "ascending" : "descending") : "none"}
+      >
+        {children}
+        {active && (dir === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />)}
+      </button>
+    </th>
+  );
+}
 function Td({ children, className }: any) { return <td className={`px-3 py-2 ${className ?? ""}`}>{children}</td>; }
 function TempBadge({ t }: { t: string | null }) {
   if (!t) return <span>—</span>;
