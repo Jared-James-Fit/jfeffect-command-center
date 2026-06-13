@@ -413,7 +413,7 @@ export function CellInput({
 
   return (
     <div className="relative w-full">
-      {inputEl}
+      {wrappedInput}
       <div className="absolute left-0 right-0 top-full z-40 mt-1 min-w-[180px] rounded-md border border-amber-500/60 bg-background p-1.5 text-[10px] shadow-lg">
         <div className="flex items-start gap-1">
           <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0 text-amber-500" />
