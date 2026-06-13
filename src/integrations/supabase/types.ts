@@ -8633,6 +8633,82 @@ export type Database = {
           },
         ]
       }
+      pl_workout_feedback: {
+        Row: {
+          client_id: string
+          client_note: string | null
+          completion_id: string
+          created_at: string
+          day_id: string
+          id: string
+          overall_rating: number
+          pain: boolean
+          pain_area: string | null
+          pain_level: number | null
+          pain_note: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          session_rpe: number
+          updated_at: string
+        }
+        Insert: {
+          client_id: string
+          client_note?: string | null
+          completion_id: string
+          created_at?: string
+          day_id: string
+          id?: string
+          overall_rating: number
+          pain?: boolean
+          pain_area?: string | null
+          pain_level?: number | null
+          pain_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          session_rpe: number
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string
+          client_note?: string | null
+          completion_id?: string
+          created_at?: string
+          day_id?: string
+          id?: string
+          overall_rating?: number
+          pain?: boolean
+          pain_area?: string | null
+          pain_level?: number | null
+          pain_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          session_rpe?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pl_workout_feedback_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pl_workout_feedback_completion_id_fkey"
+            columns: ["completion_id"]
+            isOneToOne: true
+            referencedRelation: "pl_day_completions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pl_workout_feedback_day_id_fkey"
+            columns: ["day_id"]
+            isOneToOne: false
+            referencedRelation: "pl_days"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       processed_stripe_events: {
         Row: {
           created_at: string

@@ -47,6 +47,7 @@ import { enqueueOfflineWrite, registerQueueHandler } from "@/lib/workout-offline
 import { ActiveRestTimerProvider, useRestTimer } from "@/components/active-rest-timer";
 import { ExerciseHistoryButton } from "@/components/exercise-history-sheet";
 import { convertWeight } from "@/lib/progress-metrics";
+import { WorkoutFeedbackSheet, WorkoutFeedbackReminder } from "@/components/workout-feedback-sheet";
 
 /* -------------------------------------------------------------------------- */
 /* Target-parsing helpers (Suggested → Draft → Confirmed fast-logging)         */
@@ -523,6 +524,22 @@ function WorkoutDay() {
     markInProgress();
   };
 
+  // Post-workout feedback sheet state.
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const { data: existingFeedback } = useQuery({
+    queryKey: ["pl-workout-feedback", completion?.id],
+    enabled: !!completion?.id,
+    queryFn: async () =>
+      (await (sb as any)
+        .from("pl_workout_feedback")
+        .select("id, overall_rating, session_rpe, pain")
+        .eq("completion_id", completion!.id)
+        .maybeSingle()).data,
+  });
+  const hasFeedback = !!existingFeedback;
+  const feedbackSkipped = !!(completion?.id && typeof window !== "undefined"
+    && localStorage.getItem(`lov.wfb.skip:${completion.id}`));
+
   const refreshNotes = () => {
     qc.invalidateQueries({ queryKey: ["pl-day-exercise-notes", dayId] });
     qc.invalidateQueries({ queryKey: ["client-exercise-notes", client?.id] });
@@ -731,6 +748,9 @@ function WorkoutDay() {
                 setNotes("");
                 setActualMin("");
                 refresh();
+                // Open the post-workout feedback sheet. Workout completion has
+                // already saved above — feedback is a best-effort follow-up.
+                setFeedbackOpen(true);
               }}
             >
               Mark Workout Complete
@@ -748,6 +768,11 @@ function WorkoutDay() {
             )}
           </Card>
         )}
+
+        {/* Subtle reminder when the client completed but skipped feedback. */}
+        {!readonly && completion?.completed_at && !hasFeedback && feedbackSkipped && (
+          <WorkoutFeedbackReminder onOpen={() => setFeedbackOpen(true)} />
+        )}
       </div>
 
       {/* Sticky general-notes shortcut */}
@@ -757,6 +782,18 @@ function WorkoutDay() {
           <NotebookPen className="mr-2 h-4 w-4" /> Workout Notes
         </Button>
       </div>
+      )}
+
+      {/* Post-workout feedback sheet. Client POV (readonly) never opens it. */}
+      {!readonly && client?.id && (
+        <WorkoutFeedbackSheet
+          open={feedbackOpen && !hasFeedback && !!completion?.id}
+          onOpenChange={setFeedbackOpen}
+          completionId={completion?.id ?? null}
+          clientId={client.id}
+          dayId={dayId}
+          onSubmitted={() => qc.invalidateQueries({ queryKey: ["pl-workout-feedback", completion?.id] })}
+        />
       )}
     </>
   );

@@ -7,10 +7,11 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Search } from "lucide-react";
+import { ArrowLeft, Search, AlertTriangle, CheckCircle2, MessageCircle, Star } from "lucide-react";
 import { getCompletedHistory } from "@/lib/pl-programs";
 import { ProgressComparison } from "@/components/progress-comparison";
 import { ExerciseHistorySheet } from "@/components/exercise-history-sheet";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/admin/client-programs/$clientId/history")({ component: HistoryPage });
 
@@ -69,6 +70,8 @@ function HistoryPage() {
         <Link to="/admin/client-programs/$clientId" params={{ clientId }} className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground">
           <ArrowLeft className="mr-1 h-4 w-4" /> Back to programs
         </Link>
+
+        <WorkoutFeedbackSection clientId={clientId} />
 
         <section>
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -161,5 +164,142 @@ function HistoryPage() {
         </section>
       </div>
     </>
+  );
+}
+
+function WorkoutFeedbackSection({ clientId }: { clientId: string }) {
+  const { data: rows = [], refetch } = useQuery({
+    queryKey: ["pl-workout-feedback-history", clientId],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("pl_workout_feedback")
+        .select(`
+          id, completion_id, day_id, overall_rating, session_rpe,
+          pain, pain_level, pain_area, pain_note, client_note,
+          reviewed_at, reviewed_by, created_at,
+          pl_day_completions(completed_at),
+          pl_days(title, week_id, pl_weeks(week_index, block_id, pl_blocks(name)))
+        `)
+        .eq("client_id", clientId)
+        .order("created_at", { ascending: false })
+        .limit(50);
+      if (error) throw error;
+      return (data ?? []) as any[];
+    },
+  });
+
+  const markReviewed = async (id: string) => {
+    const { error } = await (supabase as any)
+      .from("pl_workout_feedback")
+      .update({ reviewed_at: new Date().toISOString() })
+      .eq("id", id);
+    if (error) {
+      toast.error("Couldn't mark reviewed", { description: error.message });
+      return;
+    }
+    toast.success("Marked reviewed");
+    refetch();
+  };
+
+  return (
+    <section>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">Recent Workout Feedback</h2>
+        {rows.length > 0 && (
+          <span className="text-xs text-muted-foreground">
+            {rows.filter((r: any) => !r.reviewed_at).length} new
+          </span>
+        )}
+      </div>
+      {rows.length === 0 ? (
+        <Card className="p-6 text-sm text-muted-foreground">No feedback submitted yet.</Card>
+      ) : (
+        <div className="grid gap-2">
+          {rows.map((r: any) => {
+            const dayTitle = r.pl_days?.title ?? "Workout";
+            const blockName = r.pl_days?.pl_weeks?.pl_blocks?.name ?? "—";
+            const weekIdx = r.pl_days?.pl_weeks?.week_index;
+            const completedAt = r.pl_day_completions?.completed_at ?? r.created_at;
+            const hard = (r.session_rpe ?? 0) >= 9;
+            return (
+              <Card
+                key={r.id}
+                className={
+                  r.pain
+                    ? "p-4 border-amber-500/40 bg-amber-500/5"
+                    : "p-4"
+                }
+              >
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-bold">{dayTitle}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {blockName}{weekIdx ? ` · Week ${weekIdx}` : ""}
+                      </span>
+                      {r.reviewed_at && (
+                        <Badge variant="outline" className="border-emerald-500/40 text-emerald-700 dark:text-emerald-300">
+                          <CheckCircle2 className="mr-1 h-3 w-3" /> Reviewed
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="mt-0.5 text-xs text-muted-foreground">
+                      {completedAt ? new Date(completedAt).toLocaleString() : ""}
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <Badge variant="outline" className="font-bold">
+                      <Star className="mr-1 h-3 w-3" /> {r.overall_rating}/5
+                    </Badge>
+                    <Badge
+                      variant="outline"
+                      className={hard ? "border-amber-500/50 text-amber-700 dark:text-amber-300 font-bold" : "font-bold"}
+                    >
+                      RPE {r.session_rpe}/10
+                    </Badge>
+                    {r.pain && (
+                      <Badge className="border-amber-500/50 bg-amber-500/15 text-amber-800 dark:text-amber-200 font-bold">
+                        <AlertTriangle className="mr-1 h-3 w-3" /> Pain {r.pain_level ? `${r.pain_level}/10` : ""}
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+                {(r.pain || r.client_note) && (
+                  <div className="mt-3 space-y-1.5 text-sm">
+                    {r.pain && (r.pain_area || r.pain_note) && (
+                      <div>
+                        <span className="text-xs font-bold uppercase tracking-wide text-amber-700 dark:text-amber-300">Pain</span>
+                        <div>
+                          {r.pain_area ?? "Unspecified area"}
+                          {r.pain_note ? ` — ${r.pain_note}` : ""}
+                        </div>
+                      </div>
+                    )}
+                    {r.client_note && (
+                      <div>
+                        <span className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Note</span>
+                        <p className="whitespace-pre-wrap text-foreground">{r.client_note}</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {!r.reviewed_at && (
+                    <Button size="sm" variant="default" onClick={() => markReviewed(r.id)}>
+                      <CheckCircle2 className="mr-1 h-3.5 w-3.5" /> Mark reviewed
+                    </Button>
+                  )}
+                  <Button asChild size="sm" variant="ghost">
+                    <Link to="/admin/messages">
+                      <MessageCircle className="mr-1 h-3.5 w-3.5" /> Message client
+                    </Link>
+                  </Button>
+                </div>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+    </section>
   );
 }
