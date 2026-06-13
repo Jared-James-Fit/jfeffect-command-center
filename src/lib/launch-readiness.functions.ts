@@ -116,7 +116,7 @@ export const getLaunchReadiness = createServerFn({ method: "GET" })
       key: "stripe_keys",
       group: "Stripe",
       label: `Stripe API keys present for ${mode}`,
-      state: (mode === "live" ? diag.live_present : diag.test_present) ? "ready" : "blocked",
+      state: (mode === "live" ? diag.live_key_available : diag.test_key_available) ? "ready" : "blocked",
       detail: JSON.stringify(diag),
     });
 
@@ -224,13 +224,15 @@ export const getLaunchReadiness = createServerFn({ method: "GET" })
     });
 
     const { data: sales } = await supabaseAdmin
-      .from("sales_pages").select("published, slug")
-      .eq("slug", "membership").maybeSingle();
+      .from("sales_pages").select("id, published")
+      .eq("page_kind", "membership")
+      .order("updated_at", { ascending: false })
+      .limit(1).maybeSingle();
     push({
       key: "sales_published",
       group: "Sales",
       label: "Sales page published",
-      state: sales?.published ? "ready" : "warning",
+      state: (sales as any)?.published ? "ready" : "warning",
     });
     push({
       key: "join_cta",
