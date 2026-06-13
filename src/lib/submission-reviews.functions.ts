@@ -69,9 +69,11 @@ const PriorityInput = z.object({
  * scope of a `*.functions.ts` file (route + functions modules ship to the
  * client bundle; only handler bodies are stripped).
  */
-async function admin() {
+async function admin(): Promise<any> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  return supabaseAdmin;
+  // Cast to any so we can pass Record<string, unknown> patches and so JSON
+  // columns accept generic objects without per-call generics.
+  return supabaseAdmin as any;
 }
 
 async function assertCoachOrAdmin(supabase: any, userId: string) {
