@@ -135,6 +135,21 @@ async function audit(
 }
 
 /**
+ * True when the owning form's `form_ai_configs.require_coach_approval` is on.
+ * Returns false when there is no form (applications, ad-hoc submissions) or
+ * when no config row exists.
+ */
+async function isApprovalRequired(sb: any, row: any): Promise<boolean> {
+  if (!row?.form_id) return false;
+  const { data } = await sb
+    .from("form_ai_configs")
+    .select("require_coach_approval")
+    .eq("form_id", row.form_id)
+    .maybeSingle();
+  return !!data?.require_coach_approval;
+}
+
+/**
  * Idempotent intake: ensure a `submission_reviews` row exists for a given
  * source (native / fillout / application). Returns the row.
  */
