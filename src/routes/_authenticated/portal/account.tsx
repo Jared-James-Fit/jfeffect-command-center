@@ -19,6 +19,7 @@ import { ChangePasswordCard } from "@/components/change-password-card";
 import { TrainingScheduleCard } from "@/components/training-schedule-card";
 import { useAutosave } from "@/hooks/use-autosave";
 import { SavedIndicator } from "@/components/saved-indicator";
+import { ClientLegalSafety } from "@/components/legal/client-legal-safety";
 
 export const Route = createFileRoute("/_authenticated/portal/account")({
   component: AccountPage,
@@ -219,6 +220,10 @@ function AccountPage() {
 
         <div className="md:col-span-3">
           <TrainingScheduleCard client={client as any} editable />
+        </div>
+
+        <div className="md:col-span-3">
+          <ClientLegalSafety />
         </div>
 
         {/* ── Billing & Subscription ─────────────────────────────────────── */}

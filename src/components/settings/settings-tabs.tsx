@@ -14,6 +14,7 @@ const TABS: Tab[] = [
   { to: "/admin/account",       label: "Account",      roles: ["admin", "coach"] },
   { to: "/admin/settings",      label: "Workspace",    roles: ["admin"] },
   { to: "/admin/apps",          label: "Integrations", roles: ["admin"] },
+  { to: "/admin/legal",         label: "Legal & Disclaimers", roles: ["admin"] },
   { to: "/admin/floating-bar",  label: "Floating Bar", roles: ["admin", "coach"] },
   { to: "/admin/faqs",          label: "FAQ",          roles: ["admin", "coach"] },
   { to: "/admin/archives",      label: "Archive",      roles: ["admin"] },
