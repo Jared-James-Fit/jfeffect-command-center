@@ -222,6 +222,10 @@ function AccountPage() {
           <TrainingScheduleCard client={client as any} editable />
         </div>
 
+        <div className="md:col-span-3">
+          <ClientLegalSafety />
+        </div>
+
         {/* ── Billing & Subscription ─────────────────────────────────────── */}
         <BillingSection clientId={client?.id} />
       </div>
