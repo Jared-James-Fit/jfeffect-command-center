@@ -179,124 +179,149 @@ function WorkoutsPage() {
     <>
       <PageHeader title="Workouts" subtitle="Your assigned training" />
       <div className="p-6 md:p-8 space-y-6 pb-32">
-        <FaqWidget category="workouts" />
-        <FaqWidget category="cardio" />
-        {client && <TrainingScheduleCard client={client as any} editable />}
-
-        {/* PRIORITY #1 — Smart Today Card */}
-        {client?.id && !isLoading && workoutItems.length > 0 && (
-          <SmartTodayCard items={workoutItems} clientId={client.id} />
-        )}
-
-        <Card className="border-border bg-card p-6 md:p-8">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div className="flex items-start gap-3">
-              <FileText className="h-8 w-8 text-primary" />
-              <div>
-                <h2 className="text-xl font-black">Your Training Program</h2>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {phaseLink
-                    ? "Opens your program sheet or file — bookmark it on your phone."
-                    : "Your coach hasn't linked your program yet. Check back soon."}
-                </p>
-              </div>
-            </div>
-            {phaseLink && (
-              <a href={phaseLink} target="_blank" rel="noreferrer">
-                <Button size="lg" className="bg-gradient-primary font-bold uppercase">
-                  Open My Program <ExternalLink className="ml-2 h-4 w-4" />
-                </Button>
-              </a>
-            )}
+        {/* Top-level view toggle — sits directly under the page title so the
+            client picks Block vs Overview before scrolling through content. */}
+        <div
+          role="tablist"
+          aria-label="Workouts view"
+          className="sticky top-[var(--app-header-h,56px)] z-30 -mx-6 md:-mx-8 bg-background/95 px-6 md:px-8 py-2 backdrop-blur"
+        >
+          <div className="inline-flex rounded-md border border-border bg-card p-0.5 text-xs">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={viewMode === "block"}
+              tabIndex={viewMode === "block" ? 0 : -1}
+              onClick={() => setViewMode("block")}
+              className={cn(
+                "rounded px-3 py-1.5 font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                viewMode === "block" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              Block View
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={viewMode === "overview"}
+              tabIndex={viewMode === "overview" ? 0 : -1}
+              onClick={() => setViewMode("overview")}
+              className={cn(
+                "rounded px-3 py-1.5 font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                viewMode === "overview" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              Overview
+            </button>
           </div>
-          <div className="mt-4 flex flex-wrap gap-2">
-            <Link to="/portal/lift-videos">
-              <Button variant="outline" size="sm"><Video className="mr-1 h-4 w-4" /> Upload Lift Video</Button>
-            </Link>
-            <Link to="/portal/exercises">
-              <Button variant="outline" size="sm"><Dumbbell className="mr-1 h-4 w-4" /> Exercise Library</Button>
-            </Link>
-            <Link to="/portal/workouts/analytics">
-              <Button variant="outline" size="sm"><Activity className="mr-1 h-4 w-4" /> My Analytics</Button>
-            </Link>
-          </div>
-        </Card>
+        </div>
 
         {isLoading ? (
           <Card className="flex items-center gap-2 p-6 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" /> Loading program…
           </Card>
-        ) : blockGroups.size === 0 ? (
-          <Card className="p-10 text-center">
-            <Activity className="mx-auto h-10 w-10 text-muted-foreground" />
-            <p className="mt-3 text-sm text-muted-foreground">No workouts assigned yet. Your coach will publish your block soon.</p>
-          </Card>
-        ) : (
+        ) : viewMode === "block" ? (
           <div className="space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="inline-flex rounded-md border border-border bg-card p-0.5 text-xs">
-                <button
-                  type="button"
-                  onClick={() => setViewMode("day")}
-                  className={cn(
-                    "rounded px-3 py-1 font-semibold transition",
-                    viewMode === "day" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground",
-                  )}
-                >
-                  Day View
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setViewMode("block")}
-                  className={cn(
-                    "rounded px-3 py-1 font-semibold transition",
-                    viewMode === "block" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground",
-                  )}
-                >
-                  Block View
-                </button>
-              </div>
-            </div>
+            <div id="client-block-view" className="scroll-mt-24" />
+            {currentGroup ? (
+              <ClientBlockView
+                block={currentGroup.block}
+                selectedWeekIndex={search?.week ?? null}
+                selectedDayId={search?.day ?? null}
+                onWeekChange={(idx) => {
+                  navigate({
+                    search: (prev: any) => ({ ...prev, view: "block", week: idx, day: undefined }),
+                    replace: true,
+                  });
+                }}
+                onDayChange={(dayId) => {
+                  navigate({
+                    search: (prev: any) => ({ ...prev, view: "block", day: dayId }),
+                    replace: true,
+                  });
+                }}
+                mode="client"
+              />
+            ) : (
+              <Card className="p-10 text-center">
+                <Activity className="mx-auto h-10 w-10 text-muted-foreground" />
+                <p className="mt-3 text-sm text-muted-foreground">No workouts assigned yet. Your coach will publish your block soon.</p>
+                <p className="mt-2 text-xs text-muted-foreground">Switch to Overview for schedule and quick actions.</p>
+              </Card>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-6">
+            <FaqWidget category="workouts" />
+            <FaqWidget category="cardio" />
+            {client && <TrainingScheduleCard client={client as any} editable />}
 
-            {viewMode === "block" ? (
-              <>
-                <div id="client-block-view" className="scroll-mt-24" />
-                {currentGroup ? (
-                  <ClientBlockView
-                    block={currentGroup.block}
-                    selectedWeekIndex={search?.week ?? null}
-                    selectedDayId={search?.day ?? null}
-                    onWeekChange={(idx) => {
-                      navigate({
-                        search: (prev: any) => ({ ...prev, view: "block", week: idx, day: undefined }),
-                        replace: true,
-                      });
-                    }}
-                    onDayChange={(dayId) => {
-                      navigate({
-                        search: (prev: any) => ({ ...prev, view: "block", day: dayId }),
-                        replace: true,
-                      });
-                    }}
-                    mode="client"
-                  />
-                ) : (
-                  <Card className="p-6 text-sm text-muted-foreground">
-                    No assigned block.
-                  </Card>
-                )}
-                {client?.id && (
-                  <details className="rounded-md border border-border bg-card p-3 text-xs text-muted-foreground">
-                    <summary className="cursor-pointer font-semibold uppercase tracking-wide">Show calendar schedule</summary>
-                    <div className="pt-3 space-y-3">
-                      <WeekScheduleView clientId={client.id} blockId={currentBlockId} mode="client" />
-                      {currentGroup && (
-                        <BlockWeekColumns block={currentGroup.block} weeks={[...currentGroup.weeks.values()]} mode="client" />
-                      )}
+            {client?.id && workoutItems.length > 0 && (
+              <SmartTodayCard items={workoutItems} clientId={client.id} />
+            )}
+
+            {/* Program card — only shows the unlinked message when there is
+                truly no active program. With an active block we show a
+                compact summary instead. */}
+            {(phaseLink || blockGroups.size === 0) ? (
+              <Card className="border-border bg-card p-6 md:p-8">
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div className="flex items-start gap-3">
+                    <FileText className="h-8 w-8 text-primary" />
+                    <div>
+                      <h2 className="text-xl font-black">Your Training Program</h2>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        {phaseLink
+                          ? "Opens your program sheet or file — bookmark it on your phone."
+                          : "Your coach hasn't linked your program yet. Check back soon."}
+                      </p>
                     </div>
-                  </details>
-                )}
-              </>
+                  </div>
+                  {phaseLink && (
+                    <a href={phaseLink} target="_blank" rel="noreferrer">
+                      <Button size="lg" className="bg-gradient-primary font-bold uppercase">
+                        Open My Program <ExternalLink className="ml-2 h-4 w-4" />
+                      </Button>
+                    </a>
+                  )}
+                </div>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <Link to="/portal/lift-videos">
+                    <Button variant="outline" size="sm"><Video className="mr-1 h-4 w-4" /> Upload Lift Video</Button>
+                  </Link>
+                  <Link to="/portal/exercises">
+                    <Button variant="outline" size="sm"><Dumbbell className="mr-1 h-4 w-4" /> Exercise Library</Button>
+                  </Link>
+                  <Link to="/portal/workouts/analytics">
+                    <Button variant="outline" size="sm"><Activity className="mr-1 h-4 w-4" /> My Analytics</Button>
+                  </Link>
+                </div>
+              </Card>
+            ) : currentGroup ? (
+              <Card className="border-border bg-card p-4 md:p-6">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <FileText className="h-6 w-6 text-primary" />
+                    <div>
+                      <div className="text-xs uppercase tracking-widest text-muted-foreground">Active Block</div>
+                      <div className="text-base font-black">{currentGroup.block?.name ?? "Training Block"}</div>
+                    </div>
+                  </div>
+                  <Button size="sm" variant="outline" onClick={() => setViewMode("block")}>Open Block View</Button>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Link to="/portal/lift-videos"><Button variant="outline" size="sm"><Video className="mr-1 h-4 w-4" /> Upload Lift Video</Button></Link>
+                  <Link to="/portal/exercises"><Button variant="outline" size="sm"><Dumbbell className="mr-1 h-4 w-4" /> Exercise Library</Button></Link>
+                  <Link to="/portal/workouts/analytics"><Button variant="outline" size="sm"><Activity className="mr-1 h-4 w-4" /> My Analytics</Button></Link>
+                </div>
+              </Card>
+            ) : null}
+
+            {blockGroups.size === 0 ? (
+              <Card className="p-10 text-center">
+                <Activity className="mx-auto h-10 w-10 text-muted-foreground" />
+                <p className="mt-3 text-sm text-muted-foreground">No workouts assigned yet. Your coach will publish your block soon.</p>
+              </Card>
             ) : (
               <Tabs defaultValue="today" className="space-y-4">
                 <TabsList className="grid w-full grid-cols-4">
