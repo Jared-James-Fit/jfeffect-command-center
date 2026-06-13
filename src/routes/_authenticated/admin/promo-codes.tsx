@@ -1,5 +1,5 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { listPromoRedemptions, backfillPromoFromSession } from "@/lib/promo-redemptions.functions";
@@ -12,8 +12,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/admin/promo-codes")({
-  component: PromoCodesPage,
+  component: PromoCodesRedirect,
 });
+
+function PromoCodesRedirect() {
+  const navigate = useNavigate();
+  useEffect(() => {
+    navigate({ to: "/admin/sales", search: { tab: "promotions" } as any, replace: true });
+  }, [navigate]);
+  return null;
+}
 
 function fmtDiscount(r: any): string {
   if (r.discount_percent_off != null) return `${r.discount_percent_off}% off`;
@@ -40,7 +48,7 @@ function toCsv(rows: any[]): string {
   return [cols.join(","), ...rows.map((r) => cols.map((c) => esc(r[c])).join(","))].join("\n");
 }
 
-function PromoCodesPage() {
+export function PromoCodesPage({ embedded = false }: { embedded?: boolean } = {}) {
   const [code, setCode] = useState("");
   const [productType, setProductType] = useState<string>("__all");
   const [email, setEmail] = useState("");
@@ -101,7 +109,7 @@ function PromoCodesPage() {
   };
 
   return (
-    <div className="mx-auto max-w-7xl space-y-4 p-4 md:p-6">
+    <div className={embedded ? "mx-auto max-w-7xl space-y-4 p-4 md:p-6" : "mx-auto max-w-7xl space-y-4 p-4 md:p-6"}>
       <div className="flex items-center justify-between gap-2">
         <div>
           <h1 className="text-2xl font-black flex items-center gap-2">
