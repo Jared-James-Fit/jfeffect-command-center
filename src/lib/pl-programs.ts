@@ -325,15 +325,11 @@ export async function duplicateWeek(weekId: string) {
 }
 
 export async function moveRow(rowId: string, direction: "up" | "down") {
-  const { data: row } = await sb.from("pl_exercise_rows").select("*").eq("id", rowId).maybeSingle();
-  if (!row) return;
-  const { data: siblings } = await sb.from("pl_exercise_rows").select("id, sort_order").eq("day_id", row.day_id).order("sort_order");
-  const idx = (siblings ?? []).findIndex((s: any) => s.id === rowId);
-  const swapIdx = direction === "up" ? idx - 1 : idx + 1;
-  if (swapIdx < 0 || swapIdx >= (siblings ?? []).length) return;
-  const other = (siblings as any[])[swapIdx];
-  await sb.from("pl_exercise_rows").update({ sort_order: other.sort_order }).eq("id", rowId);
-  await sb.from("pl_exercise_rows").update({ sort_order: row.sort_order }).eq("id", other.id);
+  // Protected server function backed by the pl_move_row RPC. Both updates
+  // happen inside the same database function (transaction); on failure the
+  // RPC raises and Postgres rolls back, leaving sort_order unchanged.
+  const { moveRowFn } = await import("@/lib/pl-programs.functions");
+  return moveRowFn({ data: { rowId, direction } });
 }
 
 // ---------- Sheet-style builder helpers ----------
