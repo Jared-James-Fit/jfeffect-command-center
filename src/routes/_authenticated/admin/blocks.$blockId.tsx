@@ -300,7 +300,7 @@ function BlockEditor() {
     // local state (e.g. just clicked Save without typing). Never do both —
     // that would issue two full persist() flows and race the IDs returned
     // from the first insert against the second.
-    if (autosave.hasPending) {
+    if (autosave.hasPending()) {
       await autosave.flush();
     } else {
       await persist();
