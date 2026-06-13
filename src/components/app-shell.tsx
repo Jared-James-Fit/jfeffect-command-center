@@ -94,7 +94,10 @@ function groupNavItems(items: NavItem[]) {
 type SidebarMode = "expanded" | "compact" | "collapsed";
 const SIDEBAR_MODE_KEY = "jf-sidebar-mode";
 const SIDEBAR_COLLAPSED_SECTIONS_KEY = "jf-sidebar-collapsed-sections";
-const DEFAULT_COLLAPSED_SECTIONS = ["Documents", "Team / Ops"];
+// Default-collapsed sidebar sections. Includes both the new IA workspace
+// names (Team, Settings) and the legacy group names so users on either
+// nav source see a reasonably compact sidebar on first load.
+const DEFAULT_COLLAPSED_SECTIONS = ["Settings", "Team", "Documents", "Team / Ops"];
 
 function useSidebarMode() {
   const [mode, setMode] = useState<SidebarMode>("expanded");
