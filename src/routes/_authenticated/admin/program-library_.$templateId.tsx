@@ -25,6 +25,8 @@ import { cn } from "@/lib/utils";
 import { useAutosave } from "@/hooks/use-autosave";
 import { SaveStatus } from "@/components/save-status";
 import { useConflictWatch } from "@/hooks/use-conflict-watch";
+import { usePersistentUndoStack } from "@/lib/persistent-undo";
+import { useScrollRestoration } from "@/lib/scroll-restore";
 import { ActionButton } from "@/components/action-button";
 import { copyRows, useClip } from "@/lib/program-builder-clipboard";
 import { createContext, useContext } from "react";
