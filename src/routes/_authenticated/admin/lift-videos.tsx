@@ -227,7 +227,7 @@ export function AdminLiftVideos({ embedded = false, initialOpen }: { embedded?: 
 
   return (
     <>
-      <PageHeader title="Lift Video Review" subtitle="Coaching review inbox — tap a submission to review." />
+      {!embedded && <PageHeader title="Lift Video Review" subtitle="Coaching review inbox — tap a submission to review." />}
 
       <div className="mx-auto w-full max-w-7xl min-w-0 px-4 py-4 sm:px-5 md:px-6">
         {/* Mobile: show detail full-screen when a submission is open */}
