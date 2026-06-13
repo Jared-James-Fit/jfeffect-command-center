@@ -47,7 +47,7 @@ function parseFloatOrNull(s: string | null): number | null {
   return Number.isFinite(n) ? n : null;
 }
 function RowCell({
-  value, onCommit, className, placeholder, inputMode, commitDelay = 400,
+  value, onCommit, className, placeholder, inputMode, commitDelay = 400, dataField,
 }: {
   value: string | number | null | undefined;
   onCommit: (v: string | null) => void;
@@ -55,6 +55,7 @@ function RowCell({
   placeholder?: string;
   inputMode?: any;
   commitDelay?: number;
+  dataField?: string;
 }) {
   const stringify = (v: string | number | null | undefined) => (v == null ? "" : String(v));
   const [local, setLocal] = useState(() => stringify(value));
@@ -83,6 +84,7 @@ function RowCell({
       placeholder={placeholder}
       inputMode={inputMode}
       value={local}
+      data-pb-field={dataField}
       onChange={(e) => {
         const v = e.target.value;
         setLocal(v);
@@ -96,16 +98,137 @@ function RowCell({
         doCommit(local);
       }}
       onKeyDown={(e) => {
-        if (e.key === "Enter") {
-          (e.target as HTMLInputElement).blur();
-        } else if (e.key === "Escape") {
+        if (e.key === "Escape") {
           setLocal(lastCommittedRef.current);
           (e.target as HTMLInputElement).blur();
+          return;
+        }
+        if (handleRowFieldNav(e, { value: local })) {
+          // committed handler took over
+          return;
         }
       }}
     />
   );
 }
+
+// ---- Spreadsheet-style keyboard navigation for builder rows -------------
+// Inputs that participate must carry a `data-pb-field` attribute and live
+// inside a `[data-pb-row]` container; rows live inside `[data-pb-day]`.
+const NAV_FIELDS = [
+  "sets","reps","rpe","rir","rest","tempo","percentage","load","unit",
+] as const;
+
+function focusField(el: HTMLElement | null) {
+  if (!el) return;
+  el.focus();
+  if (el instanceof HTMLInputElement && (el.type === "text" || el.type === "number" || !el.type)) {
+    try { el.select(); } catch {}
+  }
+  el.scrollIntoView({ block: "nearest", inline: "nearest" });
+}
+
+function fieldsInRow(row: Element): HTMLElement[] {
+  return Array.from(row.querySelectorAll<HTMLElement>("[data-pb-field]"))
+    .filter((el) => !(el as any).disabled && el.offsetParent !== null);
+}
+
+/**
+ * Handle Enter / Shift+Enter / left-right (at caret boundary) / up-down
+ * navigation between editable prescription fields. Returns true if the
+ * event was handled.
+ */
+export function handleRowFieldNav(
+  e: React.KeyboardEvent<HTMLInputElement>,
+  opts?: { value?: string },
+): boolean {
+  const target = e.currentTarget;
+  const row = target.closest("[data-pb-row]");
+  if (!row) return false;
+  const fields = fieldsInRow(row);
+  const idx = fields.indexOf(target);
+  if (idx < 0) return false;
+  const len = (opts?.value ?? target.value ?? "").length;
+  const atStart = target.selectionStart === 0 && target.selectionEnd === 0;
+  const atEnd = target.selectionStart === len && target.selectionEnd === len;
+
+  const moveSibling = (delta: number) => {
+    const next = fields[idx + delta];
+    if (next) {
+      e.preventDefault();
+      focusField(next);
+      return true;
+    }
+    // wrap to adjacent row, same column
+    const day = row.closest("[data-pb-day]");
+    if (day) {
+      const rows = Array.from(day.querySelectorAll<HTMLElement>("[data-pb-row]"));
+      const ri = rows.indexOf(row as HTMLElement);
+      const nextRow = rows[ri + (delta > 0 ? 1 : -1)];
+      if (nextRow) {
+        const cols = fieldsInRow(nextRow);
+        const col = cols[delta > 0 ? 0 : cols.length - 1];
+        if (col) { e.preventDefault(); focusField(col); return true; }
+      }
+    }
+    return false;
+  };
+
+  const moveVertical = (delta: number) => {
+    const day = row.closest("[data-pb-day]");
+    if (!day) return false;
+    const rows = Array.from(day.querySelectorAll<HTMLElement>("[data-pb-row]"));
+    const ri = rows.indexOf(row as HTMLElement);
+    const nextRow = rows[ri + delta];
+    if (!nextRow) return false;
+    const fieldName = target.getAttribute("data-pb-field");
+    const peer = nextRow.querySelector<HTMLElement>(`[data-pb-field="${fieldName}"]`)
+      ?? fieldsInRow(nextRow)[Math.min(idx, fieldsInRow(nextRow).length - 1)];
+    if (peer) { e.preventDefault(); focusField(peer); return true; }
+    return false;
+  };
+
+  if (e.key === "Enter" && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey) {
+    return moveSibling(1) || (target.blur(), true);
+  }
+  if (e.key === "Enter" && e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey) {
+    return moveSibling(-1) || (target.blur(), true);
+  }
+  if (e.key === "ArrowRight" && atEnd && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey) {
+    return moveSibling(1);
+  }
+  if (e.key === "ArrowLeft" && atStart && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey) {
+    return moveSibling(-1);
+  }
+  if (e.key === "ArrowDown" && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey) {
+    return moveVertical(1);
+  }
+  if (e.key === "ArrowUp" && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey) {
+    return moveVertical(-1);
+  }
+  return false;
+}
+
+// ---- Format helpers ----
+function fmtRestSeconds(sec: number | null | undefined): string {
+  if (sec == null) return "—";
+  if (sec < 60) return `${sec} sec`;
+  if (sec % 60 === 0) return `${sec / 60} min`;
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${m}m ${s}s`;
+}
+const TIME_PROFILE_LABEL: Record<string, string> = {
+  competition_lift: "Competition lift",
+  heavy_compound: "Heavy compound",
+  accessory_compound: "Accessory compound",
+  isolation: "Isolation",
+  machine: "Machine",
+  bodyweight: "Bodyweight",
+  core: "Core",
+  cardio: "Cardio",
+  custom: "Custom",
+};
 
 // ---- Client-max context shared by RowEditor regardless of nesting depth ----
 type MaxesCtx = {
@@ -1076,7 +1199,7 @@ function DayEditor({ day, setDay, exercises, compact }: { day: any; setDay: (d: 
           {dragOver ? "Drop exercise here" : "Drag exercises from the library, or click + Row"}
         </p>
       ) : (
-        <div className="space-y-1.5">
+        <div className="space-y-1.5" data-pb-day>
           {rows.map((r: any, i: number) => (
             <div
               key={i}
@@ -1149,7 +1272,7 @@ function DayEditor({ day, setDay, exercises, compact }: { day: any; setDay: (d: 
 function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMoveDown, canMoveUp, canMoveDown, onDragStartRow, onDragEndRow, isDragging, purposeLabel }: { row: any; setRow: (r: any) => void; onDelete?: () => void; exercises: any[]; compact?: boolean; onMoveUp?: () => void; onMoveDown?: () => void; canMoveUp?: boolean; canMoveDown?: boolean; onDragStartRow?: (e: React.DragEvent) => void; onDragEndRow?: () => void; isDragging?: boolean; purposeLabel?: string }) {
   const Field = ({ label, className, children }: { label: string; className?: string; children: React.ReactNode }) => (
     <div className={cn("flex flex-col gap-0.5 min-w-0", className)}>
-      <span className="px-0.5 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground leading-none">{label}</span>
+      <span className="px-0.5 text-[10px] font-semibold uppercase tracking-wide text-foreground/80 leading-none">{label}</span>
       {children}
     </div>
   );
@@ -1219,6 +1342,7 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
   };
   return (
     <div
+      data-pb-row
       className={cn(
         "relative overflow-hidden rounded-md border-2 border-border bg-card shadow-sm transition-shadow hover:border-foreground/30 hover:shadow",
         isDragging && "opacity-50 ring-2 ring-primary",
@@ -1299,18 +1423,18 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
         </div>
         </Field>
         <Field className="col-span-1" label="Sets">
-          <RowCell className={cn("text-sm font-semibold tabular-nums text-center", h, inputCls)} inputMode="numeric" placeholder="3" value={row.sets} onCommit={(v) => setRow({ ...row, sets: parseIntOrNull(v) })} />
+          <RowCell dataField="sets" className={cn("text-sm font-semibold tabular-nums text-center", h, inputCls)} inputMode="numeric" placeholder="3" value={row.sets} onCommit={(v) => setRow({ ...row, sets: parseIntOrNull(v) })} />
         </Field>
         <Field className="col-span-2" label="Reps">
-          <RowCell className={cn("text-sm font-semibold tabular-nums text-center", h, inputCls)} placeholder="8-12" value={row.reps_text} onCommit={(v) => setRow({ ...row, reps_text: v ?? "" })} />
+          <RowCell dataField="reps" className={cn("text-sm font-semibold tabular-nums text-center", h, inputCls)} placeholder="8-12" value={row.reps_text} onCommit={(v) => setRow({ ...row, reps_text: v ?? "" })} />
         </Field>
         <Field className="col-span-1" label="RPE">
-          <RowCell className={cn("text-sm font-semibold tabular-nums text-center", h, inputCls)} inputMode="decimal" placeholder="—" value={row.rpe} onCommit={(v) => setRow({ ...row, rpe: v ?? "" })} />
+          <RowCell dataField="rpe" className={cn("text-sm font-semibold tabular-nums text-center", h, inputCls)} inputMode="decimal" placeholder="—" value={row.rpe} onCommit={(v) => setRow({ ...row, rpe: v ?? "" })} />
         </Field>
         <Field className="col-span-1" label="RIR">
-          <RowCell className={cn("text-sm font-semibold tabular-nums text-center", h, inputCls)} inputMode="decimal" placeholder="—" value={row.rir} onCommit={(v) => setRow({ ...row, rir: v ?? "" })} />
+          <RowCell dataField="rir" className={cn("text-sm font-semibold tabular-nums text-center", h, inputCls)} inputMode="decimal" placeholder="—" value={row.rir} onCommit={(v) => setRow({ ...row, rir: v ?? "" })} />
         </Field>
-        <Field className="col-span-2 md:col-span-2" label={`Rest (seconds)${restIsOverride ? " *" : ""}`}>
+        <Field className="col-span-2 md:col-span-2" label={`Rest time${restIsOverride ? " *" : ""}`}>
           {(() => {
             const REST_PRESETS: { v: number; label: string }[] = [
               { v: 30, label: "30 sec" },
@@ -1348,10 +1472,16 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
                       restIsOverride && "ring-1 ring-primary/40",
                     )}
                   >
-                    <SelectValue />
+                    <SelectValue>
+                      {selectValue === "auto"
+                        ? `Auto · ${fmtRestSeconds(restDefault)}`
+                        : selectValue === "custom"
+                          ? `Custom · ${fmtRestSeconds(override ?? null)}`
+                          : fmtRestSeconds(parseInt(selectValue, 10))}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="auto">Auto ({restDefault}s)</SelectItem>
+                    <SelectItem value="auto">Auto · {fmtRestSeconds(restDefault)}</SelectItem>
                     {REST_PRESETS.map((p) => (
                       <SelectItem key={p.v} value={String(p.v)}>{p.label}</SelectItem>
                     ))}
@@ -1360,6 +1490,7 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
                 </Select>
                 {selectValue === "custom" && (
                   <RowCell
+                    dataField="rest"
                     className={cn("mt-1 text-xs font-semibold tabular-nums text-center", h, inputCls)}
                     inputMode="numeric"
                     placeholder="Custom rest (seconds)"
@@ -1374,8 +1505,10 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
                     }}
                   />
                 )}
-                <span className="px-0.5 text-[8px] leading-none text-muted-foreground">
-                  {selectValue === "auto" ? `auto · ${restCat}` : `${effectiveRest}s programmed`}
+                <span className="px-0.5 text-[10px] leading-tight text-foreground/70">
+                  {selectValue === "auto"
+                    ? `Auto · ${restCat} · ${fmtRestSeconds(effectiveRest)}`
+                    : `${fmtRestSeconds(effectiveRest)} programmed`}
                 </span>
               </>
             );
@@ -1409,6 +1542,30 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
           <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => { copyRows([row]); toast.success("Exercise copied"); }} title="Copy exercise">
             <ClipboardCopy className="h-3.5 w-3.5" />
           </Button>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button size="icon" variant="ghost" className="h-7 w-7" title="Advanced settings (exercise classification)">
+                <Settings2 className="h-3.5 w-3.5" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-72 p-3" align="end">
+              <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-foreground/80">Exercise classification</div>
+              <p className="mb-2 text-[11px] leading-snug text-foreground/70">
+                Controls automatic rest defaults, workout-duration estimates, and warm-up buffer. Inferred automatically — override only when needed.
+              </p>
+              <Select value={row.time_profile ?? "accessory_compound"} onValueChange={(v) => setRow({ ...row, time_profile: v })}>
+                <SelectTrigger className={cn("text-xs font-medium", h, inputCls)}>
+                  <SelectValue>
+                    {TIME_PROFILE_LABEL[row.time_profile ?? "accessory_compound"] ?? (row.time_profile ?? "Accessory compound")}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>{TIME_PROFILES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}</SelectContent>
+              </Select>
+              <div className="mt-2 text-[10px] text-foreground/60">
+                Current: <span className="font-semibold text-foreground/80">{TIME_PROFILE_LABEL[row.time_profile ?? "accessory_compound"] ?? (row.time_profile ?? "Accessory compound")}</span>
+              </div>
+            </PopoverContent>
+          </Popover>
           <Popover>
             <PopoverTrigger asChild>
               <Button size="icon" variant="ghost" className="h-7 w-7" title="Card color">
@@ -1514,14 +1671,10 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
         </Field>
         )}
         <Field className="col-span-2" label="Tempo">
-          <RowCell className={cn("text-xs font-semibold tabular-nums text-center", h, inputCls)} placeholder="—" value={row.tempo} onCommit={(v) => setRow({ ...row, tempo: v ?? "" })} />
-          <span className="px-0.5 text-[8px] leading-none text-muted-foreground">Format: 3-1-1 (ecc-pause-con)</span>
-        </Field>
-        <Field className={cn(loadMode === "none" ? "col-span-5" : "col-span-3")} label="Type">
-          <Select value={row.time_profile ?? "accessory_compound"} onValueChange={(v) => setRow({ ...row, time_profile: v })}>
-            <SelectTrigger className={cn("text-xs font-medium", h, inputCls)}><SelectValue /></SelectTrigger>
-            <SelectContent>{TIME_PROFILES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}</SelectContent>
-          </Select>
+          <RowCell dataField="tempo" className={cn("text-xs font-semibold tabular-nums text-center", h, inputCls)} placeholder="—" value={row.tempo} onCommit={(v) => setRow({ ...row, tempo: v ?? "" })} />
+          <span className="px-0.5 text-[10px] leading-tight text-foreground/70" title="Tempo notation: seconds for the eccentric (lowering) phase, pause at the bottom, then concentric (lifting) phase. Example: 3-1-1 = 3s down, 1s pause, 1s up.">
+            Format: eccentric–pause–concentric · e.g. <span className="text-foreground/50">3-1-1</span>
+          </span>
         </Field>
       </div>
       )}
@@ -1535,7 +1688,7 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
         </div>
       )}
       {expanded && loadMode === "none" && (
-        <p className="text-[11px] text-muted-foreground italic">No suggested load — client will log the weight they use.</p>
+        <p className="text-[11px] text-foreground/70 italic">No suggested load — client will log the weight they use.</p>
       )}
       {expanded && clientId && computed && computed.status !== "manual" && (
         <div className="flex flex-wrap items-center gap-1.5 pt-0.5 text-[11px]">

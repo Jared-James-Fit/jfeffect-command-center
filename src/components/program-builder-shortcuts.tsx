@@ -83,6 +83,17 @@ function buildShortcuts(mac: boolean): ShortcutGroup[] {
         { label: "Close active panel", combos: [["Esc"]] },
       ],
     },
+    {
+      heading: "Workout Builder",
+      items: [
+        { label: "Move between prescription fields", combos: [["←"], ["→"]] },
+        { label: "Same field, previous / next exercise", combos: [["↑"], ["↓"]] },
+        { label: "Next field", combos: [["Enter"]] },
+        { label: "Previous field", combos: [["Shift", "Enter"]] },
+        { label: "Standard focus navigation", combos: [["Tab"], ["Shift", "Tab"]] },
+        { label: "Close active menu / advanced", combos: [["Esc"]] },
+      ],
+    },
   ];
 }
 
