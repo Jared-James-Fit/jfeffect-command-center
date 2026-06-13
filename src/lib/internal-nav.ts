@@ -26,6 +26,7 @@ import {
   FileSignature, ShoppingBag, Library, KeyRound, BarChart3, RefreshCw,
   Link as LinkIcon, Trophy, Tag, ShieldCheck,
   Home as HomeIcon,
+  ListChecks, Upload, Star, FileText, ExternalLink, Image as ImageIcon,
 } from "lucide-react";
 import type { NavItem } from "@/components/app-shell";
 
@@ -228,6 +229,38 @@ const MEMBERSHIP_OVERLAY: Entry[] = [
 ];
 
 /**
+ * Media Manager registry — all `/media/*` routes grouped into the same 11
+ * workspaces. Media Manager has its own physical route tree (`/media`) with
+ * its own narrow permissions, so we cannot point a media-manager sidebar at
+ * `/admin/*` URLs (those routes redirect non-admins away). This registry
+ * mirrors the IA without changing any route or permission boundary.
+ */
+const MEDIA_REGISTRY: NavItem[] = [
+  // Home
+  { to: "/media", label: "Media Dashboard", icon: LayoutDashboard, group: "Home" },
+  { to: "/media/action-items", label: "Action Items", icon: ListChecks, group: "Home" },
+  // Communication
+  { to: "/media/broadcasts", label: "Broadcast Drafts", icon: Megaphone, group: "Communication" },
+  { to: "/media/announcements", label: "Announcement Drafts", icon: FileText, group: "Communication" },
+  // Sales
+  { to: "/media/sales/coaching", label: "Coaching Page", icon: ExternalLink, group: "Sales" },
+  { to: "/media/sales/membership", label: "JF Membership Page", icon: ExternalLink, group: "Sales" },
+  { to: "/media/campaigns", label: "Campaigns / Promos", icon: Sparkles, group: "Sales" },
+  { to: "/media/promo-links", label: "Promo Links", icon: LinkIcon, group: "Sales" },
+  // Calendar
+  { to: "/media/calendar", label: "Content Calendar", icon: Calendar, group: "Calendar" },
+  { to: "/media/events", label: "Events", icon: Calendar, group: "Calendar" },
+  // Content
+  { to: "/media/inbox", label: "Media Inbox", icon: ImageIcon, group: "Content" },
+  { to: "/media/archives", label: "Media Archives", icon: FolderOpen, group: "Content" },
+  { to: "/media/uploads", label: "Uploads", icon: Upload, group: "Content" },
+  { to: "/media/resources", label: "Resource Library", icon: FolderOpen, group: "Content" },
+  { to: "/media/testimonials", label: "Testimonials / Proof", icon: Star, group: "Content" },
+  // Settings
+  { to: "/media/account", label: "My Account", icon: UserCog, group: "Settings" },
+];
+
+/**
  * Build the sidebar for a given staff role tag and dashboard mode.
  * Returns `NavItem[]` (already filtered, already grouped via NavItem.group).
  */
@@ -235,6 +268,13 @@ export function buildInternalNav(
   roleTag: StaffRoleTag,
   opts: { mode?: "coaching" | "membership" } = {},
 ): NavItem[] {
+  // Media Manager has its own physical /media route tree with its own
+  // narrower permissions — return the /media-scoped registry directly so
+  // the sidebar does not point at /admin/* routes that the role cannot
+  // access. Admin viewing in Media Manager mode also uses this set.
+  if (roleTag === "media_manager") {
+    return MEDIA_REGISTRY.map((i) => ({ ...i }));
+  }
   const base = REGISTRY.filter((e) => e.visibleTo.includes(roleTag));
   const overlay =
     opts.mode === "membership" && roleTag === "admin" ? MEMBERSHIP_OVERLAY : [];
