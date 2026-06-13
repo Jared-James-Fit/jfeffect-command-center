@@ -10755,6 +10755,17 @@ export type Database = {
           user_id: string
         }[]
       }
+      get_membership_cleanup_job_status: {
+        Args: never
+        Returns: {
+          active: boolean
+          exists_: boolean
+          jobname: string
+          last_run_started_at: string
+          last_run_status: string
+          schedule: string
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
