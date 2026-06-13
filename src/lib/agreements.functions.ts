@@ -232,6 +232,21 @@ export const syncSignNowTemplates = createServerFn({ method: "POST" })
       throw new Error("SignNow API is not configured. Add the SIGNNOW_* secrets to enable template sync.");
     }
     const remote = await listSignNowTemplates();
+    // Dedupe by name — SignNow often contains multiple templates that share a
+    // name (folder copies, old revisions, "Duplicate of…" leftovers). Keep the
+    // most-recently-updated one per name; treat the rest as not synced so we
+    // never re-create them locally and we archive any stale local rows.
+    const byName = new Map<string, typeof remote[number]>();
+    for (const r of remote) {
+      const key = (r.name ?? "").trim().toLowerCase();
+      if (!key) continue;
+      const cur = byName.get(key);
+      if (!cur) { byName.set(key, r); continue; }
+      const curU = typeof cur.updated === "number" ? cur.updated : 0;
+      const newU = typeof r.updated === "number" ? r.updated : 0;
+      if (newU >= curU) byName.set(key, r);
+    }
+    const dedupedRemote = Array.from(byName.values());
     const { data: existing } = await supabase
       .from("agreement_templates")
       .select("id, signnow_template_id, name, is_active");
@@ -243,7 +258,7 @@ export const syncSignNowTemplates = createServerFn({ method: "POST" })
     let updated = 0;
     let skipped = 0;
     const seenRemoteIds = new Set<string>();
-    for (const r of remote) {
+    for (const r of dedupedRemote) {
       seenRemoteIds.add(r.id);
       const match = byId.get(r.id);
       if (match) {
@@ -266,8 +281,8 @@ export const syncSignNowTemplates = createServerFn({ method: "POST" })
       }
     }
     // Archive + deactivate any previously-synced rows whose remote template no
-    // longer exists in SignNow (deleted, trashed, or never a real template).
-    // Historical agreements already created from them are untouched.
+    // longer exists in SignNow OR was de-duplicated above (older same-name
+    // copy). Historical agreements already created from them are untouched.
     for (const [sid, row] of byId.entries()) {
       if (!seenRemoteIds.has(sid) && (row.is_active || !row.archived)) {
         await supabase.from("agreement_templates")
@@ -278,7 +293,7 @@ export const syncSignNowTemplates = createServerFn({ method: "POST" })
     await supabase.from("signnow_settings").update({
       last_synced_at: new Date().toISOString(),
     } as any).eq("singleton", true);
-    return { ok: true, total: remote.length, created, updated, skipped };
+    return { ok: true, total: dedupedRemote.length, fetched: remote.length, created, updated, skipped };
   });
 
 export const createAgreement = createServerFn({ method: "POST" })
