@@ -444,7 +444,6 @@ export function ClientBlockView({
                       )}
                     </div>
                   </div>
-                  <div className="mt-2"><Action /></div>
                 </div>
 
                 {/* Exercise list */}
@@ -492,6 +491,11 @@ export function ClientBlockView({
                       </div>
                     );
                   })}
+                </div>
+
+                {/* Bottom action */}
+                <div className="border-t border-border p-3">
+                  <Action />
                 </div>
               </div>
             );
