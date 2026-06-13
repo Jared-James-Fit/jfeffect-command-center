@@ -143,12 +143,12 @@ export function ClientBlockView({
   useEffect(() => {
     if (!days.length) { setActiveDayIdx(0); return; }
     // Prefer today, then the first not-completed, then 0.
-    const tIdx = days.findIndex((d) => {
+    const tIdx = days.findIndex((d: any) => {
       const dd = dayDate(d);
       return !!dd && dd.getTime() === today.getTime();
     });
     if (tIdx >= 0) { setActiveDayIdx(tIdx); return; }
-    const firstOpen = days.findIndex((d) => !completionByDay.get(d.id)?.completed_at);
+    const firstOpen = days.findIndex((d: any) => !completionByDay.get(d.id)?.completed_at);
     setActiveDayIdx(firstOpen >= 0 ? firstOpen : 0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resolvedWeek?.id, days.length]);
