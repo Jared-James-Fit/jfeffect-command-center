@@ -1347,9 +1347,38 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
   const clearOverride = () => {
     setRow({ ...row, manual_override: false, load_kg: null, load_lb: null });
   };
+  const resetCard = () => {
+    setRow({
+      ...row,
+      sets: null,
+      reps_text: "",
+      rpe: "",
+      rir: "",
+      percentage: null,
+      percentage_basis: null,
+      load_kg: null,
+      load_lb: null,
+      rest_seconds: null,
+      rest_seconds_override: null,
+      tempo: "",
+      notes: "",
+      manual_override: false,
+      override_of_pct: null,
+      purpose_label: null,
+    });
+    toast.success("Card reset");
+  };
   return (
     <div
       data-pb-row
+      onKeyDown={(e) => {
+        // Quick key: Alt+R resets the currently focused card
+        if (e.altKey && (e.key === "r" || e.key === "R")) {
+          e.preventDefault();
+          e.stopPropagation();
+          resetCard();
+        }
+      }}
       className={cn(
         "relative overflow-hidden rounded-md border-2 border-border bg-card shadow-sm transition-shadow hover:border-foreground/30 hover:shadow",
         isDragging && "opacity-50 ring-2 ring-primary",
