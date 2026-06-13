@@ -821,6 +821,17 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
     return { days: days.length, rows: rowCount, minutes };
   }), [weeksData]);
   const fmtDur = (m: number) => { if (!m || m <= 0) return "—"; const h = Math.floor(m/60); const mm = Math.round(m%60); return h > 0 ? `${h}h ${mm}m` : `${mm}m`; };
+  const weekHeaderScrollRef = useRef<HTMLDivElement | null>(null);
+  const weekCardsScrollRef = useRef<HTMLDivElement | null>(null);
+  const weekColumnWidthClass = compact
+    ? "w-[88vw] max-w-[520px] sm:w-[440px] lg:w-[480px] xl:w-[520px]"
+    : "w-[94vw] max-w-[720px] sm:w-[600px] lg:w-[640px] xl:w-[700px]";
+  const syncWeekScroll = (source: "header" | "cards") => (e: React.UIEvent<HTMLDivElement>) => {
+    const other = source === "header" ? weekCardsScrollRef.current : weekHeaderScrollRef.current;
+    if (!other) return;
+    const left = e.currentTarget.scrollLeft;
+    if (Math.abs(other.scrollLeft - left) > 1) other.scrollLeft = left;
+  };
   const addWeek = () => {
     const nextIdx = (weeksData[weeksData.length - 1]?.week_index ?? 0) + 1;
     setWeeksData([...weeksData, { week_index: nextIdx, days: [{ day_index: 1, title: "Day 1", rows: [] }] }]);
