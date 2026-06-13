@@ -52,16 +52,3 @@ export async function saveExerciseUnitPref(
     .from("client_exercise_unit_prefs")
     .upsert({ client_id: clientId, exercise_id: exerciseId, unit }, { onConflict: "client_id,exercise_id" });
 }
-
-/** Bulk upsert prefs for many exercises in one call (used by the global toggle). */
-export async function saveExerciseUnitPrefsBulk(
-  clientId: string,
-  exerciseIds: string[],
-  unit: WUnit,
-): Promise<void> {
-  const rows = exerciseIds.filter(Boolean).map((id) => ({ client_id: clientId, exercise_id: id, unit }));
-  if (!rows.length) return;
-  await sb
-    .from("client_exercise_unit_prefs")
-    .upsert(rows, { onConflict: "client_id,exercise_id" });
-}
