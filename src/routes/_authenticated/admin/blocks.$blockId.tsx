@@ -314,8 +314,8 @@ function BlockEditor() {
   const totalRows = (payload.weeks_data ?? []).reduce((n: number, w: any) =>
     n + (w.days ?? []).reduce((m: number, d: any) => m + (d.rows?.length ?? 0), 0), 0);
 
-  const canUndo = histRef.current.length > 0;
-  const canRedo = futureRef.current.length > 0;
+  const canUndo = undoStack.canUndo;
+  const canRedo = undoStack.canRedo;
 
   return (
     <div className="space-y-2 p-2 md:p-3">
