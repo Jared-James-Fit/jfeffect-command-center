@@ -580,6 +580,7 @@ function TemplateEditor() {
             redo={redo}
             canUndo={canUndo}
             canRedo={canRedo}
+            templateId={templateId}
           />
         </TabsContent>
       </Tabs>
@@ -624,7 +625,7 @@ function EditorChrome({ meta, summary, typeLabel, autosave, save, dirty, childre
   );
 }
 
-export function StructureCanvas({ type, payload, setP, exercises, appendRowToFirstDay, undo, redo, canUndo, canRedo, clientId, blockId, toolbarExtras }: {
+export function StructureCanvas({ type, payload, setP, exercises, appendRowToFirstDay, undo, redo, canUndo, canRedo, clientId, blockId, toolbarExtras, templateId }: {
   type: string; payload: any; setP: (p: any, opts?: { skipHistory?: boolean }) => void; exercises: any[];
   appendRowToFirstDay: (payload: any, type: string, row: any) => void;
   undo: () => void; redo: () => void; canUndo: boolean; canRedo: boolean;
@@ -634,6 +635,9 @@ export function StructureCanvas({ type, payload, setP, exercises, appendRowToFir
   blockId?: string | null;
   /** Optional — rendered in the canvas toolbar (e.g. "Block Maxes" button). */
   toolbarExtras?: React.ReactNode;
+  /** Optional — template id, used to give legacy blocks deterministic
+   * temporary IDs (legacy:<templateId>:...). Stable across refreshes. */
+  templateId?: string;
 }) {
   const [prefs, setPrefsState] = useState<EditorPrefs>(() => readPrefs());
   const setPrefs = (patch: Partial<EditorPrefs>) => {
@@ -801,7 +805,7 @@ export function StructureCanvas({ type, payload, setP, exercises, appendRowToFir
             }}
             className="pl-1 pr-2 py-2"
           >
-            <StructureEditor type={type} payload={payload} setPayload={setP} exercises={exercises as any[]} compact={compact} />
+            <StructureEditor type={type} payload={payload} setPayload={setP} exercises={exercises as any[]} compact={compact} templateId={templateId} />
           </div>
         </div>
       </div>
@@ -812,9 +816,9 @@ export function StructureCanvas({ type, payload, setP, exercises, appendRowToFir
 
 // ---------- Structure editing for the JSON payload ----------
 
-function StructureEditor({ type, payload, setPayload, exercises, compact }: { type: string; payload: any; setPayload: (p: any) => void; exercises: any[]; compact?: boolean }) {
+function StructureEditor({ type, payload, setPayload, exercises, compact, templateId }: { type: string; payload: any; setPayload: (p: any) => void; exercises: any[]; compact?: boolean; templateId?: string }) {
   if (type === "full_prep" || type === "block") {
-    return <MultiBlockStructureEditor type={type} payload={payload} setPayload={setPayload} exercises={exercises} compact={compact} />;
+    return <MultiBlockStructureEditor type={type} payload={payload} setPayload={setPayload} exercises={exercises} compact={compact} templateId={templateId} />;
   }
   if (type === "week") return <WeekEditor week={payload} setWeek={setPayload} exercises={exercises} compact={compact} />;
   if (type === "day") return <DayEditor day={payload} setDay={setPayload} exercises={exercises} compact={compact} />;
