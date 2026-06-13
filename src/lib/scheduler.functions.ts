@@ -24,6 +24,8 @@ async function assertAdmin(supabase: any, userId: string) {
 function parseSettings(raw: any): {
   mode: "dry_run" | "real";
   emergency_disable: boolean;
+  live_enabled: boolean;
+  allowed_test_recipients: string[];
   updated_at: string | null;
   updated_by: string | null;
   notes: string | null;
@@ -32,13 +34,32 @@ function parseSettings(raw: any): {
   if (typeof raw === "string") {
     try { v = JSON.parse(raw); } catch { v = {}; }
   }
+  const recipients = Array.isArray(v?.allowed_test_recipients)
+    ? v.allowed_test_recipients.filter(
+        (x: unknown): x is string => typeof x === "string" && x.length > 0,
+      )
+    : [];
   return {
     mode: v?.mode === "real" ? "real" : "dry_run",
     emergency_disable: !!v?.emergency_disable,
+    live_enabled: !!v?.live_enabled,
+    allowed_test_recipients: recipients,
     updated_at: v?.updated_at ?? null,
     updated_by: v?.updated_by ?? null,
     notes: v?.notes ?? null,
   };
+}
+
+function settingsToValue(s: ReturnType<typeof parseSettings>) {
+  return JSON.stringify({
+    mode: s.mode,
+    emergency_disable: s.emergency_disable,
+    live_enabled: s.live_enabled,
+    allowed_test_recipients: s.allowed_test_recipients,
+    updated_at: s.updated_at,
+    updated_by: s.updated_by,
+    notes: s.notes,
+  });
 }
 
 export const getSchedulerStatus = createServerFn({ method: "GET" })
@@ -133,15 +154,18 @@ export const setSchedulerMode = createServerFn({ method: "POST" })
       .maybeSingle();
     const prev = parseSettings(current?.value);
     const next = {
+      ...prev,
       mode: data.mode,
-      emergency_disable: prev.emergency_disable,
+      // Switching back to dry_run also unsets the live kill switch — you must
+      // re-arm it explicitly after enabling real mode again.
+      live_enabled: data.mode === "real" ? prev.live_enabled : false,
       updated_at: new Date().toISOString(),
       updated_by: context.userId,
       notes: data.reason,
     };
     await sb
       .from("app_settings")
-      .upsert({ key: "forms_scheduled_delivery", value: JSON.stringify(next) }, { onConflict: "key" });
+      .upsert({ key: "forms_scheduled_delivery", value: settingsToValue(next) }, { onConflict: "key" });
     await sb.from("scheduler_mode_audit").insert({
       changed_by: context.userId,
       previous_mode: prev.mode,
@@ -171,7 +195,7 @@ export const setSchedulerEmergencyDisable = createServerFn({ method: "POST" })
       .maybeSingle();
     const prev = parseSettings(current?.value);
     const next = {
-      mode: prev.mode,
+      ...prev,
       emergency_disable: data.disabled,
       updated_at: new Date().toISOString(),
       updated_by: context.userId,
@@ -179,7 +203,7 @@ export const setSchedulerEmergencyDisable = createServerFn({ method: "POST" })
     };
     await sb
       .from("app_settings")
-      .upsert({ key: "forms_scheduled_delivery", value: JSON.stringify(next) }, { onConflict: "key" });
+      .upsert({ key: "forms_scheduled_delivery", value: settingsToValue(next) }, { onConflict: "key" });
     await sb.from("scheduler_mode_audit").insert({
       changed_by: context.userId,
       previous_mode: prev.mode,
@@ -187,6 +211,88 @@ export const setSchedulerEmergencyDisable = createServerFn({ method: "POST" })
       previous_emergency_disabled: prev.emergency_disable,
       new_emergency_disabled: data.disabled,
       reason: data.reason,
+    });
+    return { ok: true, settings: next };
+  });
+
+// Live kill switch — must be explicitly armed before any real delivery.
+const LiveInput = z.object({
+  enabled: z.boolean(),
+  reason: z.string().min(4).max(1000),
+  confirm: z.literal("I UNDERSTAND THIS WILL SEND REAL MESSAGES").optional(),
+});
+
+export const setSchedulerLiveEnabled = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => LiveInput.parse(d))
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context.supabase, context.userId);
+    if (data.enabled && data.confirm !== "I UNDERSTAND THIS WILL SEND REAL MESSAGES") {
+      throw new Error("Confirmation phrase required to arm live delivery");
+    }
+    const sb = await admin();
+    const { data: current } = await sb
+      .from("app_settings")
+      .select("value")
+      .eq("key", "forms_scheduled_delivery")
+      .maybeSingle();
+    const prev = parseSettings(current?.value);
+    const next = {
+      ...prev,
+      live_enabled: data.enabled,
+      updated_at: new Date().toISOString(),
+      updated_by: context.userId,
+      notes: data.reason,
+    };
+    await sb
+      .from("app_settings")
+      .upsert({ key: "forms_scheduled_delivery", value: settingsToValue(next) }, { onConflict: "key" });
+    // Re-use the same audit table — log via reason text.
+    await sb.from("scheduler_mode_audit").insert({
+      changed_by: context.userId,
+      previous_mode: prev.mode,
+      new_mode: prev.mode,
+      previous_emergency_disabled: prev.emergency_disable,
+      new_emergency_disabled: prev.emergency_disable,
+      reason: `live_enabled=${data.enabled} :: ${data.reason}`,
+    });
+    return { ok: true, settings: next };
+  });
+
+const AllowlistInput = z.object({
+  clientIds: z.array(z.string().uuid()).max(50),
+  reason: z.string().min(4).max(1000),
+});
+
+export const setSchedulerAllowlist = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => AllowlistInput.parse(d))
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context.supabase, context.userId);
+    const sb = await admin();
+    const { data: current } = await sb
+      .from("app_settings")
+      .select("value")
+      .eq("key", "forms_scheduled_delivery")
+      .maybeSingle();
+    const prev = parseSettings(current?.value);
+    const next = {
+      ...prev,
+      allowed_test_recipients: data.clientIds,
+      updated_at: new Date().toISOString(),
+      updated_by: context.userId,
+      notes: data.reason,
+    };
+    await sb
+      .from("app_settings")
+      .upsert({ key: "forms_scheduled_delivery", value: settingsToValue(next) }, { onConflict: "key" });
+    await sb.from("scheduler_mode_audit").insert({
+      changed_by: context.userId,
+      previous_mode: prev.mode,
+      new_mode: prev.mode,
+      previous_emergency_disabled: prev.emergency_disable,
+      new_emergency_disabled: prev.emergency_disable,
+      reason: `allowlist=${data.clientIds.length} :: ${data.reason}`,
     });
     return { ok: true, settings: next };
   });
@@ -200,12 +306,21 @@ export const runSchedulerNow = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     await assertAdmin(context.supabase, context.userId);
+    const secret = process.env.SCHEDULED_WORKER_SECRET;
+    if (!secret) {
+      throw new Error(
+        "SCHEDULED_WORKER_SECRET is not configured. Add the secret before running the worker.",
+      );
+    }
     // Same-origin fetch to the public hook
     const { getRequestHost } = await import("@tanstack/react-start/server");
     const host = (() => { try { return getRequestHost(); } catch { return null; } })();
     const base = host ? `https://${host}` : (process.env.SUPABASE_URL ?? "");
     const url = `${base.replace(/\/$/, "")}/api/public/hooks/scheduled-send-worker`;
-    const r = await fetch(url, { method: "POST" });
+    const r = await fetch(url, {
+      method: "POST",
+      headers: { "x-worker-secret": secret },
+    });
     const body = await r.json().catch(() => ({}));
     return { ok: r.ok, status: r.status, result: body };
   });
