@@ -13,7 +13,7 @@ import {
 type Mode = "show" | "hide";
 type Op = NfConditionalRule["op"];
 
-const OPS_BY_TYPE: Record<string, Op[]> = {
+const OPS_BY_TYPE: Record<string, readonly Op[]> = {
   short_text: ["equals", "not_equals", "contains", "not_contains", "is_empty", "is_not_empty"],
   long_text: ["contains", "not_contains", "is_empty", "is_not_empty"],
   number: ["equals", "not_equals", "gt", "lt", "is_empty", "is_not_empty"],
@@ -115,7 +115,9 @@ export function ConditionalLogicEditor({
 
       {rules.map((r, i) => {
         const src = sources.find((s) => s.id === r.question_id);
-        const ops = src ? (OPS_BY_TYPE[src.question_type] ?? ["equals", "not_equals"]) : ["equals"];
+        const ops: readonly Op[] = src
+          ? (OPS_BY_TYPE[src.question_type] ?? (["equals", "not_equals"] as Op[]))
+          : (["equals"] as Op[]);
         const needsValue = !["is_empty", "is_not_empty"].includes(r.op);
         return (
           <div key={i} className="flex flex-wrap items-center gap-1.5">
