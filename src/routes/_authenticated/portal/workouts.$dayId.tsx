@@ -65,11 +65,18 @@ function parseRepTarget(text?: string | null): RangeTarget {
 
 function parseEffortTarget(text?: string | null): RangeTarget {
   if (!text) return {};
-  const s = String(text).trim();
+  // Tolerate values like "RPE 8", "@8", "RIR 2", "rir: 1-2", "~8.5"
+  const s = String(text)
+    .replace(/rpe|rir|[@~:]/gi, " ")
+    .trim();
+  if (!s) return {};
   const range = s.match(/^(\d+(?:\.\d+)?)\s*[-–]\s*(\d+(?:\.\d+)?)$/);
   if (range) return { min: Number(range[1]), max: Number(range[2]) };
   const n = s.match(/^(\d+(?:\.\d+)?)$/);
   if (n) return { exact: Number(n[1]) };
+  // Last resort: pull first number out of the string
+  const any = s.match(/(\d+(?:\.\d+)?)/);
+  if (any) return { exact: Number(any[1]) };
   return {};
 }
 
@@ -907,6 +914,8 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
   const repTarget = useMemo(() => parseRepTarget(row.reps_text), [row.reps_text]);
   const rpeTarget = useMemo(() => parseEffortTarget(row.rpe), [row.rpe]);
   const rirTarget = useMemo(() => parseEffortTarget(row.rir), [row.rir]);
+  // When the program prescribes RIR and not RPE, the input column behaves as RIR.
+  const showRir = !!row.rir && !row.rpe;
 
   // "Apply to remaining" — runs from a completed SetRow, pushes Draft values
   // into all later un-completed sets of this same exercise. Never overwrites
@@ -1057,7 +1066,7 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
           <span>Set</span>
           <span>Reps</span>
           <span className="truncate">Wt ({unit.toUpperCase()})</span>
-          <span>RPE</span>
+          <span>{showRir ? "RIR" : "RPE"}</span>
           <span className="text-right">Status</span>
         </div>
         {Array.from({ length: setCount }).map((_, i) => {
@@ -1522,6 +1531,7 @@ function SetRow({
     if (rpeTarget?.exact != null) setRpe(String(rpeTarget.exact));
     else if (rpeTarget?.min != null) setRpe(String(rpeTarget.min));
     else if (rirTarget?.exact != null) setRpe(String(Math.min(10, Math.max(0, 10 - rirTarget.exact))));
+    else if (rirTarget?.max != null) setRpe(String(Math.min(10, Math.max(0, 10 - rirTarget.max))));
     else if (rirTarget?.min != null) setRpe(String(Math.min(10, Math.max(0, 10 - rirTarget.min))));
   };
   const copyPrevious = () => {
@@ -1580,10 +1590,20 @@ function SetRow({
         inputMode="decimal"
         type="text"
         pattern="[0-9]*\.?[0-9]*"
-        placeholder="rpe"
-        aria-label={`Set ${setIndex} RPE`}
-        value={rpe}
-        onChange={(e) => setRpe(e.target.value.replace(/[^0-9.]/g, ""))}
+        placeholder={showRir ? "rir" : "rpe"}
+        aria-label={`Set ${setIndex} ${showRir ? "RIR" : "RPE"}`}
+        value={showRir && rpe !== "" ? String(Math.max(0, 10 - Number(rpe))) : rpe}
+        onChange={(e) => {
+          const cleaned = e.target.value.replace(/[^0-9.]/g, "");
+          if (showRir && cleaned !== "") {
+            const n = Number(cleaned);
+            if (isFinite(n)) {
+              setRpe(String(Math.max(0, Math.min(10, 10 - n))));
+              return;
+            }
+          }
+          setRpe(cleaned);
+        }}
         onKeyDown={onEnter}
         onBlur={() => save.flush()}
         readOnly={readonly}
@@ -1683,7 +1703,7 @@ function SetRow({
         {/* Row actions */}
         <div className="flex flex-wrap items-center gap-1 pt-0.5">
           <Button size="sm" variant="outline" onClick={useTargets} className="h-7 px-2 text-[11px]">
-            Use Targets
+            Quick Inputs
           </Button>
           {setIndex > 1 && prevExisting?.completed_at && (
             <Button size="sm" variant="outline" onClick={copyPrevious} className="h-7 px-2 text-[11px]">
