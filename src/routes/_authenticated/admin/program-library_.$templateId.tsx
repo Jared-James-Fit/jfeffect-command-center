@@ -518,6 +518,15 @@ function TemplateEditor() {
     savedAt: autosave.savedAt,
   });
 
+  // Restore the coach's vertical scroll for this template / selected block.
+  // Scoped per user + template + active block so switching blocks doesn't
+  // jump to the wrong saved position. Waits until the editor has hydrated.
+  useScrollRestoration({
+    key: `tpl:${templateId}:b:${search.block ?? "_"}`,
+    ready: !!tpl && !!meta && !!payload,
+    dependencies: [search.block ?? null],
+  });
+
   const save = async () => {
     if (!meta || !payload) return;
     setSaving(true);
