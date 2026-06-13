@@ -1544,6 +1544,30 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
           </Button>
           <Popover>
             <PopoverTrigger asChild>
+              <Button size="icon" variant="ghost" className="h-7 w-7" title="Advanced settings (exercise classification)">
+                <Settings2 className="h-3.5 w-3.5" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-72 p-3" align="end">
+              <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-foreground/80">Exercise classification</div>
+              <p className="mb-2 text-[11px] leading-snug text-foreground/70">
+                Controls automatic rest defaults, workout-duration estimates, and warm-up buffer. Inferred automatically — override only when needed.
+              </p>
+              <Select value={row.time_profile ?? "accessory_compound"} onValueChange={(v) => setRow({ ...row, time_profile: v })}>
+                <SelectTrigger className={cn("text-xs font-medium", h, inputCls)}>
+                  <SelectValue>
+                    {TIME_PROFILE_LABEL[row.time_profile ?? "accessory_compound"] ?? (row.time_profile ?? "Accessory compound")}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>{TIME_PROFILES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}</SelectContent>
+              </Select>
+              <div className="mt-2 text-[10px] text-foreground/60">
+                Current: <span className="font-semibold text-foreground/80">{TIME_PROFILE_LABEL[row.time_profile ?? "accessory_compound"] ?? (row.time_profile ?? "Accessory compound")}</span>
+              </div>
+            </PopoverContent>
+          </Popover>
+          <Popover>
+            <PopoverTrigger asChild>
               <Button size="icon" variant="ghost" className="h-7 w-7" title="Card color">
                 <Palette className="h-3.5 w-3.5" />
               </Button>
