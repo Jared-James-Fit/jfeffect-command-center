@@ -821,6 +821,17 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
     return { days: days.length, rows: rowCount, minutes };
   }), [weeksData]);
   const fmtDur = (m: number) => { if (!m || m <= 0) return "—"; const h = Math.floor(m/60); const mm = Math.round(m%60); return h > 0 ? `${h}h ${mm}m` : `${mm}m`; };
+  const weekHeaderScrollRef = useRef<HTMLDivElement | null>(null);
+  const weekCardsScrollRef = useRef<HTMLDivElement | null>(null);
+  const weekColumnWidthClass = compact
+    ? "w-[88vw] max-w-[520px] sm:w-[440px] lg:w-[480px] xl:w-[520px]"
+    : "w-[94vw] max-w-[720px] sm:w-[600px] lg:w-[640px] xl:w-[700px]";
+  const syncWeekScroll = (source: "header" | "cards") => (e: React.UIEvent<HTMLDivElement>) => {
+    const other = source === "header" ? weekCardsScrollRef.current : weekHeaderScrollRef.current;
+    if (!other) return;
+    const left = e.currentTarget.scrollLeft;
+    if (Math.abs(other.scrollLeft - left) > 1) other.scrollLeft = left;
+  };
   const addWeek = () => {
     const nextIdx = (weeksData[weeksData.length - 1]?.week_index ?? 0) + 1;
     setWeeksData([...weeksData, { week_index: nextIdx, days: [{ day_index: 1, title: "Day 1", rows: [] }] }]);
@@ -952,23 +963,45 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
       ) : (
         <div className="space-y-3">
           {weeksData.length > 0 && (
-            // Quick-jump strip: NOT sticky. The frozen global Week overlay
-            // is gone; each column's own Week header handles sticky behaviour.
-            <div className="-mx-2 overflow-x-auto border-b border-primary/20 bg-[color-mix(in_oklab,var(--primary)_6%,var(--background))] px-2 py-2">
-              <div className="flex w-max items-center gap-1.5">
-                <span className="mr-1 shrink-0 text-[11px] font-semibold uppercase tracking-wide text-primary">
-                  Full Block · {weeksData.length} week{weeksData.length === 1 ? "" : "s"}
-                </span>
-                {weeksData.map((w: any, i: number) => (
-                  <button
-                    key={i}
-                    type="button"
-                    onClick={() => document.getElementById(`tpl-week-${i}`)?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "start" })}
-                    className="h-8 w-[112px] shrink-0 rounded-md border border-border bg-card px-2 text-xs font-semibold text-muted-foreground hover:border-primary/60 hover:text-primary"
-                  >
-                    Week {w.week_index}
-                  </button>
-                ))}
+            <div
+              ref={weekHeaderScrollRef}
+              onScroll={syncWeekScroll("header")}
+              className={cn(
+                "sticky top-10 z-20 -mx-2 overflow-x-auto border-b border-primary/20 bg-[color-mix(in_oklab,var(--primary)_6%,var(--background))] px-3 py-2 shadow-sm backdrop-blur scroll-smooth",
+                "[scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+              )}
+            >
+              <div className={cn("flex w-max items-stretch", compact ? "gap-2" : "gap-3")}>
+                {weeksData.map((w: any, i: number) => {
+                  const s = weekStats[i] ?? { days: 0, rows: 0, minutes: 0 };
+                  return (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => {
+                        setActiveIdx(i);
+                        document.getElementById(`tpl-week-${i}`)?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "start" });
+                      }}
+                      className={cn(
+                        "grid shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-md border border-border bg-card px-3 py-2 text-left shadow-sm hover:border-primary/60",
+                        weekColumnWidthClass,
+                        activeIdx === i && "border-primary bg-primary/10",
+                      )}
+                    >
+                      <span className="min-w-0 truncate text-xs font-bold uppercase tracking-wide text-primary">Week {w.week_index}</span>
+                      <span className="shrink-0 text-[10px] font-semibold text-muted-foreground">
+                        {s.days}d · {s.rows} rows · {fmtDur(s.minutes)}
+                      </span>
+                    </button>
+                  );
+                })}
+                <button
+                  type="button"
+                  onClick={addWeek}
+                  className={cn("shrink-0 rounded-md border border-dashed border-primary/40 px-3 py-2 text-xs font-bold uppercase tracking-wide text-primary hover:bg-primary/10", compact ? "w-[200px]" : "w-[260px]")}
+                >
+                  Add Week
+                </button>
               </div>
             </div>
           )}
@@ -977,8 +1010,11 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
               No weeks yet. Click <em>Add week</em> to start.
             </p>
           )}
-          <div className={cn(
-            "snap-x snap-proximity overflow-x-auto [overflow-y:clip] pb-3 scroll-smooth",
+          <div
+            ref={weekCardsScrollRef}
+            onScroll={syncWeekScroll("cards")}
+            className={cn(
+            "snap-x snap-proximity overflow-x-auto overflow-y-visible pb-3 scroll-smooth",
             compact ? "px-2 scroll-pl-2" : "px-3 scroll-pl-3",
           )}>
             <div className={cn("flex w-max items-start", compact ? "gap-2" : "gap-3")}>
@@ -990,34 +1026,27 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
                     id={`tpl-week-${wi}`}
                     className={cn(
                       "shrink-0 snap-start border-2 border-border p-0",
-                      compact
-                        ? "w-[88vw] max-w-[520px] sm:w-[440px] lg:w-[480px] xl:w-[520px]"
-                        : "w-[94vw] max-w-[720px] sm:w-[600px] lg:w-[640px] xl:w-[700px]",
+                      weekColumnWidthClass,
                     )}
                     style={{ borderLeftWidth: 6, borderLeftColor: "var(--primary)" }}
                   >
                     <div className={cn(
-                      // Each column owns its own sticky Week header. It sticks
-                      // directly below the EditorChrome toolbar (sticky top-0,
-                      // ~42px) — no global Week bar above it. The per-column
-                      // sticky is scoped to its own card so headers never
-                      // float over a neighbouring column.
-                      "sticky top-[44px] z-[9] flex flex-wrap items-center gap-1.5 border-b border-primary/20 bg-[color-mix(in_oklab,var(--primary)_8%,var(--card))] shadow-sm",
+                      "grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 border-b border-primary/20 bg-[color-mix(in_oklab,var(--primary)_8%,var(--card))] shadow-sm sm:grid-cols-[auto_auto_minmax(120px,1fr)_auto]",
                       compact ? "px-2 py-1" : "px-3 py-2",
                     )}>
-                      <span className={cn("inline-flex items-center rounded-md bg-primary px-2 text-[10px] font-bold uppercase tracking-wide text-primary-foreground", compact ? "h-5" : "h-6 text-[11px]")}>
+                      <span className={cn("inline-flex shrink-0 items-center rounded-md bg-primary px-2 text-[10px] font-bold uppercase tracking-wide text-primary-foreground", compact ? "h-5" : "h-6 text-[11px]")}> 
                         Week {w.week_index}
                       </span>
-                      <span className={cn("text-muted-foreground", compact ? "text-[10px]" : "text-[11px]")}>
+                      <span className={cn("min-w-0 truncate text-muted-foreground max-sm:col-span-2", compact ? "text-[10px]" : "text-[11px]")}> 
                         {s.days} day{s.days === 1 ? "" : "s"} · {s.rows} row{s.rows === 1 ? "" : "s"} · Est {fmtDur(s.minutes)}
                       </span>
                       <Input
-                        className={cn("min-w-[120px] flex-1 border-0 bg-transparent text-xs focus-visible:ring-1", compact ? "h-6" : "h-7")}
+                        className={cn("min-w-0 border-0 bg-transparent text-xs focus-visible:ring-1 max-sm:col-span-2", compact ? "h-6" : "h-7")}
                         placeholder="Week notes"
                         value={w.notes ?? ""}
                         onChange={(e) => { const c = [...weeksData]; c[wi] = { ...w, notes: e.target.value }; setWeeksData(c); }}
                       />
-                      <div className="ml-auto flex gap-1">
+                      <div className="col-start-2 row-start-1 flex shrink-0 gap-1 sm:col-start-auto sm:row-start-auto">
                         <Button size="sm" variant="ghost" className="h-7 text-[11px]" onClick={() => copyWeekToFuture(wi)} title="Copy week → all future weeks">
                           <Copy className="mr-1 h-3 w-3" /> → future
                         </Button>
