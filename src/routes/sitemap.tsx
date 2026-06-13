@@ -1,12 +1,17 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { adminNav, clientNav } from "@/lib/admin-nav";
+import { useMemo } from "react";
+import { clientNav } from "@/lib/admin-nav";
+import { useAuth } from "@/lib/auth";
+import { useDashboardMode } from "@/lib/dashboard-mode";
+import { buildInternalNav, resolveStaffRoleTag, WORKSPACE_ORDER } from "@/lib/internal-nav";
+import type { NavItem } from "@/components/app-shell";
 
 export const Route = createFileRoute("/sitemap")({
   head: () => ({ meta: [{ title: "Sitemap — JF Effect" }] }),
   component: SitemapPage,
 });
 
-function Section({ title, items }: { title: string; items: typeof adminNav }) {
+function Section({ title, items }: { title: string; items: NavItem[] }) {
   return (
     <section className="space-y-3">
       <h2 className="text-xs uppercase tracking-widest text-muted-foreground">{title}</h2>
@@ -28,6 +33,43 @@ function Section({ title, items }: { title: string; items: typeof adminNav }) {
 }
 
 function SitemapPage() {
+  const { role } = useAuth();
+  const [mode] = useDashboardMode();
+  const roleTag = resolveStaffRoleTag(role);
+
+  // Internal nav, scoped to the active role + dashboard mode and grouped
+  // by workspace following the canonical WORKSPACE_ORDER. Empty groups
+  // are omitted automatically because `buildInternalNav` only returns
+  // entries the current role can see.
+  const internalGroups = useMemo(() => {
+    if (!roleTag) return [] as { label: string; items: NavItem[] }[];
+    const items = buildInternalNav(roleTag, {
+      mode: mode === "membership" ? "membership" : "coaching",
+    });
+    const byGroup = new Map<string, NavItem[]>();
+    for (const it of items) {
+      const key = (it.group as string) || "Other";
+      const list = byGroup.get(key) || [];
+      list.push(it);
+      byGroup.set(key, list);
+    }
+    const ordered: { label: string; items: NavItem[] }[] = [];
+    for (const key of WORKSPACE_ORDER) {
+      const list = byGroup.get(key);
+      if (list && list.length) {
+        // de-dupe by `to` defensively
+        const seen = new Set<string>();
+        const unique = list.filter((i) => (seen.has(i.to) ? false : (seen.add(i.to), true)));
+        ordered.push({ label: key, items: unique });
+      }
+      byGroup.delete(key);
+    }
+    for (const [label, list] of byGroup) {
+      ordered.push({ label, items: list });
+    }
+    return ordered;
+  }, [roleTag, mode]);
+
   const publicPages = [
     { to: "/", label: "Landing" },
     { to: "/auth", label: "Sign in / Sign up" },
@@ -40,8 +82,9 @@ function SitemapPage() {
         <header className="space-y-2">
           <h1 className="text-3xl font-black tracking-tight">All Pages</h1>
           <p className="text-sm text-muted-foreground">
-            Quick access to every screen in the JF Effect platform. Admin pages require an admin
-            account; portal pages require a client account.
+            Quick access to every screen visible to your account. Listed pages
+            follow your role and dashboard mode — switching modes refreshes
+            this list. Other portals require the matching account type.
           </p>
         </header>
 
@@ -61,8 +104,12 @@ function SitemapPage() {
           </div>
         </section>
 
-        <Section title="Admin Command Center" items={adminNav} />
-        <Section title="Client Portal" items={clientNav} />
+        {internalGroups.map((g) => (
+          <Section key={g.label} title={g.label} items={g.items} />
+        ))}
+        {!roleTag && (
+          <Section title="Client Portal" items={clientNav} />
+        )}
       </div>
     </main>
   );
