@@ -829,12 +829,6 @@ function StructureEditor({ type, payload, setPayload, exercises, compact, templa
     </Card>
   );
 }
-
-function FullPrepEditor({ payload, setPayload, exercises, compact }: any) {
-  // Retained for backward-compat; the active editor path now goes through
-  // MultiBlockStructureEditor for both `block` and `full_prep` template types.
-  void payload; void setPayload; void exercises; void compact;
-  return null as any;
 }
 
 // ---------- Multi-block (v2 payload) structure editor -----------------------
@@ -1083,54 +1077,6 @@ function MultiBlockStructureEditor({ type, payload, setPayload, exercises, compa
         </div>
       ) : (
         <Card className="p-8 text-center text-sm text-muted-foreground">
-          Add a block to start building this program.
-        </Card>
-      )}
-    </div>
-  );
-}
-
-function _LegacyFullPrepEditor({ payload, setPayload, exercises, compact }: any) {
-  const prep = payload.prep || {};
-  const blocks = payload.blocks_data || [];
-  const setPrep = (patch: any) => setPayload({ ...payload, prep: { ...prep, ...patch } });
-  const setBlocks = (b: any[]) => setPayload({ ...payload, blocks_data: b });
-  return (
-    <div className="space-y-4">
-      <Card className="p-4 max-w-2xl">
-        <div className="mb-2 text-sm font-bold">Prep details</div>
-        <div className="grid grid-cols-2 gap-2">
-          <div><Label>Event name</Label><Input value={prep.event_name ?? ""} onChange={(e) => setPrep({ event_name: e.target.value || null })} /></div>
-          <div><Label>Event date</Label><Input type="date" value={prep.event_date ?? ""} onChange={(e) => setPrep({ event_date: e.target.value || null })} /></div>
-          <div><Label>Goal type</Label><Input value={prep.goal_type ?? ""} onChange={(e) => setPrep({ goal_type: e.target.value })} /></div>
-          <div><Label>Total weeks</Label><Input type="number" inputMode="numeric" value={prep.total_weeks ?? ""} onChange={(e) => setPrep({ total_weeks: parseInt(e.target.value) || null })} /></div>
-        </div>
-      </Card>
-
-      <div className="flex items-center justify-between">
-        <h3 className="text-sm font-bold">Blocks</h3>
-        <Button size="sm" onClick={() => setBlocks([...blocks, { name: `Block ${blocks.length + 1}`, training_focus: "", weeks_data: [] }])}>
-          <Plus className="mr-1 h-3 w-3" /> Add block
-        </Button>
-      </div>
-      {blocks.map((b: any, i: number) => (
-        <Card key={i} className="p-3 space-y-2">
-          <div className="flex items-center gap-2">
-            <Input className="max-w-xs font-bold" value={b.name ?? ""} onChange={(e) => { const copy = [...blocks]; copy[i] = { ...b, name: e.target.value }; setBlocks(copy); }} />
-            <Input className="max-w-xs" placeholder="Focus" value={b.training_focus ?? ""} onChange={(e) => { const copy = [...blocks]; copy[i] = { ...b, training_focus: e.target.value }; setBlocks(copy); }} />
-            <Button size="icon" variant="ghost" className="ml-auto text-destructive" onClick={() => { if (confirm("Remove block?")) setBlocks(blocks.filter((_: any, j: number) => j !== i)); }}><Trash2 className="h-4 w-4" /></Button>
-          </div>
-          <BlockPayloadEditor
-            weeksData={b.weeks_data || []}
-            setWeeksData={(wd) => { const copy = [...blocks]; copy[i] = { ...b, weeks_data: wd }; setBlocks(copy); }}
-            exercises={exercises}
-            compact={compact}
-          />
-        </Card>
-      ))}
-    </div>
-  );
-}
 
 export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact }: { weeksData: any[]; setWeeksData: (wd: any[]) => void; exercises: any[]; compact?: boolean }) {
   // Persist the coach's editing position (active week + view mode) across
