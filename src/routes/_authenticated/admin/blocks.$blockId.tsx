@@ -266,16 +266,19 @@ function BlockEditor() {
     if (tree?.block && name !== tree.block.name) {
       await updateBlock(blockId, { name });
     }
-    // Apply structural diff
+    // Apply structural diff. `applyPayloadDiff` mutates `payload` in place to
+    // attach fresh _dbIds to any newly-inserted weeks/days/rows, so we don't
+    // need to swap the payload reference afterwards — keeping the same object
+    // identity preserves scroll position, input focus, and prevents the editor
+    // from re-rendering every cell after autosave.
     await applyPayloadDiff(blockId, originalTreeRef.current, payload);
-    // Refresh + rehydrate original snapshot so subsequent diffs are minimal.
+    // Refresh just the snapshot used for future diffs. Do NOT replace `payload`
+    // here — that would re-render the entire builder mid-edit and bounce the
+    // coach's scroll position / blur the active input.
     const fresh = await getBlockTree(blockId);
-    if (fresh) {
-      originalTreeRef.current = fresh;
-      // Re-derive payload so all entities have fresh DB ids and indices.
-      setPayload(treeToPayload(fresh));
-    }
-    qc.invalidateQueries({ queryKey: ["pl-block-tree", blockId] });
+    if (fresh) originalTreeRef.current = fresh;
+    // Invalidate sibling caches but skip the tree query — refetching it would
+    // overwrite our in-memory payload via the hydration effect on the next mount.
     qc.invalidateQueries({ queryKey: ["pl-block-summary", blockId] });
     qc.invalidateQueries({ queryKey: ["client-assigned-programs"] });
     setDirty(false);
