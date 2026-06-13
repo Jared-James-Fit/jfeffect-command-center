@@ -38,7 +38,7 @@ import { WorkoutEmptyCard } from "@/components/workout-empty-state";
 import { useAuth } from "@/lib/auth";
 import { useClientImpersonation } from "@/lib/client-impersonation";
 import { writeSetEditAudit } from "@/lib/logged-set-audit";
-import { resolveExerciseUnit, modeUnit, saveExerciseUnitPref, saveExerciseUnitPrefsBulk, type WUnit } from "@/lib/exercise-unit-prefs";
+import { resolveExerciseUnit, modeUnit, saveExerciseUnitPref, type WUnit } from "@/lib/exercise-unit-prefs";
 import { WorkoutUndoProvider, useWorkoutUndo, UndoButton } from "@/lib/workout-undo";
 import { WorkoutSyncBanner } from "@/components/workout-sync-banner";
 import { writePlanCache, cachedInitialData } from "@/lib/workout-plan-cache";
@@ -247,25 +247,6 @@ function WorkoutDay() {
     setUnitHydrated(true);
   }, [client, builderDefaultUnit, unitHydrated]);
 
-  const persistUnit = async (next: "kg" | "lb") => {
-    const prev = unit;
-    setUnit(next);
-    if (!client?.id) return;
-    await sb.from("clients").update({ preferred_weight_unit: next }).eq("id", client.id);
-    qc.invalidateQueries({ queryKey: ["my-client", portalUserId] });
-    undo.push({
-      label: `Changed unit to ${next.toUpperCase()}`,
-      coalesceKey: "unit-toggle",
-      undo: async () => {
-        setUnit(prev);
-        if (client?.id) {
-          await sb.from("clients").update({ preferred_weight_unit: prev }).eq("id", client.id);
-          qc.invalidateQueries({ queryKey: ["my-client", portalUserId] });
-        }
-      },
-    });
-  };
-
   // ----------------------------------------------------------------
   // Per-exercise unit overrides (client preference + history detection)
   // ----------------------------------------------------------------
@@ -343,25 +324,6 @@ function WorkoutDay() {
         }
       },
     });
-  };
-
-  // Global toggle: change workout-level pref AND bulk-set every exercise in this
-  // workout — but only for exercises WITHOUT an explicit per-exercise override
-  // (either a saved pref or a session override). Per-exercise picks stay
-  // authoritative until the client clears them. This matches the
-  // unit-controls spec: "Global changes should update exercises that do not
-  // have an explicit override."
-  const handleGlobalUnitChange = async (next: WUnit) => {
-    await persistUnit(next);
-    const prefMap = new Map<string, string>();
-    for (const p of (prefRows as any[] | undefined) ?? []) {
-      if (p?.exercise_id && p?.unit) prefMap.set(p.exercise_id, p.unit);
-    }
-    const targetIds = exerciseIds.filter((id) => !unitOverrides[id] && !prefMap.has(id));
-    if (client?.id && targetIds.length > 0) {
-      try { await saveExerciseUnitPrefsBulk(client.id, targetIds, next); } catch { /* non-blocking */ }
-      qc.invalidateQueries({ queryKey: ["client-exercise-unit-prefs", client.id] });
-    }
   };
 
   const unitForRow = (r: any): WUnit => {
