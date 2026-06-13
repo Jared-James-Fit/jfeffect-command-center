@@ -463,12 +463,11 @@ function WorkoutDay() {
         <div className="fixed inset-0 z-[60] overflow-y-auto bg-background">
           <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-background/95 px-4 py-3 backdrop-blur">
             <div className="font-bold">{day.title || `Day ${day.day_index}`} · Full Screen</div>
-            <div className="flex items-center gap-2">
-              <UnitToggle unit={unit} onChange={handleGlobalUnitChange} label="Entire workout" />
-              <Button size="sm" variant="outline" onClick={() => setFocusMode(false)}>
-                <Minimize2 className="mr-1 h-4 w-4" /> Exit Full Screen
-              </Button>
-            </div>
+            {/* Global KG/LB toggle removed — each exercise carries its own
+                authoritative unit control. */}
+            <Button size="sm" variant="outline" onClick={() => setFocusMode(false)}>
+              <Minimize2 className="mr-1 h-4 w-4" /> Exit Full Screen
+            </Button>
           </div>
           <div className="mx-auto max-w-3xl space-y-4 p-4 md:p-6">
             <WorkoutLoadBoundary clientId={client?.id ?? null} clientName={(client as any)?.full_name ?? null} dayId={dayId} route={`/portal/workouts/${dayId}`}>
@@ -527,7 +526,8 @@ function WorkoutDay() {
           {completion && <Badge variant="outline" className="text-green-500 border-green-500/30 bg-green-500/10"><CheckCircle2 className="mr-1 h-3 w-3" /> Completed</Badge>}
           {readonly && <Badge variant="outline" className="border-muted-foreground/30 bg-muted/30 text-muted-foreground"><Lock className="mr-1 h-3 w-3" /> Read-only</Badge>}
           <div className="ml-auto flex items-center gap-2">
-            {!readonly && <UnitToggle unit={unit} onChange={handleGlobalUnitChange} label="Entire workout" />}
+            {/* Global KG/LB toggle removed — per-exercise unit controls remain
+                the single source of truth for unit selection. */}
             {!readonly && (
               <Button size="sm" variant="outline" onClick={() => setFocusMode(true)}>
                 <Maximize2 className="mr-1 h-4 w-4" /> Full Screen
