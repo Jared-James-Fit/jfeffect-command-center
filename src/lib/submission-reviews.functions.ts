@@ -28,6 +28,10 @@ const ListInput = z.object({
   formId: z.string().uuid().optional(),
   search: z.string().optional(),
   limit: z.number().int().min(1).max(200).optional(),
+  assignedCoachUserId: z.string().uuid().nullable().optional(),
+  priority: z.enum(["low", "normal", "high", "urgent"]).optional(),
+  dateFrom: z.string().optional(),
+  dateTo: z.string().optional(),
 }).partial();
 
 const GetInput = z.object({ id: z.string().uuid() });
@@ -128,6 +132,21 @@ async function audit(
     actor_role: actorRole,
     details,
   });
+}
+
+/**
+ * True when the owning form's `form_ai_configs.require_coach_approval` is on.
+ * Returns false when there is no form (applications, ad-hoc submissions) or
+ * when no config row exists.
+ */
+async function isApprovalRequired(sb: any, row: any): Promise<boolean> {
+  if (!row?.form_id) return false;
+  const { data } = await sb
+    .from("form_ai_configs")
+    .select("require_coach_approval")
+    .eq("form_id", row.form_id)
+    .maybeSingle();
+  return !!data?.require_coach_approval;
 }
 
 /**
@@ -267,6 +286,14 @@ export const listSubmissionReviews = createServerFn({ method: "POST" })
     if (data.source) q = q.eq("source_type", data.source);
     if (data.clientId) q = q.eq("client_id", data.clientId);
     if (data.formId) q = q.eq("form_id", data.formId);
+    if (data.priority) q = q.eq("priority", data.priority);
+    if (data.assignedCoachUserId === null) {
+      q = q.is("assigned_coach_user_id", null);
+    } else if (data.assignedCoachUserId) {
+      q = q.eq("assigned_coach_user_id", data.assignedCoachUserId);
+    }
+    if (data.dateFrom) q = q.gte("submitted_at", data.dateFrom);
+    if (data.dateTo) q = q.lte("submitted_at", data.dateTo);
 
     const { data: rows, error } = await q;
     if (error) throw error;
@@ -653,7 +680,18 @@ export const generateSubmissionDraft = createServerFn({ method: "POST" })
         latest_generation_id: gen.id,
       };
       // Only auto-seed coach_draft when there isn't already one
-      if (!row.coach_draft) patch.coach_draft = safe.client_response;
+      if (!row.coach_draft) {
+        patch.coach_draft = safe.client_response;
+        patch.draft_origin_generation_id = gen.id;
+      }
+      // Regenerating clears any prior approval — even if the coach_draft
+      // isn't replaced, the underlying analysis changed, so an authorized
+      // user must re-approve before send/schedule.
+      if (row.approved_at) {
+        patch.approved_at = null;
+        patch.approved_by = null;
+        patch.approved_response = null;
+      }
       if (row.review_status === "processing" || row.review_status === "submitted") {
         patch.review_status = "draft_ready";
       }
@@ -666,6 +704,12 @@ export const generateSubmissionDraft = createServerFn({ method: "POST" })
         generation_id: gen.id,
         urgency: safe.urgency,
       });
+      if (row.approved_at) {
+        await audit(row.id, "approval_reset", context.userId, "coach", {
+          reason: "regenerated",
+          generation_id: gen.id,
+        });
+      }
 
       return { ok: true, generation: updated.data };
     } catch (err: any) {
@@ -697,18 +741,35 @@ export const saveCoachDraft = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => SaveDraftInput.parse(d))
   .handler(async ({ data, context }) => {
-    await assertCanTouchReview(context.supabase, context.userId, data.reviewId);
+    const { row } = await assertCanTouchReview(context.supabase, context.userId, data.reviewId);
     const sb = await admin();
-    await sb
-      .from("submission_reviews")
-      .update({
-        coach_draft: data.coachDraft,
-        review_status: "coach_editing",
-      })
-      .eq("id", data.reviewId);
+    // If the draft materially differs from the previously approved content,
+    // clear the approval. Send-now / schedule will refuse to deliver until
+    // an authorized user re-approves.
+    const prevApproved = (row.approved_response ?? "").trim();
+    const newDraft = (data.coachDraft ?? "").trim();
+    const approvalCleared = !!row.approved_at && prevApproved !== newDraft;
+    const patch: Record<string, unknown> = {
+      coach_draft: data.coachDraft,
+    };
+    if (row.review_status !== "no_response" && row.review_status !== "sent") {
+      patch.review_status = "coach_editing";
+    }
+    if (approvalCleared) {
+      patch.approved_at = null;
+      patch.approved_by = null;
+      patch.approved_response = null;
+    }
+    await sb.from("submission_reviews").update(patch).eq("id", data.reviewId);
     await audit(data.reviewId, "coach_draft_saved", context.userId, "coach", {
       length: data.coachDraft.length,
+      approval_cleared: approvalCleared,
     });
+    if (approvalCleared) {
+      await audit(data.reviewId, "approval_reset", context.userId, "coach", {
+        reason: "draft_edited",
+      });
+    }
     return { ok: true };
   });
 
@@ -747,7 +808,25 @@ export const approveAndSendNow = createServerFn({ method: "POST" })
     if (!row.client_id) {
       throw new Error("This submission isn't linked to a client. Map it first.");
     }
+    if (row.review_status === "no_response") {
+      throw new Error("This review is marked as no response required.");
+    }
     const sb = await admin();
+
+    // Approval gate. When the owning form (or any future global flag) sets
+    // require_coach_approval = true, refuse to send until an authorized user
+    // explicitly approved the current draft. Send Now must NOT silently
+    // self-approve.
+    const requireApproval = await isApprovalRequired(sb, row);
+    const draftMatchesApproved =
+      !!row.approved_at &&
+      (row.approved_response ?? "").trim() === (data.body ?? "").trim();
+    if (requireApproval && !draftMatchesApproved) {
+      await audit(row.id, "send_refused_no_approval", context.userId, "coach", {});
+      throw new Error(
+        "Coach approval required. Approve the current draft, then send.",
+      );
+    }
 
     // Idempotency: if this idempotency key already produced a successful
     // delivery for this review, return that message without sending again.
@@ -782,11 +861,11 @@ export const approveAndSendNow = createServerFn({ method: "POST" })
         .from("submission_reviews")
         .update({
           review_status: "sent",
-          approved_response: data.body,
+          approved_response: row.approved_response ?? data.body,
           delivered_response: data.body,
           latest_message_id: msg.id,
-          approved_at: new Date().toISOString(),
-          approved_by: context.userId,
+          approved_at: row.approved_at ?? new Date().toISOString(),
+          approved_by: row.approved_by ?? context.userId,
           sent_at: new Date().toISOString(),
           sent_by: context.userId,
           last_delivery_error: null,
@@ -846,7 +925,21 @@ export const scheduleSendResponse = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { row } = await assertCanTouchReview(context.supabase, context.userId, data.reviewId);
     if (!row.client_id) throw new Error("Submission has no client to send to");
+    if (row.review_status === "no_response") {
+      throw new Error("This review is marked as no response required.");
+    }
     const sb = await admin();
+
+    const requireApproval = await isApprovalRequired(sb, row);
+    const draftMatchesApproved =
+      !!row.approved_at &&
+      (row.approved_response ?? "").trim() === (data.body ?? "").trim();
+    if (requireApproval && !draftMatchesApproved) {
+      await audit(row.id, "schedule_refused_no_approval", context.userId, "coach", {});
+      throw new Error(
+        "Coach approval required. Approve the current draft, then schedule.",
+      );
+    }
 
     // Upsert the schedule row by idempotency key
     const { data: existing } = await sb
@@ -877,8 +970,10 @@ export const scheduleSendResponse = createServerFn({ method: "POST" })
         review_status: "scheduled",
         approved_response: data.body,
         coach_draft: data.body,
-        approved_at: new Date().toISOString(),
-        approved_by: context.userId,
+        // Preserve existing approval timestamp when present, otherwise
+        // stamp self-approval (only possible when approval is NOT required).
+        approved_at: row.approved_at ?? new Date().toISOString(),
+        approved_by: row.approved_by ?? context.userId,
         scheduled_at: data.scheduledAt,
         scheduled_by: context.userId,
         schedule_cancelled_at: null,
@@ -913,4 +1008,292 @@ export const cancelScheduledSend = createServerFn({ method: "POST" })
       .eq("id", row.id);
     await audit(row.id, "schedule_cancelled", context.userId, "coach");
     return { ok: true };
+  });
+// ---------- Approval (explicit, separate from send) --------------------------
+
+const ApproveInput = z.object({
+  reviewId: z.string().uuid(),
+  body: z.string().trim().min(1).max(20000),
+});
+
+/** Explicitly mark the current draft as coach-approved. */
+export const approveReviewDraft = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => ApproveInput.parse(d))
+  .handler(async ({ data, context }) => {
+    const { row } = await assertCanTouchReview(context.supabase, context.userId, data.reviewId);
+    if (row.review_status === "no_response") {
+      throw new Error("This review is marked as no response required.");
+    }
+    const sb = await admin();
+    await sb
+      .from("submission_reviews")
+      .update({
+        approved_response: data.body,
+        coach_draft: data.body,
+        approved_at: new Date().toISOString(),
+        approved_by: context.userId,
+        review_status: row.review_status === "sent" ? "sent" : "approved",
+      })
+      .eq("id", row.id);
+    await audit(row.id, "draft_approved", context.userId, "coach", { length: data.body.length });
+    return { ok: true };
+  });
+
+/** Reset approval back to coach_editing. */
+export const resetReviewApproval = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => ArchiveInput.parse(d))
+  .handler(async ({ data, context }) => {
+    const { row } = await assertCanTouchReview(context.supabase, context.userId, data.reviewId);
+    const sb = await admin();
+    await sb
+      .from("submission_reviews")
+      .update({
+        approved_response: null,
+        approved_at: null,
+        approved_by: null,
+        review_status: row.review_status === "approved" ? "coach_editing" : row.review_status,
+      })
+      .eq("id", row.id);
+    await audit(row.id, "approval_reset", context.userId, "coach", { reason: "manual" });
+    return { ok: true };
+  });
+
+// ---------- No-response workflow --------------------------------------------
+
+export const markNoResponseRequired = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => ArchiveInput.parse(d))
+  .handler(async ({ data, context }) => {
+    const { row } = await assertCanTouchReview(context.supabase, context.userId, data.reviewId);
+    if (row.review_status === "sent") {
+      throw new Error("Cannot mark a sent response as no-response.");
+    }
+    const sb = await admin();
+    // Cancel any pending schedule so the worker won't pick it up.
+    await sb
+      .from("scheduled_submission_responses")
+      .update({ status: "cancelled" })
+      .eq("review_id", row.id)
+      .eq("status", "pending");
+    await sb
+      .from("submission_reviews")
+      .update({
+        review_status: "no_response",
+        scheduled_at: null,
+      })
+      .eq("id", row.id);
+    await audit(row.id, "marked_no_response", context.userId, "coach", {
+      previous_status: row.review_status,
+    });
+    return { ok: true };
+  });
+
+export const reopenReview = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => ArchiveInput.parse(d))
+  .handler(async ({ data, context }) => {
+    const { row } = await assertCanTouchReview(context.supabase, context.userId, data.reviewId);
+    const sb = await admin();
+    const next = row.coach_draft ? "coach_editing" : (row.latest_generation_id ? "draft_ready" : "needs_review");
+    await sb.from("submission_reviews").update({ review_status: next }).eq("id", row.id);
+    await audit(row.id, "review_reopened", context.userId, "coach", {
+      previous_status: row.review_status,
+      next_status: next,
+    });
+    return { ok: true };
+  });
+
+// ---------- Coach reassignment ----------------------------------------------
+
+const ReassignInput = z.object({
+  reviewId: z.string().uuid(),
+  assignedCoachUserId: z.string().uuid().nullable(),
+});
+
+export const reassignReviewCoach = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => ReassignInput.parse(d))
+  .handler(async ({ data, context }) => {
+    const { row } = await assertCanTouchReview(context.supabase, context.userId, data.reviewId);
+    const sb = await admin();
+    // If a user id is provided, verify they are an authorized admin/coach.
+    if (data.assignedCoachUserId) {
+      const { data: ok } = await sb.rpc("is_coach_or_admin", {
+        _uid: data.assignedCoachUserId,
+      });
+      if (!ok) throw new Error("Selected user is not an authorized coach or admin.");
+    }
+    const prev = row.assigned_coach_user_id ?? null;
+    await sb
+      .from("submission_reviews")
+      .update({ assigned_coach_user_id: data.assignedCoachUserId })
+      .eq("id", row.id);
+    await audit(row.id, "coach_reassigned", context.userId, "coach", {
+      previous: prev,
+      next: data.assignedCoachUserId,
+    });
+    return { ok: true };
+  });
+
+/** List admins + coaches that can be assigned a review. */
+export const listAssignableCoaches = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await assertCoachOrAdmin(context.supabase, context.userId);
+    const sb = await admin();
+    // Coaches (active, non-archived). Each row has user_id we can map to profiles.
+    const { data: coaches } = await sb
+      .from("coaches")
+      .select("user_id, name, role, status, archived")
+      .eq("archived", false)
+      .eq("status", "Active");
+    const userIds = Array.from(
+      new Set((coaches ?? []).map((c: any) => c.user_id).filter(Boolean)),
+    );
+    // Admins (user_roles role = 'admin')
+    const { data: adminRows } = await sb
+      .from("user_roles")
+      .select("user_id")
+      .eq("role", "admin");
+    for (const r of adminRows ?? []) {
+      if (r.user_id && !userIds.includes(r.user_id)) userIds.push(r.user_id);
+    }
+    if (userIds.length === 0) return [];
+    const { data: profiles } = await sb
+      .from("profiles")
+      .select("id, full_name, email")
+      .in("id", userIds);
+    const coachByUser = new Map((coaches ?? []).map((c: any) => [c.user_id, c]));
+    return (profiles ?? []).map((p: any) => ({
+      user_id: p.id,
+      full_name: p.full_name ?? p.email ?? "Unknown",
+      email: p.email ?? null,
+      role: coachByUser.has(p.id) ? "coach" : "admin",
+    }));
+  });
+
+// ---------- Internal notes --------------------------------------------------
+
+const InternalNotesInput = z.object({
+  reviewId: z.string().uuid(),
+  notes: z.string().max(20000),
+});
+
+export const saveInternalNotes = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => InternalNotesInput.parse(d))
+  .handler(async ({ data, context }) => {
+    const { row } = await assertCanTouchReview(context.supabase, context.userId, data.reviewId);
+    const sb = await admin();
+    const prev = (row.internal_notes ?? "").trim();
+    const next = (data.notes ?? "").trim();
+    await sb
+      .from("submission_reviews")
+      .update({
+        internal_notes: data.notes,
+        internal_notes_updated_at: new Date().toISOString(),
+        internal_notes_updated_by: context.userId,
+      })
+      .eq("id", row.id);
+    // Audit only when the text materially changes (not on every keystroke).
+    if (prev !== next) {
+      await audit(row.id, "internal_notes_updated", context.userId, "coach", {
+        prev_length: prev.length,
+        next_length: next.length,
+      });
+    }
+    return { ok: true };
+  });
+
+// ---------- AI draft restore ------------------------------------------------
+
+const RestoreInput = z.object({
+  reviewId: z.string().uuid(),
+  generationId: z.string().uuid(),
+});
+
+export const restoreDraftFromGeneration = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => RestoreInput.parse(d))
+  .handler(async ({ data, context }) => {
+    const { row } = await assertCanTouchReview(context.supabase, context.userId, data.reviewId);
+    const sb = await admin();
+    const { data: gen } = await sb
+      .from("submission_ai_generations")
+      .select("*")
+      .eq("id", data.generationId)
+      .eq("review_id", row.id)
+      .maybeSingle();
+    if (!gen) throw new Error("Generation not found");
+    const newBody = gen.client_response ?? "";
+    if (!newBody) throw new Error("This generation has no client response to restore.");
+    const prevDraft = (row.coach_draft ?? "").trim();
+    const approvalCleared = !!row.approved_at && prevDraft !== newBody.trim();
+    const patch: Record<string, unknown> = {
+      coach_draft: newBody,
+      draft_origin_generation_id: gen.id,
+      review_status: row.review_status === "no_response" || row.review_status === "sent"
+        ? row.review_status
+        : "coach_editing",
+    };
+    if (approvalCleared) {
+      patch.approved_at = null;
+      patch.approved_by = null;
+      patch.approved_response = null;
+    }
+    await sb.from("submission_reviews").update(patch).eq("id", row.id);
+    await audit(row.id, "draft_restored", context.userId, "coach", {
+      generation_id: gen.id,
+      approval_cleared: approvalCleared,
+    });
+    if (approvalCleared) {
+      await audit(row.id, "approval_reset", context.userId, "coach", { reason: "restore_draft" });
+    }
+    return { ok: true };
+  });
+
+// ---------- Submission files: signed URLs -----------------------------------
+
+const FilesInput = z.object({ reviewId: z.string().uuid() });
+
+/**
+ * Return signed URLs (1 hour) for every file attached to the review's
+ * underlying submission. Currently only native submissions store files in
+ * `nf_files` against the `form-uploads` bucket; Fillout/applications return [].
+ */
+export const listSubmissionFiles = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => FilesInput.parse(d))
+  .handler(async ({ data, context }) => {
+    const { row } = await assertCanTouchReview(context.supabase, context.userId, data.reviewId);
+    if (row.source_type !== "native") return [];
+    const sb = await admin();
+    const { data: files } = await sb
+      .from("nf_files")
+      .select("id, storage_path, original_name, mime_type, size_bytes, created_at")
+      .eq("submission_id", row.source_id);
+    const out: Array<{
+      id: string;
+      name: string | null;
+      mime: string | null;
+      size: number | null;
+      url: string | null;
+      created_at: string;
+    }> = [];
+    for (const f of files ?? []) {
+      const { data: signed } = await sb.storage
+        .from("form-uploads")
+        .createSignedUrl(f.storage_path, 60 * 60);
+      out.push({
+        id: f.id,
+        name: f.original_name ?? null,
+        mime: f.mime_type ?? null,
+        size: f.size_bytes ?? null,
+        url: signed?.signedUrl ?? null,
+        created_at: f.created_at,
+      });
+    }
+    return out;
   });
