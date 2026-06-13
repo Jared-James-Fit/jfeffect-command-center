@@ -379,6 +379,7 @@ export type Database = {
       }
       app_members: {
         Row: {
+          access_restricted_at: string | null
           account_type: string
           address_city: string | null
           address_country: string | null
@@ -390,6 +391,7 @@ export type Database = {
           cancel_at: string | null
           cancelled_at: string | null
           created_at: string
+          cross_account_locked: boolean
           current_period_end: string | null
           date_of_birth: string | null
           email: string
@@ -397,15 +399,20 @@ export type Database = {
           emergency_contact_phone: string | null
           full_name: string | null
           goals: string | null
+          grace_period_ends_at: string | null
           hold_plan_started_at: string | null
           id: string
           is_admin_sandbox: boolean
           last_active_at: string | null
           last_billing_event_at: string | null
+          last_grace_warning_at: string | null
           last_invoice_status: string | null
+          last_restart_attempt_at: string | null
           last_signed_in_at: string | null
           messaging_permission: string
           paused_until: string | null
+          payment_failed_at: string | null
+          payment_recovered_at: string | null
           phone: string | null
           profile_picture_required: boolean
           setup_completed_at: string | null
@@ -419,13 +426,17 @@ export type Database = {
           stripe_customer_id: string | null
           stripe_price_id: string | null
           stripe_subscription_id: string | null
+          subscription_ended_at: string | null
           subscription_status: string | null
+          sync_warning_at: string | null
+          sync_warning_reason: string | null
           training_background: string | null
           trial_end_at: string | null
           updated_at: string
           user_id: string | null
         }
         Insert: {
+          access_restricted_at?: string | null
           account_type?: string
           address_city?: string | null
           address_country?: string | null
@@ -437,6 +448,7 @@ export type Database = {
           cancel_at?: string | null
           cancelled_at?: string | null
           created_at?: string
+          cross_account_locked?: boolean
           current_period_end?: string | null
           date_of_birth?: string | null
           email: string
@@ -444,15 +456,20 @@ export type Database = {
           emergency_contact_phone?: string | null
           full_name?: string | null
           goals?: string | null
+          grace_period_ends_at?: string | null
           hold_plan_started_at?: string | null
           id?: string
           is_admin_sandbox?: boolean
           last_active_at?: string | null
           last_billing_event_at?: string | null
+          last_grace_warning_at?: string | null
           last_invoice_status?: string | null
+          last_restart_attempt_at?: string | null
           last_signed_in_at?: string | null
           messaging_permission?: string
           paused_until?: string | null
+          payment_failed_at?: string | null
+          payment_recovered_at?: string | null
           phone?: string | null
           profile_picture_required?: boolean
           setup_completed_at?: string | null
@@ -466,13 +483,17 @@ export type Database = {
           stripe_customer_id?: string | null
           stripe_price_id?: string | null
           stripe_subscription_id?: string | null
+          subscription_ended_at?: string | null
           subscription_status?: string | null
+          sync_warning_at?: string | null
+          sync_warning_reason?: string | null
           training_background?: string | null
           trial_end_at?: string | null
           updated_at?: string
           user_id?: string | null
         }
         Update: {
+          access_restricted_at?: string | null
           account_type?: string
           address_city?: string | null
           address_country?: string | null
@@ -484,6 +505,7 @@ export type Database = {
           cancel_at?: string | null
           cancelled_at?: string | null
           created_at?: string
+          cross_account_locked?: boolean
           current_period_end?: string | null
           date_of_birth?: string | null
           email?: string
@@ -491,15 +513,20 @@ export type Database = {
           emergency_contact_phone?: string | null
           full_name?: string | null
           goals?: string | null
+          grace_period_ends_at?: string | null
           hold_plan_started_at?: string | null
           id?: string
           is_admin_sandbox?: boolean
           last_active_at?: string | null
           last_billing_event_at?: string | null
+          last_grace_warning_at?: string | null
           last_invoice_status?: string | null
+          last_restart_attempt_at?: string | null
           last_signed_in_at?: string | null
           messaging_permission?: string
           paused_until?: string | null
+          payment_failed_at?: string | null
+          payment_recovered_at?: string | null
           phone?: string | null
           profile_picture_required?: boolean
           setup_completed_at?: string | null
@@ -513,7 +540,10 @@ export type Database = {
           stripe_customer_id?: string | null
           stripe_price_id?: string | null
           stripe_subscription_id?: string | null
+          subscription_ended_at?: string | null
           subscription_status?: string | null
+          sync_warning_at?: string | null
+          sync_warning_reason?: string | null
           training_background?: string | null
           trial_end_at?: string | null
           updated_at?: string
@@ -4360,6 +4390,7 @@ export type Database = {
       }
       jf_membership_settings: {
         Row: {
+          grace_period_days: number
           hold_price_display: string
           hold_price_id: string | null
           id: boolean
@@ -4373,6 +4404,7 @@ export type Database = {
           upgrade_coaching_url: string | null
         }
         Insert: {
+          grace_period_days?: number
           hold_price_display?: string
           hold_price_id?: string | null
           id?: boolean
@@ -4386,6 +4418,7 @@ export type Database = {
           upgrade_coaching_url?: string | null
         }
         Update: {
+          grace_period_days?: number
           hold_price_display?: string
           hold_price_id?: string | null
           id?: boolean
@@ -6008,6 +6041,53 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "access_levels"
             referencedColumns: ["key"]
+          },
+        ]
+      }
+      member_access_transitions: {
+        Row: {
+          created_at: string
+          event_kind: string
+          from_status: string | null
+          id: string
+          member_id: string
+          metadata: Json
+          reason: string | null
+          stripe_event_id: string | null
+          stripe_subscription_id: string | null
+          to_status: string | null
+        }
+        Insert: {
+          created_at?: string
+          event_kind: string
+          from_status?: string | null
+          id?: string
+          member_id: string
+          metadata?: Json
+          reason?: string | null
+          stripe_event_id?: string | null
+          stripe_subscription_id?: string | null
+          to_status?: string | null
+        }
+        Update: {
+          created_at?: string
+          event_kind?: string
+          from_status?: string | null
+          id?: string
+          member_id?: string
+          metadata?: Json
+          reason?: string | null
+          stripe_event_id?: string | null
+          stripe_subscription_id?: string | null
+          to_status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "member_access_transitions_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "app_members"
+            referencedColumns: ["id"]
           },
         ]
       }
