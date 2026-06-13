@@ -171,12 +171,20 @@ function PortalAnalytics() {
 
   // Volume data with stable colours + short labels.
   const volumeData = useMemo(
-    () =>
-      volume.map((v) => ({
-        ...v,
-        label: shortMuscleLabel(v.muscle),
-        color: muscleColor(v.muscle),
-      })),
+    () => {
+      // Merge raw muscle_group strings that collapse to the same short label.
+      const merged = new Map<string, { muscle: string; sets: number; color: string; label: string }>();
+      for (const v of volume) {
+        const label = shortMuscleLabel(v.muscle);
+        const existing = merged.get(label);
+        if (existing) {
+          existing.sets += v.sets;
+        } else {
+          merged.set(label, { muscle: label, sets: v.sets, color: muscleColor(label), label });
+        }
+      }
+      return [...merged.values()].sort((a, b) => b.sets - a.sets);
+    },
     [volume],
   );
 
