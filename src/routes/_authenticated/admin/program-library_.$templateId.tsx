@@ -813,8 +813,9 @@ export function StructureCanvas({ type, payload, setP, exercises, appendRowToFir
 // ---------- Structure editing for the JSON payload ----------
 
 function StructureEditor({ type, payload, setPayload, exercises, compact }: { type: string; payload: any; setPayload: (p: any) => void; exercises: any[]; compact?: boolean }) {
-  if (type === "full_prep") return <FullPrepEditor payload={payload} setPayload={setPayload} exercises={exercises} compact={compact} />;
-  if (type === "block") return <BlockPayloadEditor weeksData={payload.weeks_data || []} setWeeksData={(wd) => setPayload({ ...payload, weeks_data: wd })} exercises={exercises} compact={compact} />;
+  if (type === "full_prep" || type === "block") {
+    return <MultiBlockStructureEditor type={type} payload={payload} setPayload={setPayload} exercises={exercises} compact={compact} />;
+  }
   if (type === "week") return <WeekEditor week={payload} setWeek={setPayload} exercises={exercises} compact={compact} />;
   if (type === "day") return <DayEditor day={payload} setDay={setPayload} exercises={exercises} compact={compact} />;
   return (
