@@ -31,11 +31,24 @@ type Filter = typeof FILTERS[number];
 
 export const Route = createFileRoute("/_authenticated/admin/messages")({
   validateSearch: (s) => z.object({ client: z.string().uuid().optional() }).parse(s),
-  component: MessagesInbox,
+  component: MessagesRedirect,
 });
 
-function MessagesInbox() {
-  const { client: selectedFromUrl } = Route.useSearch();
+function MessagesRedirect() {
+  const { client } = Route.useSearch();
+  const nav = useNavigate();
+  useEffect(() => {
+    nav({
+      to: "/admin/communication",
+      search: { tab: "messages", ...(client ? { client } : {}) } as any,
+      replace: true,
+    });
+  }, [nav, client]);
+  return null;
+}
+
+export function MessagesInbox({ initialClient }: { initialClient?: string } = {}) {
+  const selectedFromUrl = initialClient;
   const navigate = useNavigate();
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
