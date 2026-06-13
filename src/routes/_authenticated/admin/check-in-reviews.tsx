@@ -275,11 +275,39 @@ function SubmissionDetail({ submissionId }: { submissionId: string }) {
   const { data: sub } = useQuery({ queryKey: ["nf-sub", submissionId], queryFn: () => getSubmission(submissionId) });
   const { data: answers = [] } = useQuery({ queryKey: ["nf-sub-answers", submissionId], queryFn: () => listAnswers(submissionId) });
   const { data: files = [] } = useQuery({ queryKey: ["nf-sub-files", submissionId], queryFn: () => listFiles(submissionId) });
-  const { data: questions = [] } = useQuery({
-    queryKey: ["nf-questions", sub?.form_id],
-    enabled: !!sub?.form_id,
-    queryFn: () => listQuestions(sub!.form_id),
+  // Prefer the form-version snapshot stamped on the submission so deleted/renamed
+  // questions still render with their original label and type.
+  const { data: version } = useQuery({
+    queryKey: ["nf-form-version", sub?.form_version_id],
+    enabled: !!sub?.form_version_id,
+    queryFn: () => getFormVersion(sub!.form_version_id as string),
   });
+  const { data: liveQuestions = [] } = useQuery({
+    queryKey: ["nf-questions-all", sub?.form_id],
+    enabled: !!sub?.form_id && !sub?.form_version_id,
+    queryFn: () => listQuestionsIncludingArchived(sub!.form_id),
+  });
+  const questions: NfQuestion[] = useMemo(() => {
+    const base = version ? ((version.questions_snapshot ?? []) as NfQuestion[]) : liveQuestions;
+    // Include any orphan answers whose question is missing from the snapshot.
+    const present = new Set(base.map((q) => q.id));
+    const orphans: NfQuestion[] = (answers ?? [])
+      .filter((a: any) => !present.has(a.question_id))
+      .map((a: any) => ({
+        id: a.question_id,
+        form_id: sub?.form_id ?? "",
+        order_index: 9999,
+        question_type: "short_text",
+        label: "(deleted question)",
+        help_text: null,
+        required: false,
+        options: [],
+        validation: {},
+        conditional_logic: {},
+        archived_at: null,
+      }));
+    return [...base, ...orphans];
+  }, [version, liveQuestions, answers, sub?.form_id]);
 
   const ansMap = useMemo(() => {
     const m: Record<string, any> = {};
@@ -348,6 +376,11 @@ function SubmissionDetail({ submissionId }: { submissionId: string }) {
 
       <Card className="border-border bg-card p-4">
         <div className="mb-3 text-sm font-black">Answers</div>
+        {(sub.form_version_number ?? null) !== null && (
+          <div className="mb-2 text-[11px] text-muted-foreground">
+            Rendered against form version v{sub.form_version_number}.
+          </div>
+        )}
         <ol className="space-y-3 text-sm">
           {questions.map((q, idx) => {
             const a = ansMap[q.id];
@@ -358,7 +391,11 @@ function SubmissionDetail({ submissionId }: { submissionId: string }) {
               (a?.value_json ? JSON.stringify(a.value_json) : null);
             return (
               <li key={q.id} className="border-b border-border pb-3 last:border-0">
-                <div className="text-xs font-bold text-muted-foreground">{idx + 1}. {q.label}</div>
+                <div className="text-xs font-bold text-muted-foreground">
+                  {idx + 1}. {q.label}
+                  {q.archived_at && <span className="ml-2 rounded bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-700">archived</span>}
+                  <span className="ml-2 text-[10px] uppercase opacity-60">{q.question_type}</span>
+                </div>
                 <div className="mt-1 whitespace-pre-wrap">{val || (qFiles.length ? "" : <span className="text-muted-foreground">—</span>)}</div>
                 {qFiles.map((f) => <FileLink key={f.id} path={f.storage_path} name={f.original_name} />)}
               </li>
