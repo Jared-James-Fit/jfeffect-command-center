@@ -23,6 +23,7 @@ import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SignupJfRouteImport } from './routes/signup.jf'
 import { Route as MWelcomeRouteImport } from './routes/m.welcome'
+import { Route as LegalSlugRouteImport } from './routes/legal.$slug'
 import { Route as CoachingApplyRouteImport } from './routes/coaching.apply'
 import { Route as BookSlugRouteImport } from './routes/book.$slug'
 import { Route as ApiDriveUploadRouteImport } from './routes/api/drive-upload'
@@ -278,6 +279,11 @@ const SignupJfRoute = SignupJfRouteImport.update({
 const MWelcomeRoute = MWelcomeRouteImport.update({
   id: '/m/welcome',
   path: '/m/welcome',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LegalSlugRoute = LegalSlugRouteImport.update({
+  id: '/legal/$slug',
+  path: '/legal/$slug',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CoachingApplyRoute = CoachingApplyRouteImport.update({
@@ -1391,6 +1397,7 @@ export interface FileRoutesByFullPath {
   '/api/drive-upload': typeof ApiDriveUploadRoute
   '/book/$slug': typeof BookSlugRoute
   '/coaching/apply': typeof CoachingApplyRoute
+  '/legal/$slug': typeof LegalSlugRoute
   '/m/welcome': typeof MWelcomeRoute
   '/signup/jf': typeof SignupJfRoute
   '/admin/account': typeof AuthenticatedAdminAccountRoute
@@ -1589,6 +1596,7 @@ export interface FileRoutesByTo {
   '/api/drive-upload': typeof ApiDriveUploadRoute
   '/book/$slug': typeof BookSlugRoute
   '/coaching/apply': typeof CoachingApplyRoute
+  '/legal/$slug': typeof LegalSlugRoute
   '/m/welcome': typeof MWelcomeRoute
   '/signup/jf': typeof SignupJfRoute
   '/admin/account': typeof AuthenticatedAdminAccountRoute
@@ -1792,6 +1800,7 @@ export interface FileRoutesById {
   '/api/drive-upload': typeof ApiDriveUploadRoute
   '/book/$slug': typeof BookSlugRoute
   '/coaching/apply': typeof CoachingApplyRoute
+  '/legal/$slug': typeof LegalSlugRoute
   '/m/welcome': typeof MWelcomeRoute
   '/signup/jf': typeof SignupJfRoute
   '/_authenticated/admin/account': typeof AuthenticatedAdminAccountRoute
@@ -1996,6 +2005,7 @@ export interface FileRouteTypes {
     | '/api/drive-upload'
     | '/book/$slug'
     | '/coaching/apply'
+    | '/legal/$slug'
     | '/m/welcome'
     | '/signup/jf'
     | '/admin/account'
@@ -2194,6 +2204,7 @@ export interface FileRouteTypes {
     | '/api/drive-upload'
     | '/book/$slug'
     | '/coaching/apply'
+    | '/legal/$slug'
     | '/m/welcome'
     | '/signup/jf'
     | '/admin/account'
@@ -2396,6 +2407,7 @@ export interface FileRouteTypes {
     | '/api/drive-upload'
     | '/book/$slug'
     | '/coaching/apply'
+    | '/legal/$slug'
     | '/m/welcome'
     | '/signup/jf'
     | '/_authenticated/admin/account'
@@ -2595,6 +2607,7 @@ export interface RootRouteChildren {
   StaffSetupRoute: typeof StaffSetupRoute
   ApiDriveUploadRoute: typeof ApiDriveUploadRoute
   BookSlugRoute: typeof BookSlugRoute
+  LegalSlugRoute: typeof LegalSlugRoute
   MWelcomeRoute: typeof MWelcomeRoute
   SignupJfRoute: typeof SignupJfRoute
   ApiPublic_replay73ae9c8e4bcdc04ea9fd65f84f0752daRoute: typeof ApiPublic_replay73ae9c8e4bcdc04ea9fd65f84f0752daRoute
@@ -2709,6 +2722,13 @@ declare module '@tanstack/react-router' {
       path: '/m/welcome'
       fullPath: '/m/welcome'
       preLoaderRoute: typeof MWelcomeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/legal/$slug': {
+      id: '/legal/$slug'
+      path: '/legal/$slug'
+      fullPath: '/legal/$slug'
+      preLoaderRoute: typeof LegalSlugRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/coaching/apply': {
@@ -4626,6 +4646,7 @@ const rootRouteChildren: RootRouteChildren = {
   StaffSetupRoute: StaffSetupRoute,
   ApiDriveUploadRoute: ApiDriveUploadRoute,
   BookSlugRoute: BookSlugRoute,
+  LegalSlugRoute: LegalSlugRoute,
   MWelcomeRoute: MWelcomeRoute,
   SignupJfRoute: SignupJfRoute,
   ApiPublic_replay73ae9c8e4bcdc04ea9fd65f84f0752daRoute:
