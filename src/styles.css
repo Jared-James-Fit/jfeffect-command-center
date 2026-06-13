@@ -149,7 +149,9 @@
 }
 
 @utility bg-gradient-primary { background-image: var(--gradient-primary); }
+@utility bg-gradient-analytics-blue { background-image: var(--gradient-analytics-blue); }
 @utility shadow-glow { box-shadow: var(--shadow-glow); }
+@utility shadow-analytics-blue { box-shadow: var(--shadow-analytics-blue); }
 @utility shadow-card-elegant { box-shadow: var(--shadow-card); }
 @utility text-balance { text-wrap: balance; }
 
