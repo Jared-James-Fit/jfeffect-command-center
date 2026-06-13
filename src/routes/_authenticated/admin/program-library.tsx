@@ -31,7 +31,15 @@ import {
   DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-export const Route = createFileRoute("/_authenticated/admin/program-library")({ component: ProgramLibrary });
+export const Route = createFileRoute("/_authenticated/admin/program-library")({ component: ProgramLibraryRedirect });
+
+function ProgramLibraryRedirect() {
+  const navigate = useNavigate();
+  useEffect(() => {
+    navigate({ to: "/admin/programming", search: { tab: "programs" } as any, replace: true });
+  }, [navigate]);
+  return null;
+}
 
 const TEMPLATE_TYPES: { v: TemplateType; label: string }[] = [
   { v: "full_prep", label: "Full Prep" },
@@ -60,7 +68,7 @@ type FilterChip =
   | { kind: "style"; v: TrainingStyle }
   | { kind: "archived" };
 
-function ProgramLibrary() {
+export function ProgramLibrary({ embedded = false }: { embedded?: boolean } = {}) {
   const qc = useQueryClient();
   const [q, setQ] = useState("");
   const [chip, setChip] = useState<FilterChip>({ kind: "all" });
@@ -87,10 +95,10 @@ function ProgramLibrary() {
 
   return (
     <>
-      <PageHeader
+      {!embedded && <PageHeader
         title="Program Library"
         subtitle="Reusable preps, blocks, weeks, days, and exercise rows"
-      />
+      />}
       <div className="p-6 md:p-8 space-y-4">
         {/* Search + New */}
         <div className="flex flex-wrap items-center gap-3">
