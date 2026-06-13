@@ -1,0 +1,1 @@
+ALTER VIEW public.v_membership_checkout_legal SET (security_invoker = true);
