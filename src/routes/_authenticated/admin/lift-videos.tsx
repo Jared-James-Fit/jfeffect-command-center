@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -33,6 +33,18 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/admin/lift-videos")({
+  component: LiftVideosRedirect,
+});
+
+function LiftVideosRedirect() {
+  const navigate = useNavigate();
+  useEffect(() => {
+    navigate({ to: "/admin/coaching", search: { tab: "lift-reviews" } as any, replace: true });
+  }, [navigate]);
+  return null;
+}
+
+const _LegacyRoute = createFileRoute("/_authenticated/admin/lift-videos")({
   component: AdminLiftVideos,
   validateSearch: (s: Record<string, unknown>) => ({
     open: typeof s.open === "string" ? s.open : undefined,
