@@ -32,10 +32,18 @@ import { ActionButton } from "@/components/action-button";
 const EMPTY_ARRAY: any[] = [];
 
 export const Route = createFileRoute("/_authenticated/admin/native-forms")({
-  component: AdminNativeForms,
+  component: NativeFormsRedirect,
 });
 
-function AdminNativeForms() {
+function NativeFormsRedirect() {
+  const nav = useNavigate();
+  useEffect(() => {
+    nav({ to: "/admin/forms", search: { tab: "native-forms" } as any, replace: true });
+  }, [nav]);
+  return null;
+}
+
+export function AdminNativeForms({ embedded = false }: { embedded?: boolean } = {}) {
   const qc = useQueryClient();
   const [editing, setEditing] = useState<NfForm | null>(null);
   const [editTab, setEditTab] = useState<"settings" | "questions" | "shared">("settings");
@@ -100,14 +108,24 @@ function AdminNativeForms() {
 
   return (
     <>
-      <PageHeader title="Check-Ins & Form Builder" subtitle="Build native forms or embed external check-ins. Share them from chat or this page — clients only see forms they've been shared." actions={
-        <div className="flex flex-wrap gap-2">
+      {!embedded && (
+        <PageHeader title="Check-Ins & Form Builder" subtitle="Build native forms or embed external check-ins. Share them from chat or this page — clients only see forms they've been shared." actions={
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={handleSyncFillout} disabled={syncing}>
+              <ExternalLink className="mr-2 h-4 w-4" /> {syncing ? "Syncing…" : "Sync from Fillout"}
+            </Button>
+            <Button onClick={() => setCreating("native")} className="bg-gradient-primary font-bold"><Plus className="mr-2 h-4 w-4" /> New Form</Button>
+          </div>
+        } />
+      )}
+      {embedded && (
+        <div className="flex flex-wrap justify-end gap-2 px-4 pt-4 md:px-6">
           <Button variant="outline" onClick={handleSyncFillout} disabled={syncing}>
             <ExternalLink className="mr-2 h-4 w-4" /> {syncing ? "Syncing…" : "Sync from Fillout"}
           </Button>
           <Button onClick={() => setCreating("native")} className="bg-gradient-primary font-bold"><Plus className="mr-2 h-4 w-4" /> New Form</Button>
         </div>
-      } />
+      )}
       <div className="space-y-3 p-4 md:p-6">
         {forms.length > 0 && (
           <Card className="border-border bg-card p-3">
