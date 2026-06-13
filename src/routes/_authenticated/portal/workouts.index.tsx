@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -24,9 +24,16 @@ import { ClientPreviousBlocks } from "@/components/client-previous-blocks";
 import { WeekScheduleView } from "@/components/week-schedule-view";
 import { ProgressComparison } from "@/components/progress-comparison";
 
-export const Route = createFileRoute("/_authenticated/portal/workouts/")({ component: WorkoutsPage });
+export const Route = createFileRoute("/_authenticated/portal/workouts/")({
+  validateSearch: (s: Record<string, unknown>) => ({
+    view: s.view === "block" || s.view === "day" ? (s.view as "block" | "day") : undefined,
+  }),
+  component: WorkoutsPage,
+});
 
 function WorkoutsPage() {
+  const search = Route.useSearch();
+  const navigate = useNavigate({ from: Route.fullPath });
   const portalUserId = usePortalUserId();
   const { data: client } = useQuery({
     queryKey: ["my-client", portalUserId],
@@ -72,6 +79,43 @@ function WorkoutsPage() {
   const currentGroup = blockList[blockList.length - 1] ?? null;
   const currentBlockId: string | null = currentGroup?.block?.id ?? null;
   const currentBlockItems = workoutItems.filter((it) => it.block?.id === currentBlockId);
+
+  // Persist Day/Block view preference. ?view= search param wins, then localStorage,
+  // then default to "day".
+  const STORAGE_KEY = "portal-workouts-view";
+  const [viewMode, setViewModeState] = useState<"day" | "block">(() => {
+    if (typeof window === "undefined") return "day";
+    if (search?.view === "block" || search?.view === "day") return search.view;
+    const saved = window.localStorage.getItem(STORAGE_KEY);
+    return saved === "block" ? "block" : "day";
+  });
+  useEffect(() => {
+    if (search?.view === "block" || search?.view === "day") {
+      setViewModeState(search.view);
+    }
+  }, [search?.view]);
+  useEffect(() => {
+    try { window.localStorage.setItem(STORAGE_KEY, viewMode); } catch {}
+  }, [viewMode]);
+  const setViewMode = (v: "day" | "block") => {
+    setViewModeState(v);
+    navigate({ search: (prev: any) => ({ ...prev, view: v }), replace: true });
+    if (v === "block") {
+      // Scroll to the block view anchor after the tab switch renders.
+      setTimeout(() => {
+        document.getElementById("client-block-view")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 50);
+    }
+  };
+  // If we landed with ?view=block, scroll on mount.
+  useEffect(() => {
+    if (viewMode === "block") {
+      setTimeout(() => {
+        document.getElementById("client-block-view")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 150);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <>
