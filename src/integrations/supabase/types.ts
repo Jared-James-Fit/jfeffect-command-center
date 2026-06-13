@@ -4520,6 +4520,7 @@ export type Database = {
           expires_at: string
           full_name: string
           id: string
+          legal_acceptance_ids: string[]
           password_hash: string
           phone: string | null
           session_id: string
@@ -4531,6 +4532,7 @@ export type Database = {
           expires_at?: string
           full_name: string
           id?: string
+          legal_acceptance_ids?: string[]
           password_hash: string
           phone?: string | null
           session_id: string
@@ -4542,6 +4544,7 @@ export type Database = {
           expires_at?: string
           full_name?: string
           id?: string
+          legal_acceptance_ids?: string[]
           password_hash?: string
           phone?: string | null
           session_id?: string
@@ -4611,6 +4614,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "legal_document_versions"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "legal_acceptance_requirements_version_id_fkey"
+            columns: ["version_id"]
+            isOneToOne: false
+            referencedRelation: "v_membership_checkout_legal"
+            referencedColumns: ["current_version_id"]
           },
         ]
       }
@@ -4694,6 +4704,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "legal_acceptances_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "v_membership_checkout_legal"
+            referencedColumns: ["document_id"]
+          },
+          {
             foreignKeyName: "legal_acceptances_superseded_by_fkey"
             columns: ["superseded_by"]
             isOneToOne: false
@@ -4706,6 +4723,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "legal_document_versions"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "legal_acceptances_version_id_fkey"
+            columns: ["version_id"]
+            isOneToOne: false
+            referencedRelation: "v_membership_checkout_legal"
+            referencedColumns: ["current_version_id"]
           },
         ]
       }
@@ -4799,6 +4823,13 @@ export type Database = {
             referencedRelation: "legal_documents"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "legal_document_placements_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "v_membership_checkout_legal"
+            referencedColumns: ["document_id"]
+          },
         ]
       }
       legal_document_versions: {
@@ -4872,6 +4903,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "legal_documents"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "legal_document_versions_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "v_membership_checkout_legal"
+            referencedColumns: ["document_id"]
           },
         ]
       }
@@ -4971,6 +5009,13 @@ export type Database = {
             referencedRelation: "legal_document_versions"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "fk_legal_documents_current_version"
+            columns: ["current_version_id"]
+            isOneToOne: false
+            referencedRelation: "v_membership_checkout_legal"
+            referencedColumns: ["current_version_id"]
+          },
         ]
       }
       legal_enforcement_audit: {
@@ -5016,11 +5061,25 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "legal_enforcement_audit_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "v_membership_checkout_legal"
+            referencedColumns: ["document_id"]
+          },
+          {
             foreignKeyName: "legal_enforcement_audit_version_id_fkey"
             columns: ["version_id"]
             isOneToOne: false
             referencedRelation: "legal_document_versions"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "legal_enforcement_audit_version_id_fkey"
+            columns: ["version_id"]
+            isOneToOne: false
+            referencedRelation: "v_membership_checkout_legal"
+            referencedColumns: ["current_version_id"]
           },
         ]
       }
@@ -10470,7 +10529,25 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      v_membership_checkout_legal: {
+        Row: {
+          current_version_id: string | null
+          current_version_number: number | null
+          current_version_status:
+            | Database["public"]["Enums"]["legal_version_status"]
+            | null
+          doc_type: Database["public"]["Enums"]["legal_doc_type"] | null
+          document_id: string | null
+          needs_legal_review: boolean | null
+          placement_active: boolean | null
+          public_read_allowed: boolean | null
+          published_at: string | null
+          required: boolean | null
+          slug: string | null
+          title: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       apply_default_member_access: {
