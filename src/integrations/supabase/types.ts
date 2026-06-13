@@ -6899,6 +6899,47 @@ export type Database = {
           },
         ]
       }
+      nf_form_versions: {
+        Row: {
+          change_reason: string | null
+          created_at: string
+          created_by: string | null
+          form_id: string
+          form_snapshot: Json
+          id: string
+          questions_snapshot: Json
+          version_number: number
+        }
+        Insert: {
+          change_reason?: string | null
+          created_at?: string
+          created_by?: string | null
+          form_id: string
+          form_snapshot: Json
+          id?: string
+          questions_snapshot: Json
+          version_number: number
+        }
+        Update: {
+          change_reason?: string | null
+          created_at?: string
+          created_by?: string | null
+          form_id?: string
+          form_snapshot?: Json
+          id?: string
+          questions_snapshot?: Json
+          version_number?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nf_form_versions_form_id_fkey"
+            columns: ["form_id"]
+            isOneToOne: false
+            referencedRelation: "nf_forms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       nf_forms: {
         Row: {
           active: boolean
@@ -6991,6 +7032,7 @@ export type Database = {
       }
       nf_questions: {
         Row: {
+          archived_at: string | null
           conditional_logic: Json
           created_at: string
           form_id: string
@@ -7005,6 +7047,7 @@ export type Database = {
           validation: Json
         }
         Insert: {
+          archived_at?: string | null
           conditional_logic?: Json
           created_at?: string
           form_id: string
@@ -7019,6 +7062,7 @@ export type Database = {
           validation?: Json
         }
         Update: {
+          archived_at?: string | null
           conditional_logic?: Json
           created_at?: string
           form_id?: string
@@ -7085,6 +7129,8 @@ export type Database = {
           client_id: string
           created_at: string
           form_id: string
+          form_version_id: string | null
+          form_version_number: number | null
           id: string
           period_start: string | null
           reviewed_at: string | null
@@ -7098,6 +7144,8 @@ export type Database = {
           client_id: string
           created_at?: string
           form_id: string
+          form_version_id?: string | null
+          form_version_number?: number | null
           id?: string
           period_start?: string | null
           reviewed_at?: string | null
@@ -7111,6 +7159,8 @@ export type Database = {
           client_id?: string
           created_at?: string
           form_id?: string
+          form_version_id?: string | null
+          form_version_number?: number | null
           id?: string
           period_start?: string | null
           reviewed_at?: string | null
@@ -7126,6 +7176,13 @@ export type Database = {
             columns: ["form_id"]
             isOneToOne: false
             referencedRelation: "nf_forms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nf_submissions_form_version_id_fkey"
+            columns: ["form_version_id"]
+            isOneToOne: false
+            referencedRelation: "nf_form_versions"
             referencedColumns: ["id"]
           },
         ]
@@ -11076,6 +11133,44 @@ export type Database = {
           source_queue: string
         }
         Returns: number
+      }
+      nf_publish_form_version: {
+        Args: { _form_id: string; _reason?: string }
+        Returns: {
+          change_reason: string | null
+          created_at: string
+          created_by: string | null
+          form_id: string
+          form_snapshot: Json
+          id: string
+          questions_snapshot: Json
+          version_number: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "nf_form_versions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      nf_restore_form_version: {
+        Args: { _reason?: string; _version_id: string }
+        Returns: {
+          change_reason: string | null
+          created_at: string
+          created_by: string | null
+          form_id: string
+          form_snapshot: Json
+          id: string
+          questions_snapshot: Json
+          version_number: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "nf_form_versions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       ping_client_activity: { Args: { _route?: string }; Returns: undefined }
       pl_assign_template_blocks_atomic: {
