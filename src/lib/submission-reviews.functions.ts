@@ -861,11 +861,11 @@ export const approveAndSendNow = createServerFn({ method: "POST" })
         .from("submission_reviews")
         .update({
           review_status: "sent",
-          approved_response: data.body,
+          approved_response: row.approved_response ?? data.body,
           delivered_response: data.body,
           latest_message_id: msg.id,
-          approved_at: new Date().toISOString(),
-          approved_by: context.userId,
+          approved_at: row.approved_at ?? new Date().toISOString(),
+          approved_by: row.approved_by ?? context.userId,
           sent_at: new Date().toISOString(),
           sent_by: context.userId,
           last_delivery_error: null,
