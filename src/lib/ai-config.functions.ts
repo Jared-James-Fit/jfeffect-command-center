@@ -183,7 +183,7 @@ export const runAiPlayground = createServerFn({ method: "POST" })
         "Sample submission to analyse:\n\n" + data.sampleAnswers + "\n\nProduce the structured analysis and a client-facing response.",
     });
     const stripped = (result.text ?? "").replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "").trim();
-    let out: unknown = null;
+    let out: any = null;
     try { out = JSON.parse(stripped); }
     catch {
       const m = stripped.match(/\{[\s\S]*\}/);
