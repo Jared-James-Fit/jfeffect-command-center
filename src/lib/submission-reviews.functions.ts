@@ -925,7 +925,21 @@ export const scheduleSendResponse = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { row } = await assertCanTouchReview(context.supabase, context.userId, data.reviewId);
     if (!row.client_id) throw new Error("Submission has no client to send to");
+    if (row.review_status === "no_response") {
+      throw new Error("This review is marked as no response required.");
+    }
     const sb = await admin();
+
+    const requireApproval = await isApprovalRequired(sb, row);
+    const draftMatchesApproved =
+      !!row.approved_at &&
+      (row.approved_response ?? "").trim() === (data.body ?? "").trim();
+    if (requireApproval && !draftMatchesApproved) {
+      await audit(row.id, "schedule_refused_no_approval", context.userId, "coach", {});
+      throw new Error(
+        "Coach approval required. Approve the current draft, then schedule.",
+      );
+    }
 
     // Upsert the schedule row by idempotency key
     const { data: existing } = await sb
@@ -956,8 +970,10 @@ export const scheduleSendResponse = createServerFn({ method: "POST" })
         review_status: "scheduled",
         approved_response: data.body,
         coach_draft: data.body,
-        approved_at: new Date().toISOString(),
-        approved_by: context.userId,
+        // Preserve existing approval timestamp when present, otherwise
+        // stamp self-approval (only possible when approval is NOT required).
+        approved_at: row.approved_at ?? new Date().toISOString(),
+        approved_by: row.approved_by ?? context.userId,
         scheduled_at: data.scheduledAt,
         scheduled_by: context.userId,
         schedule_cancelled_at: null,
