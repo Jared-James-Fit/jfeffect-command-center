@@ -23,6 +23,7 @@ import {
 } from "@/lib/submission-reviews";
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
+import { AiAssistanceLabel, deriveAiAssistance } from "@/components/legal/ai-assistance-label";
 
 const STATUS_FILTERS: Array<{ value: "" | ReviewStatus; label: string }> = [
   { value: "", label: "All" },
