@@ -50,7 +50,7 @@ import {
   type TemplatePayloadV2,
   type TemplateBlockV2,
 } from "@/lib/pl-template-blocks";
-import { useNavigate } from "@tanstack/react-router";
+import { useNavigate, useSearch } from "@tanstack/react-router";
 import { ArchiveRestore, Archive as ArchiveIcon, Pencil } from "lucide-react";
 
 // ---------------- Fast local-state cell (instant typing, debounced commit) ---
@@ -855,7 +855,10 @@ function MultiBlockStructureEditor({ type, payload, setPayload, exercises, compa
   templateId?: string;
 }) {
   const navigate = useNavigate();
-  const search = Route.useSearch() as { block?: string };
+  // This component is also reused from `/admin/blocks/$blockId`, where the
+  // program-library route isn't in the match chain. Use a non-strict search
+  // hook so it works under either route without triggering an invariant.
+  const search = useSearch({ strict: false }) as { block?: string };
   const v2 = useMemo<TemplatePayloadV2>(
     () => normalizeTemplatePayload(payload, { templateType: type, templateId }),
     [payload, type, templateId],
