@@ -37,6 +37,7 @@ export type LaunchGateResult = {
 };
 
 const GENERIC_BLOCK_MSG = "Membership checkout is temporarily unavailable.";
+const PAUSED_MSG = "Membership signups are temporarily paused.";
 
 /**
  * Internal resolver. Reachable from other server fns; never exported as RPC.
@@ -46,15 +47,24 @@ export async function resolveMembershipLaunchGate(opts: { admin: boolean }): Pro
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
   const blockers: string[] = [];
+  let pausedByAdmin = false;
 
   // 1) Stripe monthly price configured?
   const { data: settings } = await supabaseAdmin
     .from("jf_membership_settings")
-    .select("monthly_price_id, support_email, refund_policy, trial_days")
+    .select("*")
     .eq("id", true)
     .maybeSingle();
   if (!settings?.monthly_price_id) blockers.push("Stripe monthly price not configured");
   if (!settings?.support_email) blockers.push("Support email not configured");
+  // Kill switch — when the admin has turned public checkout off, treat as
+  // a launch blocker. We surface a distinct, member-safe "paused" message
+  // instead of the generic "temporarily unavailable" so it doesn't look
+  // like a misconfiguration to visitors.
+  if ((settings as any)?.public_checkout_enabled === false) {
+    pausedByAdmin = true;
+    blockers.push("Public checkout disabled by admin (kill switch)");
+  }
 
   // 2) Required legal documents at the membership_checkout placement.
   //    We require the canonical 5 slugs; each must have a current published version.
@@ -110,7 +120,7 @@ export async function resolveMembershipLaunchGate(opts: { admin: boolean }): Pro
   const ok = blockers.length === 0;
   return {
     ok,
-    message: ok ? null : GENERIC_BLOCK_MSG,
+    message: ok ? null : (pausedByAdmin ? PAUSED_MSG : GENERIC_BLOCK_MSG),
     required_docs,
     admin_blockers: opts.admin ? blockers : undefined,
   };
