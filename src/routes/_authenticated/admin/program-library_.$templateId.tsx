@@ -756,9 +756,40 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
             <CalendarRange className="h-3 w-3" /> Weekly
           </button>
         </div>
+        {/* Active editing context — always visible while scrolling deep into a week */}
+        {view === "week" && weeksData[activeIdx] && (() => {
+          const aw = weeksData[activeIdx];
+          const s = weekStats[activeIdx] ?? { days: 0, rows: 0, minutes: 0 };
+          return (
+            <div className="inline-flex items-center gap-1.5 rounded-md border border-primary/40 bg-primary/5 px-2 py-1 text-[11px] text-foreground">
+              <span className="rounded bg-primary px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-primary-foreground">
+                Editing · Week {aw.week_index}
+              </span>
+              <span className="text-muted-foreground">
+                {s.days}d · {s.rows} rows · Est {fmtDur(s.minutes)}
+              </span>
+              {aw.notes ? (
+                <span className="hidden md:inline max-w-[220px] truncate italic text-muted-foreground" title={aw.notes}>
+                  “{aw.notes}”
+                </span>
+              ) : null}
+            </div>
+          );
+        })()}
         {view === "block" && weeksData.length > 1 && (
           <Button size="sm" variant="outline" onClick={copyWeek1ToAll}>
             <Copy className="mr-1 h-3 w-3" /> Copy Week 1 → all weeks
+          </Button>
+        )}
+        {view === "week" && weeksData[activeIdx] && (
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-7 text-[11px]"
+            onClick={() => copyWeekToFuture(activeIdx)}
+            title="Copy this week's prescriptions into every later week"
+          >
+            <ArrowRight className="mr-1 h-3 w-3" /> Apply → future
           </Button>
         )}
         <BlockMaxesButton clientId={ctxClientId} blockId={ctxBlockId} />
