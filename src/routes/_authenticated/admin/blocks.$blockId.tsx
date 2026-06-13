@@ -20,6 +20,7 @@ import { BlockWarmupPanel } from "@/components/block-warmup-panel";
 import { AutoSchedulePanel } from "@/components/auto-schedule-panel";
 import { usePersistentUndoStack } from "@/lib/persistent-undo";
 import { useScrollRestoration } from "@/lib/scroll-restore";
+import { ClientBuilderIdentityHeader, ClientBuilderStickyChip } from "@/components/builder-identity-header";
 
 export const Route = createFileRoute("/_authenticated/admin/blocks/$blockId")({ component: BlockEditor });
 
@@ -195,6 +196,35 @@ function BlockEditor() {
   const { data: tree, isLoading } = useQuery({
     queryKey: ["pl-block-tree", blockId],
     queryFn: () => getBlockTree(blockId),
+  });
+  const clientIdFromTree = tree?.block?.client_id ?? null;
+  // Load the client identity + (optional) parent Program (prep) so the
+  // header can show whose plan is being edited without any guessing.
+  // Scoped per-block to avoid cross-client leakage when navigating routes.
+  const { data: clientRow } = useQuery({
+    queryKey: ["pl-block-client", blockId, clientIdFromTree],
+    enabled: !!clientIdFromTree,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("clients")
+        .select("id, full_name, status")
+        .eq("id", clientIdFromTree as string)
+        .maybeSingle();
+      return data;
+    },
+  });
+  const prepIdFromTree = (tree?.block as any)?.prep_id ?? null;
+  const { data: prepRow } = useQuery({
+    queryKey: ["pl-block-prep", blockId, prepIdFromTree],
+    enabled: !!prepIdFromTree,
+    queryFn: async () => {
+      const { data } = await (supabase as any)
+        .from("pl_preps")
+        .select("id, title, client_id")
+        .eq("id", prepIdFromTree)
+        .maybeSingle();
+      return data;
+    },
   });
   const { data: exercises = [] } = useQuery<ExerciseRef[]>({
     queryKey: ["exercises-min"],
