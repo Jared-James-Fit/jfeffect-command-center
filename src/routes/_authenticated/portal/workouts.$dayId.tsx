@@ -116,6 +116,46 @@ function fmtNum(n: number): string {
   return Number.isInteger(n) ? String(n) : String(Math.round(n * 100) / 100);
 }
 
+/**
+ * Build the standardized client-facing prescription line:
+ *   "Sets × Reps @ Weight | RPE"
+ * Examples: "3 × 8–12 @ 40 lb | RPE 8", "3 × 10 | RPE 8", "1 × 3 @ 82.5% | RPE 7".
+ * Only includes segments that are actually prescribed — never falls back to logged
+ * results or previous-session values.
+ */
+function formatPrescription(p: {
+  sets: number | null | undefined;
+  repsText: string | null | undefined;
+  suggestedWeight: number | null | undefined;
+  unit: "kg" | "lb";
+  percentage: number | string | null | undefined;
+  percentageBasis: string | null | undefined;
+  manualOverride: boolean | null | undefined;
+  rpe: string | number | null | undefined;
+  rir: string | number | null | undefined;
+}): string {
+  const sets = p.sets ?? 1;
+  // Normalize "8-12" → "8–12" for readability; leave AMRAP / Max / other text untouched.
+  const repsRaw = (p.repsText ?? "").toString().trim();
+  const reps = repsRaw ? repsRaw.replace(/\s*-\s*/, "–") : "?";
+  let load = "";
+  if (p.suggestedWeight != null) {
+    load = `@ ${fmtNum(p.suggestedWeight)} ${p.unit}`;
+  } else if (
+    p.percentage &&
+    !p.manualOverride &&
+    p.percentageBasis &&
+    p.percentageBasis !== "none" &&
+    p.percentageBasis !== "manual"
+  ) {
+    load = `@ ${p.percentage}%`;
+  }
+  let effort = "";
+  if (p.rpe != null && String(p.rpe).trim() !== "") effort = `| RPE ${p.rpe}`;
+  else if (p.rir != null && String(p.rir).trim() !== "") effort = `| ${p.rir} RIR`;
+  return [`${sets} × ${reps}`, load, effort].filter(Boolean).join(" ");
+}
+
 export const Route = createFileRoute("/_authenticated/portal/workouts/$dayId")({
   validateSearch: (s: Record<string, unknown>) => ({
     readonly: s.readonly === 1 || s.readonly === "1" || s.readonly === true ? 1 : undefined,
