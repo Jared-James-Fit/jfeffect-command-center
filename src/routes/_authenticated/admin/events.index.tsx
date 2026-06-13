@@ -151,9 +151,9 @@ export function AdminEventsPage({ embedded = false }: { embedded?: boolean } = {
       )}
 
       <Card className="p-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <Tabs value={status} onValueChange={(v) => setStatus(v as EventStatus | "All")}>
-            <TabsList>
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+          <Tabs value={status} onValueChange={(v) => setStatus(v as EventStatus | "All")} className="-mx-1 overflow-x-auto sm:mx-0 sm:overflow-visible">
+            <TabsList className="px-1 sm:px-0">
               <TabsTrigger value="Active">Active</TabsTrigger>
               <TabsTrigger value="Draft">Drafts</TabsTrigger>
               <TabsTrigger value="Completed">Completed</TabsTrigger>
@@ -161,22 +161,24 @@ export function AdminEventsPage({ embedded = false }: { embedded?: boolean } = {
               <TabsTrigger value="All">All</TabsTrigger>
             </TabsList>
           </Tabs>
-          <div className="ml-auto flex flex-wrap items-center gap-2">
-            <Input placeholder="Search events…" value={search} onChange={(e) => setSearch(e.target.value)} className="w-48" />
+          <div className="grid grid-cols-1 gap-2 sm:ml-auto sm:flex sm:flex-wrap sm:items-center">
+            <Input placeholder="Search events…" value={search} onChange={(e) => setSearch(e.target.value)} className="w-full sm:w-48" />
+            <div className="grid grid-cols-2 gap-2 sm:contents">
             <Select value={importance} onValueChange={(v) => setImportance(v as EventImportance | "All")}>
-              <SelectTrigger className="w-36"><SelectValue placeholder="Importance" /></SelectTrigger>
+              <SelectTrigger className="w-full sm:w-36"><SelectValue placeholder="Importance" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="All">All importance</SelectItem>
                 {EVENT_IMPORTANCE.map((i) => <SelectItem key={i} value={i}>{i}</SelectItem>)}
               </SelectContent>
             </Select>
             <Select value={type} onValueChange={(v) => setType(v as EventType | "All")}>
-              <SelectTrigger className="w-40"><SelectValue placeholder="Type" /></SelectTrigger>
+              <SelectTrigger className="w-full sm:w-40"><SelectValue placeholder="Type" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="All">All types</SelectItem>
                 {EVENT_TYPES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
               </SelectContent>
             </Select>
+            </div>
           </div>
         </div>
       </Card>

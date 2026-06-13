@@ -55,8 +55,8 @@ export function PtCalendarPanel() {
           <Plus className="mr-2 h-4 w-4" /> Book Session
         </Button>
       } />
-      <div className="p-6 md:p-8 space-y-4">
-        <Card className="border-border bg-card p-4 grid gap-3 md:grid-cols-6">
+      <div className="p-3 sm:p-6 md:p-8 space-y-4">
+        <Card className="border-border bg-card p-3 sm:p-4 grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-6">
           <Select value={filters.client} onValueChange={(v) => setFilters({ ...filters, client: v })}>
             <SelectTrigger><SelectValue placeholder="Client" /></SelectTrigger>
             <SelectContent>
@@ -83,25 +83,25 @@ export function PtCalendarPanel() {
           <Input type="date" value={filters.to} onChange={(e) => setFilters({ ...filters, to: e.target.value })} />
         </Card>
 
-        <Card className="border-border bg-card p-4">
+        <Card className="border-border bg-card p-3 sm:p-4">
           {filtered.length === 0 ? (
             <div className="rounded-md border border-dashed border-border p-10 text-center text-sm text-muted-foreground">No sessions match those filters.</div>
           ) : (
             <ul className="divide-y divide-border">
               {filtered.map((s: any) => (
-                <li key={s.id} className="flex flex-wrap items-center justify-between gap-2 py-3">
-                  <div className="flex items-center gap-3">
-                    <Badge variant="outline" className={statusTone(s.status)}>{s.status}</Badge>
-                    <div>
+                <li key={s.id} className="flex flex-col gap-2 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+                  <div className="flex min-w-0 items-start gap-3">
+                    <Badge variant="outline" className={`${statusTone(s.status)} shrink-0`}>{s.status}</Badge>
+                    <div className="min-w-0">
                       <div className="text-sm font-semibold">{s.title}</div>
-                      <div className="text-xs text-muted-foreground">
+                      <div className="text-xs text-muted-foreground break-words">
                         {new Date(s.session_date + "T00:00:00").toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })} · {fmtTimeRange(s.start_time, s.end_time)} · {s.location}
                       </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2 sm:shrink-0">
                     {s.clients && (
-                      <Link to="/admin/clients/$id" params={{ id: s.clients.id }} className="text-sm font-semibold text-primary hover:underline">{s.clients.full_name}</Link>
+                      <Link to="/admin/clients/$id" params={{ id: s.clients.id }} className="truncate text-sm font-semibold text-primary hover:underline">{s.clients.full_name}</Link>
                     )}
                     <Button size="sm" variant="ghost" onClick={() => { setEditing(s); setOpen(true); }}><Pencil className="h-4 w-4" /></Button>
                   </div>
