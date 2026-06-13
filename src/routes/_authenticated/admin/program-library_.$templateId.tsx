@@ -158,6 +158,39 @@ function fieldsInRow(row: Element): HTMLElement[] {
 }
 
 /**
+ * Fill the given value into every input with the same data-pb-field
+ * in rows BELOW the source cell, scoped to the same day. Uses the
+ * native input value setter so React's onChange fires and the row's
+ * debounced commit pipeline persists each new value.
+ */
+function fillDownFromCell(source: HTMLInputElement | null, value: string) {
+  if (!source) return 0;
+  const fieldName = source.getAttribute("data-pb-field");
+  if (!fieldName) return 0;
+  const row = source.closest("[data-pb-row]");
+  const day = source.closest("[data-pb-day]");
+  if (!row || !day) return 0;
+  const rows = Array.from(day.querySelectorAll<HTMLElement>("[data-pb-row]"));
+  const ri = rows.indexOf(row as HTMLElement);
+  if (ri < 0) return 0;
+  const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set;
+  let count = 0;
+  for (let i = ri + 1; i < rows.length; i++) {
+    const peer = rows[i].querySelector<HTMLInputElement>(`input[data-pb-field="${fieldName}"]`);
+    if (!peer || (peer as any).disabled) continue;
+    if (peer.value === value) continue;
+    setter?.call(peer, value);
+    peer.dispatchEvent(new Event("input", { bubbles: true }));
+    peer.dispatchEvent(new Event("change", { bubbles: true }));
+    count++;
+  }
+  if (count > 0) {
+    try { toast.success(`Filled "${value || "—"}" into ${count} row${count === 1 ? "" : "s"} below`); } catch {}
+  }
+  return count;
+}
+
+/**
  * Handle Enter / Shift+Enter / left-right (at caret boundary) / up-down
  * navigation between editable prescription fields. Returns true if the
  * event was handled.
@@ -229,6 +262,11 @@ export function handleRowFieldNav(
   }
   if (e.key === "ArrowUp" && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey) {
     return moveVertical(-1);
+  }
+  if (e.key === "ArrowDown" && (e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey) {
+    e.preventDefault();
+    fillDownFromCell(target, opts?.value ?? target.value ?? "");
+    return true;
   }
   return false;
 }
