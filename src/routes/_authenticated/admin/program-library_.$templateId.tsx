@@ -1153,6 +1153,14 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
       {children}
     </div>
   );
+  // High-contrast input styling for builder rows — white fill so editable
+  // fields pop against the dark card background and never look pre-filled.
+  const inputCls =
+    "bg-white text-slate-900 border-2 border-slate-300 shadow-sm " +
+    "placeholder:text-slate-400 placeholder:font-normal " +
+    "hover:border-slate-400 " +
+    "focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/30 " +
+    "dark:bg-white dark:text-slate-900 dark:border-slate-300 dark:placeholder:text-slate-400";
   const exMeta = (exercises as any[]).find((e) => e.id === row.exercise_id) ?? null;
   const exName = exMeta?.name ?? row.exercise_name_override ?? "";
   const accent = exerciseAccent(exMeta, row.card_color);
@@ -1291,26 +1299,27 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
         </div>
         </Field>
         <Field className="col-span-1" label="Sets">
-          <RowCell className={cn("text-sm font-medium tabular-nums", h)} inputMode="numeric" placeholder="3" value={row.sets} onCommit={(v) => setRow({ ...row, sets: parseIntOrNull(v) })} />
+          <RowCell className={cn("text-sm font-semibold tabular-nums text-center", h, inputCls)} inputMode="numeric" placeholder="3" value={row.sets} onCommit={(v) => setRow({ ...row, sets: parseIntOrNull(v) })} />
         </Field>
         <Field className="col-span-2" label="Reps">
-          <RowCell className={cn("text-sm font-medium tabular-nums", h)} placeholder="8-12" value={row.reps_text} onCommit={(v) => setRow({ ...row, reps_text: v ?? "" })} />
+          <RowCell className={cn("text-sm font-semibold tabular-nums text-center", h, inputCls)} placeholder="8-12" value={row.reps_text} onCommit={(v) => setRow({ ...row, reps_text: v ?? "" })} />
         </Field>
         <Field className="col-span-1" label="RPE">
-          <RowCell className={cn("text-sm font-medium tabular-nums", h)} inputMode="decimal" placeholder="8" value={row.rpe} onCommit={(v) => setRow({ ...row, rpe: v ?? "" })} />
+          <RowCell className={cn("text-sm font-semibold tabular-nums text-center", h, inputCls)} inputMode="decimal" placeholder="—" value={row.rpe} onCommit={(v) => setRow({ ...row, rpe: v ?? "" })} />
         </Field>
         <Field className="col-span-1" label="RIR">
-          <RowCell className={cn("text-sm font-medium tabular-nums", h)} inputMode="decimal" placeholder="2" value={row.rir} onCommit={(v) => setRow({ ...row, rir: v ?? "" })} />
+          <RowCell className={cn("text-sm font-semibold tabular-nums text-center", h, inputCls)} inputMode="decimal" placeholder="—" value={row.rir} onCommit={(v) => setRow({ ...row, rir: v ?? "" })} />
         </Field>
-        <Field className="col-span-2 md:col-span-1" label={`Rest s${restIsOverride ? " *" : ""}`}>
+        <Field className="col-span-2 md:col-span-1" label={`Rest (sec)${restIsOverride ? " *" : ""}`}>
           <RowCell
             className={cn(
-              "text-sm font-medium tabular-nums",
+              "text-sm font-semibold tabular-nums text-center",
               h,
+              inputCls,
               restIsOverride && "ring-1 ring-primary/40",
             )}
             inputMode="numeric"
-            placeholder={String(restDefault)}
+            placeholder={`${restDefault}s`}
             value={effectiveRest}
             onCommit={(v) => {
               const n = parseIntOrNull(v);
@@ -1428,28 +1437,28 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
         {loadMode === "pct" && (
         <Field className="col-span-3" label="Basis">
           <Select value={row.percentage_basis ?? "manual"} onValueChange={(v) => setRow({ ...row, percentage_basis: v })}>
-            <SelectTrigger className={cn("text-xs", h)}><SelectValue /></SelectTrigger>
+            <SelectTrigger className={cn("text-xs font-medium", h, inputCls)}><SelectValue /></SelectTrigger>
             <SelectContent>{PERCENTAGE_BASES.filter((p) => p.value !== "none" && p.value !== "manual").map((p) => <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>)}</SelectContent>
           </Select>
         </Field>
         )}
         {loadMode === "pct" && (
         <Field className="col-span-1" label="%">
-          <RowCell className={cn("text-xs", h)} inputMode="decimal" placeholder="75" value={row.percentage} onCommit={(v) => setRow({ ...row, percentage: parseFloatOrNull(v) })} />
+          <RowCell className={cn("text-xs font-semibold tabular-nums text-center", h, inputCls)} inputMode="decimal" placeholder="75" value={row.percentage} onCommit={(v) => setRow({ ...row, percentage: parseFloatOrNull(v) })} />
         </Field>
         )}
         {loadMode !== "none" && (
         <Field className={cn(loadMode === "pct" ? "col-span-2" : "col-span-3")} label={`Suggested Load (${rowUnit})`}>
           <div className="flex gap-1">
             <RowCell
-              className={cn("text-xs flex-1", h)}
+              className={cn("text-xs font-semibold tabular-nums flex-1", h, inputCls)}
               inputMode="decimal"
               placeholder={loadMode === "pct" ? "auto" : "weight"}
               value={rowUnit === "kg" ? row.load_kg : row.load_lb}
               onCommit={(v) => setRow({ ...row, [rowUnit === "kg" ? "load_kg" : "load_lb"]: parseFloatOrNull(v) })}
             />
             <Select value={rowUnit} onValueChange={(v) => setRow({ ...row, load_unit: v })}>
-              <SelectTrigger className={cn("w-[52px] text-[11px] px-1.5", h)}><SelectValue /></SelectTrigger>
+              <SelectTrigger className={cn("w-[56px] text-[11px] font-semibold px-1.5", h, inputCls)}><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="kg">kg</SelectItem>
                 <SelectItem value="lb">lb</SelectItem>
@@ -1459,11 +1468,12 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
         </Field>
         )}
         <Field className="col-span-2" label="Tempo">
-          <RowCell className={cn("text-xs", h)} placeholder="3-1-1" value={row.tempo} onCommit={(v) => setRow({ ...row, tempo: v ?? "" })} />
+          <RowCell className={cn("text-xs font-semibold tabular-nums text-center", h, inputCls)} placeholder="—" value={row.tempo} onCommit={(v) => setRow({ ...row, tempo: v ?? "" })} />
+          <span className="px-0.5 text-[8px] leading-none text-muted-foreground">Format: 3-1-1 (ecc-pause-con)</span>
         </Field>
         <Field className={cn(loadMode === "none" ? "col-span-5" : "col-span-3")} label="Type">
           <Select value={row.time_profile ?? "accessory_compound"} onValueChange={(v) => setRow({ ...row, time_profile: v })}>
-            <SelectTrigger className={cn("text-xs", h)}><SelectValue /></SelectTrigger>
+            <SelectTrigger className={cn("text-xs font-medium", h, inputCls)}><SelectValue /></SelectTrigger>
             <SelectContent>{TIME_PROFILES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}</SelectContent>
           </Select>
         </Field>
