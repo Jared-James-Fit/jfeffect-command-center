@@ -1,5 +1,5 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
@@ -15,7 +15,15 @@ import {
   FollowupRow, FollowupDialog, MarkAllClientReviewed, highlightPainHtml,
 } from "@/components/intel-actions";
 
-export const Route = createFileRoute("/_authenticated/admin/training-intelligence")({ component: TrainingIntelPage });
+export const Route = createFileRoute("/_authenticated/admin/training-intelligence")({ component: TrainingIntelRedirect });
+
+function TrainingIntelRedirect() {
+  const navigate = useNavigate();
+  useEffect(() => {
+    navigate({ to: "/admin/coaching", search: { tab: "training-intel" } as any, replace: true });
+  }, [navigate]);
+  return null;
+}
 
 const FILTERS: { key: FilterKey; label: string }[] = [
   { key: "all", label: "All" },
