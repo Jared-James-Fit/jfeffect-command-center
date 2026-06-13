@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Search } from "lucide-react";
-import { getClientResults, getCompletedHistory } from "@/lib/pl-programs";
+import { getCompletedHistory } from "@/lib/pl-programs";
 import { ProgressComparison } from "@/components/progress-comparison";
 import { ExerciseHistorySheet } from "@/components/exercise-history-sheet";
 
