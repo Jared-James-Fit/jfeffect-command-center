@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Link } from "@tanstack/react-router";
+import { useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Camera, LogOut, Settings as SettingsIcon, UserCog, ImageIcon } from "lucide-react";
 import {
@@ -38,6 +38,7 @@ export function SettingsMenu({
 }) {
   const { user } = useAuth();
   const qc = useQueryClient();
+  const navigate = useNavigate();
   const [picOpen, setPicOpen] = useState(false);
   const [viewOpen, setViewOpen] = useState(false);
 
@@ -137,10 +138,14 @@ export function SettingsMenu({
               {settingItems.map((item) => {
                 const Icon = item.icon ?? UserCog;
                 return (
-                  <DropdownMenuItem key={item.to} asChild>
-                    <Link to={item.to}>
-                      <Icon className="mr-2 h-4 w-4" /> {item.label}
-                    </Link>
+                  <DropdownMenuItem
+                    key={item.to}
+                    onSelect={(e) => {
+                      e.preventDefault();
+                      navigate({ to: item.to });
+                    }}
+                  >
+                    <Icon className="mr-2 h-4 w-4" /> {item.label}
                   </DropdownMenuItem>
                 );
               })}
