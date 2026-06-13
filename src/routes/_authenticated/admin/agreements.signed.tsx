@@ -421,6 +421,31 @@ function SignedAgreementsPage() {
         )}
 
         <Card className="p-5">
+          <div className="flex flex-wrap items-center justify-between gap-3 pb-3 mb-3 border-b border-border">
+            <div className="flex items-center gap-2 text-sm">
+              <Checkbox
+                checked={allFilteredSelected ? true : someFilteredSelected ? "indeterminate" : false}
+                onCheckedChange={(v) => toggleAllFiltered(v === true)}
+                aria-label="Select all filtered documents"
+              />
+              <span className="text-muted-foreground">
+                {selected.size > 0
+                  ? `${selected.size} selected`
+                  : `Select all (${filteredIds.length})`}
+              </span>
+              {selected.size > 0 && (
+                <Button size="sm" variant="ghost" onClick={clearSelection}>Clear</Button>
+              )}
+            </div>
+            <Button
+              size="sm"
+              variant="destructive"
+              disabled={selected.size === 0}
+              onClick={() => setDeleteOpen(true)}
+            >
+              <Trash2 className="h-3.5 w-3.5 mr-1" /> Delete selected
+            </Button>
+          </div>
           {isLoading ? (
             <div className="py-12 text-center text-sm text-muted-foreground">
               <Loader2 className="h-5 w-5 inline animate-spin mr-2" /> Loading signed documents…
