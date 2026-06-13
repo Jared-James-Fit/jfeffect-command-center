@@ -1247,7 +1247,36 @@ function ExerciseNotesSheet({ open, onOpenChange, clientId, dayId, dayTitle, row
   );
 }
 
-function SetRow({ rowId, workoutId, exerciseId, exerciseName, clientId, setIndex, existing, targetReps, targetRpe, readonly = false, unit = "kg", focusMode = false, onChange, onSetCompleted }: { rowId: string; workoutId?: string | null; exerciseId?: string | null; exerciseName?: string | null; clientId: string | undefined; setIndex: number; existing?: any; targetReps?: string | null; targetRpe?: string | null; readonly?: boolean; unit?: "kg" | "lb"; focusMode?: boolean; onChange: () => void; onSetCompleted?: (setIndex: number) => void }) {
+function SetRow({
+  rowId, workoutId, exerciseId, exerciseName, clientId, setIndex, existing, prevExisting,
+  targetReps, targetRpe, targetRir, suggestedWeight,
+  repTarget, rpeTarget, rirTarget,
+  hasUncompletedAfter, onApplyToRemaining,
+  readonly = false, unit = "kg", focusMode = false, onChange, onSetCompleted,
+}: {
+  rowId: string;
+  workoutId?: string | null;
+  exerciseId?: string | null;
+  exerciseName?: string | null;
+  clientId: string | undefined;
+  setIndex: number;
+  existing?: any;
+  prevExisting?: any;
+  targetReps?: string | null;
+  targetRpe?: string | null;
+  targetRir?: string | null;
+  suggestedWeight?: number | null;
+  repTarget?: RangeTarget;
+  rpeTarget?: RangeTarget;
+  rirTarget?: RangeTarget;
+  hasUncompletedAfter?: boolean;
+  onApplyToRemaining?: (fromSetIndex: number, payload: { load: string; reps: string; rpe: string; unit: "kg" | "lb" }) => Promise<void> | void;
+  readonly?: boolean;
+  unit?: "kg" | "lb";
+  focusMode?: boolean;
+  onChange: () => void;
+  onSetCompleted?: (setIndex: number) => void;
+}) {
   const { user } = useAuth();
   const { isImpersonating, client: povClient } = useClientImpersonation();
   // Display weight is always shown in the active unit.
