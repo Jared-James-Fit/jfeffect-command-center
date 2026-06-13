@@ -72,8 +72,8 @@ export function BlockWeekColumns({
                   ? `Starts ${format(range.start, "MMM d")}`
                   : "Locked"
                 : total === 0
-                ? "No workouts"
-                : `${doneCount} of ${total} complete`;
+                  ? "No workouts"
+                  : `${doneCount} of ${total} complete`;
             return (
               <button
                 key={week?.id ?? Math.random()}
