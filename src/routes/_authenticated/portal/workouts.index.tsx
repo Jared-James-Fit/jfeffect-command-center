@@ -289,7 +289,7 @@ function WorkoutsPage() {
                 </div>
                 <div className="mt-4 flex flex-wrap gap-2">
                   <Link to="/portal/workouts/analytics" className="w-full sm:w-auto">
-                    <Button size="lg" className="w-full bg-gradient-primary font-bold uppercase shadow-glow btn-glow ring-2 ring-primary/20 sm:w-auto">
+                    <Button size="lg" className="w-full bg-gradient-analytics-blue font-bold uppercase shadow-analytics-blue btn-glow-blue ring-2 ring-analytics-blue/20 sm:w-auto">
                       <Activity className="mr-2 h-5 w-5" /> Training Analytics
                     </Button>
                   </Link>
