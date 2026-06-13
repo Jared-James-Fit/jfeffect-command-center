@@ -2,12 +2,14 @@ import {
   LayoutDashboard, Users, CreditCard, AlertCircle, FolderOpen, Calendar, Megaphone, UserPlus,
   HelpCircle, ChefHat, BookOpen, Settings, ListChecks, KeyRound,
   Link2 as LinkIcon, BarChart3, RefreshCw, ShoppingBag, Tag, MessagesSquare, Trophy, ShieldCheck,
+  Rocket, Bell, Activity,
 } from "lucide-react";
 import type { NavItem } from "@/components/app-shell";
 
 export const membershipNav: NavItem[] = [
   // OVERVIEW
   { to: "/admin/membership", label: "Membership Dashboard", icon: LayoutDashboard, group: "Overview" },
+  { to: "/admin/membership/launch-readiness", label: "Launch Readiness", icon: Rocket, group: "Overview" },
   { to: "/admin/membership/signup-stats", label: "Signup Stats", icon: BarChart3, group: "Overview" },
   { to: "/admin/membership/action-needed", label: "Action Needed", icon: AlertCircle, group: "Overview" },
   { to: "/admin/support-alerts", label: "Support Alerts", icon: AlertCircle, group: "Overview" },
@@ -20,6 +22,8 @@ export const membershipNav: NavItem[] = [
   { to: "/admin/members", label: "Members", icon: Users, group: "Members" },
   // BILLING
   { to: "/admin/membership/billing", label: "Subscriptions & Billing", icon: CreditCard, group: "Billing" },
+  { to: "/admin/membership/billing-events", label: "Billing Events", icon: Activity, group: "Billing" },
+  { to: "/admin/membership/notifications", label: "Notification Attempts", icon: Bell, group: "Billing" },
   { to: "/admin/membership/stripe-sync", label: "Stripe Sync", icon: RefreshCw, group: "Billing" },
   // SETUP TOOLS
   { to: "/admin/membership/setup-links", label: "Setup Links", icon: LinkIcon, group: "Setup Tools" },

@@ -160,6 +160,7 @@ import { Route as ApiPublicHooksScheduledSendWorkerRouteImport } from './routes/
 import { Route as ApiPublicHooksMediaArchiveRouteImport } from './routes/api/public/hooks/media-archive'
 import { Route as ApiPublicHooksLiftArchiveTickRouteImport } from './routes/api/public/hooks/lift-archive-tick'
 import { Route as ApiPublicHooksFilloutRouteImport } from './routes/api/public/hooks/fillout'
+import { Route as ApiPublicHooksCleanupPendingSignupsRouteImport } from './routes/api/public/hooks/cleanup-pending-signups'
 import { Route as ApiPublicHooksAppointmentRemindersRouteImport } from './routes/api/public/hooks/appointment-reminders'
 import { Route as AuthenticatedPortalWorkoutsAnalyticsRouteImport } from './routes/_authenticated/portal/workouts.analytics'
 import { Route as AuthenticatedPortalWorkoutsDayIdRouteImport } from './routes/_authenticated/portal/workouts.$dayId'
@@ -190,7 +191,10 @@ import { Route as AuthenticatedAdminMembershipSalesPageRouteImport } from './rou
 import { Route as AuthenticatedAdminMembershipResetLinksRouteImport } from './routes/_authenticated/admin/membership.reset-links'
 import { Route as AuthenticatedAdminMembershipRefundPolicyRouteImport } from './routes/_authenticated/admin/membership.refund-policy'
 import { Route as AuthenticatedAdminMembershipPromoToolsRouteImport } from './routes/_authenticated/admin/membership.promo-tools'
+import { Route as AuthenticatedAdminMembershipNotificationsRouteImport } from './routes/_authenticated/admin/membership.notifications'
+import { Route as AuthenticatedAdminMembershipLaunchReadinessRouteImport } from './routes/_authenticated/admin/membership.launch-readiness'
 import { Route as AuthenticatedAdminMembershipChallengesRouteImport } from './routes/_authenticated/admin/membership.challenges'
+import { Route as AuthenticatedAdminMembershipBillingEventsRouteImport } from './routes/_authenticated/admin/membership.billing-events'
 import { Route as AuthenticatedAdminMembershipBillingRouteImport } from './routes/_authenticated/admin/membership.billing'
 import { Route as AuthenticatedAdminMembershipActionNeededRouteImport } from './routes/_authenticated/admin/membership.action-needed'
 import { Route as AuthenticatedAdminMembershipAccessChecklistRouteImport } from './routes/_authenticated/admin/membership.access-checklist'
@@ -1072,6 +1076,12 @@ const ApiPublicHooksFilloutRoute = ApiPublicHooksFilloutRouteImport.update({
   path: '/api/public/hooks/fillout',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicHooksCleanupPendingSignupsRoute =
+  ApiPublicHooksCleanupPendingSignupsRouteImport.update({
+    id: '/api/public/hooks/cleanup-pending-signups',
+    path: '/api/public/hooks/cleanup-pending-signups',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicHooksAppointmentRemindersRoute =
   ApiPublicHooksAppointmentRemindersRouteImport.update({
     id: '/api/public/hooks/appointment-reminders',
@@ -1252,10 +1262,28 @@ const AuthenticatedAdminMembershipPromoToolsRoute =
     path: '/promo-tools',
     getParentRoute: () => AuthenticatedAdminMembershipRoute,
   } as any)
+const AuthenticatedAdminMembershipNotificationsRoute =
+  AuthenticatedAdminMembershipNotificationsRouteImport.update({
+    id: '/notifications',
+    path: '/notifications',
+    getParentRoute: () => AuthenticatedAdminMembershipRoute,
+  } as any)
+const AuthenticatedAdminMembershipLaunchReadinessRoute =
+  AuthenticatedAdminMembershipLaunchReadinessRouteImport.update({
+    id: '/launch-readiness',
+    path: '/launch-readiness',
+    getParentRoute: () => AuthenticatedAdminMembershipRoute,
+  } as any)
 const AuthenticatedAdminMembershipChallengesRoute =
   AuthenticatedAdminMembershipChallengesRouteImport.update({
     id: '/challenges',
     path: '/challenges',
+    getParentRoute: () => AuthenticatedAdminMembershipRoute,
+  } as any)
+const AuthenticatedAdminMembershipBillingEventsRoute =
+  AuthenticatedAdminMembershipBillingEventsRouteImport.update({
+    id: '/billing-events',
+    path: '/billing-events',
     getParentRoute: () => AuthenticatedAdminMembershipRoute,
   } as any)
 const AuthenticatedAdminMembershipBillingRoute =
@@ -1545,7 +1573,10 @@ export interface FileRoutesByFullPath {
   '/admin/membership/access-checklist': typeof AuthenticatedAdminMembershipAccessChecklistRoute
   '/admin/membership/action-needed': typeof AuthenticatedAdminMembershipActionNeededRoute
   '/admin/membership/billing': typeof AuthenticatedAdminMembershipBillingRoute
+  '/admin/membership/billing-events': typeof AuthenticatedAdminMembershipBillingEventsRoute
   '/admin/membership/challenges': typeof AuthenticatedAdminMembershipChallengesRoute
+  '/admin/membership/launch-readiness': typeof AuthenticatedAdminMembershipLaunchReadinessRoute
+  '/admin/membership/notifications': typeof AuthenticatedAdminMembershipNotificationsRoute
   '/admin/membership/promo-tools': typeof AuthenticatedAdminMembershipPromoToolsRoute
   '/admin/membership/refund-policy': typeof AuthenticatedAdminMembershipRefundPolicyRoute
   '/admin/membership/reset-links': typeof AuthenticatedAdminMembershipResetLinksRoute
@@ -1576,6 +1607,7 @@ export interface FileRoutesByFullPath {
   '/portal/workouts/$dayId': typeof AuthenticatedPortalWorkoutsDayIdRoute
   '/portal/workouts/analytics': typeof AuthenticatedPortalWorkoutsAnalyticsRoute
   '/api/public/hooks/appointment-reminders': typeof ApiPublicHooksAppointmentRemindersRoute
+  '/api/public/hooks/cleanup-pending-signups': typeof ApiPublicHooksCleanupPendingSignupsRoute
   '/api/public/hooks/fillout': typeof ApiPublicHooksFilloutRoute
   '/api/public/hooks/lift-archive-tick': typeof ApiPublicHooksLiftArchiveTickRoute
   '/api/public/hooks/media-archive': typeof ApiPublicHooksMediaArchiveRoute
@@ -1746,7 +1778,10 @@ export interface FileRoutesByTo {
   '/admin/membership/access-checklist': typeof AuthenticatedAdminMembershipAccessChecklistRoute
   '/admin/membership/action-needed': typeof AuthenticatedAdminMembershipActionNeededRoute
   '/admin/membership/billing': typeof AuthenticatedAdminMembershipBillingRoute
+  '/admin/membership/billing-events': typeof AuthenticatedAdminMembershipBillingEventsRoute
   '/admin/membership/challenges': typeof AuthenticatedAdminMembershipChallengesRoute
+  '/admin/membership/launch-readiness': typeof AuthenticatedAdminMembershipLaunchReadinessRoute
+  '/admin/membership/notifications': typeof AuthenticatedAdminMembershipNotificationsRoute
   '/admin/membership/promo-tools': typeof AuthenticatedAdminMembershipPromoToolsRoute
   '/admin/membership/refund-policy': typeof AuthenticatedAdminMembershipRefundPolicyRoute
   '/admin/membership/reset-links': typeof AuthenticatedAdminMembershipResetLinksRoute
@@ -1777,6 +1812,7 @@ export interface FileRoutesByTo {
   '/portal/workouts/$dayId': typeof AuthenticatedPortalWorkoutsDayIdRoute
   '/portal/workouts/analytics': typeof AuthenticatedPortalWorkoutsAnalyticsRoute
   '/api/public/hooks/appointment-reminders': typeof ApiPublicHooksAppointmentRemindersRoute
+  '/api/public/hooks/cleanup-pending-signups': typeof ApiPublicHooksCleanupPendingSignupsRoute
   '/api/public/hooks/fillout': typeof ApiPublicHooksFilloutRoute
   '/api/public/hooks/lift-archive-tick': typeof ApiPublicHooksLiftArchiveTickRoute
   '/api/public/hooks/media-archive': typeof ApiPublicHooksMediaArchiveRoute
@@ -1954,7 +1990,10 @@ export interface FileRoutesById {
   '/_authenticated/admin/membership/access-checklist': typeof AuthenticatedAdminMembershipAccessChecklistRoute
   '/_authenticated/admin/membership/action-needed': typeof AuthenticatedAdminMembershipActionNeededRoute
   '/_authenticated/admin/membership/billing': typeof AuthenticatedAdminMembershipBillingRoute
+  '/_authenticated/admin/membership/billing-events': typeof AuthenticatedAdminMembershipBillingEventsRoute
   '/_authenticated/admin/membership/challenges': typeof AuthenticatedAdminMembershipChallengesRoute
+  '/_authenticated/admin/membership/launch-readiness': typeof AuthenticatedAdminMembershipLaunchReadinessRoute
+  '/_authenticated/admin/membership/notifications': typeof AuthenticatedAdminMembershipNotificationsRoute
   '/_authenticated/admin/membership/promo-tools': typeof AuthenticatedAdminMembershipPromoToolsRoute
   '/_authenticated/admin/membership/refund-policy': typeof AuthenticatedAdminMembershipRefundPolicyRoute
   '/_authenticated/admin/membership/reset-links': typeof AuthenticatedAdminMembershipResetLinksRoute
@@ -1985,6 +2024,7 @@ export interface FileRoutesById {
   '/_authenticated/portal/workouts/$dayId': typeof AuthenticatedPortalWorkoutsDayIdRoute
   '/_authenticated/portal/workouts/analytics': typeof AuthenticatedPortalWorkoutsAnalyticsRoute
   '/api/public/hooks/appointment-reminders': typeof ApiPublicHooksAppointmentRemindersRoute
+  '/api/public/hooks/cleanup-pending-signups': typeof ApiPublicHooksCleanupPendingSignupsRoute
   '/api/public/hooks/fillout': typeof ApiPublicHooksFilloutRoute
   '/api/public/hooks/lift-archive-tick': typeof ApiPublicHooksLiftArchiveTickRoute
   '/api/public/hooks/media-archive': typeof ApiPublicHooksMediaArchiveRoute
@@ -2162,7 +2202,10 @@ export interface FileRouteTypes {
     | '/admin/membership/access-checklist'
     | '/admin/membership/action-needed'
     | '/admin/membership/billing'
+    | '/admin/membership/billing-events'
     | '/admin/membership/challenges'
+    | '/admin/membership/launch-readiness'
+    | '/admin/membership/notifications'
     | '/admin/membership/promo-tools'
     | '/admin/membership/refund-policy'
     | '/admin/membership/reset-links'
@@ -2193,6 +2236,7 @@ export interface FileRouteTypes {
     | '/portal/workouts/$dayId'
     | '/portal/workouts/analytics'
     | '/api/public/hooks/appointment-reminders'
+    | '/api/public/hooks/cleanup-pending-signups'
     | '/api/public/hooks/fillout'
     | '/api/public/hooks/lift-archive-tick'
     | '/api/public/hooks/media-archive'
@@ -2363,7 +2407,10 @@ export interface FileRouteTypes {
     | '/admin/membership/access-checklist'
     | '/admin/membership/action-needed'
     | '/admin/membership/billing'
+    | '/admin/membership/billing-events'
     | '/admin/membership/challenges'
+    | '/admin/membership/launch-readiness'
+    | '/admin/membership/notifications'
     | '/admin/membership/promo-tools'
     | '/admin/membership/refund-policy'
     | '/admin/membership/reset-links'
@@ -2394,6 +2441,7 @@ export interface FileRouteTypes {
     | '/portal/workouts/$dayId'
     | '/portal/workouts/analytics'
     | '/api/public/hooks/appointment-reminders'
+    | '/api/public/hooks/cleanup-pending-signups'
     | '/api/public/hooks/fillout'
     | '/api/public/hooks/lift-archive-tick'
     | '/api/public/hooks/media-archive'
@@ -2570,7 +2618,10 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/membership/access-checklist'
     | '/_authenticated/admin/membership/action-needed'
     | '/_authenticated/admin/membership/billing'
+    | '/_authenticated/admin/membership/billing-events'
     | '/_authenticated/admin/membership/challenges'
+    | '/_authenticated/admin/membership/launch-readiness'
+    | '/_authenticated/admin/membership/notifications'
     | '/_authenticated/admin/membership/promo-tools'
     | '/_authenticated/admin/membership/refund-policy'
     | '/_authenticated/admin/membership/reset-links'
@@ -2601,6 +2652,7 @@ export interface FileRouteTypes {
     | '/_authenticated/portal/workouts/$dayId'
     | '/_authenticated/portal/workouts/analytics'
     | '/api/public/hooks/appointment-reminders'
+    | '/api/public/hooks/cleanup-pending-signups'
     | '/api/public/hooks/fillout'
     | '/api/public/hooks/lift-archive-tick'
     | '/api/public/hooks/media-archive'
@@ -2653,6 +2705,7 @@ export interface RootRouteChildren {
   ApiPublicSignnowWebhookRoute: typeof ApiPublicSignnowWebhookRoute
   ApiPublicStripeWebhookRoute: typeof ApiPublicStripeWebhookRoute
   ApiPublicHooksAppointmentRemindersRoute: typeof ApiPublicHooksAppointmentRemindersRoute
+  ApiPublicHooksCleanupPendingSignupsRoute: typeof ApiPublicHooksCleanupPendingSignupsRoute
   ApiPublicHooksFilloutRoute: typeof ApiPublicHooksFilloutRoute
   ApiPublicHooksLiftArchiveTickRoute: typeof ApiPublicHooksLiftArchiveTickRoute
   ApiPublicHooksMediaArchiveRoute: typeof ApiPublicHooksMediaArchiveRoute
@@ -3723,6 +3776,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksFilloutRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/cleanup-pending-signups': {
+      id: '/api/public/hooks/cleanup-pending-signups'
+      path: '/api/public/hooks/cleanup-pending-signups'
+      fullPath: '/api/public/hooks/cleanup-pending-signups'
+      preLoaderRoute: typeof ApiPublicHooksCleanupPendingSignupsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/hooks/appointment-reminders': {
       id: '/api/public/hooks/appointment-reminders'
       path: '/api/public/hooks/appointment-reminders'
@@ -3933,11 +3993,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminMembershipPromoToolsRouteImport
       parentRoute: typeof AuthenticatedAdminMembershipRoute
     }
+    '/_authenticated/admin/membership/notifications': {
+      id: '/_authenticated/admin/membership/notifications'
+      path: '/notifications'
+      fullPath: '/admin/membership/notifications'
+      preLoaderRoute: typeof AuthenticatedAdminMembershipNotificationsRouteImport
+      parentRoute: typeof AuthenticatedAdminMembershipRoute
+    }
+    '/_authenticated/admin/membership/launch-readiness': {
+      id: '/_authenticated/admin/membership/launch-readiness'
+      path: '/launch-readiness'
+      fullPath: '/admin/membership/launch-readiness'
+      preLoaderRoute: typeof AuthenticatedAdminMembershipLaunchReadinessRouteImport
+      parentRoute: typeof AuthenticatedAdminMembershipRoute
+    }
     '/_authenticated/admin/membership/challenges': {
       id: '/_authenticated/admin/membership/challenges'
       path: '/challenges'
       fullPath: '/admin/membership/challenges'
       preLoaderRoute: typeof AuthenticatedAdminMembershipChallengesRouteImport
+      parentRoute: typeof AuthenticatedAdminMembershipRoute
+    }
+    '/_authenticated/admin/membership/billing-events': {
+      id: '/_authenticated/admin/membership/billing-events'
+      path: '/billing-events'
+      fullPath: '/admin/membership/billing-events'
+      preLoaderRoute: typeof AuthenticatedAdminMembershipBillingEventsRouteImport
       parentRoute: typeof AuthenticatedAdminMembershipRoute
     }
     '/_authenticated/admin/membership/billing': {
@@ -4123,7 +4204,10 @@ interface AuthenticatedAdminMembershipRouteChildren {
   AuthenticatedAdminMembershipAccessChecklistRoute: typeof AuthenticatedAdminMembershipAccessChecklistRoute
   AuthenticatedAdminMembershipActionNeededRoute: typeof AuthenticatedAdminMembershipActionNeededRoute
   AuthenticatedAdminMembershipBillingRoute: typeof AuthenticatedAdminMembershipBillingRoute
+  AuthenticatedAdminMembershipBillingEventsRoute: typeof AuthenticatedAdminMembershipBillingEventsRoute
   AuthenticatedAdminMembershipChallengesRoute: typeof AuthenticatedAdminMembershipChallengesRoute
+  AuthenticatedAdminMembershipLaunchReadinessRoute: typeof AuthenticatedAdminMembershipLaunchReadinessRoute
+  AuthenticatedAdminMembershipNotificationsRoute: typeof AuthenticatedAdminMembershipNotificationsRoute
   AuthenticatedAdminMembershipPromoToolsRoute: typeof AuthenticatedAdminMembershipPromoToolsRoute
   AuthenticatedAdminMembershipRefundPolicyRoute: typeof AuthenticatedAdminMembershipRefundPolicyRoute
   AuthenticatedAdminMembershipResetLinksRoute: typeof AuthenticatedAdminMembershipResetLinksRoute
@@ -4146,8 +4230,14 @@ const AuthenticatedAdminMembershipRouteChildren: AuthenticatedAdminMembershipRou
       AuthenticatedAdminMembershipActionNeededRoute,
     AuthenticatedAdminMembershipBillingRoute:
       AuthenticatedAdminMembershipBillingRoute,
+    AuthenticatedAdminMembershipBillingEventsRoute:
+      AuthenticatedAdminMembershipBillingEventsRoute,
     AuthenticatedAdminMembershipChallengesRoute:
       AuthenticatedAdminMembershipChallengesRoute,
+    AuthenticatedAdminMembershipLaunchReadinessRoute:
+      AuthenticatedAdminMembershipLaunchReadinessRoute,
+    AuthenticatedAdminMembershipNotificationsRoute:
+      AuthenticatedAdminMembershipNotificationsRoute,
     AuthenticatedAdminMembershipPromoToolsRoute:
       AuthenticatedAdminMembershipPromoToolsRoute,
     AuthenticatedAdminMembershipRefundPolicyRoute:
@@ -4718,6 +4808,8 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicStripeWebhookRoute: ApiPublicStripeWebhookRoute,
   ApiPublicHooksAppointmentRemindersRoute:
     ApiPublicHooksAppointmentRemindersRoute,
+  ApiPublicHooksCleanupPendingSignupsRoute:
+    ApiPublicHooksCleanupPendingSignupsRoute,
   ApiPublicHooksFilloutRoute: ApiPublicHooksFilloutRoute,
   ApiPublicHooksLiftArchiveTickRoute: ApiPublicHooksLiftArchiveTickRoute,
   ApiPublicHooksMediaArchiveRoute: ApiPublicHooksMediaArchiveRoute,
