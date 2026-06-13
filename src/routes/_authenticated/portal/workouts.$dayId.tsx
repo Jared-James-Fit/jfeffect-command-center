@@ -65,11 +65,18 @@ function parseRepTarget(text?: string | null): RangeTarget {
 
 function parseEffortTarget(text?: string | null): RangeTarget {
   if (!text) return {};
-  const s = String(text).trim();
+  // Tolerate values like "RPE 8", "@8", "RIR 2", "rir: 1-2", "~8.5"
+  const s = String(text)
+    .replace(/rpe|rir|[@~:]/gi, " ")
+    .trim();
+  if (!s) return {};
   const range = s.match(/^(\d+(?:\.\d+)?)\s*[-–]\s*(\d+(?:\.\d+)?)$/);
   if (range) return { min: Number(range[1]), max: Number(range[2]) };
   const n = s.match(/^(\d+(?:\.\d+)?)$/);
   if (n) return { exact: Number(n[1]) };
+  // Last resort: pull first number out of the string
+  const any = s.match(/(\d+(?:\.\d+)?)/);
+  if (any) return { exact: Number(any[1]) };
   return {};
 }
 
