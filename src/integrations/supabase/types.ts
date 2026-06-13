@@ -8257,6 +8257,71 @@ export type Database = {
           },
         ]
       }
+      pl_template_operations: {
+        Row: {
+          actor_user_id: string | null
+          affected_block_keys: string[]
+          after_payload: Json | null
+          base_revision: number
+          before_payload: Json | null
+          created_at: string
+          id: string
+          idempotency_key: string | null
+          operation_type: string
+          redone_at: string | null
+          result_revision: number
+          status: string
+          superseded_at: string | null
+          template_id: string
+          undone_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          actor_user_id?: string | null
+          affected_block_keys?: string[]
+          after_payload?: Json | null
+          base_revision: number
+          before_payload?: Json | null
+          created_at?: string
+          id?: string
+          idempotency_key?: string | null
+          operation_type: string
+          redone_at?: string | null
+          result_revision: number
+          status?: string
+          superseded_at?: string | null
+          template_id: string
+          undone_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          actor_user_id?: string | null
+          affected_block_keys?: string[]
+          after_payload?: Json | null
+          base_revision?: number
+          before_payload?: Json | null
+          created_at?: string
+          id?: string
+          idempotency_key?: string | null
+          operation_type?: string
+          redone_at?: string | null
+          result_revision?: number
+          status?: string
+          superseded_at?: string | null
+          template_id?: string
+          undone_at?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pl_template_operations_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "pl_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pl_templates: {
         Row: {
           archived: boolean
@@ -10672,6 +10737,33 @@ export type Database = {
         Returns: string
       }
       pl_recompute_week_status: { Args: { _week_id: string }; Returns: string }
+      pl_template_apply_payload: {
+        Args: {
+          _affected_block_keys: string[]
+          _before_payload: Json
+          _expected_revision: number
+          _idempotency_key?: string
+          _new_payload: Json
+          _operation_type: string
+          _template_id: string
+        }
+        Returns: {
+          new_revision: number
+          operation_id: string
+        }[]
+      }
+      pl_template_redo_operation: {
+        Args: { _operation_id: string }
+        Returns: {
+          new_revision: number
+        }[]
+      }
+      pl_template_undo_operation: {
+        Args: { _operation_id: string }
+        Returns: {
+          new_revision: number
+        }[]
+      }
       pl_week_completed_workouts: {
         Args: { _client_id: string; _week_id: string }
         Returns: number
