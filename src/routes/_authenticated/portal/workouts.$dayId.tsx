@@ -768,6 +768,11 @@ function WorkoutDay() {
             )}
           </Card>
         )}
+
+        {/* Subtle reminder when the client completed but skipped feedback. */}
+        {!readonly && completion?.completed_at && !hasFeedback && feedbackSkipped && (
+          <WorkoutFeedbackReminder onOpen={() => setFeedbackOpen(true)} />
+        )}
       </div>
 
       {/* Sticky general-notes shortcut */}
@@ -777,6 +782,18 @@ function WorkoutDay() {
           <NotebookPen className="mr-2 h-4 w-4" /> Workout Notes
         </Button>
       </div>
+      )}
+
+      {/* Post-workout feedback sheet. Client POV (readonly) never opens it. */}
+      {!readonly && client?.id && (
+        <WorkoutFeedbackSheet
+          open={feedbackOpen && !hasFeedback && !!completion?.id}
+          onOpenChange={setFeedbackOpen}
+          completionId={completion?.id ?? null}
+          clientId={client.id}
+          dayId={dayId}
+          onSubmitted={() => qc.invalidateQueries({ queryKey: ["pl-workout-feedback", completion?.id] })}
+        />
       )}
     </>
   );
