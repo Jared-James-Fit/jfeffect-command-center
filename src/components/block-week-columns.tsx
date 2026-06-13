@@ -240,18 +240,32 @@ export function BlockWeekColumns({
                   );
                   if (mode === "client") {
                     return (
-                      <Link key={it.day.id} to="/portal/workouts/$dayId" params={{ dayId: it.day.id }} className="block">
+                      <Link
+                        key={it.day.id}
+                        to="/portal/workouts/$dayId"
+                        params={{ dayId: it.day.id }}
+                        className="block"
+                      >
                         {inner}
                       </Link>
                     );
                   }
                   return (
-                    <Link key={it.day.id} to="/admin/blocks/$blockId" params={{ blockId: block?.id }} className="block">
+                    <Link
+                      key={it.day.id}
+                      to="/admin/blocks/$blockId"
+                      params={{ blockId: block?.id }}
+                      className="block"
+                    >
                       {inner}
                     </Link>
                   );
                 })}
-                {sel.entries.length === 0 && <p className="text-[11px] italic text-muted-foreground">No workouts in this week.</p>}
+                {sel.entries.length === 0 && (
+                  <p className="text-[11px] italic text-muted-foreground">
+                    No workouts in this week.
+                  </p>
+                )}
               </div>
             </div>
           ))}
