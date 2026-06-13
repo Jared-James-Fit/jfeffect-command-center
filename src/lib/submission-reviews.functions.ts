@@ -793,7 +793,25 @@ export const approveAndSendNow = createServerFn({ method: "POST" })
     if (!row.client_id) {
       throw new Error("This submission isn't linked to a client. Map it first.");
     }
+    if (row.review_status === "no_response") {
+      throw new Error("This review is marked as no response required.");
+    }
     const sb = await admin();
+
+    // Approval gate. When the owning form (or any future global flag) sets
+    // require_coach_approval = true, refuse to send until an authorized user
+    // explicitly approved the current draft. Send Now must NOT silently
+    // self-approve.
+    const requireApproval = await isApprovalRequired(sb, row);
+    const draftMatchesApproved =
+      !!row.approved_at &&
+      (row.approved_response ?? "").trim() === (data.body ?? "").trim();
+    if (requireApproval && !draftMatchesApproved) {
+      await audit(row.id, "send_refused_no_approval", context.userId, "coach", {});
+      throw new Error(
+        "Coach approval required. Approve the current draft, then send.",
+      );
+    }
 
     // Idempotency: if this idempotency key already produced a successful
     // delivery for this review, return that message without sending again.
