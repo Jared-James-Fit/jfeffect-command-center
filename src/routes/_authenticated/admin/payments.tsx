@@ -1,6 +1,6 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState, useMemo } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
@@ -15,7 +15,15 @@ import { updatePurchasePayment, sendPaymentLinkEmail } from "@/lib/payments.func
 import { PAYMENT_STATUS_DETAILED } from "@/lib/offers";
 import { SendPaymentRequestDialog } from "@/components/send-payment-request-dialog";
 
-export const Route = createFileRoute("/_authenticated/admin/payments")({ component: PaymentsPage });
+export const Route = createFileRoute("/_authenticated/admin/payments")({ component: PaymentsRedirect });
+
+function PaymentsRedirect() {
+  const navigate = useNavigate();
+  useEffect(() => {
+    navigate({ to: "/admin/sales", search: { tab: "products-payments", sub: "payments" } as any, replace: true });
+  }, [navigate]);
+  return null;
+}
 
 function statusTone(s?: string | null) {
   switch (s) {
@@ -36,7 +44,7 @@ function statusTone(s?: string | null) {
   }
 }
 
-function PaymentsPage() {
+export function PaymentsPage({ embedded = false }: { embedded?: boolean } = {}) {
   const qc = useQueryClient();
   const updateFn = useServerFn(updatePurchasePayment);
   const sendFn = useServerFn(sendPaymentLinkEmail);
@@ -126,11 +134,16 @@ function PaymentsPage() {
 
   return (
     <>
-      <PageHeader
+      {!embedded && <PageHeader
         title="Payments"
         subtitle="Every payment status across clients, with quick actions and CSV export."
         actions={<Button variant="outline" onClick={exportCsv}><Download className="mr-2 h-4 w-4" />Export</Button>}
-      />
+      />}
+      {embedded && (
+        <div className="flex justify-end px-6 pt-4 md:px-8">
+          <Button variant="outline" onClick={exportCsv}><Download className="mr-2 h-4 w-4" />Export</Button>
+        </div>
+      )}
       <div className="p-6 md:p-8 space-y-4">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <Stat label="Records" value={totals.count.toString()} icon={DollarSign} />

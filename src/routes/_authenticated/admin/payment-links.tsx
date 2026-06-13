@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useMemo, useState } from "react";
@@ -33,8 +33,16 @@ import { ProductAccessGrantDialog } from "@/components/product-access-grant-dial
 import { Lock as LockIcon } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/admin/payment-links")({
-  component: PaymentLinksPage,
+  component: PaymentLinksRedirect,
 });
+
+function PaymentLinksRedirect() {
+  const navigate = useNavigate();
+  useEffect(() => {
+    navigate({ to: "/admin/sales", search: { tab: "products-payments", sub: "products" } as any, replace: true });
+  }, [navigate]);
+  return null;
+}
 
 const PRODUCT_TYPES = [
   "Online Coaching", "In-Person Personal Training", "In-Person Session Package",
@@ -182,7 +190,7 @@ function productToForm(p: Product): FormState {
   };
 }
 
-function PaymentLinksPage() {
+export function PaymentLinksPage({ embedded = false }: { embedded?: boolean } = {}) {
   const qc = useQueryClient();
   const listFn = useServerFn(listCoachingProducts);
   const createFn = useServerFn(createCoachingProduct);
@@ -391,7 +399,7 @@ function PaymentLinksPage() {
 
   return (
     <>
-      <PageHeader
+      {!embedded && <PageHeader
         title="Products & Payments"
         subtitle="Create coaching products, connect Stripe checkout, assign products to clients, and track purchases."
         actions={
@@ -410,7 +418,23 @@ function PaymentLinksPage() {
             )}
           </div>
         }
-      />
+      />}
+      {embedded && (
+        <div className="flex justify-end gap-2 px-6 pt-4 md:px-8">
+          {!manageMode ? (
+            <>
+              <Button variant="outline" onClick={() => setManageMode(true)}>
+                <ListChecks className="mr-2 h-4 w-4" /> Manage products
+              </Button>
+              <Button className="bg-gradient-primary font-bold uppercase tracking-wide" onClick={() => setEditing({ open: true, product: null })}>
+                <Plus className="mr-2 h-4 w-4" /> New product
+              </Button>
+            </>
+          ) : (
+            <Button variant="outline" onClick={exitManage}>Cancel</Button>
+          )}
+        </div>
+      )}
       <div className="p-6 md:p-8 space-y-6">
         {manageMode && (
           <Card className="border-primary/30 bg-primary/5 p-3 flex flex-wrap items-center gap-3">

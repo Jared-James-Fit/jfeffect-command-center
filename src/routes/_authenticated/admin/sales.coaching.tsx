@@ -1,12 +1,12 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { PageHeader } from "@/components/app-shell";
-import { SalesPageEditor } from "@/components/admin/sales-page-editor";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useEffect } from "react";
 
 export const Route = createFileRoute("/_authenticated/admin/sales/coaching")({
-  component: () => (
-    <div className="space-y-5">
-      <PageHeader title="Coaching Sales Page" subtitle="Edit the public /coaching page and configure the Apply CTA." />
-      <SalesPageEditor pageKey="coaching" />
-    </div>
-  ),
+  component: () => {
+    const navigate = useNavigate();
+    useEffect(() => {
+      navigate({ to: "/admin/sales", search: { tab: "sales-pages", sub: "coaching" } as any, replace: true });
+    }, [navigate]);
+    return null;
+  },
 });

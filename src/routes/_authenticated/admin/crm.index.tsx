@@ -1,4 +1,5 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { PageHeader } from "@/components/app-shell";
@@ -9,17 +10,25 @@ import { Flame, Users, ClipboardList, PhoneCall, AlertTriangle, TrendingUp, Chec
 import { format } from "date-fns";
 
 export const Route = createFileRoute("/_authenticated/admin/crm/")({
-  component: CrmDashboard,
+  component: CrmRedirect,
 });
 
-function CrmDashboard() {
+function CrmRedirect() {
+  const navigate = useNavigate();
+  useEffect(() => {
+    navigate({ to: "/admin/sales", search: { tab: "pipeline" } as any, replace: true });
+  }, [navigate]);
+  return null;
+}
+
+export function CrmDashboard({ embedded = false }: { embedded?: boolean } = {}) {
   const fetchStats = useServerFn(crmDashboardStats);
   const { data } = useQuery({ queryKey: ["crm","dashboard"], queryFn: () => fetchStats(), refetchInterval: 60_000 });
   const s = data?.stats;
 
   return (
     <div className="space-y-5">
-      <PageHeader title="CRM" subtitle="Leads, applicants and conversion pipeline. Active coaching clients are tracked separately." />
+      {!embedded && <PageHeader title="CRM" subtitle="Leads, applicants and conversion pipeline. Active coaching clients are tracked separately." />}
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-5">
         <StatCard to="/admin/crm/contacts" search={{ scope: "prospects" }} icon={Users} label="Prospects" value={s?.total_prospects ?? 0} />

@@ -1,4 +1,5 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
@@ -7,9 +8,17 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Download } from "lucide-react";
 
-export const Route = createFileRoute("/_authenticated/admin/purchases")({ component: PurchasesPage });
+export const Route = createFileRoute("/_authenticated/admin/purchases")({ component: PurchasesRedirect });
 
-function PurchasesPage() {
+function PurchasesRedirect() {
+  const navigate = useNavigate();
+  useEffect(() => {
+    navigate({ to: "/admin/sales", search: { tab: "products-payments", sub: "purchases" } as any, replace: true });
+  }, [navigate]);
+  return null;
+}
+
+export function PurchasesPage({ embedded = false }: { embedded?: boolean } = {}) {
   const { data: records = [] } = useQuery({
     queryKey: ["purchase-records"],
     queryFn: async () => {
@@ -46,11 +55,16 @@ function PurchasesPage() {
 
   return (
     <>
-      <PageHeader
+      {!embedded && <PageHeader
         title="Purchase Records"
         subtitle="Every offer assigned or sold to a client, snapshotted at purchase time."
         actions={<Button variant="outline" onClick={exportCsv}><Download className="mr-2 h-4 w-4" />Export CSV</Button>}
-      />
+      />}
+      {embedded && (
+        <div className="flex justify-end px-6 pt-4 md:px-8">
+          <Button variant="outline" onClick={exportCsv}><Download className="mr-2 h-4 w-4" />Export CSV</Button>
+        </div>
+      )}
       <div className="p-6 md:p-8">
         {records.length === 0 ? (
           <div className="rounded-md border border-dashed border-border p-10 text-center text-sm text-muted-foreground">No purchase records yet.</div>
