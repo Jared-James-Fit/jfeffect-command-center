@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as TermsRouteImport } from './routes/terms'
 import { Route as StaffSetupRouteImport } from './routes/staff-setup'
 import { Route as SitemapRouteImport } from './routes/sitemap'
 import { Route as SetupRouteImport } from './routes/setup'
@@ -212,6 +213,11 @@ import { Route as AuthenticatedAdminClientProgramsClientIdHistoryRouteImport } f
 import { Route as AuthenticatedAdminClientProgramsClientIdAnalyticsRouteImport } from './routes/_authenticated/admin/client-programs.$clientId.analytics'
 import { Route as AuthenticatedMWorkoutsEnrollmentIdWeekDayRouteImport } from './routes/_authenticated/m/workouts.$enrollmentId.$week.$day'
 
+const TermsRoute = TermsRouteImport.update({
+  id: '/terms',
+  path: '/terms',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const StaffSetupRoute = StaffSetupRouteImport.update({
   id: '/staff-setup',
   path: '/staff-setup',
@@ -1390,6 +1396,7 @@ export interface FileRoutesByFullPath {
   '/setup': typeof SetupRoute
   '/sitemap': typeof SitemapRoute
   '/staff-setup': typeof StaffSetupRoute
+  '/terms': typeof TermsRoute
   '/admin': typeof AuthenticatedAdminRouteRouteWithChildren
   '/m': typeof AuthenticatedMRouteRouteWithChildren
   '/media': typeof AuthenticatedMediaRouteRouteWithChildren
@@ -1593,6 +1600,7 @@ export interface FileRoutesByTo {
   '/setup': typeof SetupRoute
   '/sitemap': typeof SitemapRoute
   '/staff-setup': typeof StaffSetupRoute
+  '/terms': typeof TermsRoute
   '/api/drive-upload': typeof ApiDriveUploadRoute
   '/book/$slug': typeof BookSlugRoute
   '/coaching/apply': typeof CoachingApplyRoute
@@ -1793,6 +1801,7 @@ export interface FileRoutesById {
   '/setup': typeof SetupRoute
   '/sitemap': typeof SitemapRoute
   '/staff-setup': typeof StaffSetupRoute
+  '/terms': typeof TermsRoute
   '/_authenticated/admin': typeof AuthenticatedAdminRouteRouteWithChildren
   '/_authenticated/m': typeof AuthenticatedMRouteRouteWithChildren
   '/_authenticated/media': typeof AuthenticatedMediaRouteRouteWithChildren
@@ -1998,6 +2007,7 @@ export interface FileRouteTypes {
     | '/setup'
     | '/sitemap'
     | '/staff-setup'
+    | '/terms'
     | '/admin'
     | '/m'
     | '/media'
@@ -2201,6 +2211,7 @@ export interface FileRouteTypes {
     | '/setup'
     | '/sitemap'
     | '/staff-setup'
+    | '/terms'
     | '/api/drive-upload'
     | '/book/$slug'
     | '/coaching/apply'
@@ -2400,6 +2411,7 @@ export interface FileRouteTypes {
     | '/setup'
     | '/sitemap'
     | '/staff-setup'
+    | '/terms'
     | '/_authenticated/admin'
     | '/_authenticated/m'
     | '/_authenticated/media'
@@ -2605,6 +2617,7 @@ export interface RootRouteChildren {
   SetupRoute: typeof SetupRoute
   SitemapRoute: typeof SitemapRoute
   StaffSetupRoute: typeof StaffSetupRoute
+  TermsRoute: typeof TermsRoute
   ApiDriveUploadRoute: typeof ApiDriveUploadRoute
   BookSlugRoute: typeof BookSlugRoute
   LegalSlugRoute: typeof LegalSlugRoute
@@ -2626,6 +2639,13 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/terms': {
+      id: '/terms'
+      path: '/terms'
+      fullPath: '/terms'
+      preLoaderRoute: typeof TermsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/staff-setup': {
       id: '/staff-setup'
       path: '/staff-setup'
@@ -4644,6 +4664,7 @@ const rootRouteChildren: RootRouteChildren = {
   SetupRoute: SetupRoute,
   SitemapRoute: SitemapRoute,
   StaffSetupRoute: StaffSetupRoute,
+  TermsRoute: TermsRoute,
   ApiDriveUploadRoute: ApiDriveUploadRoute,
   BookSlugRoute: BookSlugRoute,
   LegalSlugRoute: LegalSlugRoute,
