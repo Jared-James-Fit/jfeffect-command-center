@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -20,6 +20,18 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/admin/media-review")({
+  component: MediaReviewRedirect,
+});
+
+function MediaReviewRedirect() {
+  const navigate = useNavigate();
+  useEffect(() => {
+    navigate({ to: "/admin/content", search: { tab: "inbox" } as any, replace: true });
+  }, [navigate]);
+  return null;
+}
+
+const _LegacyRoute = createFileRoute("/_authenticated/admin/media-review")({
   component: AdminMediaReview,
 });
 
