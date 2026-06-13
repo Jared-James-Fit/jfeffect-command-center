@@ -415,9 +415,34 @@ export const getMyJfBilling = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const { userId } = context as any;
-    const member = await findMemberByUser(userId);
+    let member = await findMemberByUser(userId);
     if (!member) return { member: null, settings: null };
+    // Server-side lazy enforcement: if grace expired, restrict access now.
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    member = await enforceGraceIfExpired(supabaseAdmin, member);
     const s = await loadSettings();
+    const graceDays = Number(s.grace_period_days ?? 5);
+    // Resolve the canonical lifecycle so the UI gets one consistent action.
+    const lifecycle = resolveLifecycle({
+      member,
+      sub: member.stripe_subscription_id
+        ? {
+            id: member.stripe_subscription_id,
+            status:
+              member.subscription_status === "Trialing" ? "trialing"
+              : member.subscription_status === "Active" || member.subscription_status === "Active (Cancels at period end)" ? "active"
+              : member.subscription_status === "Past Due" || member.subscription_status === "Past Due (Access Restricted)" ? "past_due"
+              : member.subscription_status === "Paused" ? "paused"
+              : member.subscription_status === "Hold Plan" ? "active"
+              : "canceled",
+            cancel_at_period_end: !!member.cancel_at,
+            items: { data: [{ price: { id: member.stripe_price_id } }] },
+            current_period_end: member.current_period_end ? Math.floor(new Date(member.current_period_end).getTime() / 1000) : null,
+          }
+        : null,
+      holdPriceId: s.hold_price_id ?? null,
+      graceDays,
+    });
     return {
       member: {
         id: member.id,
@@ -435,6 +460,14 @@ export const getMyJfBilling = createServerFn({ method: "GET" })
         cancelled_at: member.cancelled_at,
         paused_until: member.paused_until,
         hold_plan_started_at: member.hold_plan_started_at,
+        payment_failed_at: member.payment_failed_at,
+        grace_period_ends_at: member.grace_period_ends_at,
+        access_restricted_at: member.access_restricted_at,
+        subscription_ended_at: member.subscription_ended_at,
+        payment_recovered_at: member.payment_recovered_at,
+        sync_warning_at: member.sync_warning_at,
+        sync_warning_reason: member.sync_warning_reason,
+        cross_account_locked: !!member.cross_account_locked,
       },
       settings: {
         monthly_price_display: s.monthly_price_display,
@@ -442,6 +475,16 @@ export const getMyJfBilling = createServerFn({ method: "GET" })
         is_hold: s.hold_price_id && member.stripe_price_id === s.hold_price_id,
         refund_policy: s.refund_policy,
         support_email: s.support_email,
+        grace_period_days: graceDays,
+      },
+      lifecycle: {
+        status: lifecycle.status,
+        grants_access: lifecycle.grants_access,
+        in_grace: lifecycle.in_grace,
+        grace_ends_at: lifecycle.grace_ends_at ?? member.grace_period_ends_at ?? null,
+        needs_payment_update: lifecycle.needs_payment_update,
+        action: lifecycle.action,
+        subscription_ended: lifecycle.subscription_ended || !!member.subscription_ended_at,
       },
     };
   });
