@@ -1079,19 +1079,32 @@ function SetupGatesPanel() {
 /* ============================================================
    PAGE
    ============================================================ */
-function PopupsManager() {
+function PopupsRedirect() {
+  const nav = useNavigate();
+  useEffect(() => {
+    nav({ to: "/admin/communication", search: { tab: "popups" } as any, replace: true });
+  }, [nav]);
+  return null;
+}
+
+export function PopupsManager({ embedded = false }: { embedded?: boolean } = {}) {
   const [tab, setTab] = useState<string>(() => {
     if (typeof window === "undefined") return "overview";
     const p = new URLSearchParams(window.location.search).get("tab");
-    return p ?? "overview";
+    // When embedded under a workspace, the outer ?tab= belongs to the workspace.
+    // Use ?sub= for the inner Popups tab to avoid collision.
+    const sub = new URLSearchParams(window.location.search).get("sub");
+    return sub ?? (p && !["messages","broadcasts","support-inbox","support-alerts","media-libraries","popups"].includes(p) ? p : "overview");
   });
 
   return (
     <>
-      <PageHeader
-        title="Popups"
-        subtitle="Every popup, load-screen, and setup prompt that shows in the app — in one place."
-      />
+      {!embedded && (
+        <PageHeader
+          title="Popups"
+          subtitle="Every popup, load-screen, and setup prompt that shows in the app — in one place."
+        />
+      )}
       <div className="space-y-5 p-4 pb-32 md:p-6 md:pb-8">
         <Tabs value={tab} onValueChange={setTab} className="space-y-4">
           <TabsList className="grid w-full grid-cols-2 sm:grid-cols-6">
