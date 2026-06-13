@@ -465,28 +465,28 @@ export function ClientBlockView({
                     const rir = r.rir;
                     return (
                       <div key={r.id ?? i} className={cn(
-                        "rounded-md border bg-background/40 p-2",
+                        "min-w-0 rounded-md border bg-background/40 p-2",
                         isComp ? "border-primary/40" : "border-border",
                       )}>
-                        <div className="flex items-start justify-between gap-2">
+                        <div className="grid grid-cols-1 gap-2">
                           <div className="min-w-0">
                             <div className="truncate text-[13px] font-bold leading-tight">{name}</div>
-                            <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[10px] font-semibold uppercase tracking-wide text-foreground/70">
-                              <span>{purpose[i]}</span>
-                              {isComp && <span className="rounded bg-primary/15 px-1 text-primary">Comp</span>}
-                              <span className="text-foreground/50">· {cat}</span>
+                            <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[10px] font-semibold uppercase tracking-wide text-foreground/70">
+                              <span className="max-w-full truncate">{purpose[i]}</span>
+                              {isComp && <span className="shrink-0 rounded bg-primary/15 px-1 text-primary">Comp</span>}
+                              <span className="max-w-full truncate text-foreground/50">· {cat}</span>
                             </div>
                           </div>
                         </div>
-                        <div className="mt-1.5 grid grid-cols-3 gap-1 text-[11px] tabular-nums">
-                          <div><span className="text-foreground/60">Sets</span> <span className="font-bold">{sets}</span></div>
-                          <div><span className="text-foreground/60">Reps</span> <span className="font-bold">{reps}</span></div>
-                          <div><span className="text-foreground/60">Rest</span> <span className="font-bold">{fmtRest(rest)}</span></div>
-                          {(rpe != null && rpe !== "") && <div><span className="text-foreground/60">RPE</span> <span className="font-bold">{rpe}</span></div>}
-                          {(rir != null && rir !== "") && <div><span className="text-foreground/60">RIR</span> <span className="font-bold">{rir}</span></div>}
-                          {(loadVal != null) && <div><span className="text-foreground/60">Load</span> <span className="font-bold">{loadVal}{loadUnit}</span></div>}
-                          {(pct != null && pct !== "") && <div><span className="text-foreground/60">%</span> <span className="font-bold">{pct}%</span></div>}
-                          {r.tempo && <div className="col-span-3"><span className="text-foreground/60">Tempo</span> <span className="font-bold">{r.tempo}</span></div>}
+                        <div className="mt-1.5 grid grid-cols-2 gap-x-2 gap-y-1 text-[11px] tabular-nums sm:grid-cols-3">
+                          <div className="min-w-0"><span className="text-foreground/60">Sets</span> <span className="font-bold break-words">{sets}</span></div>
+                          <div className="min-w-0"><span className="text-foreground/60">Reps</span> <span className="font-bold break-words">{reps}</span></div>
+                          <div className="min-w-0"><span className="text-foreground/60">Rest</span> <span className="font-bold break-words">{fmtRest(rest)}</span></div>
+                          {(rpe != null && rpe !== "") && <div className="min-w-0"><span className="text-foreground/60">RPE</span> <span className="font-bold break-words">{rpe}</span></div>}
+                          {(rir != null && rir !== "") && <div className="min-w-0"><span className="text-foreground/60">RIR</span> <span className="font-bold break-words">{rir}</span></div>}
+                          {(loadVal != null) && <div className="min-w-0"><span className="text-foreground/60">Load</span> <span className="font-bold break-words">{loadVal}{loadUnit}</span></div>}
+                          {(pct != null && pct !== "") && <div className="min-w-0"><span className="text-foreground/60">%</span> <span className="font-bold break-words">{pct}%</span></div>}
+                          {r.tempo && <div className="col-span-2 min-w-0 sm:col-span-3"><span className="text-foreground/60">Tempo</span> <span className="font-bold break-words">{r.tempo}</span></div>}
                         </div>
                       </div>
                     );
