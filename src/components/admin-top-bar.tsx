@@ -21,11 +21,23 @@ export function AdminTopBar({ showDashboardMode = true }: { showDashboardMode?: 
   const navigate = useNavigate();
   const location = useLocation();
   const pathname = useRouterState({ select: (r) => r.location.pathname });
+  const search = useRouterState({ select: (r) => r.location.search as { tab?: string } | undefined });
   const qc = useQueryClient();
   const setPersona = useServerFn(setPovPersona);
   const [busy, setBusy] = useState(false);
   const pov = getPovFlag();
   const isMemberView = pov.active || location.pathname.startsWith("/m");
+
+  // The messaging surface is an immersive, full-bleed chat view (mobile
+  // overlays the whole screen; desktop uses full vertical height). The
+  // mode + POV switcher sitting on top eats vertical room above the chat
+  // header and competes with the Coach Chat / Group Chats and filter
+  // pills. Hide the top bar entirely on these routes — the same controls
+  // remain available from every other admin page.
+  const isChatRoute =
+    pathname.startsWith("/admin/messages") ||
+    (pathname.startsWith("/admin/communication") && (search?.tab ?? "messages") === "messages");
+  if (isChatRoute) return null;
 
   const selectMode = (m: DashboardMode) => {
     setMode(m);
