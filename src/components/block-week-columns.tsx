@@ -45,7 +45,8 @@ export function BlockWeekColumns({
         const locked = mode === "client" && week ? isWeekLocked(block, week) : false;
         const doneCount = entries.filter((it) => it.completion?.completed_at).length;
         const baseStatus = displayWeekStatus(week?.status);
-        const status = locked && doneCount === 0 && baseStatus === "Not Started" ? "Locked" : baseStatus;
+        const status =
+          locked && doneCount === 0 && baseStatus === "Not Started" ? "Locked" : baseStatus;
         return { week, entries, range, now, locked, doneCount, status };
       }),
     [weeks, block, mode],
@@ -67,10 +68,12 @@ export function BlockWeekColumns({
             const total = entries.length;
             const progressLine =
               status === "Locked"
-                ? range ? `Starts ${format(range.start, "MMM d")}` : "Locked"
+                ? range
+                  ? `Starts ${format(range.start, "MMM d")}`
+                  : "Locked"
                 : total === 0
-                  ? "No workouts"
-                  : `${doneCount} of ${total} complete`;
+                ? "No workouts"
+                : `${doneCount} of ${total} complete`;
             return (
               <button
                 key={week?.id ?? Math.random()}
@@ -79,9 +82,7 @@ export function BlockWeekColumns({
                 className={cn(
                   "group relative flex w-[140px] sm:w-[160px] shrink-0 flex-col items-start gap-1 rounded-md border bg-card p-2.5 text-left transition",
                   "hover:bg-secondary/40",
-                  now
-                    ? "border-primary ring-2 ring-primary/40 bg-primary/5"
-                    : "border-border",
+                  now ? "border-primary ring-2 ring-primary/40 bg-primary/5" : "border-border",
                   status === "Locked" && "opacity-70",
                 )}
               >
@@ -91,7 +92,8 @@ export function BlockWeekColumns({
                   </span>
                   {now && (
                     <Badge className="h-4 border-primary/40 bg-primary/15 px-1 text-[9px] font-bold text-primary hover:bg-primary/20">
-                      <Crosshair className="mr-0.5 h-2.5 w-2.5" />Now
+                      <Crosshair className="mr-0.5 h-2.5 w-2.5" />
+                      Now
                     </Badge>
                   )}
                 </div>
