@@ -1552,7 +1552,7 @@ function SetRow({
         inputMode="numeric"
         type="text"
         pattern="[0-9]*"
-        placeholder={targetReps || "—"}
+        placeholder="reps"
         aria-label={`Set ${setIndex} reps`}
         value={reps}
         onChange={(e) => setReps(e.target.value.replace(/[^0-9]/g, ""))}
@@ -1566,7 +1566,7 @@ function SetRow({
         inputMode="decimal"
         type="text"
         pattern="[0-9]*\.?[0-9]*"
-        placeholder={suggestedWeight != null ? fmtNum(suggestedWeight) : "—"}
+        placeholder={unit}
         aria-label={`Set ${setIndex} weight in ${unit}`}
         value={load}
         onChange={(e) => setLoad(e.target.value.replace(/[^0-9.]/g, ""))}
@@ -1580,7 +1580,7 @@ function SetRow({
         inputMode="decimal"
         type="text"
         pattern="[0-9]*\.?[0-9]*"
-        placeholder={targetRpe ? String(targetRpe) : "—"}
+        placeholder="rpe"
         aria-label={`Set ${setIndex} RPE`}
         value={rpe}
         onChange={(e) => setRpe(e.target.value.replace(/[^0-9.]/g, ""))}
