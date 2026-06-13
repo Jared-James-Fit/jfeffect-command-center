@@ -347,14 +347,20 @@ function WorkoutDay() {
   };
 
   // Global toggle: change workout-level pref AND bulk-set every exercise in this
-  // workout so the choice sticks per-exercise too.
+  // workout — but only for exercises WITHOUT an explicit per-exercise override
+  // (either a saved pref or a session override). Per-exercise picks stay
+  // authoritative until the client clears them. This matches the
+  // unit-controls spec: "Global changes should update exercises that do not
+  // have an explicit override."
   const handleGlobalUnitChange = async (next: WUnit) => {
     await persistUnit(next);
-    const overrides: Record<string, WUnit> = {};
-    for (const id of exerciseIds) overrides[id] = next;
-    setUnitOverrides((m) => ({ ...m, ...overrides }));
-    if (client?.id && exerciseIds.length > 0) {
-      try { await saveExerciseUnitPrefsBulk(client.id, exerciseIds, next); } catch { /* non-blocking */ }
+    const prefMap = new Map<string, string>();
+    for (const p of (prefRows as any[] | undefined) ?? []) {
+      if (p?.exercise_id && p?.unit) prefMap.set(p.exercise_id, p.unit);
+    }
+    const targetIds = exerciseIds.filter((id) => !unitOverrides[id] && !prefMap.has(id));
+    if (client?.id && targetIds.length > 0) {
+      try { await saveExerciseUnitPrefsBulk(client.id, targetIds, next); } catch { /* non-blocking */ }
       qc.invalidateQueries({ queryKey: ["client-exercise-unit-prefs", client.id] });
     }
   };
@@ -459,7 +465,7 @@ function WorkoutDay() {
           <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-background/95 px-4 py-3 backdrop-blur">
             <div className="font-bold">{day.title || `Day ${day.day_index}`} · Full Screen</div>
             <div className="flex items-center gap-2">
-              <UnitToggle unit={unit} onChange={handleGlobalUnitChange} label="Workout Units" />
+              <UnitToggle unit={unit} onChange={handleGlobalUnitChange} label="Entire workout" />
               <Button size="sm" variant="outline" onClick={() => setFocusMode(false)}>
                 <Minimize2 className="mr-1 h-4 w-4" /> Exit Full Screen
               </Button>
@@ -522,7 +528,7 @@ function WorkoutDay() {
           {completion && <Badge variant="outline" className="text-green-500 border-green-500/30 bg-green-500/10"><CheckCircle2 className="mr-1 h-3 w-3" /> Completed</Badge>}
           {readonly && <Badge variant="outline" className="border-muted-foreground/30 bg-muted/30 text-muted-foreground"><Lock className="mr-1 h-3 w-3" /> Read-only</Badge>}
           <div className="ml-auto flex items-center gap-2">
-            {!readonly && <UnitToggle unit={unit} onChange={handleGlobalUnitChange} label="Workout Units" />}
+            {!readonly && <UnitToggle unit={unit} onChange={handleGlobalUnitChange} label="Entire workout" />}
             {!readonly && (
               <Button size="sm" variant="outline" onClick={() => setFocusMode(true)}>
                 <Maximize2 className="mr-1 h-4 w-4" /> Full Screen
