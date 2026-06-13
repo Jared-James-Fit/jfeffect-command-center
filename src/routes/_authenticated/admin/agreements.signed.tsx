@@ -460,14 +460,26 @@ function SignedAgreementsPage() {
               {grouped.map((g) => (
                 <div key={g.clientId}>
                   <div className="flex items-center justify-between border-b border-border pb-2 mb-2">
-                    <Link
-                      to="/admin/clients/$id"
-                      params={{ id: g.clientId }}
-                      className="flex items-center gap-2 font-semibold hover:underline"
-                    >
-                      <User className="h-4 w-4 text-muted-foreground" />
-                      {g.clientName}
-                    </Link>
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        checked={(() => {
+                          const ids = g.items.map((i) => i.id);
+                          const all = ids.every((id) => selected.has(id));
+                          const some = ids.some((id) => selected.has(id));
+                          return all ? true : some ? "indeterminate" : false;
+                        })()}
+                        onCheckedChange={(v) => toggleGroup(g.items.map((i) => i.id), v === true)}
+                        aria-label={`Select all documents for ${g.clientName}`}
+                      />
+                      <Link
+                        to="/admin/clients/$id"
+                        params={{ id: g.clientId }}
+                        className="flex items-center gap-2 font-semibold hover:underline"
+                      >
+                        <User className="h-4 w-4 text-muted-foreground" />
+                        {g.clientName}
+                      </Link>
+                    </div>
                     <span className="text-xs text-muted-foreground">
                       {g.items.length} document{g.items.length === 1 ? "" : "s"}
                     </span>
@@ -479,6 +491,11 @@ function SignedAgreementsPage() {
                       const email = a.clients?.email ?? a.client_email ?? null;
                       return (
                         <li key={a.id} className="flex flex-wrap items-center gap-3 py-3 text-sm">
+                          <Checkbox
+                            checked={selected.has(a.id)}
+                            onCheckedChange={(v) => toggleOne(a.id, v === true)}
+                            aria-label="Select document"
+                          />
                           <FileText className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                           <div className="min-w-0 flex-1">
                             <div className="font-medium truncate">
