@@ -33,11 +33,7 @@ function EventsRedirect() {
   return null;
 }
 
-const _LegacyEventsRoute = createFileRoute("/_authenticated/admin/events/")({
-  component: AdminEventsPage,
-});
-
-function AdminEventsPage() {
+export function AdminEventsPage({ embedded = false }: { embedded?: boolean } = {}) {
   const nav = useNavigate();
   const qc = useQueryClient();
   const createDraftFn = useServerFn(createEventDraft);
@@ -118,7 +114,7 @@ function AdminEventsPage() {
 
   return (
     <div className="space-y-4">
-      <PageHeader
+      {!embedded && <PageHeader
         title="Events"
         subtitle="Plan upcoming meets, shoots, calls, and key client dates."
         actions={
