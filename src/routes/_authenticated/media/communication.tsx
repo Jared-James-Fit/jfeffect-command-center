@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { createBroadcastDraft, updateBroadcastDraft, submitForReview, listMyDrafts } from "@/lib/media-manager.functions";
+import { createBroadcastDraft, submitForReview, listMyDrafts } from "@/lib/media-manager.functions";
 
 const TABS = ["drafts", "announcements"] as const;
 type Tab = typeof TABS[number];
@@ -36,38 +36,38 @@ function CommunicationWorkspace() {
           <TabsTrigger value="drafts">Broadcast Drafts</TabsTrigger>
           <TabsTrigger value="announcements">Announcements</TabsTrigger>
         </TabsList>
-        <TabsContent value="drafts" className="mt-4"><DraftsTab kind="broadcast" /></TabsContent>
+        <TabsContent value="drafts" className="mt-4"><DraftsTab /></TabsContent>
         <TabsContent value="announcements" className="mt-4">
           <Card className="p-4 text-sm text-muted-foreground">
             Announcements share the broadcast pipeline. Create an announcement-style draft below and admin will approve before publishing.
           </Card>
-          <div className="mt-4"><DraftsTab kind="announcement" /></div>
+          <div className="mt-4"><DraftsTab /></div>
         </TabsContent>
       </Tabs>
     </div>
   );
 }
 
-function DraftsTab({ kind }: { kind: "broadcast" | "announcement" }) {
+function DraftsTab() {
   const list = useServerFn(listMyDrafts);
   const create = useServerFn(createBroadcastDraft);
-  const update = useServerFn(updateBroadcastDraft);
   const submit = useServerFn(submitForReview);
   const qc = useQueryClient();
   const { data, isLoading } = useQuery({
-    queryKey: ["media-my-drafts", kind],
-    queryFn: () => list({ data: { kind } }),
+    queryKey: ["media-my-drafts", "broadcast"],
+    queryFn: () => list({ data: { kind: "broadcast" } }),
   });
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
-  const [scope, setScope] = useState("everyone");
+  const [scope, setScope] = useState<"everyone" | "coaching_clients" | "app_members" | "program_members" | "selected_clients">("everyone");
+  const items: any[] = Array.isArray(data) ? data : (data?.items ?? []);
 
   const submitNew = async () => {
     if (!title.trim()) return toast.error("Title is required");
     try {
-      await create({ data: { kind, title, body, scope } });
+      await create({ data: { title, body, audience_scope: scope } });
       setTitle(""); setBody("");
-      qc.invalidateQueries({ queryKey: ["media-my-drafts", kind] });
+      qc.invalidateQueries({ queryKey: ["media-my-drafts", "broadcast"] });
       toast.success("Draft saved");
     } catch (e: any) { toast.error(e?.message ?? "Failed"); }
   };
@@ -79,12 +79,12 @@ function DraftsTab({ kind }: { kind: "broadcast" | "announcement" }) {
         <Input placeholder="Title" value={title} onChange={(e) => setTitle(e.target.value)} />
         <Textarea placeholder="Body" value={body} onChange={(e) => setBody(e.target.value)} rows={4} />
         <div className="flex items-center gap-2">
-          <Select value={scope} onValueChange={setScope}>
+          <Select value={scope} onValueChange={(v) => setScope(v as typeof scope)}>
             <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="everyone">Everyone</SelectItem>
-              <SelectItem value="clients">Clients</SelectItem>
-              <SelectItem value="members">Members</SelectItem>
+              <SelectItem value="coaching_clients">Coaching Clients</SelectItem>
+              <SelectItem value="app_members">App Members</SelectItem>
             </SelectContent>
           </Select>
           <Button onClick={submitNew}>Save Draft</Button>
@@ -92,7 +92,7 @@ function DraftsTab({ kind }: { kind: "broadcast" | "announcement" }) {
       </Card>
       {isLoading && <div className="text-sm text-muted-foreground">Loading…</div>}
       <div className="space-y-2">
-        {(data ?? []).map((d: any) => (
+        {items.map((d: any) => (
           <Card key={d.id} className="p-3 space-y-2">
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
@@ -105,7 +105,7 @@ function DraftsTab({ kind }: { kind: "broadcast" | "announcement" }) {
               {d.review_status === "draft" && (
                 <Button size="sm" variant="outline" onClick={async () => {
                   try { await submit({ data: { id: d.id } });
-                    qc.invalidateQueries({ queryKey: ["media-my-drafts", kind] });
+                    qc.invalidateQueries({ queryKey: ["media-my-drafts", "broadcast"] });
                     toast.success("Submitted for review");
                   } catch (e: any) { toast.error(e?.message ?? "Failed"); }
                 }}>Submit for Review</Button>
@@ -113,7 +113,7 @@ function DraftsTab({ kind }: { kind: "broadcast" | "announcement" }) {
             </div>
           </Card>
         ))}
-        {!isLoading && (data ?? []).length === 0 && (
+        {!isLoading && items.length === 0 && (
           <div className="text-sm text-muted-foreground">No drafts yet.</div>
         )}
       </div>
