@@ -1,4 +1,5 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useEffect } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
@@ -7,10 +8,18 @@ import { toast } from "sonner";
 import { listApprovalQueue, approveItem, rejectItem } from "@/lib/media-manager.functions";
 
 export const Route = createFileRoute("/_authenticated/admin/approvals")({
-  component: ApprovalsPage,
+  component: ApprovalsRedirect,
 });
 
-function ApprovalsPage() {
+function ApprovalsRedirect() {
+  const navigate = useNavigate();
+  useEffect(() => {
+    navigate({ to: "/admin/content", search: { tab: "approvals" } as any, replace: true });
+  }, [navigate]);
+  return null;
+}
+
+export function ApprovalsPage({ embedded = false }: { embedded?: boolean } = {}) {
   const list = useServerFn(listApprovalQueue);
   const approve = useServerFn(approveItem);
   const reject = useServerFn(rejectItem);
@@ -30,10 +39,12 @@ function ApprovalsPage() {
 
   return (
     <div className="mx-auto max-w-4xl space-y-6 p-4 md:p-6">
-      <header>
-        <h1 className="text-2xl md:text-3xl font-black tracking-tight">Approvals Queue</h1>
-        <p className="text-sm text-muted-foreground">Items submitted by Media Manager awaiting review.</p>
-      </header>
+      {!embedded && (
+        <header>
+          <h1 className="text-2xl md:text-3xl font-black tracking-tight">Approvals Queue</h1>
+          <p className="text-sm text-muted-foreground">Items submitted by Media Manager awaiting review.</p>
+        </header>
+      )}
       {isLoading && <div className="text-sm text-muted-foreground">Loading…</div>}
 
       <Section title="Broadcasts" empty="No broadcast drafts awaiting review.">
