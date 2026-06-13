@@ -7372,6 +7372,54 @@ export type Database = {
           },
         ]
       }
+      pl_bulk_operations: {
+        Row: {
+          action: string
+          actor_user_id: string | null
+          created_at: string
+          created_ids: string[]
+          destination_ids: string[]
+          error_message: string | null
+          id: string
+          meta: Json
+          operation_id: string
+          scope: string
+          source_ids: string[]
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          action: string
+          actor_user_id?: string | null
+          created_at?: string
+          created_ids?: string[]
+          destination_ids?: string[]
+          error_message?: string | null
+          id?: string
+          meta?: Json
+          operation_id: string
+          scope: string
+          source_ids?: string[]
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          action?: string
+          actor_user_id?: string | null
+          created_at?: string
+          created_ids?: string[]
+          destination_ids?: string[]
+          error_message?: string | null
+          id?: string
+          meta?: Json
+          operation_id?: string
+          scope?: string
+          source_ids?: string[]
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       pl_client_maxes: {
         Row: {
           active: boolean
@@ -7518,8 +7566,13 @@ export type Database = {
       }
       pl_days: {
         Row: {
+          archived: boolean
+          archived_at: string | null
+          archived_by: string | null
           created_at: string
           day_index: number
+          deleted_at: string | null
+          deleted_by: string | null
           duration_estimate_min: number | null
           duration_override_min: number | null
           duration_source: string
@@ -7538,8 +7591,13 @@ export type Database = {
           week_id: string
         }
         Insert: {
+          archived?: boolean
+          archived_at?: string | null
+          archived_by?: string | null
           created_at?: string
           day_index: number
+          deleted_at?: string | null
+          deleted_by?: string | null
           duration_estimate_min?: number | null
           duration_override_min?: number | null
           duration_source?: string
@@ -7558,8 +7616,13 @@ export type Database = {
           week_id: string
         }
         Update: {
+          archived?: boolean
+          archived_at?: string | null
+          archived_by?: string | null
           created_at?: string
           day_index?: number
+          deleted_at?: string | null
+          deleted_by?: string | null
           duration_estimate_min?: number | null
           duration_override_min?: number | null
           duration_source?: string
@@ -8037,9 +8100,14 @@ export type Database = {
       }
       pl_weeks: {
         Row: {
+          archived: boolean
+          archived_at: string | null
+          archived_by: string | null
           block_id: string
           created_at: string
           date_source: string
+          deleted_at: string | null
+          deleted_by: string | null
           end_date: string | null
           est_minutes: number | null
           id: string
@@ -8054,9 +8122,14 @@ export type Database = {
           week_index: number
         }
         Insert: {
+          archived?: boolean
+          archived_at?: string | null
+          archived_by?: string | null
           block_id: string
           created_at?: string
           date_source?: string
+          deleted_at?: string | null
+          deleted_by?: string | null
           end_date?: string | null
           est_minutes?: number | null
           id?: string
@@ -8071,9 +8144,14 @@ export type Database = {
           week_index: number
         }
         Update: {
+          archived?: boolean
+          archived_at?: string | null
+          archived_by?: string | null
           block_id?: string
           created_at?: string
           date_source?: string
+          deleted_at?: string | null
+          deleted_by?: string | null
           end_date?: string | null
           est_minutes?: number | null
           id?: string
