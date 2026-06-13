@@ -46,6 +46,76 @@ import { enqueueOfflineWrite, registerQueueHandler } from "@/lib/workout-offline
 import { ActiveRestTimerProvider, useRestTimer } from "@/components/active-rest-timer";
 import { ExerciseHistoryButton } from "@/components/exercise-history-sheet";
 
+/* -------------------------------------------------------------------------- */
+/* Target-parsing helpers (Suggested → Draft → Confirmed fast-logging)         */
+/* -------------------------------------------------------------------------- */
+
+type RangeTarget = { exact?: number; min?: number; max?: number };
+
+function parseRepTarget(text?: string | null): RangeTarget {
+  if (!text) return {};
+  const s = String(text).trim();
+  const range = s.match(/^(\d+)\s*[-–]\s*(\d+)$/);
+  if (range) return { min: Number(range[1]), max: Number(range[2]) };
+  const n = s.match(/^(\d+)$/);
+  if (n) return { exact: Number(n[1]) };
+  return {};
+}
+
+function parseEffortTarget(text?: string | null): RangeTarget {
+  if (!text) return {};
+  const s = String(text).trim();
+  const range = s.match(/^(\d+(?:\.\d+)?)\s*[-–]\s*(\d+(?:\.\d+)?)$/);
+  if (range) return { min: Number(range[1]), max: Number(range[2]) };
+  const n = s.match(/^(\d+(?:\.\d+)?)$/);
+  if (n) return { exact: Number(n[1]) };
+  return {};
+}
+
+function repChips(t: RangeTarget): number[] {
+  if (t.exact != null) {
+    return Array.from(new Set([t.exact - 1, t.exact, t.exact + 1].filter((x) => x > 0)));
+  }
+  if (t.min != null && t.max != null) {
+    const span = t.max - t.min;
+    if (span <= 2) return Array.from({ length: span + 1 }, (_, i) => t.min! + i);
+    return [t.min, Math.round((t.min + t.max) / 2), t.max];
+  }
+  return [];
+}
+
+function rpeChips(t: RangeTarget): number[] {
+  if (t.exact != null) {
+    return [t.exact - 0.5, t.exact, t.exact + 0.5].filter((x) => x >= 5 && x <= 10);
+  }
+  if (t.min != null && t.max != null) {
+    const out: number[] = [];
+    for (let v = t.min; v <= t.max + 1e-9; v += 0.5) out.push(Math.round(v * 2) / 2);
+    return out.slice(0, 4);
+  }
+  return [];
+}
+
+function rirChips(t: RangeTarget): number[] {
+  if (t.exact != null) {
+    return [t.exact - 1, t.exact, t.exact + 1].filter((x) => x >= 0 && x <= 10);
+  }
+  if (t.min != null && t.max != null) {
+    const out: number[] = [];
+    for (let v = t.min; v <= t.max; v++) out.push(v);
+    return out.slice(0, 4);
+  }
+  return [];
+}
+
+function weightIncrement(unit: "kg" | "lb"): number {
+  return unit === "kg" ? 2.5 : 5;
+}
+
+function fmtNum(n: number): string {
+  return Number.isInteger(n) ? String(n) : String(Math.round(n * 100) / 100);
+}
+
 export const Route = createFileRoute("/_authenticated/portal/workouts/$dayId")({
   validateSearch: (s: Record<string, unknown>) => ({
     readonly: s.readonly === 1 || s.readonly === "1" || s.readonly === true ? 1 : undefined,
@@ -774,6 +844,65 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
     });
   }, [row.percentage, row.percentage_basis, row.load_kg, row.load_lb, name, maxes]);
 
+  // Resolved suggested weight in the *active display unit*. Priority:
+  // 1) coach manual_override exact load   2) computed % weight (rounded)
+  // 3) raw load_kg/load_lb prescription   4) null (no safe suggestion).
+  // This is "Suggested" only — it never auto-confirms a set.
+  const suggestedWeight: number | null = useMemo(() => {
+    if (row.manual_override) {
+      if (unit === "kg" && row.load_kg) return Number(row.load_kg);
+      if (unit === "lb" && row.load_lb) return Number(row.load_lb);
+    }
+    if (computed && computed.status === "ok" && computed.load != null) {
+      const inUnit = unit === "kg" ? computed.load : computed.load * 2.2046226218;
+      const step = weightIncrement(unit);
+      return Math.round(inUnit / step) * step;
+    }
+    if (unit === "kg" && row.load_kg) return Number(row.load_kg);
+    if (unit === "lb" && row.load_lb) return Number(row.load_lb);
+    return null;
+  }, [row.manual_override, row.load_kg, row.load_lb, computed, unit]);
+
+  const repTarget = useMemo(() => parseRepTarget(row.reps_text), [row.reps_text]);
+  const rpeTarget = useMemo(() => parseEffortTarget(row.rpe), [row.rpe]);
+  const rirTarget = useMemo(() => parseEffortTarget(row.rir), [row.rir]);
+
+  // "Apply to remaining" — runs from a completed SetRow, pushes Draft values
+  // into all later un-completed sets of this same exercise. Never overwrites
+  // a confirmed (completed_at != null) set.
+  const qc = useQueryClient();
+  const applyToRemaining = async (fromSetIndex: number, payload: { load: string; reps: string; rpe: string; unit: "kg" | "lb" }) => {
+    if (!clientId) return;
+    const loadNum = payload.load ? Number(payload.load) : null;
+    const repsNum = payload.reps ? parseInt(payload.reps, 10) : null;
+    const rpeNum = payload.rpe ? Number(payload.rpe) : null;
+    const tasks: Array<Promise<any>> = [];
+    for (let i = fromSetIndex + 1; i <= setCount; i++) {
+      const ex = existingResults.find((x) => x.set_index === i);
+      if (ex?.completed_at) continue; // never touch confirmed sets
+      const body: Record<string, any> = {
+        row_id: row.id,
+        client_id: clientId,
+        set_index: i,
+        actual_load: loadNum,
+        actual_load_unit: payload.unit,
+        entered_value: loadNum,
+        entered_unit: payload.unit,
+        actual_reps: repsNum,
+        actual_rpe: payload.rpe || null,
+        actual_rpe_num: rpeNum,
+        completed_at: null, // Draft only — must be confirmed per set
+      };
+      if (ex?.id) tasks.push(sb.from("pl_row_results").update(body).eq("id", ex.id));
+      else tasks.push(sb.from("pl_row_results").insert(body));
+    }
+    if (!tasks.length) return;
+    await Promise.all(tasks);
+    onChange();
+    qc.invalidateQueries({ queryKey: ["pl-day-results"] });
+    toast.success(`Applied to ${tasks.length} remaining set${tasks.length === 1 ? "" : "s"} as draft`);
+  };
+
   return (
     <Card className="relative overflow-hidden p-3 pl-4 sm:p-4 sm:pl-5">
       <div className={`absolute left-0 top-0 h-full w-1.5 ${accent}`} aria-hidden />
@@ -876,6 +1005,11 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
         </div>
         {Array.from({ length: setCount }).map((_, i) => {
           const existing = existingResults.find((x) => x.set_index === i + 1);
+          const prevExisting = i > 0 ? existingResults.find((x) => x.set_index === i) : undefined;
+          const hasUncompletedAfter = Array.from({ length: setCount - (i + 1) }).some((_, k) => {
+            const ex = existingResults.find((x) => x.set_index === i + 2 + k);
+            return !ex?.completed_at;
+          });
           return (
             <SetRow
               key={i}
@@ -886,8 +1020,16 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
               clientId={clientId}
               setIndex={i + 1}
               existing={existing}
+              prevExisting={prevExisting}
               targetReps={row.reps_text}
               targetRpe={row.rpe}
+              targetRir={row.rir}
+              suggestedWeight={suggestedWeight}
+              repTarget={repTarget}
+              rpeTarget={rpeTarget}
+              rirTarget={rirTarget}
+              hasUncompletedAfter={hasUncompletedAfter}
+              onApplyToRemaining={applyToRemaining}
               readonly={readonly}
               unit={unit}
               focusMode={focusMode}
@@ -1105,7 +1247,36 @@ function ExerciseNotesSheet({ open, onOpenChange, clientId, dayId, dayTitle, row
   );
 }
 
-function SetRow({ rowId, workoutId, exerciseId, exerciseName, clientId, setIndex, existing, targetReps, targetRpe, readonly = false, unit = "kg", focusMode = false, onChange, onSetCompleted }: { rowId: string; workoutId?: string | null; exerciseId?: string | null; exerciseName?: string | null; clientId: string | undefined; setIndex: number; existing?: any; targetReps?: string | null; targetRpe?: string | null; readonly?: boolean; unit?: "kg" | "lb"; focusMode?: boolean; onChange: () => void; onSetCompleted?: (setIndex: number) => void }) {
+function SetRow({
+  rowId, workoutId, exerciseId, exerciseName, clientId, setIndex, existing, prevExisting,
+  targetReps, targetRpe, targetRir, suggestedWeight,
+  repTarget, rpeTarget, rirTarget,
+  hasUncompletedAfter, onApplyToRemaining,
+  readonly = false, unit = "kg", focusMode = false, onChange, onSetCompleted,
+}: {
+  rowId: string;
+  workoutId?: string | null;
+  exerciseId?: string | null;
+  exerciseName?: string | null;
+  clientId: string | undefined;
+  setIndex: number;
+  existing?: any;
+  prevExisting?: any;
+  targetReps?: string | null;
+  targetRpe?: string | null;
+  targetRir?: string | null;
+  suggestedWeight?: number | null;
+  repTarget?: RangeTarget;
+  rpeTarget?: RangeTarget;
+  rirTarget?: RangeTarget;
+  hasUncompletedAfter?: boolean;
+  onApplyToRemaining?: (fromSetIndex: number, payload: { load: string; reps: string; rpe: string; unit: "kg" | "lb" }) => Promise<void> | void;
+  readonly?: boolean;
+  unit?: "kg" | "lb";
+  focusMode?: boolean;
+  onChange: () => void;
+  onSetCompleted?: (setIndex: number) => void;
+}) {
   const { user } = useAuth();
   const { isImpersonating, client: povClient } = useClientImpersonation();
   // Display weight is always shown in the active unit.
@@ -1274,11 +1445,47 @@ function SetRow({ rowId, workoutId, exerciseId, exerciseName, clientId, setIndex
     if (e.key === "Enter") { e.preventDefault(); (e.target as HTMLInputElement).blur(); save.flush(); }
   };
 
+  // State labels: Suggested (no draft, no confirm), Draft (typed but not all valid yet
+  // OR explicitly saved with completed_at=null), Confirmed (existing.completed_at set).
+  const isConfirmed = Boolean(existing?.completed_at);
+  const hasAnyEntry = load.length > 0 || reps.length > 0 || rpe.length > 0;
+  const isDraft = !isConfirmed && (hasAnyEntry || (existing && !existing.completed_at));
+
+  // Quick-fill helpers — these only update local state, never auto-confirm.
+  const applySuggestedWeight = () => { if (suggestedWeight != null) setLoad(fmtNum(suggestedWeight)); };
+  const bumpWeight = (delta: number) => {
+    const base = load ? Number(load) : (suggestedWeight ?? 0);
+    const next = Math.max(0, base + delta);
+    setLoad(fmtNum(Math.round(next / weightIncrement(unit)) * weightIncrement(unit)));
+  };
+  const useTargets = () => {
+    if (suggestedWeight != null) setLoad(fmtNum(suggestedWeight));
+    if (repTarget?.exact != null) setReps(String(repTarget.exact));
+    else if (repTarget?.min != null) setReps(String(repTarget.min));
+    if (rpeTarget?.exact != null) setRpe(String(rpeTarget.exact));
+    else if (rpeTarget?.min != null) setRpe(String(rpeTarget.min));
+  };
+  const copyPrevious = () => {
+    if (!prevExisting) return;
+    const pkg = unit === "kg" ? (prevExisting.actual_load_kg ?? prevExisting.actual_load) : (prevExisting.actual_load_lb ?? prevExisting.actual_load);
+    if (pkg != null) setLoad(String(pkg));
+    if (prevExisting.actual_reps != null) setReps(String(prevExisting.actual_reps));
+    const prevRpe = prevExisting.actual_rpe_num ?? prevExisting.actual_rpe;
+    if (prevRpe != null) setRpe(String(prevRpe));
+  };
+
+  const repChipValues = useMemo(() => (repTarget ? repChips(repTarget) : []), [repTarget]);
+  const rpeChipValues = useMemo(() => (rpeTarget ? rpeChips(rpeTarget) : []), [rpeTarget]);
+  const rirChipValues = useMemo(() => (rirTarget ? rirChips(rirTarget) : []), [rirTarget]);
+  const showRir = !!targetRir && !targetRpe;
+
+  const hasAnyTarget = suggestedWeight != null || repChipValues.length > 0 || rpeChipValues.length > 0 || rirChipValues.length > 0;
+
   return (
+    <div className={cn("border-t border-border/60", isConfirmed && "bg-green-500/5", isDraft && "bg-amber-500/5")}>
     <div className={cn(
       "grid items-center gap-2 border-t border-border/60 px-3 py-2",
       focusMode ? "grid-cols-[44px_1fr_1fr_1fr_64px]" : "grid-cols-[36px_1fr_1fr_1fr_56px]",
-      existing?.completed_at && "bg-green-500/5",
     )}>
       <span className={cn("font-mono text-muted-foreground", focusMode ? "text-sm" : "text-xs")}>{setIndex}</span>
       <Input
@@ -1325,8 +1532,125 @@ function SetRow({ rowId, workoutId, exerciseId, exerciseName, clientId, setIndex
       />
       <div className="flex items-center justify-end gap-1">
         {!readonly && <SaveStatus state={save.state} savedAt={save.savedAt} compact />}
-        {existing?.completed_at && <CheckCircle2 className="h-4 w-4 text-green-500" />}
+        {isConfirmed && <CheckCircle2 className="h-4 w-4 text-green-500" />}
       </div>
+    </div>
+
+    {/* Quick-fill chip row — Suggested values are visible but never auto-confirm */}
+    {!readonly && !isConfirmed && hasAnyTarget && (
+      <div className="px-3 pb-2 space-y-1.5">
+        {/* Weight quick controls */}
+        {suggestedWeight != null && (
+          <div className="flex flex-wrap items-center gap-1">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mr-1">Weight</span>
+            <button type="button" onClick={() => bumpWeight(-weightIncrement(unit))}
+              aria-label={`Decrease weight by ${weightIncrement(unit)} ${unit}`}
+              className="h-7 min-w-[36px] rounded-md border border-border bg-background px-2 text-xs font-bold hover:bg-secondary">
+              −{weightIncrement(unit)}
+            </button>
+            <button type="button" onClick={applySuggestedWeight}
+              aria-label={`Use suggested ${suggestedWeight} ${unit} — programmed target`}
+              className="h-7 rounded-md border border-primary/40 bg-primary/10 px-2 text-xs font-bold text-primary hover:bg-primary/20">
+              Use {fmtNum(suggestedWeight)} {unit}
+            </button>
+            <button type="button" onClick={() => bumpWeight(weightIncrement(unit))}
+              aria-label={`Increase weight by ${weightIncrement(unit)} ${unit}`}
+              className="h-7 min-w-[36px] rounded-md border border-border bg-background px-2 text-xs font-bold hover:bg-secondary">
+              +{weightIncrement(unit)}
+            </button>
+          </div>
+        )}
+
+        {/* Reps quick controls */}
+        {repChipValues.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mr-1">Reps</span>
+            {repChipValues.map((v) => {
+              const isTarget = repTarget?.exact === v;
+              return (
+                <button key={v} type="button" onClick={() => setReps(String(v))}
+                  aria-label={`Select ${v} reps${isTarget ? " — programmed target" : ""}`}
+                  className={cn(
+                    "h-7 min-w-[34px] rounded-md border px-2 text-xs font-bold hover:bg-secondary",
+                    isTarget ? "border-primary/40 bg-primary/10 text-primary" : "border-border bg-background",
+                  )}>
+                  {v}{isTarget && <span className="ml-1 text-[9px] font-normal opacity-70">★</span>}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* RPE quick controls */}
+        {rpeChipValues.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mr-1">RPE</span>
+            {rpeChipValues.map((v) => {
+              const isTarget = rpeTarget?.exact === v;
+              return (
+                <button key={v} type="button" onClick={() => setRpe(String(v))}
+                  aria-label={`Select RPE ${v}${isTarget ? " — programmed target" : ""}`}
+                  className={cn(
+                    "h-7 min-w-[34px] rounded-md border px-2 text-xs font-bold hover:bg-secondary",
+                    isTarget ? "border-primary/40 bg-primary/10 text-primary" : "border-border bg-background",
+                  )}>
+                  {fmtNum(v)}{isTarget && <span className="ml-1 text-[9px] font-normal opacity-70">★</span>}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* RIR quick controls (only when RIR is programmed and RPE isn't) */}
+        {showRir && rirChipValues.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mr-1">RIR</span>
+            {rirChipValues.map((v) => {
+              const isTarget = rirTarget?.exact === v;
+              return (
+                <button key={v} type="button" onClick={() => setRpe(String(Math.max(0, 10 - v)))}
+                  aria-label={`Select ${v} RIR${isTarget ? " — programmed target" : ""}`}
+                  className={cn(
+                    "h-7 min-w-[34px] rounded-md border px-2 text-xs font-bold hover:bg-secondary",
+                    isTarget ? "border-primary/40 bg-primary/10 text-primary" : "border-border bg-background",
+                  )}>
+                  {v}{isTarget && <span className="ml-1 text-[9px] font-normal opacity-70">★</span>}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Row actions */}
+        <div className="flex flex-wrap items-center gap-1 pt-0.5">
+          <Button size="sm" variant="outline" onClick={useTargets} className="h-7 px-2 text-[11px]">
+            Use Targets
+          </Button>
+          {setIndex > 1 && prevExisting?.completed_at && (
+            <Button size="sm" variant="outline" onClick={copyPrevious} className="h-7 px-2 text-[11px]">
+              Copy Previous
+            </Button>
+          )}
+        </div>
+      </div>
+    )}
+
+    {/* Apply to remaining sets (visible after this set is confirmed) */}
+    {!readonly && isConfirmed && hasUncompletedAfter && onApplyToRemaining && (
+      <div className="px-3 pb-2">
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-7 px-2 text-[11px] text-muted-foreground hover:text-foreground"
+          onClick={async () => {
+            const ok = typeof window !== "undefined" ? window.confirm("Apply this result to the remaining sets as drafts?") : true;
+            if (!ok) return;
+            await onApplyToRemaining(setIndex, { load, reps, rpe, unit });
+          }}>
+            Apply to remaining sets
+        </Button>
+      </div>
+    )}
     </div>
   );
 }
