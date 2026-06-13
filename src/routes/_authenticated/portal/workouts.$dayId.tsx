@@ -1531,6 +1531,7 @@ function SetRow({
     if (rpeTarget?.exact != null) setRpe(String(rpeTarget.exact));
     else if (rpeTarget?.min != null) setRpe(String(rpeTarget.min));
     else if (rirTarget?.exact != null) setRpe(String(Math.min(10, Math.max(0, 10 - rirTarget.exact))));
+    else if (rirTarget?.max != null) setRpe(String(Math.min(10, Math.max(0, 10 - rirTarget.max))));
     else if (rirTarget?.min != null) setRpe(String(Math.min(10, Math.max(0, 10 - rirTarget.min))));
   };
   const copyPrevious = () => {
