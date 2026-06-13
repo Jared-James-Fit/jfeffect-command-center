@@ -7,6 +7,7 @@ import { RotateCcw, Trash2, Search, Eye } from "lucide-react";
 
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
+import { SettingsTabs } from "@/components/settings/settings-tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -121,6 +122,7 @@ function ArchivesPage() {
 
   return (
     <div className="space-y-4">
+      <SettingsTabs />
       <PageHeader
         title="Archive Manager"
         subtitle="One place to view, restore, or permanently delete everything archived across the app."
