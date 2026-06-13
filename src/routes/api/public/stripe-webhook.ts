@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { createClient } from "@supabase/supabase-js";
-import { stripeFetch } from "@/lib/stripe.server";
+import { stripeFetch, getStripeKeyForMode, type StripeMode } from "@/lib/stripe.server";
 import {
   buildPromoRowFromSession,
   fetchExpandedCheckoutSession,
@@ -398,6 +398,26 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
         const obj = event?.data?.object ?? {};
         const now = new Date().toISOString();
 
+        // ── Mode-correct Stripe API key for any /v1 lookups in this event ──
+        // The webhook signature was already verified against either the LIVE
+        // or TEST secret (matchedSecret). That is the authoritative signal of
+        // which Stripe mode this event came from. NEVER fall back to the
+        // default key for a test event or vice-versa: a test-mode subscription
+        // ID does not exist in live and a live-mode subscription ID does not
+        // exist in test, so the lookup would silently 404 and we'd skip the
+        // member update entirely.
+        const eventMode: StripeMode =
+          matchedSecret === "TEST" ? "test"
+          : matchedSecret === "LIVE" ? "live"
+          : (event?.livemode === false ? "test" : "live");
+        const eventApiKey = getStripeKeyForMode(eventMode);
+        console.info("[stripe-webhook] mode resolved", {
+          eventId: event?.id ?? null,
+          eventType: event?.type ?? null,
+          eventMode,
+          keyAvailable: !!eventApiKey,
+        });
+
         // ── Duplicate-event protection ──────────────────────────────────────
         // Stripe retries delivery on any non-2xx or timeout. We dedupe by
         // event.id so repeated retries can't double-process the same event.
@@ -634,7 +654,20 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
             // ── Invoice paid (subscription renewal) ─────────────────────────
             case "invoice.payment_succeeded": {
               if (obj.subscription) {
-                const sub = await stripeFetch(`/subscriptions/${obj.subscription}`);
+                let sub: any;
+                try {
+                  sub = await stripeFetch(`/subscriptions/${obj.subscription}`, { apiKey: eventApiKey ?? undefined });
+                } catch (err: any) {
+                  console.error("[stripe-webhook] subscription.lookup.failed", {
+                    eventId: event?.id ?? null,
+                    eventType: event?.type ?? null,
+                    eventMode,
+                    subscriptionId: obj.subscription,
+                    keyAvailable: !!eventApiKey,
+                    message: err?.message ?? String(err),
+                  });
+                  throw err;
+                }
                 if (await isJfMembershipSubscription(supabase, sub)) {
                   const member = await findJfMemberBySub(supabase, sub);
                   if (member) {
@@ -672,7 +705,20 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
             // ── Invoice failed (payment issue) ──────────────────────────────
             case "invoice.payment_failed": {
               if (obj.subscription) {
-                const sub = await stripeFetch(`/subscriptions/${obj.subscription}`);
+                let sub: any;
+                try {
+                  sub = await stripeFetch(`/subscriptions/${obj.subscription}`, { apiKey: eventApiKey ?? undefined });
+                } catch (err: any) {
+                  console.error("[stripe-webhook] subscription.lookup.failed", {
+                    eventId: event?.id ?? null,
+                    eventType: event?.type ?? null,
+                    eventMode,
+                    subscriptionId: obj.subscription,
+                    keyAvailable: !!eventApiKey,
+                    message: err?.message ?? String(err),
+                  });
+                  throw err;
+                }
                 if (await isJfMembershipSubscription(supabase, sub)) {
                   const member = await findJfMemberBySub(supabase, sub);
                   if (member) {

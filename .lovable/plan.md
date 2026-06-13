@@ -1,117 +1,99 @@
-# Multi-Select & Bulk Actions for Program Builders
+# JF Effect Membership — Launch Readiness Implementation Plan
 
-One shared selection + bulk-action system used by:
-- Program Library template builder (`admin/program-library_.$templateId.tsx`)
-- Client program builder (`admin/client-programs.$clientId_.tsx`)
-- Client-assigned training block / Full Block view (`admin/blocks.$blockId.tsx`)
-- Weekly builder view inside the above
+This is a fix-and-harden pass on the existing membership stack. No rebuilds. No destructive migrations. Every change is additive or surgical, and the default posture is "do nothing real" (dry-run notifications, draft legal docs, test-mode QA only).
 
-Nothing in the existing builder behavior (sticky week header, autosave delay, Full Block / Full Screen / Weekly modes, per-exercise reset, drag-and-drop, copy-to-future, kg/lb, suggested loads, analytics) changes.
+## Guiding Safety Rules (apply to every phase)
 
----
+- Never charge a real card, never touch live Stripe products/prices, never cancel a live subscription, never clear Stripe IDs, never revoke an existing member's access.
+- Notifications default to `dry_run` — no real SMS/email goes out during this work or QA.
+- Legal documents stay in `draft` until you explicitly publish them.
+- The cross-account member flagged in the audit is never auto-modified.
+- All time math uses server timestamps (`now()` in SQL, server-fn `Date.now()`), never browser timers.
 
-## Scope of this plan
+## Phase 0 — Read-only reconnaissance (no code yet)
 
-This is a large, multi-area change. I want your sign-off before writing code. I'll ship it in **3 PRs** in the order below — each PR leaves the app fully working.
+Before writing, I read the actual current shape of:
 
-### PR 1 — Foundation (schema + server functions + Undo)
-- DB migration:
-  - `pl_weeks`: add `archived boolean default false`, `archived_at`, `archived_by`, `deleted_at`, `deleted_by`.
-  - `pl_days`: same set of columns.
-  - `pl_bulk_operations` audit table (operation_id, action, scope, source_ids, destination_ids, created_ids, actor, status, created_at) for idempotency + Undo metadata.
-  - Indexes on `(block_id, archived, deleted_at)` and `(week_id, archived, deleted_at)`.
-  - RLS: same policies as parent rows; soft-deleted rows hidden from default selects via updated coach/admin policies.
-- New file `src/lib/pl-bulk.functions.ts` (TanStack server functions, `requireSupabaseAuth`, role check via `has_role` / `is_assigned_coach`):
-  - `bulkDuplicateWeeks({ blockId, weekIds, insertMode, anchorWeekId? })`
-  - `bulkDuplicateDays({ sourceDayIds, targetWeekIds, insertMode, anchorDayId? })`
-  - `bulkCopyWeeksToDestinations({ weekIds, destinations:[{kind, id, insertMode, anchor?}] })`
-  - `bulkCopyDaysToDestinations({ dayIds, destinations:[{weekId, insertMode, anchor?}] })`
-  - `bulkArchive({ scope:"week"|"day", ids })` / `bulkRestore` / `bulkSoftDelete` / `bulkRestoreFromTrash` / `bulkPermanentDelete`
-  - All run inside one Postgres function (`pl_bulk_clone_weeks`, `pl_bulk_clone_days`, etc.) so a single failure rolls back the whole operation.
-  - Idempotency: client passes `operationId` (uuid); server rejects duplicates via `pl_bulk_operations.operation_id` unique index.
-  - Cloning strictly excludes client history: never touches `pl_row_results`, `pl_day_completions`, `lift_videos`, `manual_check_in_reviews`, `pl_client_maxes`, analytics. Copy fields are limited to programming columns on `pl_weeks` / `pl_days` / `pl_exercise_rows` / `pl_exercise_notes`.
-  - Permanent-delete guard: server function checks for any `pl_row_results` / `pl_day_completions` rows under the targets; if found, returns `{ blocked: true, reason: "has_client_history" }` and the UI offers Archive instead.
-- New `src/lib/bulk-undo.ts` (thin wrapper around existing global Undo system used by the builder — if none exists, a shared `useBulkUndoStore` Zustand store with one compound entry per operation; survives refresh by reading `pl_bulk_operations` rows from the last 24h).
+- `src/routes/api/public/stripe-webhook.ts` — to find the `invoice.payment_*` handlers and the `stripeFetch` / `resolveStripeKey` helpers.
+- `src/lib/stripe.server.ts`, `src/lib/stripe-checkout.functions.ts`, `src/lib/jf-billing.functions.ts`, `src/lib/member-checkout.functions.ts`.
+- `src/routes/join.tsx`, `src/routes/_authenticated/m/billing.tsx`, `src/routes/_authenticated/m/upgrade.tsx`, `src/routes/_authenticated/admin/` membership pages.
+- `src/lib/legal.functions.ts`, `src/lib/agreements.functions.ts`, `src/routes/legal.$slug.tsx`, `src/routes/terms.tsx`, `src/routes/privacy.tsx`.
+- Tables: `app_members`, `member_access`, `jf_membership_settings`, `jf_billing_events`, `jf_pending_signups`, `legal_documents`, `legal_document_versions`, `legal_acceptances`, `app_settings`.
 
-### PR 2 — Shared selection UI (used by all three builder routes)
-- New `src/components/builder/selection-provider.tsx`:
-  - Context: `scope: "off" | "weeks" | "days"`, `selectedIds: Set<string>`, last-clicked anchor for shift-range.
-  - Switching scope clears selection. Autosave does NOT clear selection.
-  - Persists across scroll, settings panels, Full Screen toggle. Clears on route leave or explicit Clear/Done.
-- New `src/components/builder/selection-toolbar.tsx`:
-  - "Select" button + scope toggle (Weeks / Days), "Select all", "Clear", "Exit".
-  - Live count: "3 weeks selected" / "5 training days selected".
-- New `src/components/builder/bulk-action-bar.tsx` (sticky bottom on mobile, sticky top-of-canvas on desktop):
-  - Weeks scope: Duplicate · Copy to… · Archive · Trash (delete) · Clear.
-  - Days scope: Duplicate · Copy to… · Archive · Trash · Clear.
-  - Destructive actions visually separated (right-aligned, destructive variant).
-- New `src/components/builder/SelectableWeekHeader.tsx` and `SelectableDayHeader.tsx`:
-  - Render checkbox + selected ring/background when scope is on; identical visuals across all three routes.
-  - Click / Shift-click range / Cmd-Ctrl toggle on desktop; large tap target on mobile (no modifiers required).
-  - Does not interfere with rename, drag, week notes, copy-to-future, day settings — those controls are wrapped in `data-no-select` and ignored by the selection handler.
-- New `src/components/builder/destination-modal.tsx` (one modal used by Copy to…):
-  - Destination tabs: Template library · Client program · Client block · New template.
-  - Search by program/template/block/client name (debounced server-side function).
-  - Multi-destination chips with per-destination insert-position picker.
-  - Summary screen: "Copy 2 weeks to 3 programs?" with what-will-not-be-copied notice.
-- New `src/components/builder/duplicate-position-popover.tsx`: After / Before / End / Choose week.
-- New `src/components/builder/trash-archive-filters.tsx`: Active / Archived / Trash tabs in the builder header.
-- New `src/components/builder/keyboard-shortcuts.ts` integration: S, A, Esc, Shift-click, Delete, Cmd/Ctrl-D. Hooks into the existing builder shortcuts dialog rather than creating a second one. Ignored while typing.
+Goal: confirm exact column names, helper signatures, and existing patterns so every new piece reuses what's already there.
 
-### PR 3 — Wire into each builder + QA
-- `program-library_.$templateId.tsx`, `blocks.$blockId.tsx`, `client-programs.$clientId_.tsx`:
-  - Wrap canvas in `<SelectionProvider>`.
-  - Replace existing week / day header containers with `SelectableWeekHeader` / `SelectableDayHeader`.
-  - Mount `<SelectionToolbar>` next to existing builder controls, `<BulkActionBar>` once at the bottom.
-  - Add Active / Archived / Trash filter chips.
-- Conflict handling in copies: server returns `{ conflicts: [...] }`; UI prompts Insert as new (default with "Copy of …" rename) · Rename · Choose another location · Cancel.
-- Sonner toasts for every operation with one-tap Undo; Undo restores prior order, prior week numbers, prior archive/trash state, removes only newly-created clone IDs.
-- Idempotency: action buttons disable while in-flight; per-click `operationId` UUID generated up front.
+## Phase 1 — Stripe webhook key-mode bug (Section 1)
 
----
+Single, narrow fix to `stripe-webhook.ts`:
 
-## Items I'm proceeding with as defaults (call out anything you want changed)
+- In the `invoice.payment_succeeded` and `invoice.payment_failed` handlers, derive `mode = event.livemode ? 'live' : 'test'` and pass the matching key (via the existing `resolveStripeKey`) to the subscription fetch.
+- Add three server logs per event: `event.mode`, `selected.key.mode`, and a structured `subscription.lookup.failed` on error. Never log key material.
+- Preserve signature verification, `processed_stripe_events` idempotency, `jf_billing_events` writes, and entitlement updates.
 
-1. **Renumbering after duplication**: keep current builder rule (sequential week_index / day_index renumber within parent). Inserted copies labeled "Copy of Week N".
-2. **Archive vs Trash UX**: two separate filters (Active default, Archived, Trash). Archive is reversible without expiry. Trash auto-empties after 30 days for template-only items with no client history; items with history can never be permanently deleted (Archive only).
-3. **Permission rules**: admins see everything; coaches only see clients where `is_assigned_coach(clientId)` is true and only see templates they own or that are shared. Enforced in every bulk server function — not just in UI.
-4. **Multi-destination copy**: all-or-nothing transaction at the destination level — if one destination fails, the whole multi-destination operation rolls back and the toast surfaces which destination failed.
-5. **Undo window**: 24h server-side via `pl_bulk_operations`; toast Undo for ~10s, then user can find recent ops in the Trash/Archive panel's "Recent operations" list.
-6. **Cmd/Ctrl-D mapping**: only when selection mode is active and focus isn't in an input.
-7. **Mobile**: bulk action bar pinned above the bottom nav, never under it; destination modal is full-sheet on mobile.
+## Phase 2 — Notification safety mode (Sections 2 + 3)
 
----
+Schema (one migration):
 
-## Files touched (high-level)
+- Insert default row in `app_settings` with key `jf_membership_notifications`, JSON `{ mode: "dry_run", allowed_emails: [], allowed_phones: [], updated_at, updated_by }`.
+- New table `jf_notification_attempts` (id, definition_key, recipient_user_id, channel, recipient_address, rendered_subject, rendered_body, dedupe_key, mode, status: `dry_run|sent|suppressed_allowlist|suppressed_legal|error`, suppression_reason, stripe_event_id nullable, created_at). RLS: admin-only read; grants for `authenticated` SELECT to own rows; `service_role` ALL.
+- Seed inactive lifecycle definition rows (in `sms_automations` if that's the canonical store, otherwise a new `jf_lifecycle_notifications` table — Phase 0 decides which) for: `subscription_trial_ending`, `subscription_payment_succeeded`, `subscription_payment_failed`, `subscription_cancelled`, `subscription_ended`, `subscription_frozen`, `subscription_hold_plan`, `subscription_reactivated`. All `active = false`.
 
-```text
-supabase/migrations/<ts>_pl_bulk_selection.sql      # new
-src/lib/pl-bulk.functions.ts                        # new
-src/lib/pl-bulk.server.ts                           # new (admin-side helpers)
-src/lib/bulk-undo.ts                                # new
-src/components/builder/selection-provider.tsx       # new
-src/components/builder/selection-toolbar.tsx        # new
-src/components/builder/bulk-action-bar.tsx          # new
-src/components/builder/SelectableWeekHeader.tsx     # new
-src/components/builder/SelectableDayHeader.tsx     # new
-src/components/builder/destination-modal.tsx        # new
-src/components/builder/duplicate-position-popover.tsx # new
-src/components/builder/trash-archive-filters.tsx    # new
-src/components/builder/keyboard-shortcuts.ts        # new (extends existing dialog)
-src/routes/_authenticated/admin/program-library_.$templateId.tsx  # wire in
-src/routes/_authenticated/admin/blocks.$blockId.tsx               # wire in
-src/routes/_authenticated/admin/client-programs.$clientId_.tsx    # wire in
-```
+Code:
 
-No changes to autosave delay, sticky week header, per-exercise reset, kg/lb, suggested loads, drag-and-drop, copy-to-future, or analytics.
+- `src/lib/jf-notify.server.ts` — single `sendMembershipNotification({ definitionKey, userId, payload, dedupeKey })` that: loads the definition, renders, checks safety mode, records attempt, and only calls the real SMS/email provider in `live` mode (and only for allowlist matches in `allowlist` mode).
+- Admin UI: Membership Settings → "Notification Safety" panel with mode selector, allowlist editors, dry-run attempt log, and a red banner when mode = `live`. Switching to `live` requires a typed confirmation.
+- Wire the existing active purchase notification through this gate before changing anything else.
 
----
+## Phase 3 — Subscription lifecycle handlers (Sections 4 + 6 + 7)
 
-## What I need from you before I start
+- `customer.subscription.deleted` handler: on verified delete, set member `subscription_status = 'canceled'`, revoke paid `member_access` rows tagged `source = 'paid'`, write `jf_billing_events` row, fire inactive `subscription_ended` through the safety gate. Idempotent via `processed_stripe_events`.
+- Failed-payment grace: add `payment_grace_period_days` (default 5) and `first_payment_failure_at` to settings/member. On `invoice.payment_failed`: set `subscription_status = 'past_due'`, stamp `first_payment_failure_at = now()` if null, KEEP access. On `invoice.payment_succeeded`: clear failure stamp, return to `active`. A new server fn `enforceGracePeriodExpiries` (called from `/api/public/hooks/scheduled-send-worker.ts` cron path that already runs) revokes paid access for any member whose `first_payment_failure_at + grace_days < now()` and status is still `past_due`.
+- Keep vs Restart: `keepMembership` server fn calls `stripe.subscriptions.update(id, { cancel_at_period_end: false })` — only if subscription still exists. `restartMembership` server fn does a fresh Stripe Checkout reusing the existing `app_members` row and Stripe customer when valid; never creates duplicate user/member rows; rejects if any active/trialing/cancel_at_period_end subscription already exists.
 
-1. Approve the 3-PR sequence (Foundation → Shared UI → Wire-in + QA). Each PR ships independently.
-2. Approve the defaults in the section above, or tell me what to change.
-3. Confirm "Trash auto-empties after 30 days for template-only items" — or you'd rather keep Trash forever until manually emptied.
-4. Confirm Undo window of 24h is acceptable (vs 7d).
+## Phase 4 — Legal launch gate (Sections 8 + 9 + 10)
 
-Reply "go" (with any default overrides) and I'll start with PR 1.
+- Migration: ensure `legal_documents` has rows for `terms_of_service`, `privacy_policy`, `membership_agreement` with at least one `draft` version each (titled "Draft — pending professional review"). No publish.
+- New `legal_acceptances` writes happen server-side inside the checkout server fn. The fn rejects when: any required doc has no published current version, or the submitted version IDs don't match the current published ones, or the user didn't tick the boxes.
+- `/terms`, `/privacy`, `/membership-agreement` routes load via a public server fn that reads only `status='published'` versions. When none exist: render a controlled "This document is being finalized — checkout is disabled" page. Drafts are never publicly accessible.
+- A `legalLaunchGate()` helper returns `{ ready: boolean, blockers: string[] }` and is consulted by checkout creation AND by the Launch Readiness panel.
+
+## Phase 5 — Restart / Billing UI (Sections 5 + 6 + 16)
+
+- `/m/billing` becomes a state-machine: Trialing, Active, Past Due (within grace), Past Due (expired), Canceling, Canceled, Expired, Hold, Paused, Complimentary. Each state renders the correct CTA set:
+  - Canceling → "Keep Membership" + "Manage Billing"
+  - Canceled/Expired → "Restart Membership"
+  - Past Due (in grace) → banner with grace end date + "Update Payment Method"
+  - Past Due (expired) → restricted view + "Update Payment Method" / "Restart Membership"
+  - Complimentary → no billing CTAs, "Contact Support" only
+- `/join`: minimal edits only — wire legal checkboxes to server-validated acceptance, gate the Subscribe button on `legalLaunchGate().ready`, replace any fake support address with the configured one or hide. Preserve all hero/sales copy, features, testimonials, FAQ, monthly pricing, 3-day trial. Annual stays hidden.
+
+## Phase 6 — Settings + Admin readiness (Sections 11 + 12 + 13 + 14 + 15 + 17)
+
+- Migration adds to `jf_membership_settings`: `support_email text`, `payment_grace_period_days int default 5`, `monthly_price_id text`, `stripe_mode text`. Required-field validation on admin save.
+- `member_access.source` column: enum-like text default `'unknown'` with allowed values `paid|complimentary|legacy|admin|unknown`. Backfill ONLY where source is unambiguous (existing complimentary grants → `complimentary`; rows tied to a verified Stripe subscription → `paid`). Everything else stays `unknown` for manual review.
+- Cleanup cron in `/api/public/hooks/scheduled-send-worker.ts`: delete `jf_pending_signups` where `expires_at < now()` AND no checkout completed. Log counts to a new `jf_cleanup_runs` table (or reuse `worker_runs`). Never log passwords.
+- Stripe sync safety: when `stripeFetch` returns "No such customer/subscription" for a member with non-null Stripe refs, set `member.sync_warning_at = now()` and `sync_warning_reason`, surface in Admin "Manual Review" without overwriting any IDs or revoking access.
+- Admin Membership → "Launch Readiness" tab with live checks listed in spec Section 11. Final status = `Not ready to sell` | `Ready for test-mode QA` | `Ready for live launch`. `Ready for live launch` is impossible while any required legal doc is unpublished.
+- Admin Membership additional panels: recent billing events, failed-payment members, in-grace, grace-expired, webhook status, sync warnings, dry-run notification log, legal blockers, complimentary members, expired-eligible-to-restart.
+
+## Phase 7 — QA (Sections 19 + 20)
+
+- Manual test-mode QA against a clearly-marked test customer using Stripe test keys via the existing test-key path. Live settings untouched.
+- Responsive QA at the 5 viewports for /join, legal acceptance, /m/billing, cancellation, Keep/Restart, failed-payment banner, Admin Launch Readiness.
+
+## Technical Notes
+
+- One migration per phase to keep approvals reviewable; never combine schema changes with destructive data ops.
+- All new server fns use `requireSupabaseAuth` and check `has_role(_user_id, 'admin')` for admin-only operations.
+- All new tables get GRANT statements in the same migration (per project rules).
+- `supabaseAdmin` is loaded inside handlers only.
+- Notification provider calls are wrapped in the safety gate — there is no direct provider call path that bypasses it.
+
+## What I Need From You Before I Start
+
+1. **Confirm the phasing**: ship Phase 1 (webhook bug) first as its own change so it's reviewable in isolation, then proceed phase by phase? Or batch Phases 1–3 as the "billing safety" PR and 4–6 as the "launch gate" PR?
+2. **Lifecycle notification storage**: existing `sms_automations` table appears to handle automations. Reuse it (add new keys, default inactive) or create a dedicated `jf_lifecycle_notifications` table? I'll default to **reuse `sms_automations`** unless you say otherwise.
+3. **`/membership-agreement` route slug**: confirm `/membership-agreement` is fine, or do you prefer `/legal/membership-agreement` to sit alongside `/legal/$slug`?
+4. **Support email at launch**: I'll leave the field blank and surface it as a Launch Readiness blocker. You enter it in Admin → Membership Settings when you've decided. Confirm.
+
+Once you confirm (or just say "go with your defaults"), I'll start Phase 0 reconnaissance and ship Phase 1 immediately.
