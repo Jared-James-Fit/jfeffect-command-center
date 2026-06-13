@@ -1,5 +1,5 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
@@ -16,11 +16,19 @@ import { Plus, Copy, Archive, Trash2, Pencil, Flame, Star, Loader2 } from "lucid
 import { toast } from "sonner";
 import { listWarmupProtocols, WARMUP_CATEGORIES, type WarmupProtocol, type WarmupSection } from "@/lib/warmups";
 
-export const Route = createFileRoute("/_authenticated/admin/warmup-protocols")({ component: WarmupProtocolsAdmin });
+export const Route = createFileRoute("/_authenticated/admin/warmup-protocols")({ component: WarmupRedirect });
+
+function WarmupRedirect() {
+  const navigate = useNavigate();
+  useEffect(() => {
+    navigate({ to: "/admin/programming", search: { tab: "warmups" } as any, replace: true });
+  }, [navigate]);
+  return null;
+}
 
 const sb = supabase as any;
 
-function WarmupProtocolsAdmin() {
+export function WarmupProtocolsAdmin({ embedded = false }: { embedded?: boolean } = {}) {
   const qc = useQueryClient();
   const [includeArchived, setIncludeArchived] = useState(false);
   const [editing, setEditing] = useState<WarmupProtocol | null>(null);
@@ -84,10 +92,10 @@ function WarmupProtocolsAdmin() {
 
   return (
     <>
-      <PageHeader
+      {!embedded && <PageHeader
         title="Warm-Up Protocols"
         subtitle="Build warm-up templates. Auto-detect applies powerlifting warm-up when squat/bench/deadlift variations are programmed."
-      />
+      />}
       <div className="p-4 md:p-8 space-y-4 pb-32">
         <div className="flex flex-wrap items-center gap-2">
           <Button onClick={() => setCreating(true)}><Plus className="h-4 w-4" /> New Protocol</Button>
