@@ -19,7 +19,8 @@ export type ReviewStatus =
   | "sending"
   | "sent"
   | "delivery_failed"
-  | "archived";
+  | "archived"
+  | "no_response";
 
 export type AiStatus = "pending" | "processing" | "ready" | "failed" | "skipped";
 export type ReviewPriority = "low" | "normal" | "high" | "urgent";
@@ -138,6 +139,7 @@ export const REVIEW_STATUS_LABELS: Record<ReviewStatus, string> = {
   sent: "Sent",
   delivery_failed: "Delivery failed",
   archived: "Archived",
+  no_response: "No response needed",
 };
 
 export const REVIEW_STATUS_TONE: Record<ReviewStatus, string> = {
@@ -152,6 +154,7 @@ export const REVIEW_STATUS_TONE: Record<ReviewStatus, string> = {
   sent:             "bg-muted text-muted-foreground border-border",
   delivery_failed:  "bg-destructive/15 text-destructive border-destructive/40",
   archived:         "bg-muted text-muted-foreground border-border",
+  no_response:      "bg-muted text-muted-foreground border-border",
 };
 
 export const AI_STATUS_LABELS: Record<AiStatus, string> = {
