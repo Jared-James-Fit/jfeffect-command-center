@@ -8,14 +8,14 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { UserAvatar } from "@/components/user-avatar";
 import { cn } from "@/lib/utils";
-import { ChevronLeft, Plus, Settings2, Users, Archive, Trash2, CheckSquare, X } from "lucide-react";
+import { ChevronLeft, Plus, Settings2, Users, Archive, Trash2, CheckSquare, X, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import {
   listMyGroups, listAllGroupsForAdmin, listMyGroupMemberships,
   listGroupMemberProfiles, type GroupMemberProfile,
   type ChatGroup,
 } from "@/lib/group-chats";
-import { deleteGroupChats } from "@/lib/group-chats.functions";
+import { deleteGroupChats, updateGroupChat } from "@/lib/group-chats.functions";
 import { GroupMessageThread } from "@/components/group-message-thread";
 import { CreateGroupDialog } from "@/components/create-group-dialog";
 import { ManageGroupDialog } from "@/components/manage-group-dialog";
@@ -32,6 +32,7 @@ export function GroupChatsPane({ asAdmin }: { asAdmin: boolean }) {
   const [selectMode, setSelectMode] = useState(false);
   const [checked, setChecked] = useState<Record<string, true>>({});
   const deleteGroupsFn = useServerFn(deleteGroupChats);
+  const renameGroupFn = useServerFn(updateGroupChat);
   const isAdmin = role === "admin";
 
   const { data: groups = [] } = useQuery({
@@ -130,6 +131,19 @@ export function GroupChatsPane({ asAdmin }: { asAdmin: boolean }) {
   const myPresenceRole: "admin" | "coach" | "client" | "member" =
     role === "admin" ? "admin" : role === "coach" ? "coach" : "client";
   const { liveCount } = useGroupPresence(selected?.id ?? null, myPresenceRole);
+
+  const renameGroup = async () => {
+    if (!selected) return;
+    const next = window.prompt("Rename group chat", selected.name)?.trim();
+    if (!next || next === selected.name) return;
+    try {
+      await renameGroupFn({ data: { group_id: selected.id, name: next } as any });
+      toast.success("Group renamed");
+      qc.invalidateQueries({ queryKey: ["chat-groups"] });
+    } catch (e: any) {
+      toast.error(e?.message ?? "Could not rename group");
+    }
+  };
 
   return (
     <div className="flex h-full min-h-0 w-full">
@@ -252,7 +266,20 @@ export function GroupChatsPane({ asAdmin }: { asAdmin: boolean }) {
                 <Users className="h-4 w-4" />
               </div>
               <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-bold">{selected.name}</div>
+                <div className="flex items-center gap-1.5">
+                  <span className="truncate text-sm font-bold">{selected.name}</span>
+                  {(asAdmin || isAdminOfGroup) && (
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-6 w-6 shrink-0 text-muted-foreground hover:text-foreground"
+                      title="Rename group"
+                      onClick={renameGroup}
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
+                </div>
                 <div className="truncate text-[11px] text-muted-foreground">
                   {liveCount > 0 ? (
                     <span className="inline-flex items-center gap-1.5">
