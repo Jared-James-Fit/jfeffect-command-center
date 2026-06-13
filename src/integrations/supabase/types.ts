@@ -7469,6 +7469,75 @@ export type Database = {
           },
         ]
       }
+      pl_assignment_operations: {
+        Row: {
+          actor_user_id: string | null
+          client_id: string
+          created_at: string
+          created_block_ids: string[]
+          error_message: string | null
+          id: string
+          idempotency_key: string
+          mode: string
+          prep_id: string | null
+          selected_block_keys: string[]
+          status: string
+          template_id: string
+          template_payload_revision: number | null
+          template_schema_version: number | null
+          updated_at: string
+        }
+        Insert: {
+          actor_user_id?: string | null
+          client_id: string
+          created_at?: string
+          created_block_ids?: string[]
+          error_message?: string | null
+          id?: string
+          idempotency_key: string
+          mode: string
+          prep_id?: string | null
+          selected_block_keys?: string[]
+          status?: string
+          template_id: string
+          template_payload_revision?: number | null
+          template_schema_version?: number | null
+          updated_at?: string
+        }
+        Update: {
+          actor_user_id?: string | null
+          client_id?: string
+          created_at?: string
+          created_block_ids?: string[]
+          error_message?: string | null
+          id?: string
+          idempotency_key?: string
+          mode?: string
+          prep_id?: string | null
+          selected_block_keys?: string[]
+          status?: string
+          template_id?: string
+          template_payload_revision?: number | null
+          template_schema_version?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pl_assignment_operations_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pl_assignment_operations_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "pl_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pl_blocks: {
         Row: {
           archived: boolean
@@ -10732,6 +10801,25 @@ export type Database = {
         Returns: number
       }
       ping_client_activity: { Args: { _route?: string }; Returns: undefined }
+      pl_assign_template_blocks_atomic: {
+        Args: {
+          _blocks: Json
+          _client_id: string
+          _create_prep: boolean
+          _expected_template_revision: number
+          _idempotency_key: string
+          _mode: string
+          _prep_title: string
+          _selected_block_keys: string[]
+          _template_id: string
+        }
+        Returns: {
+          created_block_ids: string[]
+          operation_id: string
+          prep_id: string
+          was_idempotent: boolean
+        }[]
+      }
       pl_recompute_block_status: {
         Args: { _block_id: string }
         Returns: string
