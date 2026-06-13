@@ -639,10 +639,15 @@ export function StructureCanvas({ type, payload, setP, exercises, appendRowToFir
         <div className="h-5 w-px bg-border" />
         <button
           onClick={() => setPrefs({ compact: !compact })}
-          className={cn("inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-semibold transition", compact ? "border-primary bg-primary text-primary-foreground" : "border-border text-muted-foreground hover:text-foreground")}
+          className={cn(
+            "inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-semibold transition",
+            compact
+              ? "border-green-600 bg-green-600 text-white hover:bg-green-700 hover:border-green-700"
+              : "border-red-500 bg-red-500 text-white hover:bg-red-600 hover:border-red-600"
+          )}
           title="Toggle compact mode"
         >
-          <Rows3 className="h-3 w-3" /> Compact
+          <Rows3 className="h-3 w-3" /> {compact ? "Compact On" : "Compact Off"}
         </button>
         <div className="h-5 w-px bg-border" />
         <div className="inline-flex items-center gap-0.5 rounded-md border border-border p-0.5">
