@@ -304,6 +304,13 @@ function BlockEditor() {
     }
   };
 
+  // Restore the coach's vertical scroll for this block. Scoped per
+  // user + block id, gated on hydration so the saved position is meaningful.
+  useScrollRestoration({
+    key: `block:${blockId}`,
+    ready: !!tree && !!payload,
+  });
+
   if (isLoading || !tree || !payload) {
     return <div className="p-8 text-sm text-muted-foreground">Loading block…</div>;
   }
