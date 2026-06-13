@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -18,8 +18,16 @@ import { buildCleanVimeoEmbedUrl, vimeoUrlFromId, MIGRATION_STATUSES } from "@/l
 import { ExerciseWarmupDialog } from "@/components/exercise-warmup-dialog";
 
 export const Route = createFileRoute("/_authenticated/admin/exercises")({
-  component: ExercisesAdmin,
+  component: ExercisesRedirect,
 });
+
+function ExercisesRedirect() {
+  const navigate = useNavigate();
+  useEffect(() => {
+    navigate({ to: "/admin/programming", search: { tab: "exercises" } as any, replace: true });
+  }, [navigate]);
+  return null;
+}
 
 const CATEGORIES = ["Squat", "Bench", "Deadlift", "Upper Body", "Lower Body", "Back", "Chest", "Shoulders", "Arms", "Glutes", "Core", "Mobility", "Warm-Ups", "Powerlifting", "Bodybuilding", "Cardio"];
 
@@ -35,7 +43,7 @@ const MIGRATION_FILTERS: { value: string; label: string }[] = [
   { value: "still_youtube_client", label: "Still YouTube client-facing" },
 ];
 
-function ExercisesAdmin() {
+export function ExercisesAdmin({ embedded = false }: { embedded?: boolean } = {}) {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -88,7 +96,7 @@ function ExercisesAdmin() {
 
   return (
     <>
-      <PageHeader
+      {!embedded && <PageHeader
         title="Exercise Library"
         subtitle={`${exercises.length} exercises · ${stillYouTubeCount} still serving YouTube to clients`}
         actions={
@@ -101,7 +109,19 @@ function ExercisesAdmin() {
             <NewExerciseDialog onClose={() => setOpen(false)} onCreated={() => qc.invalidateQueries({ queryKey: ["exercises"] })} />
           </Dialog>
         }
-      />
+      />}
+      {embedded && (
+        <div className="flex justify-end px-6 pt-4 md:px-8">
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+              <Button className="bg-gradient-primary font-bold uppercase tracking-wide">
+                <Plus className="mr-2 h-4 w-4" /> Add exercise
+              </Button>
+            </DialogTrigger>
+            <NewExerciseDialog onClose={() => setOpen(false)} onCreated={() => qc.invalidateQueries({ queryKey: ["exercises"] })} />
+          </Dialog>
+        </div>
+      )}
       <div className="space-y-4 p-6 md:p-8">
         <div className="sticky top-0 z-20 -mx-6 md:-mx-8 -mt-6 md:-mt-8 px-6 md:px-8 py-3 bg-background/80 backdrop-blur-md border-b border-border/50 shadow-sm">
           <div className="flex flex-wrap gap-3">
