@@ -159,7 +159,7 @@ export function AdminLiftVideos({ embedded = false, initialOpen }: { embedded?: 
   // Deep-link: ?open=<videoId> from dashboard / notifications.
   // Auto-select that submission and clear the param.
   useEffect(() => {
-    const target = search_.open;
+    const target = openParam;
     if (!target || videos.length === 0) return;
     const v = videos.find((x) => x.id === target);
     if (!v) return;
@@ -172,8 +172,8 @@ export function AdminLiftVideos({ embedded = false, initialOpen }: { embedded?: 
       : `c:${v.client_id}|${day ?? ""}|${v.date_performed ?? v.created_at.slice(0, 10)}`;
     setOpenKey(key);
     setActiveClipId(v.id);
-    navigate({ search: { open: undefined }, replace: true }).catch(() => {});
-  }, [search_.open, videos]);
+    setOpenParam(undefined);
+  }, [openParam, videos, filter]);
 
   const openSub = openKey ? submissions.find((s) => s.key === openKey) ?? null : null;
   const activeClip: LiftVideo | null =
