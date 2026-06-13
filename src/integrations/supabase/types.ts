@@ -4454,6 +4454,367 @@ export type Database = {
         }
         Relationships: []
       }
+      legal_acceptance_requirements: {
+        Row: {
+          active: boolean
+          audience: Database["public"]["Enums"]["legal_audience"]
+          block_workflows: boolean
+          created_at: string
+          id: string
+          selected_form_ids: string[]
+          selected_offer_ids: string[]
+          selected_user_ids: string[]
+          updated_at: string
+          version_id: string
+        }
+        Insert: {
+          active?: boolean
+          audience: Database["public"]["Enums"]["legal_audience"]
+          block_workflows?: boolean
+          created_at?: string
+          id?: string
+          selected_form_ids?: string[]
+          selected_offer_ids?: string[]
+          selected_user_ids?: string[]
+          updated_at?: string
+          version_id: string
+        }
+        Update: {
+          active?: boolean
+          audience?: Database["public"]["Enums"]["legal_audience"]
+          block_workflows?: boolean
+          created_at?: string
+          id?: string
+          selected_form_ids?: string[]
+          selected_offer_ids?: string[]
+          selected_user_ids?: string[]
+          updated_at?: string
+          version_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "legal_acceptance_requirements_version_id_fkey"
+            columns: ["version_id"]
+            isOneToOne: false
+            referencedRelation: "legal_document_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      legal_acceptances: {
+        Row: {
+          accepted_at: string
+          acknowledgement_text: string
+          checkbox_checked: boolean
+          client_id: string | null
+          context: Database["public"]["Enums"]["legal_acceptance_context"]
+          context_ref: string | null
+          created_at: string
+          document_id: string
+          id: string
+          ip_address: unknown
+          rendered_snapshot: string | null
+          revoked_at: string | null
+          revoked_reason: string | null
+          signature_method: Database["public"]["Enums"]["legal_signature_method"]
+          superseded_by: string | null
+          typed_name: string | null
+          user_agent: string | null
+          user_id: string
+          version_id: string
+        }
+        Insert: {
+          accepted_at?: string
+          acknowledgement_text: string
+          checkbox_checked?: boolean
+          client_id?: string | null
+          context: Database["public"]["Enums"]["legal_acceptance_context"]
+          context_ref?: string | null
+          created_at?: string
+          document_id: string
+          id?: string
+          ip_address?: unknown
+          rendered_snapshot?: string | null
+          revoked_at?: string | null
+          revoked_reason?: string | null
+          signature_method: Database["public"]["Enums"]["legal_signature_method"]
+          superseded_by?: string | null
+          typed_name?: string | null
+          user_agent?: string | null
+          user_id: string
+          version_id: string
+        }
+        Update: {
+          accepted_at?: string
+          acknowledgement_text?: string
+          checkbox_checked?: boolean
+          client_id?: string | null
+          context?: Database["public"]["Enums"]["legal_acceptance_context"]
+          context_ref?: string | null
+          created_at?: string
+          document_id?: string
+          id?: string
+          ip_address?: unknown
+          rendered_snapshot?: string | null
+          revoked_at?: string | null
+          revoked_reason?: string | null
+          signature_method?: Database["public"]["Enums"]["legal_signature_method"]
+          superseded_by?: string | null
+          typed_name?: string | null
+          user_agent?: string | null
+          user_id?: string
+          version_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "legal_acceptances_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "legal_acceptances_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "legal_documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "legal_acceptances_superseded_by_fkey"
+            columns: ["superseded_by"]
+            isOneToOne: false
+            referencedRelation: "legal_acceptances"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "legal_acceptances_version_id_fkey"
+            columns: ["version_id"]
+            isOneToOne: false
+            referencedRelation: "legal_document_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      legal_consent_preferences: {
+        Row: {
+          client_id: string | null
+          consent_key: string
+          created_at: string
+          granted: boolean
+          id: string
+          source_acceptance_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          client_id?: string | null
+          consent_key: string
+          created_at?: string
+          granted: boolean
+          id?: string
+          source_acceptance_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          client_id?: string | null
+          consent_key?: string
+          created_at?: string
+          granted?: boolean
+          id?: string
+          source_acceptance_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "legal_consent_preferences_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "legal_consent_preferences_source_acceptance_id_fkey"
+            columns: ["source_acceptance_id"]
+            isOneToOne: false
+            referencedRelation: "legal_acceptances"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      legal_document_placements: {
+        Row: {
+          active: boolean
+          context_key: string | null
+          created_at: string
+          display_order: number
+          document_id: string
+          id: string
+          required: boolean
+          surface: Database["public"]["Enums"]["legal_placement_surface"]
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          context_key?: string | null
+          created_at?: string
+          display_order?: number
+          document_id: string
+          id?: string
+          required?: boolean
+          surface: Database["public"]["Enums"]["legal_placement_surface"]
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          context_key?: string | null
+          created_at?: string
+          display_order?: number
+          document_id?: string
+          id?: string
+          required?: boolean
+          surface?: Database["public"]["Enums"]["legal_placement_surface"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "legal_document_placements_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "legal_documents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      legal_document_versions: {
+        Row: {
+          archived_at: string | null
+          body: string
+          created_at: string
+          created_by: string | null
+          document_id: string
+          effective_date: string | null
+          id: string
+          legal_review_note: string | null
+          needs_legal_review: boolean
+          published_at: string | null
+          published_by: string | null
+          reacceptance_audience: Database["public"]["Enums"]["legal_audience"]
+          requires_reacceptance: boolean
+          signature_method: Database["public"]["Enums"]["legal_signature_method"]
+          status: Database["public"]["Enums"]["legal_version_status"]
+          summary: string | null
+          title: string
+          updated_at: string
+          version_number: number
+        }
+        Insert: {
+          archived_at?: string | null
+          body: string
+          created_at?: string
+          created_by?: string | null
+          document_id: string
+          effective_date?: string | null
+          id?: string
+          legal_review_note?: string | null
+          needs_legal_review?: boolean
+          published_at?: string | null
+          published_by?: string | null
+          reacceptance_audience?: Database["public"]["Enums"]["legal_audience"]
+          requires_reacceptance?: boolean
+          signature_method?: Database["public"]["Enums"]["legal_signature_method"]
+          status?: Database["public"]["Enums"]["legal_version_status"]
+          summary?: string | null
+          title: string
+          updated_at?: string
+          version_number: number
+        }
+        Update: {
+          archived_at?: string | null
+          body?: string
+          created_at?: string
+          created_by?: string | null
+          document_id?: string
+          effective_date?: string | null
+          id?: string
+          legal_review_note?: string | null
+          needs_legal_review?: boolean
+          published_at?: string | null
+          published_by?: string | null
+          reacceptance_audience?: Database["public"]["Enums"]["legal_audience"]
+          requires_reacceptance?: boolean
+          signature_method?: Database["public"]["Enums"]["legal_signature_method"]
+          status?: Database["public"]["Enums"]["legal_version_status"]
+          summary?: string | null
+          title?: string
+          updated_at?: string
+          version_number?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "legal_document_versions_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "legal_documents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      legal_documents: {
+        Row: {
+          archived: boolean
+          audience: Database["public"]["Enums"]["legal_audience"]
+          created_at: string
+          created_by: string | null
+          current_version_id: string | null
+          doc_type: Database["public"]["Enums"]["legal_doc_type"]
+          id: string
+          is_optional_consent: boolean
+          is_required: boolean
+          slug: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          archived?: boolean
+          audience?: Database["public"]["Enums"]["legal_audience"]
+          created_at?: string
+          created_by?: string | null
+          current_version_id?: string | null
+          doc_type: Database["public"]["Enums"]["legal_doc_type"]
+          id?: string
+          is_optional_consent?: boolean
+          is_required?: boolean
+          slug: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          archived?: boolean
+          audience?: Database["public"]["Enums"]["legal_audience"]
+          created_at?: string
+          created_by?: string | null
+          current_version_id?: string | null
+          doc_type?: Database["public"]["Enums"]["legal_doc_type"]
+          id?: string
+          is_optional_consent?: boolean
+          is_required?: boolean
+          slug?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_legal_documents_current_version"
+            columns: ["current_version_id"]
+            isOneToOne: false
+            referencedRelation: "legal_document_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       lift_video_comments: {
         Row: {
           attachments: Json | null
@@ -9815,6 +10176,57 @@ export type Database = {
         | "disconnected"
       group_member_role: "admin" | "member"
       group_permission_mode: "everyone" | "admins_only" | "read_only"
+      legal_acceptance_context:
+        | "onboarding"
+        | "account_centre"
+        | "form_submission"
+        | "agreement"
+        | "upload"
+        | "reaccept_prompt"
+        | "public_form"
+        | "signup"
+        | "custom"
+      legal_audience:
+        | "everyone"
+        | "all_clients"
+        | "new_clients"
+        | "selected_users"
+        | "selected_products"
+        | "selected_forms"
+        | "staff"
+      legal_doc_type:
+        | "terms"
+        | "privacy"
+        | "coaching_disclaimer"
+        | "medical_disclaimer"
+        | "nutrition_disclaimer"
+        | "ai_disclosure"
+        | "waiver"
+        | "par_q"
+        | "upload_consent"
+        | "media_release"
+        | "communication_consent"
+        | "cancellation_policy"
+        | "custom"
+      legal_placement_surface:
+        | "onboarding"
+        | "account_centre"
+        | "login_footer"
+        | "signup_footer"
+        | "public_form"
+        | "injury_form"
+        | "nutrition_form"
+        | "upload_field"
+        | "agreement_workflow"
+        | "ai_message_label"
+        | "app_footer"
+        | "custom"
+      legal_signature_method:
+        | "checkbox"
+        | "typed_name"
+        | "signature"
+        | "link_only"
+      legal_version_status: "draft" | "published" | "archived"
       media_visibility: "private" | "marketing" | "public"
       reminder_audience: "attendee" | "host"
       reminder_status: "pending" | "sent" | "failed" | "skipped"
@@ -10021,6 +10433,62 @@ export const Constants = {
       ],
       group_member_role: ["admin", "member"],
       group_permission_mode: ["everyone", "admins_only", "read_only"],
+      legal_acceptance_context: [
+        "onboarding",
+        "account_centre",
+        "form_submission",
+        "agreement",
+        "upload",
+        "reaccept_prompt",
+        "public_form",
+        "signup",
+        "custom",
+      ],
+      legal_audience: [
+        "everyone",
+        "all_clients",
+        "new_clients",
+        "selected_users",
+        "selected_products",
+        "selected_forms",
+        "staff",
+      ],
+      legal_doc_type: [
+        "terms",
+        "privacy",
+        "coaching_disclaimer",
+        "medical_disclaimer",
+        "nutrition_disclaimer",
+        "ai_disclosure",
+        "waiver",
+        "par_q",
+        "upload_consent",
+        "media_release",
+        "communication_consent",
+        "cancellation_policy",
+        "custom",
+      ],
+      legal_placement_surface: [
+        "onboarding",
+        "account_centre",
+        "login_footer",
+        "signup_footer",
+        "public_form",
+        "injury_form",
+        "nutrition_form",
+        "upload_field",
+        "agreement_workflow",
+        "ai_message_label",
+        "app_footer",
+        "custom",
+      ],
+      legal_signature_method: [
+        "checkbox",
+        "typed_name",
+        "signature",
+        "link_only",
+      ],
+      legal_version_status: ["draft", "published", "archived"],
       media_visibility: ["private", "marketing", "public"],
       reminder_audience: ["attendee", "host"],
       reminder_status: ["pending", "sent", "failed", "skipped"],
