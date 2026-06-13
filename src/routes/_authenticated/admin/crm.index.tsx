@@ -1,24 +1,20 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect } from "react";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { crmDashboardStats } from "@/lib/crm.functions";
-import { Flame, Users, ClipboardList, PhoneCall, AlertTriangle, TrendingUp, CheckCircle2, XCircle } from "lucide-react";
+import { Flame, Users, ClipboardList, PhoneCall, AlertTriangle, TrendingUp, CheckCircle2, XCircle, GitBranch } from "lucide-react";
 import { format } from "date-fns";
 
 export const Route = createFileRoute("/_authenticated/admin/crm/")({
-  component: CrmRedirect,
+  component: CrmDashboardPage,
 });
 
-function CrmRedirect() {
-  const navigate = useNavigate();
-  useEffect(() => {
-    navigate({ to: "/admin/sales", search: { tab: "pipeline" } as any, replace: true });
-  }, [navigate]);
-  return null;
+function CrmDashboardPage() {
+  return <CrmDashboard />;
 }
 
 export function CrmDashboard({ embedded = false }: { embedded?: boolean } = {}) {
@@ -28,7 +24,26 @@ export function CrmDashboard({ embedded = false }: { embedded?: boolean } = {}) 
 
   return (
     <div className="space-y-5">
-      {!embedded && <PageHeader title="CRM" subtitle="Leads, applicants and conversion pipeline. Active coaching clients are tracked separately." />}
+      {!embedded && (
+        <PageHeader
+          title="CRM"
+          subtitle="Leads, applicants and conversion pipeline. Active coaching clients are tracked separately."
+          actions={
+            <div className="flex flex-wrap gap-2">
+              <Link to="/admin/crm/contacts">
+                <Button size="sm" variant="outline">
+                  <Users className="mr-1 h-3.5 w-3.5" /> All contacts
+                </Button>
+              </Link>
+              <Link to="/admin/sales" search={{ tab: "pipeline" } as any}>
+                <Button size="sm" variant="outline">
+                  <GitBranch className="mr-1 h-3.5 w-3.5" /> Sales pipeline
+                </Button>
+              </Link>
+            </div>
+          }
+        />
+      )}
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-5">
         <StatCard to="/admin/crm/contacts" search={{ scope: "prospects" }} icon={Users} label="Prospects" value={s?.total_prospects ?? 0} />
