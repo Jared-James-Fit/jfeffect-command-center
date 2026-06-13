@@ -128,21 +128,17 @@ const REGISTRY: Entry[] = [
   { to: "/admin/settings/sms", label: "SMS Access", icon: MessageCircle, group: "Communication",
     visibleTo: ["admin"] },
 
-  // ── SALES (CRM + offers + financial) ────────────────────────────────
-  { to: "/admin/crm", label: "Pipeline", icon: BarChart3, group: "Sales",
-    visibleTo: ["admin", "sales"] },
-  { to: "/admin/sales/coaching", label: "Coaching Page", icon: ShoppingBag, group: "Sales",
-    visibleTo: ["admin", "sales", "media_manager"] },
-  { to: "/admin/sales/membership", label: "Membership Page", icon: ShoppingBag, group: "Sales",
-    visibleTo: ["admin", "sales", "media_manager"] },
-  { to: "/admin/payment-links", label: "Products", icon: CreditCard, group: "Sales",
-    visibleTo: ["admin", "sales"] },
-  { to: "/admin/payments", label: "Payments", icon: DollarSign, group: "Sales",
-    visibleTo: ["admin", "sales"] },
-  { to: "/admin/purchases", label: "Purchases", icon: ClipboardCheck, group: "Sales",
-    visibleTo: ["admin", "sales", "support"] },
-  { to: "/admin/promo-codes", label: "Promo Codes", icon: Ticket, group: "Sales",
-    visibleTo: ["admin", "sales"] },
+  // ── SALES (consolidated workspace; tabs handle sub-views) ───────────
+  { to: "/admin/sales", label: "Sales", icon: BarChart3, group: "Sales",
+    visibleTo: ["admin", "sales", "media_manager", "support"],
+    keywords: [
+      "sales", "pipeline", "crm", "leads", "prospects",
+      "products", "payments", "checkout", "stripe price id", "payment links",
+      "purchases", "purchase records",
+      "sales pages", "offers", "coaching page", "membership page", "join page",
+      "promotions", "promo codes", "redemptions", "ambassadors", "referrals",
+      "revenue",
+    ] },
 
   // ── CALENDAR (calendar + events + bookings) ─────────────────────────
   { to: "/admin/calendar", label: "Calendar", icon: Calendar, group: "Calendar",
