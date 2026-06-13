@@ -7,6 +7,8 @@ import { AdminNativeForms } from "./native-forms";
 import { FilloutSubmissionsPage } from "./fillout-submissions";
 import { ApplicationsInbox } from "./sales.coaching-applications";
 import { AgreementsAdminPage } from "./agreements.index";
+import { ReviewsTab } from "@/components/forms/reviews-tab";
+import { AiSettingsTab } from "@/components/forms/ai-settings-tab";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -22,38 +24,59 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ActionButton } from "@/components/action-button";
 
 const TABS = [
-  { value: "native-forms", label: "Native Forms" },
-  { value: "document-forms", label: "Document Forms" },
-  { value: "fillout-submissions", label: "Fillout Submissions" },
-  { value: "coaching-applications", label: "Coaching Applications" },
-  { value: "agreements", label: "Agreements" },
+  { value: "reviews",                label: "Reviews" },
+  { value: "builder",                label: "Builder" },
+  { value: "submissions",            label: "Submissions" },
+  { value: "applications",           label: "Applications" },
+  { value: "agreements",             label: "Agreements" },
+  { value: "integrations",           label: "Integrations" },
+  { value: "ai-settings",            label: "AI Settings" },
+  // Legacy / hidden keys kept so old links keep working.
+  { value: "native-forms",           label: "Native Forms",         hidden: true },
+  { value: "document-forms",         label: "Document Forms",       hidden: true },
+  { value: "fillout-submissions",    label: "Fillout Submissions",  hidden: true },
+  { value: "coaching-applications",  label: "Coaching Applications",hidden: true },
 ] as const;
 type TabKey = typeof TABS[number]["value"];
 
 const LAST_TAB_KEY = "jf-admin-forms-last-tab";
+
+// Legacy tab keys → canonical tabs. Keeps old bookmarks and redirect stubs
+// working when the user lands here directly.
+const LEGACY_TAB_ALIAS: Record<string, TabKey> = {
+  "native-forms": "builder",
+  "document-forms": "builder",
+  "fillout-submissions": "submissions",
+  "coaching-applications": "applications",
+};
 
 function isTab(v: unknown): v is TabKey {
   return typeof v === "string" && TABS.some((t) => t.value === v);
 }
 
 export const Route = createFileRoute("/_authenticated/admin/forms")({
-  validateSearch: (raw: Record<string, unknown>): { tab: TabKey } => {
+  validateSearch: (raw: Record<string, unknown>): { tab: TabKey; sub?: string } => {
     const t = raw?.tab;
-    if (isTab(t)) return { tab: t };
+    const sub = typeof raw?.sub === "string" ? (raw.sub as string) : undefined;
+    if (typeof t === "string" && LEGACY_TAB_ALIAS[t]) {
+      return { tab: LEGACY_TAB_ALIAS[t], sub };
+    }
+    if (isTab(t)) return { tab: t, sub };
     // URL takes priority; only consult localStorage when search is missing.
     if (typeof t === "undefined" && typeof window !== "undefined") {
       try {
         const stored = window.localStorage.getItem(LAST_TAB_KEY);
-        if (isTab(stored)) return { tab: stored };
+        if (stored && LEGACY_TAB_ALIAS[stored]) return { tab: LEGACY_TAB_ALIAS[stored], sub };
+        if (isTab(stored)) return { tab: stored, sub };
       } catch {}
     }
-    return { tab: "native-forms" };
+    return { tab: "reviews", sub };
   },
   component: FormsWorkspacePage,
 });
 
 function FormsWorkspacePage() {
-  const { tab } = Route.useSearch();
+  const { tab, sub } = Route.useSearch();
   const navigate = useNavigate();
 
   // Persist last tab so direct /admin/forms hits remember the choice, while
@@ -66,15 +89,17 @@ function FormsWorkspacePage() {
     navigate({ to: "/admin/forms", search: { tab: next }, replace: false });
   };
 
+  const visibleTabs = TABS.filter((t) => !("hidden" in t && (t as any).hidden));
+
   return (
     <>
       <PageHeader
         title="Forms"
-        subtitle="Create, review, and manage forms, submissions, applications, and agreements."
+        subtitle="One place for forms, submissions, AI-assisted reviews, applications, agreements, and integrations."
       />
       <div className="border-b border-border bg-background/50">
         <div className="-mb-px flex gap-1 overflow-x-auto px-2 md:px-4">
-          {TABS.map((t) => {
+          {visibleTabs.map((t) => {
             const active = t.value === tab;
             return (
               <button
@@ -96,13 +121,114 @@ function FormsWorkspacePage() {
         </div>
       </div>
       <div>
-        {tab === "native-forms" && <AdminNativeForms embedded />}
-        {tab === "document-forms" && <DocumentFormsPanel embedded />}
-        {tab === "fillout-submissions" && <FilloutSubmissionsPage embedded />}
-        {tab === "coaching-applications" && <ApplicationsInbox embedded />}
+        {tab === "reviews" && <ReviewsTab />}
+        {tab === "builder" && <BuilderRouter sub={sub} />}
+        {tab === "submissions" && <SubmissionsRouter sub={sub} />}
+        {tab === "applications" && <ApplicationsInbox embedded />}
         {tab === "agreements" && <AgreementsAdminPage embedded />}
+        {tab === "integrations" && <IntegrationsPanel />}
+        {tab === "ai-settings" && <AiSettingsTab />}
       </div>
     </>
+  );
+}
+
+/**
+ * Builder tab sub-router. `sub` query param selects between native forms,
+ * document forms, and check-in style forms — keeping legacy deep-links alive.
+ */
+function BuilderRouter({ sub }: { sub?: string }) {
+  const navigate = useNavigate();
+  const current: "native" | "document" | "check-ins" =
+    sub === "document-forms" ? "document" : sub === "check-ins" ? "check-ins" : "native";
+  const setSub = (next: "native" | "document" | "check-ins") => {
+    navigate({
+      to: "/admin/forms",
+      search: { tab: "builder", sub: next === "native" ? undefined : (next === "document" ? "document-forms" : "check-ins") },
+    });
+  };
+  return (
+    <>
+      <div className="border-b border-border bg-background/30 px-2 md:px-4 py-2 flex gap-1">
+        <SubTab active={current === "native"} onClick={() => setSub("native")} label="Native forms" />
+        <SubTab active={current === "check-ins"} onClick={() => setSub("check-ins")} label="Check-ins" />
+        <SubTab active={current === "document"} onClick={() => setSub("document")} label="Document forms" />
+      </div>
+      {/* AdminNativeForms hosts native + check-in style forms in its existing builder */}
+      {(current === "native" || current === "check-ins") && <AdminNativeForms embedded />}
+      {current === "document" && <DocumentFormsPanel embedded />}
+    </>
+  );
+}
+
+function SubmissionsRouter({ sub }: { sub?: string }) {
+  const navigate = useNavigate();
+  const current: "all" | "fillout" =
+    sub === "fillout" ? "fillout" : "all";
+  const setSub = (next: "all" | "fillout") => {
+    navigate({
+      to: "/admin/forms",
+      search: { tab: "submissions", sub: next === "all" ? undefined : "fillout" },
+    });
+  };
+  return (
+    <>
+      <div className="border-b border-border bg-background/30 px-2 md:px-4 py-2 flex gap-1">
+        <SubTab active={current === "all"} onClick={() => setSub("all")} label="All sources" />
+        <SubTab active={current === "fillout"} onClick={() => setSub("fillout")} label="Fillout only" />
+      </div>
+      {current === "all" && <ReviewsTab />}
+      {current === "fillout" && <FilloutSubmissionsPage embedded />}
+    </>
+  );
+}
+
+function SubTab({ active, onClick, label }: { active: boolean; onClick: () => void; label: string }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "rounded-md px-2.5 py-1 text-xs font-semibold transition-colors",
+        active ? "bg-primary/15 text-primary" : "text-muted-foreground hover:bg-muted hover:text-foreground",
+      )}
+    >
+      {label}
+    </button>
+  );
+}
+
+function IntegrationsPanel() {
+  return (
+    <div className="p-4 md:p-6 space-y-3 max-w-3xl">
+      <Card className="p-5">
+        <div className="text-sm font-bold mb-1">Fillout</div>
+        <p className="text-xs text-muted-foreground mb-3">
+          Fillout submissions are ingested through the webhook at
+          <code className="mx-1 rounded bg-muted px-1 py-0.5 text-[11px]">/api/public/hooks/fillout</code>.
+          Unmatched submissions appear in <strong>Submissions → Fillout only</strong>.
+        </p>
+        <a
+          href="/admin/forms?tab=submissions&sub=fillout"
+          className="text-xs font-semibold text-primary hover:underline"
+        >
+          Open Fillout submissions →
+        </a>
+      </Card>
+      <Card className="p-5">
+        <div className="text-sm font-bold mb-1">SignNow</div>
+        <p className="text-xs text-muted-foreground mb-3">
+          Agreement signing is handled through SignNow. The webhook lives at
+          <code className="mx-1 rounded bg-muted px-1 py-0.5 text-[11px]">/api/public/signnow-webhook</code>.
+        </p>
+        <a
+          href="/admin/forms?tab=agreements"
+          className="text-xs font-semibold text-primary hover:underline"
+        >
+          Open Agreements →
+        </a>
+      </Card>
+    </div>
   );
 }
 

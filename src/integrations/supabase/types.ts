@@ -3870,6 +3870,86 @@ export type Database = {
           },
         ]
       }
+      form_ai_configs: {
+        Row: {
+          allow_recommend_nutrition: boolean
+          allow_recommend_programming: boolean
+          allowed_client_context: string[]
+          client_response_structure: string | null
+          created_at: string
+          default_assigned_coach: string | null
+          enabled: boolean
+          escalation_rules: string | null
+          form_id: string
+          id: string
+          instructions: string | null
+          internal_analysis_structure: string | null
+          model: string | null
+          priority_rules: string | null
+          require_coach_approval: boolean
+          response_length: string
+          response_tone: string | null
+          review_sla_hours: number | null
+          updated_at: string
+          updated_by: string | null
+          version: number
+        }
+        Insert: {
+          allow_recommend_nutrition?: boolean
+          allow_recommend_programming?: boolean
+          allowed_client_context?: string[]
+          client_response_structure?: string | null
+          created_at?: string
+          default_assigned_coach?: string | null
+          enabled?: boolean
+          escalation_rules?: string | null
+          form_id: string
+          id?: string
+          instructions?: string | null
+          internal_analysis_structure?: string | null
+          model?: string | null
+          priority_rules?: string | null
+          require_coach_approval?: boolean
+          response_length?: string
+          response_tone?: string | null
+          review_sla_hours?: number | null
+          updated_at?: string
+          updated_by?: string | null
+          version?: number
+        }
+        Update: {
+          allow_recommend_nutrition?: boolean
+          allow_recommend_programming?: boolean
+          allowed_client_context?: string[]
+          client_response_structure?: string | null
+          created_at?: string
+          default_assigned_coach?: string | null
+          enabled?: boolean
+          escalation_rules?: string | null
+          form_id?: string
+          id?: string
+          instructions?: string | null
+          internal_analysis_structure?: string | null
+          model?: string | null
+          priority_rules?: string | null
+          require_coach_approval?: boolean
+          response_length?: string
+          response_tone?: string | null
+          review_sla_hours?: number | null
+          updated_at?: string
+          updated_by?: string | null
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "form_ai_configs_form_id_fkey"
+            columns: ["form_id"]
+            isOneToOne: true
+            referencedRelation: "nf_forms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       form_client_assignments: {
         Row: {
           assigned_by: string | null
@@ -3953,6 +4033,57 @@ export type Database = {
           updated_at?: string
           url?: string
           visible_to_client?: boolean
+        }
+        Relationships: []
+      }
+      global_ai_config: {
+        Row: {
+          brand_voice: string | null
+          created_at: string
+          default_analysis_structure: string | null
+          default_model: string
+          default_response_structure: string | null
+          escalation_rules: string | null
+          id: string
+          prohibited_phrases: string[]
+          safety_rules: string | null
+          singleton: boolean
+          tone: string | null
+          updated_at: string
+          updated_by: string | null
+          version: number
+        }
+        Insert: {
+          brand_voice?: string | null
+          created_at?: string
+          default_analysis_structure?: string | null
+          default_model?: string
+          default_response_structure?: string | null
+          escalation_rules?: string | null
+          id?: string
+          prohibited_phrases?: string[]
+          safety_rules?: string | null
+          singleton?: boolean
+          tone?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          version?: number
+        }
+        Update: {
+          brand_voice?: string | null
+          created_at?: string
+          default_analysis_structure?: string | null
+          default_model?: string
+          default_response_structure?: string | null
+          escalation_rules?: string | null
+          id?: string
+          prohibited_phrases?: string[]
+          safety_rules?: string | null
+          singleton?: boolean
+          tone?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          version?: number
         }
         Relationships: []
       }
@@ -8394,6 +8525,56 @@ export type Database = {
         }
         Relationships: []
       }
+      scheduled_submission_responses: {
+        Row: {
+          attempts: number
+          created_at: string
+          created_by: string | null
+          id: string
+          idempotency_key: string
+          last_attempt_at: string | null
+          last_error: string | null
+          review_id: string
+          scheduled_at: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          attempts?: number
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          idempotency_key: string
+          last_attempt_at?: string | null
+          last_error?: string | null
+          review_id: string
+          scheduled_at: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          attempts?: number
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          idempotency_key?: string
+          last_attempt_at?: string | null
+          last_error?: string | null
+          review_id?: string
+          scheduled_at?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scheduled_submission_responses_review_id_fkey"
+            columns: ["review_id"]
+            isOneToOne: false
+            referencedRelation: "submission_reviews"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       setup_prompt_dismissals: {
         Row: {
           created_at: string
@@ -8793,6 +8974,282 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      submission_ai_generations: {
+        Row: {
+          client_response: string | null
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          error: string | null
+          form_config_version: number | null
+          global_config_version: number | null
+          id: string
+          input_context: Json | null
+          model: string | null
+          review_id: string
+          started_at: string | null
+          status: string
+          structured_output: Json | null
+          submission_instruction: string | null
+          urgency: string | null
+          usage: Json | null
+        }
+        Insert: {
+          client_response?: string | null
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          error?: string | null
+          form_config_version?: number | null
+          global_config_version?: number | null
+          id?: string
+          input_context?: Json | null
+          model?: string | null
+          review_id: string
+          started_at?: string | null
+          status?: string
+          structured_output?: Json | null
+          submission_instruction?: string | null
+          urgency?: string | null
+          usage?: Json | null
+        }
+        Update: {
+          client_response?: string | null
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          error?: string | null
+          form_config_version?: number | null
+          global_config_version?: number | null
+          id?: string
+          input_context?: Json | null
+          model?: string | null
+          review_id?: string
+          started_at?: string | null
+          status?: string
+          structured_output?: Json | null
+          submission_instruction?: string | null
+          urgency?: string | null
+          usage?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "submission_ai_generations_review_id_fkey"
+            columns: ["review_id"]
+            isOneToOne: false
+            referencedRelation: "submission_reviews"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      submission_audit_events: {
+        Row: {
+          actor_role: string | null
+          actor_user_id: string | null
+          created_at: string
+          details: Json | null
+          event_type: string
+          id: string
+          review_id: string
+        }
+        Insert: {
+          actor_role?: string | null
+          actor_user_id?: string | null
+          created_at?: string
+          details?: Json | null
+          event_type: string
+          id?: string
+          review_id: string
+        }
+        Update: {
+          actor_role?: string | null
+          actor_user_id?: string | null
+          created_at?: string
+          details?: Json | null
+          event_type?: string
+          id?: string
+          review_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "submission_audit_events_review_id_fkey"
+            columns: ["review_id"]
+            isOneToOne: false
+            referencedRelation: "submission_reviews"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      submission_delivery_attempts: {
+        Row: {
+          attempted_at: string
+          delivery_channel: string
+          error: string | null
+          id: string
+          initiated_by: string | null
+          message_id: string | null
+          outcome: string
+          review_id: string
+          schedule_id: string | null
+        }
+        Insert: {
+          attempted_at?: string
+          delivery_channel?: string
+          error?: string | null
+          id?: string
+          initiated_by?: string | null
+          message_id?: string | null
+          outcome: string
+          review_id: string
+          schedule_id?: string | null
+        }
+        Update: {
+          attempted_at?: string
+          delivery_channel?: string
+          error?: string | null
+          id?: string
+          initiated_by?: string | null
+          message_id?: string | null
+          outcome?: string
+          review_id?: string
+          schedule_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "submission_delivery_attempts_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "submission_delivery_attempts_review_id_fkey"
+            columns: ["review_id"]
+            isOneToOne: false
+            referencedRelation: "submission_reviews"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "submission_delivery_attempts_schedule_id_fkey"
+            columns: ["schedule_id"]
+            isOneToOne: false
+            referencedRelation: "scheduled_submission_responses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      submission_reviews: {
+        Row: {
+          ai_status: string
+          application_id: string | null
+          approved_at: string | null
+          approved_by: string | null
+          approved_response: string | null
+          assigned_coach_user_id: string | null
+          client_id: string | null
+          coach_draft: string | null
+          created_at: string
+          delivered_response: string | null
+          form_id: string | null
+          id: string
+          last_delivery_error: string | null
+          latest_generation_id: string | null
+          latest_message_id: string | null
+          priority: string
+          review_status: string
+          schedule_cancelled_at: string | null
+          scheduled_at: string | null
+          scheduled_by: string | null
+          send_idempotency_key: string | null
+          sent_at: string | null
+          sent_by: string | null
+          source_id: string
+          source_type: string
+          submitted_at: string
+          updated_at: string
+        }
+        Insert: {
+          ai_status?: string
+          application_id?: string | null
+          approved_at?: string | null
+          approved_by?: string | null
+          approved_response?: string | null
+          assigned_coach_user_id?: string | null
+          client_id?: string | null
+          coach_draft?: string | null
+          created_at?: string
+          delivered_response?: string | null
+          form_id?: string | null
+          id?: string
+          last_delivery_error?: string | null
+          latest_generation_id?: string | null
+          latest_message_id?: string | null
+          priority?: string
+          review_status?: string
+          schedule_cancelled_at?: string | null
+          scheduled_at?: string | null
+          scheduled_by?: string | null
+          send_idempotency_key?: string | null
+          sent_at?: string | null
+          sent_by?: string | null
+          source_id: string
+          source_type: string
+          submitted_at?: string
+          updated_at?: string
+        }
+        Update: {
+          ai_status?: string
+          application_id?: string | null
+          approved_at?: string | null
+          approved_by?: string | null
+          approved_response?: string | null
+          assigned_coach_user_id?: string | null
+          client_id?: string | null
+          coach_draft?: string | null
+          created_at?: string
+          delivered_response?: string | null
+          form_id?: string | null
+          id?: string
+          last_delivery_error?: string | null
+          latest_generation_id?: string | null
+          latest_message_id?: string | null
+          priority?: string
+          review_status?: string
+          schedule_cancelled_at?: string | null
+          scheduled_at?: string | null
+          scheduled_by?: string | null
+          send_idempotency_key?: string | null
+          sent_at?: string | null
+          sent_by?: string | null
+          source_id?: string
+          source_type?: string
+          submitted_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "submission_reviews_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "submission_reviews_form_id_fkey"
+            columns: ["form_id"]
+            isOneToOne: false
+            referencedRelation: "nf_forms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "submission_reviews_latest_message_id_fkey"
+            columns: ["latest_message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       support_alerts: {
         Row: {

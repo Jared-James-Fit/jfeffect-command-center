@@ -35,7 +35,9 @@ export const Route = createFileRoute("/_authenticated/admin/check-in-reviews")({
 function CheckInReviewsRedirect() {
   const navigate = useNavigate();
   useEffect(() => {
-    navigate({ to: "/admin/coaching", search: { tab: "check-ins" } as any, replace: true });
+    // Canonical destination is /admin/forms?tab=reviews — the unified
+    // AI-assisted review queue replaces the standalone Check-In Reviews page.
+    navigate({ to: "/admin/forms", search: { tab: "reviews" } as any, replace: true });
   }, [navigate]);
   return null;
 }

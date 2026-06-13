@@ -103,6 +103,9 @@ const REGISTRY: Entry[] = [
       "forms", "native forms", "check-ins", "check ins", "form builder",
       "document forms", "fillout", "fillout submissions", "submissions",
       "coaching applications", "applications", "agreements", "signnow",
+      "reviews", "review queue", "submission reviews", "ai", "ai settings",
+      "ai instructions", "ai coach", "ai review", "draft", "playground",
+      "integrations",
     ] },
 
   // ── COMMUNICATION ────────────────────────────────────────────────────
