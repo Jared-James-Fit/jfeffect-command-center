@@ -978,7 +978,7 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
             </p>
           )}
           <div className={cn(
-            "snap-x snap-proximity overflow-x-auto pb-3 scroll-smooth",
+            "snap-x snap-proximity overflow-x-auto [overflow-y:clip] pb-3 scroll-smooth",
             compact ? "px-2 scroll-pl-2" : "px-3 scroll-pl-3",
           )}>
             <div className={cn("flex w-max items-start", compact ? "gap-2" : "gap-3")}>
