@@ -9,6 +9,7 @@ import { ApplicationsInbox } from "./sales.coaching-applications";
 import { AgreementsAdminPage } from "./agreements.index";
 import { ReviewsTab } from "@/components/forms/reviews-tab";
 import { AiSettingsTab } from "@/components/forms/ai-settings-tab";
+import { SchedulerTab } from "@/components/forms/scheduler-tab";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -30,6 +31,7 @@ const TABS = [
   { value: "applications",           label: "Applications" },
   { value: "agreements",             label: "Agreements" },
   { value: "integrations",           label: "Integrations" },
+  { value: "scheduler",              label: "Scheduler" },
   { value: "ai-settings",            label: "AI Settings" },
   // Legacy / hidden keys kept so old links keep working.
   { value: "native-forms",           label: "Native Forms",         hidden: true },
@@ -127,6 +129,7 @@ function FormsWorkspacePage() {
         {tab === "applications" && <ApplicationsInbox embedded />}
         {tab === "agreements" && <AgreementsAdminPage embedded />}
         {tab === "integrations" && <IntegrationsPanel />}
+        {tab === "scheduler" && <SchedulerTab />}
         {tab === "ai-settings" && <AiSettingsTab />}
       </div>
     </>
