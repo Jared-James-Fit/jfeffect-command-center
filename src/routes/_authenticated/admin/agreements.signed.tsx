@@ -18,10 +18,11 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Download, ExternalLink, RefreshCw, FileText, Loader2, Search, User, Mail, DownloadCloud } from "lucide-react";
+import { Download, ExternalLink, RefreshCw, FileText, Loader2, Search, User, Mail, DownloadCloud, Trash2 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
-import { getSignedAgreementUrl, refreshAllPendingAgreements, refreshAgreementStatus, importSignNowSignedDocuments } from "@/lib/agreements.functions";
+import { getSignedAgreementUrl, refreshAllPendingAgreements, refreshAgreementStatus, importSignNowSignedDocuments, bulkDeleteAgreements } from "@/lib/agreements.functions";
 import { AgreementStatusBadge } from "@/components/agreement-status-badge";
 import { VERIFICATION_BADGE } from "@/lib/agreements";
 
@@ -98,10 +99,14 @@ function SignedAgreementsPage() {
   const [importConfirmOpen, setImportConfirmOpen] = useState(false);
   const [downloading, setDownloading] = useState<string | null>(null);
   const [rowRefreshing, setRowRefreshing] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const getUrlFn = useServerFn(getSignedAgreementUrl);
   const refreshAllFn = useServerFn(refreshAllPendingAgreements);
   const refreshOneFn = useServerFn(refreshAgreementStatus);
   const importFn = useServerFn(importSignNowSignedDocuments);
+  const bulkDeleteFn = useServerFn(bulkDeleteAgreements);
 
   const importMutation = useMutation({
     mutationFn: async (): Promise<ImportSummary> => {
