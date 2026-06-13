@@ -524,6 +524,22 @@ function WorkoutDay() {
     markInProgress();
   };
 
+  // Post-workout feedback sheet state.
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const { data: existingFeedback } = useQuery({
+    queryKey: ["pl-workout-feedback", completion?.id],
+    enabled: !!completion?.id,
+    queryFn: async () =>
+      (await (sb as any)
+        .from("pl_workout_feedback")
+        .select("id, overall_rating, session_rpe, pain")
+        .eq("completion_id", completion!.id)
+        .maybeSingle()).data,
+  });
+  const hasFeedback = !!existingFeedback;
+  const feedbackSkipped = !!(completion?.id && typeof window !== "undefined"
+    && localStorage.getItem(`lov.wfb.skip:${completion.id}`));
+
   const refreshNotes = () => {
     qc.invalidateQueries({ queryKey: ["pl-day-exercise-notes", dayId] });
     qc.invalidateQueries({ queryKey: ["client-exercise-notes", client?.id] });
