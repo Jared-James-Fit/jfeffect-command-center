@@ -3,7 +3,7 @@ import { useEffect, useMemo } from "react";
 import { useAuth } from "@/lib/auth";
 import { AppShell } from "@/components/app-shell";
 import { coachingAdminNav, coachNav } from "@/lib/admin-nav";
-import { membershipNav } from "@/lib/membership-nav";
+import { buildInternalNav, resolveStaffRoleTag } from "@/lib/internal-nav";
 import { useDashboardMode, setDashboardMode } from "@/lib/dashboard-mode";
 import { DashboardModeSwitcher } from "@/components/dashboard-mode-switcher";
 import { PovQuickToggle } from "@/components/pov-quick-toggle";
@@ -44,7 +44,13 @@ function AdminLayout() {
 
   const isCoach = role === "coach";
   const isMembership = !isCoach && mode === "membership";
-  const nav = isCoach ? coachNav : isMembership ? membershipNav : coachingAdminNav;
+  // Build the sidebar from the shared role-aware internal-nav registry.
+  // Falls back to the legacy per-role registries if the role isn't yet
+  // mapped (defensive — keeps existing behaviour for unknown future roles).
+  const roleTag = resolveStaffRoleTag(role);
+  const nav = roleTag
+    ? buildInternalNav(roleTag, { mode: isMembership ? "membership" : "coaching" })
+    : (isCoach ? coachNav : coachingAdminNav);
   const title = isCoach ? "Coach" : isMembership ? "Membership Admin" : "Admin";
   const customLayout = useBarLayout(isCoach ? "coach" : "admin");
 

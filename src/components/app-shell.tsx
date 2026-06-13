@@ -49,21 +49,33 @@ function groupNavItems(items: NavItem[]) {
     map.set(key, list);
   }
   const order = [
+    // ── New consolidated IA (11 workspaces). Listed first so they always
+    // render in the intended order when the sidebar is driven by
+    // `buildInternalNav()` from `@/lib/internal-nav`. Legacy groups remain
+    // below for back-compat with any nav source still using the old labels.
+    "Home",
+    "Clients",
+    "Coaching",
+    "Programming",
+    "Forms",
+    "Communication",
+    "Sales",
+    "Calendar",
+    "Content",
+    "Team",
+    "Settings",
+    // ── Legacy group labels (kept for back-compat — `membershipNav`,
+    // `floating-bar.tsx`, `sitemap.tsx` still reference some of these).
     "Core",
     "Overview",
-    "Sales",
     "Members",
     "Billing",
     "Setup Tools",
-    "Content",
     "Community",
-    "Communication",
     "Membership",
-    "Programming",
     "Business",
     "Documents",
     "Team / Ops",
-    "Settings",
     "Account",
   ];
   const result: { label: string | undefined; items: NavItem[] }[] = [];
@@ -82,7 +94,10 @@ function groupNavItems(items: NavItem[]) {
 type SidebarMode = "expanded" | "compact" | "collapsed";
 const SIDEBAR_MODE_KEY = "jf-sidebar-mode";
 const SIDEBAR_COLLAPSED_SECTIONS_KEY = "jf-sidebar-collapsed-sections";
-const DEFAULT_COLLAPSED_SECTIONS = ["Documents", "Team / Ops"];
+// Default-collapsed sidebar sections. Includes both the new IA workspace
+// names (Team, Settings) and the legacy group names so users on either
+// nav source see a reasonably compact sidebar on first load.
+const DEFAULT_COLLAPSED_SECTIONS = ["Settings", "Team", "Documents", "Team / Ops"];
 
 function useSidebarMode() {
   const [mode, setMode] = useState<SidebarMode>("expanded");
