@@ -760,17 +760,14 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
     { rest_seconds_override: row.rest_seconds_override, rest_seconds: row.rest_seconds },
     exMeta,
   );
-  const restDisplay = (() => {
-    if (row.rest_seconds_override != null) {
-      const s = row.rest_seconds_override as number;
-      return s >= 60 ? `${Math.round(s / 60)} min` : `${s}s`;
-    }
-    if (row.rest_seconds != null) {
-      const s = row.rest_seconds as number;
-      return s >= 60 ? `${Math.round(s / 60)} min` : `${s}s`;
-    }
-    return restRangeLabel(category);
-  })();
+  // Always show the resolved rest value (programmed or category default), never
+  // a vague range. "Auto · 4 min" makes it obvious when the value comes from
+  // the category default rather than an explicit programmed rest.
+  const fmtRest = (s: number) => (s >= 60 ? `${Math.round(s / 60)} min` : `${s} sec`);
+  const restIsExplicit = row.rest_seconds_override != null || row.rest_seconds != null;
+  const restDisplay = effectiveRest != null
+    ? (restIsExplicit ? fmtRest(effectiveRest) : `Auto · ${fmtRest(effectiveRest)}`)
+    : "Auto";
   const categoryBadgeClass =
     category === "competition"
       ? "border-primary/30 bg-primary/10 text-primary"
@@ -779,6 +776,7 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
         : "border-muted-foreground/30 bg-muted text-muted-foreground";
   const [howToOpen, setHowToOpen] = useState(false);
   const [notesOpen, setNotesOpen] = useState(false);
+  const [cuesOpen, setCuesOpen] = useState(false);
   const hasNote = Boolean(existingNote?.id);
 
   // Rest timer trigger: SetRow calls bumpRestTimer() when a set is marked complete,
