@@ -46,6 +46,7 @@ import {
   purgeTrashedBlock,
   cloneTemplateBlock,
   BLOCK_PHASE_OPTIONS,
+  isPayloadInRecovery,
   type TemplatePayloadV2,
   type TemplateBlockV2,
 } from "@/lib/pl-template-blocks";
