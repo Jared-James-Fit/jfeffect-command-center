@@ -27,6 +27,7 @@ import {
   Link as LinkIcon, Trophy, Tag, ShieldCheck,
   Home as HomeIcon,
   ListChecks, Upload, Star, FileText, ExternalLink, Image as ImageIcon,
+  PowerOff,
 } from "lucide-react";
 import type { NavItem } from "@/components/app-shell";
 
