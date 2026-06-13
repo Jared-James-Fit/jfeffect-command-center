@@ -27,7 +27,13 @@ import { ProgressComparison } from "@/components/progress-comparison";
 
 export const Route = createFileRoute("/_authenticated/portal/workouts/")({
   validateSearch: (s: Record<string, unknown>) => ({
-    view: s.view === "block" || s.view === "day" ? (s.view as "block" | "day") : undefined,
+    // Canonical values: "block" | "overview". Legacy "day" maps to "overview".
+    view:
+      s.view === "block"
+        ? ("block" as const)
+        : s.view === "overview" || s.view === "day"
+        ? ("overview" as const)
+        : undefined,
     week: typeof s.week === "string" ? parseInt(s.week, 10) || undefined
       : typeof s.week === "number" ? s.week : undefined,
     day: typeof s.day === "string" && s.day ? s.day : undefined,
@@ -84,17 +90,17 @@ function WorkoutsPage() {
   const currentBlockId: string | null = currentGroup?.block?.id ?? null;
   const currentBlockItems = workoutItems.filter((it) => it.block?.id === currentBlockId);
 
-  // Persist Day/Block view preference. ?view= search param wins, then localStorage,
-  // then default to "day".
+  // Persist Block/Overview view preference. ?view= search param wins, then
+  // localStorage, then default to "block" (the primary training experience).
   const STORAGE_KEY = "portal-workouts-view";
-  const [viewMode, setViewModeState] = useState<"day" | "block">(() => {
-    if (typeof window === "undefined") return "day";
-    if (search?.view === "block" || search?.view === "day") return search.view;
+  const [viewMode, setViewModeState] = useState<"block" | "overview">(() => {
+    if (typeof window === "undefined") return "block";
+    if (search?.view === "block" || search?.view === "overview") return search.view;
     const saved = window.localStorage.getItem(STORAGE_KEY);
-    return saved === "block" ? "block" : "day";
+    return saved === "overview" ? "overview" : "block";
   });
   useEffect(() => {
-    if (search?.view === "block" || search?.view === "day") {
+    if (search?.view === "block" || search?.view === "overview") {
       setViewModeState(search.view);
     }
   }, [search?.view]);
@@ -102,12 +108,12 @@ function WorkoutsPage() {
     try { window.localStorage.setItem(STORAGE_KEY, viewMode); } catch {}
   }, [viewMode]);
   // Per-view scroll memory, scoped to this client + block + view, session only.
-  const scrollKey = (v: "day" | "block") =>
+  const scrollKey = (v: "block" | "overview") =>
     `workouts-${v}-view-scroll:${client?.id ?? "anon"}:${currentBlockId ?? "none"}`;
-  const saveScroll = (v: "day" | "block") => {
+  const saveScroll = (v: "block" | "overview") => {
     try { sessionStorage.setItem(scrollKey(v), String(window.scrollY)); } catch {}
   };
-  const restoreScroll = (v: "day" | "block") => {
+  const restoreScroll = (v: "block" | "overview") => {
     try {
       const raw = sessionStorage.getItem(scrollKey(v));
       if (raw == null) return false;
@@ -119,7 +125,7 @@ function WorkoutsPage() {
     } catch {}
     return false;
   };
-  const setViewMode = (v: "day" | "block") => {
+  const setViewMode = (v: "block" | "overview") => {
     if (v === viewMode) return;
     // Remember where we were in the current view before switching.
     saveScroll(viewMode);
@@ -130,7 +136,7 @@ function WorkoutsPage() {
     navigate({
       search: (prev: any) => {
         const next: any = { ...prev, view: v };
-        if (v === "day") { delete next.day; }
+        if (v === "overview") { delete next.day; }
         return next;
       },
       replace: true,
