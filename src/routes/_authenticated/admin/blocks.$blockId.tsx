@@ -288,7 +288,7 @@ function BlockEditor() {
   const autosave = useAutosave({
     key: `pl-block:${blockId}:editor`,
     value: autosaveValue,
-    delay: 1500,
+    delay: 8000,
     enabled: hydratedRef.current && dirty,
     onSave: async () => { await persist(); },
   });

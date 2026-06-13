@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { AlertTriangle, ArrowLeft, Plus, Trash2, Save, Clock, Copy, LayoutGrid, CalendarRange, ArrowRight, ZoomIn, ZoomOut, Maximize2, Minimize2, PanelLeftClose, PanelLeftOpen, Rows3, ChevronDown, ChevronUp, Settings2, Undo2, Redo2, ClipboardCopy, ClipboardPaste, Expand } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Plus, Trash2, Save, Clock, Copy, LayoutGrid, CalendarRange, ArrowRight, ZoomIn, ZoomOut, Maximize2, Minimize2, PanelLeftClose, PanelLeftOpen, Rows3, ChevronDown, ChevronUp, Settings2, Undo2, Redo2, ClipboardCopy, ClipboardPaste, Expand, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import {
   getTemplate, updateTemplate, summarizeTemplatePayload, TIME_PROFILES,
@@ -397,7 +397,7 @@ function TemplateEditor() {
   const autosave = useAutosave({
     key: `template:${templateId}:editor`,
     value: autosaveValue,
-    delay: 1500,
+    delay: 8000,
     enabled: !!meta && !!payload && hydratedRef.current && dirty,
     onSave: async ({ meta: m, payload: p }) => {
       if (!m || !p) return;
@@ -1347,9 +1347,38 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
   const clearOverride = () => {
     setRow({ ...row, manual_override: false, load_kg: null, load_lb: null });
   };
+  const resetCard = () => {
+    setRow({
+      ...row,
+      sets: null,
+      reps_text: "",
+      rpe: "",
+      rir: "",
+      percentage: null,
+      percentage_basis: null,
+      load_kg: null,
+      load_lb: null,
+      rest_seconds: null,
+      rest_seconds_override: null,
+      tempo: "",
+      notes: "",
+      manual_override: false,
+      override_of_pct: null,
+      purpose_label: null,
+    });
+    toast.success("Card reset");
+  };
   return (
     <div
       data-pb-row
+      onKeyDown={(e) => {
+        // Quick key: Alt+R resets the currently focused card
+        if (e.altKey && (e.key === "r" || e.key === "R")) {
+          e.preventDefault();
+          e.stopPropagation();
+          resetCard();
+        }
+      }}
       className={cn(
         "relative overflow-hidden rounded-md border-2 border-border bg-card shadow-sm transition-shadow hover:border-foreground/30 hover:shadow",
         isDragging && "opacity-50 ring-2 ring-primary",
@@ -1525,6 +1554,16 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
             </Button>
           )}
           {onDelete && <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={onDelete}><Trash2 className="h-3.5 w-3.5" /></Button>}
+          <Button
+            size="icon"
+            variant="ghost"
+            className="h-7 w-7"
+            onClick={resetCard}
+            title="Reset card (Alt+R)"
+            aria-label="Reset card"
+          >
+            <RotateCcw className="h-3.5 w-3.5" />
+          </Button>
         </div>
       </div>
       {/* ---- Primary programming row ---- */}
