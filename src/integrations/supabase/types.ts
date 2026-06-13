@@ -10831,6 +10831,27 @@ export type Database = {
           was_idempotent: boolean
         }[]
       }
+      pl_assign_template_to_client: {
+        Args: {
+          p_client_id: string
+          p_client_visible: boolean
+          p_end_date: string
+          p_name: string
+          p_placement: Json
+          p_selected_block_ids: string[]
+          p_start_date: string
+          p_start_from_block_id: string
+          p_template_id: string
+        }
+        Returns: Json
+      }
+      pl_move_row: {
+        Args: { p_direction: string; p_row_id: string }
+        Returns: {
+          id: string
+          sort_order: number
+        }[]
+      }
       pl_recompute_block_status: {
         Args: { _block_id: string }
         Returns: string
