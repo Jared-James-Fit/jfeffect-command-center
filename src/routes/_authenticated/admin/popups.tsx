@@ -38,7 +38,7 @@ import type { TaskQuadrant } from "@/lib/tasks";
 const sb = supabase as any;
 
 export const Route = createFileRoute("/_authenticated/admin/popups")({
-  component: PopupsManager,
+  component: PopupsRedirect,
 });
 
 /* ============================================================
