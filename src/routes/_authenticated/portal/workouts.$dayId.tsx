@@ -1540,20 +1540,6 @@ function SetRow({
       <span className={cn("font-mono text-muted-foreground", focusMode ? "text-sm" : "text-xs")}>{setIndex}</span>
       <Input
         className={cn(focusMode ? "h-11 text-base" : "h-9 text-sm", "bg-white text-black placeholder:text-gray-500")}
-        inputMode="decimal"
-        type="text"
-        pattern="[0-9]*\.?[0-9]*"
-        placeholder="—"
-        aria-label={`Set ${setIndex} weight in ${unit}`}
-        value={load}
-        onChange={(e) => setLoad(e.target.value.replace(/[^0-9.]/g, ""))}
-        onKeyDown={onEnter}
-        onBlur={() => save.flush()}
-        readOnly={readonly}
-        disabled={readonly}
-      />
-      <Input
-        className={cn(focusMode ? "h-11 text-base" : "h-9 text-sm", "bg-white text-black placeholder:text-gray-500")}
         inputMode="numeric"
         type="text"
         pattern="[0-9]*"
@@ -1561,6 +1547,20 @@ function SetRow({
         aria-label={`Set ${setIndex} reps`}
         value={reps}
         onChange={(e) => setReps(e.target.value.replace(/[^0-9]/g, ""))}
+        onKeyDown={onEnter}
+        onBlur={() => save.flush()}
+        readOnly={readonly}
+        disabled={readonly}
+      />
+      <Input
+        className={cn(focusMode ? "h-11 text-base" : "h-9 text-sm", "bg-white text-black placeholder:text-gray-500")}
+        inputMode="decimal"
+        type="text"
+        pattern="[0-9]*\.?[0-9]*"
+        placeholder={suggestedWeight != null ? fmtNum(suggestedWeight) : "—"}
+        aria-label={`Set ${setIndex} weight in ${unit}`}
+        value={load}
+        onChange={(e) => setLoad(e.target.value.replace(/[^0-9.]/g, ""))}
         onKeyDown={onEnter}
         onBlur={() => save.flush()}
         readOnly={readonly}
