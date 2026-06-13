@@ -886,6 +886,7 @@ const SettingsInput = z.object({
   support_email: z.string().email().optional().nullable().or(z.literal("")),
   refund_policy: z.string().optional(),
   stripe_mode: z.enum(["test", "live"]).optional(),
+  public_checkout_enabled: z.boolean().optional(),
 });
 export const adminUpdateJfSettings = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
