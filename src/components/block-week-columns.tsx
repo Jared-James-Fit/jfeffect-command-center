@@ -158,14 +158,14 @@ export function BlockWeekColumns({
 
               const inner = (
                 <Card className={cn(
-                  "p-2.5 flex items-center justify-between gap-2 cursor-pointer hover:bg-secondary/40 active:bg-secondary/60 transition",
+                  "flex min-w-0 cursor-pointer flex-col gap-2 p-2.5 transition hover:bg-secondary/40 active:bg-secondary/60 sm:flex-row sm:items-center sm:justify-between",
                   isToday && !done && "border-primary ring-2 ring-primary/40",
                 )}>
                   <div className="min-w-0 flex-1">
-                    <div className="font-semibold text-sm truncate flex items-center gap-1.5">
-                      {it.day.title || `Day ${it.day.day_index}`}
+                    <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-sm font-semibold leading-snug">
+                      <span className="min-w-0 break-words">{it.day.title || `Day ${it.day.day_index}`}</span>
                       {it.day.focus ? (
-                        <span className="text-muted-foreground font-normal text-xs"> — {it.day.focus}</span>
+                        <span className="min-w-0 break-words text-xs font-normal text-muted-foreground">— {it.day.focus}</span>
                       ) : null}
                       {isToday && !done && (
                         <Badge className="h-4 border-primary/40 bg-primary/15 px-1 text-[9px] font-bold text-primary hover:bg-primary/20">
@@ -173,12 +173,12 @@ export function BlockWeekColumns({
                         </Badge>
                       )}
                     </div>
-                    <div className="mt-0.5 text-[11px] text-muted-foreground inline-flex items-center gap-1">
+                    <div className="mt-0.5 inline-flex items-center gap-1 text-[11px] text-muted-foreground">
                       <Clock className="h-3 w-3" />
                       {durationRange(it.day.duration_override_min ?? it.day.duration_estimate_min ?? 60)}
                     </div>
                   </div>
-                  <div className="flex items-center gap-1.5 shrink-0">
+                  <div className="flex shrink-0 items-center justify-end gap-1.5 self-end sm:self-center">
                     {done ? (
                       <Badge variant="outline" className="text-green-500 border-green-500/30 bg-green-500/10 text-[10px] px-1.5">
                         <CheckCircle2 className="mr-0.5 h-3 w-3" />Completed
