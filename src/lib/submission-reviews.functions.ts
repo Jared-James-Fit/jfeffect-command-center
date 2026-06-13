@@ -828,91 +828,22 @@ export const approveAndSendNow = createServerFn({ method: "POST" })
       );
     }
 
-    // Idempotency: if this idempotency key already produced a successful
-    // delivery for this review, return that message without sending again.
-    if (row.send_idempotency_key === data.idempotencyKey && row.latest_message_id) {
-      return { ok: true, messageId: row.latest_message_id, deduped: true };
-    }
-
-    // Optimistically mark sending
-    await sb
-      .from("submission_reviews")
-      .update({ review_status: "sending", send_idempotency_key: data.idempotencyKey })
-      .eq("id", row.id);
-
+    // Delegate the actual delivery to the shared helper so Send Now and the
+    // scheduled-send worker share identical message-insert, audit, mirror,
+    // and idempotency behavior.
+    const { performReviewDelivery, recordDeliveryFailure } = await import(
+      "./submission-reviews-delivery.server"
+    );
     try {
-      const { data: msg, error: msgErr } = await sb
-        .from("messages")
-        .insert({
-          client_id: row.client_id,
-          sender_id: context.userId,
-          sender_role: "admin",
-          body: data.body,
-          attachments: [],
-          message_type: row.source_type === "application" ? "General" : "Check-In",
-          is_internal_note: false,
-          read_by_admin_at: new Date().toISOString(),
-        })
-        .select("*")
-        .single();
-      if (msgErr || !msg) throw msgErr ?? new Error("Message insert failed");
-
-      await sb
-        .from("submission_reviews")
-        .update({
-          review_status: "sent",
-          approved_response: row.approved_response ?? data.body,
-          delivered_response: data.body,
-          latest_message_id: msg.id,
-          approved_at: row.approved_at ?? new Date().toISOString(),
-          approved_by: row.approved_by ?? context.userId,
-          sent_at: new Date().toISOString(),
-          sent_by: context.userId,
-          last_delivery_error: null,
-        })
-        .eq("id", row.id);
-
-      await sb.from("submission_delivery_attempts").insert({
-        review_id: row.id,
-        outcome: "success",
-        message_id: msg.id,
-        initiated_by: context.userId,
-        delivery_channel: "in_app_message",
+      return await performReviewDelivery(sb, {
+        reviewRow: row,
+        body: data.body,
+        actorUserId: context.userId,
+        actorRole: "coach",
+        idempotencyKey: data.idempotencyKey,
       });
-      await audit(row.id, "response_sent", context.userId, "coach", { message_id: msg.id });
-
-      // Backwards compat: mirror into nf_reviews when source is native, so
-      // the legacy check-in-reviews UI also reflects the send.
-      if (row.source_type === "native") {
-        await sb.from("nf_reviews").insert({
-          submission_id: row.source_id,
-          reviewer_user_id: context.userId,
-          reply_text: data.body,
-          message_id: msg.id,
-          sent_to_messenger_at: new Date().toISOString(),
-        });
-        await sb
-          .from("nf_submissions")
-          .update({ status: "reviewed", reviewed_at: new Date().toISOString(), reviewed_by: context.userId })
-          .eq("id", row.source_id);
-      }
-
-      return { ok: true, messageId: msg.id, deduped: false };
-    } catch (err: any) {
-      await sb
-        .from("submission_reviews")
-        .update({
-          review_status: "delivery_failed",
-          last_delivery_error: String(err?.message ?? err).slice(0, 1000),
-        })
-        .eq("id", row.id);
-      await sb.from("submission_delivery_attempts").insert({
-        review_id: row.id,
-        outcome: "failed",
-        error: String(err?.message ?? err).slice(0, 1000),
-        initiated_by: context.userId,
-      });
-      await audit(row.id, "delivery_failed", context.userId, "coach", { error: String(err?.message ?? err).slice(0, 500) });
+    } catch (err) {
+      await recordDeliveryFailure(sb, row.id, err, context.userId);
       throw err;
     }
   });
@@ -993,11 +924,20 @@ export const cancelScheduledSend = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { row } = await assertCanTouchReview(context.supabase, context.userId, data.reviewId);
     const sb = await admin();
-    await sb
-      .from("scheduled_submission_responses")
-      .update({ status: "cancelled" })
-      .eq("review_id", row.id)
-      .eq("status", "pending");
+    // Race-safe cancellation. The SECURITY DEFINER RPC takes a row lock and
+    // refuses to cancel if the worker has already flipped the schedule to
+    // 'sending' or it has reached a terminal state. The current status is
+    // returned so the UI can show the real state.
+    const { data: resultStatus, error: cancelErr } = await sb.rpc(
+      "cancel_scheduled_response_safe",
+      { _review_id: row.id },
+    );
+    if (cancelErr) throw cancelErr;
+    if (resultStatus && resultStatus !== "cancelled" && resultStatus !== "none") {
+      throw new Error(
+        `Cannot cancel — schedule is already ${resultStatus}.`,
+      );
+    }
     await sb
       .from("submission_reviews")
       .update({
@@ -1008,6 +948,38 @@ export const cancelScheduledSend = createServerFn({ method: "POST" })
       .eq("id", row.id);
     await audit(row.id, "schedule_cancelled", context.userId, "coach");
     return { ok: true };
+  });
+
+// ---------- Admin: retry a failed scheduled send ----------------------------
+
+const RetryScheduleInput = z.object({ scheduleId: z.string().uuid() });
+
+export const retryFailedSchedule = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => RetryScheduleInput.parse(d))
+  .handler(async ({ data, context }) => {
+    // Admin gate is enforced both here (defense-in-depth) and inside the
+    // SECURITY DEFINER RPC `retry_failed_schedule`.
+    const { data: isAdmin } = await context.supabase.rpc("has_role", {
+      _user_id: context.userId,
+      _role: "admin",
+    });
+    if (!isAdmin) throw new Error("Forbidden — admin only");
+    const sb = await admin();
+    const { data: updated, error } = await sb.rpc("retry_failed_schedule", {
+      _schedule_id: data.scheduleId,
+      _actor: context.userId,
+    });
+    if (error) throw error;
+    if (!updated?.id) {
+      throw new Error("Schedule is not in a failed state.");
+    }
+    await audit(updated.review_id, "schedule_retry_requested", context.userId, "admin", {
+      schedule_id: data.scheduleId,
+      previous_last_error: updated.last_error ?? null,
+      attempts: updated.attempts,
+    });
+    return { ok: true, schedule: updated };
   });
 // ---------- Approval (explicit, separate from send) --------------------------
 
