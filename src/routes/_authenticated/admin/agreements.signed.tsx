@@ -322,8 +322,17 @@ function SignedAgreementsPage() {
             {refreshing ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-1" />}
             Refresh pending
           </Button>
-          <div className="text-xs text-muted-foreground bg-secondary/40 rounded-md px-3 py-2">
-            Historical SignNow import is temporarily disabled; future signed agreements will appear here after webhook or refresh.
+          <Button
+            type="button"
+            variant="outline"
+            onClick={handleImportHistorical}
+            disabled={importMutation.isPending}
+          >
+            {importMutation.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-1" />}
+            Sync from SignNow
+          </Button>
+          <div className="text-xs text-muted-foreground bg-secondary/40 rounded-md px-3 py-2 max-w-[320px]">
+            Sync refreshes existing agreements from SignNow. It never creates new rows — docs without a linked agreement are reported as unlinked.
           </div>
           <Link to="/admin/agreements" className="text-sm text-primary hover:underline">
             ← Back to Agreements
