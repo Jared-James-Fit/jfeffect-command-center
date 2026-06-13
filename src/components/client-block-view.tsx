@@ -391,9 +391,9 @@ export function ClientBlockView({
                 id={`cbv-day-${d.id}`}
                 data-day-id={d.id}
                 className={cn(
-                  "flex snap-start flex-col rounded-lg border bg-card",
+                  "flex min-w-0 snap-start flex-col rounded-lg border bg-card",
                   // Mobile: ~85vw per card with a small peek of the next day.
-                  "w-[85vw] shrink-0",
+                  "w-[calc(100vw-3rem)] max-w-[360px] shrink-0",
                   // Tablet/desktop: fixed-width columns; horizontal scroll if overflow.
                   "md:w-[320px] lg:w-[340px] xl:w-[360px]",
                   isToday && !done && "border-primary ring-2 ring-primary/40",
@@ -401,14 +401,14 @@ export function ClientBlockView({
               >
                 {/* Sticky day header inside the column */}
                 <div className="sticky top-[64px] z-10 rounded-t-lg border-b border-border bg-card/95 p-3 backdrop-blur">
-                  <div className="flex items-start justify-between gap-2">
+                  <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2">
                     <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <h3 className="truncate text-sm font-black uppercase tracking-wide">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <h3 className="min-w-0 truncate text-sm font-black uppercase tracking-wide">
                           {d.title || `Day ${d.day_index}`}
                         </h3>
                         {isToday && !done && (
-                          <Badge className="h-4 border-primary/40 bg-primary/15 px-1 text-[9px] font-bold text-primary hover:bg-primary/20">
+                          <Badge className="h-4 shrink-0 whitespace-nowrap border-primary/40 bg-primary/15 px-1 text-[9px] font-bold text-primary hover:bg-primary/20">
                             Today
                           </Badge>
                         )}
@@ -416,13 +416,13 @@ export function ClientBlockView({
                       {d.focus && (
                         <p className="mt-0.5 truncate text-[11px] text-foreground/70">{d.focus}</p>
                       )}
-                      <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-foreground/70">
-                        {dd && <span>{format(dd, "EEE · MMM d")}</span>}
-                        <span className="inline-flex items-center gap-1"><Clock className="h-3 w-3" />{duration}</span>
-                        <span className="inline-flex items-center gap-1"><Dumbbell className="h-3 w-3" />{rows.length} ex</span>
+                      <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-foreground/70">
+                        {dd && <span className="shrink-0 whitespace-nowrap">{format(dd, "EEE · MMM d")}</span>}
+                        <span className="inline-flex min-w-0 items-center gap-1 whitespace-nowrap"><Clock className="h-3 w-3 shrink-0" />{duration}</span>
+                        <span className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap"><Dumbbell className="h-3 w-3 shrink-0" />{rows.length} ex</span>
                       </div>
                     </div>
-                    <div className="shrink-0">
+                    <div className="shrink-0 whitespace-nowrap">
                       {done ? (
                         <Badge variant="outline" className="border-emerald-500/40 bg-emerald-500/10 text-[10px] text-emerald-500">
                           <CheckCircle2 className="mr-0.5 h-3 w-3" /> Done
@@ -465,28 +465,28 @@ export function ClientBlockView({
                     const rir = r.rir;
                     return (
                       <div key={r.id ?? i} className={cn(
-                        "rounded-md border bg-background/40 p-2",
+                        "min-w-0 rounded-md border bg-background/40 p-2",
                         isComp ? "border-primary/40" : "border-border",
                       )}>
-                        <div className="flex items-start justify-between gap-2">
+                        <div className="grid grid-cols-1 gap-2">
                           <div className="min-w-0">
                             <div className="truncate text-[13px] font-bold leading-tight">{name}</div>
-                            <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[10px] font-semibold uppercase tracking-wide text-foreground/70">
-                              <span>{purpose[i]}</span>
-                              {isComp && <span className="rounded bg-primary/15 px-1 text-primary">Comp</span>}
-                              <span className="text-foreground/50">· {cat}</span>
+                            <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[10px] font-semibold uppercase tracking-wide text-foreground/70">
+                              <span className="max-w-full truncate">{purpose[i]}</span>
+                              {isComp && <span className="shrink-0 rounded bg-primary/15 px-1 text-primary">Comp</span>}
+                              <span className="max-w-full truncate text-foreground/50">· {cat}</span>
                             </div>
                           </div>
                         </div>
-                        <div className="mt-1.5 grid grid-cols-3 gap-1 text-[11px] tabular-nums">
-                          <div><span className="text-foreground/60">Sets</span> <span className="font-bold">{sets}</span></div>
-                          <div><span className="text-foreground/60">Reps</span> <span className="font-bold">{reps}</span></div>
-                          <div><span className="text-foreground/60">Rest</span> <span className="font-bold">{fmtRest(rest)}</span></div>
-                          {(rpe != null && rpe !== "") && <div><span className="text-foreground/60">RPE</span> <span className="font-bold">{rpe}</span></div>}
-                          {(rir != null && rir !== "") && <div><span className="text-foreground/60">RIR</span> <span className="font-bold">{rir}</span></div>}
-                          {(loadVal != null) && <div><span className="text-foreground/60">Load</span> <span className="font-bold">{loadVal}{loadUnit}</span></div>}
-                          {(pct != null && pct !== "") && <div><span className="text-foreground/60">%</span> <span className="font-bold">{pct}%</span></div>}
-                          {r.tempo && <div className="col-span-3"><span className="text-foreground/60">Tempo</span> <span className="font-bold">{r.tempo}</span></div>}
+                        <div className="mt-1.5 grid grid-cols-2 gap-x-2 gap-y-1 text-[11px] tabular-nums sm:grid-cols-3">
+                          <div className="min-w-0"><span className="text-foreground/60">Sets</span> <span className="font-bold break-words">{sets}</span></div>
+                          <div className="min-w-0"><span className="text-foreground/60">Reps</span> <span className="font-bold break-words">{reps}</span></div>
+                          <div className="min-w-0"><span className="text-foreground/60">Rest</span> <span className="font-bold break-words">{fmtRest(rest)}</span></div>
+                          {(rpe != null && rpe !== "") && <div className="min-w-0"><span className="text-foreground/60">RPE</span> <span className="font-bold break-words">{rpe}</span></div>}
+                          {(rir != null && rir !== "") && <div className="min-w-0"><span className="text-foreground/60">RIR</span> <span className="font-bold break-words">{rir}</span></div>}
+                          {(loadVal != null) && <div className="min-w-0"><span className="text-foreground/60">Load</span> <span className="font-bold break-words">{loadVal}{loadUnit}</span></div>}
+                          {(pct != null && pct !== "") && <div className="min-w-0"><span className="text-foreground/60">%</span> <span className="font-bold break-words">{pct}%</span></div>}
+                          {r.tempo && <div className="col-span-2 min-w-0 sm:col-span-3"><span className="text-foreground/60">Tempo</span> <span className="font-bold break-words">{r.tempo}</span></div>}
                         </div>
                       </div>
                     );
