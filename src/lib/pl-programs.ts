@@ -1226,6 +1226,49 @@ export async function applyTemplateToClient(opts: { templateId: string; clientId
   const payload = tpl.payload || {};
   const placement: TemplatePlacement = opts.placement ?? (opts.prepId ? { mode: "existing_prep", prepId: opts.prepId } : { mode: "standalone_block" });
 
+  // ---- v2 multi-block "block" template: expand selected (or all active) blocks
+  // into N pl_blocks. Single active block keeps the legacy standalone path
+  // (drops through to the "block (default)" branch below) so behavior is
+  // unchanged for existing templates.
+  if (tpl.template_type === "block" && payload?.schema_version === 2 && Array.isArray(payload.blocks)) {
+    const { toAssignmentBlocks } = await import("@/lib/pl-template-blocks");
+    const selectedIds = (opts as any).selectedBlockIds as string[] | undefined;
+    const assignBlocks = toAssignmentBlocks(payload, { selectedIds });
+    if (assignBlocks.length > 1) {
+      // Multi-block standalone: wrap in a new prep so the blocks group together.
+      const prep = await createPrep({
+        client_id: opts.clientId,
+        title: opts.name ?? tpl.name,
+        status: "Active",
+        client_visible: opts.clientVisible ?? true,
+        source_template_id: tpl.id,
+        start_date: opts.startDate ?? null,
+        end_date: opts.endDate ?? null,
+      });
+      for (const b of assignBlocks) {
+        const wdLen = Array.isArray(b.weeks_data) ? b.weeks_data.length : 4;
+        const blk = await createBlock({
+          client_id: opts.clientId, prep_id: prep.id, name: b.name || "Block",
+          weeks: wdLen, training_focus: b.training_focus ?? null,
+          source_template_id: tpl.id,
+          status: "Active",
+        });
+        if (Array.isArray(b.weeks_data) && b.weeks_data.length) {
+          await sb.from("pl_weeks").delete().eq("block_id", blk.id);
+          let idx = 1;
+          for (const w of b.weeks_data) await insertWeekTree(blk.id, w.week_index ?? idx++, w);
+          await sb.from("pl_blocks").update({ weeks: b.weeks_data.length }).eq("id", blk.id);
+        }
+      }
+      return { prepId: prep.id };
+    }
+    // Single block selected → fall through, but make sure weeks_data reflects
+    // the chosen block (serialize already mirrors the first active block).
+    if (assignBlocks.length === 1) {
+      (payload as any).weeks_data = assignBlocks[0].weeks_data;
+    }
+  }
+
   // ---- full_prep: create new prep + N blocks
   if (tpl.template_type === "full_prep") {
     const prepInfo = (placement as any).prep || {};
