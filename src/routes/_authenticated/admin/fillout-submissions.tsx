@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { useEffect, useMemo, useState } from "react";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
@@ -14,8 +14,16 @@ import { toast } from "sonner";
 import { ClipboardList, ExternalLink, UserCheck, Inbox } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/admin/fillout-submissions")({
-  component: FilloutSubmissionsPage,
+  component: FilloutSubmissionsRedirect,
 });
+
+function FilloutSubmissionsRedirect() {
+  const nav = useNavigate();
+  useEffect(() => {
+    nav({ to: "/admin/forms", search: { tab: "fillout-submissions" } as any, replace: true });
+  }, [nav]);
+  return null;
+}
 
 type Sub = {
   id: string;
@@ -33,7 +41,7 @@ type Sub = {
   created_at: string;
 };
 
-function FilloutSubmissionsPage() {
+export function FilloutSubmissionsPage({ embedded = false }: { embedded?: boolean } = {}) {
   const qc = useQueryClient();
   const [tab, setTab] = useState<"unmatched" | "all">("unmatched");
   const [viewing, setViewing] = useState<Sub | null>(null);
@@ -79,10 +87,12 @@ function FilloutSubmissionsPage() {
 
   return (
     <>
-      <PageHeader
-        title="Fillout Submissions"
-        subtitle="External form responses received from Fillout. Unmatched submissions need a client assigned."
-      />
+      {!embedded && (
+        <PageHeader
+          title="Fillout Submissions"
+          subtitle="External form responses received from Fillout. Unmatched submissions need a client assigned."
+        />
+      )}
       <div className="space-y-4 p-4 md:p-6">
         <Tabs value={tab} onValueChange={(v) => setTab(v as any)}>
           <TabsList>

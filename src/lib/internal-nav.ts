@@ -104,17 +104,14 @@ const REGISTRY: Entry[] = [
   { to: "/admin/recipes", label: "Recipes", icon: ChefHat, group: "Programming",
     visibleTo: ["admin", "coach"] },
 
-  // ── FORMS (incl. applications & native forms) ───────────────────────
-  { to: "/admin/native-forms", label: "Check-Ins & Forms", icon: FileEdit, group: "Forms",
-    visibleTo: ["admin", "coach", "assistant_coach"] },
-  { to: "/admin/forms", label: "Document Forms", icon: FileEdit, group: "Forms",
-    visibleTo: ["admin", "coach"] },
-  { to: "/admin/fillout-submissions", label: "Fillout Submissions", icon: ClipboardList, group: "Forms",
-    visibleTo: ["admin", "coach", "sales"] },
-  { to: "/admin/sales/coaching-applications", label: "Applications", icon: ClipboardList, group: "Forms",
-    visibleTo: ["admin", "sales", "coach"] },
-  { to: "/admin/agreements", label: "Agreements", icon: FileSignature, group: "Forms",
-    visibleTo: ["admin", "coach", "sales"] },
+  // ── FORMS (one consolidated workspace; tabs handle the sub-views) ───
+  { to: "/admin/forms", label: "Forms", icon: FileEdit, group: "Forms",
+    visibleTo: ["admin", "coach", "assistant_coach", "sales"],
+    keywords: [
+      "forms", "native forms", "check-ins", "check ins", "form builder",
+      "document forms", "fillout", "fillout submissions", "submissions",
+      "coaching applications", "applications", "agreements", "signnow",
+    ] },
 
   // ── COMMUNICATION ────────────────────────────────────────────────────
   { to: "/admin/messages", label: "Inbox", icon: MessageCircle, group: "Communication",

@@ -1,6 +1,6 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
@@ -18,14 +18,21 @@ import { useServerFn } from "@tanstack/react-start";
 import { createTemplate, updateTemplate, archiveTemplate, setTemplateActive, createAgreement, syncSignNowTemplates } from "@/lib/agreements.functions";
 import { AGREEMENT_TYPES, type AgreementTemplate } from "@/lib/agreements";
 import { AgreementStatusBadge } from "@/components/agreement-status-badge";
-import { useNavigate } from "@tanstack/react-router";
 import { SentAgreementsManager } from "@/components/sent-agreements-manager";
 
 export const Route = createFileRoute("/_authenticated/admin/agreements/")({
-  component: AgreementsAdminPage,
+  component: AgreementsAdminRedirect,
 });
 
-function AgreementsAdminPage() {
+function AgreementsAdminRedirect() {
+  const nav = useNavigate();
+  useEffect(() => {
+    nav({ to: "/admin/forms", search: { tab: "agreements" } as any, replace: true });
+  }, [nav]);
+  return null;
+}
+
+export function AgreementsAdminPage({ embedded = false }: { embedded?: boolean } = {}) {
   const qc = useQueryClient();
   const [editing, setEditing] = useState<Partial<AgreementTemplate> | null>(null);
   const [actioning, setActioning] = useState<{ template: AgreementTemplate } | null>(null);
@@ -63,7 +70,9 @@ function AgreementsAdminPage() {
 
   return (
     <>
-      <PageHeader title="Agreements" subtitle="Connected to SignNow. Tracks, organizes, and verifies signed copies." />
+      {!embedded && (
+        <PageHeader title="Agreements" subtitle="Connected to SignNow. Tracks, organizes, and verifies signed copies." />
+      )}
       <div className="p-6 md:p-8 space-y-6">
         <div className="flex justify-end">
           <Link to="/admin/agreements/signed">
