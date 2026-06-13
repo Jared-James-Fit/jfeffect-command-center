@@ -47,7 +47,10 @@ function MessagesRedirect() {
   return null;
 }
 
-export function MessagesInbox({ initialClient }: { initialClient?: string } = {}) {
+export function MessagesInbox({
+  initialClient,
+  embedded = false,
+}: { initialClient?: string; embedded?: boolean } = {}) {
   const selectedFromUrl = initialClient;
   const navigate = useNavigate();
   const qc = useQueryClient();
@@ -199,8 +202,27 @@ export function MessagesInbox({ initialClient }: { initialClient?: string } = {}
   // On md+: persistent inbox sidebar (320–360px) + conversation pane.
   return (
     <div
-      className="fixed inset-x-0 top-0 z-30 flex flex-col bg-background md:static md:inset-auto md:z-auto md:h-full md:flex-1"
-      style={{ height: "calc(100dvh - var(--bottom-nav-clearance, 0px))" }}
+      className={cn(
+        "flex flex-col bg-background",
+        embedded
+          // Stays inside the workspace shell — no fixed overlay so the
+          // workspace header/tabs remain visible. Uses dvh so iOS Safari's
+          // dynamic toolbar doesn't clip the conversation pane.
+          ? "w-full"
+          : "fixed inset-x-0 top-0 z-30 md:static md:inset-auto md:z-auto md:h-full md:flex-1",
+      )}
+      style={
+        embedded
+          ? {
+              // Subtract the visible workspace chrome (~ header + tabs ≈ 124px)
+              // and the mobile bottom-nav clearance so the thread is never
+              // hidden behind the fixed nav.
+              height:
+                "calc(100dvh - var(--bottom-nav-clearance, 0px) - 124px)",
+              minHeight: "60vh",
+            }
+          : { height: "calc(100dvh - var(--bottom-nav-clearance, 0px))" }
+      }
     >
       {tab === "groups" ? (
         <div className="flex min-h-0 flex-1 w-full flex-col">

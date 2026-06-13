@@ -13,36 +13,48 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import { createBroadcastDraft, submitForReview, listMyDrafts } from "@/lib/media-manager.functions";
 
-const TABS = ["drafts", "announcements"] as const;
+// Phase 4A — the underlying broadcast model has no distinction between
+// drafts and announcements (both read from the same listMyDrafts source),
+// so the duplicate Announcements tab was removed. The /media/announcements
+// route now redirects here (see announcements.tsx) and the old
+// ?tab=announcements query param is treated as "drafts".
+const TABS = ["drafts"] as const;
 type Tab = typeof TABS[number];
 
 export const Route = createFileRoute("/_authenticated/media/communication")({
-  validateSearch: (s) => z.object({ tab: z.enum(TABS).optional() }).parse(s),
+  validateSearch: (s) =>
+    z
+      .object({
+        // Accept the legacy "announcements" value but normalise to "drafts"
+        // so old bookmarks keep working without showing a duplicate tab.
+        tab: z.enum(["drafts", "announcements"]).optional(),
+      })
+      .parse(s),
   component: CommunicationWorkspace,
 });
 
 function CommunicationWorkspace() {
   const { tab } = Route.useSearch();
   const navigate = useNavigate();
-  const active: Tab = tab ?? "drafts";
+  // Always normalise to the single supported tab.
+  const active: Tab = "drafts";
+  // If the URL still carries ?tab=announcements, rewrite it once.
+  if (tab === "announcements" && typeof window !== "undefined") {
+    navigate({ to: "/media/communication", search: { tab: "drafts" }, replace: true });
+  }
   return (
     <div className="mx-auto max-w-5xl space-y-4 p-4 md:p-6">
       <header>
         <h1 className="text-2xl md:text-3xl font-black tracking-tight">Communication</h1>
-        <p className="text-sm text-muted-foreground">Broadcast drafts and announcements pending admin approval.</p>
+        <p className="text-sm text-muted-foreground">
+          Broadcast drafts pending admin approval.
+        </p>
       </header>
-      <Tabs value={active} onValueChange={(v) => navigate({ to: "/media/communication", search: { tab: v as Tab }, replace: true })}>
+      <Tabs value={active} onValueChange={() => { /* single tab */ }}>
         <TabsList>
           <TabsTrigger value="drafts">Broadcast Drafts</TabsTrigger>
-          <TabsTrigger value="announcements">Announcements</TabsTrigger>
         </TabsList>
         <TabsContent value="drafts" className="mt-4"><DraftsTab /></TabsContent>
-        <TabsContent value="announcements" className="mt-4">
-          <Card className="p-4 text-sm text-muted-foreground">
-            Announcements share the broadcast pipeline. Create an announcement-style draft below and admin will approve before publishing.
-          </Card>
-          <div className="mt-4"><DraftsTab /></div>
-        </TabsContent>
       </Tabs>
     </div>
   );
