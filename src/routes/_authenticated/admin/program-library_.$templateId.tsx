@@ -25,6 +25,8 @@ import { cn } from "@/lib/utils";
 import { useAutosave } from "@/hooks/use-autosave";
 import { SaveStatus } from "@/components/save-status";
 import { useConflictWatch } from "@/hooks/use-conflict-watch";
+import { usePersistentUndoStack } from "@/lib/persistent-undo";
+import { useScrollRestoration } from "@/lib/scroll-restore";
 import { ActionButton } from "@/components/action-button";
 import { copyRows, useClip } from "@/lib/program-builder-clipboard";
 import { createContext, useContext } from "react";
@@ -384,6 +386,7 @@ const STYLES: TrainingStyle[] = ["powerlifting", "bodybuilding", "strength", "li
 
 function TemplateEditor() {
   const { templateId } = Route.useParams();
+  const search = useSearch({ strict: false }) as { block?: string };
   const qc = useQueryClient();
 
   const { data: tpl, isLoading } = useQuery({
@@ -407,12 +410,18 @@ function TemplateEditor() {
   const hydratedRef = useRef(false);
 
   // ---- Undo / Redo history for payload ----
-  const histRef = useRef<string[]>([]);
-  const futureRef = useRef<string[]>([]);
   const lastPushTs = useRef(0);
-  const [, bumpHist] = useState(0);
-  const canUndo = histRef.current.length > 0;
-  const canRedo = futureRef.current.length > 0;
+  // Durable per-template undo/redo. The server's `updated_at` is the
+  // baseline marker — if the template was saved elsewhere since the last
+  // visit, stored history is dropped (we never replay stale ops onto a
+  // newer payload). See src/lib/persistent-undo.ts.
+  const undoStack = usePersistentUndoStack({
+    scope: `tpl:${templateId}`,
+    baseline: (tpl as any)?.updated_at ?? null,
+    enabled: hydratedRef.current,
+  });
+  const canUndo = undoStack.canUndo;
+  const canRedo = undoStack.canRedo;
 
   useEffect(() => {
     if (tpl && !meta) {
@@ -423,9 +432,6 @@ function TemplateEditor() {
       });
       setPayload(JSON.parse(JSON.stringify(tpl.payload || {})));
       hydratedRef.current = true;
-      histRef.current = [];
-      futureRef.current = [];
-      bumpHist((n) => n + 1);
     }
   }, [tpl]);
 
@@ -435,33 +441,28 @@ function TemplateEditor() {
       const now = Date.now();
       // Coalesce rapid edits (e.g. typing) within 600ms into a single history step.
       if (now - lastPushTs.current > 600) {
-        histRef.current.push(JSON.stringify(payload));
-        if (histRef.current.length > 100) histRef.current.shift();
+        undoStack.pushSnapshot(JSON.stringify(payload));
       }
       lastPushTs.current = now;
-      futureRef.current = [];
-      bumpHist((n) => n + 1);
     }
     setPayload(next);
     setDirty(true);
   };
   const undo = () => {
-    const prev = histRef.current.pop();
+    if (payload == null) return;
+    const prev = undoStack.undo(JSON.stringify(payload));
     if (!prev) return;
-    futureRef.current.push(JSON.stringify(payload));
     setPayload(JSON.parse(prev));
     setDirty(true);
     lastPushTs.current = 0;
-    bumpHist((n) => n + 1);
   };
   const redo = () => {
-    const next = futureRef.current.pop();
+    if (payload == null) return;
+    const next = undoStack.redo(JSON.stringify(payload));
     if (!next) return;
-    histRef.current.push(JSON.stringify(payload));
     setPayload(JSON.parse(next));
     setDirty(true);
     lastPushTs.current = 0;
-    bumpHist((n) => n + 1);
   };
 
   const persist = async (m: any, p: any) => {
@@ -515,6 +516,15 @@ function TemplateEditor() {
     remote: remoteMeta,
     local: meta,
     savedAt: autosave.savedAt,
+  });
+
+  // Restore the coach's vertical scroll for this template / selected block.
+  // Scoped per user + template + active block so switching blocks doesn't
+  // jump to the wrong saved position. Waits until the editor has hydrated.
+  useScrollRestoration({
+    key: `tpl:${templateId}:b:${search.block ?? "_"}`,
+    ready: !!tpl && !!meta && !!payload,
+    dependencies: [search.block ?? null],
   });
 
   const save = async () => {
