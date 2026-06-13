@@ -492,6 +492,11 @@ export function ClientBlockView({
                     );
                   })}
                 </div>
+
+                {/* Bottom action */}
+                <div className="border-t border-border p-3">
+                  <Action />
+                </div>
               </div>
             );
           })}
