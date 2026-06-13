@@ -914,6 +914,8 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
   const repTarget = useMemo(() => parseRepTarget(row.reps_text), [row.reps_text]);
   const rpeTarget = useMemo(() => parseEffortTarget(row.rpe), [row.rpe]);
   const rirTarget = useMemo(() => parseEffortTarget(row.rir), [row.rir]);
+  // When the program prescribes RIR and not RPE, the input column behaves as RIR.
+  const showRir = !!row.rir && !row.rpe;
 
   // "Apply to remaining" — runs from a completed SetRow, pushes Draft values
   // into all later un-completed sets of this same exercise. Never overwrites
@@ -1064,7 +1066,7 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
           <span>Set</span>
           <span>Reps</span>
           <span className="truncate">Wt ({unit.toUpperCase()})</span>
-          <span>RPE</span>
+          <span>{showRir ? "RIR" : "RPE"}</span>
           <span className="text-right">Status</span>
         </div>
         {Array.from({ length: setCount }).map((_, i) => {
