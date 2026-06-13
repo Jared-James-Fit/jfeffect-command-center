@@ -194,6 +194,7 @@ import { Route as AuthenticatedAdminMembershipRefundPolicyRouteImport } from './
 import { Route as AuthenticatedAdminMembershipPromoToolsRouteImport } from './routes/_authenticated/admin/membership.promo-tools'
 import { Route as AuthenticatedAdminMembershipNotificationsRouteImport } from './routes/_authenticated/admin/membership.notifications'
 import { Route as AuthenticatedAdminMembershipLaunchReadinessRouteImport } from './routes/_authenticated/admin/membership.launch-readiness'
+import { Route as AuthenticatedAdminMembershipCheckoutSettingsRouteImport } from './routes/_authenticated/admin/membership.checkout-settings'
 import { Route as AuthenticatedAdminMembershipChallengesRouteImport } from './routes/_authenticated/admin/membership.challenges'
 import { Route as AuthenticatedAdminMembershipBillingEventsRouteImport } from './routes/_authenticated/admin/membership.billing-events'
 import { Route as AuthenticatedAdminMembershipBillingRouteImport } from './routes/_authenticated/admin/membership.billing'
@@ -1281,6 +1282,12 @@ const AuthenticatedAdminMembershipLaunchReadinessRoute =
     path: '/launch-readiness',
     getParentRoute: () => AuthenticatedAdminMembershipRoute,
   } as any)
+const AuthenticatedAdminMembershipCheckoutSettingsRoute =
+  AuthenticatedAdminMembershipCheckoutSettingsRouteImport.update({
+    id: '/checkout-settings',
+    path: '/checkout-settings',
+    getParentRoute: () => AuthenticatedAdminMembershipRoute,
+  } as any)
 const AuthenticatedAdminMembershipChallengesRoute =
   AuthenticatedAdminMembershipChallengesRouteImport.update({
     id: '/challenges',
@@ -1582,6 +1589,7 @@ export interface FileRoutesByFullPath {
   '/admin/membership/billing': typeof AuthenticatedAdminMembershipBillingRoute
   '/admin/membership/billing-events': typeof AuthenticatedAdminMembershipBillingEventsRoute
   '/admin/membership/challenges': typeof AuthenticatedAdminMembershipChallengesRoute
+  '/admin/membership/checkout-settings': typeof AuthenticatedAdminMembershipCheckoutSettingsRoute
   '/admin/membership/launch-readiness': typeof AuthenticatedAdminMembershipLaunchReadinessRoute
   '/admin/membership/notifications': typeof AuthenticatedAdminMembershipNotificationsRoute
   '/admin/membership/promo-tools': typeof AuthenticatedAdminMembershipPromoToolsRoute
@@ -1788,6 +1796,7 @@ export interface FileRoutesByTo {
   '/admin/membership/billing': typeof AuthenticatedAdminMembershipBillingRoute
   '/admin/membership/billing-events': typeof AuthenticatedAdminMembershipBillingEventsRoute
   '/admin/membership/challenges': typeof AuthenticatedAdminMembershipChallengesRoute
+  '/admin/membership/checkout-settings': typeof AuthenticatedAdminMembershipCheckoutSettingsRoute
   '/admin/membership/launch-readiness': typeof AuthenticatedAdminMembershipLaunchReadinessRoute
   '/admin/membership/notifications': typeof AuthenticatedAdminMembershipNotificationsRoute
   '/admin/membership/promo-tools': typeof AuthenticatedAdminMembershipPromoToolsRoute
@@ -2001,6 +2010,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/membership/billing': typeof AuthenticatedAdminMembershipBillingRoute
   '/_authenticated/admin/membership/billing-events': typeof AuthenticatedAdminMembershipBillingEventsRoute
   '/_authenticated/admin/membership/challenges': typeof AuthenticatedAdminMembershipChallengesRoute
+  '/_authenticated/admin/membership/checkout-settings': typeof AuthenticatedAdminMembershipCheckoutSettingsRoute
   '/_authenticated/admin/membership/launch-readiness': typeof AuthenticatedAdminMembershipLaunchReadinessRoute
   '/_authenticated/admin/membership/notifications': typeof AuthenticatedAdminMembershipNotificationsRoute
   '/_authenticated/admin/membership/promo-tools': typeof AuthenticatedAdminMembershipPromoToolsRoute
@@ -2214,6 +2224,7 @@ export interface FileRouteTypes {
     | '/admin/membership/billing'
     | '/admin/membership/billing-events'
     | '/admin/membership/challenges'
+    | '/admin/membership/checkout-settings'
     | '/admin/membership/launch-readiness'
     | '/admin/membership/notifications'
     | '/admin/membership/promo-tools'
@@ -2420,6 +2431,7 @@ export interface FileRouteTypes {
     | '/admin/membership/billing'
     | '/admin/membership/billing-events'
     | '/admin/membership/challenges'
+    | '/admin/membership/checkout-settings'
     | '/admin/membership/launch-readiness'
     | '/admin/membership/notifications'
     | '/admin/membership/promo-tools'
@@ -2632,6 +2644,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/membership/billing'
     | '/_authenticated/admin/membership/billing-events'
     | '/_authenticated/admin/membership/challenges'
+    | '/_authenticated/admin/membership/checkout-settings'
     | '/_authenticated/admin/membership/launch-readiness'
     | '/_authenticated/admin/membership/notifications'
     | '/_authenticated/admin/membership/promo-tools'
@@ -4028,6 +4041,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminMembershipLaunchReadinessRouteImport
       parentRoute: typeof AuthenticatedAdminMembershipRoute
     }
+    '/_authenticated/admin/membership/checkout-settings': {
+      id: '/_authenticated/admin/membership/checkout-settings'
+      path: '/checkout-settings'
+      fullPath: '/admin/membership/checkout-settings'
+      preLoaderRoute: typeof AuthenticatedAdminMembershipCheckoutSettingsRouteImport
+      parentRoute: typeof AuthenticatedAdminMembershipRoute
+    }
     '/_authenticated/admin/membership/challenges': {
       id: '/_authenticated/admin/membership/challenges'
       path: '/challenges'
@@ -4227,6 +4247,7 @@ interface AuthenticatedAdminMembershipRouteChildren {
   AuthenticatedAdminMembershipBillingRoute: typeof AuthenticatedAdminMembershipBillingRoute
   AuthenticatedAdminMembershipBillingEventsRoute: typeof AuthenticatedAdminMembershipBillingEventsRoute
   AuthenticatedAdminMembershipChallengesRoute: typeof AuthenticatedAdminMembershipChallengesRoute
+  AuthenticatedAdminMembershipCheckoutSettingsRoute: typeof AuthenticatedAdminMembershipCheckoutSettingsRoute
   AuthenticatedAdminMembershipLaunchReadinessRoute: typeof AuthenticatedAdminMembershipLaunchReadinessRoute
   AuthenticatedAdminMembershipNotificationsRoute: typeof AuthenticatedAdminMembershipNotificationsRoute
   AuthenticatedAdminMembershipPromoToolsRoute: typeof AuthenticatedAdminMembershipPromoToolsRoute
@@ -4255,6 +4276,8 @@ const AuthenticatedAdminMembershipRouteChildren: AuthenticatedAdminMembershipRou
       AuthenticatedAdminMembershipBillingEventsRoute,
     AuthenticatedAdminMembershipChallengesRoute:
       AuthenticatedAdminMembershipChallengesRoute,
+    AuthenticatedAdminMembershipCheckoutSettingsRoute:
+      AuthenticatedAdminMembershipCheckoutSettingsRoute,
     AuthenticatedAdminMembershipLaunchReadinessRoute:
       AuthenticatedAdminMembershipLaunchReadinessRoute,
     AuthenticatedAdminMembershipNotificationsRoute:
