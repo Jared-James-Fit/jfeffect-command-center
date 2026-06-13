@@ -1227,7 +1227,7 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
     >
       <div className={`absolute left-0 top-0 h-full w-2 ${accent}`} aria-hidden />
       <div className="grid grid-cols-12 items-end gap-1">
-        <Field className="col-span-12 md:col-span-4" label="Exercise">
+        <Field className="col-span-12 md:col-span-3" label="Exercise">
         <div className="flex items-center gap-1">
           <span
             draggable={!!onDragStartRow}
