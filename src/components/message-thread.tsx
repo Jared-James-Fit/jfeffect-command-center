@@ -38,6 +38,8 @@ import { GifThumb } from "@/components/gif-thumb";
 import { fallbackEmoji } from "@/lib/gif-fallback";
 import { markRecent as markSoundRecent } from "@/lib/chat-sounds";
 import { ChatSoundCard } from "@/components/chat-sound-card";
+import { ScheduledStrip } from "@/components/messages/scheduled-strip";
+import { ScheduleButton } from "@/components/messages/schedule-button";
 import { renderBodyWithMeet } from "@/components/chat-shared";
 import { MeetQuickAction } from "@/components/meet-quick-action";
 import { ComposerPlusMenu } from "@/components/composer-plus-menu";
@@ -1363,6 +1365,11 @@ export function MessageThread({
         })}
       </div>
 
+      {/* Phase 4A — admin strip showing scheduled & failed messages with
+          cancel/retry. RLS hides these rows from clients, so it's only
+          rendered for the admin role. */}
+      {role === "admin" && clientId && <ScheduledStrip clientId={clientId} />}
+
       <div
         className={cn(
           "space-y-2 border-t border-border",
@@ -1538,6 +1545,15 @@ export function MessageThread({
 
             {/* Voice or Send */}
             {body.trim() || attachments.length > 0 ? (
+              <>
+              {role === "admin" && body.trim() && attachments.length === 0 && (
+                <ScheduleButton
+                  clientId={clientId}
+                  body={body}
+                  disabled={sending || uploading}
+                  onScheduled={() => { setBody(""); }}
+                />
+              )}
               <Button
                 type="button"
                 onClick={onSend}
@@ -1552,6 +1568,7 @@ export function MessageThread({
                   <Send className="h-4 w-4" />
                 )}
               </Button>
+              </>
             ) : (
               <Button type="button" variant="ghost" size="icon" className="h-10 w-10 shrink-0 rounded-full"
                 onClick={async () => {

@@ -88,7 +88,7 @@ function CommunicationWorkspace() {
         </div>
       </div>
       <div>
-        {tab === "messages" && <MessagesInbox initialClient={client} />}
+        {tab === "messages" && <MessagesInbox initialClient={client} embedded />}
         {tab === "broadcasts" && <AdminBroadcasts embedded />}
         {tab === "support-inbox" && <SupportInbox embedded />}
         {tab === "support-alerts" && <SupportAlertsPage embedded />}
