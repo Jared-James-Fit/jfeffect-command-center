@@ -1437,7 +1437,7 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
         {loadMode === "pct" && (
         <Field className="col-span-3" label="Basis">
           <Select value={row.percentage_basis ?? "manual"} onValueChange={(v) => setRow({ ...row, percentage_basis: v })}>
-            <SelectTrigger className={cn("text-xs", h)}><SelectValue /></SelectTrigger>
+            <SelectTrigger className={cn("text-xs font-medium", h, inputCls)}><SelectValue /></SelectTrigger>
             <SelectContent>{PERCENTAGE_BASES.filter((p) => p.value !== "none" && p.value !== "manual").map((p) => <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>)}</SelectContent>
           </Select>
         </Field>
