@@ -85,7 +85,7 @@ export const listMyLegalStatus = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     const { data: docs, error: e1 } = await context.supabase
       .from("legal_documents")
-      .select("id, doc_type, slug, title, audience, is_required, is_optional_consent, current_version_id, current_version:legal_document_versions!legal_documents_current_version_id_fkey(id, version_number, title, summary, body, signature_method, requires_reacceptance, effective_date, status, needs_legal_review)")
+      .select("id, doc_type, slug, title, audience, is_required, is_optional_consent, enforcement_mode, enforcement_enabled, emergency_disabled, effective_at, grace_period_days, current_version_id, current_version:legal_document_versions!legal_documents_current_version_id_fkey(id, version_number, title, summary, body, signature_method, requires_reacceptance, effective_date, status, needs_legal_review)")
       .eq("archived", false);
     if (e1) throw new Error(e1.message);
     const published = (docs ?? []).filter((d: any) => d.current_version && d.current_version.status === "published" && !d.current_version.needs_legal_review);
@@ -102,8 +102,18 @@ export const listMyLegalStatus = createServerFn({ method: "GET" })
       acceptances = acc ?? [];
     }
 
+    // Resolve effective enforcement per doc for THIS user (kill switch,
+    // emergency disable, audience, effective date, grace period).
+    const effective = await Promise.all(published.map(async (d: any) => {
+      const { data: eff } = await context.supabase.rpc("legal_effective_enforcement", {
+        _doc_id: d.id, _user_id: context.userId,
+      });
+      return { id: d.id, effective: (eff as string) ?? "inactive" };
+    }));
+
     return published.map((d: any) => {
       const accepted = acceptances.find((a) => a.version_id === d.current_version.id && !a.revoked_at);
+      const eff = effective.find((e) => e.id === d.id)?.effective ?? "inactive";
       return {
         document_id: d.id,
         doc_type: d.doc_type,
@@ -112,6 +122,10 @@ export const listMyLegalStatus = createServerFn({ method: "GET" })
         audience: d.audience,
         is_required: d.is_required,
         is_optional_consent: d.is_optional_consent,
+        enforcement_mode: d.enforcement_mode,
+        enforcement_enabled: d.enforcement_enabled,
+        emergency_disabled: d.emergency_disabled,
+        effective_enforcement: eff, // 'inactive'|'notice_only'|'workflow_gate'|'onboarding_gate'|'full_portal_gate'
         version: d.current_version,
         accepted_at: accepted?.accepted_at ?? null,
         acceptance_id: accepted?.id ?? null,
