@@ -1540,6 +1540,15 @@ export function MessageThread({
 
             {/* Voice or Send */}
             {body.trim() || attachments.length > 0 ? (
+              <>
+              {role === "admin" && body.trim() && attachments.length === 0 && (
+                <ScheduleButton
+                  clientId={clientId}
+                  body={body}
+                  disabled={sending || uploading}
+                  onScheduled={() => { setBody(""); }}
+                />
+              )}
               <Button
                 type="button"
                 onClick={onSend}
@@ -1554,6 +1563,7 @@ export function MessageThread({
                   <Send className="h-4 w-4" />
                 )}
               </Button>
+              </>
             ) : (
               <Button type="button" variant="ghost" size="icon" className="h-10 w-10 shrink-0 rounded-full"
                 onClick={async () => {
