@@ -963,23 +963,45 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
       ) : (
         <div className="space-y-3">
           {weeksData.length > 0 && (
-            // Quick-jump strip: NOT sticky. The frozen global Week overlay
-            // is gone; each column's own Week header handles sticky behaviour.
-            <div className="-mx-2 overflow-x-auto border-b border-primary/20 bg-[color-mix(in_oklab,var(--primary)_6%,var(--background))] px-2 py-2">
-              <div className="flex w-max items-center gap-1.5">
-                <span className="mr-1 shrink-0 text-[11px] font-semibold uppercase tracking-wide text-primary">
-                  Full Block · {weeksData.length} week{weeksData.length === 1 ? "" : "s"}
-                </span>
-                {weeksData.map((w: any, i: number) => (
-                  <button
-                    key={i}
-                    type="button"
-                    onClick={() => document.getElementById(`tpl-week-${i}`)?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "start" })}
-                    className="h-8 w-[112px] shrink-0 rounded-md border border-border bg-card px-2 text-xs font-semibold text-muted-foreground hover:border-primary/60 hover:text-primary"
-                  >
-                    Week {w.week_index}
-                  </button>
-                ))}
+            <div
+              ref={weekHeaderScrollRef}
+              onScroll={syncWeekScroll("header")}
+              className={cn(
+                "sticky top-10 z-20 -mx-2 overflow-x-auto border-b border-primary/20 bg-[color-mix(in_oklab,var(--primary)_6%,var(--background))] px-3 py-2 shadow-sm backdrop-blur scroll-smooth",
+                "[scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+              )}
+            >
+              <div className={cn("flex w-max items-stretch", compact ? "gap-2" : "gap-3")}>
+                {weeksData.map((w: any, i: number) => {
+                  const s = weekStats[i] ?? { days: 0, rows: 0, minutes: 0 };
+                  return (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => {
+                        setActiveIdx(i);
+                        document.getElementById(`tpl-week-${i}`)?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "start" });
+                      }}
+                      className={cn(
+                        "grid shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-md border border-border bg-card px-3 py-2 text-left shadow-sm hover:border-primary/60",
+                        weekColumnWidthClass,
+                        activeIdx === i && "border-primary bg-primary/10",
+                      )}
+                    >
+                      <span className="min-w-0 truncate text-xs font-bold uppercase tracking-wide text-primary">Week {w.week_index}</span>
+                      <span className="shrink-0 text-[10px] font-semibold text-muted-foreground">
+                        {s.days}d · {s.rows} rows · {fmtDur(s.minutes)}
+                      </span>
+                    </button>
+                  );
+                })}
+                <button
+                  type="button"
+                  onClick={addWeek}
+                  className={cn("shrink-0 rounded-md border border-dashed border-primary/40 px-3 py-2 text-xs font-bold uppercase tracking-wide text-primary hover:bg-primary/10", compact ? "w-[200px]" : "w-[260px]")}
+                >
+                  Add Week
+                </button>
               </div>
             </div>
           )}
@@ -988,8 +1010,11 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
               No weeks yet. Click <em>Add week</em> to start.
             </p>
           )}
-          <div className={cn(
-            "snap-x snap-proximity overflow-x-auto [overflow-y:clip] pb-3 scroll-smooth",
+          <div
+            ref={weekCardsScrollRef}
+            onScroll={syncWeekScroll("cards")}
+            className={cn(
+            "snap-x snap-proximity overflow-x-auto overflow-y-visible pb-3 scroll-smooth",
             compact ? "px-2 scroll-pl-2" : "px-3 scroll-pl-3",
           )}>
             <div className={cn("flex w-max items-start", compact ? "gap-2" : "gap-3")}>
