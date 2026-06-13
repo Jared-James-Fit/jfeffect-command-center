@@ -5,8 +5,10 @@ import {
   getSchedulerStatus,
   setSchedulerMode,
   setSchedulerEmergencyDisable,
+  setSchedulerLiveEnabled,
   runSchedulerNow,
 } from "@/lib/scheduler.functions";
+import { retryFailedSchedule } from "@/lib/submission-reviews.functions";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -25,7 +27,9 @@ export function SchedulerTab() {
   const statusFn = useServerFn(getSchedulerStatus);
   const modeFn = useServerFn(setSchedulerMode);
   const emergencyFn = useServerFn(setSchedulerEmergencyDisable);
+  const liveFn = useServerFn(setSchedulerLiveEnabled);
   const runNowFn = useServerFn(runSchedulerNow);
+  const retryFn = useServerFn(retryFailedSchedule);
 
   const { data, isLoading, refetch, isFetching } = useQuery({
     queryKey: ["scheduler-status"],
@@ -45,7 +49,15 @@ export function SchedulerTab() {
 
   const s = data.settings;
   const isReal = s.mode === "real";
+  const isLive = isReal && (s as any).live_enabled === true;
   const isEmergency = s.emergency_disable;
+
+  const stateLabel = isEmergency ? "Disabled" : isLive ? "Live" : "Dry Run";
+  const stateTone = isEmergency
+    ? "border-rose-500/40 text-rose-300"
+    : isLive
+      ? "border-amber-500/40 text-amber-300"
+      : "border-emerald-500/40 text-emerald-300";
 
   async function enableReal() {
     try {
@@ -116,20 +128,21 @@ export function SchedulerTab() {
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <h2 className="text-lg font-bold">Scheduled response worker</h2>
-                {isEmergency ? (
-                  <Badge variant="outline" className="border-rose-500/40 text-rose-300">Emergency disabled</Badge>
-                ) : isReal ? (
-                  <Badge variant="outline" className="border-amber-500/40 text-amber-300">REAL delivery</Badge>
-                ) : (
-                  <Badge variant="outline" className="border-emerald-500/40 text-emerald-300">Dry run</Badge>
+                <Badge variant="outline" className={stateTone}>{stateLabel}</Badge>
+                {isReal && !isLive && !isEmergency && (
+                  <Badge variant="outline" className="border-amber-500/30 text-amber-300/80">
+                    Real mode staged · live kill switch OFF
+                  </Badge>
                 )}
               </div>
               <p className="mt-1 text-sm text-muted-foreground max-w-2xl">
                 {isEmergency
                   ? "All worker activity is halted. Cron ticks return immediately without claiming or simulating anything."
-                  : isReal
-                    ? "Worker is sending real messages to clients. Disable immediately if anything looks wrong."
-                    : "Worker is claiming due schedules, validating them, and recording what would have been sent. No emails, SMS, or in-app messages are delivered."}
+                  : isLive
+                    ? "Worker is sending real in-app messages to clients at their scheduled time. Disable immediately if anything looks wrong."
+                    : isReal
+                      ? "Real mode is staged but the live kill switch is OFF. The worker is running as dry-run until you explicitly arm the live switch."
+                      : "Worker is claiming due schedules, validating them, and recording what would have been sent. No emails, SMS, or in-app messages are delivered."}
               </p>
               {s.updated_at && (
                 <p className="mt-1 text-xs text-muted-foreground">
@@ -178,6 +191,42 @@ export function SchedulerTab() {
         </Card>
       </div>
 
+      {/* Live kill switch — separate, two-step toggle after real mode is on */}
+      {isReal && (
+        <Card className="p-4 space-y-3 border-amber-500/40 bg-amber-500/5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <div className="font-semibold">Live delivery kill switch</div>
+              <p className="text-xs text-muted-foreground max-w-xl">
+                Even with mode set to REAL, no message ships until this switch is armed.
+                Use a recipient allowlist while you exercise the live path with test accounts.
+              </p>
+            </div>
+            <Switch
+              checked={isLive}
+              onCheckedChange={async (next) => {
+                try {
+                  await liveFn({
+                    data: next
+                      ? { enabled: true, reason: "Arming live delivery from scheduler tab", confirm: "I UNDERSTAND THIS WILL SEND REAL MESSAGES" }
+                      : { enabled: false, reason: "Disarming live delivery from scheduler tab" },
+                  });
+                  toast.success(next ? "LIVE delivery armed" : "LIVE delivery disarmed");
+                  qc.invalidateQueries({ queryKey: ["scheduler-status"] });
+                } catch (e: any) {
+                  toast.error(e?.message ?? "Failed to update live switch");
+                }
+              }}
+            />
+          </div>
+          {Array.isArray((s as any).allowed_test_recipients) && (s as any).allowed_test_recipients.length > 0 && (
+            <div className="rounded border border-amber-500/30 bg-background/40 p-2 text-[11px] text-muted-foreground">
+              Recipient allowlist active — {(s as any).allowed_test_recipients.length} client id(s). Messages to clients outside this list are refused.
+            </div>
+          )}
+        </Card>
+      )}
+
       {/* Stats */}
       <Card className="p-4">
         <div className="font-semibold mb-3">Last 24 hours</div>
@@ -217,6 +266,20 @@ export function SchedulerTab() {
           </ul>
         )}
       </Card>
+
+      {/* Failed schedules with retry */}
+      <FailedSchedulesCard
+        onRetry={async (id: string) => {
+          try {
+            await retryFn({ data: { scheduleId: id } });
+            toast.success("Schedule re-queued");
+            qc.invalidateQueries({ queryKey: ["scheduler-status"] });
+            qc.invalidateQueries({ queryKey: ["scheduler-failed"] });
+          } catch (e: any) {
+            toast.error(e?.message ?? "Retry failed");
+          }
+        }}
+      />
 
       {/* Recent worker runs */}
       <Card className="p-4">
@@ -348,5 +411,45 @@ function Stat({ label, value, tone }: { label: string; value: number; tone?: "em
       <div className={`text-lg font-bold ${toneClass}`}>{value}</div>
       <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</div>
     </div>
+  );
+}
+
+function FailedSchedulesCard({ onRetry }: { onRetry: (id: string) => void | Promise<void> }) {
+  const { data, isLoading } = useQuery({
+    queryKey: ["scheduler-failed"],
+    queryFn: async () => {
+      const { supabase } = await import("@/integrations/supabase/client");
+      const { data } = await supabase
+        .from("scheduled_submission_responses")
+        .select("id, review_id, scheduled_at, attempts, last_error, status, updated_at")
+        .eq("status", "failed")
+        .order("updated_at", { ascending: false })
+        .limit(20);
+      return data ?? [];
+    },
+    refetchInterval: 30_000,
+  });
+  return (
+    <Card className="p-4">
+      <div className="font-semibold mb-2">Failed schedules ({data?.length ?? 0})</div>
+      {isLoading ? (
+        <div className="text-xs text-muted-foreground">Loading…</div>
+      ) : !data || data.length === 0 ? (
+        <div className="text-xs text-muted-foreground">No failed schedules.</div>
+      ) : (
+        <ul className="divide-y divide-border text-xs">
+          {data.map((p: any) => (
+            <li key={p.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
+              <code className="text-[10px] text-muted-foreground">{p.id.slice(0, 8)}</code>
+              <span>{p.attempts} attempt{p.attempts === 1 ? "" : "s"}</span>
+              <span className="max-w-[40ch] truncate text-rose-300" title={p.last_error ?? ""}>
+                {p.last_error ?? "—"}
+              </span>
+              <Button size="sm" variant="outline" onClick={() => onRetry(p.id)}>Retry</Button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
   );
 }
