@@ -519,7 +519,11 @@ export async function uploadFormFile(opts: {
     mime_type: opts.file.type,
     size_bytes: opts.file.size,
   });
-  if (error) throw error;
+  if (error) {
+    // Roll back the orphan storage object if the DB row insert was rejected.
+    await supabase.storage.from("form-uploads").remove([path]).catch(() => {});
+    throw error;
+  }
 }
 
 export async function getFileSignedUrl(storagePath: string) {
@@ -528,6 +532,76 @@ export async function getFileSignedUrl(storagePath: string) {
     .createSignedUrl(storagePath, 60 * 60);
   if (error) throw error;
   return data.signedUrl;
+}
+
+/**
+ * Verify the current user owns the file's submission and that the submission
+ * is still editable. Returns the file row + storage_path on success.
+ * Throws on missing ownership, missing record, or locked submission.
+ */
+async function assertEditableOwnedFile(fileId: string): Promise<NfFile> {
+  const { data, error } = await db
+    .from("nf_files")
+    .select("id, storage_path, submission_id, question_id, original_name, mime_type, size_bytes, created_at, submission:submission_id(status, client:client_id(user_id))")
+    .eq("id", fileId)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) throw new Error("File not found or you don't have access");
+  const sub = (data as any).submission;
+  const ownerUserId = sub?.client?.user_id;
+  const { data: auth } = await supabase.auth.getUser();
+  if (!auth?.user?.id || ownerUserId !== auth.user.id) {
+    throw new Error("You can only modify files you uploaded");
+  }
+  if (sub?.status && sub.status !== "in_progress") {
+    throw new Error("This submission is locked — files can no longer be changed");
+  }
+  return data as NfFile;
+}
+
+export async function removeFormFile(fileId: string) {
+  const file = await assertEditableOwnedFile(fileId);
+  // Delete the DB row first (RLS re-enforces ownership). Only purge storage
+  // after the row is gone so a failure can't leave the DB pointing at a
+  // missing object.
+  const { error: delErr } = await db.from("nf_files").delete().eq("id", file.id);
+  if (delErr) throw delErr;
+  await supabase.storage.from("form-uploads").remove([file.storage_path]).catch(() => {});
+}
+
+export async function replaceFormFile(opts: {
+  fileId: string;
+  clientId: string;
+  file: File;
+}) {
+  const old = await assertEditableOwnedFile(opts.fileId);
+  const ext = opts.file.name.split(".").pop() || "bin";
+  const path = `${opts.clientId}/${old.submission_id}/${old.question_id}-${Date.now()}.${ext}`;
+
+  const { error: upErr } = await supabase.storage
+    .from("form-uploads")
+    .upload(path, opts.file, { upsert: false, contentType: opts.file.type || undefined });
+  if (upErr) throw upErr;
+
+  // Update the existing row in place (no duplicate rows).
+  const { error: updErr } = await db
+    .from("nf_files")
+    .update({
+      storage_path: path,
+      original_name: opts.file.name,
+      mime_type: opts.file.type,
+      size_bytes: opts.file.size,
+    })
+    .eq("id", opts.fileId);
+  if (updErr) {
+    await supabase.storage.from("form-uploads").remove([path]).catch(() => {});
+    throw updErr;
+  }
+
+  // Purge the previous storage object only after the DB commit succeeded.
+  if (old.storage_path && old.storage_path !== path) {
+    await supabase.storage.from("form-uploads").remove([old.storage_path]).catch(() => {});
+  }
 }
 
 /* -------------------------- Reviews -------------------------- */
