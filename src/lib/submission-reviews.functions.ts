@@ -665,7 +665,18 @@ export const generateSubmissionDraft = createServerFn({ method: "POST" })
         latest_generation_id: gen.id,
       };
       // Only auto-seed coach_draft when there isn't already one
-      if (!row.coach_draft) patch.coach_draft = safe.client_response;
+      if (!row.coach_draft) {
+        patch.coach_draft = safe.client_response;
+        patch.draft_origin_generation_id = gen.id;
+      }
+      // Regenerating clears any prior approval — even if the coach_draft
+      // isn't replaced, the underlying analysis changed, so an authorized
+      // user must re-approve before send/schedule.
+      if (row.approved_at) {
+        patch.approved_at = null;
+        patch.approved_by = null;
+        patch.approved_response = null;
+      }
       if (row.review_status === "processing" || row.review_status === "submitted") {
         patch.review_status = "draft_ready";
       }
@@ -678,6 +689,12 @@ export const generateSubmissionDraft = createServerFn({ method: "POST" })
         generation_id: gen.id,
         urgency: safe.urgency,
       });
+      if (row.approved_at) {
+        await audit(row.id, "approval_reset", context.userId, "coach", {
+          reason: "regenerated",
+          generation_id: gen.id,
+        });
+      }
 
       return { ok: true, generation: updated.data };
     } catch (err: any) {
