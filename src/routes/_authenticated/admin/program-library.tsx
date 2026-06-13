@@ -414,11 +414,26 @@ function NewTemplateDialog({ open, onOpenChange, onCreated }: { open: boolean; o
             </div>
           </div>
           {(form.template_type === "block" || form.template_type === "full_prep") && (
-            <div className="grid grid-cols-3 gap-2">
-              <div><Label>Weeks</Label><Input type="number" inputMode="numeric" value={form.weeks} onChange={(e) => setForm({ ...form, weeks: parseInt(e.target.value) || 0 })} /></div>
-              <div><Label>Days/week</Label><Input type="number" inputMode="numeric" value={form.days_per_week} onChange={(e) => setForm({ ...form, days_per_week: parseInt(e.target.value) || 0 })} /></div>
-              <div><Label>Est min</Label><Input type="number" inputMode="numeric" value={form.est_duration_min} onChange={(e) => setForm({ ...form, est_duration_min: parseInt(e.target.value) || 0 })} /></div>
-            </div>
+            <>
+              {form.template_type === "full_prep" && (
+                <div>
+                  <Label>Blocks</Label>
+                  <Input
+                    type="number" inputMode="numeric" min={1}
+                    value={form.blocks}
+                    onChange={(e) => setForm({ ...form, blocks: Math.max(1, parseInt(e.target.value) || 1) })}
+                  />
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    Seeds this many blocks (each with the weeks &amp; days set below). You can add, rename, duplicate, or remove blocks in the editor afterwards.
+                  </p>
+                </div>
+              )}
+              <div className="grid grid-cols-3 gap-2">
+                <div><Label>{form.template_type === "full_prep" ? "Weeks/block" : "Weeks"}</Label><Input type="number" inputMode="numeric" value={form.weeks} onChange={(e) => setForm({ ...form, weeks: parseInt(e.target.value) || 0 })} /></div>
+                <div><Label>Days/week</Label><Input type="number" inputMode="numeric" value={form.days_per_week} onChange={(e) => setForm({ ...form, days_per_week: parseInt(e.target.value) || 0 })} /></div>
+                <div><Label>Est min</Label><Input type="number" inputMode="numeric" value={form.est_duration_min} onChange={(e) => setForm({ ...form, est_duration_min: parseInt(e.target.value) || 0 })} /></div>
+              </div>
+            </>
           )}
           <div>
             <Label>Tags (comma-separated)</Label>
