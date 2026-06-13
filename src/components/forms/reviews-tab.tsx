@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
@@ -11,18 +11,23 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   Sparkles, Send, Save, Clock, AlertTriangle, RefreshCw, Inbox,
   Loader2, CheckCircle2, XCircle, ChevronRight, Archive, FileText,
+  CheckCheck, RotateCcw, UserCog, Ban, FileIcon, History, Eye,
+  Download, FileImage, FileVideo, FileAudio, X as XIcon,
 } from "lucide-react";
 import {
   listSubmissionReviews, getSubmissionReviewDetail, generateSubmissionDraft,
   saveCoachDraft, approveAndSendNow, scheduleSendResponse, cancelScheduledSend,
   archiveReview, setReviewPriority, syncSubmissionReviews,
+  approveReviewDraft, resetReviewApproval, markNoResponseRequired, reopenReview,
+  reassignReviewCoach, listAssignableCoaches, saveInternalNotes,
+  restoreDraftFromGeneration, listSubmissionFiles,
 } from "@/lib/submission-reviews.functions";
 import {
   REVIEW_STATUS_LABELS, REVIEW_STATUS_TONE, AI_STATUS_LABELS, SOURCE_LABELS,
   type ReviewStatus, type ReviewPriority,
 } from "@/lib/submission-reviews";
 import { cn } from "@/lib/utils";
-import { formatDistanceToNow } from "date-fns";
+import { formatDistanceToNow, format } from "date-fns";
 import { AiAssistanceLabel, deriveAiAssistance } from "@/components/legal/ai-assistance-label";
 
 const STATUS_FILTERS: Array<{ value: "" | ReviewStatus; label: string }> = [
@@ -30,57 +35,139 @@ const STATUS_FILTERS: Array<{ value: "" | ReviewStatus; label: string }> = [
   { value: "submitted", label: "New" },
   { value: "draft_ready", label: "Draft ready" },
   { value: "coach_editing", label: "Coach editing" },
+  { value: "approved", label: "Approved" },
   { value: "scheduled", label: "Scheduled" },
   { value: "sent", label: "Sent" },
   { value: "delivery_failed", label: "Failed" },
+  { value: "no_response", label: "No response" },
+  { value: "archived", label: "Archived" },
 ];
 
 function genIdemKey(prefix: string) {
   return `${prefix}-${crypto.randomUUID()}`;
 }
 
+// ---------------------------------------------------------------------------
+// URL-synced filter state. Survives refresh; "Clear Filters" wipes them all.
+// ---------------------------------------------------------------------------
+type FilterState = {
+  status: "" | ReviewStatus;
+  source: "" | "native" | "fillout" | "application";
+  priority: "" | ReviewPriority;
+  coach: string; // user uuid, "unassigned", or ""
+  formId: string;
+  dateFrom: string; // yyyy-MM-dd
+  dateTo: string;
+  search: string;
+  selectedId: string;
+};
+
+const DEFAULT_FILTERS: FilterState = {
+  status: "", source: "", priority: "", coach: "", formId: "",
+  dateFrom: "", dateTo: "", search: "", selectedId: "",
+};
+
+const URL_KEYS: Record<keyof FilterState, string> = {
+  status: "rstatus", source: "rsource", priority: "rprio", coach: "rcoach",
+  formId: "rform", dateFrom: "rfrom", dateTo: "rto", search: "rq", selectedId: "rid",
+};
+
+function readFiltersFromUrl(): FilterState {
+  if (typeof window === "undefined") return DEFAULT_FILTERS;
+  const sp = new URLSearchParams(window.location.search);
+  const get = (k: keyof FilterState) => sp.get(URL_KEYS[k]) ?? "";
+  return {
+    status: (get("status") as any) || "",
+    source: (get("source") as any) || "",
+    priority: (get("priority") as any) || "",
+    coach: get("coach"),
+    formId: get("formId"),
+    dateFrom: get("dateFrom"),
+    dateTo: get("dateTo"),
+    search: get("search"),
+    selectedId: get("selectedId"),
+  };
+}
+
+function writeFiltersToUrl(f: FilterState) {
+  if (typeof window === "undefined") return;
+  const sp = new URLSearchParams(window.location.search);
+  (Object.keys(URL_KEYS) as (keyof FilterState)[]).forEach((k) => {
+    const v = f[k];
+    if (v) sp.set(URL_KEYS[k], v);
+    else sp.delete(URL_KEYS[k]);
+  });
+  const next = `${window.location.pathname}?${sp.toString()}${window.location.hash}`;
+  window.history.replaceState(null, "", next);
+}
+
 export function ReviewsTab() {
   const qc = useQueryClient();
-  const [statusFilter, setStatusFilter] = useState<"" | ReviewStatus>("");
-  const [sourceFilter, setSourceFilter] = useState<"" | "native" | "fillout" | "application">("");
-  const [search, setSearch] = useState("");
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [filters, setFilters] = useState<FilterState>(() => readFiltersFromUrl());
+  const set = <K extends keyof FilterState>(k: K, v: FilterState[K]) =>
+    setFilters((prev) => ({ ...prev, [k]: v }));
+
+  // Persist filter changes to the URL so refresh restores state.
+  useEffect(() => { writeFiltersToUrl(filters); }, [filters]);
 
   const sync = useServerFn(syncSubmissionReviews);
   const list = useServerFn(listSubmissionReviews);
+  const listCoaches = useServerFn(listAssignableCoaches);
 
-  // Lazy intake on mount — pulls any existing submissions into the queue
+  // Lazy intake on mount
   useQuery({
     queryKey: ["review-intake-sync"],
     queryFn: () => sync({ data: {} as any }),
     staleTime: 60_000,
   });
 
+  const { data: coaches = [] } = useQuery({
+    queryKey: ["review-assignable-coaches"],
+    queryFn: () => listCoaches({ data: undefined as any }),
+    staleTime: 60_000,
+  });
+
   const { data: rows = [], isLoading } = useQuery({
-    queryKey: ["submission-reviews-list", statusFilter, sourceFilter],
+    queryKey: ["submission-reviews-list", filters.status, filters.source, filters.priority, filters.coach, filters.formId, filters.dateFrom, filters.dateTo],
     queryFn: () =>
       list({
         data: {
-          status: statusFilter || undefined,
-          source: sourceFilter || undefined,
+          status: filters.status || undefined,
+          source: filters.source || undefined,
+          priority: (filters.priority || undefined) as any,
+          assignedCoachUserId:
+            filters.coach === "unassigned" ? null : (filters.coach || undefined),
+          formId: filters.formId || undefined,
+          dateFrom: filters.dateFrom ? new Date(filters.dateFrom).toISOString() : undefined,
+          dateTo: filters.dateTo ? new Date(filters.dateTo + "T23:59:59").toISOString() : undefined,
         },
       }),
     refetchInterval: 30_000,
   });
 
+  // Form options derived from server-returned rows (authorized data only).
+  const formOptions = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const r of rows ?? []) {
+      if (r.form_id && r.form?.title) map.set(r.form_id, r.form.title);
+    }
+    return Array.from(map.entries()).map(([id, title]) => ({ id, title }));
+  }, [rows]);
+
   const filtered = useMemo(() => {
-    if (!search.trim()) return rows ?? [];
-    const q = search.trim().toLowerCase();
+    if (!filters.search.trim()) return rows ?? [];
+    const q = filters.search.trim().toLowerCase();
     return (rows ?? []).filter((r: any) => {
       const hay = [
-        r?.client?.full_name,
-        r?.form?.title,
-        r?.source_type,
-        r?.review_status,
+        r?.client?.full_name, r?.form?.title, r?.source_type, r?.review_status,
       ].join(" ").toLowerCase();
       return hay.includes(q);
     });
-  }, [rows, search]);
+  }, [rows, filters.search]);
+
+  const hasActiveFilters =
+    filters.status || filters.source || filters.priority || filters.coach
+    || filters.formId || filters.dateFrom || filters.dateTo || filters.search;
 
   return (
     <div className="flex flex-col md:flex-row md:h-[calc(100vh-220px)]">
@@ -88,13 +175,13 @@ export function ReviewsTab() {
       <div className="w-full md:w-[380px] md:border-r border-border flex flex-col">
         <div className="border-b border-border bg-background p-3 space-y-2">
           <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            value={filters.search}
+            onChange={(e) => set("search", e.target.value)}
             placeholder="Search client, form, status…"
             className="h-8 text-sm"
           />
           <div className="flex gap-2">
-            <Select value={statusFilter || "all"} onValueChange={(v) => setStatusFilter(v === "all" ? "" : (v as any))}>
+            <Select value={filters.status || "all"} onValueChange={(v) => set("status", v === "all" ? "" : (v as any))}>
               <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Status" /></SelectTrigger>
               <SelectContent>
                 {STATUS_FILTERS.map((f) => (
@@ -102,7 +189,7 @@ export function ReviewsTab() {
                 ))}
               </SelectContent>
             </Select>
-            <Select value={sourceFilter || "all"} onValueChange={(v) => setSourceFilter(v === "all" ? "" : (v as any))}>
+            <Select value={filters.source || "all"} onValueChange={(v) => set("source", v === "all" ? "" : (v as any))}>
               <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Source" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All sources</SelectItem>
@@ -111,15 +198,53 @@ export function ReviewsTab() {
                 <SelectItem value="application">Application</SelectItem>
               </SelectContent>
             </Select>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-8 px-2"
-              onClick={() => qc.invalidateQueries({ queryKey: ["submission-reviews-list"] })}
-            >
+            <Button type="button" variant="outline" size="sm" className="h-8 px-2"
+              onClick={() => qc.invalidateQueries({ queryKey: ["submission-reviews-list"] })}>
               <RefreshCw className="h-3.5 w-3.5" />
             </Button>
+          </div>
+          <div className="flex gap-2">
+            <Select value={filters.priority || "all"} onValueChange={(v) => set("priority", v === "all" ? "" : (v as any))}>
+              <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Priority" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Any priority</SelectItem>
+                <SelectItem value="low">low</SelectItem>
+                <SelectItem value="normal">normal</SelectItem>
+                <SelectItem value="high">high</SelectItem>
+                <SelectItem value="urgent">urgent</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={filters.coach || "all"} onValueChange={(v) => set("coach", v === "all" ? "" : v)}>
+              <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Coach" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All coaches</SelectItem>
+                <SelectItem value="unassigned">Unassigned</SelectItem>
+                {(coaches ?? []).map((c: any) => (
+                  <SelectItem key={c.user_id} value={c.user_id}>{c.full_name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex gap-2 items-center">
+            <Select value={filters.formId || "all"} onValueChange={(v) => set("formId", v === "all" ? "" : v)}>
+              <SelectTrigger className="h-8 text-xs flex-1"><SelectValue placeholder="Form" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All forms</SelectItem>
+                {formOptions.map((o) => (
+                  <SelectItem key={o.id} value={o.id}>{o.title}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex gap-2 items-center">
+            <Input type="date" value={filters.dateFrom} onChange={(e) => set("dateFrom", e.target.value)} className="h-8 text-xs" aria-label="From" />
+            <Input type="date" value={filters.dateTo} onChange={(e) => set("dateTo", e.target.value)} className="h-8 text-xs" aria-label="To" />
+            {hasActiveFilters && (
+              <Button variant="ghost" size="sm" className="h-8 px-2 text-xs"
+                onClick={() => setFilters({ ...DEFAULT_FILTERS, selectedId: filters.selectedId })}>
+                <XIcon className="h-3 w-3 mr-1" /> Clear
+              </Button>
+            )}
           </div>
         </div>
         <div className="flex-1 overflow-y-auto">
@@ -133,12 +258,12 @@ export function ReviewsTab() {
           ) : (
             <ul className="divide-y divide-border">
               {filtered.map((r: any) => {
-                const active = r.id === selectedId;
+                const active = r.id === filters.selectedId;
                 return (
                   <li key={r.id}>
                     <button
                       type="button"
-                      onClick={() => setSelectedId(r.id)}
+                      onClick={() => set("selectedId", r.id)}
                       className={cn(
                         "w-full text-left px-3 py-3 hover:bg-muted/50",
                         active && "bg-primary/10 border-l-2 border-primary",
@@ -167,8 +292,7 @@ export function ReviewsTab() {
                         {r.priority && r.priority !== "normal" && (
                           <Badge variant="outline" className={cn("text-[10px] py-0",
                             r.priority === "urgent" || r.priority === "high"
-                              ? "border-destructive/40 bg-destructive/10 text-destructive"
-                              : "")}>
+                              ? "border-destructive/40 bg-destructive/10 text-destructive" : "")}>
                             {r.priority}
                           </Badge>
                         )}
@@ -186,8 +310,8 @@ export function ReviewsTab() {
       </div>
       {/* Right detail */}
       <div className="flex-1 min-w-0 overflow-y-auto">
-        {selectedId ? (
-          <ReviewDetail reviewId={selectedId} onDeleted={() => setSelectedId(null)} />
+        {filters.selectedId ? (
+          <ReviewDetail reviewId={filters.selectedId} coaches={coaches} onDeleted={() => set("selectedId", "")} />
         ) : (
           <div className="grid h-full place-items-center p-8 text-center text-sm text-muted-foreground">
             <div>
@@ -202,7 +326,11 @@ export function ReviewsTab() {
   );
 }
 
-function ReviewDetail({ reviewId, onDeleted }: { reviewId: string; onDeleted: () => void }) {
+// ===========================================================================
+// ReviewDetail
+// ===========================================================================
+
+function ReviewDetail({ reviewId, coaches, onDeleted }: { reviewId: string; coaches: any[]; onDeleted: () => void }) {
   const qc = useQueryClient();
   const fetchDetail = useServerFn(getSubmissionReviewDetail);
   const generate = useServerFn(generateSubmissionDraft);
@@ -212,6 +340,14 @@ function ReviewDetail({ reviewId, onDeleted }: { reviewId: string; onDeleted: ()
   const cancelSchedule = useServerFn(cancelScheduledSend);
   const archive = useServerFn(archiveReview);
   const setPriority = useServerFn(setReviewPriority);
+  const approveDraft = useServerFn(approveReviewDraft);
+  const resetApproval = useServerFn(resetReviewApproval);
+  const markNoResp = useServerFn(markNoResponseRequired);
+  const reopen = useServerFn(reopenReview);
+  const reassign = useServerFn(reassignReviewCoach);
+  const saveNotes = useServerFn(saveInternalNotes);
+  const restoreDraft = useServerFn(restoreDraftFromGeneration);
+  const listFiles = useServerFn(listSubmissionFiles);
 
   const { data, isLoading } = useQuery({
     queryKey: ["submission-review-detail", reviewId],
@@ -222,18 +358,51 @@ function ReviewDetail({ reviewId, onDeleted }: { reviewId: string; onDeleted: ()
     },
   });
 
+  const { data: files = [] } = useQuery({
+    queryKey: ["submission-review-files", reviewId],
+    queryFn: () => listFiles({ data: { reviewId } }),
+    staleTime: 50 * 60 * 1000,
+  });
+
   const [draftLocal, setDraftLocal] = useState<string | null>(null);
   const [instruction, setInstruction] = useState("");
   const [scheduledAt, setScheduledAt] = useState("");
+  const [notesLocal, setNotesLocal] = useState<string | null>(null);
+  const [notesSavedAt, setNotesSavedAt] = useState<Date | null>(null);
+  const [showHistory, setShowHistory] = useState(false);
+  const [compareWithGenId, setCompareWithGenId] = useState<string | null>(null);
+
+  // Reset locals when the review switches
+  useEffect(() => {
+    setDraftLocal(null); setInstruction(""); setScheduledAt("");
+    setNotesLocal(null); setNotesSavedAt(null);
+    setShowHistory(false); setCompareWithGenId(null);
+  }, [reviewId]);
+
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ["submission-review-detail", reviewId] });
     qc.invalidateQueries({ queryKey: ["submission-reviews-list"] });
   };
 
+  // Internal-notes autosave (debounced)
+  const notesTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (notesLocal == null) return;
+    if (notesTimer.current) clearTimeout(notesTimer.current);
+    notesTimer.current = setTimeout(async () => {
+      try {
+        await saveNotes({ data: { reviewId, notes: notesLocal } });
+        setNotesSavedAt(new Date());
+      } catch (e: any) {
+        toast.error(e?.message ?? "Notes save failed");
+      }
+    }, 800);
+    return () => { if (notesTimer.current) clearTimeout(notesTimer.current); };
+  }, [notesLocal, reviewId, saveNotes]);
+
   const generateMutation = useMutation({
-    mutationFn: () =>
-      generate({ data: { reviewId, submissionInstruction: instruction || undefined } }),
-    onSuccess: () => { toast.success("AI draft generated"); setInstruction(""); invalidate(); },
+    mutationFn: () => generate({ data: { reviewId, submissionInstruction: instruction || undefined } }),
+    onSuccess: () => { toast.success("AI draft generated"); setInstruction(""); setDraftLocal(null); invalidate(); },
     onError: (e: any) => toast.error(e?.message ?? "Generation failed"),
   });
 
@@ -243,28 +412,28 @@ function ReviewDetail({ reviewId, onDeleted }: { reviewId: string; onDeleted: ()
     onError: (e: any) => toast.error(e?.message ?? "Save failed"),
   });
 
+  const approveMutation = useMutation({
+    mutationFn: () => approveDraft({ data: { reviewId, body: currentDraft } }),
+    onSuccess: () => { toast.success("Draft approved"); invalidate(); },
+    onError: (e: any) => toast.error(e?.message ?? "Approve failed"),
+  });
+
+  const resetApprovalMutation = useMutation({
+    mutationFn: () => resetApproval({ data: { reviewId } }),
+    onSuccess: () => { toast.success("Approval reset"); invalidate(); },
+    onError: (e: any) => toast.error(e?.message ?? "Reset failed"),
+  });
+
   const sendMutation = useMutation({
-    mutationFn: () =>
-      sendNow({
-        data: { reviewId, body: currentDraft, idempotencyKey: genIdemKey(`send-${reviewId.slice(0, 8)}`) },
-      }),
-    onSuccess: (r: any) => {
-      toast.success(r?.deduped ? "Already sent" : "Sent to client");
-      invalidate();
-    },
+    mutationFn: () => sendNow({ data: { reviewId, body: currentDraft, idempotencyKey: genIdemKey(`send-${reviewId.slice(0, 8)}`) } }),
+    onSuccess: (r: any) => { toast.success(r?.deduped ? "Already sent" : "Sent to client"); invalidate(); },
     onError: (e: any) => toast.error(e?.message ?? "Send failed"),
   });
 
   const scheduleMutation = useMutation({
-    mutationFn: () =>
-      schedule({
-        data: {
-          reviewId,
-          scheduledAt: new Date(scheduledAt).toISOString(),
-          body: currentDraft,
-          idempotencyKey: genIdemKey(`sched-${reviewId.slice(0, 8)}`),
-        },
-      }),
+    mutationFn: () => schedule({
+      data: { reviewId, scheduledAt: new Date(scheduledAt).toISOString(), body: currentDraft, idempotencyKey: genIdemKey(`sched-${reviewId.slice(0, 8)}`) },
+    }),
     onSuccess: () => { toast.success("Scheduled"); invalidate(); },
     onError: (e: any) => toast.error(e?.message ?? "Schedule failed"),
   });
@@ -279,6 +448,29 @@ function ReviewDetail({ reviewId, onDeleted }: { reviewId: string; onDeleted: ()
     onSuccess: () => { toast.success("Archived"); onDeleted(); invalidate(); },
   });
 
+  const noResponseMutation = useMutation({
+    mutationFn: () => markNoResp({ data: { reviewId } }),
+    onSuccess: () => { toast.success("Marked as no-response"); invalidate(); },
+    onError: (e: any) => toast.error(e?.message ?? "Failed"),
+  });
+
+  const reopenMutation = useMutation({
+    mutationFn: () => reopen({ data: { reviewId } }),
+    onSuccess: () => { toast.success("Reopened"); invalidate(); },
+  });
+
+  const reassignMutation = useMutation({
+    mutationFn: (uid: string | null) => reassign({ data: { reviewId, assignedCoachUserId: uid } }),
+    onSuccess: () => { toast.success("Coach updated"); invalidate(); },
+    onError: (e: any) => toast.error(e?.message ?? "Reassign failed"),
+  });
+
+  const restoreMutation = useMutation({
+    mutationFn: (genId: string) => restoreDraft({ data: { reviewId, generationId: genId } }),
+    onSuccess: () => { toast.success("Draft restored"); setDraftLocal(null); invalidate(); },
+    onError: (e: any) => toast.error(e?.message ?? "Restore failed"),
+  });
+
   if (isLoading || !data) {
     return <div className="p-8 text-center text-sm text-muted-foreground">Loading…</div>;
   }
@@ -288,13 +480,18 @@ function ReviewDetail({ reviewId, onDeleted }: { reviewId: string; onDeleted: ()
   const currentDraft =
     draftLocal != null
       ? draftLocal
-      : review.coach_draft ??
-        review.approved_response ??
-        latestGen?.client_response ??
-        "";
+      : review.coach_draft ?? review.approved_response ?? latestGen?.client_response ?? "";
 
-  const canSend = review.client_id && currentDraft.trim().length > 0 && !sendMutation.isPending;
+  const currentNotes = notesLocal != null ? notesLocal : (review.internal_notes ?? "");
   const isProcessing = review.ai_status === "processing";
+  const isNoResponse = review.review_status === "no_response";
+  const isSent = review.review_status === "sent";
+  const isApproved =
+    !!review.approved_at &&
+    (review.approved_response ?? "").trim() === (currentDraft ?? "").trim();
+  const sendDisabled =
+    !review.client_id || !currentDraft.trim() || sendMutation.isPending
+    || isNoResponse || isSent;
 
   return (
     <div className="p-4 md:p-6 space-y-4">
@@ -313,9 +510,6 @@ function ReviewDetail({ reviewId, onDeleted }: { reviewId: string; onDeleted: ()
               {REVIEW_STATUS_LABELS[review.review_status as ReviewStatus] ?? review.review_status}
             </Badge>
             <Badge variant="outline" className="text-[10px]">AI: {AI_STATUS_LABELS[review.ai_status as keyof typeof AI_STATUS_LABELS]}</Badge>
-            {/* Accurate client-facing disclosure label preview — same component
-                that will render on the delivered message. Never claims
-                "coach-reviewed" unless approved_by + approved_at exist. */}
             <AiAssistanceLabel
               state={deriveAiAssistance({
                 ai_used: ["draft_ready","approved","sent","scheduled","processing"].includes(review.ai_status),
@@ -324,10 +518,8 @@ function ReviewDetail({ reviewId, onDeleted }: { reviewId: string; onDeleted: ()
                 approved_at: review.approved_at ?? null,
               })}
             />
-            <Select
-              value={review.priority}
-              onValueChange={(v) => setPriority({ data: { reviewId, priority: v as ReviewPriority } }).then(invalidate)}
-            >
+            <Select value={review.priority}
+              onValueChange={(v) => setPriority({ data: { reviewId, priority: v as ReviewPriority } }).then(invalidate)}>
               <SelectTrigger className="h-6 w-auto text-[10px]"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="low">low</SelectItem>
@@ -336,9 +528,32 @@ function ReviewDetail({ reviewId, onDeleted }: { reviewId: string; onDeleted: ()
                 <SelectItem value="urgent">urgent</SelectItem>
               </SelectContent>
             </Select>
+            {/* Assigned coach */}
+            <Select
+              value={review.assigned_coach_user_id ?? "unassigned"}
+              onValueChange={(v) => reassignMutation.mutate(v === "unassigned" ? null : v)}
+            >
+              <SelectTrigger className="h-6 w-auto text-[10px]"><UserCog className="h-3 w-3 mr-1" /><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="unassigned">Unassigned</SelectItem>
+                {(coaches ?? []).map((c: any) => (
+                  <SelectItem key={c.user_id} value={c.user_id}>{c.full_name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          {!isNoResponse && !isSent && (
+            <Button variant="ghost" size="sm" onClick={() => noResponseMutation.mutate()}>
+              <Ban className="h-3.5 w-3.5 mr-1" /> No response
+            </Button>
+          )}
+          {isNoResponse && (
+            <Button variant="ghost" size="sm" onClick={() => reopenMutation.mutate()}>
+              <RotateCcw className="h-3.5 w-3.5 mr-1" /> Reopen
+            </Button>
+          )}
           <Button variant="ghost" size="sm" onClick={() => archiveMutation.mutate()}>
             <Archive className="h-3.5 w-3.5 mr-1" /> Archive
           </Button>
@@ -374,6 +589,18 @@ function ReviewDetail({ reviewId, onDeleted }: { reviewId: string; onDeleted: ()
         )}
       </Card>
 
+      {/* Attached files */}
+      {files && files.length > 0 && (
+        <Card className="p-4">
+          <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">
+            Attached files
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            {(files as any[]).map((f) => <FileTile key={f.id} file={f} />)}
+          </div>
+        </Card>
+      )}
+
       {/* AI Analysis */}
       <Card className="p-4 border-primary/30">
         <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
@@ -381,18 +608,12 @@ function ReviewDetail({ reviewId, onDeleted }: { reviewId: string; onDeleted: ()
             <Sparkles className="inline h-3.5 w-3.5 mr-1" /> AI Analysis (internal)
           </div>
           <div className="flex items-center gap-2">
-            <Input
-              value={instruction}
-              onChange={(e) => setInstruction(e.target.value)}
-              placeholder="e.g. shorter, focus on nutrition…"
-              className="h-8 w-56 text-xs"
-            />
+            <Input value={instruction} onChange={(e) => setInstruction(e.target.value)}
+              placeholder="e.g. shorter, focus on nutrition…" className="h-8 w-56 text-xs" />
             <Button size="sm" onClick={() => generateMutation.mutate()} disabled={isProcessing || generateMutation.isPending}>
-              {isProcessing || generateMutation.isPending ? (
-                <><Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> Generating…</>
-              ) : (
-                <><Sparkles className="h-3.5 w-3.5 mr-1" /> {latestGen ? "Regenerate" : "Generate"}</>
-              )}
+              {isProcessing || generateMutation.isPending
+                ? (<><Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> Generating…</>)
+                : (<><Sparkles className="h-3.5 w-3.5 mr-1" /> {latestGen ? "Regenerate" : "Generate"}</>)}
             </Button>
           </div>
         </div>
@@ -411,38 +632,137 @@ function ReviewDetail({ reviewId, onDeleted }: { reviewId: string; onDeleted: ()
         )}
       </Card>
 
-      {/* Client response */}
+      {/* Draft history */}
+      {generations && generations.length > 0 && (
+        <Card className="p-4">
+          <button type="button" onClick={() => setShowHistory((v) => !v)}
+            className="w-full flex items-center justify-between text-xs font-bold uppercase tracking-wider text-muted-foreground">
+            <span><History className="inline h-3.5 w-3.5 mr-1" /> Draft history ({generations.length})</span>
+            <ChevronRight className={cn("h-4 w-4 transition-transform", showHistory && "rotate-90")} />
+          </button>
+          {showHistory && (
+            <div className="mt-3 space-y-3">
+              {generations.map((g: any, idx: number) => {
+                const isCurrent = review.draft_origin_generation_id
+                  ? g.id === review.draft_origin_generation_id
+                  : idx === 0;
+                const isCompare = compareWithGenId === g.id;
+                return (
+                  <div key={g.id} className="border border-border rounded p-3">
+                    <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
+                      <div className="text-xs text-muted-foreground flex items-center gap-2 flex-wrap">
+                        <span className="font-mono">{format(new Date(g.created_at), "yyyy-MM-dd HH:mm")}</span>
+                        {g.model && <Badge variant="outline" className="text-[10px]">{g.model}</Badge>}
+                        {g.global_config_version != null && (
+                          <Badge variant="outline" className="text-[10px]">g-v{g.global_config_version}</Badge>
+                        )}
+                        {g.form_config_version != null && (
+                          <Badge variant="outline" className="text-[10px]">f-v{g.form_config_version}</Badge>
+                        )}
+                        {isCurrent
+                          ? <Badge className="text-[10px] bg-primary text-primary-foreground">Current draft</Badge>
+                          : <Badge variant="outline" className="text-[10px]">Previous</Badge>}
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Button variant="ghost" size="sm" className="h-7 text-xs"
+                          onClick={() => setCompareWithGenId(isCompare ? null : g.id)}>
+                          <Eye className="h-3 w-3 mr-1" /> {isCompare ? "Hide diff" : "Compare"}
+                        </Button>
+                        {!isCurrent && (
+                          <Button variant="outline" size="sm" className="h-7 text-xs"
+                            onClick={() => restoreMutation.mutate(g.id)} disabled={restoreMutation.isPending}>
+                            <RotateCcw className="h-3 w-3 mr-1" /> Restore
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                    {isCompare ? (
+                      <DiffView
+                        from={g.client_response ?? ""}
+                        to={currentDraft}
+                        fromLabel="this version"
+                        toLabel="current draft"
+                      />
+                    ) : (
+                      <div className="text-sm whitespace-pre-wrap break-words max-h-56 overflow-y-auto">
+                        {g.client_response ?? <span className="text-muted-foreground italic">No client response in this generation.</span>}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </Card>
+      )}
+
+      {/* Internal notes (staff only) */}
       <Card className="p-4">
-        <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">
-          Client response (visible to client when sent)
+        <div className="flex items-center justify-between gap-2 mb-2">
+          <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+            Internal notes (staff only — never sent to client or AI)
+          </div>
+          <div className="text-[10px] text-muted-foreground">
+            {notesSavedAt
+              ? `Saved ${formatDistanceToNow(notesSavedAt, { addSuffix: true })}`
+              : notesLocal != null
+                ? "Saving…"
+                : review.internal_notes_updated_at
+                  ? `Saved ${formatDistanceToNow(new Date(review.internal_notes_updated_at), { addSuffix: true })}`
+                  : ""}
+          </div>
+        </div>
+        <Textarea
+          value={currentNotes}
+          onChange={(e) => setNotesLocal(e.target.value)}
+          placeholder="Anything the team should know about this submission. Not visible to the client."
+          className="min-h-[100px] text-sm"
+        />
+      </Card>
+
+      {/* Client response */}
+      <Card className={cn("p-4", isNoResponse && "opacity-60")}>
+        <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2 flex items-center justify-between flex-wrap gap-2">
+          <span>Client response (visible to client when sent)</span>
+          {isApproved && (
+            <Badge variant="outline" className="text-[10px] border-emerald-500/40 bg-emerald-500/10 text-emerald-400">
+              <CheckCheck className="inline h-3 w-3 mr-1" /> Approved
+              {review.approved_at && ` ${formatDistanceToNow(new Date(review.approved_at), { addSuffix: true })}`}
+            </Badge>
+          )}
         </div>
         <Textarea
           value={currentDraft}
           onChange={(e) => setDraftLocal(e.target.value)}
           placeholder="The AI draft will appear here. Edit as needed before sending."
           className="min-h-[180px] text-sm"
+          disabled={isNoResponse || isSent}
         />
         <div className="mt-3 flex items-center gap-2 flex-wrap">
-          <Button variant="outline" size="sm" onClick={() => saveDraftMutation.mutate()} disabled={saveDraftMutation.isPending}>
+          <Button variant="outline" size="sm" onClick={() => saveDraftMutation.mutate()}
+            disabled={saveDraftMutation.isPending || isNoResponse || isSent}>
             <Save className="h-3.5 w-3.5 mr-1" /> Save Draft
           </Button>
-          <Button size="sm" onClick={() => sendMutation.mutate()} disabled={!canSend}>
+          {!isApproved ? (
+            <Button variant="outline" size="sm" onClick={() => approveMutation.mutate()}
+              disabled={!currentDraft.trim() || approveMutation.isPending || isNoResponse || isSent}>
+              <CheckCheck className="h-3.5 w-3.5 mr-1" /> Approve
+            </Button>
+          ) : (
+            <Button variant="ghost" size="sm" onClick={() => resetApprovalMutation.mutate()}
+              disabled={resetApprovalMutation.isPending}>
+              <RotateCcw className="h-3.5 w-3.5 mr-1" /> Reset approval
+            </Button>
+          )}
+          <Button size="sm" onClick={() => sendMutation.mutate()} disabled={sendDisabled}>
             {sendMutation.isPending ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Send className="h-3.5 w-3.5 mr-1" />}
             Send Now
           </Button>
           <div className="flex items-center gap-1">
-            <Input
-              type="datetime-local"
-              value={scheduledAt}
-              onChange={(e) => setScheduledAt(e.target.value)}
-              className="h-8 w-44 text-xs"
-            />
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={!scheduledAt || !review.client_id || !currentDraft.trim() || scheduleMutation.isPending}
-              onClick={() => scheduleMutation.mutate()}
-            >
+            <Input type="datetime-local" value={scheduledAt} onChange={(e) => setScheduledAt(e.target.value)} className="h-8 w-44 text-xs" />
+            <Button variant="outline" size="sm"
+              disabled={!scheduledAt || !review.client_id || !currentDraft.trim() || scheduleMutation.isPending || isNoResponse || isSent}
+              onClick={() => scheduleMutation.mutate()}>
               <Clock className="h-3.5 w-3.5 mr-1" /> Schedule
             </Button>
             {review.scheduled_at && review.review_status === "scheduled" && (
@@ -458,10 +778,14 @@ function ReviewDetail({ reviewId, onDeleted }: { reviewId: string; onDeleted: ()
             Map this submission to a client before sending.
           </div>
         )}
-        {review.last_delivery_error && (
-          <div className="mt-2 text-xs text-destructive">
-            Last error: {review.last_delivery_error}
+        {isNoResponse && (
+          <div className="mt-2 text-xs text-muted-foreground">
+            <Ban className="inline h-3.5 w-3.5 mr-1" />
+            Marked as no response required. Reopen to enable sending.
           </div>
+        )}
+        {review.last_delivery_error && (
+          <div className="mt-2 text-xs text-destructive">Last error: {review.last_delivery_error}</div>
         )}
         {review.sent_at && (
           <div className="mt-2 text-xs text-muted-foreground">
@@ -475,7 +799,7 @@ function ReviewDetail({ reviewId, onDeleted }: { reviewId: string; onDeleted: ()
       <Card className="p-4">
         <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">Activity</div>
         <ul className="space-y-1 text-xs">
-          {(audits ?? []).slice(0, 12).map((a: any) => (
+          {(audits ?? []).slice(0, 20).map((a: any) => (
             <li key={a.id} className="text-muted-foreground">
               <span className="text-foreground font-medium">{a.event_type.replace(/_/g, " ")}</span>
               {" — "}
@@ -485,6 +809,95 @@ function ReviewDetail({ reviewId, onDeleted }: { reviewId: string; onDeleted: ()
           {(audits ?? []).length === 0 && <li className="text-muted-foreground italic">No activity yet.</li>}
         </ul>
       </Card>
+    </div>
+  );
+}
+
+// ===========================================================================
+// Subcomponents
+// ===========================================================================
+
+function FileTile({ file }: { file: { id: string; name: string | null; mime: string | null; size: number | null; url: string | null } }) {
+  const [imgError, setImgError] = useState(false);
+  const mime = file.mime ?? "";
+  const isImage = mime.startsWith("image/");
+  const isVideo = mime.startsWith("video/");
+  const isAudio = mime.startsWith("audio/");
+  const isPdf = mime === "application/pdf";
+  const sizeKb = file.size != null ? `${Math.max(1, Math.round(file.size / 1024))} KB` : "";
+
+  if (!file.url) {
+    return (
+      <div className="border border-border rounded p-3 text-xs text-muted-foreground">
+        <FileIcon className="inline h-3.5 w-3.5 mr-1" />
+        {file.name ?? "File"} — link expired, please refresh.
+      </div>
+    );
+  }
+
+  if (isImage && !imgError) {
+    return (
+      <a href={file.url} target="_blank" rel="noreferrer" className="block group">
+        <div className="border border-border rounded overflow-hidden bg-muted/40 aspect-video">
+          <img src={file.url} alt={file.name ?? "Attachment"} className="w-full h-full object-cover group-hover:opacity-80"
+            onError={() => setImgError(true)} />
+        </div>
+        <div className="mt-1 text-[11px] truncate text-muted-foreground">{file.name ?? "Image"} · {sizeKb}</div>
+      </a>
+    );
+  }
+  if (isVideo) {
+    return (
+      <div className="border border-border rounded overflow-hidden">
+        <video src={file.url} controls className="w-full aspect-video bg-black" preload="metadata" />
+        <div className="px-2 py-1 text-[11px] truncate text-muted-foreground"><FileVideo className="inline h-3 w-3 mr-1" />{file.name ?? "Video"} · {sizeKb}</div>
+      </div>
+    );
+  }
+  if (isAudio) {
+    return (
+      <div className="border border-border rounded p-2">
+        <div className="text-[11px] truncate text-muted-foreground mb-1"><FileAudio className="inline h-3 w-3 mr-1" />{file.name ?? "Audio"} · {sizeKb}</div>
+        <audio src={file.url} controls className="w-full" preload="metadata" />
+      </div>
+    );
+  }
+  // PDFs / docs / unknown
+  return (
+    <div className="border border-border rounded p-3 flex items-center justify-between gap-2">
+      <div className="min-w-0 text-xs">
+        {isPdf ? <FileText className="inline h-3.5 w-3.5 mr-1" /> : isImage ? <FileImage className="inline h-3.5 w-3.5 mr-1" /> : <FileIcon className="inline h-3.5 w-3.5 mr-1" />}
+        <span className="font-medium truncate">{file.name ?? "File"}</span>
+        <div className="text-[10px] text-muted-foreground">{mime || "unknown"} · {sizeKb}</div>
+      </div>
+      <a href={file.url} target="_blank" rel="noreferrer" className="text-xs">
+        <Button size="sm" variant="outline" className="h-7"><Download className="h-3 w-3 mr-1" /> Open</Button>
+      </a>
+    </div>
+  );
+}
+
+function DiffView({ from, to, fromLabel, toLabel }: { from: string; to: string; fromLabel: string; toLabel: string }) {
+  // Cheap line-by-line set diff — no third-party dep. Lines unique to `from`
+  // render red, unique to `to` render green; shared lines are dim.
+  const fromLines = from.split(/\r?\n/);
+  const toLines = to.split(/\r?\n/);
+  const toSet = new Set(toLines);
+  const fromSet = new Set(fromLines);
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs font-mono">
+      <div className="border border-border rounded p-2 bg-rose-500/5">
+        <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">{fromLabel}</div>
+        {fromLines.map((l, i) => (
+          <div key={i} className={cn("whitespace-pre-wrap break-words", !toSet.has(l) && l.trim() && "text-rose-300")}>{l || "\u00A0"}</div>
+        ))}
+      </div>
+      <div className="border border-border rounded p-2 bg-emerald-500/5">
+        <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">{toLabel}</div>
+        {toLines.map((l, i) => (
+          <div key={i} className={cn("whitespace-pre-wrap break-words", !fromSet.has(l) && l.trim() && "text-emerald-300")}>{l || "\u00A0"}</div>
+        ))}
+      </div>
     </div>
   );
 }
