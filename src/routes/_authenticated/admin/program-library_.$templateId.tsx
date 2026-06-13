@@ -1776,8 +1776,8 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
               aria-checked={suggestedOn}
               onClick={() => setLoadMode(suggestedOn ? "none" : "manual")}
               className={cn(
-                "relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors",
-                suggestedOn ? "bg-primary" : "bg-muted",
+                "relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors border",
+                suggestedOn ? "bg-green-600 border-green-600" : "bg-red-500 border-red-500",
               )}
               title={suggestedOn ? "Click to remove suggested load" : "Click to add a suggested load"}
             >
