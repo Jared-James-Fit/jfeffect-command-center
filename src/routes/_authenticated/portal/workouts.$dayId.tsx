@@ -1590,10 +1590,20 @@ function SetRow({
         inputMode="decimal"
         type="text"
         pattern="[0-9]*\.?[0-9]*"
-        placeholder="rpe"
-        aria-label={`Set ${setIndex} RPE`}
-        value={rpe}
-        onChange={(e) => setRpe(e.target.value.replace(/[^0-9.]/g, ""))}
+        placeholder={showRir ? "rir" : "rpe"}
+        aria-label={`Set ${setIndex} ${showRir ? "RIR" : "RPE"}`}
+        value={showRir && rpe !== "" ? String(Math.max(0, 10 - Number(rpe))) : rpe}
+        onChange={(e) => {
+          const cleaned = e.target.value.replace(/[^0-9.]/g, "");
+          if (showRir && cleaned !== "") {
+            const n = Number(cleaned);
+            if (isFinite(n)) {
+              setRpe(String(Math.max(0, Math.min(10, 10 - n))));
+              return;
+            }
+          }
+          setRpe(cleaned);
+        }}
         onKeyDown={onEnter}
         onBlur={() => save.flush()}
         readOnly={readonly}
