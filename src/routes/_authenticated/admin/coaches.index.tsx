@@ -175,7 +175,7 @@ export function CoachesPage({ embedded = false }: { embedded?: boolean } = {}) {
             </DialogContent>
           </Dialog>
         }
-      />
+      />}
       <div className="space-y-3 p-6 md:p-8">
         {isLoading ? (
           <Card className="p-6 text-sm text-muted-foreground">Loading coaches…</Card>
