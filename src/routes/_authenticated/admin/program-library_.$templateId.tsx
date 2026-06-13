@@ -1202,7 +1202,7 @@ function WeekEditor({ week, setWeek, exercises, onCopyDayToFuture, hideHeader, c
           </div>
           <DayEditor day={d} setDay={(nd) => { const copy = [...days]; copy[i] = nd; setWeek({ ...week, days: copy }); }} exercises={exercises} compact={compact} />
         </Card>
-      ))}
+      )})}
       {hideHeader && days.length > 0 && (
         <Button size="sm" variant="ghost" onClick={addDay}><Plus className="mr-1 h-3 w-3" /> Day</Button>
       )}
