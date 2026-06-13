@@ -984,13 +984,32 @@ function MultiBlockStructureEditor({ type, payload, setPayload, exercises, compa
       )}
 
       {/* Program overview */}
+      {inRecovery && (
+        <Card className="border-amber-500/50 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-300">
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            <div className="space-y-1">
+              <div className="font-semibold">This template payload is malformed.</div>
+              <div>
+                The raw payload has been preserved untouched. Autosave and all
+                destructive block operations (add, archive, trash, reorder,
+                purge, assignment) are disabled until an admin reviews and
+                explicitly confirms a recovery action.
+              </div>
+              <div className="opacity-80">
+                Reason: {String((v2 as any).__recovery?.reason || "Unknown")}
+              </div>
+            </div>
+          </div>
+        </Card>
+      )}
       <Card className="flex flex-wrap items-center gap-3 p-2 text-xs">
         <span className="font-bold uppercase tracking-wide text-muted-foreground">Program</span>
         <span>{active.length} active block{active.length === 1 ? "" : "s"}</span>
         {archived.length > 0 && <span className="text-muted-foreground">· {archived.length} archived</span>}
         {trashed.length > 0 && <span className="text-muted-foreground">· {trashed.length} in trash</span>}
         <span className="ml-auto" />
-        <Button size="sm" variant="outline" className="h-7" onClick={handleAddBlock}>
+        <Button size="sm" variant="outline" className="h-7" onClick={handleAddBlock} disabled={inRecovery}>
           <Plus className="mr-1 h-3 w-3" /> Add block
         </Button>
       </Card>
