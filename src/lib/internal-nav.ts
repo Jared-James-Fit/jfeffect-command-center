@@ -155,19 +155,14 @@ const REGISTRY: Entry[] = [
     visibleTo: ["admin", "operations"],
     keywords: ["team", "people", "coaches", "staff", "media manager invites", "operations", "business systems"] },
 
-  // ── SETTINGS ────────────────────────────────────────────────────────
-  { to: "/admin/settings", label: "Workspace Settings", icon: Settings, group: "Settings",
-    visibleTo: ["admin"] },
-  { to: "/admin/apps", label: "Integrations", icon: Layers, group: "Settings",
-    visibleTo: ["admin"] },
-  { to: "/admin/floating-bar", label: "Floating Bar", icon: LayoutGrid, group: "Settings",
-    visibleTo: ["admin", "coach", "media_manager"] },
-  { to: "/admin/faqs", label: "FAQ Manager", icon: HelpCircle, group: "Settings",
-    visibleTo: ["admin", "coach"] },
-  { to: "/admin/archives", label: "Archive Manager", icon: Archive, group: "Settings",
-    visibleTo: ["admin", "operations"] },
-  { to: "/admin/account", label: "My Account", icon: UserCog, group: "Settings",
-    visibleTo: ["admin", "coach", "assistant_coach", "media_manager", "sales", "support", "operations", "staff"] },
+  // ── SETTINGS (consolidated; tabs handle sub-views) ──────────────────
+  { to: "/admin/settings", label: "Settings", icon: Settings, group: "Settings",
+    visibleTo: ["admin", "coach", "assistant_coach", "sales", "support", "operations", "staff"],
+    keywords: [
+      "settings", "account", "workspace", "integrations", "apps", "floating bar",
+      "faq", "faqs", "archive", "archives", "automations", "sops", "branding",
+      "notifications", "roles", "permissions", "navigation",
+    ] },
 ];
 
 /** Membership-mode overrides (admin viewing the JF Membership workspace).
