@@ -289,15 +289,8 @@ function WorkoutFeedbackSection({ clientId }: { clientId: string }) {
                       <CheckCircle2 className="mr-1 h-3.5 w-3.5" /> Mark reviewed
                     </Button>
                   )}
-                  {r.day_id && (
-                    <Button asChild size="sm" variant="outline">
-                      <Link to="/admin/client-programs/$clientId/day/$dayId" params={{ clientId, dayId: r.day_id }} search={{ readonly: 1 } as any}>
-                        Open workout
-                      </Link>
-                    </Button>
-                  )}
                   <Button asChild size="sm" variant="ghost">
-                    <Link to="/admin/messages" search={{ client: clientId } as any}>
+                    <Link to="/admin/messages">
                       <MessageCircle className="mr-1 h-3.5 w-3.5" /> Message client
                     </Link>
                   </Button>
