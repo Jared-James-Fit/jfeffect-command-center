@@ -174,7 +174,35 @@ function WorkoutsPage() {
             <p className="mt-3 text-sm text-muted-foreground">No workouts assigned yet. Your coach will publish your block soon.</p>
           </Card>
         ) : (
-          <Tabs defaultValue="today" className="space-y-4">
+          <Tabs
+            value={viewMode === "block" ? "calendar" : "today"}
+            onValueChange={(v) => setViewMode(v === "calendar" ? "block" : "day")}
+            className="space-y-4"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="inline-flex rounded-md border border-border bg-card p-0.5 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setViewMode("day")}
+                  className={cn(
+                    "rounded px-3 py-1 font-semibold transition",
+                    viewMode === "day" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  Day View
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode("block")}
+                  className={cn(
+                    "rounded px-3 py-1 font-semibold transition",
+                    viewMode === "block" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  Block View
+                </button>
+              </div>
+            </div>
             <TabsList className="grid w-full grid-cols-4">
               <TabsTrigger value="today" className="text-xs sm:text-sm"><Sun className="mr-1 h-3.5 w-3.5" /><span className="hidden sm:inline">Today</span><span className="sm:hidden">Today</span></TabsTrigger>
               <TabsTrigger value="all" className="text-xs sm:text-sm"><ListChecks className="mr-1 h-3.5 w-3.5" /><span className="hidden sm:inline">All Workouts</span><span className="sm:hidden">All</span></TabsTrigger>
@@ -206,6 +234,7 @@ function WorkoutsPage() {
             </TabsContent>
 
             <TabsContent value="calendar" className="space-y-4">
+              <div id="client-block-view" className="scroll-mt-24" />
               {client?.id && (
                 <WeekScheduleView clientId={client.id} blockId={currentBlockId} mode="client" />
               )}
