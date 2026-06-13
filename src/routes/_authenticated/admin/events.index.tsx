@@ -114,27 +114,29 @@ export function AdminEventsPage({ embedded = false }: { embedded?: boolean } = {
 
   return (
     <div className="space-y-4">
-      {!embedded ? <PageHeader
-        title="Events"
-        subtitle="Plan upcoming meets, shoots, calls, and key client dates."
-        actions={
-          <div className="flex gap-2">
-            <Button
-              size="sm"
-              variant={selectMode ? "default" : "outline"}
-              onClick={() => { setSelectMode((v) => !v); selection.clear(); }}
-            >
-              <CheckSquare className="mr-1 h-4 w-4" />{selectMode ? "Done" : "Select"}
-            </Button>
-            <Button asChild variant="outline" size="sm">
-              <Link to="/admin/events/format-guide"><Sparkles className="mr-1 h-4 w-4" />Format Guide</Link>
-            </Button>
-            <Button size="sm" onClick={createDraft}>
-              <Plus className="mr-1 h-4 w-4" />New Event
-            </Button>
-          </div>
-        }
-      /> : (
+      {!embedded ? (
+        <PageHeader
+          title="Events"
+          subtitle="Plan upcoming meets, shoots, calls, and key client dates."
+          actions={
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                variant={selectMode ? "default" : "outline"}
+                onClick={() => { setSelectMode((v) => !v); selection.clear(); }}
+              >
+                <CheckSquare className="mr-1 h-4 w-4" />{selectMode ? "Done" : "Select"}
+              </Button>
+              <Button asChild variant="outline" size="sm">
+                <Link to="/admin/events/format-guide"><Sparkles className="mr-1 h-4 w-4" />Format Guide</Link>
+              </Button>
+              <Button size="sm" onClick={createDraft}>
+                <Plus className="mr-1 h-4 w-4" />New Event
+              </Button>
+            </div>
+          }
+        />
+      ) : (
         <div className="flex justify-end gap-2 px-4 pt-4 md:px-6">
           <Button size="sm" variant={selectMode ? "default" : "outline"} onClick={() => { setSelectMode((v) => !v); selection.clear(); }}>
             <CheckSquare className="mr-1 h-4 w-4" />{selectMode ? "Done" : "Select"}
