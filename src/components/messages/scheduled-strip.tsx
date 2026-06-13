@@ -135,7 +135,9 @@ export function ScheduledStrip({ clientId }: { clientId: string }) {
           </div>
         );
       })}
-      {failed.map((m) => (
+      {failed.map((m) => {
+        const attempts = m.attempt_count ?? 0;
+        return (
         <div
           key={m.id}
           className="flex items-start gap-2 rounded-lg border border-destructive/40 bg-destructive/5 p-2.5 shadow-sm"
@@ -147,9 +149,9 @@ export function ScheduledStrip({ clientId }: { clientId: string }) {
                 Failed
               </Badge>
               <span className="text-destructive">{safeErrorLabel(m.delivery_error)}</span>
-              {m.attempt_count > 0 && (
+              {attempts > 0 && (
                 <span className="font-normal lowercase text-muted-foreground">
-                  · {m.attempt_count} attempt{m.attempt_count === 1 ? "" : "s"}
+                  · {attempts} attempt{attempts === 1 ? "" : "s"}
                 </span>
               )}
             </div>
@@ -174,7 +176,8 @@ export function ScheduledStrip({ clientId }: { clientId: string }) {
             Retry
           </Button>
         </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

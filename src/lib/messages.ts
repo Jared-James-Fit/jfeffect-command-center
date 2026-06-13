@@ -50,6 +50,17 @@ export type Message = {
   transcript_status?: string | null;
   edited_at?: string | null;
   deleted_at?: string | null;
+  // Phase 4A delivery tracking (additive, optional for callers).
+  delivery_status?: "pending" | "sending" | "sent" | "failed" | "scheduled" | "cancelled";
+  delivery_error?: string | null;
+  attempt_count?: number;
+  last_attempt_at?: string | null;
+  sent_at?: string | null;
+  scheduled_at?: string | null;
+  scheduled_by?: string | null;
+  scheduled_tz?: string | null;
+  cancelled_at?: string | null;
+  cancelled_by?: string | null;
 };
 
 export type ConversationState = {
