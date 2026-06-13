@@ -27,6 +27,7 @@ import {
   Link as LinkIcon, Trophy, Tag, ShieldCheck,
   Home as HomeIcon,
   ListChecks, Upload, Star, FileText, ExternalLink, Image as ImageIcon,
+  PowerOff,
 } from "lucide-react";
 import type { NavItem } from "@/components/app-shell";
 
@@ -208,6 +209,8 @@ const MEMBERSHIP_OVERLAY: Entry[] = [
     visibleTo: ["admin"], keywords: ["legal", "terms", "privacy", "agreement", "disclosure", "cancellation"] },
   { to: "/admin/membership/refund-policy", label: "Refund Policy", icon: FileText, group: "Launch",
     visibleTo: ["admin"] },
+  { to: "/admin/membership/checkout-settings", label: "Checkout Kill-Switch", icon: PowerOff, group: "Launch",
+    visibleTo: ["admin"], keywords: ["kill switch", "pause", "checkout", "disable signups", "join page"] },
   { to: "/admin/membership/support", label: "Membership Support", icon: MessagesSquare, group: "Launch",
     visibleTo: ["admin"] },
   { to: "/admin/sales/membership", label: "Sales Page", icon: Sparkles, group: "Sales",
