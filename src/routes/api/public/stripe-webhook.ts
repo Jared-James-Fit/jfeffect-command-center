@@ -288,27 +288,17 @@ async function findJfMemberBySub(supabase: any, sub: any) {
 }
 
 async function applyJfSubToMember(supabase: any, member: any, sub: any) {
+  // Phase 3: delegate to the canonical lifecycle resolver/applier so the
+  // webhook, member billing fns, and admin sync all share one source of
+  // truth for status, entitlements, grace period, recovery, and audit.
   const s = await jfSettings(supabase);
-  const holdId = s?.hold_price_id ?? null;
-  const status = jfStatusFromSub(sub, holdId);
-  const patch: any = {
-    subscription_status: status,
-    stripe_subscription_id: sub.id,
-    stripe_customer_id: sub.customer ?? null,
-    stripe_price_id: sub.items?.data?.[0]?.price?.id ?? null,
-    trial_end_at: fromUnix(sub.trial_end),
-    current_period_end: fromUnix(sub.current_period_end),
-    cancel_at: fromUnix(sub.cancel_at),
-    cancelled_at: fromUnix(sub.canceled_at),
-    paused_until: fromUnix(sub.pause_collection?.resumes_at),
-    last_billing_event_at: new Date().toISOString(),
-  };
-  if (status === "Hold Plan") patch.hold_plan_started_at = new Date().toISOString();
-  if (["Trialing", "Active"].includes(status)) patch.status = "Active";
-  else if (status === "Cancelled" || status === "Payment Failed") patch.status = "Cancelled";
-  await supabase.from("app_members").update(patch).eq("id", member.id);
-  const grants = status === "Trialing" || status === "Active";
-  await supabase.from("member_access").update({ active: grants }).eq("member_id", member.id);
+  const { applyJfLifecycle } = await import("@/lib/jf-lifecycle.server");
+  await applyJfLifecycle({
+    supabaseAdmin: supabase,
+    member,
+    sub,
+    holdPriceId: s?.hold_price_id ?? null,
+  });
 }
 
 /** Fire a JF SMS automation; swallow errors so the webhook still returns 200. */
