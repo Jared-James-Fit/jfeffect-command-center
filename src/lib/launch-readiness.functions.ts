@@ -356,20 +356,23 @@ export const getLaunchReadiness = createServerFn({ method: "GET" })
     push({ key: "keep_flow", group: "Lifecycle", label: "Keep Membership flow available", state: "ready", owner: "Lovable", blocks_checkout: false, blocks_promotion: false });
 
     // 9. Cleanup / safety ---------------------------------------------------
-    // 9a. Is the cleanup actually scheduled in pg_cron? Service role can read cron.job.
+    // 9a. Is the cleanup actually scheduled in pg_cron? Use the admin-only
+    // SECURITY DEFINER RPC that exposes ONLY this single cleanup job's
+    // existence, schedule, active flag, and last run metadata.
     let cronScheduled = false;
     let cronDetail = "Unable to inspect pg_cron";
     try {
-      const { data: cronRows } = await (supabaseAdmin as any)
-        .schema("cron")
-        .from("job")
-        .select("jobname, schedule, active, command");
-      const match = (cronRows ?? []).find((j: any) =>
-        /cleanup-pending-signups|pending_signups/i.test(`${j.jobname ?? ""} ${j.command ?? ""}`),
+      const { data: rows, error } = await (context.supabase as any).rpc(
+        "get_membership_cleanup_job_status",
       );
-      if (match) {
-        cronScheduled = !!match.active;
-        cronDetail = `${match.jobname} — ${match.schedule} (${match.active ? "active" : "disabled"})`;
+      if (error) throw error;
+      const row = Array.isArray(rows) ? rows[0] : rows;
+      if (row?.exists_) {
+        cronScheduled = !!row.active;
+        const last = row.last_run_started_at
+          ? ` · last run ${new Date(row.last_run_started_at).toISOString()} (${row.last_run_status ?? "unknown"})`
+          : "";
+        cronDetail = `${row.jobname} — ${row.schedule} (${row.active ? "active" : "disabled"})${last}`;
       } else {
         cronDetail = "No pg_cron job targets the pending-signups cleanup endpoint";
       }
