@@ -1423,18 +1423,18 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
         </div>
         </Field>
         <Field className="col-span-1" label="Sets">
-          <RowCell className={cn("text-sm font-semibold tabular-nums text-center", h, inputCls)} inputMode="numeric" placeholder="3" value={row.sets} onCommit={(v) => setRow({ ...row, sets: parseIntOrNull(v) })} />
+          <RowCell dataField="sets" className={cn("text-sm font-semibold tabular-nums text-center", h, inputCls)} inputMode="numeric" placeholder="3" value={row.sets} onCommit={(v) => setRow({ ...row, sets: parseIntOrNull(v) })} />
         </Field>
         <Field className="col-span-2" label="Reps">
-          <RowCell className={cn("text-sm font-semibold tabular-nums text-center", h, inputCls)} placeholder="8-12" value={row.reps_text} onCommit={(v) => setRow({ ...row, reps_text: v ?? "" })} />
+          <RowCell dataField="reps" className={cn("text-sm font-semibold tabular-nums text-center", h, inputCls)} placeholder="8-12" value={row.reps_text} onCommit={(v) => setRow({ ...row, reps_text: v ?? "" })} />
         </Field>
         <Field className="col-span-1" label="RPE">
-          <RowCell className={cn("text-sm font-semibold tabular-nums text-center", h, inputCls)} inputMode="decimal" placeholder="—" value={row.rpe} onCommit={(v) => setRow({ ...row, rpe: v ?? "" })} />
+          <RowCell dataField="rpe" className={cn("text-sm font-semibold tabular-nums text-center", h, inputCls)} inputMode="decimal" placeholder="—" value={row.rpe} onCommit={(v) => setRow({ ...row, rpe: v ?? "" })} />
         </Field>
         <Field className="col-span-1" label="RIR">
-          <RowCell className={cn("text-sm font-semibold tabular-nums text-center", h, inputCls)} inputMode="decimal" placeholder="—" value={row.rir} onCommit={(v) => setRow({ ...row, rir: v ?? "" })} />
+          <RowCell dataField="rir" className={cn("text-sm font-semibold tabular-nums text-center", h, inputCls)} inputMode="decimal" placeholder="—" value={row.rir} onCommit={(v) => setRow({ ...row, rir: v ?? "" })} />
         </Field>
-        <Field className="col-span-2 md:col-span-2" label={`Rest (seconds)${restIsOverride ? " *" : ""}`}>
+        <Field className="col-span-2 md:col-span-2" label={`Rest time${restIsOverride ? " *" : ""}`}>
           {(() => {
             const REST_PRESETS: { v: number; label: string }[] = [
               { v: 30, label: "30 sec" },
@@ -1472,10 +1472,16 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
                       restIsOverride && "ring-1 ring-primary/40",
                     )}
                   >
-                    <SelectValue />
+                    <SelectValue>
+                      {selectValue === "auto"
+                        ? `Auto · ${fmtRestSeconds(restDefault)}`
+                        : selectValue === "custom"
+                          ? `Custom · ${fmtRestSeconds(override ?? null)}`
+                          : fmtRestSeconds(parseInt(selectValue, 10))}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="auto">Auto ({restDefault}s)</SelectItem>
+                    <SelectItem value="auto">Auto · {fmtRestSeconds(restDefault)}</SelectItem>
                     {REST_PRESETS.map((p) => (
                       <SelectItem key={p.v} value={String(p.v)}>{p.label}</SelectItem>
                     ))}
@@ -1484,6 +1490,7 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
                 </Select>
                 {selectValue === "custom" && (
                   <RowCell
+                    dataField="rest"
                     className={cn("mt-1 text-xs font-semibold tabular-nums text-center", h, inputCls)}
                     inputMode="numeric"
                     placeholder="Custom rest (seconds)"
@@ -1498,8 +1505,10 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
                     }}
                   />
                 )}
-                <span className="px-0.5 text-[8px] leading-none text-muted-foreground">
-                  {selectValue === "auto" ? `auto · ${restCat}` : `${effectiveRest}s programmed`}
+                <span className="px-0.5 text-[10px] leading-tight text-foreground/70">
+                  {selectValue === "auto"
+                    ? `Auto · ${restCat} · ${fmtRestSeconds(effectiveRest)}`
+                    : `${fmtRestSeconds(effectiveRest)} programmed`}
                 </span>
               </>
             );
