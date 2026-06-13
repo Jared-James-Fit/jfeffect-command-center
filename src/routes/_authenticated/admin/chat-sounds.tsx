@@ -1,4 +1,4 @@
-import { createFileRoute, useRouter } from "@tanstack/react-router";
+import { createFileRoute, useRouter, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
 import { PageHeader } from "@/components/app-shell";
@@ -20,7 +20,7 @@ import {
 import { playSound, stopSound, subscribeSound } from "@/lib/sound-player";
 
 export const Route = createFileRoute("/_authenticated/admin/chat-sounds")({
-  component: ChatSoundsPage,
+  component: ChatSoundsRedirect,
   errorComponent: ({ error, reset }) => {
     const router = useRouter();
     return (
@@ -32,6 +32,14 @@ export const Route = createFileRoute("/_authenticated/admin/chat-sounds")({
   },
   notFoundComponent: () => <div className="p-6 text-sm">Not found.</div>,
 });
+
+function ChatSoundsRedirect() {
+  const nav = useNavigate();
+  useEffect(() => {
+    nav({ to: "/admin/communication", search: { tab: "media-libraries", sub: "sounds" } as any, replace: true });
+  }, [nav]);
+  return null;
+}
 
 type FormState = {
   id?: string;
@@ -53,7 +61,7 @@ function emptyForm(): FormState {
   };
 }
 
-function ChatSoundsPage() {
+export function ChatSoundsPage({ embedded = false }: { embedded?: boolean } = {}) {
   const qc = useQueryClient();
   const [filter, setFilter] = useState<string>("all");
   const [editing, setEditing] = useState<FormState | null>(null);
@@ -138,15 +146,23 @@ function ChatSoundsPage() {
 
   return (
     <div className="p-4 sm:p-6">
-      <PageHeader
-        title="Chat Sound Library"
-        subtitle="Curated short sound effects for chat — hype, PRs, coach reactions, gym humour"
-        actions={
+      {embedded ? (
+        <div className="flex justify-end">
           <Button onClick={() => setEditing(emptyForm())}>
             <Plus className="mr-2 h-4 w-4" /> Add Sound
           </Button>
-        }
-      />
+        </div>
+      ) : (
+        <PageHeader
+          title="Chat Sound Library"
+          subtitle="Curated short sound effects for chat — hype, PRs, coach reactions, gym humour"
+          actions={
+            <Button onClick={() => setEditing(emptyForm())}>
+              <Plus className="mr-2 h-4 w-4" /> Add Sound
+            </Button>
+          }
+        />
+      )}
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
         <Label className="text-xs">Filter:</Label>

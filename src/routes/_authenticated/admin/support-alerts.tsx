@@ -1,4 +1,5 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useEffect } from "react";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
@@ -14,8 +15,16 @@ import { cn } from "@/lib/utils";
 import { AlertCircle, Clock, CheckCircle2, Hammer } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/admin/support-alerts")({
-  component: SupportAlertsPage,
+  component: SupportAlertsRedirect,
 });
+
+function SupportAlertsRedirect() {
+  const nav = useNavigate();
+  useEffect(() => {
+    nav({ to: "/admin/communication", search: { tab: "support-alerts" } as any, replace: true });
+  }, [nav]);
+  return null;
+}
 
 const alertsQueryOptions = {
   queryKey: ["support_alerts"],
@@ -34,7 +43,7 @@ const alertsQueryOptions = {
   },
 };
 
-function SupportAlertsPage() {
+export function SupportAlertsPage({ embedded = false }: { embedded?: boolean } = {}) {
   const { data: alerts } = useSuspenseQuery(alertsQueryOptions);
   const qc = useQueryClient();
 
@@ -78,10 +87,12 @@ function SupportAlertsPage() {
 
   return (
     <div className="flex flex-col min-h-screen bg-background">
-      <PageHeader
-        title="Support Alerts"
-        subtitle="Technical issues and workout logger failures reported by clients."
-      />
+      {!embedded && (
+        <PageHeader
+          title="Support Alerts"
+          subtitle="Technical issues and workout logger failures reported by clients."
+        />
+      )}
       
       <div className="p-4 md:p-6 space-y-6">
         <Tabs defaultValue="open" className="w-full">

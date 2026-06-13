@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -16,7 +16,15 @@ import { Send, Bug, Lightbulb, HelpCircle, Check } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
-export const Route = createFileRoute("/_authenticated/admin/membership/support")({ component: SupportInbox });
+export const Route = createFileRoute("/_authenticated/admin/membership/support")({ component: SupportInboxRedirect });
+
+function SupportInboxRedirect() {
+  const nav = useNavigate();
+  useEffect(() => {
+    nav({ to: "/admin/communication", search: { tab: "support-inbox" } as any, replace: true });
+  }, [nav]);
+  return null;
+}
 
 const CAT: Record<string, { icon: any; tone: string; label: string }> = {
   question: { icon: HelpCircle, tone: "bg-blue-500/15 text-blue-300 border-blue-500/30", label: "Question" },
@@ -25,7 +33,7 @@ const CAT: Record<string, { icon: any; tone: string; label: string }> = {
   reply: { icon: HelpCircle, tone: "bg-secondary text-foreground border-border", label: "Reply" },
 };
 
-function SupportInbox() {
+export function SupportInbox({ embedded = false }: { embedded?: boolean } = {}) {
   const qc = useQueryClient();
   const list = useServerFn(listSupportThreads);
   const get = useServerFn(getSupportThread);
@@ -87,7 +95,9 @@ function SupportInbox() {
 
   return (
     <div className="space-y-4">
-      <PageHeader title="Member Support Inbox" subtitle="Questions, bug reports, and suggestions from JF members." />
+      {!embedded && (
+        <PageHeader title="Member Support Inbox" subtitle="Questions, bug reports, and suggestions from JF members." />
+      )}
       <div className="grid gap-3 md:grid-cols-[320px,1fr]">
         <Card className="flex h-[calc(100dvh-12rem)] flex-col overflow-hidden">
           <div className="flex items-center gap-2 border-b p-2">

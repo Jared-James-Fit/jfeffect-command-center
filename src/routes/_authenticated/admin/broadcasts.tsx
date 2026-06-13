@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { useEffect, useMemo, useState } from "react";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
@@ -12,9 +12,17 @@ import { BroadcastComposer } from "@/components/broadcast-composer";
 import { format } from "date-fns";
 import { toast } from "sonner";
 
-export const Route = createFileRoute("/_authenticated/admin/broadcasts")({ component: AdminBroadcasts });
+export const Route = createFileRoute("/_authenticated/admin/broadcasts")({ component: BroadcastsRedirect });
 
-function AdminBroadcasts() {
+function BroadcastsRedirect() {
+  const nav = useNavigate();
+  useEffect(() => {
+    nav({ to: "/admin/communication", search: { tab: "broadcasts" } as any, replace: true });
+  }, [nav]);
+  return null;
+}
+
+export function AdminBroadcasts({ embedded = false }: { embedded?: boolean } = {}) {
   const qc = useQueryClient();
   const [tab, setTab] = useState("Active");
   const [open, setOpen] = useState(false);
@@ -39,20 +47,32 @@ function AdminBroadcasts() {
 
   return (
     <>
-      <PageHeader
-        title="Community Broadcasts"
-        subtitle="Send quick messages, quotes, voice notes, videos, and reminders."
-        actions={
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={() => { setEditing(null); setQuick(true); setOpen(true); }}>
-              <Zap className="mr-1 h-4 w-4" /> Quick Broadcast
-            </Button>
-            <Button onClick={() => { setEditing(null); setQuick(false); setOpen(true); }} className="bg-gradient-primary font-bold">
-              <Plus className="mr-1 h-4 w-4" /> New Broadcast
-            </Button>
-          </div>
-        }
-      />
+      {!embedded && (
+        <PageHeader
+          title="Community Broadcasts"
+          subtitle="Send quick messages, quotes, voice notes, videos, and reminders."
+          actions={
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => { setEditing(null); setQuick(true); setOpen(true); }}>
+                <Zap className="mr-1 h-4 w-4" /> Quick Broadcast
+              </Button>
+              <Button onClick={() => { setEditing(null); setQuick(false); setOpen(true); }} className="bg-gradient-primary font-bold">
+                <Plus className="mr-1 h-4 w-4" /> New Broadcast
+              </Button>
+            </div>
+          }
+        />
+      )}
+      {embedded && (
+        <div className="flex justify-end gap-2 p-4 md:p-6 md:pb-0">
+          <Button variant="outline" onClick={() => { setEditing(null); setQuick(true); setOpen(true); }}>
+            <Zap className="mr-1 h-4 w-4" /> Quick Broadcast
+          </Button>
+          <Button onClick={() => { setEditing(null); setQuick(false); setOpen(true); }} className="bg-gradient-primary font-bold">
+            <Plus className="mr-1 h-4 w-4" /> New Broadcast
+          </Button>
+        </div>
+      )}
       <div className="space-y-4 p-4 md:p-6">
         <Tabs value={tab} onValueChange={setTab}>
           <TabsList>
