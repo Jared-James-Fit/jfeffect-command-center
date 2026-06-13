@@ -92,6 +92,13 @@ export function QuickAssignTemplateDialog({ open, onOpenChange, clientId, client
         `Overlaps with "${conflict.name ?? "another block"}" (${conflict.start_date ?? "?"} – ${conflict.end_date ?? "?"}). Use the suggested start date.`,
       );
     }
+    // Empty "selected blocks" mode must never fall through to the legacy
+    // single-block assignment path — the server now rejects this anyway but
+    // we block in the UI for a clearer error and to keep the action
+    // idempotent.
+    if (v2Blocks.length > 0 && assignMode === "selected" && selectedBlockIds.length === 0) {
+      return toast.error("Pick at least one block to assign");
+    }
     setBusy(true);
     try {
       const placement = selected?.template_type === "full_prep"
@@ -303,7 +310,17 @@ export function QuickAssignTemplateDialog({ open, onOpenChange, clientId, client
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={submit} disabled={!templateId || busy || !!conflict}>{busy ? "Assigning…" : "Assign"}</Button>
+          <Button
+            onClick={submit}
+            disabled={
+              !templateId ||
+              busy ||
+              !!conflict ||
+              (v2Blocks.length > 0 && assignMode === "selected" && selectedBlockIds.length === 0)
+            }
+          >
+            {busy ? "Assigning…" : "Assign"}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
