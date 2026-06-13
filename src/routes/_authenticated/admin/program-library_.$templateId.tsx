@@ -32,6 +32,25 @@ import { listClientMaxes, buildMaxIndex, computeRowLoad, type ClientMaxRow } fro
 import { MaxEditorDialog } from "@/components/client-maxes-panel";
 import { BlockMaxesButton } from "@/components/block-maxes-panel";
 import { AlertCircle as PbAlertCircle, Calculator as PbCalculator } from "lucide-react";
+import {
+  normalizeTemplatePayload,
+  serializeTemplatePayload,
+  getActiveTemplateBlocks,
+  getArchivedTemplateBlocks,
+  getTrashedTemplateBlocks,
+  addBlankBlock,
+  replaceBlock,
+  reorderActiveBlocks,
+  setBlockArchived,
+  setBlockTrashed,
+  purgeTrashedBlock,
+  cloneTemplateBlock,
+  BLOCK_PHASE_OPTIONS,
+  type TemplatePayloadV2,
+  type TemplateBlockV2,
+} from "@/lib/pl-template-blocks";
+import { useNavigate } from "@tanstack/react-router";
+import { ArchiveRestore } from "lucide-react";
 
 // ---------------- Fast local-state cell (instant typing, debounced commit) ---
 // Keeps keystrokes local so parent rows/days/blocks don't re-render per digit.
@@ -355,6 +374,9 @@ export function appendRowToFirstDay(payload: any, type: string, row: any) {
 
 export const Route = createFileRoute("/_authenticated/admin/program-library_/$templateId")({
   component: TemplateEditor,
+  validateSearch: (s: Record<string, unknown>) => ({
+    block: typeof s.block === "string" ? (s.block as string) : undefined,
+  }),
 });
 
 const STYLES: TrainingStyle[] = ["powerlifting", "bodybuilding", "strength", "lifestyle", "hybrid", "rehab", "conditioning", "custom"];
