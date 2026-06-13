@@ -21,6 +21,7 @@ import { Mail, Send, FolderOpen, ExternalLink, ShieldCheck } from "lucide-react"
 import { Switch } from "@/components/ui/switch";
 import { AccountProfileSettings } from "@/components/account-profile-settings";
 import { JfMembershipSettingsCard } from "@/components/admin/jf-membership-settings-card";
+import { SettingsTabs } from "@/components/settings/settings-tabs";
 
 export const Route = createFileRoute("/_authenticated/admin/settings")({ component: SettingsPage });
 
@@ -104,7 +105,8 @@ function SettingsPage() {
 
   return (
     <>
-      <PageHeader title="Settings" subtitle="Account & access" />
+      <SettingsTabs />
+      <PageHeader title="Workspace Settings" subtitle="Email sender, integrations, archive, and access." />
       <div className="grid gap-6 p-6 md:grid-cols-2 md:p-8">
         <AccountProfileSettings title="Your Profile" roleLabel="Admin / Owner" />
         <JfMembershipSettingsCard />
