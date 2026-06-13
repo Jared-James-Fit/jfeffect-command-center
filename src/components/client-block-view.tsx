@@ -444,7 +444,6 @@ export function ClientBlockView({
                       )}
                     </div>
                   </div>
-                  <div className="mt-2"><Action /></div>
                 </div>
 
                 {/* Exercise list */}
