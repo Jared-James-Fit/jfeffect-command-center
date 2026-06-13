@@ -44,10 +44,10 @@ export function BlockWeekColumns({
   };
 
   return (
-    <div className="space-y-4">
+    <div className="min-w-0 space-y-4">
       {/* Horizontal week timeline (quick nav) */}
-      <div className="-mx-1 overflow-x-auto pb-2">
-        <div className="flex min-w-min items-stretch gap-2 px-1">
+      <div className="-mx-3 overflow-x-auto px-3 pb-2 sm:-mx-1 sm:px-1">
+        <div className="flex min-w-max items-stretch gap-2">
           {computed.map(({ week, entries, range, now, status, doneCount }) => {
             const tone = weekStatusTone(status);
             const total = entries.length;
@@ -103,21 +103,21 @@ export function BlockWeekColumns({
       </div>
 
       {/* Full block: every week + its days */}
-      <div className="-mx-3 overflow-x-auto px-3 pb-3">
-        <div className="flex w-max items-start gap-3">
+      <div className="min-w-0 md:-mx-3 md:overflow-x-auto md:px-3 md:pb-3">
+        <div className="flex min-w-0 flex-col gap-3 md:w-max md:flex-row md:items-start">
           {computed.map((sel) => (
             <div
               key={sel.week?.id ?? Math.random()}
               ref={(el) => { if (sel.week?.id) weekRefs.current[sel.week.id] = el; }}
               className={cn(
-                "w-[82vw] max-w-[400px] shrink-0 scroll-mt-24 space-y-2 rounded-md border p-3 sm:w-[360px] lg:w-[390px]",
+                "w-full min-w-0 scroll-mt-24 space-y-2 rounded-md border p-3 md:w-[360px] md:max-w-[400px] md:shrink-0 lg:w-[390px]",
                 sel.now ? "border-primary/50 bg-primary/5" : "border-border bg-card/40",
                 sel.status === "Locked" && "opacity-80",
               )}
             >
-            <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <div className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+            <div className="flex min-w-0 flex-wrap items-start justify-between gap-2">
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
+                <div className="shrink-0 text-xs font-bold uppercase tracking-widest text-muted-foreground">
                   Week {sel.week?.week_index ?? "—"}
                 </div>
                 <Badge variant="outline" className={cn("h-4 px-1 text-[9px]", weekStatusTone(sel.status))}>
@@ -131,7 +131,7 @@ export function BlockWeekColumns({
                 )}
               </div>
               {sel.range && (
-                <div className="text-[11px] text-muted-foreground inline-flex items-center gap-1">
+                <div className="inline-flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground">
                   <CalendarRange className="h-3 w-3" />
                   {formatWeekRange(sel.range.start, sel.range.end)}
                 </div>
