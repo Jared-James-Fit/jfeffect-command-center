@@ -55,8 +55,13 @@ function AdminLayout() {
   const customLayout = useBarLayout(isCoach ? "coach" : "admin");
 
   const defaultBottom = useMemo(() => {
-    const source = isCoach ? coachNav : coachingAdminNav;
-    const pick = (to: string) => source.find((i) => i.to === to)!;
+    // Derive the mobile bottom bar from the SAME role-aware registry that
+    // drives the sidebar — keeps desktop + mobile permission rules in sync.
+    // Falls back to the legacy registries only if a route isn't present
+    // (defensive — should not happen for these five core destinations).
+    const legacy = isCoach ? coachNav : coachingAdminNav;
+    const pick = (to: string) =>
+      nav.find((i) => i.to === to) ?? legacy.find((i) => i.to === to)!;
     if (isCoach) {
       return [
         pick("/admin"),
@@ -81,7 +86,7 @@ function AdminLayout() {
       },
       { ...pick("/admin/tasks"), label: "Tasks" },
     ];
-  }, [isCoach]);
+  }, [isCoach, nav]);
 
   const bottomItems = useMemo(() => {
     if (customLayout && customLayout.slots.length > 0) {

@@ -1,8 +1,8 @@
 import { createFileRoute, Outlet, useNavigate } from "@tanstack/react-router";
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { useAuth } from "@/lib/auth";
 import { AppShell } from "@/components/app-shell";
-import { mediaNav } from "@/lib/media-nav";
+import { buildInternalNav } from "@/lib/internal-nav";
 import { DashboardModeSwitcher } from "@/components/dashboard-mode-switcher";
 import { setDashboardMode, useDashboardMode } from "@/lib/dashboard-mode";
 import { TaskPopupGate } from "@/components/tasks/task-popup-gate";
@@ -33,8 +33,20 @@ function MediaLayout() {
     return <div className="grid min-h-screen place-items-center text-muted-foreground">Redirecting…</div>;
   }
 
+  const nav = useMemo(() => buildInternalNav("media_manager"), []);
+  const bottomItems = useMemo(() => {
+    const pick = (to: string) => nav.find((i) => i.to === to);
+    return [
+      pick("/media"),
+      pick("/media/action-items"),
+      pick("/media/inbox"),
+      pick("/media/uploads"),
+      pick("/media/calendar"),
+    ].filter(Boolean) as typeof nav;
+  }, [nav]);
+
   return (
-    <AppShell items={mediaNav} title="Media Manager">
+    <AppShell items={nav} bottomItems={bottomItems} title="Media Manager">
       {role === "admin" && <DashboardModeSwitcher />}
       <Outlet />
       <TaskPopupGate scope="media_manager" />
