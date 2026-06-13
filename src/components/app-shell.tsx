@@ -4,11 +4,10 @@ import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import {
   LogOut, ChevronLeft, ChevronRight, ChevronDown, Search, Settings as SettingsIcon, ArrowLeft, MoreHorizontal,
-  Star, Pin, RotateCcw,
+  Star, Pin, ChevronsDownUp, ChevronsUpDown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { NotificationBell } from "@/components/notification-bell";
-import { KeyboardShortcutsButton } from "@/components/keyboard-shortcuts";
 import { useClientNavBadges, markNavSeen } from "@/hooks/use-client-nav-badges";
 import { useKeyboardOpen } from "@/hooks/use-keyboard-open";
 import { UserAvatar } from "@/components/user-avatar";
@@ -24,7 +23,7 @@ import {
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { useSidebarPins, restoreSidebarDefaults, MAX_PINS, type PinScope } from "@/lib/sidebar-pins";
+import { useSidebarPins, MAX_PINS, type PinScope } from "@/lib/sidebar-pins";
 import { toast } from "sonner";
 
 export interface NavItem {
@@ -139,7 +138,12 @@ function useCollapsedSections() {
       return next;
     });
   };
-  return [collapsed, toggle] as const;
+  const setAll = (labels: string[], collapseAll: boolean) => {
+    const next = collapseAll ? new Set(labels) : new Set<string>();
+    try { localStorage.setItem(SIDEBAR_COLLAPSED_SECTIONS_KEY, JSON.stringify(Array.from(next))); } catch {}
+    setCollapsed(next);
+  };
+  return [collapsed, toggle, setAll] as const;
 }
 
 export function AppShell({ items, bottomItems: customBottomItems, title, children }: { items: NavItem[]; bottomItems?: NavItem[]; title: string; children: ReactNode }) {
@@ -149,7 +153,7 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
   const pathname = useRouterState({ select: (r) => r.location.pathname });
   const navBadges = useClientNavBadges();
   const [mode, setMode] = useSidebarMode();
-  const [collapsedSections, toggleSection] = useCollapsedSections();
+  const [collapsedSections, toggleSection, setAllSections] = useCollapsedSections();
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const [moreQuery, setMoreQuery] = useState("");
@@ -234,11 +238,6 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
     else if (r.pinned) toast.success(`Pinned ${it.label}`);
     else toast.message(`Unpinned ${it.label}`);
   };
-  const onRestoreDefaults = () => {
-    restoreSidebarDefaults(pinScope);
-    setMode("expanded");
-    toast.success("Sidebar restored to defaults");
-  };
 
   // Sections that contain the currently active route should auto-open.
   const activeGroupLabel = useMemo(() => {
@@ -264,6 +263,33 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
   const cycleMode = () => {
     setMode(mode === "expanded" ? "compact" : mode === "compact" ? "collapsed" : "expanded");
   };
+
+  // Expand-all / collapse-all toggle for sidebar sections.
+  const allCollapsed = useMemo(
+    () => allGroupLabels.length > 0 && allGroupLabels.every((l) => collapsedSections.has(l)),
+    [allGroupLabels, collapsedSections],
+  );
+  const toggleAllOpen = () => {
+    if (allCollapsed) {
+      setAllSections(allGroupLabels, false);
+      toast.success("All sections opened");
+    } else {
+      setAllSections(allGroupLabels, true);
+      toast.message("All sections closed");
+    }
+  };
+
+  // ⌘/Ctrl + Shift + E — toggle expand/collapse all sidebar sections.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === "e") {
+        e.preventDefault();
+        toggleAllOpen();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [allCollapsed, allGroupLabels]);
 
   // Open the active group when the More sheet opens, or when route changes.
   useEffect(() => {
