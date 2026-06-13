@@ -386,6 +386,7 @@ const STYLES: TrainingStyle[] = ["powerlifting", "bodybuilding", "strength", "li
 
 function TemplateEditor() {
   const { templateId } = Route.useParams();
+  const search = useSearch({ strict: false }) as { block?: string };
   const qc = useQueryClient();
 
   const { data: tpl, isLoading } = useQuery({
