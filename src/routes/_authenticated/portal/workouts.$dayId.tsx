@@ -44,7 +44,8 @@ import { WorkoutUndoProvider, useWorkoutUndo, UndoButton } from "@/lib/workout-u
 import { WorkoutSyncBanner } from "@/components/workout-sync-banner";
 import { writePlanCache, cachedInitialData } from "@/lib/workout-plan-cache";
 import { enqueueOfflineWrite, registerQueueHandler } from "@/lib/workout-offline-queue";
-import { WorkoutRestTimer } from "@/components/workout-rest-timer";
+import { ActiveRestTimerProvider, useRestTimer } from "@/components/active-rest-timer";
+import { ExerciseHistoryButton } from "@/components/exercise-history-sheet";
 
 export const Route = createFileRoute("/_authenticated/portal/workouts/$dayId")({
   validateSearch: (s: Record<string, unknown>) => ({
@@ -52,7 +53,9 @@ export const Route = createFileRoute("/_authenticated/portal/workouts/$dayId")({
   }),
   component: () => (
     <WorkoutUndoProvider>
-      <WorkoutDay />
+      <ActiveRestTimerProvider>
+        <WorkoutDay />
+      </ActiveRestTimerProvider>
     </WorkoutUndoProvider>
   ),
 });
