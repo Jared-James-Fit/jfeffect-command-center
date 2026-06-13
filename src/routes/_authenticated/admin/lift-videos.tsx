@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -33,11 +33,16 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/admin/lift-videos")({
-  component: AdminLiftVideos,
-  validateSearch: (s: Record<string, unknown>) => ({
-    open: typeof s.open === "string" ? s.open : undefined,
-  }),
+  component: LiftVideosRedirect,
 });
+
+function LiftVideosRedirect() {
+  const navigate = useNavigate();
+  useEffect(() => {
+    navigate({ to: "/admin/coaching", search: { tab: "lift-reviews" } as any, replace: true });
+  }, [navigate]);
+  return null;
+}
 
 type FilterKey = "all" | "new" | "in-review" | "reviewed" | "follow-up" | "urgent" | "archived";
 
@@ -102,11 +107,10 @@ function groupSubmissions(videos: LiftVideo[]): Submission[] {
   return subs;
 }
 
-function AdminLiftVideos() {
+export function AdminLiftVideos({ embedded = false, initialOpen }: { embedded?: boolean; initialOpen?: string } = {}) {
   const { user } = useAuth();
   const qc = useQueryClient();
-  const search_ = Route.useSearch();
-  const navigate = Route.useNavigate();
+  const [openParam, setOpenParam] = useState<string | undefined>(initialOpen);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<FilterKey>("new");
   const [openKey, setOpenKey] = useState<string | null>(null);
@@ -155,7 +159,7 @@ function AdminLiftVideos() {
   // Deep-link: ?open=<videoId> from dashboard / notifications.
   // Auto-select that submission and clear the param.
   useEffect(() => {
-    const target = search_.open;
+    const target = openParam;
     if (!target || videos.length === 0) return;
     const v = videos.find((x) => x.id === target);
     if (!v) return;
@@ -168,8 +172,8 @@ function AdminLiftVideos() {
       : `c:${v.client_id}|${day ?? ""}|${v.date_performed ?? v.created_at.slice(0, 10)}`;
     setOpenKey(key);
     setActiveClipId(v.id);
-    navigate({ search: { open: undefined }, replace: true }).catch(() => {});
-  }, [search_.open, videos]);
+    setOpenParam(undefined);
+  }, [openParam, videos, filter]);
 
   const openSub = openKey ? submissions.find((s) => s.key === openKey) ?? null : null;
   const activeClip: LiftVideo | null =
@@ -223,7 +227,7 @@ function AdminLiftVideos() {
 
   return (
     <>
-      <PageHeader title="Lift Video Review" subtitle="Coaching review inbox — tap a submission to review." />
+      {!embedded && <PageHeader title="Lift Video Review" subtitle="Coaching review inbox — tap a submission to review." />}
 
       <div className="mx-auto w-full max-w-7xl min-w-0 px-4 py-4 sm:px-5 md:px-6">
         {/* Mobile: show detail full-screen when a submission is open */}

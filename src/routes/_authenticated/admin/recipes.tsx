@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { useEffect, useMemo, useState } from "react";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
@@ -15,9 +15,17 @@ import { RecipeFormattingGuide } from "@/components/recipe-formatting-guide";
 import { format } from "date-fns";
 import { toast } from "sonner";
 
-export const Route = createFileRoute("/_authenticated/admin/recipes")({ component: AdminRecipes });
+export const Route = createFileRoute("/_authenticated/admin/recipes")({ component: RecipesRedirect });
 
-function AdminRecipes() {
+function RecipesRedirect() {
+  const navigate = useNavigate();
+  useEffect(() => {
+    navigate({ to: "/admin/programming", search: { tab: "recipes" } as any, replace: true });
+  }, [navigate]);
+  return null;
+}
+
+export function AdminRecipes({ embedded = false }: { embedded?: boolean } = {}) {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Recipe | null>(null);
@@ -53,7 +61,7 @@ function AdminRecipes() {
 
   return (
     <>
-      <PageHeader
+      {!embedded && <PageHeader
         title="Recipe Library"
         subtitle="Add, format, and share recipes with clients and members."
         actions={
@@ -61,7 +69,14 @@ function AdminRecipes() {
             <Plus className="mr-1 h-4 w-4" /> New Recipe
           </Button>
         }
-      />
+      />}
+      {embedded && (
+        <div className="flex justify-end px-4 pt-4 md:px-6">
+          <Button onClick={() => { setEditing(null); setOpen(true); }} className="bg-gradient-primary font-bold">
+            <Plus className="mr-1 h-4 w-4" /> New Recipe
+          </Button>
+        </div>
+      )}
       <div className="space-y-4 p-4 md:p-6">
         <RecipeFormattingGuide />
 

@@ -1,5 +1,5 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { PageHeader } from "@/components/app-shell";
@@ -28,8 +28,16 @@ import {
 } from "@/lib/resource-library.functions";
 
 export const Route = createFileRoute("/_authenticated/admin/resources")({
-  component: ResourceLibrary,
+  component: ResourcesRedirect,
 });
+
+function ResourcesRedirect() {
+  const navigate = useNavigate();
+  useEffect(() => {
+    navigate({ to: "/admin/content", search: { tab: "library" } as any, replace: true });
+  }, [navigate]);
+  return null;
+}
 
 type FolderRow = { id: string; parent_id: string | null; name: string; color: string | null; icon: string | null };
 type Resource = {
@@ -56,7 +64,7 @@ function FileTypeIcon({ mime, className = "h-5 w-5" }: { mime: string | null; cl
   return <FileIcon className={className} />;
 }
 
-function ResourceLibrary() {
+export function ResourceLibrary({ embedded = false }: { embedded?: boolean } = {}) {
   const qc = useQueryClient();
   const foldersFn = useServerFn(listFolders);
   const resourcesFn = useServerFn(listResources);
@@ -172,7 +180,7 @@ function ResourceLibrary() {
 
   return (
     <div className="space-y-4">
-      <PageHeader
+      {!embedded && <PageHeader
         title="Resource Library"
         subtitle="Private files for coaching, admin, and website work."
         actions={
@@ -189,7 +197,7 @@ function ResourceLibrary() {
             </label>
           </div>
         }
-      />
+      />}
 
       <div className="grid gap-4 lg:grid-cols-[260px_1fr]">
         {/* Sidebar */}

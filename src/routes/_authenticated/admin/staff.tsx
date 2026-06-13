@@ -1,7 +1,7 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,10 +12,18 @@ import {
 } from "@/lib/media-manager.functions";
 
 export const Route = createFileRoute("/_authenticated/admin/staff")({
-  component: StaffPage,
+  component: StaffRedirect,
 });
 
-function StaffPage() {
+function StaffRedirect() {
+  const navigate = useNavigate();
+  useEffect(() => {
+    navigate({ to: "/admin/team", search: { tab: "staff-media" } as any, replace: true });
+  }, [navigate]);
+  return null;
+}
+
+export function StaffPage({ embedded = false }: { embedded?: boolean } = {}) {
   const list = useServerFn(listStaff);
   const invite = useServerFn(inviteMediaManager);
   const resend = useServerFn(resendStaffInvite);
@@ -42,10 +50,12 @@ function StaffPage() {
 
   return (
     <div className="mx-auto max-w-4xl space-y-6 p-4 md:p-6">
-      <header>
-        <h1 className="text-2xl md:text-3xl font-black tracking-tight">Staff & Media Manager Access</h1>
-        <p className="text-sm text-muted-foreground">Invite a Media Manager. They will get a setup link to create their password.</p>
-      </header>
+      {!embedded && (
+        <header>
+          <h1 className="text-2xl md:text-3xl font-black tracking-tight">Staff & Media Manager Access</h1>
+          <p className="text-sm text-muted-foreground">Invite a Media Manager. They will get a setup link to create their password.</p>
+        </header>
+      )}
 
       <Card className="p-4 space-y-3">
         <h2 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">Invite Media Manager</h2>

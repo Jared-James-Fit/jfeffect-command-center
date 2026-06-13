@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -20,8 +20,16 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/admin/media-review")({
-  component: AdminMediaReview,
+  component: MediaReviewRedirect,
 });
+
+function MediaReviewRedirect() {
+  const navigate = useNavigate();
+  useEffect(() => {
+    navigate({ to: "/admin/content", search: { tab: "inbox" } as any, replace: true });
+  }, [navigate]);
+  return null;
+}
 
 function typeIcon(t: string) {
   if (t === "Progress Photos") return <ImageIcon className="h-4 w-4" />;
@@ -29,7 +37,7 @@ function typeIcon(t: string) {
   return <Video className="h-4 w-4" />;
 }
 
-function AdminMediaReview() {
+export function AdminMediaReview({ embedded = false }: { embedded?: boolean } = {}) {
   const { user } = useAuth();
   const qc = useQueryClient();
   const [status, setStatus] = useState<"all" | MediaStatus>("Pending Review");
@@ -102,7 +110,7 @@ function AdminMediaReview() {
 
   return (
     <>
-      <PageHeader title="Media Review Inbox" subtitle="All client uploads needing coach attention." />
+      {!embedded && <PageHeader title="Media Review Inbox" subtitle="All client uploads needing coach attention." />}
       <div className="space-y-4 p-4 md:p-8">
         <Card className="border-border bg-card p-4 flex flex-wrap items-center gap-3">
           <Input className="max-w-xs" placeholder="Search client, file…" value={search} onChange={(e) => setSearch(e.target.value)} />

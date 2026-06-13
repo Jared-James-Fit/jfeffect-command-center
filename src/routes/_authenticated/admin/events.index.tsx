@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -22,10 +22,18 @@ import { toast } from "sonner";
 import { useBulkSelection } from "@/hooks/use-bulk-selection";
 
 export const Route = createFileRoute("/_authenticated/admin/events/")({
-  component: AdminEventsPage,
+  component: EventsRedirect,
 });
 
-function AdminEventsPage() {
+function EventsRedirect() {
+  const navigate = useNavigate();
+  useEffect(() => {
+    navigate({ to: "/admin/calendar", search: { tab: "events" } as any, replace: true });
+  }, [navigate]);
+  return null;
+}
+
+export function AdminEventsPage({ embedded = false }: { embedded?: boolean } = {}) {
   const nav = useNavigate();
   const qc = useQueryClient();
   const createDraftFn = useServerFn(createEventDraft);
@@ -106,7 +114,7 @@ function AdminEventsPage() {
 
   return (
     <div className="space-y-4">
-      <PageHeader
+      {!embedded ? <PageHeader
         title="Events"
         subtitle="Plan upcoming meets, shoots, calls, and key client dates."
         actions={
@@ -126,7 +134,19 @@ function AdminEventsPage() {
             </Button>
           </div>
         }
-      />
+      /> : (
+        <div className="flex justify-end gap-2 px-4 pt-4 md:px-6">
+          <Button size="sm" variant={selectMode ? "default" : "outline"} onClick={() => { setSelectMode((v) => !v); selection.clear(); }}>
+            <CheckSquare className="mr-1 h-4 w-4" />{selectMode ? "Done" : "Select"}
+          </Button>
+          <Button asChild variant="outline" size="sm">
+            <Link to="/admin/events/format-guide"><Sparkles className="mr-1 h-4 w-4" />Format Guide</Link>
+          </Button>
+          <Button size="sm" onClick={createDraft}>
+            <Plus className="mr-1 h-4 w-4" />New Event
+          </Button>
+        </div>
+      )}
 
       <Card className="p-3">
         <div className="flex flex-wrap items-center gap-2">

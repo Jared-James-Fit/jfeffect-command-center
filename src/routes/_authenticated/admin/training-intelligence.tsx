@@ -1,5 +1,5 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
@@ -15,7 +15,15 @@ import {
   FollowupRow, FollowupDialog, MarkAllClientReviewed, highlightPainHtml,
 } from "@/components/intel-actions";
 
-export const Route = createFileRoute("/_authenticated/admin/training-intelligence")({ component: TrainingIntelPage });
+export const Route = createFileRoute("/_authenticated/admin/training-intelligence")({ component: TrainingIntelRedirect });
+
+function TrainingIntelRedirect() {
+  const navigate = useNavigate();
+  useEffect(() => {
+    navigate({ to: "/admin/coaching", search: { tab: "training-intel" } as any, replace: true });
+  }, [navigate]);
+  return null;
+}
 
 const FILTERS: { key: FilterKey; label: string }[] = [
   { key: "all", label: "All" },
@@ -30,7 +38,7 @@ const FILTERS: { key: FilterKey; label: string }[] = [
   { key: "bodybuilding", label: "Bodybuilding" },
 ];
 
-function TrainingIntelPage() {
+export function TrainingIntelPage({ embedded = false }: { embedded?: boolean } = {}) {
   const [filter, setFilter] = useState<FilterKey>("attention");
   const [search, setSearch] = useState("");
   const { data = [], isLoading } = useQuery({ queryKey: ["coach-intel"], queryFn: () => getCoachIntel() });
@@ -74,7 +82,7 @@ function TrainingIntelPage() {
 
   return (
     <>
-      <PageHeader title="Training Intelligence" subtitle="Action dashboard — see issue, take action, mark reviewed." />
+      {!embedded && <PageHeader title="Training Intelligence" subtitle="Action dashboard — see issue, take action, mark reviewed." />}
       <div className="p-6 md:p-8 space-y-6">
         <div className="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-7">
           <SummaryStat icon={Activity} label="Clients" value={summary.total} />

@@ -80,29 +80,21 @@ const REGISTRY: Entry[] = [
   { to: "/admin/crm/contacts", label: "Leads & Contacts", icon: UserCheck, group: "Clients",
     visibleTo: ["admin", "sales"] },
 
-  // ── COACHING (review queues consolidated) ───────────────────────────
-  { to: "/admin/check-in-reviews", label: "Check-In Reviews", icon: ClipboardList, group: "Coaching",
-    visibleTo: ["admin", "coach", "assistant_coach"] },
-  { to: "/admin/lift-videos", label: "Lift Reviews", icon: Video, group: "Coaching",
-    visibleTo: ["admin", "coach", "assistant_coach"] },
-  { to: "/admin/training-intelligence", label: "Training Intel", icon: Activity, group: "Coaching",
-    visibleTo: ["admin", "coach"] },
-  { to: "/admin/client-action-requests", label: "Action Requests", icon: ClipboardCheck, group: "Coaching",
-    visibleTo: ["admin", "coach", "assistant_coach"] },
+  // ── COACHING (consolidated workspace) ───────────────────────────────
+  { to: "/admin/coaching", label: "Coaching", icon: ClipboardList, group: "Coaching",
+    visibleTo: ["admin", "coach", "assistant_coach"],
+    keywords: ["coaching", "check-ins", "check in reviews", "lift videos", "lift reviews", "training intelligence", "training intel", "action requests", "client requests"] },
 
-  // ── PROGRAMMING ─────────────────────────────────────────────────────
-  { to: "/admin/program-library", label: "Programs", icon: BookOpen, group: "Programming",
-    visibleTo: ["admin", "coach"] },
-  { to: "/admin/exercises", label: "Exercises", icon: Dumbbell, group: "Programming",
-    visibleTo: ["admin", "coach", "assistant_coach"] },
-  { to: "/admin/cardio-targets", label: "Cardio", icon: Heart, group: "Programming",
-    visibleTo: ["admin", "coach"],
-    keywords: ["card", "cardio", "targets", "conditioning", "steps", "hiit", "liss", "zone 2"] },
-  { to: "/admin/warmup-protocols", label: "Warm-Ups", icon: Flame, group: "Programming",
-    visibleTo: ["admin", "coach"],
-    keywords: ["warmup", "warm-up", "warm up", "sbd", "squat", "bench", "deadlift", "mobility"] },
-  { to: "/admin/recipes", label: "Recipes", icon: ChefHat, group: "Programming",
-    visibleTo: ["admin", "coach"] },
+  // ── PROGRAMMING (consolidated workspace) ────────────────────────────
+  { to: "/admin/programming", label: "Programming", icon: BookOpen, group: "Programming",
+    visibleTo: ["admin", "coach", "assistant_coach"],
+    keywords: [
+      "programming", "programs", "program library", "templates",
+      "exercises", "exercise library",
+      "cardio", "targets", "conditioning", "steps", "hiit", "liss", "zone 2",
+      "warmup", "warm-up", "warm up", "sbd", "squat", "bench", "deadlift", "mobility",
+      "recipes",
+    ] },
 
   // ── FORMS (one consolidated workspace; tabs handle the sub-views) ───
   { to: "/admin/forms", label: "Forms", icon: FileEdit, group: "Forms",
@@ -140,38 +132,28 @@ const REGISTRY: Entry[] = [
       "revenue",
     ] },
 
-  // ── CALENDAR (calendar + events + bookings) ─────────────────────────
+  // ── CALENDAR (consolidated workspace) ───────────────────────────────
   { to: "/admin/calendar", label: "Calendar", icon: Calendar, group: "Calendar",
     visibleTo: ["admin", "coach", "assistant_coach", "sales", "support", "operations", "media_manager"],
-    keywords: ["calendar", "appointments", "booking", "booking links", "pt calendar", "google calendar", "availability", "schedule"] },
-  { to: "/admin/events", label: "Events", icon: Calendar, group: "Calendar",
-    visibleTo: ["admin", "coach", "media_manager", "operations"] },
-  { to: "/admin/booking-links", label: "Booking Links", icon: LinkIcon, group: "Calendar",
-    visibleTo: ["admin", "sales", "coach"] },
-  { to: "/admin/google-calendar", label: "Google Calendar", icon: Calendar, group: "Calendar",
-    visibleTo: ["admin"] },
+    keywords: [
+      "calendar", "events", "appointments", "booking", "booking links",
+      "pt calendar", "google calendar", "availability", "schedule",
+    ] },
 
-  // ── CONTENT (media workflows) ───────────────────────────────────────
-  { to: "/admin/media-review", label: "Media Inbox", icon: Film, group: "Content",
-    visibleTo: ["admin", "coach", "media_manager"] },
-  { to: "/admin/approvals", label: "Approvals", icon: ClipboardCheck, group: "Content",
-    visibleTo: ["admin", "media_manager"] },
-  { to: "/admin/tasks", label: "Tasks", icon: ClipboardList, group: "Content",
-    visibleTo: ["admin", "coach", "media_manager", "assistant_coach", "operations"] },
-  { to: "/admin/member-resources", label: "Member Resources", icon: FolderOpen, group: "Content",
-    visibleTo: ["admin", "media_manager"] },
-  { to: "/admin/resources", label: "Resources Library", icon: FolderOpen, group: "Content",
-    visibleTo: ["admin", "coach", "media_manager"] },
-  { to: "/admin/media-archives", label: "Archive", icon: FolderOpen, group: "Content",
-    visibleTo: ["admin", "media_manager"] },
+  // ── CONTENT (consolidated workspace) ────────────────────────────────
+  { to: "/admin/content", label: "Content", icon: Film, group: "Content",
+    visibleTo: ["admin", "coach", "media_manager", "assistant_coach", "operations"],
+    keywords: [
+      "content", "media", "media inbox", "media review",
+      "approvals", "tasks",
+      "member resources", "resources", "resource library",
+      "archive", "media archives",
+    ] },
 
-  // ── TEAM (people + ops + support alerts) ────────────────────────────
-  { to: "/admin/coaches", label: "People", icon: Users, group: "Team",
-    visibleTo: ["admin"] },
-  { to: "/admin/staff", label: "Staff & Media", icon: UserPlus, group: "Team",
-    visibleTo: ["admin"] },
-  { to: "/admin/business-systems", label: "Operations", icon: Briefcase, group: "Team",
-    visibleTo: ["admin", "operations"] },
+  // ── TEAM (consolidated workspace) ───────────────────────────────────
+  { to: "/admin/team", label: "Team", icon: Users, group: "Team",
+    visibleTo: ["admin", "operations"],
+    keywords: ["team", "people", "coaches", "staff", "media manager invites", "operations", "business systems"] },
 
   // ── SETTINGS ────────────────────────────────────────────────────────
   { to: "/admin/settings", label: "Workspace Settings", icon: Settings, group: "Settings",

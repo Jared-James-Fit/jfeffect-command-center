@@ -1,6 +1,6 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
@@ -16,8 +16,16 @@ import { inviteCoach, getCoachSetupLink } from "@/lib/coaches.functions";
 import { useAuth } from "@/lib/auth";
 
 export const Route = createFileRoute("/_authenticated/admin/coaches/")({
-  component: CoachesPage,
+  component: CoachesRedirect,
 });
+
+function CoachesRedirect() {
+  const navigate = useNavigate();
+  useEffect(() => {
+    navigate({ to: "/admin/team", search: { tab: "people" } as any, replace: true });
+  }, [navigate]);
+  return null;
+}
 
 function statusTone(s: string) {
   switch (s) {
@@ -29,7 +37,7 @@ function statusTone(s: string) {
   }
 }
 
-function CoachesPage() {
+export function CoachesPage({ embedded = false }: { embedded?: boolean } = {}) {
   const { role } = useAuth();
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
@@ -138,7 +146,7 @@ function CoachesPage() {
 
   return (
     <>
-      <PageHeader
+      {!embedded && <PageHeader
         title="Coaches"
         subtitle="Manage your coaching team. Only the owner can access this section."
         actions={
@@ -167,7 +175,7 @@ function CoachesPage() {
             </DialogContent>
           </Dialog>
         }
-      />
+      />}
       <div className="space-y-3 p-6 md:p-8">
         {isLoading ? (
           <Card className="p-6 text-sm text-muted-foreground">Loading coaches…</Card>

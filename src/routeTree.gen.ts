@@ -80,6 +80,7 @@ import { Route as AuthenticatedAdminWarmupProtocolsRouteImport } from './routes/
 import { Route as AuthenticatedAdminTrainingPhasesRouteImport } from './routes/_authenticated/admin/training-phases'
 import { Route as AuthenticatedAdminTrainingIntelligenceRouteImport } from './routes/_authenticated/admin/training-intelligence'
 import { Route as AuthenticatedAdminTestimonialsRouteImport } from './routes/_authenticated/admin/testimonials'
+import { Route as AuthenticatedAdminTeamRouteImport } from './routes/_authenticated/admin/team'
 import { Route as AuthenticatedAdminTasksRouteImport } from './routes/_authenticated/admin/tasks'
 import { Route as AuthenticatedAdminSupportAlertsRouteImport } from './routes/_authenticated/admin/support-alerts'
 import { Route as AuthenticatedAdminStaffRouteImport } from './routes/_authenticated/admin/staff'
@@ -91,6 +92,7 @@ import { Route as AuthenticatedAdminPurchasesRouteImport } from './routes/_authe
 import { Route as AuthenticatedAdminPtCalendarRouteImport } from './routes/_authenticated/admin/pt-calendar'
 import { Route as AuthenticatedAdminPromoCodesRouteImport } from './routes/_authenticated/admin/promo-codes'
 import { Route as AuthenticatedAdminProgramsRouteImport } from './routes/_authenticated/admin/programs'
+import { Route as AuthenticatedAdminProgrammingRouteImport } from './routes/_authenticated/admin/programming'
 import { Route as AuthenticatedAdminProgramLibraryRouteImport } from './routes/_authenticated/admin/program-library'
 import { Route as AuthenticatedAdminPopupsRouteImport } from './routes/_authenticated/admin/popups'
 import { Route as AuthenticatedAdminPaymentsRouteImport } from './routes/_authenticated/admin/payments'
@@ -110,7 +112,9 @@ import { Route as AuthenticatedAdminFilloutSubmissionsRouteImport } from './rout
 import { Route as AuthenticatedAdminFaqsRouteImport } from './routes/_authenticated/admin/faqs'
 import { Route as AuthenticatedAdminExercisesRouteImport } from './routes/_authenticated/admin/exercises'
 import { Route as AuthenticatedAdminContentIdeasRouteImport } from './routes/_authenticated/admin/content-ideas'
+import { Route as AuthenticatedAdminContentRouteImport } from './routes/_authenticated/admin/content'
 import { Route as AuthenticatedAdminCommunicationRouteImport } from './routes/_authenticated/admin/communication'
+import { Route as AuthenticatedAdminCoachingRouteImport } from './routes/_authenticated/admin/coaching'
 import { Route as AuthenticatedAdminClientPovRouteImport } from './routes/_authenticated/admin/client-pov'
 import { Route as AuthenticatedAdminClientActionRequestsRouteImport } from './routes/_authenticated/admin/client-action-requests'
 import { Route as AuthenticatedAdminCheckInsRouteImport } from './routes/_authenticated/admin/check-ins'
@@ -594,6 +598,11 @@ const AuthenticatedAdminTestimonialsRoute =
     path: '/testimonials',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
+const AuthenticatedAdminTeamRoute = AuthenticatedAdminTeamRouteImport.update({
+  id: '/team',
+  path: '/team',
+  getParentRoute: () => AuthenticatedAdminRouteRoute,
+} as any)
 const AuthenticatedAdminTasksRoute = AuthenticatedAdminTasksRouteImport.update({
   id: '/tasks',
   path: '/tasks',
@@ -655,6 +664,12 @@ const AuthenticatedAdminProgramsRoute =
   AuthenticatedAdminProgramsRouteImport.update({
     id: '/programs',
     path: '/programs',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
+const AuthenticatedAdminProgrammingRoute =
+  AuthenticatedAdminProgrammingRouteImport.update({
+    id: '/programming',
+    path: '/programming',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
 const AuthenticatedAdminProgramLibraryRoute =
@@ -769,10 +784,22 @@ const AuthenticatedAdminContentIdeasRoute =
     path: '/content-ideas',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
+const AuthenticatedAdminContentRoute =
+  AuthenticatedAdminContentRouteImport.update({
+    id: '/content',
+    path: '/content',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
 const AuthenticatedAdminCommunicationRoute =
   AuthenticatedAdminCommunicationRouteImport.update({
     id: '/communication',
     path: '/communication',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
+const AuthenticatedAdminCoachingRoute =
+  AuthenticatedAdminCoachingRouteImport.update({
+    id: '/coaching',
+    path: '/coaching',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
 const AuthenticatedAdminClientPovRoute =
@@ -1357,7 +1384,9 @@ export interface FileRoutesByFullPath {
   '/admin/check-ins': typeof AuthenticatedAdminCheckInsRoute
   '/admin/client-action-requests': typeof AuthenticatedAdminClientActionRequestsRoute
   '/admin/client-pov': typeof AuthenticatedAdminClientPovRoute
+  '/admin/coaching': typeof AuthenticatedAdminCoachingRoute
   '/admin/communication': typeof AuthenticatedAdminCommunicationRoute
+  '/admin/content': typeof AuthenticatedAdminContentRoute
   '/admin/content-ideas': typeof AuthenticatedAdminContentIdeasRoute
   '/admin/exercises': typeof AuthenticatedAdminExercisesRoute
   '/admin/faqs': typeof AuthenticatedAdminFaqsRoute
@@ -1377,6 +1406,7 @@ export interface FileRoutesByFullPath {
   '/admin/payments': typeof AuthenticatedAdminPaymentsRoute
   '/admin/popups': typeof AuthenticatedAdminPopupsRoute
   '/admin/program-library': typeof AuthenticatedAdminProgramLibraryRoute
+  '/admin/programming': typeof AuthenticatedAdminProgrammingRoute
   '/admin/programs': typeof AuthenticatedAdminProgramsRoute
   '/admin/promo-codes': typeof AuthenticatedAdminPromoCodesRoute
   '/admin/pt-calendar': typeof AuthenticatedAdminPtCalendarRoute
@@ -1388,6 +1418,7 @@ export interface FileRoutesByFullPath {
   '/admin/staff': typeof AuthenticatedAdminStaffRoute
   '/admin/support-alerts': typeof AuthenticatedAdminSupportAlertsRoute
   '/admin/tasks': typeof AuthenticatedAdminTasksRoute
+  '/admin/team': typeof AuthenticatedAdminTeamRoute
   '/admin/testimonials': typeof AuthenticatedAdminTestimonialsRoute
   '/admin/training-intelligence': typeof AuthenticatedAdminTrainingIntelligenceRoute
   '/admin/training-phases': typeof AuthenticatedAdminTrainingPhasesRoute
@@ -1547,7 +1578,9 @@ export interface FileRoutesByTo {
   '/admin/check-ins': typeof AuthenticatedAdminCheckInsRoute
   '/admin/client-action-requests': typeof AuthenticatedAdminClientActionRequestsRoute
   '/admin/client-pov': typeof AuthenticatedAdminClientPovRoute
+  '/admin/coaching': typeof AuthenticatedAdminCoachingRoute
   '/admin/communication': typeof AuthenticatedAdminCommunicationRoute
+  '/admin/content': typeof AuthenticatedAdminContentRoute
   '/admin/content-ideas': typeof AuthenticatedAdminContentIdeasRoute
   '/admin/exercises': typeof AuthenticatedAdminExercisesRoute
   '/admin/faqs': typeof AuthenticatedAdminFaqsRoute
@@ -1566,6 +1599,7 @@ export interface FileRoutesByTo {
   '/admin/payments': typeof AuthenticatedAdminPaymentsRoute
   '/admin/popups': typeof AuthenticatedAdminPopupsRoute
   '/admin/program-library': typeof AuthenticatedAdminProgramLibraryRoute
+  '/admin/programming': typeof AuthenticatedAdminProgrammingRoute
   '/admin/programs': typeof AuthenticatedAdminProgramsRoute
   '/admin/promo-codes': typeof AuthenticatedAdminPromoCodesRoute
   '/admin/pt-calendar': typeof AuthenticatedAdminPtCalendarRoute
@@ -1577,6 +1611,7 @@ export interface FileRoutesByTo {
   '/admin/staff': typeof AuthenticatedAdminStaffRoute
   '/admin/support-alerts': typeof AuthenticatedAdminSupportAlertsRoute
   '/admin/tasks': typeof AuthenticatedAdminTasksRoute
+  '/admin/team': typeof AuthenticatedAdminTeamRoute
   '/admin/testimonials': typeof AuthenticatedAdminTestimonialsRoute
   '/admin/training-intelligence': typeof AuthenticatedAdminTrainingIntelligenceRoute
   '/admin/training-phases': typeof AuthenticatedAdminTrainingPhasesRoute
@@ -1742,7 +1777,9 @@ export interface FileRoutesById {
   '/_authenticated/admin/check-ins': typeof AuthenticatedAdminCheckInsRoute
   '/_authenticated/admin/client-action-requests': typeof AuthenticatedAdminClientActionRequestsRoute
   '/_authenticated/admin/client-pov': typeof AuthenticatedAdminClientPovRoute
+  '/_authenticated/admin/coaching': typeof AuthenticatedAdminCoachingRoute
   '/_authenticated/admin/communication': typeof AuthenticatedAdminCommunicationRoute
+  '/_authenticated/admin/content': typeof AuthenticatedAdminContentRoute
   '/_authenticated/admin/content-ideas': typeof AuthenticatedAdminContentIdeasRoute
   '/_authenticated/admin/exercises': typeof AuthenticatedAdminExercisesRoute
   '/_authenticated/admin/faqs': typeof AuthenticatedAdminFaqsRoute
@@ -1762,6 +1799,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/payments': typeof AuthenticatedAdminPaymentsRoute
   '/_authenticated/admin/popups': typeof AuthenticatedAdminPopupsRoute
   '/_authenticated/admin/program-library': typeof AuthenticatedAdminProgramLibraryRoute
+  '/_authenticated/admin/programming': typeof AuthenticatedAdminProgrammingRoute
   '/_authenticated/admin/programs': typeof AuthenticatedAdminProgramsRoute
   '/_authenticated/admin/promo-codes': typeof AuthenticatedAdminPromoCodesRoute
   '/_authenticated/admin/pt-calendar': typeof AuthenticatedAdminPtCalendarRoute
@@ -1773,6 +1811,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/staff': typeof AuthenticatedAdminStaffRoute
   '/_authenticated/admin/support-alerts': typeof AuthenticatedAdminSupportAlertsRoute
   '/_authenticated/admin/tasks': typeof AuthenticatedAdminTasksRoute
+  '/_authenticated/admin/team': typeof AuthenticatedAdminTeamRoute
   '/_authenticated/admin/testimonials': typeof AuthenticatedAdminTestimonialsRoute
   '/_authenticated/admin/training-intelligence': typeof AuthenticatedAdminTrainingIntelligenceRoute
   '/_authenticated/admin/training-phases': typeof AuthenticatedAdminTrainingPhasesRoute
@@ -1938,7 +1977,9 @@ export interface FileRouteTypes {
     | '/admin/check-ins'
     | '/admin/client-action-requests'
     | '/admin/client-pov'
+    | '/admin/coaching'
     | '/admin/communication'
+    | '/admin/content'
     | '/admin/content-ideas'
     | '/admin/exercises'
     | '/admin/faqs'
@@ -1958,6 +1999,7 @@ export interface FileRouteTypes {
     | '/admin/payments'
     | '/admin/popups'
     | '/admin/program-library'
+    | '/admin/programming'
     | '/admin/programs'
     | '/admin/promo-codes'
     | '/admin/pt-calendar'
@@ -1969,6 +2011,7 @@ export interface FileRouteTypes {
     | '/admin/staff'
     | '/admin/support-alerts'
     | '/admin/tasks'
+    | '/admin/team'
     | '/admin/testimonials'
     | '/admin/training-intelligence'
     | '/admin/training-phases'
@@ -2128,7 +2171,9 @@ export interface FileRouteTypes {
     | '/admin/check-ins'
     | '/admin/client-action-requests'
     | '/admin/client-pov'
+    | '/admin/coaching'
     | '/admin/communication'
+    | '/admin/content'
     | '/admin/content-ideas'
     | '/admin/exercises'
     | '/admin/faqs'
@@ -2147,6 +2192,7 @@ export interface FileRouteTypes {
     | '/admin/payments'
     | '/admin/popups'
     | '/admin/program-library'
+    | '/admin/programming'
     | '/admin/programs'
     | '/admin/promo-codes'
     | '/admin/pt-calendar'
@@ -2158,6 +2204,7 @@ export interface FileRouteTypes {
     | '/admin/staff'
     | '/admin/support-alerts'
     | '/admin/tasks'
+    | '/admin/team'
     | '/admin/testimonials'
     | '/admin/training-intelligence'
     | '/admin/training-phases'
@@ -2322,7 +2369,9 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/check-ins'
     | '/_authenticated/admin/client-action-requests'
     | '/_authenticated/admin/client-pov'
+    | '/_authenticated/admin/coaching'
     | '/_authenticated/admin/communication'
+    | '/_authenticated/admin/content'
     | '/_authenticated/admin/content-ideas'
     | '/_authenticated/admin/exercises'
     | '/_authenticated/admin/faqs'
@@ -2342,6 +2391,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/payments'
     | '/_authenticated/admin/popups'
     | '/_authenticated/admin/program-library'
+    | '/_authenticated/admin/programming'
     | '/_authenticated/admin/programs'
     | '/_authenticated/admin/promo-codes'
     | '/_authenticated/admin/pt-calendar'
@@ -2353,6 +2403,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/staff'
     | '/_authenticated/admin/support-alerts'
     | '/_authenticated/admin/tasks'
+    | '/_authenticated/admin/team'
     | '/_authenticated/admin/testimonials'
     | '/_authenticated/admin/training-intelligence'
     | '/_authenticated/admin/training-phases'
@@ -3008,6 +3059,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminTestimonialsRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
+    '/_authenticated/admin/team': {
+      id: '/_authenticated/admin/team'
+      path: '/team'
+      fullPath: '/admin/team'
+      preLoaderRoute: typeof AuthenticatedAdminTeamRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
     '/_authenticated/admin/tasks': {
       id: '/_authenticated/admin/tasks'
       path: '/tasks'
@@ -3083,6 +3141,13 @@ declare module '@tanstack/react-router' {
       path: '/programs'
       fullPath: '/admin/programs'
       preLoaderRoute: typeof AuthenticatedAdminProgramsRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
+    '/_authenticated/admin/programming': {
+      id: '/_authenticated/admin/programming'
+      path: '/programming'
+      fullPath: '/admin/programming'
+      preLoaderRoute: typeof AuthenticatedAdminProgrammingRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
     '/_authenticated/admin/program-library': {
@@ -3218,11 +3283,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminContentIdeasRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
+    '/_authenticated/admin/content': {
+      id: '/_authenticated/admin/content'
+      path: '/content'
+      fullPath: '/admin/content'
+      preLoaderRoute: typeof AuthenticatedAdminContentRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
     '/_authenticated/admin/communication': {
       id: '/_authenticated/admin/communication'
       path: '/communication'
       fullPath: '/admin/communication'
       preLoaderRoute: typeof AuthenticatedAdminCommunicationRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
+    '/_authenticated/admin/coaching': {
+      id: '/_authenticated/admin/coaching'
+      path: '/coaching'
+      fullPath: '/admin/coaching'
+      preLoaderRoute: typeof AuthenticatedAdminCoachingRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
     '/_authenticated/admin/client-pov': {
@@ -3973,7 +4052,9 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminCheckInsRoute: typeof AuthenticatedAdminCheckInsRoute
   AuthenticatedAdminClientActionRequestsRoute: typeof AuthenticatedAdminClientActionRequestsRoute
   AuthenticatedAdminClientPovRoute: typeof AuthenticatedAdminClientPovRoute
+  AuthenticatedAdminCoachingRoute: typeof AuthenticatedAdminCoachingRoute
   AuthenticatedAdminCommunicationRoute: typeof AuthenticatedAdminCommunicationRoute
+  AuthenticatedAdminContentRoute: typeof AuthenticatedAdminContentRoute
   AuthenticatedAdminContentIdeasRoute: typeof AuthenticatedAdminContentIdeasRoute
   AuthenticatedAdminExercisesRoute: typeof AuthenticatedAdminExercisesRoute
   AuthenticatedAdminFaqsRoute: typeof AuthenticatedAdminFaqsRoute
@@ -3993,6 +4074,7 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminPaymentsRoute: typeof AuthenticatedAdminPaymentsRoute
   AuthenticatedAdminPopupsRoute: typeof AuthenticatedAdminPopupsRoute
   AuthenticatedAdminProgramLibraryRoute: typeof AuthenticatedAdminProgramLibraryRoute
+  AuthenticatedAdminProgrammingRoute: typeof AuthenticatedAdminProgrammingRoute
   AuthenticatedAdminProgramsRoute: typeof AuthenticatedAdminProgramsRoute
   AuthenticatedAdminPromoCodesRoute: typeof AuthenticatedAdminPromoCodesRoute
   AuthenticatedAdminPtCalendarRoute: typeof AuthenticatedAdminPtCalendarRoute
@@ -4004,6 +4086,7 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminStaffRoute: typeof AuthenticatedAdminStaffRoute
   AuthenticatedAdminSupportAlertsRoute: typeof AuthenticatedAdminSupportAlertsRoute
   AuthenticatedAdminTasksRoute: typeof AuthenticatedAdminTasksRoute
+  AuthenticatedAdminTeamRoute: typeof AuthenticatedAdminTeamRoute
   AuthenticatedAdminTestimonialsRoute: typeof AuthenticatedAdminTestimonialsRoute
   AuthenticatedAdminTrainingIntelligenceRoute: typeof AuthenticatedAdminTrainingIntelligenceRoute
   AuthenticatedAdminTrainingPhasesRoute: typeof AuthenticatedAdminTrainingPhasesRoute
@@ -4067,7 +4150,9 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
     AuthenticatedAdminClientActionRequestsRoute:
       AuthenticatedAdminClientActionRequestsRoute,
     AuthenticatedAdminClientPovRoute: AuthenticatedAdminClientPovRoute,
+    AuthenticatedAdminCoachingRoute: AuthenticatedAdminCoachingRoute,
     AuthenticatedAdminCommunicationRoute: AuthenticatedAdminCommunicationRoute,
+    AuthenticatedAdminContentRoute: AuthenticatedAdminContentRoute,
     AuthenticatedAdminContentIdeasRoute: AuthenticatedAdminContentIdeasRoute,
     AuthenticatedAdminExercisesRoute: AuthenticatedAdminExercisesRoute,
     AuthenticatedAdminFaqsRoute: AuthenticatedAdminFaqsRoute,
@@ -4092,6 +4177,7 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
     AuthenticatedAdminPopupsRoute: AuthenticatedAdminPopupsRoute,
     AuthenticatedAdminProgramLibraryRoute:
       AuthenticatedAdminProgramLibraryRoute,
+    AuthenticatedAdminProgrammingRoute: AuthenticatedAdminProgrammingRoute,
     AuthenticatedAdminProgramsRoute: AuthenticatedAdminProgramsRoute,
     AuthenticatedAdminPromoCodesRoute: AuthenticatedAdminPromoCodesRoute,
     AuthenticatedAdminPtCalendarRoute: AuthenticatedAdminPtCalendarRoute,
@@ -4104,6 +4190,7 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
     AuthenticatedAdminStaffRoute: AuthenticatedAdminStaffRoute,
     AuthenticatedAdminSupportAlertsRoute: AuthenticatedAdminSupportAlertsRoute,
     AuthenticatedAdminTasksRoute: AuthenticatedAdminTasksRoute,
+    AuthenticatedAdminTeamRoute: AuthenticatedAdminTeamRoute,
     AuthenticatedAdminTestimonialsRoute: AuthenticatedAdminTestimonialsRoute,
     AuthenticatedAdminTrainingIntelligenceRoute:
       AuthenticatedAdminTrainingIntelligenceRoute,

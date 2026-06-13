@@ -8,8 +8,9 @@ import { UpcomingPanel } from "@/components/admin-calendar/upcoming-panel";
 import { BookingLinksPage } from "./booking-links";
 import { GoogleCalendarPage } from "./google-calendar";
 import { PtCalendarPanel } from "@/components/admin-calendar/pt-calendar-panel";
+import { AdminEventsPage } from "./events.index";
 
-const TAB_VALUES = ["upcoming", "availability", "booking-links", "pt-calendar", "google-calendar"] as const;
+const TAB_VALUES = ["upcoming", "events", "availability", "booking-links", "pt-calendar", "google-calendar"] as const;
 type TabValue = typeof TAB_VALUES[number];
 const LS_KEY = "admin.calendar.lastTab";
 
@@ -70,6 +71,7 @@ function AdminCalendarShell() {
           <Tabs value={active} onValueChange={setTab}>
             <TabsList className="flex w-max gap-1">
               <TabsTrigger value="upcoming">Upcoming</TabsTrigger>
+              <TabsTrigger value="events">Events</TabsTrigger>
               <TabsTrigger value="availability">Availability</TabsTrigger>
               <TabsTrigger value="booking-links">Booking Links</TabsTrigger>
               <TabsTrigger value="pt-calendar">PT Calendar</TabsTrigger>
@@ -79,6 +81,7 @@ function AdminCalendarShell() {
         </div>
       </div>
       {active === "upcoming" && <UpcomingPanel />}
+      {active === "events" && <div className="p-4 md:p-6"><AdminEventsPage embedded /></div>}
       {active === "availability" && <AvailabilityPlaceholder />}
       {active === "booking-links" && <BookingLinksPage />}
       {active === "pt-calendar" && <PtCalendarPanel />}

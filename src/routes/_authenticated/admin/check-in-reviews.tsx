@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { useEffect, useMemo, useState } from "react";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
@@ -29,10 +29,18 @@ import { ManualCheckInReviewComposer } from "@/components/manual-check-in-review
 import { listAllManualReviews, deleteManualReview, reviewStatus, sourceLabel, resendManualReview } from "@/lib/manual-check-in-reviews";
 
 export const Route = createFileRoute("/_authenticated/admin/check-in-reviews")({
-  component: AdminCheckInReviews,
+  component: CheckInReviewsRedirect,
 });
 
-function AdminCheckInReviews() {
+function CheckInReviewsRedirect() {
+  const navigate = useNavigate();
+  useEffect(() => {
+    navigate({ to: "/admin/coaching", search: { tab: "check-ins" } as any, replace: true });
+  }, [navigate]);
+  return null;
+}
+
+export function AdminCheckInReviews({ embedded = false }: { embedded?: boolean } = {}) {
   const [tab, setTab] = useState<string>("manual");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [composerOpen, setComposerOpen] = useState(false);
@@ -52,7 +60,7 @@ function AdminCheckInReviews() {
 
   return (
     <>
-      <PageHeader
+      {!embedded && <PageHeader
         title="Check-In Reviews"
         subtitle="Review submitted check-ins and send manual reviews for external (Fillout) check-ins."
         actions={
@@ -60,7 +68,14 @@ function AdminCheckInReviews() {
             <Plus className="mr-1 h-4 w-4" /> New Manual Review
           </Button>
         }
-      />
+      />}
+      {embedded && (
+        <div className="flex justify-end px-4 pt-4 md:px-6">
+          <Button onClick={() => setComposerOpen(true)} className="bg-gradient-primary font-bold">
+            <Plus className="mr-1 h-4 w-4" /> New Manual Review
+          </Button>
+        </div>
+      )}
       <div className="grid gap-4 p-4 md:grid-cols-[360px_1fr] md:p-6">
         <div>
           <Tabs value={tab} onValueChange={(v) => { setTab(v); setSelectedId(null); }}>

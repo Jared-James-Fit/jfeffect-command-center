@@ -1,11 +1,20 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useEffect } from "react";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Star, Lightbulb, BookOpen, Workflow, FileText } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/admin/business-systems")({
-  component: BusinessSystemsHub,
+  component: BusinessSystemsRedirect,
 });
+
+function BusinessSystemsRedirect() {
+  const navigate = useNavigate();
+  useEffect(() => {
+    navigate({ to: "/admin/team", search: { tab: "operations" } as any, replace: true });
+  }, [navigate]);
+  return null;
+}
 
 const TILES = [
   { to: "/admin/testimonials", label: "Testimonials", desc: "Client wins & transformations.", icon: Star },
@@ -15,10 +24,10 @@ const TILES = [
   { to: "/admin/programs", label: "Program Templates", desc: "Reusable training templates.", icon: FileText },
 ] as const;
 
-function BusinessSystemsHub() {
+export function BusinessSystemsHub({ embedded = false }: { embedded?: boolean } = {}) {
   return (
     <>
-      <PageHeader title="Business Systems" subtitle="Internal admin & coaching operations." />
+      {!embedded && <PageHeader title="Business Systems" subtitle="Internal admin & coaching operations." />}
       <div className="grid gap-4 p-6 sm:grid-cols-2 md:p-8">
         {TILES.map((t) => (
           <Link key={t.to} to={t.to}>
