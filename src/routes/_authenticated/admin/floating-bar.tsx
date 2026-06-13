@@ -1,8 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useMemo } from "react";
 import { useAuth } from "@/lib/auth";
 import { PageHeader } from "@/components/app-shell";
 import { FloatingBarCustomizer } from "@/components/floating-bar-customizer";
-import { adminNav, coachNav } from "@/lib/admin-nav";
+import { buildInternalNav, resolveStaffRoleTag } from "@/lib/internal-nav";
+import { useDashboardMode } from "@/lib/dashboard-mode";
 import { withBarActionItems } from "@/lib/floating-bar";
 import { ClipboardList } from "lucide-react";
 import type { NavItem } from "@/components/app-shell";
@@ -13,8 +15,18 @@ export const Route = createFileRoute("/_authenticated/admin/floating-bar")({
 
 function FloatingBarPage() {
   const { role } = useAuth();
+  const [mode] = useDashboardMode();
   const isCoach = role === "coach";
-  const nav = withBarActionItems(isCoach ? coachNav : adminNav);
+  // Drive the picker from the same shared role-aware registry the sidebar
+  // uses, scoped to the current dashboard mode — so hidden / forbidden
+  // destinations never appear in the customizer.
+  const roleTag = resolveStaffRoleTag(role);
+  const nav = useMemo<NavItem[]>(() => {
+    const items = roleTag
+      ? buildInternalNav(roleTag, { mode: mode === "membership" ? "membership" : "coaching" })
+      : [];
+    return withBarActionItems(items);
+  }, [roleTag, mode]);
   const scope = isCoach ? "coach" : "admin";
 
   const defaults: NavItem[] = (() => {
