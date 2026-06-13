@@ -33,7 +33,7 @@ const CAT: Record<string, { icon: any; tone: string; label: string }> = {
   reply: { icon: HelpCircle, tone: "bg-secondary text-foreground border-border", label: "Reply" },
 };
 
-function SupportInbox() {
+export function SupportInbox({ embedded = false }: { embedded?: boolean } = {}) {
   const qc = useQueryClient();
   const list = useServerFn(listSupportThreads);
   const get = useServerFn(getSupportThread);
@@ -95,7 +95,9 @@ function SupportInbox() {
 
   return (
     <div className="space-y-4">
-      <PageHeader title="Member Support Inbox" subtitle="Questions, bug reports, and suggestions from JF members." />
+      {!embedded && (
+        <PageHeader title="Member Support Inbox" subtitle="Questions, bug reports, and suggestions from JF members." />
+      )}
       <div className="grid gap-3 md:grid-cols-[320px,1fr]">
         <Card className="flex h-[calc(100dvh-12rem)] flex-col overflow-hidden">
           <div className="flex items-center gap-2 border-b p-2">
