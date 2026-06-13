@@ -777,9 +777,19 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
   const hasNote = Boolean(existingNote?.id);
 
   // Rest timer trigger: SetRow calls bumpRestTimer() when a set is marked complete,
-  // which auto-starts the per-block <WorkoutRestTimer />.
-  const [restTimerTrigger, setRestTimerTrigger] = useState(0);
-  const bumpRestTimer = () => setRestTimerTrigger((t) => t + 1);
+  // which auto-starts the single page-level active rest timer.
+  const { startRestTimer } = useRestTimer();
+  const bumpRestTimer = (setIndex: number) => {
+    startRestTimer({
+      exerciseName: name,
+      setIndex,
+      seconds: effectiveRest,
+      category,
+      // signalKey must change for each genuinely-newly-completed set so the
+      // provider can dedupe idempotent re-saves of the same set.
+      signalKey: `${row.id}:${setIndex}:${Date.now()}`,
+    });
+  };
 
   const { data: maxes = [] } = useQuery({
     queryKey: ["pl-client-maxes", clientId, blockId ?? null],
@@ -854,16 +864,16 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
           {row.notes && <p className="mt-1 text-xs text-muted-foreground italic">{row.notes}</p>}
         </div>
         <div className="flex shrink-0 flex-col items-end gap-1">
-          {!readonly && (
-            <WorkoutRestTimer
-              effectiveSeconds={effectiveRest}
-              category={category}
-              triggerKey={restTimerTrigger}
-              compact
-            />
-          )}
           {!readonly && onUnitChange && (
             <UnitToggle unit={unit} onChange={onUnitChange} compact />
+          )}
+          {clientId && exerciseId && (
+            <ExerciseHistoryButton
+              clientId={clientId}
+              exerciseId={exerciseId}
+              exerciseName={name}
+              displayUnit={unit}
+            />
           )}
           {hasGuide && (
             <Button size="sm" variant="outline" onClick={() => setHowToOpen(true)} className="w-full">
