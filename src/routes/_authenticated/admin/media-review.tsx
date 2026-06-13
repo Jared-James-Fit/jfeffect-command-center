@@ -31,17 +31,13 @@ function MediaReviewRedirect() {
   return null;
 }
 
-const _LegacyRoute = createFileRoute("/_authenticated/admin/media-review")({
-  component: AdminMediaReview,
-});
-
 function typeIcon(t: string) {
   if (t === "Progress Photos") return <ImageIcon className="h-4 w-4" />;
   if (t === "Documents") return <FileIcon className="h-4 w-4" />;
   return <Video className="h-4 w-4" />;
 }
 
-function AdminMediaReview() {
+export function AdminMediaReview({ embedded = false }: { embedded?: boolean } = {}) {
   const { user } = useAuth();
   const qc = useQueryClient();
   const [status, setStatus] = useState<"all" | MediaStatus>("Pending Review");
