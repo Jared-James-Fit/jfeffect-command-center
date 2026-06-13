@@ -38,7 +38,7 @@ const FILTERS: { key: FilterKey; label: string }[] = [
   { key: "bodybuilding", label: "Bodybuilding" },
 ];
 
-function TrainingIntelPage() {
+export function TrainingIntelPage({ embedded = false }: { embedded?: boolean } = {}) {
   const [filter, setFilter] = useState<FilterKey>("attention");
   const [search, setSearch] = useState("");
   const { data = [], isLoading } = useQuery({ queryKey: ["coach-intel"], queryFn: () => getCoachIntel() });
@@ -82,7 +82,7 @@ function TrainingIntelPage() {
 
   return (
     <>
-      <PageHeader title="Training Intelligence" subtitle="Action dashboard — see issue, take action, mark reviewed." />
+      {!embedded && <PageHeader title="Training Intelligence" subtitle="Action dashboard — see issue, take action, mark reviewed." />}
       <div className="p-6 md:p-8 space-y-6">
         <div className="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-7">
           <SummaryStat icon={Activity} label="Clients" value={summary.total} />
