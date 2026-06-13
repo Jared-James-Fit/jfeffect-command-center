@@ -14,7 +14,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Loader2, Send, MessageCircle, Upload, ArrowLeft, ExternalLink, Check } from "lucide-react";
+import { Loader2, Send, MessageCircle, Upload, ArrowLeft, ExternalLink, Check, X, RotateCcw } from "lucide-react";
 import { ActionButton } from "@/components/action-button";
 import {
   listFormsForClient,
@@ -25,6 +25,8 @@ import {
   submitSubmission,
   uploadFormFile,
   listFiles,
+  removeFormFile,
+  replaceFormFile,
   getReview,
   shouldShowQuestion,
   statusLabel,
@@ -131,14 +133,47 @@ function ClientFormRenderer() {
     }
   }
 
+  const [busyQ, setBusyQ] = useState<Record<string, "uploading" | "removing" | "replacing" | undefined>>({});
+
   async function handleFileUpload(q: NfQuestion, file: File) {
     if (!submission || !client) return;
+    setBusyQ((s) => ({ ...s, [q.id]: "uploading" }));
     try {
       await uploadFormFile({ clientId: client.id, submissionId: submission.id, questionId: q.id, file });
       toast.success("Uploaded");
       qc.invalidateQueries({ queryKey: ["nf-files", submission.id] });
     } catch (e: any) {
       toast.error("Upload failed: " + e.message);
+    } finally {
+      setBusyQ((s) => ({ ...s, [q.id]: undefined }));
+    }
+  }
+
+  async function handleFileRemove(q: NfQuestion, fileId: string) {
+    if (!submission) return;
+    setBusyQ((s) => ({ ...s, [q.id]: "removing" }));
+    try {
+      await removeFormFile(fileId);
+      toast.success("Removed");
+      qc.invalidateQueries({ queryKey: ["nf-files", submission.id] });
+    } catch (e: any) {
+      toast.error("Couldn't remove: " + e.message);
+    } finally {
+      setBusyQ((s) => ({ ...s, [q.id]: undefined }));
+    }
+  }
+
+  async function handleFileReplace(q: NfQuestion, fileId: string, file: File) {
+    if (!submission || !client) return;
+    setBusyQ((s) => ({ ...s, [q.id]: "replacing" }));
+    try {
+      await replaceFormFile({ fileId, clientId: client.id, file });
+      toast.success("Replaced");
+      qc.invalidateQueries({ queryKey: ["nf-files", submission.id] });
+    } catch (e: any) {
+      toast.error("Replace failed: " + e.message);
+    } finally {
+      setBusyQ((s) => ({ ...s, [q.id]: undefined }));
     }
   }
 
@@ -249,8 +284,11 @@ function ClientFormRenderer() {
                   value={local[q.id]}
                   files={files.filter((f) => f.question_id === q.id)}
                   readOnly={!!readOnly}
+                  busy={busyQ[q.id]}
                   onChange={(v) => saveAnswer(q, v)}
                   onUpload={(file) => handleFileUpload(q, file)}
+                  onRemove={(fileId) => handleFileRemove(q, fileId)}
+                  onReplace={(fileId, file) => handleFileReplace(q, fileId, file)}
                 />
               </div>
             </Card>
