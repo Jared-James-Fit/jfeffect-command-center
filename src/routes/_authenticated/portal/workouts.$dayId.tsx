@@ -116,6 +116,46 @@ function fmtNum(n: number): string {
   return Number.isInteger(n) ? String(n) : String(Math.round(n * 100) / 100);
 }
 
+/**
+ * Build the standardized client-facing prescription line:
+ *   "Sets × Reps @ Weight | RPE"
+ * Examples: "3 × 8–12 @ 40 lb | RPE 8", "3 × 10 | RPE 8", "1 × 3 @ 82.5% | RPE 7".
+ * Only includes segments that are actually prescribed — never falls back to logged
+ * results or previous-session values.
+ */
+function formatPrescription(p: {
+  sets: number | null | undefined;
+  repsText: string | null | undefined;
+  suggestedWeight: number | null | undefined;
+  unit: "kg" | "lb";
+  percentage: number | string | null | undefined;
+  percentageBasis: string | null | undefined;
+  manualOverride: boolean | null | undefined;
+  rpe: string | number | null | undefined;
+  rir: string | number | null | undefined;
+}): string {
+  const sets = p.sets ?? 1;
+  // Normalize "8-12" → "8–12" for readability; leave AMRAP / Max / other text untouched.
+  const repsRaw = (p.repsText ?? "").toString().trim();
+  const reps = repsRaw ? repsRaw.replace(/\s*-\s*/, "–") : "?";
+  let load = "";
+  if (p.suggestedWeight != null) {
+    load = `@ ${fmtNum(p.suggestedWeight)} ${p.unit}`;
+  } else if (
+    p.percentage &&
+    !p.manualOverride &&
+    p.percentageBasis &&
+    p.percentageBasis !== "none" &&
+    p.percentageBasis !== "manual"
+  ) {
+    load = `@ ${p.percentage}%`;
+  }
+  let effort = "";
+  if (p.rpe != null && String(p.rpe).trim() !== "") effort = `| RPE ${p.rpe}`;
+  else if (p.rir != null && String(p.rir).trim() !== "") effort = `| ${p.rir} RIR`;
+  return [`${sets} × ${reps}`, load, effort].filter(Boolean).join(" ");
+}
+
 export const Route = createFileRoute("/_authenticated/portal/workouts/$dayId")({
   validateSearch: (s: Record<string, unknown>) => ({
     readonly: s.readonly === 1 || s.readonly === "1" || s.readonly === true ? 1 : undefined,
@@ -922,24 +962,34 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
             {purposeLabel}
           </Badge>
         )}
-        <Badge variant="outline" className="h-4 px-1 text-[10px] font-bold uppercase tracking-wider capitalize">
-          {category}
-        </Badge>
+        {!purposeLabel && (
+          <Badge variant="outline" className={cn("h-4 px-1 text-[10px] font-bold uppercase tracking-wider", categoryBadgeClass)}>
+            {category}
+          </Badge>
+        )}
         {hasNote && (
           <span title="You saved a note for this exercise" className="inline-flex h-4 items-center gap-1 rounded-full bg-primary/15 px-1.5 text-[10px] font-bold text-primary">
             <StickyNote className="h-2.5 w-2.5" /> Note
           </span>
         )}
-        <span className="font-semibold text-foreground">
-          {row.sets ?? "?"} × {row.reps_text ?? "?"}
-        </span>
-        {row.rpe && <span>@ RPE {row.rpe}</span>}
-        {row.rir && <span>· {row.rir} RIR</span>}
-        {row.percentage && !row.manual_override && row.percentage_basis !== "none" && <span>· {row.percentage}%</span>}
-        {row.tempo && <span>· tempo {row.tempo}</span>}
         <span className="ml-auto inline-flex items-center gap-1 rounded-md bg-secondary/40 px-1.5 py-0.5 font-semibold text-foreground">
           <Clock className="h-3 w-3" /> Rest: {restDisplay}
         </span>
+      </div>
+      {/* Standardized prescription line: Sets × Reps @ Weight | RPE */}
+      <div className="mt-1 text-sm font-semibold text-foreground leading-snug break-words">
+        {formatPrescription({
+          sets: row.sets,
+          repsText: row.reps_text,
+          suggestedWeight,
+          unit,
+          percentage: row.percentage,
+          percentageBasis: row.percentage_basis,
+          manualOverride: row.manual_override,
+          rpe: row.rpe,
+          rir: row.rir,
+        })}
+        {row.tempo && <span className="ml-2 text-xs font-normal text-muted-foreground">tempo {row.tempo}</span>}
       </div>
       {/* Suggested load badges */}
       {row.manual_override && (row.load_kg || row.load_lb) && (
@@ -998,8 +1048,8 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
       <div className={cn("mt-3 overflow-hidden rounded-md border border-border", focusMode && "text-base")}>
         <div className={cn("grid items-center gap-2 border-b border-border bg-muted/40 px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground", focusMode ? "grid-cols-[44px_1fr_1fr_1fr_64px] text-xs" : "grid-cols-[36px_1fr_1fr_1fr_56px]")}>
           <span>Set</span>
-          <span>Weight ({unit})</span>
           <span>Reps</span>
+          <span>Weight ({unit.toUpperCase()})</span>
           <span>RPE</span>
           <span className="text-right">Status</span>
         </div>
@@ -1490,20 +1540,6 @@ function SetRow({
       <span className={cn("font-mono text-muted-foreground", focusMode ? "text-sm" : "text-xs")}>{setIndex}</span>
       <Input
         className={cn(focusMode ? "h-11 text-base" : "h-9 text-sm", "bg-white text-black placeholder:text-gray-500")}
-        inputMode="decimal"
-        type="text"
-        pattern="[0-9]*\.?[0-9]*"
-        placeholder="—"
-        aria-label={`Set ${setIndex} weight in ${unit}`}
-        value={load}
-        onChange={(e) => setLoad(e.target.value.replace(/[^0-9.]/g, ""))}
-        onKeyDown={onEnter}
-        onBlur={() => save.flush()}
-        readOnly={readonly}
-        disabled={readonly}
-      />
-      <Input
-        className={cn(focusMode ? "h-11 text-base" : "h-9 text-sm", "bg-white text-black placeholder:text-gray-500")}
         inputMode="numeric"
         type="text"
         pattern="[0-9]*"
@@ -1511,6 +1547,20 @@ function SetRow({
         aria-label={`Set ${setIndex} reps`}
         value={reps}
         onChange={(e) => setReps(e.target.value.replace(/[^0-9]/g, ""))}
+        onKeyDown={onEnter}
+        onBlur={() => save.flush()}
+        readOnly={readonly}
+        disabled={readonly}
+      />
+      <Input
+        className={cn(focusMode ? "h-11 text-base" : "h-9 text-sm", "bg-white text-black placeholder:text-gray-500")}
+        inputMode="decimal"
+        type="text"
+        pattern="[0-9]*\.?[0-9]*"
+        placeholder={suggestedWeight != null ? fmtNum(suggestedWeight) : "—"}
+        aria-label={`Set ${setIndex} weight in ${unit}`}
+        value={load}
+        onChange={(e) => setLoad(e.target.value.replace(/[^0-9.]/g, ""))}
         onKeyDown={onEnter}
         onBlur={() => save.flush()}
         readOnly={readonly}
