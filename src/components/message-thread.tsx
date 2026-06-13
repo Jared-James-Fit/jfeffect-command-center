@@ -38,6 +38,8 @@ import { GifThumb } from "@/components/gif-thumb";
 import { fallbackEmoji } from "@/lib/gif-fallback";
 import { markRecent as markSoundRecent } from "@/lib/chat-sounds";
 import { ChatSoundCard } from "@/components/chat-sound-card";
+import { ScheduledStrip } from "@/components/messages/scheduled-strip";
+import { ScheduleButton } from "@/components/messages/schedule-button";
 import { renderBodyWithMeet } from "@/components/chat-shared";
 import { MeetQuickAction } from "@/components/meet-quick-action";
 import { ComposerPlusMenu } from "@/components/composer-plus-menu";
