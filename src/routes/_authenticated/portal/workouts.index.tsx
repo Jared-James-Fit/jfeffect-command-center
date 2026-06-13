@@ -94,10 +94,10 @@ function WorkoutsPage() {
   // localStorage, then default to "block" (the primary training experience).
   const STORAGE_KEY = "portal-workouts-view";
   const [viewMode, setViewModeState] = useState<"block" | "overview">(() => {
-    if (typeof window === "undefined") return "block";
+    if (typeof window === "undefined") return "overview";
     if (search?.view === "block" || search?.view === "overview") return search.view;
     const saved = window.localStorage.getItem(STORAGE_KEY);
-    return saved === "overview" ? "overview" : "block";
+    return saved === "block" ? "block" : "overview";
   });
   useEffect(() => {
     if (search?.view === "block" || search?.view === "overview") {
@@ -190,19 +190,6 @@ function WorkoutsPage() {
             <button
               type="button"
               role="tab"
-              aria-selected={viewMode === "block"}
-              tabIndex={viewMode === "block" ? 0 : -1}
-              onClick={() => setViewMode("block")}
-              className={cn(
-                "rounded px-3 py-1.5 font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                viewMode === "block" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              Block View
-            </button>
-            <button
-              type="button"
-              role="tab"
               aria-selected={viewMode === "overview"}
               tabIndex={viewMode === "overview" ? 0 : -1}
               onClick={() => setViewMode("overview")}
@@ -212,6 +199,19 @@ function WorkoutsPage() {
               )}
             >
               Overview
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={viewMode === "block"}
+              tabIndex={viewMode === "block" ? 0 : -1}
+              onClick={() => setViewMode("block")}
+              className={cn(
+                "rounded px-3 py-1.5 font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                viewMode === "block" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              Block View
             </button>
           </div>
         </div>
@@ -232,13 +232,15 @@ function WorkoutsPage() {
                   navigate({
                     search: (prev: any) => ({ ...prev, view: "block", week: idx, day: undefined }),
                     replace: true,
-                  });
+                    resetScroll: false,
+                  } as any);
                 }}
                 onDayChange={(dayId) => {
                   navigate({
                     search: (prev: any) => ({ ...prev, view: "block", day: dayId }),
                     replace: true,
-                  });
+                    resetScroll: false,
+                  } as any);
                 }}
                 mode="client"
               />
