@@ -8,7 +8,8 @@ import { Label } from "@/components/ui/label";
 import { ActionButton } from "@/components/action-button";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { Sparkles, AlertTriangle, CheckCircle2, Circle, KeyRound } from "lucide-react";
+import { Sparkles, AlertTriangle, CheckCircle2, Circle, KeyRound, PowerOff } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 
 export function JfMembershipSettingsCard() {
   const get = useServerFn(adminGetJfSettings);
@@ -43,6 +44,7 @@ export function JfMembershipSettingsCard() {
       support_email: form.support_email || null,
       refund_policy: form.refund_policy,
       stripe_mode: form.stripe_mode === "test" ? "test" : "live",
+      public_checkout_enabled: form.public_checkout_enabled !== false,
     }});
     },
     onSuccess: () => { toast.success("Saved"); qc.invalidateQueries({ queryKey: ["jf-admin-settings"] }); },
@@ -55,6 +57,7 @@ export function JfMembershipSettingsCard() {
     | { default_mode: "test" | "live" | null; test_key_present: boolean; live_key_available: boolean; test_key_available: boolean; configured_mode: "test" | "live"; key_available_for_mode: boolean; mismatch: boolean }
     | undefined;
   const selectedMode: "test" | "live" = form.stripe_mode === "test" ? "test" : "live";
+  const checkoutEnabled = form.public_checkout_enabled !== false;
 
   return (
     <Card className="border-emerald-500/30 bg-emerald-500/5 p-6 space-y-3 md:col-span-2">
@@ -87,6 +90,19 @@ export function JfMembershipSettingsCard() {
                 Public checkout is safely blocked with a generic support message until this is fixed.
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {!checkoutEnabled && (
+        <div className="flex items-start gap-2 rounded-md border border-destructive/50 bg-destructive/10 p-3 text-xs text-destructive-foreground">
+          <PowerOff className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+          <div>
+            <div className="font-bold">Public checkout is OFF (kill switch).</div>
+            <div className="opacity-90">
+              <code>/join</code> shows "Membership signups are temporarily paused" and Stripe checkout sessions are refused.
+              Existing members, billing, and the member portal are unaffected. Save to apply changes.
+            </div>
           </div>
         </div>
       )}
@@ -129,6 +145,18 @@ export function JfMembershipSettingsCard() {
       </div>
 
       <div className="grid gap-3 md:grid-cols-2">
+        <div className="md:col-span-2 flex items-start justify-between gap-3 rounded-md border border-border bg-background/50 p-3">
+          <div className="space-y-0.5">
+            <Label className="text-sm">Public checkout enabled</Label>
+            <p className="text-[11px] text-muted-foreground">
+              Master kill switch for <code>/join</code>. Turn off to immediately pause new signups while keeping the page reachable with a clear "paused" message. Existing members are not affected.
+            </p>
+          </div>
+          <Switch
+            checked={checkoutEnabled}
+            onCheckedChange={(c) => setForm({ ...form, public_checkout_enabled: !!c })}
+          />
+        </div>
         <div className="md:col-span-2">
           <Label>Stripe mode</Label>
           <div className="mt-1 flex gap-2">

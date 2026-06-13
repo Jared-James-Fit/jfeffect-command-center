@@ -4396,6 +4396,7 @@ export type Database = {
           id: boolean
           monthly_price_display: string
           monthly_price_id: string | null
+          public_checkout_enabled: boolean
           refund_policy: string
           stripe_mode: string
           support_email: string | null
@@ -4410,6 +4411,7 @@ export type Database = {
           id?: boolean
           monthly_price_display?: string
           monthly_price_id?: string | null
+          public_checkout_enabled?: boolean
           refund_policy?: string
           stripe_mode?: string
           support_email?: string | null
@@ -4424,6 +4426,7 @@ export type Database = {
           id?: boolean
           monthly_price_display?: string
           monthly_price_id?: string | null
+          public_checkout_enabled?: boolean
           refund_policy?: string
           stripe_mode?: string
           support_email?: string | null
