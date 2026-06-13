@@ -2,21 +2,23 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { getMyJfBilling, openBillingPortal, reactivateFullMembership, syncMyStripeStatus } from "@/lib/jf-billing.functions";
+import { getMyJfBilling, openBillingPortal, reactivateFullMembership, syncMyStripeStatus, keepMembership, restartMembership } from "@/lib/jf-billing.functions";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { CancelFlow } from "@/components/billing/cancel-flow";
 import { toast } from "sonner";
-import { CreditCard, RefreshCw, ExternalLink } from "lucide-react";
+import { CreditCard, RefreshCw, ExternalLink, AlertTriangle, ShieldAlert } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/m/billing")({ component: BillingPage });
 
 const STATUS_TONE: Record<string, string> = {
   "Trialing": "bg-amber-500/10 text-amber-300 border-amber-500/30",
   "Active": "bg-emerald-500/10 text-emerald-300 border-emerald-500/30",
+  "Active (Cancels at period end)": "bg-amber-500/10 text-amber-300 border-amber-500/30",
   "Past Due": "bg-rose-500/10 text-rose-300 border-rose-500/30",
+  "Past Due (Access Restricted)": "bg-rose-600/15 text-rose-300 border-rose-500/40",
   "Payment Failed": "bg-rose-500/10 text-rose-300 border-rose-500/30",
   "Paused": "bg-sky-500/10 text-sky-300 border-sky-500/30",
   "Hold Plan": "bg-violet-500/10 text-violet-300 border-violet-500/30",
@@ -31,6 +33,8 @@ function BillingPage() {
   const fn = useServerFn(getMyJfBilling);
   const portalFn = useServerFn(openBillingPortal);
   const reactivateFn = useServerFn(reactivateFullMembership);
+  const keepFn = useServerFn(keepMembership);
+  const restartFn = useServerFn(restartMembership);
   const syncFn = useServerFn(syncMyStripeStatus);
 
   const { data, isLoading } = useQuery({ queryKey: ["my-jf-billing"], queryFn: () => fn() });
@@ -51,24 +55,81 @@ function BillingPage() {
     onSuccess: () => { toast.success("Membership reactivated"); qc.invalidateQueries({ queryKey: ["my-jf-billing"] }); },
     onError: (e: any) => toast.error(e.message),
   });
+  const keep = useMutation({
+    mutationFn: () => keepFn(),
+    onSuccess: () => { toast.success("Membership kept"); qc.invalidateQueries({ queryKey: ["my-jf-billing"] }); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const restart = useMutation({
+    mutationFn: () => restartFn({ data: { origin: window.location.origin } }),
+    onSuccess: (r: any) => { if (r?.url) window.location.assign(r.url); },
+    onError: (e: any) => toast.error(e.message),
+  });
 
   if (isLoading) return <div className="p-6 text-muted-foreground">Loading…</div>;
   const m = data?.member;
   const s = data?.settings;
+  const lc = (data as any)?.lifecycle;
 
   if (!m) return <div className="p-6"><PageHeader title="Billing" /><Card className="p-6 mt-4">No membership on file.</Card></div>;
 
-  const status = m.subscription_status ?? "—";
+  const status = lc?.status ?? m.subscription_status ?? "—";
   const isHold = s?.is_hold;
   const isPaused = status === "Paused";
-  const isCancelled = status === "Cancelled" || status === "Expired";
-  const canReactivate = isHold || isPaused || isCancelled;
+  const isCancelled = status === "Cancelled" || status === "Expired" || lc?.subscription_ended;
+  const action = lc?.action ?? (isCancelled ? "restart_membership" : "none");
+  const showKeep = action === "keep_membership";
+  const showRestart = action === "restart_membership";
+  const inGrace = lc?.in_grace;
+  const accessRestricted = status === "Past Due (Access Restricted)";
+  const graceEndsAt = lc?.grace_ends_at;
+  const showSyncWarning = !!m.sync_warning_at && !m.cross_account_locked;
+  const showCrossAccountLock = !!m.cross_account_locked;
 
   return (
     <div className="space-y-5 p-4 md:p-6">
       <PageHeader title="Billing" subtitle="Manage your JF Membership subscription." />
 
       <Card className="p-5 space-y-3">
+        {showCrossAccountLock && (
+          <div className="rounded border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-200 flex gap-2">
+            <ShieldAlert className="h-4 w-4 mt-0.5 shrink-0" />
+            <div>
+              <div className="font-medium">Manual review required</div>
+              <div className="text-xs opacity-80">Your billing record is being reviewed. Please contact support before making changes.</div>
+            </div>
+          </div>
+        )}
+        {showSyncWarning && (
+          <div className="rounded border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-200">
+            We had trouble syncing the latest billing status. Your access is preserved. {m.sync_warning_reason ? `(${m.sync_warning_reason})` : null}
+          </div>
+        )}
+        {inGrace && (
+          <div className="rounded border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-200 flex gap-2">
+            <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+            <div className="flex-1">
+              <div className="font-medium">Payment failed — please update your payment method</div>
+              <div className="text-xs opacity-90">
+                Your access remains active until <span className="font-semibold">{fmt(graceEndsAt)}</span>.
+                After that date your membership features will be paused until payment is recovered.
+              </div>
+              <Button size="sm" className="mt-2" onClick={() => portal.mutate()} disabled={portal.isPending}>
+                <CreditCard className="mr-1 h-3.5 w-3.5" /> Update Payment Method
+              </Button>
+            </div>
+          </div>
+        )}
+        {accessRestricted && (
+          <div className="rounded border border-rose-600/40 bg-rose-600/15 p-3 text-sm text-rose-200">
+            <div className="font-medium">Access restricted</div>
+            <div className="text-xs opacity-90">Your grace period ended. Your account, history, and progress are preserved — update your payment method to restore full access.</div>
+            <Button size="sm" className="mt-2" onClick={() => portal.mutate()} disabled={portal.isPending}>
+              <CreditCard className="mr-1 h-3.5 w-3.5" /> Update Payment Method
+            </Button>
+          </div>
+        )}
+
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="space-y-1">
             <div className="text-xs uppercase tracking-wider text-muted-foreground">Current status</div>
@@ -98,10 +159,20 @@ function BillingPage() {
         </div>
 
         <div className="flex flex-wrap gap-2 pt-3 border-t border-border">
-          {!isCancelled && !isPaused && !isHold && (
+          {!isCancelled && !isPaused && !isHold && !showKeep && (
             <Button variant="destructive" size="sm" onClick={() => setCancelOpen(true)}>Cancel Membership</Button>
           )}
-          {canReactivate && (
+          {showKeep && (
+            <Button size="sm" onClick={() => keep.mutate()} disabled={keep.isPending}>
+              <CreditCard className="mr-1 h-3.5 w-3.5" /> Keep Membership
+            </Button>
+          )}
+          {showRestart && !showCrossAccountLock && (
+            <Button size="sm" onClick={() => restart.mutate()} disabled={restart.isPending}>
+              <CreditCard className="mr-1 h-3.5 w-3.5" /> Restart Membership
+            </Button>
+          )}
+          {(isHold || isPaused) && (
             <Button size="sm" onClick={() => reactivate.mutate()} disabled={reactivate.isPending}>
               <CreditCard className="mr-1 h-3.5 w-3.5" /> Reactivate Full Membership
             </Button>
