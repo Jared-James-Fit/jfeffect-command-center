@@ -10117,8 +10117,12 @@ export type Database = {
           coach_draft: string | null
           created_at: string
           delivered_response: string | null
+          draft_origin_generation_id: string | null
           form_id: string | null
           id: string
+          internal_notes: string | null
+          internal_notes_updated_at: string | null
+          internal_notes_updated_by: string | null
           last_delivery_error: string | null
           latest_generation_id: string | null
           latest_message_id: string | null
@@ -10146,8 +10150,12 @@ export type Database = {
           coach_draft?: string | null
           created_at?: string
           delivered_response?: string | null
+          draft_origin_generation_id?: string | null
           form_id?: string | null
           id?: string
+          internal_notes?: string | null
+          internal_notes_updated_at?: string | null
+          internal_notes_updated_by?: string | null
           last_delivery_error?: string | null
           latest_generation_id?: string | null
           latest_message_id?: string | null
@@ -10175,8 +10183,12 @@ export type Database = {
           coach_draft?: string | null
           created_at?: string
           delivered_response?: string | null
+          draft_origin_generation_id?: string | null
           form_id?: string | null
           id?: string
+          internal_notes?: string | null
+          internal_notes_updated_at?: string | null
+          internal_notes_updated_by?: string | null
           last_delivery_error?: string | null
           latest_generation_id?: string | null
           latest_message_id?: string | null
