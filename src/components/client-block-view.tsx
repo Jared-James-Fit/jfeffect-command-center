@@ -393,9 +393,9 @@ export function ClientBlockView({
                 className={cn(
                   "flex min-w-0 snap-start flex-col rounded-lg border bg-card",
                   // Mobile: ~85vw per card with a small peek of the next day.
-                  "w-[calc(100vw-3rem)] max-w-[360px] shrink-0",
-                  // Tablet/desktop: fixed-width columns; horizontal scroll if overflow.
-                  "md:w-[320px] lg:w-[340px] xl:w-[360px]",
+                  "w-[calc(100vw-3rem)] max-w-[380px] shrink-0",
+                  // Tablet/desktop: roomier columns so exercise names wrap cleanly without clipping.
+                  "md:w-[360px] lg:w-[380px] xl:w-[400px]",
                   isToday && !done && "border-primary ring-2 ring-primary/40",
                 )}
               >
