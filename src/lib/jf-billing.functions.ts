@@ -415,8 +415,8 @@ export const getMyJfBilling = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const { userId } = context as any;
-    let member = await findMemberByUser(userId);
-    if (!member) return { member: null, settings: null };
+    let member: any = await findMemberByUser(userId);
+    if (!member) return { member: null, settings: null, lifecycle: null };
     // Server-side lazy enforcement: if grace expired, restrict access now.
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     member = await enforceGraceIfExpired(supabaseAdmin, member);
