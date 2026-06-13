@@ -16,7 +16,7 @@ import { cn } from "@/lib/utils";
 import { getBlockTree, durationRange } from "@/lib/pl-programs";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  effectiveRestSeconds, resolveCategory, derivePurposeLabels,
+  effectiveRestSeconds, resolveCategory, derivePurposeLabels, purposeLabelBadgeClass,
 } from "@/lib/exercise-metadata";
 import { weekDisplayRange, isCurrentWeek, formatWeekRange } from "@/lib/block-dates";
 import { isWeekLocked } from "@/lib/workout-today";
@@ -472,7 +472,7 @@ export function ClientBlockView({
                           <div className="min-w-0">
                             <div className="break-words text-[13px] font-bold leading-snug">{name}</div>
                             <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[10px] font-semibold uppercase tracking-wide text-foreground/70">
-                              <span className="break-words">{purpose[i]}</span>
+                              <span className={cn("break-words rounded border px-1 py-0", purposeLabelBadgeClass(purpose[i]))}>{purpose[i]}</span>
                               {isComp && <span className="shrink-0 rounded bg-primary/15 px-1 text-primary">Comp</span>}
                               <span className="break-words text-foreground/50">· {cat}</span>
                             </div>

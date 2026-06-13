@@ -20,6 +20,7 @@ import {
   derivePurposeLabels,
   effectiveRestSeconds,
   resolveCategory,
+  purposeLabelBadgeClass,
   type ExerciseMeta,
 } from "@/lib/exercise-metadata";
 import { listClientMaxes, buildMaxIndex, computeRowLoad } from "@/lib/pl-maxes";
@@ -848,12 +849,6 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
   const restDisplay = effectiveRest != null
     ? (restIsExplicit ? fmtRest(effectiveRest) : `Auto · ${fmtRest(effectiveRest)}`)
     : "Auto";
-  const categoryBadgeClass =
-    category === "competition"
-      ? "border-primary/30 bg-primary/10 text-primary"
-      : category === "variation"
-        ? "border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400"
-        : "border-muted-foreground/30 bg-muted text-muted-foreground";
   const [howToOpen, setHowToOpen] = useState(false);
   const [notesOpen, setNotesOpen] = useState(false);
   const [cuesOpen, setCuesOpen] = useState(false);
@@ -967,16 +962,9 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
       </div>
       {/* Row 2 — badges + sets×reps + rest (compact, single line on mobile when possible) */}
       <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-        {purposeLabel && (
-          <Badge variant="outline" className={cn("h-4 px-1 text-[10px] font-bold uppercase tracking-wider", categoryBadgeClass)}>
-            {purposeLabel}
-          </Badge>
-        )}
-        {!purposeLabel && (
-          <Badge variant="outline" className={cn("h-4 px-1 text-[10px] font-bold uppercase tracking-wider", categoryBadgeClass)}>
-            {category}
-          </Badge>
-        )}
+        <Badge variant="outline" className={cn("h-4 px-1 text-[10px] font-bold uppercase tracking-wider", purposeLabelBadgeClass(purposeLabel))}>
+          {purposeLabel || category}
+        </Badge>
         {hasNote && (
           <span title="You saved a note for this exercise" className="inline-flex h-4 items-center gap-1 rounded-full bg-primary/15 px-1.5 text-[10px] font-bold text-primary">
             <StickyNote className="h-2.5 w-2.5" /> Note

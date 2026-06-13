@@ -116,6 +116,18 @@ export function derivePurposeLabels<R extends { purpose_label?: string | null }>
   });
 }
 
+/** Badge color class for a purpose label. */
+export function purposeLabelBadgeClass(label: string | null | undefined): string {
+  const l = (label ?? "").trim();
+  if (l === "Assistance") {
+    return "border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400";
+  }
+  if (["Primary", "Secondary", "Tertiary", "Quaternary"].includes(l)) {
+    return "border-red-500/40 bg-red-500/10 text-red-600 dark:text-red-400";
+  }
+  return "border-muted-foreground/30 bg-muted text-muted-foreground";
+}
+
 /** Suggested purpose-label options shown in the manual override picker. */
 export const PURPOSE_LABEL_OPTIONS: PurposeLabel[] = [
   "Primary",
