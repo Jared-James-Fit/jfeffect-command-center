@@ -1647,14 +1647,10 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
         </Field>
         )}
         <Field className="col-span-2" label="Tempo">
-          <RowCell className={cn("text-xs font-semibold tabular-nums text-center", h, inputCls)} placeholder="—" value={row.tempo} onCommit={(v) => setRow({ ...row, tempo: v ?? "" })} />
-          <span className="px-0.5 text-[8px] leading-none text-muted-foreground">Format: 3-1-1 (ecc-pause-con)</span>
-        </Field>
-        <Field className={cn(loadMode === "none" ? "col-span-5" : "col-span-3")} label="Type">
-          <Select value={row.time_profile ?? "accessory_compound"} onValueChange={(v) => setRow({ ...row, time_profile: v })}>
-            <SelectTrigger className={cn("text-xs font-medium", h, inputCls)}><SelectValue /></SelectTrigger>
-            <SelectContent>{TIME_PROFILES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}</SelectContent>
-          </Select>
+          <RowCell dataField="tempo" className={cn("text-xs font-semibold tabular-nums text-center", h, inputCls)} placeholder="—" value={row.tempo} onCommit={(v) => setRow({ ...row, tempo: v ?? "" })} />
+          <span className="px-0.5 text-[10px] leading-tight text-foreground/70" title="Tempo notation: seconds for the eccentric (lowering) phase, pause at the bottom, then concentric (lifting) phase. Example: 3-1-1 = 3s down, 1s pause, 1s up.">
+            Format: eccentric–pause–concentric · e.g. <span className="text-foreground/50">3-1-1</span>
+          </span>
         </Field>
       </div>
       )}
