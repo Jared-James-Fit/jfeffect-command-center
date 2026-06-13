@@ -114,23 +114,19 @@ const REGISTRY: Entry[] = [
     ] },
 
   // ── COMMUNICATION ────────────────────────────────────────────────────
-  { to: "/admin/messages", label: "Inbox", icon: MessageCircle, group: "Communication",
-    visibleTo: ["admin", "coach", "assistant_coach", "media_manager", "sales", "support"] },
-  { to: "/admin/broadcasts", label: "Broadcasts", icon: Megaphone, group: "Communication",
-    visibleTo: ["admin", "coach", "media_manager"] },
-  { to: "/admin/popups", label: "Popups", icon: LayoutGrid, group: "Communication",
-    visibleTo: ["admin", "media_manager"],
-    keywords: ["popup", "popups", "pop up", "pop-up", "modal", "task popup", "load screen", "birthday card", "event popup"] },
-  { to: "/admin/membership/support", label: "Member Support Inbox", icon: MessagesSquare, group: "Communication",
-    visibleTo: ["admin", "support"] },
+  { to: "/admin/communication", label: "Communication", icon: MessageCircle, group: "Communication",
+    visibleTo: ["admin", "coach", "assistant_coach", "media_manager", "sales", "support"],
+    keywords: [
+      "communication", "messages", "inbox", "chat", "direct messages",
+      "group chat", "broadcasts", "announcements",
+      "support", "support inbox", "support alerts", "member support",
+      "gif", "gifs", "sound", "sounds", "media library",
+      "popups", "popup", "modal", "birthday cards", "task popup", "load screen",
+    ] },
   { to: "/admin/call-access", label: "Call Access", icon: Phone, group: "Communication",
     visibleTo: ["admin"] },
   { to: "/admin/settings/sms", label: "SMS Access", icon: MessageCircle, group: "Communication",
     visibleTo: ["admin"] },
-  { to: "/admin/chat-gifs", label: "GIF Library", icon: Sparkles, group: "Communication",
-    visibleTo: ["admin", "media_manager"] },
-  { to: "/admin/chat-sounds", label: "Sound Library", icon: Sparkles, group: "Communication",
-    visibleTo: ["admin", "media_manager"] },
 
   // ── SALES (CRM + offers + financial) ────────────────────────────────
   { to: "/admin/crm", label: "Pipeline", icon: BarChart3, group: "Sales",
@@ -178,8 +174,6 @@ const REGISTRY: Entry[] = [
     visibleTo: ["admin"] },
   { to: "/admin/staff", label: "Staff & Media", icon: UserPlus, group: "Team",
     visibleTo: ["admin"] },
-  { to: "/admin/support-alerts", label: "Support Alerts", icon: AlertCircle, group: "Team",
-    visibleTo: ["admin", "support", "operations"] },
   { to: "/admin/business-systems", label: "Operations", icon: Briefcase, group: "Team",
     visibleTo: ["admin", "operations"] },
 
