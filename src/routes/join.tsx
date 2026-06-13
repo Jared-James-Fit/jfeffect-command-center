@@ -13,8 +13,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { Eye, EyeOff, Lock, Receipt } from "lucide-react";
 import { SalesPageShell, Section } from "@/components/sales/sales-page-shell";
-import { SalesHero, HeroCta, HeroCtaGhost } from "@/components/sales/sales-hero";
-import { AppPreviewGrid } from "@/components/sales/app-preview-grid";
+import { MembershipHero, MemberHeroCta, MemberHeroGhost } from "@/components/sales/membership-hero";
+import { FeatureTabs } from "@/components/sales/feature-tabs";
 import { FeatureGrid } from "@/components/sales/feature-grid";
 import { IncludedNotIncluded } from "@/components/sales/included-not-included";
 import { ComparisonCard } from "@/components/sales/comparison";
@@ -106,29 +106,23 @@ function SignupJf() {
   const trialDays = settings?.trial_days ?? 3;
   const ctaLabel = p?.primary_cta_label ?? `Start ${trialDays}-Day Free Trial`;
 
-  const previewItems = (p?.visuals ?? [])
-    .filter((v) => v.slot === "app_preview" && v.visible !== false)
-    .map((v) => ({ label: v.alt || "Preview", url: v.url }));
-  const previewFallback = [
-    "Plan library", "Workout tracking", "Exercise library", "Recipes",
-    "Resources", "Events", "Progress tracking", "Member dashboard",
-  ].map((label) => ({ label }));
-
   return (
     <SalesPageShell>
-      <SalesHero
-      eyebrow={`JF Membership · ${settings?.monthly_price_display ?? "$29/month USD"}`}
-        headline={p?.hero_headline ?? "Train with the JF Effect system without full coaching."}
-        sub={p?.hero_subheadline ?? "Get self-guided workout plans, tracking tools, exercise demos, recipes, nutrition resources, events, and member-only updates inside the JF Effect app."}
-        image={p?.hero_image_url ?? null}
-        primary={<HeroCta onClick={scrollToForm}>{ctaLabel}</HeroCta>}
-        secondary={<Link to="/coaching"><HeroCtaGhost>{p?.secondary_cta_label ?? "Apply for Coaching"}</HeroCtaGhost></Link>}
+      <MembershipHero
+        priceChip={settings?.monthly_price_display ?? "$29/month USD"}
+        headline={p?.hero_headline ?? "Train with the JF Effect system. On your own time, inside the app."}
+        sub={p?.hero_subheadline ?? "Self-guided programs, workout tracking, analytics, recipes and education — all in one place. No application required. Cancel anytime."}
+        heroImage={p?.hero_image_url ?? null}
+        primary={<MemberHeroCta onClick={scrollToForm}>{ctaLabel}</MemberHeroCta>}
+        secondary={
+          <Link to="/coaching">
+            <MemberHeroGhost>{p?.secondary_cta_label ?? "Need more support? Apply for Coaching"}</MemberHeroGhost>
+          </Link>
+        }
+        trialNote={`${trialDays}-day free trial · ${settings?.monthly_price_display ?? "$29/month USD"} after · cancel anytime`}
       />
 
-      <AppPreviewGrid
-        title="Everything you get inside the app"
-        items={previewItems.length > 0 ? previewItems : previewFallback}
-      />
+      <FeatureTabs />
 
       {Array.isArray(s.features) && s.features.length > 0 && (
         <FeatureGrid title="What's inside Membership" items={s.features} />
