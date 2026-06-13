@@ -829,7 +829,6 @@ function StructureEditor({ type, payload, setPayload, exercises, compact, templa
     </Card>
   );
 }
-}
 
 // ---------- Multi-block (v2 payload) structure editor -----------------------
 function MultiBlockStructureEditor({ type, payload, setPayload, exercises, compact, templateId }: {
