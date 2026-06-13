@@ -1199,7 +1199,7 @@ function DayEditor({ day, setDay, exercises, compact }: { day: any; setDay: (d: 
           {dragOver ? "Drop exercise here" : "Drag exercises from the library, or click + Row"}
         </p>
       ) : (
-        <div className="space-y-1.5">
+        <div className="space-y-1.5" data-pb-day>
           {rows.map((r: any, i: number) => (
             <div
               key={i}
