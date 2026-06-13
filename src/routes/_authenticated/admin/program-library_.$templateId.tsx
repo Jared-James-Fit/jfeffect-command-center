@@ -1630,9 +1630,11 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
         </Field>
       </div>
       {expanded && (
-      <div className="grid grid-cols-12 items-end gap-1">
-        <Field className="col-span-3" label="Include Suggested Load">
-          <div className="flex items-center gap-2 h-8">
+      <div className="grid grid-cols-12 items-start gap-2">
+        {/* ---- Suggested Load: one coherent group ---- */}
+        <div className={cn("col-span-12", loadMode === "none" ? "md:col-span-6" : "md:col-span-9", "rounded-md border border-border/60 bg-muted/20 p-1.5")}>
+          <div className="mb-1 flex items-center justify-between gap-2 px-0.5">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-foreground leading-none">Suggested load</span>
             <button
               type="button"
               role="switch"
@@ -1646,52 +1648,56 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
             >
               <span className={cn("inline-block h-4 w-4 transform rounded-full bg-background shadow transition-transform", suggestedOn ? "translate-x-4" : "translate-x-0.5")} />
             </button>
-            <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{suggestedOn ? "On" : "Off"}</span>
-            {suggestedOn && (
-              <div className="ml-1 inline-flex rounded-md border border-border p-0.5">
-                <button type="button" onClick={() => setLoadMode("manual")} className={cn("rounded px-1.5 py-0.5 text-[10px] font-semibold", loadMode === "manual" ? "bg-primary text-primary-foreground" : "text-muted-foreground")} title="Fixed weight">Weight</button>
-                <button type="button" onClick={() => setLoadMode("pct")} className={cn("rounded px-1.5 py-0.5 text-[10px] font-semibold", loadMode === "pct" ? "bg-primary text-primary-foreground" : "text-muted-foreground")} title="Percentage of max">%</button>
+          </div>
+          {suggestedOn ? (
+            <div className="grid grid-cols-12 items-end gap-1">
+              <div className="col-span-3">
+                <div className="inline-flex w-full rounded-md border border-border p-0.5">
+                  <button type="button" onClick={() => setLoadMode("manual")} className={cn("flex-1 rounded px-1.5 py-0.5 text-[10px] font-semibold", loadMode === "manual" ? "bg-primary text-primary-foreground" : "text-foreground/80")} title="Fixed weight">Weight</button>
+                  <button type="button" onClick={() => setLoadMode("pct")} className={cn("flex-1 rounded px-1.5 py-0.5 text-[10px] font-semibold", loadMode === "pct" ? "bg-primary text-primary-foreground" : "text-foreground/80")} title="Percentage of max">%</button>
+                </div>
               </div>
-            )}
-          </div>
-        </Field>
-        {loadMode === "pct" && (
-        <Field className="col-span-3" label="Basis">
-          <Select value={row.percentage_basis ?? "manual"} onValueChange={(v) => setRow({ ...row, percentage_basis: v })}>
-            <SelectTrigger className={cn("text-xs font-medium", h, inputCls)}><SelectValue /></SelectTrigger>
-            <SelectContent>{PERCENTAGE_BASES.filter((p) => p.value !== "none" && p.value !== "manual").map((p) => <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>)}</SelectContent>
-          </Select>
-        </Field>
-        )}
-        {loadMode === "pct" && (
-        <Field className="col-span-1" label="%">
-          <RowCell className={cn("text-xs font-semibold tabular-nums text-center", h, inputCls)} inputMode="decimal" placeholder="75" value={row.percentage} onCommit={(v) => setRow({ ...row, percentage: parseFloatOrNull(v) })} />
-        </Field>
-        )}
-        {loadMode !== "none" && (
-        <Field className={cn(loadMode === "pct" ? "col-span-2" : "col-span-3")} label={`Suggested Load (${rowUnit})`}>
-          <div className="flex gap-1">
-            <RowCell
-              className={cn("text-xs font-semibold tabular-nums flex-1", h, inputCls)}
-              inputMode="decimal"
-              placeholder={loadMode === "pct" ? "auto" : "weight"}
-              value={rowUnit === "kg" ? row.load_kg : row.load_lb}
-              onCommit={(v) => setRow({ ...row, [rowUnit === "kg" ? "load_kg" : "load_lb"]: parseFloatOrNull(v) })}
-            />
-            <Select value={rowUnit} onValueChange={(v) => setRow({ ...row, load_unit: v })}>
-              <SelectTrigger className={cn("w-[56px] text-[11px] font-semibold px-1.5", h, inputCls)}><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="kg">kg</SelectItem>
-                <SelectItem value="lb">lb</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </Field>
-        )}
-        <Field className="col-span-2" label="Tempo">
+              {loadMode === "pct" && (
+                <Field className="col-span-4" label="Basis">
+                  <Select value={row.percentage_basis ?? "manual"} onValueChange={(v) => setRow({ ...row, percentage_basis: v })}>
+                    <SelectTrigger className={cn("text-xs font-medium", h, inputCls)}><SelectValue /></SelectTrigger>
+                    <SelectContent>{PERCENTAGE_BASES.filter((p) => p.value !== "none" && p.value !== "manual").map((p) => <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>)}</SelectContent>
+                  </Select>
+                </Field>
+              )}
+              {loadMode === "pct" && (
+                <Field className="col-span-2" label="%">
+                  <RowCell className={cn("text-xs font-semibold tabular-nums text-center", h, inputCls)} inputMode="decimal" placeholder="75" value={row.percentage} onCommit={(v) => setRow({ ...row, percentage: parseFloatOrNull(v) })} />
+                </Field>
+              )}
+              <Field className={cn(loadMode === "pct" ? "col-span-3" : "col-span-9")} label={`Value (${rowUnit})`}>
+                <div className="flex gap-1">
+                  <RowCell
+                    dataField="load"
+                    className={cn("text-xs font-semibold tabular-nums flex-1", h, inputCls)}
+                    inputMode="decimal"
+                    placeholder={loadMode === "pct" ? "auto" : "weight"}
+                    value={rowUnit === "kg" ? row.load_kg : row.load_lb}
+                    onCommit={(v) => setRow({ ...row, [rowUnit === "kg" ? "load_kg" : "load_lb"]: parseFloatOrNull(v) })}
+                  />
+                  <Select value={rowUnit} onValueChange={(v) => setRow({ ...row, load_unit: v })}>
+                    <SelectTrigger className={cn("w-[56px] text-[11px] font-semibold px-1.5", h, inputCls)} data-pb-field="unit"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="kg">kg</SelectItem>
+                      <SelectItem value="lb">lb</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </Field>
+            </div>
+          ) : (
+            <p className="px-0.5 text-[11px] italic text-foreground/70">Off — client logs their own weight.</p>
+          )}
+        </div>
+        <Field className={cn("col-span-12", loadMode === "none" ? "md:col-span-6" : "md:col-span-3")} label="Tempo">
           <RowCell dataField="tempo" className={cn("text-xs font-semibold tabular-nums text-center", h, inputCls)} placeholder="—" value={row.tempo} onCommit={(v) => setRow({ ...row, tempo: v ?? "" })} />
-          <span className="px-0.5 text-[10px] leading-tight text-foreground/70" title="Tempo notation: seconds for the eccentric (lowering) phase, pause at the bottom, then concentric (lifting) phase. Example: 3-1-1 = 3s down, 1s pause, 1s up.">
-            Format: eccentric–pause–concentric · e.g. <span className="text-foreground/50">3-1-1</span>
+          <span className="px-0.5 text-[10px] leading-tight text-foreground/70 truncate" title="Tempo notation: eccentric–pause–concentric (seconds). Example: 3-1-1 = 3s down, 1s pause, 1s up.">
+            ecc–pause–con · e.g. 3-1-1
           </span>
         </Field>
       </div>
@@ -1704,9 +1710,6 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
           </span>
           <button onClick={clearOverride} className="text-[10px] underline text-muted-foreground hover:text-foreground">Remove override</button>
         </div>
-      )}
-      {expanded && loadMode === "none" && (
-        <p className="text-[11px] text-foreground/70 italic">No suggested load — client will log the weight they use.</p>
       )}
       {expanded && clientId && computed && computed.status !== "manual" && (
         <div className="flex flex-wrap items-center gap-1.5 pt-0.5 text-[11px]">
