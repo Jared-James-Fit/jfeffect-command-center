@@ -748,6 +748,9 @@ function WorkoutDay() {
                 setNotes("");
                 setActualMin("");
                 refresh();
+                // Open the post-workout feedback sheet. Workout completion has
+                // already saved above — feedback is a best-effort follow-up.
+                setFeedbackOpen(true);
               }}
             >
               Mark Workout Complete
