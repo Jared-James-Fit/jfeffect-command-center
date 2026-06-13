@@ -1,7 +1,7 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/app-shell";
 import { listCoachingApplications, updateCoachingApplication } from "@/lib/coaching-applications.functions";
 import { Card } from "@/components/ui/card";
@@ -13,10 +13,18 @@ import { toast } from "sonner";
 import { Mail, Phone, ChevronDown, ChevronUp } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/admin/sales/coaching-applications")({
-  component: ApplicationsInbox,
+  component: CoachingApplicationsRedirect,
 });
 
-function ApplicationsInbox() {
+function CoachingApplicationsRedirect() {
+  const nav = useNavigate();
+  useEffect(() => {
+    nav({ to: "/admin/forms", search: { tab: "coaching-applications" } as any, replace: true });
+  }, [nav]);
+  return null;
+}
+
+export function ApplicationsInbox({ embedded = false }: { embedded?: boolean } = {}) {
   const fetchList = useServerFn(listCoachingApplications);
   const updateApp = useServerFn(updateCoachingApplication);
   const { data, refetch } = useQuery({ queryKey: ["coaching-applications"], queryFn: () => fetchList(), refetchInterval: 60_000 });
@@ -26,7 +34,9 @@ function ApplicationsInbox() {
 
   return (
     <div className="space-y-5">
-      <PageHeader title="Coaching Applications" subtitle="Inbox of submissions from /coaching/apply." />
+      {!embedded && (
+        <PageHeader title="Coaching Applications" subtitle="Inbox of submissions from /coaching/apply." />
+      )}
       <Card className="divide-y divide-border">
         {apps.length === 0 && <div className="p-6 text-sm text-muted-foreground">No applications yet.</div>}
         {apps.map((a: any) => {
