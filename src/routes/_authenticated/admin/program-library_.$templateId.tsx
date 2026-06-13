@@ -580,6 +580,7 @@ function TemplateEditor() {
             redo={redo}
             canUndo={canUndo}
             canRedo={canRedo}
+            templateId={templateId}
           />
         </TabsContent>
       </Tabs>
@@ -624,7 +625,7 @@ function EditorChrome({ meta, summary, typeLabel, autosave, save, dirty, childre
   );
 }
 
-export function StructureCanvas({ type, payload, setP, exercises, appendRowToFirstDay, undo, redo, canUndo, canRedo, clientId, blockId, toolbarExtras }: {
+export function StructureCanvas({ type, payload, setP, exercises, appendRowToFirstDay, undo, redo, canUndo, canRedo, clientId, blockId, toolbarExtras, templateId }: {
   type: string; payload: any; setP: (p: any, opts?: { skipHistory?: boolean }) => void; exercises: any[];
   appendRowToFirstDay: (payload: any, type: string, row: any) => void;
   undo: () => void; redo: () => void; canUndo: boolean; canRedo: boolean;
@@ -634,6 +635,9 @@ export function StructureCanvas({ type, payload, setP, exercises, appendRowToFir
   blockId?: string | null;
   /** Optional — rendered in the canvas toolbar (e.g. "Block Maxes" button). */
   toolbarExtras?: React.ReactNode;
+  /** Optional — template id, used to give legacy blocks deterministic
+   * temporary IDs (legacy:<templateId>:...). Stable across refreshes. */
+  templateId?: string;
 }) {
   const [prefs, setPrefsState] = useState<EditorPrefs>(() => readPrefs());
   const setPrefs = (patch: Partial<EditorPrefs>) => {
@@ -801,7 +805,7 @@ export function StructureCanvas({ type, payload, setP, exercises, appendRowToFir
             }}
             className="pl-1 pr-2 py-2"
           >
-            <StructureEditor type={type} payload={payload} setPayload={setP} exercises={exercises as any[]} compact={compact} />
+            <StructureEditor type={type} payload={payload} setPayload={setP} exercises={exercises as any[]} compact={compact} templateId={templateId} />
           </div>
         </div>
       </div>
@@ -812,9 +816,9 @@ export function StructureCanvas({ type, payload, setP, exercises, appendRowToFir
 
 // ---------- Structure editing for the JSON payload ----------
 
-function StructureEditor({ type, payload, setPayload, exercises, compact }: { type: string; payload: any; setPayload: (p: any) => void; exercises: any[]; compact?: boolean }) {
+function StructureEditor({ type, payload, setPayload, exercises, compact, templateId }: { type: string; payload: any; setPayload: (p: any) => void; exercises: any[]; compact?: boolean; templateId?: string }) {
   if (type === "full_prep" || type === "block") {
-    return <MultiBlockStructureEditor type={type} payload={payload} setPayload={setPayload} exercises={exercises} compact={compact} />;
+    return <MultiBlockStructureEditor type={type} payload={payload} setPayload={setPayload} exercises={exercises} compact={compact} templateId={templateId} />;
   }
   if (type === "week") return <WeekEditor week={payload} setWeek={setPayload} exercises={exercises} compact={compact} />;
   if (type === "day") return <DayEditor day={payload} setDay={setPayload} exercises={exercises} compact={compact} />;
@@ -833,18 +837,19 @@ function FullPrepEditor({ payload, setPayload, exercises, compact }: any) {
 }
 
 // ---------- Multi-block (v2 payload) structure editor -----------------------
-function MultiBlockStructureEditor({ type, payload, setPayload, exercises, compact }: {
+function MultiBlockStructureEditor({ type, payload, setPayload, exercises, compact, templateId }: {
   type: "block" | "full_prep" | string;
   payload: any;
   setPayload: (p: any) => void;
   exercises: any[];
   compact?: boolean;
+  templateId?: string;
 }) {
   const navigate = useNavigate();
   const search = Route.useSearch() as { block?: string };
   const v2 = useMemo<TemplatePayloadV2>(
-    () => normalizeTemplatePayload(payload, { templateType: type }),
-    [payload, type],
+    () => normalizeTemplatePayload(payload, { templateType: type, templateId }),
+    [payload, type, templateId],
   );
   const active = getActiveTemplateBlocks(v2);
   const archived = getArchivedTemplateBlocks(v2);
@@ -861,7 +866,14 @@ function MultiBlockStructureEditor({ type, payload, setPayload, exercises, compa
     navigate({ search: (prev: any) => ({ ...prev, block: id }), replace: true } as any);
   };
   const commit = (nextV2: TemplatePayloadV2) => {
-    setPayload(serializeTemplatePayload(nextV2));
+    try {
+      setPayload(serializeTemplatePayload(nextV2));
+    } catch (e: any) {
+      // Recovery-mode payload — refuse autosave; surface to user instead of
+      // silently overwriting raw data with an empty v2 shell.
+      // eslint-disable-next-line no-console
+      console.warn("[template-builder] save refused:", e?.message);
+    }
   };
 
   const handleAddBlock = () => {
