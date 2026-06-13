@@ -4,13 +4,14 @@ import { useQuery } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 import { createJfSignupCheckout, getJfPublicSettings } from "@/lib/jf-billing.functions";
 import { getPublicSalesPage } from "@/lib/sales-pages.functions";
+import { getMembershipLaunchGate } from "@/lib/membership-launch-gate.functions";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, Lock, Receipt } from "lucide-react";
 import { SalesPageShell, Section } from "@/components/sales/sales-page-shell";
 import { SalesHero, HeroCta, HeroCtaGhost } from "@/components/sales/sales-hero";
 import { AppPreviewGrid } from "@/components/sales/app-preview-grid";
@@ -49,29 +50,36 @@ function SignupJf() {
   const getSettings = useServerFn(getJfPublicSettings);
   const createCheckout = useServerFn(createJfSignupCheckout);
   const fetchPage = useServerFn(getPublicSalesPage);
+  const fetchGate = useServerFn(getMembershipLaunchGate);
 
   const { data: settings } = useQuery({ queryKey: ["jf-public-settings"], queryFn: () => getSettings() });
   const { data: p } = useQuery({ queryKey: ["public-sales-page", "join"], queryFn: () => fetchPage({ data: { page_key: "join" } }) });
+  const { data: gate } = useQuery({ queryKey: ["jf-launch-gate"], queryFn: () => fetchGate() });
 
   const formRef = useRef<HTMLDivElement>(null);
   const scrollToForm = () => formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
 
   const [form, setForm] = useState({
     first_name: "", last_name: "", email: "", phone: "",
-    password: "", confirm: "", terms: false, sms_consent: false,
+    password: "", confirm: "", sms_consent: false,
   });
+  // Per-document acceptance state. Keyed by document_id.
+  const [accepted, setAccepted] = useState<Record<string, boolean>>({});
   const [busy, setBusy] = useState(false);
   const [showPw, setShowPw] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
 
   const cancelled = typeof window !== "undefined" && new URLSearchParams(window.location.search).has("cancelled");
+  const checkoutBlocked = (settings && !settings.has_monthly_price) || (gate && !gate.ok);
+  const requiredDocs = gate?.required_docs ?? [];
+  const allAccepted = requiredDocs.length > 0 && requiredDocs.every((d) => accepted[d.document_id]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (settings && !settings.has_monthly_price) {
+    if (checkoutBlocked) {
       return toast.error("Membership checkout is temporarily unavailable. Please contact support.");
     }
-    if (!form.terms) return toast.error("Please accept the terms.");
+    if (!allAccepted) return toast.error("Please accept each required document to continue.");
     if (form.password.length < 8) return toast.error("Password must be at least 8 characters.");
     if (form.password !== form.confirm) return toast.error("Passwords don't match.");
     setBusy(true);
@@ -81,6 +89,11 @@ function SignupJf() {
         phone: form.phone || undefined, password: form.password,
         sms_consent: !!(form.phone && form.sms_consent),
         origin: window.location.origin,
+        legal_acceptances: requiredDocs.map((d) => ({
+          document_id: d.document_id,
+          version_id: d.version_id,
+        })),
+        acknowledgement_text: "I have read and agree to the documents listed at JF Membership checkout.",
       }});
       window.location.assign(r.url);
     } catch (e: any) {
