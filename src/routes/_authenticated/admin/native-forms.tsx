@@ -535,14 +535,14 @@ function QuestionsEditor({ formId, questions }: { formId: string; questions: NfQ
   return (
     <div className="space-y-2">
       {questions.map((q, idx) => (
-        <QuestionRow key={q.id} q={q} formId={formId} onMoveUp={() => move(idx, -1)} onMoveDown={() => move(idx, 1)} />
+        <QuestionRow key={q.id} q={q} formId={formId} allQuestions={questions} onMoveUp={() => move(idx, -1)} onMoveDown={() => move(idx, 1)} />
       ))}
       <Button variant="outline" onClick={addQuestion}><Plus className="mr-1 h-4 w-4" /> Add Question</Button>
     </div>
   );
 }
 
-function QuestionRow({ q, formId, onMoveUp, onMoveDown }: { q: NfQuestion; formId: string; onMoveUp: () => void; onMoveDown: () => void }) {
+function QuestionRow({ q, formId, allQuestions, onMoveUp, onMoveDown }: { q: NfQuestion; formId: string; allQuestions: NfQuestion[]; onMoveUp: () => void; onMoveDown: () => void }) {
   const qc = useQueryClient();
   const [local, setLocal] = useState<NfQuestion>(q);
 
@@ -592,6 +592,11 @@ function QuestionRow({ q, formId, onMoveUp, onMoveDown }: { q: NfQuestion; formI
               qc.invalidateQueries({ queryKey: ["nf-questions", formId] });
             }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
           </div>
+          <ConditionalLogicEditor
+            question={local}
+            allQuestions={allQuestions}
+            onChange={(cl) => save({ conditional_logic: cl })}
+          />
         </div>
       </div>
     </Card>
