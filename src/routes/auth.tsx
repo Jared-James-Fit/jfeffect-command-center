@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import {
   Mail,
@@ -147,9 +147,9 @@ function AuthPage() {
             </div>
             <div className="mt-4 text-xs text-muted-foreground">
               New here?{" "}
-              <a href="/join" className="text-primary underline-offset-2 hover:underline">
+              <Link to="/join" className="text-primary underline-offset-2 hover:underline">
                 Join JF Membership
-              </a>
+              </Link>
             </div>
           </div>
         </div>
