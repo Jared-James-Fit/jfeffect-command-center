@@ -9,6 +9,16 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { stripeFetch, formEncode, getStripeKeyForMode, getStripeKeyDiagnostics, detectStripeKeyMode, type StripeMode } from "@/lib/stripe.server";
+import {
+  applyJfLifecycle,
+  resolveLifecycle,
+  recordSyncWarning,
+  recordCrossAccountWarning,
+  recordRestartTransition,
+  recordKeepMembershipTransition,
+  recordDuplicateBlocked,
+  enforceGraceIfExpired,
+} from "@/lib/jf-lifecycle.server";
 
 /* ───── helpers ───── */
 
@@ -66,36 +76,67 @@ function resolveStripeKey(s: any, where: string): { apiKey: string; mode: Stripe
 }
 
 async function applyStripeStateToMember(memberId: string, sub: any, holdPriceId: string | null) {
+  // Delegate to the canonical lifecycle applier so every writer (webhook,
+  // member self-service, admin tools) shares the same status/entitlement
+  // logic, grace handling, recovery detection, and audit trail.
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  const status = statusFromSubscription(sub, holdPriceId);
-  const patch: any = {
-    subscription_status: status,
-    stripe_subscription_id: sub?.id ?? null,
-    stripe_customer_id: sub?.customer ?? null,
-    stripe_price_id: sub?.items?.data?.[0]?.price?.id ?? null,
-    trial_end_at: nowIsoFromUnix(sub?.trial_end),
-    current_period_end: nowIsoFromUnix(sub?.current_period_end),
-    cancel_at: nowIsoFromUnix(sub?.cancel_at),
-    cancelled_at: nowIsoFromUnix(sub?.canceled_at),
-    paused_until: nowIsoFromUnix(sub?.pause_collection?.resumes_at),
-    last_billing_event_at: new Date().toISOString(),
-  };
-  if (status === "Hold Plan") patch.hold_plan_started_at = new Date().toISOString();
-  // Update member status to Active/Inactive based on subscription
-  if (["Trialing", "Active"].includes(status)) patch.status = "Active";
-  else if (status === "Hold Plan" || status === "Paused") patch.status = "Active"; // keep account active, access gated separately
-  else if (status === "Cancelled" || status === "Payment Failed") patch.status = "Cancelled";
-  await supabaseAdmin.from("app_members").update(patch).eq("id", memberId);
-
-  // Toggle access flags: revoke when not Trialing/Active
-  const grantsActive = status === "Trialing" || status === "Active";
-  await supabaseAdmin.from("member_access").update({ active: grantsActive }).eq("member_id", memberId);
+  const { data: member } = await supabaseAdmin
+    .from("app_members").select("*").eq("id", memberId).maybeSingle();
+  if (!member) return;
+  await applyJfLifecycle({ supabaseAdmin, member, sub, holdPriceId });
 }
 
 async function findMemberByUser(userId: string) {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { data } = await supabaseAdmin.from("app_members").select("*").eq("user_id", userId).maybeSingle();
   return data;
+}
+
+/**
+ * Stripe error matcher for "No such customer / subscription" — used to
+ * trip the cross-account / stale-reference safety guard without mutating
+ * IDs or revoking access.
+ */
+function isStripeMissingRefError(err: any): boolean {
+  const msg = String(err?.message ?? "").toLowerCase();
+  return /no such (customer|subscription)|resource_missing/.test(msg);
+}
+
+async function safeFetchSubscription(subId: string, apiKey: string): Promise<{ sub: any | null; missing: boolean; error?: string }> {
+  try {
+    const sub = await stripeFetch(`/subscriptions/${subId}`, { apiKey });
+    return { sub, missing: false };
+  } catch (err: any) {
+    if (isStripeMissingRefError(err)) return { sub: null, missing: true, error: err?.message };
+    throw err;
+  }
+}
+
+async function safeFetchCustomer(customerId: string, apiKey: string): Promise<{ customer: any | null; missing: boolean; error?: string }> {
+  try {
+    const customer = await stripeFetch(`/customers/${customerId}`, { apiKey });
+    return { customer, missing: false };
+  } catch (err: any) {
+    if (isStripeMissingRefError(err)) return { customer: null, missing: true, error: err?.message };
+    throw err;
+  }
+}
+
+async function listActiveSubscriptionsForCustomer(customerId: string, apiKey: string): Promise<any[]> {
+  try {
+    const all: any[] = [];
+    for (const status of ["active", "trialing", "past_due", "unpaid"]) {
+      const res = await stripeFetch(
+        `/subscriptions?customer=${encodeURIComponent(customerId)}&status=${status}&limit=20`,
+        { apiKey },
+      );
+      if (Array.isArray(res?.data)) all.push(...res.data);
+    }
+    return all;
+  } catch (err: any) {
+    if (isStripeMissingRefError(err)) return [];
+    throw err;
+  }
 }
 
 /**
@@ -438,6 +479,145 @@ export const cancelJfMembership = createServerFn({ method: "POST" })
       cancel_at: cancel_at ? new Date(cancel_at).toLocaleDateString() : "",
     });
     return { ok: true, cancel_at };
+  });
+
+/**
+ * Keep Membership — clear cancel_at_period_end on the EXISTING Stripe
+ * subscription. Never creates a new subscription; preserves the same
+ * billing period and price; idempotent against repeated clicks.
+ */
+export const keepMembership = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { userId } = context as any;
+    const member = await assertMyMember(userId);
+    if (member.cross_account_locked) throw new Error("This membership is under manual review. Please contact support.");
+    const s = await loadSettings();
+    const { apiKey } = resolveStripeKey(s, "keep");
+
+    // Cross-account / stale ref safety: read the current subscription first.
+    const { sub: current, missing } = await safeFetchSubscription(member.stripe_subscription_id!, apiKey);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    if (missing || !current) {
+      await recordSyncWarning({ supabaseAdmin, memberId: member.id, reason: "keep_membership_missing_subscription", metadata: { stripe_subscription_id: member.stripe_subscription_id } });
+      throw new Error("Your subscription could not be located. Please use Restart Membership instead.");
+    }
+    if (!current.cancel_at_period_end) {
+      // Already kept — idempotent no-op, just resync.
+      await applyStripeStateToMember(member.id, current, s.hold_price_id);
+      return { ok: true, already_kept: true };
+    }
+    const sub = await stripeFetch(`/subscriptions/${member.stripe_subscription_id}`, {
+      method: "POST",
+      body: formEncode({ cancel_at_period_end: "false" }),
+      apiKey,
+    });
+    await applyStripeStateToMember(member.id, sub, s.hold_price_id);
+    await recordKeepMembershipTransition({ supabaseAdmin, memberId: member.id, subscriptionId: sub.id });
+    await fireMemberSms(member.id, "subscription_reactivated", {
+      price: s.monthly_price_display ?? "$29/month USD",
+    });
+    return { ok: true };
+  });
+
+/**
+ * Restart Membership — open a fresh Stripe Checkout for a member whose
+ * previous subscription was fully ended (or cannot be located). Reuses the
+ * existing app_members row, blocks if an active/trialing/past_due
+ * subscription already exists, refuses cross-account references, and uses
+ * an idempotency key so repeated clicks don't create duplicate subs.
+ */
+const RestartInput = z.object({ origin: z.string().url() });
+export const restartMembership = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => RestartInput.parse(d))
+  .handler(async ({ data, context }) => {
+    const { userId } = context as any;
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const member = await findMemberByUser(userId);
+    if (!member) throw new Error("No member account found.");
+    if (member.cross_account_locked) {
+      await recordCrossAccountWarning({ supabaseAdmin, memberId: member.id, reason: "restart_blocked_cross_account_locked" });
+      throw new Error("This membership is under manual review. Please contact support.");
+    }
+    const s = await loadSettings();
+    if (!s.monthly_price_id) throw new Error("Membership pricing isn't configured. Please contact support.");
+    const { apiKey, mode } = resolveStripeKey(s, "restart");
+
+    // Validate any existing Stripe customer in the CURRENT mode. If the
+    // saved id doesn't exist in this mode it could be a cross-account /
+    // wrong-mode reference — never overwrite, fall back to email signup.
+    let reuseCustomerId: string | null = null;
+    if (member.stripe_customer_id) {
+      const { customer, missing } = await safeFetchCustomer(member.stripe_customer_id, apiKey);
+      if (missing) {
+        await recordSyncWarning({ supabaseAdmin, memberId: member.id, reason: "restart_customer_not_found", metadata: { mode, stripe_customer_id: member.stripe_customer_id } });
+      } else if (customer && !customer.deleted) {
+        // Duplicate-subscription prevention: block restart if the customer
+        // already has an active / trialing / past_due / unpaid subscription.
+        const active = await listActiveSubscriptionsForCustomer(member.stripe_customer_id, apiKey);
+        if (active.length > 0) {
+          await recordDuplicateBlocked({ supabaseAdmin, memberId: member.id, reason: "active_stripe_subscription_exists", metadata: { count: active.length, ids: active.map((s: any) => s.id) } });
+          // Resync state so the UI catches up.
+          await applyStripeStateToMember(member.id, active[0], s.hold_price_id);
+          throw new Error("You already have an active subscription. Refresh this page to see your current plan.");
+        }
+        reuseCustomerId = member.stripe_customer_id;
+      }
+    }
+
+    // Local guard against repeated clicks creating two checkouts in flight.
+    const lastAttempt = member.last_restart_attempt_at ? new Date(member.last_restart_attempt_at).getTime() : 0;
+    const recent = Date.now() - lastAttempt < 30_000;
+    await supabaseAdmin.from("app_members").update({ last_restart_attempt_at: new Date().toISOString() }).eq("id", member.id);
+
+    const body: Record<string, string> = {
+      mode: "subscription",
+      "line_items[0][price]": s.monthly_price_id!,
+      "line_items[0][quantity]": "1",
+      success_url: `${data.origin}/m/billing?restarted=1`,
+      cancel_url: `${data.origin}/m/billing?restart_cancelled=1`,
+      allow_promotion_codes: "true",
+      "automatic_tax[enabled]": "true",
+      billing_address_collection: "required",
+      "tax_id_collection[enabled]": "true",
+      "metadata[kind]": "jf_membership",
+      "metadata[restart_member_id]": member.id,
+      "subscription_data[metadata][kind]": "jf_membership",
+      "subscription_data[metadata][email_lc]": (member.email ?? "").toLowerCase(),
+      "subscription_data[metadata][restart_member_id]": member.id,
+    };
+    if (reuseCustomerId) body.customer = reuseCustomerId;
+    else body.customer_email = member.email!;
+
+    // Idempotency key: same member + same minute = same checkout session.
+    // Defeats double-clicks but allows a genuine retry after a minute.
+    const idempotencyKey = `jf-restart-${member.id}-${Math.floor(Date.now() / 60_000)}`;
+    const session = await stripeFetch("/checkout/sessions", {
+      method: "POST",
+      body: formEncode(body),
+      apiKey,
+      idempotencyKey,
+    });
+    await recordRestartTransition({ supabaseAdmin, memberId: member.id, reason: recent ? "rapid_repeat" : undefined, metadata: { session_id: session.id, mode } });
+    return { url: session.url as string, session_id: session.id };
+  });
+
+/* ───── ADMIN: cross-account lock ───── */
+
+const LockInput = z.object({ member_id: z.string().uuid(), locked: z.boolean(), reason: z.string().max(500).optional() });
+export const adminSetCrossAccountLock = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => LockInput.parse(d))
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    await supabaseAdmin.from("app_members").update({
+      cross_account_locked: data.locked,
+      sync_warning_reason: data.locked ? (data.reason ?? "admin_cross_account_lock") : null,
+      sync_warning_at: data.locked ? new Date().toISOString() : null,
+    }).eq("id", data.member_id);
+    return { ok: true };
   });
 
 export const freezeJfMembership = createServerFn({ method: "POST" })
