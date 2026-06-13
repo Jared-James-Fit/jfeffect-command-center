@@ -843,8 +843,8 @@ function MultiBlockStructureEditor({ type, payload, setPayload, exercises, compa
   const navigate = useNavigate();
   const search = Route.useSearch() as { block?: string };
   const v2 = useMemo<TemplatePayloadV2>(
-    () => normalizeTemplatePayload(payload, { templateType: type }),
-    [payload, type],
+    () => normalizeTemplatePayload(payload, { templateType: type, templateId }),
+    [payload, type, templateId],
   );
   const active = getActiveTemplateBlocks(v2);
   const archived = getArchivedTemplateBlocks(v2);
@@ -861,7 +861,14 @@ function MultiBlockStructureEditor({ type, payload, setPayload, exercises, compa
     navigate({ search: (prev: any) => ({ ...prev, block: id }), replace: true } as any);
   };
   const commit = (nextV2: TemplatePayloadV2) => {
-    setPayload(serializeTemplatePayload(nextV2));
+    try {
+      setPayload(serializeTemplatePayload(nextV2));
+    } catch (e: any) {
+      // Recovery-mode payload — refuse autosave; surface to user instead of
+      // silently overwriting raw data with an empty v2 shell.
+      // eslint-disable-next-line no-console
+      console.warn("[template-builder] save refused:", e?.message);
+    }
   };
 
   const handleAddBlock = () => {
