@@ -9,8 +9,32 @@ export function SalesPageShell({ children }: { children: ReactNode }) {
         <div className="container mx-auto flex items-center justify-between px-4 py-3">
           <Link to="/" className="text-lg font-black tracking-tight">JF Effect</Link>
           <div className="flex items-center gap-2">
-            <Link to="/join" className="hidden sm:inline-flex"><Button size="sm" variant="ghost">Membership</Button></Link>
-            <Link to="/coaching" className="hidden sm:inline-flex"><Button size="sm" variant="ghost">Coaching</Button></Link>
+            <Link
+              to="/join"
+              className="hidden sm:inline-flex"
+              activeProps={{ "data-active": "true" } as any}
+            >
+              <Button
+                size="sm"
+                variant="ghost"
+                className="data-[active=true]:bg-primary/10 data-[active=true]:text-primary data-[active=true]:font-bold"
+              >
+                Membership
+              </Button>
+            </Link>
+            <Link
+              to="/coaching"
+              className="hidden sm:inline-flex"
+              activeProps={{ "data-active": "true" } as any}
+            >
+              <Button
+                size="sm"
+                variant="ghost"
+                className="data-[active=true]:bg-primary/10 data-[active=true]:text-primary data-[active=true]:font-bold"
+              >
+                Private Coaching
+              </Button>
+            </Link>
             <Link to="/auth"><Button size="sm" variant="outline">Sign in</Button></Link>
           </div>
         </div>
