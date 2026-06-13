@@ -269,6 +269,59 @@ function SignedAgreementsPage() {
     importMutation.mutate();
   }
 
+  const filteredIds = useMemo(() => filtered.map((r) => r.id), [filtered]);
+  const allFilteredSelected = filteredIds.length > 0 && filteredIds.every((id) => selected.has(id));
+  const someFilteredSelected = filteredIds.some((id) => selected.has(id));
+
+  function toggleOne(id: string, on: boolean) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (on) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }
+  function toggleGroup(ids: string[], on: boolean) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      for (const id of ids) {
+        if (on) next.add(id);
+        else next.delete(id);
+      }
+      return next;
+    });
+  }
+  function toggleAllFiltered(on: boolean) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      for (const id of filteredIds) {
+        if (on) next.add(id);
+        else next.delete(id);
+      }
+      return next;
+    });
+  }
+  function clearSelection() {
+    setSelected(new Set());
+  }
+
+  async function handleBulkDelete() {
+    const ids = Array.from(selected);
+    if (ids.length === 0) return;
+    setDeleting(true);
+    try {
+      const res: any = await bulkDeleteFn({ data: { ids } });
+      toast.success(`Deleted ${res?.count ?? ids.length} document${(res?.count ?? ids.length) === 1 ? "" : "s"}`);
+      clearSelection();
+      setDeleteOpen(false);
+      refetch();
+    } catch (e: any) {
+      toast.error(e?.message ?? "Bulk delete failed");
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   return (
     <>
       <PageHeader
