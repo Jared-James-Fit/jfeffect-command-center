@@ -44,13 +44,6 @@ function LiftVideosRedirect() {
   return null;
 }
 
-const _LegacyRoute = createFileRoute("/_authenticated/admin/lift-videos")({
-  component: AdminLiftVideos,
-  validateSearch: (s: Record<string, unknown>) => ({
-    open: typeof s.open === "string" ? s.open : undefined,
-  }),
-});
-
 type FilterKey = "all" | "new" | "in-review" | "reviewed" | "follow-up" | "urgent" | "archived";
 
 const FILTERS: { key: FilterKey; label: string }[] = [
