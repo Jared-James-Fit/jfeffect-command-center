@@ -124,9 +124,17 @@ const EVENT_TYPES = [
 describe("Stripe webhook idempotency", () => {
   for (const type of EVENT_TYPES) {
     it(`deduplicates repeated ${type} on the same event.id`, async () => {
+      // For invoice.* events we omit `subscription` so the handler falls through
+      // to the purchase_records lookup (which returns nothing in the mock) instead
+      // of calling stripeFetch — which the test's network guard would reject.
+      const isInvoice = type.startsWith("invoice.");
       const ev = syntheticEvent(type, `evt_idem_${type}`, {
-        customer: "cus_test", subscription: "sub_test", status: "active",
-        metadata: {}, payment_status: "paid", mode: "subscription",
+        customer: "cus_test",
+        subscription: isInvoice ? null : "sub_test",
+        status: "active",
+        metadata: {},
+        payment_status: "paid",
+        mode: "subscription",
       });
 
       const r1 = await postEvent(ev);
@@ -164,9 +172,9 @@ describe("Stripe webhook idempotency", () => {
   });
 
   it("does not restart the failed-payment grace window when payment_failed repeats", async () => {
-    // First failure
+    // First failure (no subscription => no stripeFetch lookup)
     const ev1 = syntheticEvent("invoice.payment_failed", "evt_pf_1", {
-      customer: "cus_grace", subscription: "sub_grace", attempt_count: 1,
+      customer: "cus_grace", subscription: null, attempt_count: 1,
     });
     await postEvent(ev1);
     // Same Stripe event delivered again (Stripe retries on timeout) → must be deduped.
