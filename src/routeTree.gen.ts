@@ -111,6 +111,7 @@ import { Route as AuthenticatedAdminFilloutSubmissionsRouteImport } from './rout
 import { Route as AuthenticatedAdminFaqsRouteImport } from './routes/_authenticated/admin/faqs'
 import { Route as AuthenticatedAdminExercisesRouteImport } from './routes/_authenticated/admin/exercises'
 import { Route as AuthenticatedAdminContentIdeasRouteImport } from './routes/_authenticated/admin/content-ideas'
+import { Route as AuthenticatedAdminContentRouteImport } from './routes/_authenticated/admin/content'
 import { Route as AuthenticatedAdminCommunicationRouteImport } from './routes/_authenticated/admin/communication'
 import { Route as AuthenticatedAdminCoachingRouteImport } from './routes/_authenticated/admin/coaching'
 import { Route as AuthenticatedAdminClientPovRouteImport } from './routes/_authenticated/admin/client-pov'
@@ -777,6 +778,12 @@ const AuthenticatedAdminContentIdeasRoute =
     path: '/content-ideas',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
+const AuthenticatedAdminContentRoute =
+  AuthenticatedAdminContentRouteImport.update({
+    id: '/content',
+    path: '/content',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
 const AuthenticatedAdminCommunicationRoute =
   AuthenticatedAdminCommunicationRouteImport.update({
     id: '/communication',
@@ -1373,6 +1380,7 @@ export interface FileRoutesByFullPath {
   '/admin/client-pov': typeof AuthenticatedAdminClientPovRoute
   '/admin/coaching': typeof AuthenticatedAdminCoachingRoute
   '/admin/communication': typeof AuthenticatedAdminCommunicationRoute
+  '/admin/content': typeof AuthenticatedAdminContentRoute
   '/admin/content-ideas': typeof AuthenticatedAdminContentIdeasRoute
   '/admin/exercises': typeof AuthenticatedAdminExercisesRoute
   '/admin/faqs': typeof AuthenticatedAdminFaqsRoute
@@ -1565,6 +1573,7 @@ export interface FileRoutesByTo {
   '/admin/client-pov': typeof AuthenticatedAdminClientPovRoute
   '/admin/coaching': typeof AuthenticatedAdminCoachingRoute
   '/admin/communication': typeof AuthenticatedAdminCommunicationRoute
+  '/admin/content': typeof AuthenticatedAdminContentRoute
   '/admin/content-ideas': typeof AuthenticatedAdminContentIdeasRoute
   '/admin/exercises': typeof AuthenticatedAdminExercisesRoute
   '/admin/faqs': typeof AuthenticatedAdminFaqsRoute
@@ -1762,6 +1771,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/client-pov': typeof AuthenticatedAdminClientPovRoute
   '/_authenticated/admin/coaching': typeof AuthenticatedAdminCoachingRoute
   '/_authenticated/admin/communication': typeof AuthenticatedAdminCommunicationRoute
+  '/_authenticated/admin/content': typeof AuthenticatedAdminContentRoute
   '/_authenticated/admin/content-ideas': typeof AuthenticatedAdminContentIdeasRoute
   '/_authenticated/admin/exercises': typeof AuthenticatedAdminExercisesRoute
   '/_authenticated/admin/faqs': typeof AuthenticatedAdminFaqsRoute
@@ -1960,6 +1970,7 @@ export interface FileRouteTypes {
     | '/admin/client-pov'
     | '/admin/coaching'
     | '/admin/communication'
+    | '/admin/content'
     | '/admin/content-ideas'
     | '/admin/exercises'
     | '/admin/faqs'
@@ -2152,6 +2163,7 @@ export interface FileRouteTypes {
     | '/admin/client-pov'
     | '/admin/coaching'
     | '/admin/communication'
+    | '/admin/content'
     | '/admin/content-ideas'
     | '/admin/exercises'
     | '/admin/faqs'
@@ -2348,6 +2360,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/client-pov'
     | '/_authenticated/admin/coaching'
     | '/_authenticated/admin/communication'
+    | '/_authenticated/admin/content'
     | '/_authenticated/admin/content-ideas'
     | '/_authenticated/admin/exercises'
     | '/_authenticated/admin/faqs'
@@ -3251,6 +3264,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminContentIdeasRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
+    '/_authenticated/admin/content': {
+      id: '/_authenticated/admin/content'
+      path: '/content'
+      fullPath: '/admin/content'
+      preLoaderRoute: typeof AuthenticatedAdminContentRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
     '/_authenticated/admin/communication': {
       id: '/_authenticated/admin/communication'
       path: '/communication'
@@ -4015,6 +4035,7 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminClientPovRoute: typeof AuthenticatedAdminClientPovRoute
   AuthenticatedAdminCoachingRoute: typeof AuthenticatedAdminCoachingRoute
   AuthenticatedAdminCommunicationRoute: typeof AuthenticatedAdminCommunicationRoute
+  AuthenticatedAdminContentRoute: typeof AuthenticatedAdminContentRoute
   AuthenticatedAdminContentIdeasRoute: typeof AuthenticatedAdminContentIdeasRoute
   AuthenticatedAdminExercisesRoute: typeof AuthenticatedAdminExercisesRoute
   AuthenticatedAdminFaqsRoute: typeof AuthenticatedAdminFaqsRoute
@@ -4111,6 +4132,7 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
     AuthenticatedAdminClientPovRoute: AuthenticatedAdminClientPovRoute,
     AuthenticatedAdminCoachingRoute: AuthenticatedAdminCoachingRoute,
     AuthenticatedAdminCommunicationRoute: AuthenticatedAdminCommunicationRoute,
+    AuthenticatedAdminContentRoute: AuthenticatedAdminContentRoute,
     AuthenticatedAdminContentIdeasRoute: AuthenticatedAdminContentIdeasRoute,
     AuthenticatedAdminExercisesRoute: AuthenticatedAdminExercisesRoute,
     AuthenticatedAdminFaqsRoute: AuthenticatedAdminFaqsRoute,
