@@ -87,10 +87,12 @@ export function FilloutSubmissionsPage({ embedded = false }: { embedded?: boolea
 
   return (
     <>
-      <PageHeader
-        title="Fillout Submissions"
-        subtitle="External form responses received from Fillout. Unmatched submissions need a client assigned."
-      />
+      {!embedded && (
+        <PageHeader
+          title="Fillout Submissions"
+          subtitle="External form responses received from Fillout. Unmatched submissions need a client assigned."
+        />
+      )}
       <div className="space-y-4 p-4 md:p-6">
         <Tabs value={tab} onValueChange={(v) => setTab(v as any)}>
           <TabsList>
