@@ -1214,7 +1214,6 @@ export function PageHeader({
       </div>
       <div className="flex flex-wrap items-center gap-2">
         {actions}
-        <KeyboardShortcutsButton />
         <NotificationBell />
       </div>
     </div>
