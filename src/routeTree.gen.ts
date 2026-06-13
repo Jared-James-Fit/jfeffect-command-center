@@ -111,6 +111,7 @@ import { Route as AuthenticatedAdminFaqsRouteImport } from './routes/_authentica
 import { Route as AuthenticatedAdminExercisesRouteImport } from './routes/_authenticated/admin/exercises'
 import { Route as AuthenticatedAdminContentIdeasRouteImport } from './routes/_authenticated/admin/content-ideas'
 import { Route as AuthenticatedAdminCommunicationRouteImport } from './routes/_authenticated/admin/communication'
+import { Route as AuthenticatedAdminCoachingRouteImport } from './routes/_authenticated/admin/coaching'
 import { Route as AuthenticatedAdminClientPovRouteImport } from './routes/_authenticated/admin/client-pov'
 import { Route as AuthenticatedAdminClientActionRequestsRouteImport } from './routes/_authenticated/admin/client-action-requests'
 import { Route as AuthenticatedAdminCheckInsRouteImport } from './routes/_authenticated/admin/check-ins'
@@ -775,6 +776,12 @@ const AuthenticatedAdminCommunicationRoute =
     path: '/communication',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
+const AuthenticatedAdminCoachingRoute =
+  AuthenticatedAdminCoachingRouteImport.update({
+    id: '/coaching',
+    path: '/coaching',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
 const AuthenticatedAdminClientPovRoute =
   AuthenticatedAdminClientPovRouteImport.update({
     id: '/client-pov',
@@ -1357,6 +1364,7 @@ export interface FileRoutesByFullPath {
   '/admin/check-ins': typeof AuthenticatedAdminCheckInsRoute
   '/admin/client-action-requests': typeof AuthenticatedAdminClientActionRequestsRoute
   '/admin/client-pov': typeof AuthenticatedAdminClientPovRoute
+  '/admin/coaching': typeof AuthenticatedAdminCoachingRoute
   '/admin/communication': typeof AuthenticatedAdminCommunicationRoute
   '/admin/content-ideas': typeof AuthenticatedAdminContentIdeasRoute
   '/admin/exercises': typeof AuthenticatedAdminExercisesRoute
@@ -1547,6 +1555,7 @@ export interface FileRoutesByTo {
   '/admin/check-ins': typeof AuthenticatedAdminCheckInsRoute
   '/admin/client-action-requests': typeof AuthenticatedAdminClientActionRequestsRoute
   '/admin/client-pov': typeof AuthenticatedAdminClientPovRoute
+  '/admin/coaching': typeof AuthenticatedAdminCoachingRoute
   '/admin/communication': typeof AuthenticatedAdminCommunicationRoute
   '/admin/content-ideas': typeof AuthenticatedAdminContentIdeasRoute
   '/admin/exercises': typeof AuthenticatedAdminExercisesRoute
@@ -1742,6 +1751,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/check-ins': typeof AuthenticatedAdminCheckInsRoute
   '/_authenticated/admin/client-action-requests': typeof AuthenticatedAdminClientActionRequestsRoute
   '/_authenticated/admin/client-pov': typeof AuthenticatedAdminClientPovRoute
+  '/_authenticated/admin/coaching': typeof AuthenticatedAdminCoachingRoute
   '/_authenticated/admin/communication': typeof AuthenticatedAdminCommunicationRoute
   '/_authenticated/admin/content-ideas': typeof AuthenticatedAdminContentIdeasRoute
   '/_authenticated/admin/exercises': typeof AuthenticatedAdminExercisesRoute
@@ -1938,6 +1948,7 @@ export interface FileRouteTypes {
     | '/admin/check-ins'
     | '/admin/client-action-requests'
     | '/admin/client-pov'
+    | '/admin/coaching'
     | '/admin/communication'
     | '/admin/content-ideas'
     | '/admin/exercises'
@@ -2128,6 +2139,7 @@ export interface FileRouteTypes {
     | '/admin/check-ins'
     | '/admin/client-action-requests'
     | '/admin/client-pov'
+    | '/admin/coaching'
     | '/admin/communication'
     | '/admin/content-ideas'
     | '/admin/exercises'
@@ -2322,6 +2334,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/check-ins'
     | '/_authenticated/admin/client-action-requests'
     | '/_authenticated/admin/client-pov'
+    | '/_authenticated/admin/coaching'
     | '/_authenticated/admin/communication'
     | '/_authenticated/admin/content-ideas'
     | '/_authenticated/admin/exercises'
@@ -3225,6 +3238,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminCommunicationRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
+    '/_authenticated/admin/coaching': {
+      id: '/_authenticated/admin/coaching'
+      path: '/coaching'
+      fullPath: '/admin/coaching'
+      preLoaderRoute: typeof AuthenticatedAdminCoachingRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
     '/_authenticated/admin/client-pov': {
       id: '/_authenticated/admin/client-pov'
       path: '/client-pov'
@@ -3973,6 +3993,7 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminCheckInsRoute: typeof AuthenticatedAdminCheckInsRoute
   AuthenticatedAdminClientActionRequestsRoute: typeof AuthenticatedAdminClientActionRequestsRoute
   AuthenticatedAdminClientPovRoute: typeof AuthenticatedAdminClientPovRoute
+  AuthenticatedAdminCoachingRoute: typeof AuthenticatedAdminCoachingRoute
   AuthenticatedAdminCommunicationRoute: typeof AuthenticatedAdminCommunicationRoute
   AuthenticatedAdminContentIdeasRoute: typeof AuthenticatedAdminContentIdeasRoute
   AuthenticatedAdminExercisesRoute: typeof AuthenticatedAdminExercisesRoute
@@ -4067,6 +4088,7 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
     AuthenticatedAdminClientActionRequestsRoute:
       AuthenticatedAdminClientActionRequestsRoute,
     AuthenticatedAdminClientPovRoute: AuthenticatedAdminClientPovRoute,
+    AuthenticatedAdminCoachingRoute: AuthenticatedAdminCoachingRoute,
     AuthenticatedAdminCommunicationRoute: AuthenticatedAdminCommunicationRoute,
     AuthenticatedAdminContentIdeasRoute: AuthenticatedAdminContentIdeasRoute,
     AuthenticatedAdminExercisesRoute: AuthenticatedAdminExercisesRoute,
