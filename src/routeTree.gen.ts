@@ -156,6 +156,7 @@ import { Route as LovableEmailQueueProcessRouteImport } from './routes/lovable/e
 import { Route as LovableEmailAuthWebhookRouteImport } from './routes/lovable/email/auth/webhook'
 import { Route as LovableEmailAuthPreviewRouteImport } from './routes/lovable/email/auth/preview'
 import { Route as ApiPublicHooksSmsRemindersRouteImport } from './routes/api/public/hooks/sms-reminders'
+import { Route as ApiPublicHooksScheduledSendWorkerRouteImport } from './routes/api/public/hooks/scheduled-send-worker'
 import { Route as ApiPublicHooksMediaArchiveRouteImport } from './routes/api/public/hooks/media-archive'
 import { Route as ApiPublicHooksLiftArchiveTickRouteImport } from './routes/api/public/hooks/lift-archive-tick'
 import { Route as ApiPublicHooksFilloutRouteImport } from './routes/api/public/hooks/fillout'
@@ -1048,6 +1049,12 @@ const ApiPublicHooksSmsRemindersRoute =
     path: '/api/public/hooks/sms-reminders',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicHooksScheduledSendWorkerRoute =
+  ApiPublicHooksScheduledSendWorkerRouteImport.update({
+    id: '/api/public/hooks/scheduled-send-worker',
+    path: '/api/public/hooks/scheduled-send-worker',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicHooksMediaArchiveRoute =
   ApiPublicHooksMediaArchiveRouteImport.update({
     id: '/api/public/hooks/media-archive',
@@ -1572,6 +1579,7 @@ export interface FileRoutesByFullPath {
   '/api/public/hooks/fillout': typeof ApiPublicHooksFilloutRoute
   '/api/public/hooks/lift-archive-tick': typeof ApiPublicHooksLiftArchiveTickRoute
   '/api/public/hooks/media-archive': typeof ApiPublicHooksMediaArchiveRoute
+  '/api/public/hooks/scheduled-send-worker': typeof ApiPublicHooksScheduledSendWorkerRoute
   '/api/public/hooks/sms-reminders': typeof ApiPublicHooksSmsRemindersRoute
   '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
   '/lovable/email/auth/webhook': typeof LovableEmailAuthWebhookRoute
@@ -1772,6 +1780,7 @@ export interface FileRoutesByTo {
   '/api/public/hooks/fillout': typeof ApiPublicHooksFilloutRoute
   '/api/public/hooks/lift-archive-tick': typeof ApiPublicHooksLiftArchiveTickRoute
   '/api/public/hooks/media-archive': typeof ApiPublicHooksMediaArchiveRoute
+  '/api/public/hooks/scheduled-send-worker': typeof ApiPublicHooksScheduledSendWorkerRoute
   '/api/public/hooks/sms-reminders': typeof ApiPublicHooksSmsRemindersRoute
   '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
   '/lovable/email/auth/webhook': typeof LovableEmailAuthWebhookRoute
@@ -1979,6 +1988,7 @@ export interface FileRoutesById {
   '/api/public/hooks/fillout': typeof ApiPublicHooksFilloutRoute
   '/api/public/hooks/lift-archive-tick': typeof ApiPublicHooksLiftArchiveTickRoute
   '/api/public/hooks/media-archive': typeof ApiPublicHooksMediaArchiveRoute
+  '/api/public/hooks/scheduled-send-worker': typeof ApiPublicHooksScheduledSendWorkerRoute
   '/api/public/hooks/sms-reminders': typeof ApiPublicHooksSmsRemindersRoute
   '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
   '/lovable/email/auth/webhook': typeof LovableEmailAuthWebhookRoute
@@ -2186,6 +2196,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/fillout'
     | '/api/public/hooks/lift-archive-tick'
     | '/api/public/hooks/media-archive'
+    | '/api/public/hooks/scheduled-send-worker'
     | '/api/public/hooks/sms-reminders'
     | '/lovable/email/auth/preview'
     | '/lovable/email/auth/webhook'
@@ -2386,6 +2397,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/fillout'
     | '/api/public/hooks/lift-archive-tick'
     | '/api/public/hooks/media-archive'
+    | '/api/public/hooks/scheduled-send-worker'
     | '/api/public/hooks/sms-reminders'
     | '/lovable/email/auth/preview'
     | '/lovable/email/auth/webhook'
@@ -2592,6 +2604,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/fillout'
     | '/api/public/hooks/lift-archive-tick'
     | '/api/public/hooks/media-archive'
+    | '/api/public/hooks/scheduled-send-worker'
     | '/api/public/hooks/sms-reminders'
     | '/lovable/email/auth/preview'
     | '/lovable/email/auth/webhook'
@@ -2643,6 +2656,7 @@ export interface RootRouteChildren {
   ApiPublicHooksFilloutRoute: typeof ApiPublicHooksFilloutRoute
   ApiPublicHooksLiftArchiveTickRoute: typeof ApiPublicHooksLiftArchiveTickRoute
   ApiPublicHooksMediaArchiveRoute: typeof ApiPublicHooksMediaArchiveRoute
+  ApiPublicHooksScheduledSendWorkerRoute: typeof ApiPublicHooksScheduledSendWorkerRoute
   ApiPublicHooksSmsRemindersRoute: typeof ApiPublicHooksSmsRemindersRoute
   LovableEmailAuthPreviewRoute: typeof LovableEmailAuthPreviewRoute
   LovableEmailAuthWebhookRoute: typeof LovableEmailAuthWebhookRoute
@@ -3681,6 +3695,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksSmsRemindersRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/scheduled-send-worker': {
+      id: '/api/public/hooks/scheduled-send-worker'
+      path: '/api/public/hooks/scheduled-send-worker'
+      fullPath: '/api/public/hooks/scheduled-send-worker'
+      preLoaderRoute: typeof ApiPublicHooksScheduledSendWorkerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/hooks/media-archive': {
       id: '/api/public/hooks/media-archive'
       path: '/api/public/hooks/media-archive'
@@ -4700,6 +4721,8 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicHooksFilloutRoute: ApiPublicHooksFilloutRoute,
   ApiPublicHooksLiftArchiveTickRoute: ApiPublicHooksLiftArchiveTickRoute,
   ApiPublicHooksMediaArchiveRoute: ApiPublicHooksMediaArchiveRoute,
+  ApiPublicHooksScheduledSendWorkerRoute:
+    ApiPublicHooksScheduledSendWorkerRoute,
   ApiPublicHooksSmsRemindersRoute: ApiPublicHooksSmsRemindersRoute,
   LovableEmailAuthPreviewRoute: LovableEmailAuthPreviewRoute,
   LovableEmailAuthWebhookRoute: LovableEmailAuthWebhookRoute,

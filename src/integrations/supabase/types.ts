@@ -8985,41 +8985,59 @@ export type Database = {
       scheduled_submission_responses: {
         Row: {
           attempts: number
+          claimed_at: string | null
+          claimed_by_worker: string | null
           created_at: string
           created_by: string | null
+          dry_run_summary: Json | null
+          dry_run_validated_at: string | null
           id: string
           idempotency_key: string
           last_attempt_at: string | null
           last_error: string | null
+          lease_until: string | null
           review_id: string
           scheduled_at: string
           status: string
+          test_mode: boolean
           updated_at: string
         }
         Insert: {
           attempts?: number
+          claimed_at?: string | null
+          claimed_by_worker?: string | null
           created_at?: string
           created_by?: string | null
+          dry_run_summary?: Json | null
+          dry_run_validated_at?: string | null
           id?: string
           idempotency_key: string
           last_attempt_at?: string | null
           last_error?: string | null
+          lease_until?: string | null
           review_id: string
           scheduled_at: string
           status?: string
+          test_mode?: boolean
           updated_at?: string
         }
         Update: {
           attempts?: number
+          claimed_at?: string | null
+          claimed_by_worker?: string | null
           created_at?: string
           created_by?: string | null
+          dry_run_summary?: Json | null
+          dry_run_validated_at?: string | null
           id?: string
           idempotency_key?: string
           last_attempt_at?: string | null
           last_error?: string | null
+          lease_until?: string | null
           review_id?: string
           scheduled_at?: string
           status?: string
+          test_mode?: boolean
           updated_at?: string
         }
         Relationships: [
@@ -9031,6 +9049,48 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      scheduler_mode_audit: {
+        Row: {
+          changed_at: string
+          changed_by: string | null
+          details: Json | null
+          id: string
+          ip_address: string | null
+          new_emergency_disabled: boolean
+          new_mode: string
+          previous_emergency_disabled: boolean | null
+          previous_mode: string | null
+          reason: string | null
+          user_agent: string | null
+        }
+        Insert: {
+          changed_at?: string
+          changed_by?: string | null
+          details?: Json | null
+          id?: string
+          ip_address?: string | null
+          new_emergency_disabled: boolean
+          new_mode: string
+          previous_emergency_disabled?: boolean | null
+          previous_mode?: string | null
+          reason?: string | null
+          user_agent?: string | null
+        }
+        Update: {
+          changed_at?: string
+          changed_by?: string | null
+          details?: Json | null
+          id?: string
+          ip_address?: string | null
+          new_emergency_disabled?: boolean
+          new_mode?: string
+          previous_emergency_disabled?: boolean | null
+          previous_mode?: string | null
+          reason?: string | null
+          user_agent?: string | null
+        }
+        Relationships: []
       }
       setup_prompt_dismissals: {
         Row: {
@@ -9544,33 +9604,42 @@ export type Database = {
           delivery_channel: string
           error: string | null
           id: string
+          idempotency_key: string | null
           initiated_by: string | null
           message_id: string | null
+          notes: Json | null
           outcome: string
           review_id: string
           schedule_id: string | null
+          worker_run_id: string | null
         }
         Insert: {
           attempted_at?: string
           delivery_channel?: string
           error?: string | null
           id?: string
+          idempotency_key?: string | null
           initiated_by?: string | null
           message_id?: string | null
+          notes?: Json | null
           outcome: string
           review_id: string
           schedule_id?: string | null
+          worker_run_id?: string | null
         }
         Update: {
           attempted_at?: string
           delivery_channel?: string
           error?: string | null
           id?: string
+          idempotency_key?: string | null
           initiated_by?: string | null
           message_id?: string | null
+          notes?: Json | null
           outcome?: string
           review_id?: string
           schedule_id?: string | null
+          worker_run_id?: string | null
         }
         Relationships: [
           {
@@ -10104,6 +10173,63 @@ export type Database = {
         }
         Relationships: []
       }
+      worker_runs: {
+        Row: {
+          created_at: string
+          details: Json | null
+          duplicates_prevented: number
+          emergency_disabled: boolean
+          error: string | null
+          finished_at: string | null
+          id: string
+          mode: string
+          rows_claimed: number
+          rows_real_failed: number
+          rows_real_sent: number
+          rows_simulated_failed: number
+          rows_simulated_success: number
+          rows_skipped: number
+          started_at: string
+          worker_name: string
+        }
+        Insert: {
+          created_at?: string
+          details?: Json | null
+          duplicates_prevented?: number
+          emergency_disabled?: boolean
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          mode: string
+          rows_claimed?: number
+          rows_real_failed?: number
+          rows_real_sent?: number
+          rows_simulated_failed?: number
+          rows_simulated_success?: number
+          rows_skipped?: number
+          started_at?: string
+          worker_name: string
+        }
+        Update: {
+          created_at?: string
+          details?: Json | null
+          duplicates_prevented?: number
+          emergency_disabled?: boolean
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          mode?: string
+          rows_claimed?: number
+          rows_real_failed?: number
+          rows_real_sent?: number
+          rows_simulated_failed?: number
+          rows_simulated_success?: number
+          rows_skipped?: number
+          started_at?: string
+          worker_name?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -10118,6 +10244,38 @@ export type Database = {
       can_manage_group: {
         Args: { _group_id: string; _user_id: string }
         Returns: boolean
+      }
+      claim_scheduled_responses: {
+        Args: {
+          _batch_size?: number
+          _lease_seconds?: number
+          _worker_name: string
+        }
+        Returns: {
+          attempts: number
+          claimed_at: string | null
+          claimed_by_worker: string | null
+          created_at: string
+          created_by: string | null
+          dry_run_summary: Json | null
+          dry_run_validated_at: string | null
+          id: string
+          idempotency_key: string
+          last_attempt_at: string | null
+          last_error: string | null
+          lease_until: string | null
+          review_id: string
+          scheduled_at: string
+          status: string
+          test_mode: boolean
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "scheduled_submission_responses"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       count_active_admins: { Args: never; Returns: number }
       current_coach_id: { Args: never; Returns: string }
@@ -10203,6 +10361,10 @@ export type Database = {
           msg_id: number
           read_ct: number
         }[]
+      }
+      release_scheduled_claim: {
+        Args: { _schedule_id: string; _validated?: boolean }
+        Returns: undefined
       }
       user_can_see_broadcast: {
         Args: { _broadcast_id: string; _user_id: string }
