@@ -47,7 +47,7 @@ function parseFloatOrNull(s: string | null): number | null {
   return Number.isFinite(n) ? n : null;
 }
 function RowCell({
-  value, onCommit, className, placeholder, inputMode, commitDelay = 400,
+  value, onCommit, className, placeholder, inputMode, commitDelay = 400, dataField,
 }: {
   value: string | number | null | undefined;
   onCommit: (v: string | null) => void;
@@ -55,6 +55,7 @@ function RowCell({
   placeholder?: string;
   inputMode?: any;
   commitDelay?: number;
+  dataField?: string;
 }) {
   const stringify = (v: string | number | null | undefined) => (v == null ? "" : String(v));
   const [local, setLocal] = useState(() => stringify(value));
@@ -83,6 +84,7 @@ function RowCell({
       placeholder={placeholder}
       inputMode={inputMode}
       value={local}
+      data-pb-field={dataField}
       onChange={(e) => {
         const v = e.target.value;
         setLocal(v);
@@ -96,16 +98,137 @@ function RowCell({
         doCommit(local);
       }}
       onKeyDown={(e) => {
-        if (e.key === "Enter") {
-          (e.target as HTMLInputElement).blur();
-        } else if (e.key === "Escape") {
+        if (e.key === "Escape") {
           setLocal(lastCommittedRef.current);
           (e.target as HTMLInputElement).blur();
+          return;
+        }
+        if (handleRowFieldNav(e, { value: local })) {
+          // committed handler took over
+          return;
         }
       }}
     />
   );
 }
+
+// ---- Spreadsheet-style keyboard navigation for builder rows -------------
+// Inputs that participate must carry a `data-pb-field` attribute and live
+// inside a `[data-pb-row]` container; rows live inside `[data-pb-day]`.
+const NAV_FIELDS = [
+  "sets","reps","rpe","rir","rest","tempo","percentage","load","unit",
+] as const;
+
+function focusField(el: HTMLElement | null) {
+  if (!el) return;
+  el.focus();
+  if (el instanceof HTMLInputElement && (el.type === "text" || el.type === "number" || !el.type)) {
+    try { el.select(); } catch {}
+  }
+  el.scrollIntoView({ block: "nearest", inline: "nearest" });
+}
+
+function fieldsInRow(row: Element): HTMLElement[] {
+  return Array.from(row.querySelectorAll<HTMLElement>("[data-pb-field]"))
+    .filter((el) => !(el as any).disabled && el.offsetParent !== null);
+}
+
+/**
+ * Handle Enter / Shift+Enter / left-right (at caret boundary) / up-down
+ * navigation between editable prescription fields. Returns true if the
+ * event was handled.
+ */
+export function handleRowFieldNav(
+  e: React.KeyboardEvent<HTMLInputElement>,
+  opts?: { value?: string },
+): boolean {
+  const target = e.currentTarget;
+  const row = target.closest("[data-pb-row]");
+  if (!row) return false;
+  const fields = fieldsInRow(row);
+  const idx = fields.indexOf(target);
+  if (idx < 0) return false;
+  const len = (opts?.value ?? target.value ?? "").length;
+  const atStart = target.selectionStart === 0 && target.selectionEnd === 0;
+  const atEnd = target.selectionStart === len && target.selectionEnd === len;
+
+  const moveSibling = (delta: number) => {
+    const next = fields[idx + delta];
+    if (next) {
+      e.preventDefault();
+      focusField(next);
+      return true;
+    }
+    // wrap to adjacent row, same column
+    const day = row.closest("[data-pb-day]");
+    if (day) {
+      const rows = Array.from(day.querySelectorAll<HTMLElement>("[data-pb-row]"));
+      const ri = rows.indexOf(row as HTMLElement);
+      const nextRow = rows[ri + (delta > 0 ? 1 : -1)];
+      if (nextRow) {
+        const cols = fieldsInRow(nextRow);
+        const col = cols[delta > 0 ? 0 : cols.length - 1];
+        if (col) { e.preventDefault(); focusField(col); return true; }
+      }
+    }
+    return false;
+  };
+
+  const moveVertical = (delta: number) => {
+    const day = row.closest("[data-pb-day]");
+    if (!day) return false;
+    const rows = Array.from(day.querySelectorAll<HTMLElement>("[data-pb-row]"));
+    const ri = rows.indexOf(row as HTMLElement);
+    const nextRow = rows[ri + delta];
+    if (!nextRow) return false;
+    const fieldName = target.getAttribute("data-pb-field");
+    const peer = nextRow.querySelector<HTMLElement>(`[data-pb-field="${fieldName}"]`)
+      ?? fieldsInRow(nextRow)[Math.min(idx, fieldsInRow(nextRow).length - 1)];
+    if (peer) { e.preventDefault(); focusField(peer); return true; }
+    return false;
+  };
+
+  if (e.key === "Enter" && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey) {
+    return moveSibling(1) || (target.blur(), true);
+  }
+  if (e.key === "Enter" && e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey) {
+    return moveSibling(-1) || (target.blur(), true);
+  }
+  if (e.key === "ArrowRight" && atEnd && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey) {
+    return moveSibling(1);
+  }
+  if (e.key === "ArrowLeft" && atStart && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey) {
+    return moveSibling(-1);
+  }
+  if (e.key === "ArrowDown" && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey) {
+    return moveVertical(1);
+  }
+  if (e.key === "ArrowUp" && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey) {
+    return moveVertical(-1);
+  }
+  return false;
+}
+
+// ---- Format helpers ----
+function fmtRestSeconds(sec: number | null | undefined): string {
+  if (sec == null) return "—";
+  if (sec < 60) return `${sec} sec`;
+  if (sec % 60 === 0) return `${sec / 60} min`;
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${m}m ${s}s`;
+}
+const TIME_PROFILE_LABEL: Record<string, string> = {
+  competition_lift: "Competition lift",
+  heavy_compound: "Heavy compound",
+  accessory_compound: "Accessory compound",
+  isolation: "Isolation",
+  machine: "Machine",
+  bodyweight: "Bodyweight",
+  core: "Core",
+  cardio: "Cardio",
+  custom: "Custom",
+};
 
 // ---- Client-max context shared by RowEditor regardless of nesting depth ----
 type MaxesCtx = {
