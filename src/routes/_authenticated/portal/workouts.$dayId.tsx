@@ -1132,7 +1132,7 @@ function ExerciseNotesSheet({ open, onOpenChange, clientId, dayId, dayTitle, row
   );
 }
 
-function SetRow({ rowId, workoutId, exerciseId, exerciseName, clientId, setIndex, existing, targetReps, targetRpe, readonly = false, unit = "kg", focusMode = false, onChange, onSetCompleted }: { rowId: string; workoutId?: string | null; exerciseId?: string | null; exerciseName?: string | null; clientId: string | undefined; setIndex: number; existing?: any; targetReps?: string | null; targetRpe?: string | null; readonly?: boolean; unit?: "kg" | "lb"; focusMode?: boolean; onChange: () => void; onSetCompleted?: () => void }) {
+function SetRow({ rowId, workoutId, exerciseId, exerciseName, clientId, setIndex, existing, targetReps, targetRpe, readonly = false, unit = "kg", focusMode = false, onChange, onSetCompleted }: { rowId: string; workoutId?: string | null; exerciseId?: string | null; exerciseName?: string | null; clientId: string | undefined; setIndex: number; existing?: any; targetReps?: string | null; targetRpe?: string | null; readonly?: boolean; unit?: "kg" | "lb"; focusMode?: boolean; onChange: () => void; onSetCompleted?: (setIndex: number) => void }) {
   const { user } = useAuth();
   const { isImpersonating, client: povClient } = useClientImpersonation();
   // Display weight is always shown in the active unit.
@@ -1271,7 +1271,7 @@ function SetRow({ rowId, workoutId, exerciseId, exerciseName, clientId, setIndex
       // into a fully-valid completed state. Avoid re-triggering on idempotent
       // updates that were already completed.
       const wasCompleted = Boolean(existing?.completed_at);
-      if (allValid && !wasCompleted) onSetCompleted?.();
+      if (allValid && !wasCompleted) onSetCompleted?.(setIndex);
       // Coach/admin POV audit trail. Only writes when impersonating, only the
       // fields that actually changed, only after the save succeeds.
       if (isImpersonating && user?.id && povClient?.id === clientId) {
