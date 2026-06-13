@@ -844,6 +844,65 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
     });
   }, [row.percentage, row.percentage_basis, row.load_kg, row.load_lb, name, maxes]);
 
+  // Resolved suggested weight in the *active display unit*. Priority:
+  // 1) coach manual_override exact load   2) computed % weight (rounded)
+  // 3) raw load_kg/load_lb prescription   4) null (no safe suggestion).
+  // This is "Suggested" only — it never auto-confirms a set.
+  const suggestedWeight: number | null = useMemo(() => {
+    if (row.manual_override) {
+      if (unit === "kg" && row.load_kg) return Number(row.load_kg);
+      if (unit === "lb" && row.load_lb) return Number(row.load_lb);
+    }
+    if (computed && computed.status === "ok" && computed.load != null) {
+      const inUnit = unit === "kg" ? computed.load : computed.load * 2.2046226218;
+      const step = weightIncrement(unit);
+      return Math.round(inUnit / step) * step;
+    }
+    if (unit === "kg" && row.load_kg) return Number(row.load_kg);
+    if (unit === "lb" && row.load_lb) return Number(row.load_lb);
+    return null;
+  }, [row.manual_override, row.load_kg, row.load_lb, computed, unit]);
+
+  const repTarget = useMemo(() => parseRepTarget(row.reps_text), [row.reps_text]);
+  const rpeTarget = useMemo(() => parseEffortTarget(row.rpe), [row.rpe]);
+  const rirTarget = useMemo(() => parseEffortTarget(row.rir), [row.rir]);
+
+  // "Apply to remaining" — runs from a completed SetRow, pushes Draft values
+  // into all later un-completed sets of this same exercise. Never overwrites
+  // a confirmed (completed_at != null) set.
+  const qc = useQueryClient();
+  const applyToRemaining = async (fromSetIndex: number, payload: { load: string; reps: string; rpe: string; unit: "kg" | "lb" }) => {
+    if (!clientId) return;
+    const loadNum = payload.load ? Number(payload.load) : null;
+    const repsNum = payload.reps ? parseInt(payload.reps, 10) : null;
+    const rpeNum = payload.rpe ? Number(payload.rpe) : null;
+    const tasks: Array<Promise<any>> = [];
+    for (let i = fromSetIndex + 1; i <= setCount; i++) {
+      const ex = existingResults.find((x) => x.set_index === i);
+      if (ex?.completed_at) continue; // never touch confirmed sets
+      const body: Record<string, any> = {
+        row_id: row.id,
+        client_id: clientId,
+        set_index: i,
+        actual_load: loadNum,
+        actual_load_unit: payload.unit,
+        entered_value: loadNum,
+        entered_unit: payload.unit,
+        actual_reps: repsNum,
+        actual_rpe: payload.rpe || null,
+        actual_rpe_num: rpeNum,
+        completed_at: null, // Draft only — must be confirmed per set
+      };
+      if (ex?.id) tasks.push(sb.from("pl_row_results").update(body).eq("id", ex.id));
+      else tasks.push(sb.from("pl_row_results").insert(body));
+    }
+    if (!tasks.length) return;
+    await Promise.all(tasks);
+    onChange();
+    qc.invalidateQueries({ queryKey: ["pl-day-results"] });
+    toast.success(`Applied to ${tasks.length} remaining set${tasks.length === 1 ? "" : "s"} as draft`);
+  };
+
   return (
     <Card className="relative overflow-hidden p-3 pl-4 sm:p-4 sm:pl-5">
       <div className={`absolute left-0 top-0 h-full w-1.5 ${accent}`} aria-hidden />
@@ -946,6 +1005,11 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
         </div>
         {Array.from({ length: setCount }).map((_, i) => {
           const existing = existingResults.find((x) => x.set_index === i + 1);
+          const prevExisting = i > 0 ? existingResults.find((x) => x.set_index === i) : undefined;
+          const hasUncompletedAfter = Array.from({ length: setCount - (i + 1) }).some((_, k) => {
+            const ex = existingResults.find((x) => x.set_index === i + 2 + k);
+            return !ex?.completed_at;
+          });
           return (
             <SetRow
               key={i}
@@ -956,8 +1020,16 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
               clientId={clientId}
               setIndex={i + 1}
               existing={existing}
+              prevExisting={prevExisting}
               targetReps={row.reps_text}
               targetRpe={row.rpe}
+              targetRir={row.rir}
+              suggestedWeight={suggestedWeight}
+              repTarget={repTarget}
+              rpeTarget={rpeTarget}
+              rirTarget={rirTarget}
+              hasUncompletedAfter={hasUncompletedAfter}
+              onApplyToRemaining={applyToRemaining}
               readonly={readonly}
               unit={unit}
               focusMode={focusMode}
