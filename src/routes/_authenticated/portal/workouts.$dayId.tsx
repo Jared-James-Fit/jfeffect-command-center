@@ -47,6 +47,80 @@ import { ActiveRestTimerProvider, useRestTimer } from "@/components/active-rest-
 import { ExerciseHistoryButton } from "@/components/exercise-history-sheet";
 
 export const Route = createFileRoute("/_authenticated/portal/workouts/$dayId")({
+
+/* -------------------------------------------------------------------------- */
+/* Target-parsing helpers (Suggested → Draft → Confirmed fast-logging)         */
+/* -------------------------------------------------------------------------- */
+
+type RangeTarget = { exact?: number; min?: number; max?: number };
+
+function parseRepTarget(text?: string | null): RangeTarget {
+  if (!text) return {};
+  const s = String(text).trim();
+  const range = s.match(/^(\d+)\s*[-–]\s*(\d+)$/);
+  if (range) return { min: Number(range[1]), max: Number(range[2]) };
+  const n = s.match(/^(\d+)$/);
+  if (n) return { exact: Number(n[1]) };
+  return {};
+}
+
+function parseEffortTarget(text?: string | null): RangeTarget {
+  if (!text) return {};
+  const s = String(text).trim();
+  const range = s.match(/^(\d+(?:\.\d+)?)\s*[-–]\s*(\d+(?:\.\d+)?)$/);
+  if (range) return { min: Number(range[1]), max: Number(range[2]) };
+  const n = s.match(/^(\d+(?:\.\d+)?)$/);
+  if (n) return { exact: Number(n[1]) };
+  return {};
+}
+
+function repChips(t: RangeTarget): number[] {
+  if (t.exact != null) {
+    return Array.from(new Set([t.exact - 1, t.exact, t.exact + 1].filter((x) => x > 0)));
+  }
+  if (t.min != null && t.max != null) {
+    const span = t.max - t.min;
+    if (span <= 2) return Array.from({ length: span + 1 }, (_, i) => t.min! + i);
+    return [t.min, Math.round((t.min + t.max) / 2), t.max];
+  }
+  return [];
+}
+
+function rpeChips(t: RangeTarget): number[] {
+  if (t.exact != null) {
+    return [t.exact - 0.5, t.exact, t.exact + 0.5].filter((x) => x >= 5 && x <= 10);
+  }
+  if (t.min != null && t.max != null) {
+    const out: number[] = [];
+    for (let v = t.min; v <= t.max + 1e-9; v += 0.5) out.push(Math.round(v * 2) / 2);
+    return out.slice(0, 4);
+  }
+  return [];
+}
+
+function rirChips(t: RangeTarget): number[] {
+  if (t.exact != null) {
+    return [t.exact - 1, t.exact, t.exact + 1].filter((x) => x >= 0 && x <= 10);
+  }
+  if (t.min != null && t.max != null) {
+    const out: number[] = [];
+    for (let v = t.min; v <= t.max; v++) out.push(v);
+    return out.slice(0, 4);
+  }
+  return [];
+}
+
+function weightIncrement(unit: "kg" | "lb"): number {
+  return unit === "kg" ? 2.5 : 5;
+}
+
+function fmtNum(n: number): string {
+  return Number.isInteger(n) ? String(n) : String(Math.round(n * 100) / 100);
+}
+
+export const RouteSentinel = null;
+
+const _Route = createFileRoute("/_authenticated/portal/workouts/$dayId")({
   validateSearch: (s: Record<string, unknown>) => ({
     readonly: s.readonly === 1 || s.readonly === "1" || s.readonly === true ? 1 : undefined,
   }),
