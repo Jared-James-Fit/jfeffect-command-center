@@ -341,17 +341,28 @@ function NewTemplateDialog({ open, onOpenChange, onCreated }: { open: boolean; o
   const [form, setForm] = useState({
     name: "", template_type: "block" as TemplateType, training_style: "powerlifting" as TrainingStyle,
     training_focus: "", weeks: 4, days_per_week: 4, est_duration_min: 60, notes: "", tags: "",
+    blocks: 1,
   });
   const seedPayload = () => {
+    const buildWeeksData = () =>
+      Array.from({ length: Math.max(1, form.weeks) }, (_, i) => ({
+        week_index: i + 1,
+        days: Array.from({ length: Math.max(1, form.days_per_week) }, (_, j) => ({ day_index: j + 1, title: `Day ${j + 1}`, rows: [] })),
+      }));
     switch (form.template_type) {
-      case "full_prep":
-        return { prep: { event_name: null, event_date: null }, blocks_data: [] };
-      case "block": {
-        const weeks_data = Array.from({ length: Math.max(1, form.weeks) }, (_, i) => ({
-          week_index: i + 1,
-          days: Array.from({ length: Math.max(1, form.days_per_week) }, (_, j) => ({ day_index: j + 1, title: `Day ${j + 1}`, rows: [] })),
+      case "full_prep": {
+        const count = Math.max(1, form.blocks || 1);
+        const blocks_data = Array.from({ length: count }, (_, i) => ({
+          name: `Block ${i + 1}`,
+          weeks: Math.max(1, form.weeks),
+          days_per_week: Math.max(1, form.days_per_week),
+          est_duration_min: form.est_duration_min || null,
+          weeks_data: buildWeeksData(),
         }));
-        return { weeks_data };
+        return { prep: { event_name: null, event_date: null }, blocks_data };
+      }
+      case "block": {
+        return { weeks_data: buildWeeksData() };
       }
       case "week":
         return { days: Array.from({ length: Math.max(1, form.days_per_week) }, (_, j) => ({ day_index: j + 1, title: `Day ${j + 1}`, rows: [] })) };
