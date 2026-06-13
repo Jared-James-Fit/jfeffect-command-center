@@ -300,6 +300,37 @@ export function CellInput({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [local, conflictRemote]);
 
+  // Fill-down: copy the current value into every input in the same column
+  // BELOW this one within the same [data-pb-grid]. Uses the native value
+  // setter so React's onChange fires on each target CellInput (which then
+  // sets local state and triggers its debounced commit).
+  const runFillDown = (sourceEl: HTMLInputElement) => {
+    const grid = sourceEl.closest("[data-pb-grid]") as HTMLElement | null;
+    if (!grid) return 0;
+    const cols = Number(grid.getAttribute("data-pb-cols") ?? 1) || 1;
+    const all = Array.from(grid.querySelectorAll<HTMLInputElement>(".pb-cell-input"));
+    const idx = all.indexOf(sourceEl);
+    if (idx < 0) return 0;
+    const col = idx % cols;
+    const setter = Object.getOwnPropertyDescriptor(
+      window.HTMLInputElement.prototype,
+      "value",
+    )?.set;
+    let n = 0;
+    for (let i = idx + cols; i < all.length; i += cols) {
+      const target = all[i];
+      if (!target) continue;
+      if (i % cols !== col) continue;
+      if (target.disabled || target.readOnly) continue;
+      const v = sourceEl.value;
+      if (target.value === v) continue;
+      setter?.call(target, v);
+      target.dispatchEvent(new Event("input", { bubbles: true }));
+      n++;
+    }
+    return n;
+  };
+
   const inputEl = (
     <Input
       type={type}
@@ -314,6 +345,14 @@ export function CellInput({
         if (conflictRemote === null) commit(local);
       }}
       onKeyDown={(e) => {
+        if ((e.metaKey || e.ctrlKey) && e.key === "ArrowDown") {
+          e.preventDefault();
+          // Commit current value first so the fill source is the latest typed text.
+          if (debounceRef.current) { clearTimeout(debounceRef.current); debounceRef.current = null; }
+          if (conflictRemote === null) commit(local);
+          runFillDown(e.currentTarget as HTMLInputElement);
+          return;
+        }
         if (e.key === "Enter") {
           (e.target as HTMLInputElement).blur();
           const all = Array.from(
@@ -336,13 +375,41 @@ export function CellInput({
       className={cn(
         "pb-cell-input",
         DENSITY_CLASSES[density].input,
+        "pr-5",
         conflictRemote !== null && "border-amber-500/70 ring-1 ring-amber-500/40",
         className,
       )}
     />
   );
 
-  if (conflictRemote === null) return inputEl;
+  const wrappedInput = (
+    <div className="group/pbcell relative w-full">
+      {inputEl}
+      <button
+        type="button"
+        tabIndex={-1}
+        onMouseDown={(e) => {
+          // Don't steal focus from the input — we want its value to be source-of-truth.
+          e.preventDefault();
+        }}
+        onClick={(e) => {
+          const wrapper = (e.currentTarget as HTMLElement).parentElement;
+          const input = wrapper?.querySelector<HTMLInputElement>(".pb-cell-input");
+          if (!input) return;
+          if (debounceRef.current) { clearTimeout(debounceRef.current); debounceRef.current = null; }
+          if (conflictRemote === null) commit(local);
+          runFillDown(input);
+        }}
+        title="Fill down to all rows below (⌘↓)"
+        aria-label="Fill down to all rows below"
+        className="absolute right-0.5 top-1/2 z-10 flex h-4 w-4 -translate-y-1/2 items-center justify-center rounded text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-foreground group-hover/pbcell:opacity-100 group-focus-within/pbcell:opacity-100"
+      >
+        <ChevronDown className="h-3 w-3" />
+      </button>
+    </div>
+  );
+
+  if (conflictRemote === null) return wrappedInput;
 
   return (
     <div className="relative w-full">
