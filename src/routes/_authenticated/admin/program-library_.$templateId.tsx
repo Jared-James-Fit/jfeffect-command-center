@@ -860,6 +860,7 @@ function MultiBlockStructureEditor({ type, payload, setPayload, exercises, compa
     () => normalizeTemplatePayload(payload, { templateType: type, templateId }),
     [payload, type, templateId],
   );
+  const inRecovery = isPayloadInRecovery(v2);
   const active = getActiveTemplateBlocks(v2);
   const archived = getArchivedTemplateBlocks(v2);
   const trashed = getTrashedTemplateBlocks(v2);
@@ -875,6 +876,11 @@ function MultiBlockStructureEditor({ type, payload, setPayload, exercises, compa
     navigate({ search: (prev: any) => ({ ...prev, block: id }), replace: true } as any);
   };
   const commit = (nextV2: TemplatePayloadV2) => {
+    if (inRecovery) {
+      // eslint-disable-next-line no-console
+      console.warn("[template-builder] mutation blocked: payload in recovery mode");
+      return;
+    }
     try {
       setPayload(serializeTemplatePayload(nextV2));
     } catch (e: any) {
