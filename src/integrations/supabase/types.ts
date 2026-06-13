@@ -6626,57 +6626,96 @@ export type Database = {
       messages: {
         Row: {
           attachments: Json
+          attempt_count: number
           body: string
+          cancelled_at: string | null
+          cancelled_by: string | null
+          claimed_at: string | null
+          claimed_by_worker: string | null
           client_id: string
           created_at: string
           deleted_at: string | null
+          delivery_error: string | null
+          delivery_status: string
           edited_at: string | null
           id: string
           is_internal_note: boolean
+          last_attempt_at: string | null
+          lease_until: string | null
           message_type: string
           priority: string | null
           read_by_admin_at: string | null
           read_by_client_at: string | null
+          scheduled_at: string | null
+          scheduled_by: string | null
+          scheduled_tz: string | null
           sender_id: string | null
           sender_role: string
+          sent_at: string | null
           transcript: string | null
           transcript_status: string | null
           updated_at: string
         }
         Insert: {
           attachments?: Json
+          attempt_count?: number
           body?: string
+          cancelled_at?: string | null
+          cancelled_by?: string | null
+          claimed_at?: string | null
+          claimed_by_worker?: string | null
           client_id: string
           created_at?: string
           deleted_at?: string | null
+          delivery_error?: string | null
+          delivery_status?: string
           edited_at?: string | null
           id?: string
           is_internal_note?: boolean
+          last_attempt_at?: string | null
+          lease_until?: string | null
           message_type?: string
           priority?: string | null
           read_by_admin_at?: string | null
           read_by_client_at?: string | null
+          scheduled_at?: string | null
+          scheduled_by?: string | null
+          scheduled_tz?: string | null
           sender_id?: string | null
           sender_role: string
+          sent_at?: string | null
           transcript?: string | null
           transcript_status?: string | null
           updated_at?: string
         }
         Update: {
           attachments?: Json
+          attempt_count?: number
           body?: string
+          cancelled_at?: string | null
+          cancelled_by?: string | null
+          claimed_at?: string | null
+          claimed_by_worker?: string | null
           client_id?: string
           created_at?: string
           deleted_at?: string | null
+          delivery_error?: string | null
+          delivery_status?: string
           edited_at?: string | null
           id?: string
           is_internal_note?: boolean
+          last_attempt_at?: string | null
+          lease_until?: string | null
           message_type?: string
           priority?: string | null
           read_by_admin_at?: string | null
           read_by_client_at?: string | null
+          scheduled_at?: string | null
+          scheduled_by?: string | null
+          scheduled_tz?: string | null
           sender_id?: string | null
           sender_role?: string
+          sent_at?: string | null
           transcript?: string | null
           transcript_status?: string | null
           updated_at?: string
@@ -10715,9 +10754,136 @@ export type Database = {
         Args: { _group_id: string; _user_id: string }
         Returns: boolean
       }
+      cancel_scheduled_message: {
+        Args: { _message_id: string }
+        Returns: {
+          attachments: Json
+          attempt_count: number
+          body: string
+          cancelled_at: string | null
+          cancelled_by: string | null
+          claimed_at: string | null
+          claimed_by_worker: string | null
+          client_id: string
+          created_at: string
+          deleted_at: string | null
+          delivery_error: string | null
+          delivery_status: string
+          edited_at: string | null
+          id: string
+          is_internal_note: boolean
+          last_attempt_at: string | null
+          lease_until: string | null
+          message_type: string
+          priority: string | null
+          read_by_admin_at: string | null
+          read_by_client_at: string | null
+          scheduled_at: string | null
+          scheduled_by: string | null
+          scheduled_tz: string | null
+          sender_id: string | null
+          sender_role: string
+          sent_at: string | null
+          transcript: string | null
+          transcript_status: string | null
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "messages"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       cancel_scheduled_response_safe: {
         Args: { _review_id: string }
         Returns: string
+      }
+      claim_message_for_retry: {
+        Args: { _message_id: string }
+        Returns: {
+          attachments: Json
+          attempt_count: number
+          body: string
+          cancelled_at: string | null
+          cancelled_by: string | null
+          claimed_at: string | null
+          claimed_by_worker: string | null
+          client_id: string
+          created_at: string
+          deleted_at: string | null
+          delivery_error: string | null
+          delivery_status: string
+          edited_at: string | null
+          id: string
+          is_internal_note: boolean
+          last_attempt_at: string | null
+          lease_until: string | null
+          message_type: string
+          priority: string | null
+          read_by_admin_at: string | null
+          read_by_client_at: string | null
+          scheduled_at: string | null
+          scheduled_by: string | null
+          scheduled_tz: string | null
+          sender_id: string | null
+          sender_role: string
+          sent_at: string | null
+          transcript: string | null
+          transcript_status: string | null
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "messages"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      claim_scheduled_messages: {
+        Args: {
+          _batch_size?: number
+          _lease_seconds?: number
+          _worker_name: string
+        }
+        Returns: {
+          attachments: Json
+          attempt_count: number
+          body: string
+          cancelled_at: string | null
+          cancelled_by: string | null
+          claimed_at: string | null
+          claimed_by_worker: string | null
+          client_id: string
+          created_at: string
+          deleted_at: string | null
+          delivery_error: string | null
+          delivery_status: string
+          edited_at: string | null
+          id: string
+          is_internal_note: boolean
+          last_attempt_at: string | null
+          lease_until: string | null
+          message_type: string
+          priority: string | null
+          read_by_admin_at: string | null
+          read_by_client_at: string | null
+          scheduled_at: string | null
+          scheduled_by: string | null
+          scheduled_tz: string | null
+          sender_id: string | null
+          sender_role: string
+          sent_at: string | null
+          transcript: string | null
+          transcript_status: string | null
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "messages"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       claim_scheduled_responses: {
         Args: {
@@ -10761,6 +10927,10 @@ export type Database = {
       enqueue_email: {
         Args: { payload: Json; queue_name: string }
         Returns: number
+      }
+      finalize_message_send: {
+        Args: { _error?: string; _message_id: string; _status: string }
+        Returns: undefined
       }
       finalize_schedule_send: {
         Args: { _error?: string; _schedule_id: string; _status: string }
@@ -10815,6 +10985,47 @@ export type Database = {
       }
       legal_kill_switch_active: { Args: never; Returns: boolean }
       mark_client_signed_in: { Args: never; Returns: undefined }
+      mark_message_sending: {
+        Args: { _message_id: string }
+        Returns: {
+          attachments: Json
+          attempt_count: number
+          body: string
+          cancelled_at: string | null
+          cancelled_by: string | null
+          claimed_at: string | null
+          claimed_by_worker: string | null
+          client_id: string
+          created_at: string
+          deleted_at: string | null
+          delivery_error: string | null
+          delivery_status: string
+          edited_at: string | null
+          id: string
+          is_internal_note: boolean
+          last_attempt_at: string | null
+          lease_until: string | null
+          message_type: string
+          priority: string | null
+          read_by_admin_at: string | null
+          read_by_client_at: string | null
+          scheduled_at: string | null
+          scheduled_by: string | null
+          scheduled_tz: string | null
+          sender_id: string | null
+          sender_role: string
+          sent_at: string | null
+          transcript: string | null
+          transcript_status: string | null
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "messages"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       mark_schedule_sending: {
         Args: { _schedule_id: string }
         Returns: {
@@ -10945,6 +11156,10 @@ export type Database = {
           msg_id: number
           read_ct: number
         }[]
+      }
+      release_message_claim: {
+        Args: { _message_id: string }
+        Returns: undefined
       }
       release_scheduled_claim: {
         Args: { _schedule_id: string; _validated?: boolean }
