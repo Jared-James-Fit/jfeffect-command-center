@@ -162,7 +162,7 @@ function SignupJf() {
           )}
           {checkoutBlocked && (
             <div className="mt-3 rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-200">
-              Membership checkout is temporarily unavailable.
+              {gate?.message ?? "Membership checkout is temporarily unavailable."}
               {settings?.support_email ? <> Please contact <a className="underline" href={`mailto:${settings.support_email}`}>{settings.support_email}</a>.</> : null}
             </div>
           )}
