@@ -310,10 +310,11 @@ function FormRow({
   );
 }
 
-function FormEditorDialog({ form, open, onClose, initialTab = "settings" }: { form: NfForm; open: boolean; onClose: () => void; initialTab?: "settings" | "questions" | "shared" }) {
+function FormEditorDialog({ form, open, onClose, initialTab = "settings" }: { form: NfForm; open: boolean; onClose: () => void; initialTab?: "settings" | "questions" | "shared" | "versions" }) {
   const qc = useQueryClient();
   const [local, setLocal] = useState<NfForm>(form);
-  const [activeTab, setActiveTab] = useState<"settings" | "questions" | "shared">(initialTab);
+  const [activeTab, setActiveTab] = useState<"settings" | "questions" | "shared" | "versions">(initialTab);
+  const [preview, setPreview] = useState(false);
 
   const { data: questions = [] } = useQuery({
     queryKey: ["nf-questions", form.id],
@@ -365,6 +366,14 @@ function FormEditorDialog({ form, open, onClose, initialTab = "settings" }: { fo
             <Button type="button" size="sm" variant={activeTab === "questions" ? "default" : "ghost"} onClick={() => setActiveTab("questions")}>Questions ({questions.length})</Button>
           )}
           <Button type="button" size="sm" variant={activeTab === "shared" ? "default" : "ghost"} onClick={() => setActiveTab("shared")}>Shared with</Button>
+          {form.kind === "native" && (
+            <Button type="button" size="sm" variant={activeTab === "versions" ? "default" : "ghost"} onClick={() => setActiveTab("versions")}>Versions</Button>
+          )}
+          {form.kind === "native" && (
+            <Button type="button" size="sm" variant="ghost" className="ml-auto" onClick={() => setPreview(true)}>
+              <Eye className="mr-1 h-4 w-4" /> Preview
+            </Button>
+          )}
         </div>
 
           {activeTab === "settings" && <div className="space-y-3">
@@ -480,7 +489,19 @@ function FormEditorDialog({ form, open, onClose, initialTab = "settings" }: { fo
           {activeTab === "shared" && <div>
             <AssignmentsEditor formId={form.id} form={local} onFormChange={setLocal} />
           </div>}
+
+          {activeTab === "versions" && form.kind === "native" && (
+            <FormVersionHistory formId={form.id} />
+          )}
       </DialogContent>
+      {preview && form.kind === "native" && (
+        <NativeFormPreviewDialog
+          open={preview}
+          onClose={() => setPreview(false)}
+          form={local}
+          questions={questions}
+        />
+      )}
     </Dialog>
   );
 }
