@@ -73,6 +73,7 @@ export const ActionButton = React.forwardRef<HTMLButtonElement, ActionButtonProp
       disabled,
       className,
       state: stateProp,
+      asChild = false,
       type = "button",
       jobLabel,
       jobDescription,
@@ -159,6 +160,53 @@ export const ActionButton = React.forwardRef<HTMLButtonElement, ActionButtonProp
         ? AlertTriangle
         : null;
 
+    const content = (labelNode: React.ReactNode) => (
+      <>
+        {StateIcon ? (
+          <StateIcon className={cn("h-4 w-4", state === "pending" && "animate-spin")} />
+        ) : (
+          icon ?? null
+        )}
+        <span>{labelNode}</span>
+      </>
+    );
+
+    if (asChild) {
+      const child = React.Children.only(children);
+      if (!React.isValidElement<{ children?: React.ReactNode }>(child)) {
+        return null;
+      }
+
+      const childLabel =
+        state === "pending"
+          ? (loadingLabel ?? child.props.children)
+          : state === "success" && successLabel
+          ? successLabel
+          : state === "error" && errorLabel
+          ? errorLabel
+          : child.props.children;
+
+      return (
+        <Button
+          ref={ref}
+          asChild
+          type={type}
+          disabled={disabled || isPending}
+          onClick={handleClick}
+          className={cn(
+            "relative transition-transform active:scale-[0.97]",
+            state === "success" && !successLabel && "ring-1 ring-success/60",
+            className,
+          )}
+          aria-busy={isPending || undefined}
+          aria-live="polite"
+          {...rest}
+        >
+          {React.cloneElement(child, undefined, content(childLabel))}
+        </Button>
+      );
+    }
+
     return (
       <Button
         ref={ref}
@@ -174,12 +222,7 @@ export const ActionButton = React.forwardRef<HTMLButtonElement, ActionButtonProp
         aria-live="polite"
         {...rest}
       >
-        {StateIcon ? (
-          <StateIcon className={cn("h-4 w-4", state === "pending" && "animate-spin")} />
-        ) : (
-          icon ?? null
-        )}
-        <span>{label}</span>
+        {content(label)}
       </Button>
     );
   },
