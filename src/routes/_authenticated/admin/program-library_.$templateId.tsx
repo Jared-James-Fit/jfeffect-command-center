@@ -1803,9 +1803,7 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
                   type="button"
                   className={cn(
                     "inline-flex items-center gap-1 rounded-full border px-1.5 py-0 text-[9px] font-bold uppercase tracking-wide transition hover:bg-secondary",
-                    row.purpose_label
-                      ? "border-primary/40 bg-primary/10 text-primary"
-                      : "border-border bg-muted/30 text-muted-foreground",
+                    purposeLabelBadgeClass(purposeLabel),
                   )}
                   title={row.purpose_label ? "Manual purpose label — click to change" : "Auto purpose label — click to override"}
                 >

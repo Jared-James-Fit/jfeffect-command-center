@@ -20,6 +20,7 @@ import {
   derivePurposeLabels,
   effectiveRestSeconds,
   resolveCategory,
+  purposeLabelBadgeClass,
   type ExerciseMeta,
 } from "@/lib/exercise-metadata";
 import { listClientMaxes, buildMaxIndex, computeRowLoad } from "@/lib/pl-maxes";

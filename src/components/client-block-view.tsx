@@ -16,7 +16,7 @@ import { cn } from "@/lib/utils";
 import { getBlockTree, durationRange } from "@/lib/pl-programs";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  effectiveRestSeconds, resolveCategory, derivePurposeLabels,
+  effectiveRestSeconds, resolveCategory, derivePurposeLabels, purposeLabelBadgeClass,
 } from "@/lib/exercise-metadata";
 import { weekDisplayRange, isCurrentWeek, formatWeekRange } from "@/lib/block-dates";
 import { isWeekLocked } from "@/lib/workout-today";
