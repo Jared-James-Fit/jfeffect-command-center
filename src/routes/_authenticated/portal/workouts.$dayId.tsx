@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Clock, CheckCircle2, Play, StickyNote, NotebookPen, Info, Lock, Maximize2, Minimize2, AlertTriangle, RefreshCw, Send, MessageCircle } from "lucide-react";
+import { ArrowLeft, Clock, CheckCircle2, Play, StickyNote, NotebookPen, Info, Lock, Maximize2, Minimize2, AlertTriangle, RefreshCw, Send, MessageCircle, ChevronDown, ChevronUp } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { getExerciseVideoSource } from "@/lib/exercise-video";
@@ -20,7 +20,6 @@ import {
   derivePurposeLabels,
   effectiveRestSeconds,
   resolveCategory,
-  restRangeLabel,
   type ExerciseMeta,
 } from "@/lib/exercise-metadata";
 import { listClientMaxes, buildMaxIndex, computeRowLoad } from "@/lib/pl-maxes";
@@ -761,17 +760,14 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
     { rest_seconds_override: row.rest_seconds_override, rest_seconds: row.rest_seconds },
     exMeta,
   );
-  const restDisplay = (() => {
-    if (row.rest_seconds_override != null) {
-      const s = row.rest_seconds_override as number;
-      return s >= 60 ? `${Math.round(s / 60)} min` : `${s}s`;
-    }
-    if (row.rest_seconds != null) {
-      const s = row.rest_seconds as number;
-      return s >= 60 ? `${Math.round(s / 60)} min` : `${s}s`;
-    }
-    return restRangeLabel(category);
-  })();
+  // Always show the resolved rest value (programmed or category default), never
+  // a vague range. "Auto · 4 min" makes it obvious when the value comes from
+  // the category default rather than an explicit programmed rest.
+  const fmtRest = (s: number) => (s >= 60 ? `${Math.round(s / 60)} min` : `${s} sec`);
+  const restIsExplicit = row.rest_seconds_override != null || row.rest_seconds != null;
+  const restDisplay = effectiveRest != null
+    ? (restIsExplicit ? fmtRest(effectiveRest) : `Auto · ${fmtRest(effectiveRest)}`)
+    : "Auto";
   const categoryBadgeClass =
     category === "competition"
       ? "border-primary/30 bg-primary/10 text-primary"
@@ -780,6 +776,7 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
         : "border-muted-foreground/30 bg-muted text-muted-foreground";
   const [howToOpen, setHowToOpen] = useState(false);
   const [notesOpen, setNotesOpen] = useState(false);
+  const [cuesOpen, setCuesOpen] = useState(false);
   const hasNote = Boolean(existingNote?.id);
 
   // Rest timer trigger: SetRow calls bumpRestTimer() when a set is marked complete,
@@ -816,84 +813,92 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
   }, [row.percentage, row.percentage_basis, row.load_kg, row.load_lb, name, maxes]);
 
   return (
-    <Card className="relative overflow-hidden p-4 pl-5">
+    <Card className="relative overflow-hidden p-3 pl-4 sm:p-4 sm:pl-5">
       <div className={`absolute left-0 top-0 h-full w-1.5 ${accent}`} aria-hidden />
+      {/* Row 1 — name + unit toggle */}
       <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-1.5">
-            <div className="font-bold leading-snug break-words pr-1">{name}</div>
-            {purposeLabel && (
-              <Badge variant="outline" className={cn("text-[10px] font-bold uppercase tracking-wider", categoryBadgeClass)}>
-                {purposeLabel}
-              </Badge>
-            )}
-            <Badge variant="outline" className="text-[10px] font-bold uppercase tracking-wider capitalize">
-              {category}
-            </Badge>
-            {hasNote && (
-              <span title="You saved a note for this exercise" className="inline-flex items-center gap-1 rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] font-bold text-primary">
-                <StickyNote className="h-2.5 w-2.5" /> Note
-              </span>
-            )}
-          </div>
-          <div className="text-xs text-muted-foreground">
-            {row.sets ?? "?"} × {row.reps_text ?? "?"}
-            {row.rpe && ` @ RPE ${row.rpe}`}
-            {row.rir && ` · ${row.rir} RIR`}
-            {row.percentage && !row.manual_override && row.percentage_basis !== "none" && ` · ${row.percentage}%`}
-            {row.load_kg && ` · ${row.load_kg} kg`}
-            {row.tempo && ` · tempo ${row.tempo}`}
-            {` · rest ${restDisplay}`}
-            {effectiveRest != null && row.rest_seconds_override == null && row.rest_seconds == null && (
-              <span className="ml-1 opacity-70">(category default)</span>
-            )}
-          </div>
-          {row.manual_override && (row.load_kg || row.load_lb) && (
-            <SuggestedLoadBadge
-              load={(row.load_kg ?? row.load_lb) as number}
-              unit={row.load_kg ? "kg" : "lb"}
-              exerciseName={name}
-            />
-          )}
-          {!row.manual_override && computed && computed.status === "ok" && computed.load != null && (
-            <SuggestedLoadBadge
-              load={computed.load}
-              unit={computed.unit}
-              exerciseName={name}
-            />
-          )}
-          {row.percentage_basis === "none" && (
-            <div className="mt-1 inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5 text-xs text-muted-foreground">
-              Log the load used
-            </div>
-          )}
-          {row.notes && <p className="mt-1 text-xs text-muted-foreground italic">{row.notes}</p>}
-        </div>
-        <div className="flex shrink-0 flex-col items-end gap-1">
-          {!readonly && onUnitChange && (
+        <div className="min-w-0 flex-1 font-bold leading-snug break-words text-sm sm:text-base">{name}</div>
+        {!readonly && onUnitChange && (
+          <div className="shrink-0">
             <UnitToggle unit={unit} onChange={onUnitChange} compact />
-          )}
-          {clientId && exerciseId && (
-            <ExerciseHistoryButton
-              clientId={clientId}
-              exerciseId={exerciseId}
-              exerciseName={name}
-              displayUnit={unit}
-            />
-          )}
-          {hasGuide && (
-            <Button size="sm" variant="outline" onClick={() => setHowToOpen(true)} className="w-full">
-              <Play className="mr-1 h-3 w-3 fill-current" /> How To
-            </Button>
-          )}
-          <Button size="sm" variant={hasNote ? "default" : "outline"} onClick={() => setNotesOpen(true)} className="w-full">
-            <StickyNote className="mr-1 h-3 w-3" /> Notes
-          </Button>
-          <TrainingHelpButton size="sm" variant="ghost" className="w-full" />
+          </div>
+        )}
+      </div>
+      {/* Row 2 — badges + sets×reps + rest (compact, single line on mobile when possible) */}
+      <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+        {purposeLabel && (
+          <Badge variant="outline" className={cn("h-4 px-1 text-[10px] font-bold uppercase tracking-wider", categoryBadgeClass)}>
+            {purposeLabel}
+          </Badge>
+        )}
+        <Badge variant="outline" className="h-4 px-1 text-[10px] font-bold uppercase tracking-wider capitalize">
+          {category}
+        </Badge>
+        {hasNote && (
+          <span title="You saved a note for this exercise" className="inline-flex h-4 items-center gap-1 rounded-full bg-primary/15 px-1.5 text-[10px] font-bold text-primary">
+            <StickyNote className="h-2.5 w-2.5" /> Note
+          </span>
+        )}
+        <span className="font-semibold text-foreground">
+          {row.sets ?? "?"} × {row.reps_text ?? "?"}
+        </span>
+        {row.rpe && <span>@ RPE {row.rpe}</span>}
+        {row.rir && <span>· {row.rir} RIR</span>}
+        {row.percentage && !row.manual_override && row.percentage_basis !== "none" && <span>· {row.percentage}%</span>}
+        {row.tempo && <span>· tempo {row.tempo}</span>}
+        <span className="ml-auto inline-flex items-center gap-1 rounded-md bg-secondary/40 px-1.5 py-0.5 font-semibold text-foreground">
+          <Clock className="h-3 w-3" /> Rest: {restDisplay}
+        </span>
+      </div>
+      {/* Suggested load badges */}
+      {row.manual_override && (row.load_kg || row.load_lb) && (
+        <SuggestedLoadBadge
+          load={(row.load_kg ?? row.load_lb) as number}
+          unit={row.load_kg ? "kg" : "lb"}
+          exerciseName={name}
+        />
+      )}
+      {!row.manual_override && computed && computed.status === "ok" && computed.load != null && (
+        <SuggestedLoadBadge
+          load={computed.load}
+          unit={computed.unit}
+          exerciseName={name}
+        />
+      )}
+      {row.percentage_basis === "none" && (
+        <div className="mt-1 inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+          Log the load used
         </div>
+      )}
+      {row.notes && <p className="mt-1 text-xs text-muted-foreground italic">{row.notes}</p>}
+      {/* Row 3 — compact horizontal action row */}
+      <div className="mt-2 flex flex-wrap items-center gap-1">
+        {clientId && exerciseId && (
+          <ExerciseHistoryButton
+            clientId={clientId}
+            exerciseId={exerciseId}
+            exerciseName={name}
+            displayUnit={unit}
+          />
+        )}
+        {hasGuide && (
+          <Button size="sm" variant="outline" onClick={() => setHowToOpen(true)} className="h-7 px-2 text-xs">
+            <Play className="mr-1 h-3 w-3 fill-current" /> How&nbsp;To
+          </Button>
+        )}
+        <Button size="sm" variant={hasNote ? "default" : "outline"} onClick={() => setNotesOpen(true)} className="h-7 px-2 text-xs">
+          <StickyNote className="mr-1 h-3 w-3" /> Notes
+        </Button>
+        {cues && (
+          <Button size="sm" variant="ghost" onClick={() => setCuesOpen((v) => !v)} className="h-7 px-2 text-xs">
+            {cuesOpen ? <ChevronUp className="mr-1 h-3 w-3" /> : <ChevronDown className="mr-1 h-3 w-3" />}
+            {cuesOpen ? "Hide cues" : "Show cues"}
+          </Button>
+        )}
+        <TrainingHelpButton size="sm" variant="ghost" className="h-7 px-2 text-xs ml-auto" />
       </div>
 
-      {cues && (
+      {cues && cuesOpen && (
         <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground border-l-2 border-border pl-2">
           {typeof cues === "string" ? cues : Array.isArray(cues) ? cues.join(" · ") : null}
         </p>

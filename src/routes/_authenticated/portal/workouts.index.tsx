@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -24,9 +24,16 @@ import { ClientPreviousBlocks } from "@/components/client-previous-blocks";
 import { WeekScheduleView } from "@/components/week-schedule-view";
 import { ProgressComparison } from "@/components/progress-comparison";
 
-export const Route = createFileRoute("/_authenticated/portal/workouts/")({ component: WorkoutsPage });
+export const Route = createFileRoute("/_authenticated/portal/workouts/")({
+  validateSearch: (s: Record<string, unknown>) => ({
+    view: s.view === "block" || s.view === "day" ? (s.view as "block" | "day") : undefined,
+  }),
+  component: WorkoutsPage,
+});
 
 function WorkoutsPage() {
+  const search = Route.useSearch();
+  const navigate = useNavigate({ from: Route.fullPath });
   const portalUserId = usePortalUserId();
   const { data: client } = useQuery({
     queryKey: ["my-client", portalUserId],
@@ -72,6 +79,43 @@ function WorkoutsPage() {
   const currentGroup = blockList[blockList.length - 1] ?? null;
   const currentBlockId: string | null = currentGroup?.block?.id ?? null;
   const currentBlockItems = workoutItems.filter((it) => it.block?.id === currentBlockId);
+
+  // Persist Day/Block view preference. ?view= search param wins, then localStorage,
+  // then default to "day".
+  const STORAGE_KEY = "portal-workouts-view";
+  const [viewMode, setViewModeState] = useState<"day" | "block">(() => {
+    if (typeof window === "undefined") return "day";
+    if (search?.view === "block" || search?.view === "day") return search.view;
+    const saved = window.localStorage.getItem(STORAGE_KEY);
+    return saved === "block" ? "block" : "day";
+  });
+  useEffect(() => {
+    if (search?.view === "block" || search?.view === "day") {
+      setViewModeState(search.view);
+    }
+  }, [search?.view]);
+  useEffect(() => {
+    try { window.localStorage.setItem(STORAGE_KEY, viewMode); } catch {}
+  }, [viewMode]);
+  const setViewMode = (v: "day" | "block") => {
+    setViewModeState(v);
+    navigate({ search: (prev: any) => ({ ...prev, view: v }), replace: true });
+    if (v === "block") {
+      // Scroll to the block view anchor after the tab switch renders.
+      setTimeout(() => {
+        document.getElementById("client-block-view")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 50);
+    }
+  };
+  // If we landed with ?view=block, scroll on mount.
+  useEffect(() => {
+    if (viewMode === "block") {
+      setTimeout(() => {
+        document.getElementById("client-block-view")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 150);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <>
@@ -130,7 +174,35 @@ function WorkoutsPage() {
             <p className="mt-3 text-sm text-muted-foreground">No workouts assigned yet. Your coach will publish your block soon.</p>
           </Card>
         ) : (
-          <Tabs defaultValue="today" className="space-y-4">
+          <Tabs
+            value={viewMode === "block" ? "calendar" : "today"}
+            onValueChange={(v) => setViewMode(v === "calendar" ? "block" : "day")}
+            className="space-y-4"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="inline-flex rounded-md border border-border bg-card p-0.5 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setViewMode("day")}
+                  className={cn(
+                    "rounded px-3 py-1 font-semibold transition",
+                    viewMode === "day" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  Day View
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode("block")}
+                  className={cn(
+                    "rounded px-3 py-1 font-semibold transition",
+                    viewMode === "block" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  Block View
+                </button>
+              </div>
+            </div>
             <TabsList className="grid w-full grid-cols-4">
               <TabsTrigger value="today" className="text-xs sm:text-sm"><Sun className="mr-1 h-3.5 w-3.5" /><span className="hidden sm:inline">Today</span><span className="sm:hidden">Today</span></TabsTrigger>
               <TabsTrigger value="all" className="text-xs sm:text-sm"><ListChecks className="mr-1 h-3.5 w-3.5" /><span className="hidden sm:inline">All Workouts</span><span className="sm:hidden">All</span></TabsTrigger>
@@ -162,6 +234,7 @@ function WorkoutsPage() {
             </TabsContent>
 
             <TabsContent value="calendar" className="space-y-4">
+              <div id="client-block-view" className="scroll-mt-24" />
               {client?.id && (
                 <WeekScheduleView clientId={client.id} blockId={currentBlockId} mode="client" />
               )}
