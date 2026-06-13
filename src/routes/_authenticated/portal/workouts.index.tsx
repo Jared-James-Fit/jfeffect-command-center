@@ -288,14 +288,16 @@ function WorkoutsPage() {
                   )}
                 </div>
                 <div className="mt-4 flex flex-wrap gap-2">
+                  <Link to="/portal/workouts/analytics" className="w-full sm:w-auto">
+                    <Button size="lg" className="w-full bg-gradient-primary font-bold uppercase shadow-md sm:w-auto">
+                      <Activity className="mr-2 h-5 w-5" /> Training Analytics
+                    </Button>
+                  </Link>
                   <Link to="/portal/lift-videos">
                     <Button variant="outline" size="sm"><Video className="mr-1 h-4 w-4" /> Upload Lift Video</Button>
                   </Link>
                   <Link to="/portal/exercises">
                     <Button variant="outline" size="sm"><Dumbbell className="mr-1 h-4 w-4" /> Exercise Library</Button>
-                  </Link>
-                  <Link to="/portal/workouts/analytics">
-                    <Button variant="outline" size="sm"><Activity className="mr-1 h-4 w-4" /> My Analytics</Button>
                   </Link>
                 </div>
               </Card>
@@ -312,9 +314,13 @@ function WorkoutsPage() {
                   <Button size="sm" variant="outline" onClick={() => setViewMode("block")}>Open Block View</Button>
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2">
+                  <Link to="/portal/workouts/analytics" className="w-full sm:w-auto">
+                    <Button size="lg" className="w-full bg-gradient-primary font-bold uppercase shadow-md sm:w-auto">
+                      <Activity className="mr-2 h-5 w-5" /> Training Analytics
+                    </Button>
+                  </Link>
                   <Link to="/portal/lift-videos"><Button variant="outline" size="sm"><Video className="mr-1 h-4 w-4" /> Upload Lift Video</Button></Link>
                   <Link to="/portal/exercises"><Button variant="outline" size="sm"><Dumbbell className="mr-1 h-4 w-4" /> Exercise Library</Button></Link>
-                  <Link to="/portal/workouts/analytics"><Button variant="outline" size="sm"><Activity className="mr-1 h-4 w-4" /> My Analytics</Button></Link>
                 </div>
               </Card>
             ) : null}
