@@ -104,7 +104,7 @@ function DraftsTab() {
             <div className="flex gap-2">
               {d.review_status === "draft" && (
                 <Button size="sm" variant="outline" onClick={async () => {
-                  try { await submit({ data: { id: d.id } });
+                  try { await submit({ data: { id: d.id, kind: "broadcast" } });
                     qc.invalidateQueries({ queryKey: ["media-my-drafts", "broadcast"] });
                     toast.success("Submitted for review");
                   } catch (e: any) { toast.error(e?.message ?? "Failed"); }
