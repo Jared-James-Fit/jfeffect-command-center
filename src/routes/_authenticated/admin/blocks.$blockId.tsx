@@ -294,8 +294,17 @@ function BlockEditor() {
   });
 
   const save = async () => {
-    await autosave.flush();
-    await persist();
+    // Manual save: if there are pending autosave changes, flush() will run
+    // the autosave's onSave (which already calls persist()) exactly once.
+    // Otherwise nothing is pending and we still want to persist current
+    // local state (e.g. just clicked Save without typing). Never do both —
+    // that would issue two full persist() flows and race the IDs returned
+    // from the first insert against the second.
+    if (autosave.hasPending) {
+      await autosave.flush();
+    } else {
+      await persist();
+    }
   };
 
   if (isLoading || !tree || !payload) {
