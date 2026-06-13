@@ -54,8 +54,13 @@ export function QuickAssignTemplateDialog({ open, onOpenChange, clientId, client
     return getActiveTemplateBlocks(normalizeTemplatePayload(p, { templateType: "block" }));
   })();
   const [selectedBlockIds, setSelectedBlockIds] = useState<string[]>([]);
+  type AssignMode = "entire" | "selected" | "start_from";
+  const [assignMode, setAssignMode] = useState<AssignMode>("entire");
+  const [startFromBlockId, setStartFromBlockId] = useState<string>("");
   useEffect(() => {
     setSelectedBlockIds(v2Blocks.map((b) => b.id));
+    setAssignMode("entire");
+    setStartFromBlockId(v2Blocks[0]?.id ?? "");
   }, [templateId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const { data: existingBlocks = [] } = useQuery({
@@ -92,6 +97,20 @@ export function QuickAssignTemplateDialog({ open, onOpenChange, clientId, client
       const placement = selected?.template_type === "full_prep"
         ? { mode: "new_prep" as const, prep: {} }
         : { mode: "standalone_block" as const };
+      // Resolve the per-mode selected/start-from intent for v2 multi-block templates.
+      let effectiveSelectedIds: string[] | undefined;
+      let effectiveStartFromId: string | null | undefined;
+      if (v2Blocks.length > 0) {
+        if (assignMode === "entire") {
+          effectiveSelectedIds = v2Blocks.map((b) => b.id);
+        } else if (assignMode === "selected") {
+          effectiveSelectedIds = selectedBlockIds;
+        } else {
+          // start_from: assign chosen block + every active block after it
+          effectiveStartFromId = startFromBlockId || v2Blocks[0]?.id || null;
+          effectiveSelectedIds = v2Blocks.map((b) => b.id);
+        }
+      }
       await runJob(
         {
           title: "Assigning program template",
@@ -110,7 +129,8 @@ export function QuickAssignTemplateDialog({ open, onOpenChange, clientId, client
             clientVisible: visible,
             startDate: startDate || null,
             endDate: endDate || null,
-            ...(v2Blocks.length > 0 ? { selectedBlockIds } as any : {}),
+            ...(effectiveSelectedIds ? { selectedBlockIds: effectiveSelectedIds } as any : {}),
+            ...(effectiveStartFromId ? { startFromBlockId: effectiveStartFromId } as any : {}),
           } as any);
           job.completeStep(1);
           qc.invalidateQueries({ queryKey: ["pl-blocks", clientId] });
