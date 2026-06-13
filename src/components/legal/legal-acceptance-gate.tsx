@@ -28,10 +28,9 @@ export function LegalAcceptanceGate() {
   return (
     <Dialog open={open}>
       <DialogContent
-        className="max-w-2xl max-h-[90vh] overflow-y-auto"
+        className="max-w-2xl max-h-[90vh] overflow-y-auto [&>button.absolute]:hidden"
         onPointerDownOutside={(e) => e.preventDefault()}
         onEscapeKeyDown={(e) => e.preventDefault()}
-        hideClose
       >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
