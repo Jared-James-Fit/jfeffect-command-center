@@ -189,10 +189,9 @@ function WorkoutFeedbackSection({ clientId }: { clientId: string }) {
   });
 
   const markReviewed = async (id: string) => {
-    const { error } = await (supabase as any)
-      .from("pl_workout_feedback")
-      .update({ reviewed_at: new Date().toISOString() })
-      .eq("id", id);
+    const { error } = await (supabase as any).rpc("mark_workout_feedback_reviewed", {
+      _feedback_id: id,
+    });
     if (error) {
       toast.error("Couldn't mark reviewed", { description: error.message });
       return;

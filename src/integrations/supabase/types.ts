@@ -11195,6 +11195,32 @@ export type Database = {
         }
       }
       mark_stale_lift_uploads: { Args: never; Returns: number }
+      mark_workout_feedback_reviewed: {
+        Args: { _feedback_id: string }
+        Returns: {
+          client_id: string
+          client_note: string | null
+          completion_id: string
+          created_at: string
+          day_id: string
+          id: string
+          overall_rating: number
+          pain: boolean
+          pain_area: string | null
+          pain_level: number | null
+          pain_note: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          session_rpe: number
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "pl_workout_feedback"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       member_can_consume: { Args: { _user_id: string }; Returns: boolean }
       member_has_access: {
         Args: { _key: string; _member_id: string }
