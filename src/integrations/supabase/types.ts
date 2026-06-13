@@ -10918,6 +10918,13 @@ export type Database = {
         }
       }
       count_active_admins: { Args: never; Returns: number }
+      crm_last_contacted_map: {
+        Args: { _ids: string[] }
+        Returns: {
+          client_id: string
+          last_contacted_at: string
+        }[]
+      }
       current_coach_id: { Args: never; Returns: string }
       current_member_id: { Args: never; Returns: string }
       delete_email: {
