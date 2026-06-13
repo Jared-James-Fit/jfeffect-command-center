@@ -162,32 +162,33 @@ export const runAiPlayground = createServerFn({ method: "POST" })
       .join("\n\n");
 
     const { createLovableAiGateway, DEFAULT_AI_MODEL } = await import("@/lib/ai-gateway.server");
-    const { generateText, Output } = await import("ai");
-    const { z: zod } = await import("zod");
-    const schema = zod.object({
-      summary: zod.string(),
-      wins: zod.array(zod.string()),
-      concerns: zod.array(zod.string()),
-      risks: zod.array(zod.string()),
-      recommendations: zod.array(zod.string()),
-      follow_up_questions: zod.array(zod.string()),
-      suggested_actions: zod.array(zod.string()),
-      urgency: zod.enum(["low", "normal", "high", "urgent"]),
-      client_response: zod.string(),
-    });
-
+    const { generateText } = await import("ai");
     const gateway = createLovableAiGateway();
     const modelId = formCfg?.model || globalCfg?.default_model || DEFAULT_AI_MODEL;
 
+    const jsonInstruction = [
+      "",
+      "Reply with a single JSON object ONLY (no markdown, no commentary) matching:",
+      '{ "summary": string, "wins": string[], "concerns": string[], "risks": string[],',
+      '  "recommendations": string[], "follow_up_questions": string[],',
+      '  "suggested_actions": string[],',
+      '  "urgency": "low"|"normal"|"high"|"urgent",',
+      '  "client_response": string }',
+    ].join("\n");
+
     const result = await generateText({
       model: gateway(modelId),
-      system: systemPrompt,
+      system: systemPrompt + jsonInstruction,
       prompt:
         "Sample submission to analyse:\n\n" + data.sampleAnswers + "\n\nProduce the structured analysis and a client-facing response.",
-      experimental_output: Output.object({ schema }),
     });
-
-    const out = (result as any).experimental_output ?? null;
+    const stripped = (result.text ?? "").replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "").trim();
+    let out: unknown = null;
+    try { out = JSON.parse(stripped); }
+    catch {
+      const m = stripped.match(/\{[\s\S]*\}/);
+      if (m) { try { out = JSON.parse(m[0]); } catch {} }
+    }
     return {
       ok: true,
       model: modelId,
