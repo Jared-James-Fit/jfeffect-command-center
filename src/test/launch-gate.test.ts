@@ -129,7 +129,13 @@ describe("membership launch gate", () => {
     expect(r.ok).toBe(false);
     expect(r.message).toBe("Membership checkout is temporarily unavailable.");
     expect(r.admin_blockers).toBeUndefined();
-    expect(r.required_docs).toEqual([]);
+    // required_docs may still be populated with public-readable metadata so /join can render
+    // the acceptance checkboxes, but no draft body/text is ever returned — and crucially,
+    // no admin_blockers leak (asserted above) and ok=false keeps Checkout closed.
+    for (const d of r.required_docs) {
+      expect(d).not.toHaveProperty("body");
+      expect(d.summary).toBeNull();
+    }
   });
 
   it("does not include legal docs in the response when configuration is incomplete", async () => {
