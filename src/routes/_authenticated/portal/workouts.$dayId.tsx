@@ -1282,7 +1282,7 @@ function SetRow({ rowId, workoutId, exerciseId, exerciseName, clientId, setIndex
     )}>
       <span className={cn("font-mono text-muted-foreground", focusMode ? "text-sm" : "text-xs")}>{setIndex}</span>
       <Input
-        className={cn(focusMode ? "h-11 text-base" : "h-9 text-sm")}
+        className={cn(focusMode ? "h-11 text-base" : "h-9 text-sm", "bg-white text-black placeholder:text-gray-500")}
         inputMode="decimal"
         type="text"
         pattern="[0-9]*\.?[0-9]*"
@@ -1296,7 +1296,7 @@ function SetRow({ rowId, workoutId, exerciseId, exerciseName, clientId, setIndex
         disabled={readonly}
       />
       <Input
-        className={cn(focusMode ? "h-11 text-base" : "h-9 text-sm")}
+        className={cn(focusMode ? "h-11 text-base" : "h-9 text-sm", "bg-white text-black placeholder:text-gray-500")}
         inputMode="numeric"
         type="text"
         pattern="[0-9]*"
@@ -1310,7 +1310,7 @@ function SetRow({ rowId, workoutId, exerciseId, exerciseName, clientId, setIndex
         disabled={readonly}
       />
       <Input
-        className={cn(focusMode ? "h-11 text-base" : "h-9 text-sm")}
+        className={cn(focusMode ? "h-11 text-base" : "h-9 text-sm", "bg-white text-black placeholder:text-gray-500")}
         inputMode="decimal"
         type="text"
         pattern="[0-9]*\.?[0-9]*"
