@@ -833,12 +833,13 @@ function FullPrepEditor({ payload, setPayload, exercises, compact }: any) {
 }
 
 // ---------- Multi-block (v2 payload) structure editor -----------------------
-function MultiBlockStructureEditor({ type, payload, setPayload, exercises, compact }: {
+function MultiBlockStructureEditor({ type, payload, setPayload, exercises, compact, templateId }: {
   type: "block" | "full_prep" | string;
   payload: any;
   setPayload: (p: any) => void;
   exercises: any[];
   compact?: boolean;
+  templateId?: string;
 }) {
   const navigate = useNavigate();
   const search = Route.useSearch() as { block?: string };
