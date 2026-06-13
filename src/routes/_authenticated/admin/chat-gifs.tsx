@@ -1,6 +1,6 @@
-import { createFileRoute, useRouter } from "@tanstack/react-router";
+import { createFileRoute, useRouter, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -19,7 +19,7 @@ import {
 } from "@/lib/chat-gifs";
 
 export const Route = createFileRoute("/_authenticated/admin/chat-gifs")({
-  component: ChatGifsPage,
+  component: ChatGifsRedirect,
   errorComponent: ({ error, reset }) => {
     const router = useRouter();
     return (
@@ -31,6 +31,14 @@ export const Route = createFileRoute("/_authenticated/admin/chat-gifs")({
   },
   notFoundComponent: () => <div className="p-6 text-sm">Not found.</div>,
 });
+
+function ChatGifsRedirect() {
+  const nav = useNavigate();
+  useEffect(() => {
+    nav({ to: "/admin/communication", search: { tab: "media-libraries", sub: "gifs" } as any, replace: true });
+  }, [nav]);
+  return null;
+}
 
 type FormState = {
   id?: string;
@@ -51,7 +59,7 @@ function emptyForm(): FormState {
   };
 }
 
-function ChatGifsPage() {
+export function ChatGifsPage({ embedded = false }: { embedded?: boolean } = {}) {
   const qc = useQueryClient();
   const [filter, setFilter] = useState<string>("all");
   const [editing, setEditing] = useState<FormState | null>(null);
@@ -113,15 +121,23 @@ function ChatGifsPage() {
 
   return (
     <div className="p-4 sm:p-6">
-      <PageHeader
-        title="Chat GIF Library"
-        subtitle="Curated GIFs and effects for chat reactions"
-        actions={
+      {embedded ? (
+        <div className="flex justify-end">
           <Button onClick={() => setEditing(emptyForm())}>
             <Plus className="mr-2 h-4 w-4" /> Add GIF
           </Button>
-        }
-      />
+        </div>
+      ) : (
+        <PageHeader
+          title="Chat GIF Library"
+          subtitle="Curated GIFs and effects for chat reactions"
+          actions={
+            <Button onClick={() => setEditing(emptyForm())}>
+              <Plus className="mr-2 h-4 w-4" /> Add GIF
+            </Button>
+          }
+        />
+      )}
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
         <Label className="text-xs">Filter:</Label>
