@@ -451,11 +451,27 @@ export const getCrmContact = createServerFn({ method: "POST" })
         .limit(100),
     ]);
 
+    // Open follow-ups (newest open first), plus a small lookback of recently completed.
+    const { data: followups } = await supabaseAdmin
+      .from("coach_followups")
+      .select("id, reason, source, due_date, status, notes, created_at, completed_at")
+      .eq("client_id", data.id)
+      .order("status", { ascending: true })
+      .order("due_date", { ascending: true, nullsFirst: false })
+      .limit(25);
+
+    // Last staff-side contact summary for the header.
+    const { data: lc } = await supabaseAdmin.rpc("crm_last_contacted_map", { _ids: [data.id] });
+    const last_contacted_at =
+      (lc && lc[0] && (lc[0] as any).last_contacted_at) || null;
+
     return {
       contact,
       applications: apps.data ?? [],
       appointments: appts.data ?? [],
       activities: acts.data ?? [],
+      followups: followups ?? [],
+      last_contacted_at,
     };
   });
 
