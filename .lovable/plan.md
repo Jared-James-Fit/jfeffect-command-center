@@ -1,99 +1,117 @@
+# Multi-Select & Bulk Actions for Program Builders
 
-# Media Manager Role — v1 (Foundation + Approval Workflow)
+One shared selection + bulk-action system used by:
+- Program Library template builder (`admin/program-library_.$templateId.tsx`)
+- Client program builder (`admin/client-programs.$clientId_.tsx`)
+- Client-assigned training block / Full Block view (`admin/blocks.$blockId.tsx`)
+- Weekly builder view inside the above
 
-Scope locked from your answers:
-- Foundation + Approval workflow (broadcasts, announcements, sales pages, events)
-- Media file gate uses **both** a new visibility tag AND existing media_type exclusions
-
-Out of scope for v1 (tracked as follow-ups): standalone content-planning table, campaign manager, testimonials library, custom shoot/script tools.
-
----
-
-## 1. Database (one migration)
-
-**Roles**
-- Add `'media_manager'` to `app_role` enum.
-- Helper: `is_media_manager(_uid)` security-definer fn.
-
-**Approval workflow columns** (add to existing tables; default existing rows to `'approved'` so nothing breaks):
-- `broadcasts.review_status` — `draft | needs_review | approved | published | archived`
-- `broadcasts.submitted_by`, `submitted_at`, `reviewed_by`, `reviewed_at`, `review_notes`
-- Same five columns on: announcements source (re-using `broadcasts` if announcements are already broadcasts; otherwise the announcements table), `events`, and `sales_pages`.
-
-**Media visibility**
-- New enum `media_visibility` = `private | marketing | public`.
-- Add `marketing_visibility media_visibility DEFAULT 'private'` to `media_items` and `media_archives`.
-- Backfill: existing rows stay `private`. Lift videos, check-in videos, progress photos stay private regardless of tag.
-
-**RLS additions** (Media Manager can):
-- `SELECT/INSERT/UPDATE` on `broadcasts`, `events`, `sales_pages` when `review_status IN ('draft','needs_review')` and they are the submitter — cannot flip to `approved/published`.
-- `SELECT` on `media_items`/`media_archives` where `marketing_visibility IN ('marketing','public')` AND media_type NOT IN private types.
-- No access to: `clients`, `messages`, `pl_*` (workouts), `nutrition_*`, `lift_videos`, `agreements`, `purchase_records`, `app_members` billing fields, `sms_*`, `user_roles` writes, `app_settings`, `coaches`.
-
-**Account creation**
-- Reuse existing `coach_invites` pattern OR extend `app_members` with `role_override`. Cleanest: a new `staff_invites` table (email, role, setup_token, expires_at, status) keyed to `user_roles` on redemption.
-
-## 2. Server functions (`src/lib/media-manager.functions.ts`)
-
-- `createMediaManager({ first_name, last_name, email, phone? })` — admin only; creates auth user (admin API), inserts `user_roles`, generates setup link, sends invite via existing email infra.
-- `listMediaManagers()`, `deactivateMediaManager(id)`, `resendSetup(id)`, `resetPassword(id)`.
-- `submitForReview({ kind, id })` / `approve({ kind, id })` / `reject({ kind, id, notes })` / `publish({ kind, id })` — kind = broadcast | announcement | event | sales_page.
-- `mediaDashboardSummary()` — counts: drafts mine, needs_review (admin), recent uploads, upcoming events.
-
-## 3. Routes & UI
-
-**New top-level route tree** `src/routes/_authenticated/media/`:
-- `route.tsx` — gate: `role === 'media_manager' || admin`. Renders `MediaShell` (simplified sidebar).
-- `dashboard.tsx` — Today's priorities, quick links, recent uploads, drafts mine, items awaiting admin (read-only for MM).
-- `action-items.tsx` — reuses tasks table filtered to `assignee_role='media_manager'`.
-- `calendar.tsx` — existing content/events calendar, filtered to public/promo.
-- `campaigns.tsx` — promo planning list (uses sales_pages + events drafts).
-- `events.tsx` — list/edit events with review_status flow.
-- `inbox.tsx` — wraps existing Media Inbox, filtered to allowed visibility.
-- `archives.tsx` — wraps Media Archives, filtered.
-- `uploads.tsx` — upload screen restricted to marketing/public bucket tagging.
-- `testimonials.tsx` — filtered media_items where `tags @> ['testimonial']`.
-- `sales/membership.tsx` — preview + draft editor (writes to `sales_pages` as draft).
-- `sales/coaching.tsx` — same.
-- `promo-links.tsx` — reuses `ShareToolbar` for /join and /coaching.
-- `broadcasts.tsx` — list mine; create/edit drafts; submit for review.
-- `announcements.tsx` — same.
-- `account.tsx`.
-
-**Admin side** (`src/routes/_authenticated/admin/`):
-- `staff.tsx` — new page: list staff (admins/coaches/media managers), invite Media Manager form, manage status.
-- `approvals.tsx` — queue of items `review_status='needs_review'` across broadcasts/announcements/events/sales pages with approve/reject buttons.
-- Existing broadcast/announcement/event/sales-page editors get a "Review" tab when item is `needs_review`.
-
-**Sidebar** (`src/components/media-sidebar.tsx`): the simplified menu you specified.
-
-**Auth routing** (`src/lib/auth.tsx`): extend `AppRole` with `'media_manager'`; landing redirect after sign-in goes to `/media/dashboard` for media managers (admins/coaches/clients unchanged).
-
-## 4. Security guardrails
-
-- All `_authenticated/media/*` routes check role in `beforeLoad`; non-media/non-admin users get redirected.
-- `_authenticated/admin/*` route gate rejects `media_manager` (except the specific allowed pages above, which we move under `/media/`).
-- Every Media Manager server fn re-checks role server-side (`requireSupabaseAuth` + role lookup) — never trust client.
-- Publish endpoints reject `media_manager` callers regardless of UI state.
-- `supabaseAdmin` never reachable from MM-callable code paths (admin operations stay in admin-only server fns).
-
-## 5. Testing checklist
-
-After build I'll verify:
-- Migration applies clean; existing broadcasts/events show as `approved` (no regression for current admin flow).
-- Sign in as MM → lands on /media/dashboard; sidebar shows only allowed items.
-- MM can create broadcast draft → submit for review → cannot approve/publish.
-- Admin sees item in /admin/approvals → approves → status flips → MM sees published state.
-- MM cannot reach /admin/clients, /admin/messages, /admin/payments (redirect).
-- MM can preview /join, /coaching, copy promo links.
-- MM viewing Media Inbox sees only marketing/public items; lift videos / progress photos hidden.
+Nothing in the existing builder behavior (sticky week header, autosave delay, Full Block / Full Screen / Weekly modes, per-exercise reset, drag-and-drop, copy-to-future, kg/lb, suggested loads, analytics) changes.
 
 ---
 
-## Technical notes
+## Scope of this plan
 
-- Sales pages currently store one row per slug; "draft suggestion" = new row with `status='draft'` + `parent_id`, admin merges on approve. Simpler alternative: `draft_payload jsonb` column on `sales_pages` that admin promotes to live fields — recommend this.
-- Approval columns added with `DEFAULT 'approved'` so the trigger that fires broadcasts on `status='Active'` keeps working unchanged for admin-created items.
-- Account creation reuses your existing `redeemSetupToken` flow pattern from `members.functions.ts`.
+This is a large, multi-area change. I want your sign-off before writing code. I'll ship it in **3 PRs** in the order below — each PR leaves the app fully working.
 
-This is one migration + ~15 new route files + sidebar/auth tweaks. Roughly 2-3 hours of focused build. Approve and I'll start with the migration.
+### PR 1 — Foundation (schema + server functions + Undo)
+- DB migration:
+  - `pl_weeks`: add `archived boolean default false`, `archived_at`, `archived_by`, `deleted_at`, `deleted_by`.
+  - `pl_days`: same set of columns.
+  - `pl_bulk_operations` audit table (operation_id, action, scope, source_ids, destination_ids, created_ids, actor, status, created_at) for idempotency + Undo metadata.
+  - Indexes on `(block_id, archived, deleted_at)` and `(week_id, archived, deleted_at)`.
+  - RLS: same policies as parent rows; soft-deleted rows hidden from default selects via updated coach/admin policies.
+- New file `src/lib/pl-bulk.functions.ts` (TanStack server functions, `requireSupabaseAuth`, role check via `has_role` / `is_assigned_coach`):
+  - `bulkDuplicateWeeks({ blockId, weekIds, insertMode, anchorWeekId? })`
+  - `bulkDuplicateDays({ sourceDayIds, targetWeekIds, insertMode, anchorDayId? })`
+  - `bulkCopyWeeksToDestinations({ weekIds, destinations:[{kind, id, insertMode, anchor?}] })`
+  - `bulkCopyDaysToDestinations({ dayIds, destinations:[{weekId, insertMode, anchor?}] })`
+  - `bulkArchive({ scope:"week"|"day", ids })` / `bulkRestore` / `bulkSoftDelete` / `bulkRestoreFromTrash` / `bulkPermanentDelete`
+  - All run inside one Postgres function (`pl_bulk_clone_weeks`, `pl_bulk_clone_days`, etc.) so a single failure rolls back the whole operation.
+  - Idempotency: client passes `operationId` (uuid); server rejects duplicates via `pl_bulk_operations.operation_id` unique index.
+  - Cloning strictly excludes client history: never touches `pl_row_results`, `pl_day_completions`, `lift_videos`, `manual_check_in_reviews`, `pl_client_maxes`, analytics. Copy fields are limited to programming columns on `pl_weeks` / `pl_days` / `pl_exercise_rows` / `pl_exercise_notes`.
+  - Permanent-delete guard: server function checks for any `pl_row_results` / `pl_day_completions` rows under the targets; if found, returns `{ blocked: true, reason: "has_client_history" }` and the UI offers Archive instead.
+- New `src/lib/bulk-undo.ts` (thin wrapper around existing global Undo system used by the builder — if none exists, a shared `useBulkUndoStore` Zustand store with one compound entry per operation; survives refresh by reading `pl_bulk_operations` rows from the last 24h).
+
+### PR 2 — Shared selection UI (used by all three builder routes)
+- New `src/components/builder/selection-provider.tsx`:
+  - Context: `scope: "off" | "weeks" | "days"`, `selectedIds: Set<string>`, last-clicked anchor for shift-range.
+  - Switching scope clears selection. Autosave does NOT clear selection.
+  - Persists across scroll, settings panels, Full Screen toggle. Clears on route leave or explicit Clear/Done.
+- New `src/components/builder/selection-toolbar.tsx`:
+  - "Select" button + scope toggle (Weeks / Days), "Select all", "Clear", "Exit".
+  - Live count: "3 weeks selected" / "5 training days selected".
+- New `src/components/builder/bulk-action-bar.tsx` (sticky bottom on mobile, sticky top-of-canvas on desktop):
+  - Weeks scope: Duplicate · Copy to… · Archive · Trash (delete) · Clear.
+  - Days scope: Duplicate · Copy to… · Archive · Trash · Clear.
+  - Destructive actions visually separated (right-aligned, destructive variant).
+- New `src/components/builder/SelectableWeekHeader.tsx` and `SelectableDayHeader.tsx`:
+  - Render checkbox + selected ring/background when scope is on; identical visuals across all three routes.
+  - Click / Shift-click range / Cmd-Ctrl toggle on desktop; large tap target on mobile (no modifiers required).
+  - Does not interfere with rename, drag, week notes, copy-to-future, day settings — those controls are wrapped in `data-no-select` and ignored by the selection handler.
+- New `src/components/builder/destination-modal.tsx` (one modal used by Copy to…):
+  - Destination tabs: Template library · Client program · Client block · New template.
+  - Search by program/template/block/client name (debounced server-side function).
+  - Multi-destination chips with per-destination insert-position picker.
+  - Summary screen: "Copy 2 weeks to 3 programs?" with what-will-not-be-copied notice.
+- New `src/components/builder/duplicate-position-popover.tsx`: After / Before / End / Choose week.
+- New `src/components/builder/trash-archive-filters.tsx`: Active / Archived / Trash tabs in the builder header.
+- New `src/components/builder/keyboard-shortcuts.ts` integration: S, A, Esc, Shift-click, Delete, Cmd/Ctrl-D. Hooks into the existing builder shortcuts dialog rather than creating a second one. Ignored while typing.
+
+### PR 3 — Wire into each builder + QA
+- `program-library_.$templateId.tsx`, `blocks.$blockId.tsx`, `client-programs.$clientId_.tsx`:
+  - Wrap canvas in `<SelectionProvider>`.
+  - Replace existing week / day header containers with `SelectableWeekHeader` / `SelectableDayHeader`.
+  - Mount `<SelectionToolbar>` next to existing builder controls, `<BulkActionBar>` once at the bottom.
+  - Add Active / Archived / Trash filter chips.
+- Conflict handling in copies: server returns `{ conflicts: [...] }`; UI prompts Insert as new (default with "Copy of …" rename) · Rename · Choose another location · Cancel.
+- Sonner toasts for every operation with one-tap Undo; Undo restores prior order, prior week numbers, prior archive/trash state, removes only newly-created clone IDs.
+- Idempotency: action buttons disable while in-flight; per-click `operationId` UUID generated up front.
+
+---
+
+## Items I'm proceeding with as defaults (call out anything you want changed)
+
+1. **Renumbering after duplication**: keep current builder rule (sequential week_index / day_index renumber within parent). Inserted copies labeled "Copy of Week N".
+2. **Archive vs Trash UX**: two separate filters (Active default, Archived, Trash). Archive is reversible without expiry. Trash auto-empties after 30 days for template-only items with no client history; items with history can never be permanently deleted (Archive only).
+3. **Permission rules**: admins see everything; coaches only see clients where `is_assigned_coach(clientId)` is true and only see templates they own or that are shared. Enforced in every bulk server function — not just in UI.
+4. **Multi-destination copy**: all-or-nothing transaction at the destination level — if one destination fails, the whole multi-destination operation rolls back and the toast surfaces which destination failed.
+5. **Undo window**: 24h server-side via `pl_bulk_operations`; toast Undo for ~10s, then user can find recent ops in the Trash/Archive panel's "Recent operations" list.
+6. **Cmd/Ctrl-D mapping**: only when selection mode is active and focus isn't in an input.
+7. **Mobile**: bulk action bar pinned above the bottom nav, never under it; destination modal is full-sheet on mobile.
+
+---
+
+## Files touched (high-level)
+
+```text
+supabase/migrations/<ts>_pl_bulk_selection.sql      # new
+src/lib/pl-bulk.functions.ts                        # new
+src/lib/pl-bulk.server.ts                           # new (admin-side helpers)
+src/lib/bulk-undo.ts                                # new
+src/components/builder/selection-provider.tsx       # new
+src/components/builder/selection-toolbar.tsx        # new
+src/components/builder/bulk-action-bar.tsx          # new
+src/components/builder/SelectableWeekHeader.tsx     # new
+src/components/builder/SelectableDayHeader.tsx     # new
+src/components/builder/destination-modal.tsx        # new
+src/components/builder/duplicate-position-popover.tsx # new
+src/components/builder/trash-archive-filters.tsx    # new
+src/components/builder/keyboard-shortcuts.ts        # new (extends existing dialog)
+src/routes/_authenticated/admin/program-library_.$templateId.tsx  # wire in
+src/routes/_authenticated/admin/blocks.$blockId.tsx               # wire in
+src/routes/_authenticated/admin/client-programs.$clientId_.tsx    # wire in
+```
+
+No changes to autosave delay, sticky week header, per-exercise reset, kg/lb, suggested loads, drag-and-drop, copy-to-future, or analytics.
+
+---
+
+## What I need from you before I start
+
+1. Approve the 3-PR sequence (Foundation → Shared UI → Wire-in + QA). Each PR ships independently.
+2. Approve the defaults in the section above, or tell me what to change.
+3. Confirm "Trash auto-empties after 30 days for template-only items" — or you'd rather keep Trash forever until manually emptied.
+4. Confirm Undo window of 24h is acceptable (vs 7d).
+
+Reply "go" (with any default overrides) and I'll start with PR 1.
