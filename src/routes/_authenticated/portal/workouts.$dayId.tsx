@@ -962,16 +962,9 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
       </div>
       {/* Row 2 — badges + sets×reps + rest (compact, single line on mobile when possible) */}
       <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-        {purposeLabel && (
-          <Badge variant="outline" className={cn("h-4 px-1 text-[10px] font-bold uppercase tracking-wider", categoryBadgeClass)}>
-            {purposeLabel}
-          </Badge>
-        )}
-        {!purposeLabel && (
-          <Badge variant="outline" className={cn("h-4 px-1 text-[10px] font-bold uppercase tracking-wider", categoryBadgeClass)}>
-            {category}
-          </Badge>
-        )}
+        <Badge variant="outline" className={cn("h-4 px-1 text-[10px] font-bold uppercase tracking-wider", purposeLabelBadgeClass(purposeLabel))}>
+          {purposeLabel || category}
+        </Badge>
         {hasNote && (
           <span title="You saved a note for this exercise" className="inline-flex h-4 items-center gap-1 rounded-full bg-primary/15 px-1.5 text-[10px] font-bold text-primary">
             <StickyNote className="h-2.5 w-2.5" /> Note
