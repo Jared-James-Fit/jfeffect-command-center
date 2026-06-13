@@ -65,7 +65,7 @@ export type NfForm = {
 
 export type NfConditionalRule = {
   question_id: string;
-  op: "equals" | "not_equals" | "contains" | "gt" | "lt";
+  op: "equals" | "not_equals" | "contains" | "not_contains" | "gt" | "lt" | "is_empty" | "is_not_empty";
   value: string | number;
 };
 
@@ -79,7 +79,12 @@ export type NfQuestion = {
   required: boolean;
   options: string[];
   validation: Record<string, unknown>;
-  conditional_logic: { show_if?: NfConditionalRule[]; match?: "all" | "any" };
+  conditional_logic: {
+    show_if?: NfConditionalRule[];
+    hide_if?: NfConditionalRule[];
+    match?: "all" | "any";
+  };
+  archived_at?: string | null;
 };
 
 export type NfAssignment = {
@@ -207,6 +212,7 @@ export async function listQuestions(formId: string) {
     .from("nf_questions")
     .select("*")
     .eq("form_id", formId)
+    .is("archived_at", null)
     .order("order_index", { ascending: true });
   if (error) throw error;
   return (data ?? []) as NfQuestion[];
@@ -224,8 +230,22 @@ export async function upsertQuestion(input: Partial<NfQuestion> & { form_id: str
 }
 
 export async function deleteQuestion(id: string) {
-  const { error } = await db.from("nf_questions").delete().eq("id", id);
+  // Soft-archive so historical submissions keep the original label/type/answer readable.
+  const { error } = await db
+    .from("nf_questions")
+    .update({ archived_at: new Date().toISOString() })
+    .eq("id", id);
   if (error) throw error;
+}
+
+export async function listQuestionsIncludingArchived(formId: string) {
+  const { data, error } = await db
+    .from("nf_questions")
+    .select("*")
+    .eq("form_id", formId)
+    .order("order_index", { ascending: true });
+  if (error) throw error;
+  return (data ?? []) as NfQuestion[];
 }
 
 export async function reorderQuestions(updates: { id: string; order_index: number }[]) {
