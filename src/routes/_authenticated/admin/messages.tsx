@@ -177,11 +177,11 @@ export function MessagesInbox({ initialClient }: { initialClient?: string } = {}
 
   const selectClient = (id: string) => {
     setSelectedId(id);
-    navigate({ to: "/admin/messages", search: { client: id }, replace: true });
+    navigate({ to: "/admin/communication", search: { tab: "messages", client: id } as any, replace: true });
   };
   const clearSelection = () => {
     setSelectedId(null);
-    navigate({ to: "/admin/messages", search: {}, replace: true });
+    navigate({ to: "/admin/communication", search: { tab: "messages" } as any, replace: true });
   };
 
   const updateStatus = async (status: ConversationState["status"]) => {
