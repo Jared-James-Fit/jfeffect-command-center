@@ -1554,6 +1554,16 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
             </Button>
           )}
           {onDelete && <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={onDelete}><Trash2 className="h-3.5 w-3.5" /></Button>}
+          <Button
+            size="icon"
+            variant="ghost"
+            className="h-7 w-7"
+            onClick={resetCard}
+            title="Reset card (Alt+R)"
+            aria-label="Reset card"
+          >
+            <RotateCcw className="h-3.5 w-3.5" />
+          </Button>
         </div>
       </div>
       {/* ---- Primary programming row ---- */}
