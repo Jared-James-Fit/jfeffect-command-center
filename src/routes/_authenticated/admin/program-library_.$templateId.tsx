@@ -50,7 +50,7 @@ import {
   type TemplateBlockV2,
 } from "@/lib/pl-template-blocks";
 import { useNavigate } from "@tanstack/react-router";
-import { ArchiveRestore } from "lucide-react";
+import { ArchiveRestore, Archive as ArchiveIcon, Pencil } from "lucide-react";
 
 // ---------------- Fast local-state cell (instant typing, debounced commit) ---
 // Keeps keystrokes local so parent rows/days/blocks don't re-render per digit.
