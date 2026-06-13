@@ -353,17 +353,34 @@ function BlockEditor() {
 
   const canUndo = undoStack.canUndo;
   const canRedo = undoStack.canRedo;
+  const clientName = clientRow?.full_name ?? "Loading client…";
+  const programName = prepRow?.title ?? null;
 
   return (
     <div className="space-y-2 p-2 md:p-3">
+      <ClientBuilderIdentityHeader
+        clientId={clientId}
+        clientName={clientName}
+        programName={programName}
+        blockName={name || tree.block.name || "Block"}
+        blockStatus={(tree.block as any).status ?? null}
+        totalWeeks={totalWeeks}
+        unsaved={dirty}
+      />
       <div className="sticky top-0 z-30 -mx-2 flex flex-wrap items-center gap-2 border-b border-border bg-background/95 px-2 py-1.5 backdrop-blur md:-mx-3 md:px-3">
         <Link
           to="/admin/clients/$id"
           params={{ id: clientId }}
-          className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+          className="inline-flex shrink-0 items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+          aria-label="Back to client"
         >
-          <ArrowLeft className="h-3.5 w-3.5" /> Client
+          <ArrowLeft className="h-3.5 w-3.5" />
         </Link>
+        <ClientBuilderStickyChip
+          clientId={clientId}
+          clientName={clientName}
+          blockName={name || tree.block.name || "Block"}
+        />
         <Input
           value={name}
           onChange={(e) => { setName(e.target.value); setDirty(true); }}
@@ -375,11 +392,16 @@ function BlockEditor() {
         </span>
         <div className="ml-auto flex items-center gap-2">
           <SaveStatus state={autosave.state} savedAt={autosave.savedAt} />
+          {!dirty && autosave.savedAt ? (
+            <span className="hidden text-[10px] text-muted-foreground md:inline">
+              Saved to {clientName}'s Program
+            </span>
+          ) : null}
           <ActionButton
             onAction={save}
             loadingLabel="Saving…"
             successLabel="Saved"
-            successToast="Block saved"
+            successToast={`Saved to ${clientName}'s Program`}
             icon={<Save className="h-3.5 w-3.5" />}
             size="sm"
             className="h-7 text-xs"
