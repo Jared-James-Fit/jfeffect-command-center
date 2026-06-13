@@ -826,6 +826,258 @@ function StructureEditor({ type, payload, setPayload, exercises, compact }: { ty
 }
 
 function FullPrepEditor({ payload, setPayload, exercises, compact }: any) {
+  // Retained for backward-compat; the active editor path now goes through
+  // MultiBlockStructureEditor for both `block` and `full_prep` template types.
+  void payload; void setPayload; void exercises; void compact;
+  return null as any;
+}
+
+// ---------- Multi-block (v2 payload) structure editor -----------------------
+function MultiBlockStructureEditor({ type, payload, setPayload, exercises, compact }: {
+  type: "block" | "full_prep" | string;
+  payload: any;
+  setPayload: (p: any) => void;
+  exercises: any[];
+  compact?: boolean;
+}) {
+  const navigate = useNavigate();
+  const search = Route.useSearch() as { block?: string };
+  const v2 = useMemo<TemplatePayloadV2>(
+    () => normalizeTemplatePayload(payload, { templateType: type }),
+    [payload, type],
+  );
+  const active = getActiveTemplateBlocks(v2);
+  const archived = getArchivedTemplateBlocks(v2);
+  const trashed = getTrashedTemplateBlocks(v2);
+
+  // Pick active block from URL or fall back to first active.
+  const activeBlockId = useMemo(() => {
+    if (search.block && active.some((b) => b.id === search.block)) return search.block;
+    return active[0]?.id ?? null;
+  }, [search.block, active]);
+  const activeBlock = active.find((b) => b.id === activeBlockId) ?? null;
+
+  const setActive = (id: string) => {
+    navigate({ search: (prev: any) => ({ ...prev, block: id }), replace: true } as any);
+  };
+  const commit = (nextV2: TemplatePayloadV2) => {
+    setPayload(serializeTemplatePayload(nextV2));
+  };
+
+  const handleAddBlock = () => {
+    const next = addBlankBlock(v2);
+    const created = getActiveTemplateBlocks(next).slice(-1)[0];
+    commit(next);
+    if (created) setActive(created.id);
+  };
+  const handleRename = (id: string) => {
+    const b = v2.blocks.find((x) => x.id === id);
+    if (!b) return;
+    const name = window.prompt("Rename block", b.name);
+    if (name == null) return;
+    const trimmed = name.trim();
+    if (!trimmed || trimmed === b.name) return;
+    commit(replaceBlock(v2, id, { name: trimmed }));
+  };
+  const handleDuplicate = (id: string) => {
+    const b = v2.blocks.find((x) => x.id === id);
+    if (!b) return;
+    const cloned = cloneTemplateBlock(b);
+    const next: TemplatePayloadV2 = {
+      ...v2,
+      blocks: [...v2.blocks, { ...cloned, order_index: v2.blocks.length }],
+    };
+    commit(next);
+    setActive(cloned.id);
+  };
+  const handleArchive = (id: string) => {
+    commit(setBlockArchived(v2, id, true));
+    if (id === activeBlockId) {
+      const remaining = active.filter((b) => b.id !== id);
+      if (remaining[0]) setActive(remaining[0].id);
+    }
+  };
+  const handleRestore = (id: string) => commit(setBlockArchived(v2, id, false));
+  const handleTrash = (id: string) => {
+    if (!confirm("Move this block to trash? You can restore it from the menu below.")) return;
+    commit(setBlockTrashed(v2, id, true));
+    if (id === activeBlockId) {
+      const remaining = active.filter((b) => b.id !== id);
+      if (remaining[0]) setActive(remaining[0].id);
+    }
+  };
+  const handleRestoreTrash = (id: string) => commit(setBlockTrashed(v2, id, false));
+  const handlePurge = (id: string) => {
+    if (!confirm("Permanently delete this block? This cannot be undone.")) return;
+    commit(purgeTrashedBlock(v2, id));
+  };
+  const handleMove = (id: string, dir: -1 | 1) => {
+    const ids = active.map((b) => b.id);
+    const idx = ids.indexOf(id);
+    if (idx < 0) return;
+    const swap = idx + dir;
+    if (swap < 0 || swap >= ids.length) return;
+    const next = [...ids];
+    [next[idx], next[swap]] = [next[swap], next[idx]];
+    commit(reorderActiveBlocks(v2, next));
+  };
+  const handleUpdatePhase = (id: string, phase: string | null) => {
+    commit(replaceBlock(v2, id, { phase }));
+  };
+  const handleUpdateNotes = (id: string, notes: string) => {
+    commit(replaceBlock(v2, id, { notes }));
+  };
+  const handleUpdateEst = (id: string, mins: number | null) => {
+    commit(replaceBlock(v2, id, { estimated_minutes: mins }));
+  };
+  const setActiveBlockWeeks = (wd: any[]) => {
+    if (!activeBlock) return;
+    commit(replaceBlock(v2, activeBlock.id, { weeks: wd }));
+  };
+
+  // Prep card for full_prep templates (lives in __legacy.prep so other readers keep working).
+  const prep = (v2.__legacy && v2.__legacy.prep) || {};
+  const setPrep = (patch: any) => {
+    const nextLegacy = { ...(v2.__legacy ?? {}), prep: { ...prep, ...patch } };
+    commit({ ...v2, __legacy: nextLegacy });
+  };
+
+  return (
+    <div className="space-y-3">
+      {type === "full_prep" && (
+        <Card className="p-3 max-w-2xl">
+          <div className="mb-2 text-xs font-bold uppercase tracking-wide text-muted-foreground">Prep details</div>
+          <div className="grid grid-cols-2 gap-2">
+            <div><Label className="text-xs">Event name</Label><Input value={prep.event_name ?? ""} onChange={(e) => setPrep({ event_name: e.target.value || null })} /></div>
+            <div><Label className="text-xs">Event date</Label><Input type="date" value={prep.event_date ?? ""} onChange={(e) => setPrep({ event_date: e.target.value || null })} /></div>
+            <div><Label className="text-xs">Goal type</Label><Input value={prep.goal_type ?? ""} onChange={(e) => setPrep({ goal_type: e.target.value })} /></div>
+            <div><Label className="text-xs">Total weeks</Label><Input type="number" inputMode="numeric" value={prep.total_weeks ?? ""} onChange={(e) => setPrep({ total_weeks: parseInt(e.target.value) || null })} /></div>
+          </div>
+        </Card>
+      )}
+
+      {/* Program overview */}
+      <Card className="flex flex-wrap items-center gap-3 p-2 text-xs">
+        <span className="font-bold uppercase tracking-wide text-muted-foreground">Program</span>
+        <span>{active.length} active block{active.length === 1 ? "" : "s"}</span>
+        {archived.length > 0 && <span className="text-muted-foreground">· {archived.length} archived</span>}
+        {trashed.length > 0 && <span className="text-muted-foreground">· {trashed.length} in trash</span>}
+        <span className="ml-auto" />
+        <Button size="sm" variant="outline" className="h-7" onClick={handleAddBlock}>
+          <Plus className="mr-1 h-3 w-3" /> Add block
+        </Button>
+      </Card>
+
+      {/* Block tab strip */}
+      <div className="flex flex-wrap items-center gap-1">
+        {active.map((b) => {
+          const isActive = b.id === activeBlockId;
+          return (
+            <div key={b.id} className={cn(
+              "group inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs",
+              isActive ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:text-foreground",
+            )}>
+              <button type="button" className="font-semibold" onClick={() => setActive(b.id)} title={`${b.weeks.length} weeks`}>
+                {b.name}
+              </button>
+              <span className="text-[10px] opacity-70">·{b.weeks.length}w</span>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button type="button" className="ml-1 opacity-60 hover:opacity-100" aria-label="Block menu"><Settings2 className="h-3 w-3" /></button>
+                </PopoverTrigger>
+                <PopoverContent className="w-56 p-2 text-xs">
+                  <div className="space-y-2">
+                    <div className="flex gap-1">
+                      <Button size="sm" variant="ghost" className="h-6 flex-1 text-[11px]" onClick={() => handleRename(b.id)}><Pencil className="mr-1 h-3 w-3" />Rename</Button>
+                      <Button size="sm" variant="ghost" className="h-6 flex-1 text-[11px]" onClick={() => handleDuplicate(b.id)}><Copy className="mr-1 h-3 w-3" />Duplicate</Button>
+                    </div>
+                    <div className="flex gap-1">
+                      <Button size="sm" variant="ghost" className="h-6 flex-1 text-[11px]" onClick={() => handleMove(b.id, -1)}>← Move left</Button>
+                      <Button size="sm" variant="ghost" className="h-6 flex-1 text-[11px]" onClick={() => handleMove(b.id, 1)}>Move right →</Button>
+                    </div>
+                    <div>
+                      <Label className="text-[10px]">Phase</Label>
+                      <Select value={b.phase ?? "__none"} onValueChange={(v) => handleUpdatePhase(b.id, v === "__none" ? null : v)}>
+                        <SelectTrigger className="h-7 text-[11px]"><SelectValue placeholder="Optional phase" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none">— None —</SelectItem>
+                          {BLOCK_PHASE_OPTIONS.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label className="text-[10px]">Est minutes / workout</Label>
+                      <Input
+                        type="number" inputMode="numeric"
+                        className="h-7 text-[11px]"
+                        value={b.estimated_minutes ?? ""}
+                        onChange={(e) => handleUpdateEst(b.id, parseInt(e.target.value) || null)}
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-[10px]">Notes</Label>
+                      <Textarea rows={2} className="text-[11px]" value={b.notes} onChange={(e) => handleUpdateNotes(b.id, e.target.value)} />
+                    </div>
+                    <div className="flex gap-1 border-t border-border pt-1">
+                      <Button size="sm" variant="ghost" className="h-6 flex-1 text-[11px]" onClick={() => handleArchive(b.id)}><ArchiveIcon className="mr-1 h-3 w-3" />Archive</Button>
+                      <Button size="sm" variant="ghost" className="h-6 flex-1 text-[11px] text-destructive" onClick={() => handleTrash(b.id)}><Trash2 className="mr-1 h-3 w-3" />Trash</Button>
+                    </div>
+                  </div>
+                </PopoverContent>
+              </Popover>
+            </div>
+          );
+        })}
+        {active.length === 0 && (
+          <span className="text-xs text-muted-foreground">No active blocks. Click "Add block" to start.</span>
+        )}
+      </div>
+
+      {(archived.length > 0 || trashed.length > 0) && (
+        <details className="rounded-md border border-dashed border-border p-2 text-xs text-muted-foreground">
+          <summary className="cursor-pointer">Archived & Trash ({archived.length + trashed.length})</summary>
+          <div className="mt-2 space-y-1">
+            {archived.map((b) => (
+              <div key={b.id} className="flex items-center gap-2">
+                <ArchiveIcon className="h-3 w-3" />
+                <span className="flex-1 truncate">{b.name}</span>
+                <Button size="sm" variant="ghost" className="h-6 text-[11px]" onClick={() => handleRestore(b.id)}><ArchiveRestore className="mr-1 h-3 w-3" />Restore</Button>
+                <Button size="sm" variant="ghost" className="h-6 text-[11px] text-destructive" onClick={() => handleTrash(b.id)}><Trash2 className="h-3 w-3" /></Button>
+              </div>
+            ))}
+            {trashed.map((b) => (
+              <div key={b.id} className="flex items-center gap-2">
+                <Trash2 className="h-3 w-3" />
+                <span className="flex-1 truncate line-through">{b.name}</span>
+                <Button size="sm" variant="ghost" className="h-6 text-[11px]" onClick={() => handleRestoreTrash(b.id)}><ArchiveRestore className="mr-1 h-3 w-3" />Restore</Button>
+                <Button size="sm" variant="ghost" className="h-6 text-[11px] text-destructive" onClick={() => handlePurge(b.id)}>Delete forever</Button>
+              </div>
+            ))}
+          </div>
+        </details>
+      )}
+
+      {/* Active block weeks editor */}
+      {activeBlock ? (
+        <div className="rounded-md border border-border p-2">
+          <BlockPayloadEditor
+            key={activeBlock.id}
+            weeksData={activeBlock.weeks}
+            setWeeksData={setActiveBlockWeeks}
+            exercises={exercises}
+            compact={compact}
+          />
+        </div>
+      ) : (
+        <Card className="p-8 text-center text-sm text-muted-foreground">
+          Add a block to start building this program.
+        </Card>
+      )}
+    </div>
+  );
+}
+
+function _LegacyFullPrepEditor({ payload, setPayload, exercises, compact }: any) {
   const prep = payload.prep || {};
   const blocks = payload.blocks_data || [];
   const setPrep = (patch: any) => setPayload({ ...payload, prep: { ...prep, ...patch } });
