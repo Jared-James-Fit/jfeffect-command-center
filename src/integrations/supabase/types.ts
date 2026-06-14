@@ -13469,6 +13469,10 @@ export type Database = {
       is_active_coach: { Args: { _user_id: string }; Returns: boolean }
       is_admin_or_media_manager: { Args: { _uid: string }; Returns: boolean }
       is_assigned_coach: { Args: { _client_id: string }; Returns: boolean }
+      is_assigned_coach_for_member: {
+        Args: { _member_id: string }
+        Returns: boolean
+      }
       is_coach_or_admin: { Args: { _user_id: string }; Returns: boolean }
       is_group_admin: {
         Args: { _group_id: string; _user_id: string }
