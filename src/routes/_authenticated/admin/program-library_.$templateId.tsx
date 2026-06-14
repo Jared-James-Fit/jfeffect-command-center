@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { AlertTriangle, ArrowLeft, Plus, Trash2, Save, Clock, Copy, LayoutGrid, CalendarRange, ArrowRight, ZoomIn, ZoomOut, Maximize2, Minimize2, PanelLeftClose, PanelLeftOpen, Rows3, ChevronDown, ChevronUp, Settings2, Undo2, Redo2, ClipboardCopy, ClipboardPaste, Expand, RotateCcw } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Plus, Trash2, Save, Clock, Copy, LayoutGrid, CalendarRange, ArrowRight, ZoomIn, ZoomOut, Maximize2, Minimize2, PanelLeftClose, PanelLeftOpen, Rows3, ChevronDown, ChevronUp, Settings2, Undo2, Redo2, ClipboardCopy, ClipboardPaste, Expand, RotateCcw, ArrowLeftRight } from "lucide-react";
 import { toast } from "sonner";
 import {
   getTemplate, updateTemplate, summarizeTemplatePayload, TIME_PROFILES,
@@ -1707,6 +1707,65 @@ function DayEditor({ day, setDay, exercises, compact }: { day: any; setDay: (d: 
   );
 }
 
+function SwapExerciseButton({ row, setRow, exercises }: { row: any; setRow: (r: any) => void; exercises: any[] }) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const filtered = useMemo(() => {
+    const term = q.trim().toLowerCase();
+    const list = (exercises as any[]).filter((e) => e.id !== row.exercise_id);
+    if (!term) return list.slice(0, 100);
+    return list.filter((e) => (e.name ?? "").toLowerCase().includes(term)).slice(0, 100);
+  }, [exercises, q, row.exercise_id]);
+  const pick = (ex: any) => {
+    // Preserve every existing input (sets/reps/rpe/rir/load/rest/tempo/notes…)
+    // Replace only the exercise identity.
+    setRow({ ...row, exercise_id: ex.id, exercise_name_override: ex.name });
+    setOpen(false);
+    setQ("");
+    toast.success(`Swapped to ${ex.name}`);
+  };
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button size="icon" variant="ghost" className="h-7 w-7" title="Swap exercise (keeps sets, reps, load, etc.)">
+          <ArrowLeftRight className="h-3.5 w-3.5" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-72 p-2" align="end">
+        <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Swap exercise</div>
+        <Input
+          autoFocus
+          placeholder="Search exercises…"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          className="mb-2 h-8 text-xs"
+        />
+        <div className="max-h-64 overflow-y-auto">
+          {filtered.length === 0 ? (
+            <div className="px-2 py-3 text-center text-xs text-muted-foreground">No matches</div>
+          ) : (
+            <div className="flex flex-col gap-0.5">
+              {filtered.map((ex) => (
+                <button
+                  key={ex.id}
+                  type="button"
+                  onClick={() => pick(ex)}
+                  className="rounded px-2 py-1 text-left text-xs hover:bg-muted"
+                >
+                  {ex.name}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        <p className="mt-2 text-[10px] text-muted-foreground">
+          Sets, reps, load, rest, tempo, and notes are preserved.
+        </p>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMoveDown, canMoveUp, canMoveDown, onDragStartRow, onDragEndRow, isDragging, purposeLabel }: { row: any; setRow: (r: any) => void; onDelete?: () => void; exercises: any[]; compact?: boolean; onMoveUp?: () => void; onMoveDown?: () => void; canMoveUp?: boolean; canMoveDown?: boolean; onDragStartRow?: (e: React.DragEvent) => void; onDragEndRow?: () => void; isDragging?: boolean; purposeLabel?: string }) {
   const Field = ({ label, className, children }: { label: string; className?: string; children: React.ReactNode }) => (
     <div className={cn("flex flex-col gap-0.5 min-w-0", className)}>
@@ -1916,6 +1975,7 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
           <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => { copyRows([row]); toast.success("Exercise copied"); }} title="Copy exercise">
             <ClipboardCopy className="h-3.5 w-3.5" />
           </Button>
+          <SwapExerciseButton row={row} setRow={setRow} exercises={exercises} />
           <Popover>
             <PopoverTrigger asChild>
               <Button size="icon" variant="ghost" className="h-7 w-7" title="Advanced settings (exercise classification)">
