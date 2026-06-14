@@ -120,6 +120,7 @@ type View = {
   iconBg: string;
   borderClass: string;
   bgClass: string;
+  statusPillClass?: string;
   primary: React.ReactNode;
   secondary?: React.ReactNode;
 };
