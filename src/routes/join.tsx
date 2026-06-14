@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
-import { Eye, EyeOff, Receipt, ChevronDown, ChevronUp, ExternalLink, Check, X as XIcon } from "lucide-react";
+import { Eye, EyeOff, Receipt, Check, X as XIcon } from "lucide-react";
 import { SalesPageShell, Section } from "@/components/sales/sales-page-shell";
 import { MembershipHero, MemberHeroCta, MemberHeroGhost } from "@/components/sales/membership-hero";
 import { FeatureTabs } from "@/components/sales/feature-tabs";
@@ -77,10 +77,9 @@ function SignupJf() {
 
   const [form, setForm] = useState({
     first_name: "", last_name: "", email: "", phone: "",
-    password: "", confirm: "", marketing_consent: false,
+    password: "", confirm: "",
   });
   const [bundledAccepted, setBundledAccepted] = useState(false);
-  const [showReview, setShowReview] = useState(false);
   const [busy, setBusy] = useState(false);
   const [showPw, setShowPw] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -112,7 +111,7 @@ function SignupJf() {
   // Build the *exact* bundled acknowledgement statement displayed to the user.
   const monthlyPrice = settings?.monthly_price_display ?? "$29 USD/month";
   const trialDaysLocal = settings?.trial_days ?? 3;
-  const bundledStatement = `I agree to the Membership Agreement, Terms of Service, Recurring Billing Disclosure, and Cancellation & Refund Policy, and I acknowledge the Privacy Policy. Billing: ${trialDaysLocal}-day free trial, then ${monthlyPrice} plus applicable taxes, renews automatically until cancelled.`;
+  const bundledStatement = `I agree to the JF Membership Terms, recurring billing, and cancellation policy, and acknowledge the Privacy Policy. Billing: ${trialDaysLocal}-day free trial, then ${monthlyPrice} plus applicable taxes, renews automatically until cancelled.`;
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -135,7 +134,7 @@ function SignupJf() {
         email: form.email.trim(),
         phone: form.phone.trim(),
         password: form.password,
-        sms_consent: !!form.marketing_consent,
+        sms_consent: false,
         origin: window.location.origin,
         legal_acceptances: requiredDocs.map((d) => ({
           document_id: d.document_id,
@@ -340,10 +339,7 @@ function SignupJf() {
                   <Receipt className="h-3.5 w-3.5" /> Billing
                 </div>
                 <p className="mt-1 text-xs leading-relaxed text-foreground">
-                  <span className="font-bold">{trialDays}-day free trial</span>, then {settings?.monthly_price_display ?? "$29 USD/month"} plus applicable taxes. Renews automatically until cancelled.
-                </p>
-                <p className="mt-1 text-[11px] text-muted-foreground">
-                  $0 today. First charge {firstChargeLabel ?? `in ${trialDays} days`} via your billing page.
+                  <span className="font-bold">$0 today.</span> First charge {firstChargeLabel ?? `in ${trialDays} days`} — {settings?.monthly_price_display ?? "$29/month USD"} plus applicable taxes. Renews automatically until cancelled through your billing page.
                 </p>
               </div>
             )}
@@ -360,62 +356,29 @@ function SignupJf() {
                   />
                   <span>
                     I agree to the{" "}
-                    <DocLink slug="membership-agreement">Membership Agreement</DocLink>,{" "}
-                    <DocLink slug="terms-of-service">Terms of Service</DocLink>,{" "}
-                    <DocLink slug="recurring-billing-disclosure">Recurring Billing Disclosure</DocLink>, and{" "}
-                    <DocLink slug="cancellation-and-refund-policy">Cancellation &amp; Refund Policy</DocLink>, and I acknowledge the{" "}
+                    <DocLink slug="membership-agreement">JF Membership Terms</DocLink>,{" "}
+                    <DocLink slug="recurring-billing-disclosure">recurring billing</DocLink>, and{" "}
+                    <DocLink slug="cancellation-and-refund-policy">cancellation policy</DocLink>, and acknowledge the{" "}
                     <DocLink slug="privacy-policy">Privacy Policy</DocLink>.
                   </span>
                 </label>
-                <button
-                  type="button"
-                  onClick={() => setShowReview((v) => !v)}
-                  className="mt-2 inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground hover:text-foreground"
+                <Link
+                  to="/legal/$slug"
+                  params={{ slug: "membership-agreement" }}
+                  target="_blank"
+                  className="mt-2 inline-block text-[11px] text-muted-foreground underline underline-offset-2 hover:text-foreground"
                 >
-                  {showReview ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-                  Review membership terms
-                </button>
-                {showReview && (
-                  <ul className="mt-2 space-y-1.5 rounded-md border border-border bg-background/50 p-2">
-                    {requiredDocs.map((d) => (
-                      <li key={d.document_id} className="flex items-center justify-between gap-2 text-[11px]">
-                        <div className="min-w-0">
-                          <div className="truncate font-semibold">{d.title}</div>
-                          <div className="text-muted-foreground">Active version v{d.version_number}</div>
-                        </div>
-                        {d.public_read_allowed ? (
-                          <Link to="/legal/$slug" params={{ slug: d.slug }} target="_blank"
-                            className="inline-flex shrink-0 items-center gap-1 rounded border border-border px-2 py-1 text-[10px] font-bold uppercase tracking-widest text-foreground hover:bg-secondary">
-                            Open <ExternalLink className="h-3 w-3" />
-                          </Link>
-                        ) : (
-                          <span className="text-[10px] text-muted-foreground">Available at checkout</span>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                )}
+                  Review all membership terms
+                </Link>
               </div>
             )}
 
-            {/* Separate optional marketing consent */}
-            {!checkoutBlocked && (
-              <label className="flex items-start gap-2 text-xs text-muted-foreground">
-                <Checkbox
-                  className="mt-0.5"
-                  checked={form.marketing_consent}
-                  onCheckedChange={(c) => setForm({ ...form, marketing_consent: !!c })}
-                />
-                <span>Send me occasional coaching updates and offers by email or SMS. I can unsubscribe anytime.</span>
-              </label>
-            )}
-
-            {/* Concise cancellation summary (full policy still linked above) */}
+            {/* Concise cancellation summary */}
             <p className="text-[11px] leading-relaxed text-muted-foreground">
-              Cancel anytime through your billing page. Access remains active until the end of the applicable trial or billing period. Payments are generally non-refundable once a paid billing period begins.{" "}
+              Cancel anytime through your billing page. Access remains active until the end of your current trial or billing period.{" "}
               {docBySlug["cancellation-and-refund-policy"]?.public_read_allowed && (
                 <Link to="/legal/$slug" params={{ slug: "cancellation-and-refund-policy" }} target="_blank" className="underline">
-                  Read the Cancellation &amp; Refund Policy
+                  Cancellation &amp; Refund Policy
                 </Link>
               )}
             </p>

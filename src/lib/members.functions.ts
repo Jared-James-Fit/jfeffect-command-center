@@ -254,6 +254,29 @@ export const getCurrentMember = createServerFn({ method: "GET" })
     return { member, access: access ?? [] };
   });
 
+/* ---------- self: update own marketing preferences ---------- */
+
+const UpdateMyMarketingPrefsInput = z.object({
+  sms_opt_out: z.boolean(),
+});
+
+export const updateMyMarketingPrefs = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i: unknown) => UpdateMyMarketingPrefsInput.parse(i))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const { data: member } = await supabase
+      .from("app_members").select("id").eq("user_id", userId).maybeSingle();
+    if (!member) throw new Error("Member profile not found");
+    const patch = data.sms_opt_out
+      ? { sms_opt_out: true }
+      : { sms_opt_out: false, sms_consent_at: new Date().toISOString() };
+    const { error } = await supabase
+      .from("app_members").update(patch).eq("id", member.id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
 /* ---------- public: redeem setup token ---------- */
 
 const RedeemInput = z.object({
