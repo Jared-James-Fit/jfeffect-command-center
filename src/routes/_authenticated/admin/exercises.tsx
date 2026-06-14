@@ -99,6 +99,11 @@ export function ExercisesAdmin({ embedded = false }: { embedded?: boolean } = {}
   };
 
   const [warmupTarget, setWarmupTarget] = useState<any | null>(null);
+  const [volumeTarget, setVolumeTarget] = useState<any | null>(null);
+
+  const needsTagsCount = exercises.filter(
+    (e: any) => !e.primary_movement_pattern || !e.variation_type,
+  ).length;
 
   return (
     <>
