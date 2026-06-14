@@ -1,4 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
+import { createServerFn } from "@tanstack/react-start";
+import { z } from "zod";
+import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 const db = supabase as any;
 
@@ -37,9 +40,148 @@ function getSessionDismissed(): Set<string> {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Protected server-side mutations.
+//
+// All writes to client_action_requests must go through these handlers. They
+// authenticate via requireSupabaseAuth, authorize the caller as admin or the
+// assigned coach for the *stored* client, and derive coach_user_id from the
+// session (never from caller input).
+// ---------------------------------------------------------------------------
+async function isAdmin(supabase: any, userId: string): Promise<boolean> {
+  const { data } = await supabase
+    .from("user_roles").select("role").eq("user_id", userId).eq("role", "admin").maybeSingle();
+  return !!data;
+}
+
+async function isAssignedCoachOfClient(supabase: any, userId: string, clientId: string): Promise<boolean> {
+  // Mirror is_assigned_coach() SQL helper at the application layer (RLS still
+  // enforces server-side). Returns true if userId is the active assigned
+  // coach for clientId.
+  const { data } = await supabase
+    .from("clients").select("id, assigned_coach_id, coach:coaches!clients_assigned_coach_id_fkey(user_id, archived, status)")
+    .eq("id", clientId).maybeSingle();
+  const coach = (data as any)?.coach;
+  return !!coach && coach.user_id === userId && coach.archived === false && coach.status === "Active";
+}
+
+async function assertCanManageClient(supabase: any, userId: string, clientId: string) {
+  if (await isAdmin(supabase, userId)) return;
+  if (await isAssignedCoachOfClient(supabase, userId, clientId)) return;
+  throw new Error("Forbidden: not admin or assigned coach for this client");
+}
+
+const createInput = z.object({
+  clientId: z.string().uuid(),
+  title: z.string().min(1).max(200),
+  message: z.string().min(1).max(5000),
+  nativeFormId: z.string().uuid().nullable().optional(),
+  externalFormUrl: z.string().url().max(2000).nullable().optional(),
+  linkUrl: z.string().url().max(2000).nullable().optional(),
+  linkLabel: z.string().max(200).nullable().optional(),
+  filePath: z.string().max(500).nullable().optional(),
+  fileName: z.string().max(300).nullable().optional(),
+  fileMime: z.string().max(200).nullable().optional(),
+  priority: z.string().max(50).nullable().optional(),
+  internalNotes: z.string().max(5000).nullable().optional(),
+  dueDate: z.string().nullable().optional(),
+  notifyClient: z.boolean().optional(),
+});
+
+export const createClientActionRequestFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((raw: unknown) => createInput.parse(raw))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    // Verify the client exists, and authorize caller against the *stored* client.
+    const { data: client, error: clientErr } = await supabase
+      .from("clients").select("id").eq("id", data.clientId).maybeSingle();
+    if (clientErr) throw new Error(clientErr.message);
+    if (!client) throw new Error("Client not found");
+    await assertCanManageClient(supabase, userId, data.clientId);
+
+    const { data: row, error } = await supabase
+      .from("client_action_requests")
+      .insert({
+        client_id: data.clientId,
+        coach_user_id: userId, // derived from session, never trusted from client
+        title: data.title,
+        message: data.message,
+        native_form_id: data.nativeFormId ?? null,
+        external_form_url: data.externalFormUrl ?? null,
+        link_url: data.linkUrl ?? null,
+        link_label: data.linkLabel ?? null,
+        file_path: data.filePath ?? null,
+        file_name: data.fileName ?? null,
+        file_mime: data.fileMime ?? null,
+        priority: data.priority ?? null,
+        internal_notes: data.internalNotes ?? null,
+        due_date: data.dueDate ?? null,
+        notify_client: data.notifyClient ?? true,
+      })
+      .select()
+      .single();
+    if (error) throw new Error(error.message);
+    return row as ClientActionRequest;
+  });
+
+export const deleteClientActionRequestFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((raw: unknown) => z.object({ id: z.string().uuid() }).parse(raw))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    // Load existing row so authorization uses *stored* client_id, not input.
+    const { data: existing, error: loadErr } = await supabase
+      .from("client_action_requests").select("id, client_id, file_path").eq("id", data.id).maybeSingle();
+    if (loadErr) throw new Error(loadErr.message);
+    if (!existing) throw new Error("Request not found");
+    await assertCanManageClient(supabase, userId, existing.client_id);
+
+    // Best-effort file cleanup through the same authorized session (storage RLS
+    // still applies). Failures here must not block the row delete.
+    if (existing.file_path) {
+      try { await supabase.storage.from("client-action-files").remove([existing.file_path]); } catch {}
+    }
+
+    const { error } = await supabase.from("client_action_requests").delete().eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+export const resendClientActionRequestFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((raw: unknown) => z.object({ id: z.string().uuid() }).parse(raw))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const { data: existing, error: loadErr } = await supabase
+      .from("client_action_requests").select("id, client_id").eq("id", data.id).maybeSingle();
+    if (loadErr) throw new Error(loadErr.message);
+    if (!existing) throw new Error("Request not found");
+    await assertCanManageClient(supabase, userId, existing.client_id);
+
+    // Reset visibility flags only — never touch client_id, coach_user_id, or other ownership fields.
+    const { error } = await supabase
+      .from("client_action_requests")
+      .update({
+        completed_at: null,
+        seen_at: null,
+        dismissed_at: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+// ---------------------------------------------------------------------------
+// Browser-facing wrappers — invoke the protected server fns above.
+// Older signatures preserved so existing call sites compile unchanged.
+// `coachUserId` is accepted for backward compatibility but ignored: the
+// authoritative creator is derived from the authenticated session server-side.
+// ---------------------------------------------------------------------------
 export async function createClientActionRequest(input: {
   clientId: string;
-  coachUserId: string;
+  coachUserId?: string; // ignored — server derives from session
   title: string;
   message: string;
   nativeFormId?: string | null;
@@ -54,29 +196,24 @@ export async function createClientActionRequest(input: {
   dueDate?: string | null;
   notifyClient?: boolean;
 }) {
-  const { data, error } = await db
-    .from("client_action_requests")
-    .insert({
-      client_id: input.clientId,
-      coach_user_id: input.coachUserId,
+  return await createClientActionRequestFn({
+    data: {
+      clientId: input.clientId,
       title: input.title,
       message: input.message,
-      native_form_id: input.nativeFormId ?? null,
-      external_form_url: input.externalFormUrl ?? null,
-      link_url: input.linkUrl ?? null,
-      link_label: input.linkLabel ?? null,
-      file_path: input.filePath ?? null,
-      file_name: input.fileName ?? null,
-      file_mime: input.fileMime ?? null,
+      nativeFormId: input.nativeFormId ?? null,
+      externalFormUrl: input.externalFormUrl ?? null,
+      linkUrl: input.linkUrl ?? null,
+      linkLabel: input.linkLabel ?? null,
+      filePath: input.filePath ?? null,
+      fileName: input.fileName ?? null,
+      fileMime: input.fileMime ?? null,
       priority: input.priority ?? null,
-      internal_notes: input.internalNotes ?? null,
-      due_date: input.dueDate ?? null,
-      notify_client: input.notifyClient ?? true,
-    })
-    .select()
-    .single();
-  if (error) throw error;
-  return data as ClientActionRequest;
+      internalNotes: input.internalNotes ?? null,
+      dueDate: input.dueDate ?? null,
+      notifyClient: input.notifyClient ?? true,
+    },
+  });
 }
 
 export async function listAllClientActionRequests() {
@@ -127,16 +264,7 @@ export async function markActionCompleted(id: string) {
 }
 
 export async function resendClientActionRequest(id: string) {
-  const { error } = await db
-    .from("client_action_requests")
-    .update({
-      completed_at: null,
-      seen_at: null,
-      dismissed_at: null,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", id);
-  if (error) throw error;
+  await resendClientActionRequestFn({ data: { id } });
 }
 
 /** Suppress for this browser session only — pops back up on next app open. */
@@ -149,8 +277,7 @@ export function dismissActionForNow(id: string) {
 }
 
 export async function deleteClientActionRequest(id: string) {
-  const { error } = await db.from("client_action_requests").delete().eq("id", id);
-  if (error) throw error;
+  await deleteClientActionRequestFn({ data: { id } });
 }
 
 export async function getFileSignedUrl(path: string, expiresInSeconds = 600) {
