@@ -289,8 +289,15 @@ export const createJfSignupCheckout = createServerFn({ method: "POST" })
       throw new Error("An account with that email already exists. Please sign in instead.");
     }
 
-    // Trial abuse: skip trial if email already had one
-    const { data: trialRow } = await supabaseAdmin.from("jf_trial_emails").select("email_lc").eq("email_lc", emailLc).maybeSingle();
+    // Trial abuse: skip trial if email already had one in the SAME Stripe mode.
+    // Scoping by mode prevents pre-launch test signups from suppressing the
+    // trial for the same email's first real (live) signup.
+    const { data: trialRow } = await supabaseAdmin
+      .from("jf_trial_emails")
+      .select("email_lc")
+      .eq("email_lc", emailLc)
+      .eq("stripe_mode", mode)
+      .maybeSingle();
     const useTrial = !trialRow && s.trial_days > 0;
 
     // Note: password_hash column actually stores the raw password temporarily.
