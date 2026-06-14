@@ -10,12 +10,14 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Search, Trash2, Youtube, Pencil, CheckCircle2, AlertTriangle, Flame } from "lucide-react";
+import { Plus, Search, Trash2, Youtube, Pencil, CheckCircle2, AlertTriangle, Flame, BarChart3 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { buildCleanVimeoEmbedUrl, vimeoUrlFromId, MIGRATION_STATUSES } from "@/lib/exercise-video";
 import { ExerciseWarmupDialog } from "@/components/exercise-warmup-dialog";
+import { ExerciseVolumeTagsDialog } from "@/components/volume/exercise-volume-tags-dialog";
+import { MOVEMENT_PATTERN_LABELS, VARIATION_LABELS } from "@/lib/volume";
 
 export const Route = createFileRoute("/_authenticated/admin/exercises")({
   component: ExercisesRedirect,
@@ -33,6 +35,7 @@ const CATEGORIES = ["Squat", "Bench", "Deadlift", "Upper Body", "Lower Body", "B
 
 const MIGRATION_FILTERS: { value: string; label: string }[] = [
   { value: "all", label: "All exercises" },
+  { value: "needs_volume_tags", label: "Needs volume tags" },
   { value: "youtube_pending", label: "YouTube pending" },
   { value: "vimeo_uploaded", label: "Vimeo uploaded" },
   { value: "ready_for_review", label: "Ready for review" },
@@ -64,6 +67,9 @@ export function ExercisesAdmin({ embedded = false }: { embedded?: boolean } = {}
     if (category !== "all" && e.category !== category) return false;
     if (search && !e.name.toLowerCase().includes(search.toLowerCase())) return false;
     if (migration === "all") return true;
+    if (migration === "needs_volume_tags") {
+      return !e.primary_movement_pattern || !e.variation_type;
+    }
     if (migration === "missing_vimeo") return !e.vimeo_video_id;
     if (migration === "quality_warning") return !!e.quality_warning;
     if (migration === "youtube_fallback_enabled") return e.youtube_fallback_allowed === true;
@@ -93,12 +99,17 @@ export function ExercisesAdmin({ embedded = false }: { embedded?: boolean } = {}
   };
 
   const [warmupTarget, setWarmupTarget] = useState<any | null>(null);
+  const [volumeTarget, setVolumeTarget] = useState<any | null>(null);
+
+  const needsTagsCount = exercises.filter(
+    (e: any) => !e.primary_movement_pattern || !e.variation_type,
+  ).length;
 
   return (
     <>
       {!embedded && <PageHeader
         title="Exercise Library"
-        subtitle={`${exercises.length} exercises · ${stillYouTubeCount} still serving YouTube to clients`}
+        subtitle={`${exercises.length} exercises · ${stillYouTubeCount} still on YouTube · ${needsTagsCount} need volume tags`}
         actions={
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
@@ -156,11 +167,27 @@ export function ExercisesAdmin({ embedded = false }: { embedded?: boolean } = {}
                 </div>
                 <div className="flex gap-1">
                   <Button variant="ghost" size="sm" onClick={() => setEditing(e)}><Pencil className="h-3 w-3" /></Button>
+                  <Button variant="ghost" size="sm" title="Volume tags" onClick={() => setVolumeTarget(e)}><BarChart3 className="h-3 w-3 text-primary" /></Button>
                   <Button variant="ghost" size="sm" title="Warm-up settings" onClick={() => setWarmupTarget(e)}><Flame className="h-3 w-3 text-orange-500" /></Button>
                   <Button variant="ghost" size="sm" onClick={() => del(e.id)}><Trash2 className="h-3 w-3" /></Button>
                 </div>
               </div>
               <div className="flex flex-wrap gap-1">
+                {e.primary_movement_pattern ? (
+                  <Badge variant="secondary" className="text-[10px]">
+                    {(MOVEMENT_PATTERN_LABELS as any)[e.primary_movement_pattern] ?? e.primary_movement_pattern}
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="text-[10px] border-amber-500/40 text-amber-600 dark:text-amber-400">
+                    no pattern
+                  </Badge>
+                )}
+                {e.variation_type && (
+                  <Badge variant="outline" className="text-[10px]">
+                    {(VARIATION_LABELS as any)[e.variation_type] ?? e.variation_type}
+                    {e.volume_multiplier != null ? ` ×${Number(e.volume_multiplier)}` : ""}
+                  </Badge>
+                )}
                 <Badge variant={e.video_provider === "vimeo" ? "default" : "secondary"} className="text-[10px]">
                   {e.video_provider ?? "—"}
                 </Badge>
@@ -206,6 +233,15 @@ export function ExercisesAdmin({ embedded = false }: { embedded?: boolean } = {}
         open={!!warmupTarget}
         onClose={() => setWarmupTarget(null)}
       />
+      <Dialog open={!!volumeTarget} onOpenChange={(o) => !o && setVolumeTarget(null)}>
+        {volumeTarget && (
+          <ExerciseVolumeTagsDialog
+            exercise={volumeTarget}
+            onClose={() => setVolumeTarget(null)}
+            onSaved={() => qc.invalidateQueries({ queryKey: ["exercises"] })}
+          />
+        )}
+      </Dialog>
     </>
   );
 }

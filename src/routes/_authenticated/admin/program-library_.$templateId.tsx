@@ -38,6 +38,7 @@ import { listClientMaxes, buildMaxIndex, computeRowLoad, type ClientMaxRow } fro
 import { MaxEditorDialog } from "@/components/client-maxes-panel";
 import { BlockMaxesButton } from "@/components/block-maxes-panel";
 import { AlertCircle as PbAlertCircle, Calculator as PbCalculator } from "lucide-react";
+import { WeeklyVolumeSummary } from "@/components/volume/weekly-volume-summary";
 import {
   normalizeTemplatePayload,
   serializeTemplatePayload,
@@ -1513,6 +1514,7 @@ function WeekEditor({ week, setWeek, exercises, onCopyDayToFuture, hideHeader, c
       {hideHeader && days.length === 0 && (
         <Button size="sm" variant="outline" onClick={addDay}><Plus className="mr-1 h-3 w-3" /> Day</Button>
       )}
+      <WeeklyVolumeSummary week={week} exercises={exercises as any} weekIndex={week?.week_index} />
       {days.map((d: any, i: number) => {
         const dayMinutes = estimateDayMinutes(d.rows || []);
         return (

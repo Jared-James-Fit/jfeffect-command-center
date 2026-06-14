@@ -3648,6 +3648,7 @@ export type Database = {
           category: string | null
           common_mistakes: string | null
           competition_lift_type: string | null
+          counts_toward_volume: boolean
           created_at: string
           cues: string | null
           default_load_unit: string | null
@@ -3658,9 +3659,12 @@ export type Database = {
           is_competition_lift: boolean
           is_powerlifting: boolean
           legacy_youtube_url: string | null
+          lift_family: string | null
           muscle_group: string | null
+          muscle_groups: string[]
           name: string
           pl_lift_group: string | null
+          primary_movement_pattern: string | null
           quality_warning: string | null
           safe_to_publish: boolean
           source_quality: string | null
@@ -3669,6 +3673,7 @@ export type Database = {
           tags: string[] | null
           thumbnail_url: string | null
           updated_at: string
+          variation_type: string | null
           video_migration_status: string | null
           video_provider: string | null
           video_url: string | null
@@ -3676,6 +3681,7 @@ export type Database = {
           vimeo_url: string | null
           vimeo_video_id: string | null
           vimeo_working: boolean
+          volume_multiplier: number | null
           warmup_notes: string | null
           warmup_protocol_id: string | null
           youtube_fallback_allowed: boolean
@@ -3689,6 +3695,7 @@ export type Database = {
           category?: string | null
           common_mistakes?: string | null
           competition_lift_type?: string | null
+          counts_toward_volume?: boolean
           created_at?: string
           cues?: string | null
           default_load_unit?: string | null
@@ -3699,9 +3706,12 @@ export type Database = {
           is_competition_lift?: boolean
           is_powerlifting?: boolean
           legacy_youtube_url?: string | null
+          lift_family?: string | null
           muscle_group?: string | null
+          muscle_groups?: string[]
           name: string
           pl_lift_group?: string | null
+          primary_movement_pattern?: string | null
           quality_warning?: string | null
           safe_to_publish?: boolean
           source_quality?: string | null
@@ -3710,6 +3720,7 @@ export type Database = {
           tags?: string[] | null
           thumbnail_url?: string | null
           updated_at?: string
+          variation_type?: string | null
           video_migration_status?: string | null
           video_provider?: string | null
           video_url?: string | null
@@ -3717,6 +3728,7 @@ export type Database = {
           vimeo_url?: string | null
           vimeo_video_id?: string | null
           vimeo_working?: boolean
+          volume_multiplier?: number | null
           warmup_notes?: string | null
           warmup_protocol_id?: string | null
           youtube_fallback_allowed?: boolean
@@ -3730,6 +3742,7 @@ export type Database = {
           category?: string | null
           common_mistakes?: string | null
           competition_lift_type?: string | null
+          counts_toward_volume?: boolean
           created_at?: string
           cues?: string | null
           default_load_unit?: string | null
@@ -3740,9 +3753,12 @@ export type Database = {
           is_competition_lift?: boolean
           is_powerlifting?: boolean
           legacy_youtube_url?: string | null
+          lift_family?: string | null
           muscle_group?: string | null
+          muscle_groups?: string[]
           name?: string
           pl_lift_group?: string | null
+          primary_movement_pattern?: string | null
           quality_warning?: string | null
           safe_to_publish?: boolean
           source_quality?: string | null
@@ -3751,6 +3767,7 @@ export type Database = {
           tags?: string[] | null
           thumbnail_url?: string | null
           updated_at?: string
+          variation_type?: string | null
           video_migration_status?: string | null
           video_provider?: string | null
           video_url?: string | null
@@ -3758,6 +3775,7 @@ export type Database = {
           vimeo_url?: string | null
           vimeo_video_id?: string | null
           vimeo_working?: boolean
+          volume_multiplier?: number | null
           warmup_notes?: string | null
           warmup_protocol_id?: string | null
           youtube_fallback_allowed?: boolean
