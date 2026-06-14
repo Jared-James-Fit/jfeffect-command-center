@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect, useState, lazy, Suspense, type ComponentType } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
@@ -19,31 +19,13 @@ import { inviteClient, deleteClient, getSetupLink, getPasswordResetLink, sendPas
 import { sendAuthLinkBySms } from "@/lib/sms-links.functions";
 import { deactivateClient, reactivateClient, DEACTIVATION_REASONS } from "@/lib/client-deactivation.functions";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { TrainingPhasesPanel } from "@/components/training-phases-panel";
-import { ClientMaxesPanel } from "@/components/client-maxes-panel";
-import { ImportantDatesPanel } from "@/components/important-dates-panel";
-import { PtSessionsPanel } from "@/components/pt-sessions-panel";
-import { NutritionTargetsPanel } from "@/components/nutrition-targets-panel";
-import { CardioTargetsPanel } from "@/components/cardio-targets-panel";
-import { LiftVideosPanel } from "@/components/lift-videos-panel";
-import { ProgressMetricsPanel } from "@/components/progress-metrics-panel";
-import { BasicInfoForm } from "@/components/basic-info-form";
 import { calcAge, formatHeight } from "@/lib/basic-info";
 import { Switch } from "@/components/ui/switch";
 import { COMMON_TIMEZONES } from "@/lib/pt-sessions";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { ClientExerciseNotesCard } from "@/components/client-exercise-notes-card";
-import { ProfilePictureCapture } from "@/components/profile-picture-capture";
-import { MessageThread } from "@/components/message-thread";
 import type { ConversationState } from "@/lib/messages";
-import { AgreementStatusPanel } from "@/components/agreement-status-panel";
 import { ClientDriveFolderPanel } from "@/components/client-drive-folder-panel";
-import { PurchaseRecordsPanel } from "@/components/purchase-records-panel";
-import { PriceCardPickerDialog } from "@/components/price-card-picker-dialog";
-import { AgreementsPanel } from "@/components/agreements-panel";
 import { TrainingScheduleCard } from "@/components/training-schedule-card";
-import { AssignedProgramsCard } from "@/components/assigned-programs-card";
-import { ClientWarmupCard } from "@/components/client-warmup-card";
 import { PowerlifterBadge, POWERLIFTER_BADGE_LABELS } from "@/components/powerlifter-badge";
 import { SocialHandlesEditor } from "@/components/social-handles-editor";
 import { SocialIcons } from "@/components/social-icons";
@@ -56,7 +38,36 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { listForms as listNativeForms, type NfForm } from "@/lib/native-forms";
 import { replaceClientNativeFormAssignments } from "@/lib/native-forms.functions";
 import { ActionButton } from "@/components/action-button";
-import { ClientBillingPanel } from "@/components/admin/client-billing-panel";
+
+// Heavy panels — code-split so visiting a client only loads the active tab's code.
+const lazyDefault = <T,>(loader: () => Promise<{ [k: string]: T }>, name: string) =>
+  lazy(async () => {
+    const m = await loader();
+    return { default: (m as any)[name] as ComponentType<any> };
+  });
+const TrainingPhasesPanel = lazyDefault(() => import("@/components/training-phases-panel"), "TrainingPhasesPanel");
+const ClientMaxesPanel = lazyDefault(() => import("@/components/client-maxes-panel"), "ClientMaxesPanel");
+const ImportantDatesPanel = lazyDefault(() => import("@/components/important-dates-panel"), "ImportantDatesPanel");
+const PtSessionsPanel = lazyDefault(() => import("@/components/pt-sessions-panel"), "PtSessionsPanel");
+const NutritionTargetsPanel = lazyDefault(() => import("@/components/nutrition-targets-panel"), "NutritionTargetsPanel");
+const CardioTargetsPanel = lazyDefault(() => import("@/components/cardio-targets-panel"), "CardioTargetsPanel");
+const LiftVideosPanel = lazyDefault(() => import("@/components/lift-videos-panel"), "LiftVideosPanel");
+const ProgressMetricsPanel = lazyDefault(() => import("@/components/progress-metrics-panel"), "ProgressMetricsPanel");
+const BasicInfoForm = lazyDefault(() => import("@/components/basic-info-form"), "BasicInfoForm");
+const ClientExerciseNotesCard = lazyDefault(() => import("@/components/client-exercise-notes-card"), "ClientExerciseNotesCard");
+const ProfilePictureCapture = lazyDefault(() => import("@/components/profile-picture-capture"), "ProfilePictureCapture");
+const MessageThread = lazyDefault(() => import("@/components/message-thread"), "MessageThread");
+const AgreementStatusPanel = lazyDefault(() => import("@/components/agreement-status-panel"), "AgreementStatusPanel");
+const PurchaseRecordsPanel = lazyDefault(() => import("@/components/purchase-records-panel"), "PurchaseRecordsPanel");
+const PriceCardPickerDialog = lazyDefault(() => import("@/components/price-card-picker-dialog"), "PriceCardPickerDialog");
+const AgreementsPanel = lazyDefault(() => import("@/components/agreements-panel"), "AgreementsPanel");
+const AssignedProgramsCard = lazyDefault(() => import("@/components/assigned-programs-card"), "AssignedProgramsCard");
+const ClientWarmupCard = lazyDefault(() => import("@/components/client-warmup-card"), "ClientWarmupCard");
+const ClientBillingPanel = lazyDefault(() => import("@/components/admin/client-billing-panel"), "ClientBillingPanel");
+
+function TabFallback() {
+  return <div className="md:col-span-3 p-6 text-sm text-muted-foreground">Loading…</div>;
+}
 
 function AssignedCoachSelect({ value, onChange }: { value: string | null; onChange: (v: string | null) => void }) {
   const { data: coaches = [] } = useQuery({
