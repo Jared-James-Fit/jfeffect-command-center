@@ -2,7 +2,18 @@
 
 _Generated: 2026-06-14. Evidence-based, no code changes performed._
 
-_Re-verified: 2026-06-14 (same day). Confirmed against live DB: storage policies B6 still bound to `{-}` (catch-all), legal doc state unchanged (5/12 published, enforcement off across all 12), notification mode has progressed `dry_run` → `allowlist` (1 phone + 1 email allowlisted) — B2 partially cleared; remaining P0/P1 items below all still apply._
+_Re-verified: 2026-06-14 (3rd pass). Delta since last pass:_
+- ✅ **B1 kill switch** — `public_checkout_enabled = true` in `jf_membership_settings`. /join is now public-facing. Audit downgrades from P0 blocker to P0 "verify live purchase still works end-to-end."
+- ✅ **B5 sales-page key** — `launch-readiness.functions.ts:303` and `routes/join.tsx:72` both query `page_key="join"`. The `membership` row no longer exists in DB. RESOLVED.
+- ✅ **B9 portal agreements** — `routes/_authenticated/portal/agreements.index.tsx` now resolves the caller's `clients.id` and applies `.eq("client_id", clientId)` as defense-in-depth. RESOLVED.
+- ✅ **B11 cron handler auth** — `appointment-reminders.ts`, `sms-reminders.ts`, `media-archive.ts`, `cleanup-pending-signups.ts`, `lift-archive-tick.ts` all require `SCHEDULED_WORKER_SECRET` via `x-worker-secret`/`?secret=` with constant-time compare; `fillout.ts` uses constant-time compare against `FILLOUT_WEBHOOK_SECRET`. RESOLVED.
+- ⚠️ **B2 notifications** — still `allowlist` (1 phone + 1 email). Needs flip to `live` after Batch 3 QA.
+- ❌ **B6 storage policies** — `Admins manage client-action-files`, `Clients read own client-action-files`, `Coaches manage client-action-files for assigned clients` all still `roles={public}`. UNCHANGED.
+- ❌ **B7 cross-coach support leak** — `member_support_messages.msm_coach_select` QUAL is still bare `is_coach_or_admin(auth.uid())` with no assigned-client scope. UNCHANGED.
+- ❌ **B4 legal enforcement** — 0 of 12 documents have `enforcement_enabled=true`. UNCHANGED. (Publication count still 5/12.)
+- ❌ **B8 `client_action_requests` writes** — still direct client-side Supabase from `src/lib/client-action-requests.ts`. UNCHANGED.
+
+**Updated launch-blocker count: 7** (down from 11). The remaining hard blockers are B2 (live SMS), B3 (runtime secrets), B4 (legal enforcement), B6 (storage role), B7 (support-thread scoping), B8 (action-request server auth), B10 (pg_cron schedule for cleanup).
 
 ---
 
@@ -226,22 +237,23 @@ No missing GRANTs detected — project uses schema-level grants combined with RL
 2. [ ] Add `STRIPE_SECRET_KEY` + `STRIPE_WEBHOOK_SECRET` to runtime secrets (live mode)
 3. [ ] Add `TWILIO_API_KEY` (and any other Twilio creds the chosen client expects) to runtime secrets
 4. [ ] Add `RESEND_API_KEY` to runtime secrets
-5. [ ] Add `SCHEDULED_WORKER_SECRET` to runtime secrets
+5. [ ] Add `SCHEDULED_WORKER_SECRET` to runtime secrets — **now required by 5 cron handlers**, all return 401 without it
 6. [ ] Add `SIGNNOW_CLIENT_ID`, `SIGNNOW_CLIENT_SECRET`, `SIGNNOW_WEBHOOK_SECRET` to runtime secrets
-7. [ ] Fix sales-page key mismatch — make `/join` and Launch Readiness agree on one `page_key` ("join")
-8. [ ] Publish the membership sales page row at `/admin/sales/membership` and confirm `/join` renders the live copy (not the hardcoded fallback)
-9. [ ] Migration: `ALTER POLICY` for all 3 `client-action-files` storage policies → role `authenticated`
-10. [ ] Migration: scope `member_support_messages.msm_coach_select` to assigned clients only
+7. [x] ~~Sales-page key mismatch~~ — RESOLVED, both call sites use `page_key="join"`
+8. [ ] Confirm the published `sales_pages.join` row renders the live copy on `/join` (not the hardcoded fallback) — `published=true` already verified
+9. [ ] Migration: `ALTER POLICY` for all 3 `client-action-files` storage policies → role `authenticated` (still `{public}` as of 2026-06-14)
+10. [ ] Migration: scope `member_support_messages.msm_coach_select` to assigned clients only (still bare `is_coach_or_admin`)
 11. [ ] Migration: add admin-only RLS policies on `jf_pending_signups` (and document SECURITY DEFINER-only writes)
 12. [ ] Convert `createClientActionRequest`/`deleteClientActionRequest`/`resendClientActionRequest` to server fns with `requireSupabaseAuth` + `is_assigned_coach` / admin check
-13. [ ] Add explicit `.eq("client_id", client.id)` filter in `src/routes/_authenticated/portal/agreements.index.tsx:30`
-14. [ ] Add `SCHEDULED_WORKER_SECRET` header check (timing-safe) to: `appointment-reminders.ts`, `sms-reminders.ts`, `media-archive.ts`, `cleanup-pending-signups.ts`, `lift-archive-tick.ts`
-15. [ ] Replace plain string equality in `hooks/fillout.ts` with `timingSafeEqual`
-16. [ ] Create pg_cron schedule for `jf-cleanup-pending-signups-hourly` calling the cleanup endpoint
-17. [ ] Verify Stripe Customer Portal flow from `/m/billing` against the live key, end-to-end
-18. [ ] Publish current draft for ToS and Membership Agreement OR mark notice-only intentionally, then flip `enforcement_enabled=true` on at least those two
-19. [ ] Verify `sms_automations` rows exist for each of the 11 wired membership triggers; activate `notification_mode=allowlist`, send a test, then flip to `live`
-20. [ ] Flip `jf_membership_settings.public_checkout_enabled = true`
+13. [x] ~~Portal agreements client_id filter~~ — RESOLVED (`portal/agreements.index.tsx` now scopes by resolved `clientId`)
+14. [x] ~~`SCHEDULED_WORKER_SECRET` guard on 5 cron handlers~~ — RESOLVED (all use header/query + constant-time compare)
+15. [x] ~~Timing-safe Fillout signature~~ — RESOLVED (`hooks/fillout.ts` uses constant-time compare)
+16. [ ] Create pg_cron schedule for `jf-cleanup-pending-signups-hourly` — must POST `x-worker-secret: $SCHEDULED_WORKER_SECRET` (handler no longer accepts the publishable key)
+17. [ ] Re-schedule existing pg_cron jobs hitting `sms-reminders`, `media-archive`, `lift-archive-tick`, `appointment-reminders` to send `x-worker-secret` — current `apikey`-only jobs now 401
+18. [ ] Verify Stripe Customer Portal flow from `/m/billing` against the live key, end-to-end
+19. [ ] Publish current draft for ToS and Membership Agreement OR mark notice-only intentionally, then flip `enforcement_enabled=true` on at least those two
+20. [ ] Verify `sms_automations` rows exist for each of the 11 wired membership triggers; QA in `allowlist` mode (currently 1 phone + 1 email), then flip `app_settings.jf_membership_notifications.mode` to `live`
+21. [x] ~~Flip `public_checkout_enabled = true`~~ — RESOLVED (already true); **action: monitor first live purchase**
 
 ### P1 — Immediately after P0
 
@@ -358,14 +370,14 @@ No missing GRANTs detected — project uses schema-level grants combined with RL
 
 ## J. FINAL VERDICT
 
-**What prevents launch right now:**
-1. Production secrets not visible to runtime (Stripe, Twilio, Resend, SignNow, scheduled-worker secret).
-2. Three RLS / authorization gaps with real exfiltration risk (`client-action-files` role, cross-coach support reads, unguarded `client_action_requests` writes).
-3. The kill switch is off, notifications are in `dry_run`, and `sms_automations` template rows haven't been confirmed.
-4. Sales-page key mismatch + several legal documents lack a published version.
-5. No pg_cron schedule for pending-signup cleanup; multiple cron handlers lack proper auth.
+**What prevents launch right now (updated 2026-06-14, 3rd pass):**
+1. Production secrets not visible to runtime (Stripe, Twilio, Resend, SignNow, **`SCHEDULED_WORKER_SECRET` — now hard-required by 5 cron endpoints**).
+2. Three RLS / authorization gaps with real exfiltration risk still open: `client-action-files` storage role still `{public}`, cross-coach support reads (`msm_coach_select`), unguarded `client_action_requests` writes.
+3. Notification mode still `allowlist` (not yet `live`); `sms_automations` template rows haven't been confirmed for all 11 triggers.
+4. Legal enforcement is off on all 12 documents; ToS + Membership Agreement at minimum must flip to `enforcement_enabled=true`.
+5. No pg_cron schedule for pending-signup cleanup, AND existing pg_cron rows for sms-reminders/media-archive/lift-archive-tick still send `apikey` — they now 401 against the hardened handlers.
 
-**What can safely launch:**
+**What can safely launch (unchanged):**
 - Auth, onboarding, profiles
 - Workout builder (single-block templates), workout logger, set logging, completion, feedback (UI works; tighten auth in P1)
 - Lift video upload + review + Drive archive (pending credentials)
@@ -376,12 +388,12 @@ No missing GRANTs detected — project uses schema-level grants combined with RL
 - Member portal, billing portal redirect, lifecycle states
 
 **What must stay disabled until P0 closes:**
-- Public `/join` checkout (it is — keep it that way until everything in Batch 1–3 is green)
+- ⚠️ `/join` is currently **OPEN** (`public_checkout_enabled=true`) — strongly consider toggling back off until Batch 1 (RLS) + secrets are in place; first live purchase will exercise SMS in allowlist mode and silently no-op for the real buyer.
 - Public `/coaching/apply` (no rate limiting yet — at minimum throttle)
 - Any client-facing promo entry UI (none exists, which is fine)
 - Multi-block template assignment for live clients
 
-**Exact first batch to execute next:** Batch 1 — "Lock the doors." That clears the three high-severity security findings, removes the unguarded `client_action_requests` writes, adds defense-in-depth on the portal agreements query, and tightens the Fillout webhook signature — all without changing any user-visible flow.
+**Exact first batch to execute next:** Batch 1 — "Lock the doors (remaining items)." Batch 1's earlier scope is partially complete (B9, B11, B15 done). What remains for the same batch is the storage-policy role swap (B6), the support-thread scoping (B7), the `jf_pending_signups` admin-only RLS (B11 from §B), and the `client_action_requests` server-fn auth (B8) — all in a single migration + one code refactor, no user-visible flow change.
 
 ---
 
