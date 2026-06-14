@@ -2160,9 +2160,9 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
       {expanded && (
       <div className="grid grid-cols-12 items-start gap-2">
         {/* ---- Suggested Load: one coherent group ---- */}
-        <div className={cn("col-span-12", loadMode === "none" ? "md:col-span-6" : "md:col-span-9", "rounded-md border border-border/60 bg-muted/20 p-1.5")}>
+        <div className={cn("col-span-12", loadMode === "none" ? "md:col-span-6" : "md:col-span-9", "rounded-md border border-builder-card-border/70 bg-builder-inset p-2")}>
           <div className="mb-1 flex items-center justify-between gap-2 px-0.5">
-            <span className="text-[11px] font-semibold uppercase tracking-wide text-foreground leading-none">Suggested load</span>
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground leading-none">Suggested load</span>
             <button
               type="button"
               role="switch"
