@@ -13,6 +13,25 @@ import { Progress } from "@/components/ui/progress";
 import { ProfilePictureCapture } from "@/components/profile-picture-capture";
 import { toast } from "sonner";
 import { CheckCircle2 } from "lucide-react";
+import { cn } from "@/lib/utils";
+
+const GOAL_OPTIONS = [
+  "Get stronger",
+  "Lose fat",
+  "Build muscle",
+  "Get back in shape",
+  "General fitness",
+  "Powerlifting meet",
+  "Bodybuilding",
+  "Athletic performance",
+] as const;
+
+const EXPERIENCE_OPTIONS = [
+  { value: "new", label: "New to lifting", hint: "< 6 months" },
+  { value: "beginner", label: "Beginner", hint: "6 mo – 2 yrs" },
+  { value: "intermediate", label: "Intermediate", hint: "2 – 5 yrs" },
+  { value: "advanced", label: "Advanced", hint: "5+ yrs" },
+] as const;
 
 type Step = "photo" | "contact" | "basics" | "goals";
 const STEPS: Step[] = ["photo", "contact", "basics", "goals"];
@@ -56,7 +75,9 @@ export function MemberSetupWizard({
         }
       }
       if (step === "goals") {
+        if (form.goals_tags !== undefined) patch.goals_tags = form.goals_tags;
         if (form.goals !== undefined) patch.goals = form.goals;
+        if (form.experience_level !== undefined) patch.experience_level = form.experience_level;
         if (form.training_background !== undefined) patch.training_background = form.training_background;
       }
       if (Object.keys(patch).length) {
