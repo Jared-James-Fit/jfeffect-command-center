@@ -199,13 +199,21 @@ function FilterChips({ chip, setChip }: { chip: FilterChip; setChip: (c: FilterC
   );
 }
 
-function TemplateCard({ tpl, onPreview, onAssign, onChanged }: { tpl: any; onPreview: () => void; onAssign: () => void; onChanged: () => void }) {
+function TemplateCard({ tpl, onPreview, onAssign, onShare, onChanged }: { tpl: any; onPreview: () => void; onAssign: () => void; onShare: () => void; onChanged: () => void }) {
   const summary = useMemo(() => summarizeTemplatePayload(tpl), [tpl]);
   const updated = tpl.updated_at ? new Date(tpl.updated_at).toLocaleDateString() : "—";
   const { data: assignments = [] } = useQuery({
     queryKey: ["pl-template-assignments", tpl.id],
     queryFn: () => listTemplateAssignments(tpl.id),
   });
+  const { data: shares = [] } = useQuery({
+    queryKey: ["pl-template-shares", tpl.id],
+    queryFn: () => listShares(tpl.id),
+  });
+  const shareSummary = useMemo(
+    () => summarizeShares(tpl, shares as TemplateShare[]),
+    [tpl, shares],
+  );
   const activeAssignments = (assignments as any[]).filter((a) => !a.archived);
   const uniqueClients = Array.from(new Map(activeAssignments.map((a: any) => [a.clientId, a])).values()) as any[];
   return (
@@ -217,6 +225,8 @@ function TemplateCard({ tpl, onPreview, onAssign, onChanged }: { tpl: any; onPre
         </div>
         <RowMenu tpl={tpl} onChanged={onChanged} />
       </div>
+
+      <DestinationBadges summary={shareSummary} ownerRole={tpl.owner_role} compact />
 
       <div className="flex flex-wrap gap-1 text-[10px]">
         <Badge variant="outline">{TYPE_LABEL[tpl.template_type] ?? tpl.template_type}</Badge>
@@ -248,6 +258,9 @@ function TemplateCard({ tpl, onPreview, onAssign, onChanged }: { tpl: any; onPre
           <Link to="/admin/program-library/$templateId" params={{ templateId: tpl.id }}>
             <Pencil className="mr-1 h-3 w-3" /> Edit
           </Link>
+        </Button>
+        <Button size="sm" variant="outline" className="flex-1" onClick={onShare}>
+          <Share2 className="mr-1 h-3 w-3" /> Share
         </Button>
         <Button size="sm" className="flex-1" onClick={onAssign}>
           <UserPlus className="mr-1 h-3 w-3" /> Assign
