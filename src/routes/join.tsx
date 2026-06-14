@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery } from "@tanstack/react-query";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createJfSignupCheckout, getJfPublicSettings } from "@/lib/jf-billing.functions";
 import { getPublicSalesPage } from "@/lib/sales-pages.functions";
 import { getMembershipLaunchGate } from "@/lib/membership-launch-gate.functions";
@@ -70,7 +70,11 @@ function SignupJf() {
   const [showPw, setShowPw] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
 
-  const cancelled = typeof window !== "undefined" && new URLSearchParams(window.location.search).has("cancelled");
+  const [cancelled, setCancelled] = useState(false);
+  useEffect(() => {
+    setCancelled(new URLSearchParams(window.location.search).has("cancelled"));
+  }, []);
+  const [firstChargeLabel, setFirstChargeLabel] = useState<string | null>(null);
   const checkoutBlocked = (settings && !settings.has_monthly_price) || (gate && !gate.ok);
   const requiredDocs = gate?.required_docs ?? [];
   const allAccepted = requiredDocs.length > 0 && requiredDocs.every((d) => accepted[d.document_id]);
@@ -106,6 +110,12 @@ function SignupJf() {
   const s = p?.sections ?? {};
   const trialDays = settings?.trial_days ?? 3;
   const ctaLabel = p?.primary_cta_label ?? `Start ${trialDays}-Day Free Trial`;
+
+  useEffect(() => {
+    setFirstChargeLabel(
+      new Date(Date.now() + trialDays * 24 * 60 * 60 * 1000).toLocaleDateString(),
+    );
+  }, [trialDays]);
 
   return (
     <SalesPageShell>
@@ -177,7 +187,7 @@ function SignupJf() {
               <ul className="mt-2 space-y-1 text-xs text-foreground">
                 <li>· {settings?.monthly_price_display ?? "$29/month USD"} after a {trialDays}-day free trial</li>
                 <li>· Due today: $0 (you won't be charged until your trial ends)</li>
-                <li>· First charge: {new Date(Date.now() + trialDays * 24 * 60 * 60 * 1000).toLocaleDateString()}</li>
+                <li>· First charge: {firstChargeLabel ?? `in ${trialDays} days`}</li>
                 <li>· Billing renews automatically every month until you cancel</li>
                 <li>· Cancel anytime — access continues until the end of your current billing period</li>
               </ul>
