@@ -1981,6 +1981,17 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
             <ClipboardCopy className="h-3.5 w-3.5" />
           </Button>
           <SwapExerciseButton row={row} setRow={setRow} exercises={exercises} />
+          {multiBlockFlag && row._dbId && (
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-7 w-7 text-primary"
+              onClick={() => setBlocksOpen(true)}
+              title="Multi-block editor (preview)"
+            >
+              <Layers className="h-3.5 w-3.5" />
+            </Button>
+          )}
           <Popover>
             <PopoverTrigger asChild>
               <Button size="icon" variant="ghost" className="h-7 w-7" title="Advanced settings (exercise classification)">
