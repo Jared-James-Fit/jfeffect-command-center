@@ -689,39 +689,51 @@ function ClientDetail() {
         </TabsContent>
 
         <TabsContent value="training" className="grid gap-6 md:grid-cols-3">
-          <div className="md:col-span-3"><TrainingScheduleCard client={form} /></div>
-          <AssignedProgramsCard clientId={id} mode="admin" />
-          <TrainingPhasesPanel clientId={id} />
-          <ImportantDatesPanel clientId={id} />
-          <ClientExerciseNotesCard clientId={id} />
-          <ClientMaxesPanel clientId={id} />
-          <ClientWarmupCard clientId={id} />
+          <Suspense fallback={<TabFallback />}>
+            <div className="md:col-span-3"><TrainingScheduleCard client={form} /></div>
+            <AssignedProgramsCard clientId={id} mode="admin" />
+            <TrainingPhasesPanel clientId={id} />
+            <ImportantDatesPanel clientId={id} />
+            <ClientExerciseNotesCard clientId={id} />
+            <ClientMaxesPanel clientId={id} />
+            <ClientWarmupCard clientId={id} />
+          </Suspense>
         </TabsContent>
 
         <TabsContent value="nutrition" className="grid gap-6 md:grid-cols-3">
-          <NutritionTargetsPanel clientId={id} />
+          <Suspense fallback={<TabFallback />}>
+            <NutritionTargetsPanel clientId={id} />
+          </Suspense>
         </TabsContent>
 
         <TabsContent value="cardio" className="grid gap-6 md:grid-cols-3">
-          <div className="md:col-span-3"><TrainingScheduleCard client={form} /></div>
-          <CardioTargetsPanel clientId={id} />
+          <Suspense fallback={<TabFallback />}>
+            <div className="md:col-span-3"><TrainingScheduleCard client={form} /></div>
+            <CardioTargetsPanel clientId={id} />
+          </Suspense>
         </TabsContent>
 
         <TabsContent value="metrics" className="grid gap-6 md:grid-cols-3">
-          <ProgressMetricsPanel
-            clientId={id}
-            defaultUnit={(form?.preferred_weight_unit as "lb" | "kg") ?? "lb"}
-            canEdit
-            showExport
-          />
+          <Suspense fallback={<TabFallback />}>
+            <ProgressMetricsPanel
+              clientId={id}
+              defaultUnit={(form?.preferred_weight_unit as "lb" | "kg") ?? "lb"}
+              canEdit
+              showExport
+            />
+          </Suspense>
         </TabsContent>
 
         <TabsContent value="messages" className="grid gap-6">
-          <ClientMessagesTab clientId={id} />
+          <Suspense fallback={<TabFallback />}>
+            <ClientMessagesTab clientId={id} />
+          </Suspense>
         </TabsContent>
 
         <TabsContent value="lift-videos" className="grid gap-6 md:grid-cols-3">
-          <LiftVideosPanel clientId={id} />
+          <Suspense fallback={<TabFallback />}>
+            <LiftVideosPanel clientId={id} />
+          </Suspense>
         </TabsContent>
 
         <TabsContent value="documents" className="grid gap-6 md:grid-cols-3">
@@ -793,6 +805,7 @@ function ClientDetail() {
         </TabsContent>
 
         <TabsContent value="sessions" className="grid gap-6 md:grid-cols-3">
+          <Suspense fallback={<TabFallback />}>
           <PtSessionsPanel clientId={id} client={form} />
 
         <Card className="border-border bg-card p-6 md:col-span-3 space-y-4">
@@ -829,20 +842,27 @@ function ClientDetail() {
           </div>
           <p className="text-xs text-muted-foreground">Reminder emails are sent in the client's time zone. Defaults to America/Winnipeg if not set.</p>
         </Card>
+          </Suspense>
         </TabsContent>
 
         <TabsContent value="purchases" className="grid gap-6 md:grid-cols-3">
-          <AgreementStatusPanel client={form} />
-          <PurchaseRecordsPanel clientId={id} />
+          <Suspense fallback={<TabFallback />}>
+            <AgreementStatusPanel client={form} />
+            <PurchaseRecordsPanel clientId={id} />
+          </Suspense>
         </TabsContent>
 
         <TabsContent value="billing" className="grid gap-6 md:grid-cols-3">
-          <ClientBillingPanel clientId={id} />
+          <Suspense fallback={<TabFallback />}>
+            <ClientBillingPanel clientId={id} />
+          </Suspense>
         </TabsContent>
 
         <TabsContent value="agreements" className="grid gap-6 md:grid-cols-3">
-          <AgreementStatusPanel client={form} />
-          <AgreementsPanel clientId={id} clientName={form?.full_name} />
+          <Suspense fallback={<TabFallback />}>
+            <AgreementStatusPanel client={form} />
+            <AgreementsPanel clientId={id} clientName={form?.full_name} />
+          </Suspense>
         </TabsContent>
 
         <TabsContent value="notes" className="grid gap-6 md:grid-cols-3">
