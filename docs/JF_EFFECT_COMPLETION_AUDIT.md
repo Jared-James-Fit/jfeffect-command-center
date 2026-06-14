@@ -370,14 +370,14 @@ No missing GRANTs detected — project uses schema-level grants combined with RL
 
 ## J. FINAL VERDICT
 
-**What prevents launch right now:**
-1. Production secrets not visible to runtime (Stripe, Twilio, Resend, SignNow, scheduled-worker secret).
-2. Three RLS / authorization gaps with real exfiltration risk (`client-action-files` role, cross-coach support reads, unguarded `client_action_requests` writes).
-3. The kill switch is off, notifications are in `dry_run`, and `sms_automations` template rows haven't been confirmed.
-4. Sales-page key mismatch + several legal documents lack a published version.
-5. No pg_cron schedule for pending-signup cleanup; multiple cron handlers lack proper auth.
+**What prevents launch right now (updated 2026-06-14, 3rd pass):**
+1. Production secrets not visible to runtime (Stripe, Twilio, Resend, SignNow, **`SCHEDULED_WORKER_SECRET` — now hard-required by 5 cron endpoints**).
+2. Three RLS / authorization gaps with real exfiltration risk still open: `client-action-files` storage role still `{public}`, cross-coach support reads (`msm_coach_select`), unguarded `client_action_requests` writes.
+3. Notification mode still `allowlist` (not yet `live`); `sms_automations` template rows haven't been confirmed for all 11 triggers.
+4. Legal enforcement is off on all 12 documents; ToS + Membership Agreement at minimum must flip to `enforcement_enabled=true`.
+5. No pg_cron schedule for pending-signup cleanup, AND existing pg_cron rows for sms-reminders/media-archive/lift-archive-tick still send `apikey` — they now 401 against the hardened handlers.
 
-**What can safely launch:**
+**What can safely launch (unchanged):**
 - Auth, onboarding, profiles
 - Workout builder (single-block templates), workout logger, set logging, completion, feedback (UI works; tighten auth in P1)
 - Lift video upload + review + Drive archive (pending credentials)
@@ -388,12 +388,12 @@ No missing GRANTs detected — project uses schema-level grants combined with RL
 - Member portal, billing portal redirect, lifecycle states
 
 **What must stay disabled until P0 closes:**
-- Public `/join` checkout (it is — keep it that way until everything in Batch 1–3 is green)
+- ⚠️ `/join` is currently **OPEN** (`public_checkout_enabled=true`) — strongly consider toggling back off until Batch 1 (RLS) + secrets are in place; first live purchase will exercise SMS in allowlist mode and silently no-op for the real buyer.
 - Public `/coaching/apply` (no rate limiting yet — at minimum throttle)
 - Any client-facing promo entry UI (none exists, which is fine)
 - Multi-block template assignment for live clients
 
-**Exact first batch to execute next:** Batch 1 — "Lock the doors." That clears the three high-severity security findings, removes the unguarded `client_action_requests` writes, adds defense-in-depth on the portal agreements query, and tightens the Fillout webhook signature — all without changing any user-visible flow.
+**Exact first batch to execute next:** Batch 1 — "Lock the doors (remaining items)." Batch 1's earlier scope is partially complete (B9, B11, B15 done). What remains for the same batch is the storage-policy role swap (B6), the support-thread scoping (B7), the `jf_pending_signups` admin-only RLS (B11 from §B), and the `client_action_requests` server-fn auth (B8) — all in a single migration + one code refactor, no user-visible flow change.
 
 ---
 
