@@ -44,6 +44,8 @@ export const REQUIRED_BASIC_INFO_FIELDS = [
   "city",
   "country",
   "timezone",
+  "emergency_contact_name",
+  "emergency_contact_phone",
 ] as const;
 
 export function isBasicInfoComplete(c: Record<string, any> | null | undefined): boolean {

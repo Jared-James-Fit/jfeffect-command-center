@@ -164,21 +164,20 @@ export function BasicInfoForm({
         </div>
       </div>
 
-      {showOptional && (
-        <div className="space-y-3 rounded-md border border-border bg-secondary/20 p-4">
-          <div className="text-xs uppercase tracking-widest text-muted-foreground">Emergency contact <span className="normal-case tracking-normal">(optional)</span></div>
-          <div className="grid gap-3 md:grid-cols-2">
-            <div>
-              <Label>Contact name</Label>
-              <Input value={values.emergency_contact_name ?? ""} onChange={(e) => onChange({ emergency_contact_name: e.target.value })} />
-            </div>
-            <div>
-              <Label>Contact phone</Label>
-              <Input value={values.emergency_contact_phone ?? ""} onChange={(e) => onChange({ emergency_contact_phone: e.target.value })} />
-            </div>
+      <div className="space-y-3 rounded-md border border-border bg-secondary/20 p-4">
+        <div className="text-xs uppercase tracking-widest text-muted-foreground">Emergency contact *</div>
+        <p className="text-[11px] text-muted-foreground">Required — someone we can reach if anything urgent happens during training.</p>
+        <div className="grid gap-3 md:grid-cols-2">
+          <div>
+            <Label>Contact name *</Label>
+            <Input value={values.emergency_contact_name ?? ""} onChange={(e) => onChange({ emergency_contact_name: e.target.value })} />
+          </div>
+          <div>
+            <Label>Contact phone *</Label>
+            <Input value={values.emergency_contact_phone ?? ""} onChange={(e) => onChange({ emergency_contact_phone: e.target.value })} placeholder="(555) 123-4567" />
           </div>
         </div>
-      )}
+      </div>
 
       {showOptional && (
         <div>
