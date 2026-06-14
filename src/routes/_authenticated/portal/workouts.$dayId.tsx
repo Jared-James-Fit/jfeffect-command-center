@@ -490,7 +490,21 @@ function WorkoutDay() {
     if (!focusMode) return;
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    return () => { document.body.style.overflow = prev; };
+    // Hide the mobile bottom nav while in full-screen logging so it can't
+    // overlap controls and so opened Sheets (z-50) are not trapped behind it.
+    document.body.setAttribute("data-workout-focus", "1");
+    const navEls = document.querySelectorAll<HTMLElement>("[data-mobile-bottom-nav]");
+    const restores: Array<() => void> = [];
+    navEls.forEach((el) => {
+      const prevDisplay = el.style.display;
+      el.style.display = "none";
+      restores.push(() => { el.style.display = prevDisplay; });
+    });
+    return () => {
+      document.body.style.overflow = prev;
+      document.body.removeAttribute("data-workout-focus");
+      restores.forEach((fn) => fn());
+    };
   }, [focusMode]);
 
   // Restore any unsynced draft for this workout's notes/duration before render.
