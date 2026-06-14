@@ -2305,6 +2305,14 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
           onSaved={() => { setMaxEditor(null); refresh(); }}
         />
       )}
+      {multiBlockFlag && row._dbId && (
+        <ExerciseBlocksEditor
+          open={blocksOpen}
+          onOpenChange={setBlocksOpen}
+          rowId={row._dbId}
+          exerciseName={exName || "Exercise"}
+        />
+      )}
     </div>
   );
 }
