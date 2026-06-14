@@ -20,23 +20,41 @@ function AccountPage() {
   const fetchMe = useServerFn(getCurrentMember);
   const saveMarketing = useServerFn(updateMyMarketingPrefs);
   const { data: me } = useQuery({ queryKey: ["m-me"], queryFn: () => fetchMe() });
-  const [marketingOn, setMarketingOn] = useState(false);
-  const [savingMarketing, setSavingMarketing] = useState(false);
+  const [emailOn, setEmailOn] = useState(false);
+  const [smsOn, setSmsOn] = useState(false);
+  const [savingKey, setSavingKey] = useState<null | "email" | "sms">(null);
   useEffect(() => {
-    if (me?.member) setMarketingOn(!me.member.sms_opt_out);
-  }, [me?.member?.id, me?.member?.sms_opt_out]);
-  const onToggleMarketing = async (next: boolean) => {
-    setMarketingOn(next);
-    setSavingMarketing(true);
+    if (me?.member) {
+      setEmailOn(!!me.member.email_marketing_opt_in);
+      setSmsOn(!me.member.sms_opt_out);
+    }
+  }, [me?.member?.id, me?.member?.email_marketing_opt_in, me?.member?.sms_opt_out]);
+  const onToggleEmail = async (next: boolean) => {
+    setEmailOn(next);
+    setSavingKey("email");
     try {
-      await saveMarketing({ data: { sms_opt_out: !next } });
+      await saveMarketing({ data: { email_marketing_opt_in: next } });
       qc.invalidateQueries({ queryKey: ["m-me"] });
-      toast.success(next ? "Subscribed to coaching updates" : "Marketing messages turned off");
+      toast.success(next ? "Email updates turned on" : "Email updates turned off");
     } catch (e: any) {
-      setMarketingOn(!next);
+      setEmailOn(!next);
       toast.error(e?.message ?? "Couldn't save preference");
     } finally {
-      setSavingMarketing(false);
+      setSavingKey(null);
+    }
+  };
+  const onToggleSms = async (next: boolean) => {
+    setSmsOn(next);
+    setSavingKey("sms");
+    try {
+      await saveMarketing({ data: { sms_marketing_on: next } });
+      qc.invalidateQueries({ queryKey: ["m-me"] });
+      toast.success(next ? "Text updates turned on" : "Text updates turned off");
+    } catch (e: any) {
+      setSmsOn(!next);
+      toast.error(e?.message ?? "Couldn't save preference");
+    } finally {
+      setSavingKey(null);
     }
   };
   return (
@@ -60,21 +78,36 @@ function AccountPage() {
       </Card>
       <Card className="p-6">
         <div className="text-xs uppercase tracking-wider text-muted-foreground">Notifications &amp; marketing</div>
-        <div className="mt-3 flex items-start justify-between gap-4">
-          <div className="min-w-0">
-            <Label htmlFor="marketing-toggle" className="text-sm font-semibold">
-              Coaching updates &amp; offers
-            </Label>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Send me occasional coaching updates and offers by email or SMS. Optional — you can unsubscribe anytime from here or any message.
-            </p>
+        <div className="mt-3 space-y-4">
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <Label htmlFor="email-marketing-toggle" className="text-sm font-semibold">
+                Email me occasional coaching updates and offers.
+              </Label>
+            </div>
+            <Switch
+              id="email-marketing-toggle"
+              checked={emailOn}
+              onCheckedChange={onToggleEmail}
+              disabled={savingKey !== null || !me?.member}
+            />
           </div>
-          <Switch
-            id="marketing-toggle"
-            checked={marketingOn}
-            onCheckedChange={onToggleMarketing}
-            disabled={savingMarketing || !me?.member}
-          />
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <Label htmlFor="sms-marketing-toggle" className="text-sm font-semibold">
+                Text me occasional coaching updates and offers.
+              </Label>
+            </div>
+            <Switch
+              id="sms-marketing-toggle"
+              checked={smsOn}
+              onCheckedChange={onToggleSms}
+              disabled={savingKey !== null || !me?.member}
+            />
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Optional. You can change these preferences or unsubscribe at any time.
+          </p>
         </div>
       </Card>
       <Button variant="outline" onClick={() => signOut()}>Sign out</Button>
