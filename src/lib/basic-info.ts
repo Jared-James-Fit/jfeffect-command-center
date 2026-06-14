@@ -50,11 +50,34 @@ export const REQUIRED_BASIC_INFO_FIELDS = [
 
 export function isBasicInfoComplete(c: Record<string, any> | null | undefined): boolean {
   if (!c) return false;
-  return REQUIRED_BASIC_INFO_FIELDS.every((f) => {
+  const baseOk = REQUIRED_BASIC_INFO_FIELDS.every((f) => {
     const v = c[f];
     return v !== null && v !== undefined && String(v).trim() !== "";
   });
+  if (!baseOk) return false;
+  // Intake SBD: either "I don't know" (false) or all three values + unit.
+  return isIntakeLiftsComplete(c);
 }
+
+export function isIntakeLiftsComplete(c: Record<string, any> | null | undefined): boolean {
+  if (!c) return false;
+  if (c.intake_lifts_known === false) return true;
+  const unit = c.intake_lift_unit;
+  return (
+    (unit === "kg" || unit === "lb") &&
+    Number(c.intake_squat_1rm) > 0 &&
+    Number(c.intake_bench_1rm) > 0 &&
+    Number(c.intake_deadlift_1rm) > 0
+  );
+}
+
+// Strength standards (approximate male intermediate, kg) used as quick guidance
+// in the intake form. Conversions to lb happen at render time.
+export const SBD_GUIDANCE_KG = {
+  squat: { beginner: 60, intermediate: 100, advanced: 140, elite: 180 },
+  bench: { beginner: 40, intermediate: 75, advanced: 110, elite: 140 },
+  deadlift: { beginner: 80, intermediate: 120, advanced: 170, elite: 220 },
+} as const;
 
 // Days until next birthday (0 = today). Returns null if no DOB.
 export function daysUntilBirthday(dob: string | null | undefined, ref: Date = new Date()): number | null {

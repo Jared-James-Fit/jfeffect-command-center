@@ -4,8 +4,9 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { Checkbox } from "@/components/ui/checkbox";
 import { COMMON_TIMEZONES } from "@/lib/pt-sessions";
-import { calcAge, cmToFtIn, ftInToCm } from "@/lib/basic-info";
+import { calcAge, cmToFtIn, ftInToCm, SBD_GUIDANCE_KG } from "@/lib/basic-info";
 
 const COUNTRIES = ["Canada", "United States", "United Kingdom", "Australia", "New Zealand", "Other"];
 
@@ -26,6 +27,11 @@ export type BasicInfoValues = {
   emergency_contact_name?: string | null;
   emergency_contact_phone?: string | null;
   notes?: string | null; // maps to lifestyle_notes for client self-entry
+  intake_lifts_known?: boolean | null;
+  intake_lift_unit?: "kg" | "lb" | null;
+  intake_squat_1rm?: number | null;
+  intake_bench_1rm?: number | null;
+  intake_deadlift_1rm?: number | null;
 };
 
 export function BasicInfoForm({
@@ -179,12 +185,111 @@ export function BasicInfoForm({
         </div>
       </div>
 
+      <SbdIntakeSection values={values} onChange={onChange} />
+
       {showOptional && (
         <div>
           <Label>Anything else we should know? <span className="text-muted-foreground">(optional)</span></Label>
           <Textarea rows={3} value={values.notes ?? ""} onChange={(e) => onChange({ notes: e.target.value })} placeholder="Allergies, medical conditions, schedule constraints, etc." />
         </div>
       )}
+    </div>
+  );
+}
+
+function SbdIntakeSection({
+  values,
+  onChange,
+}: {
+  values: BasicInfoValues;
+  onChange: (patch: Partial<BasicInfoValues>) => void;
+}) {
+  const unit = (values.intake_lift_unit ?? "lb") as "kg" | "lb";
+  const dontKnow = values.intake_lifts_known === false;
+  const factor = unit === "kg" ? 1 : 2.2046226218;
+  const fmt = (kg: number) => Math.round(kg * factor);
+
+  const setNum = (k: keyof BasicInfoValues, raw: string) => {
+    const n = Number(raw);
+    onChange({ [k]: raw === "" ? null : (Number.isFinite(n) && n > 0 ? n : null) } as Partial<BasicInfoValues>);
+  };
+
+  return (
+    <div className="space-y-3 rounded-md border border-border bg-secondary/20 p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <div className="text-xs uppercase tracking-widest text-muted-foreground">Best lifts (1-rep max) *</div>
+          <p className="text-[11px] text-muted-foreground">Quick numbers — be approximate. Helps Coach Jared build your plan from day one.</p>
+        </div>
+        <ToggleGroup
+          type="single"
+          value={unit}
+          onValueChange={(v) => v && onChange({ intake_lift_unit: v as "kg" | "lb" })}
+          size="sm"
+          className="border border-border rounded-md"
+          disabled={dontKnow}
+        >
+          <ToggleGroupItem value="lb" className="text-xs h-7 px-2">lb</ToggleGroupItem>
+          <ToggleGroupItem value="kg" className="text-xs h-7 px-2">kg</ToggleGroupItem>
+        </ToggleGroup>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-3">
+        {(["squat", "bench", "deadlift"] as const).map((lift) => {
+          const fieldMap = {
+            squat: "intake_squat_1rm",
+            bench: "intake_bench_1rm",
+            deadlift: "intake_deadlift_1rm",
+          } as const;
+          const field = fieldMap[lift];
+          const label = lift === "bench" ? "Bench press" : lift[0].toUpperCase() + lift.slice(1);
+          const g = SBD_GUIDANCE_KG[lift];
+          const stored = values[field] as number | null | undefined;
+          // Stored is in the unit the user selected; convert for display only if unit changed.
+          const display = stored == null ? "" : String(stored);
+          return (
+            <div key={lift}>
+              <Label className="text-xs">{label}</Label>
+              <div className="flex items-center gap-1">
+                <Input
+                  type="number"
+                  inputMode="numeric"
+                  min={0}
+                  step={unit === "kg" ? 2.5 : 5}
+                  value={display}
+                  disabled={dontKnow}
+                  onChange={(e) => setNum(field, e.target.value)}
+                  placeholder={String(fmt(g.intermediate))}
+                />
+                <span className="text-xs text-muted-foreground">{unit}</span>
+              </div>
+              <p className="mt-1 text-[10px] leading-tight text-muted-foreground">
+                Beginner {fmt(g.beginner)} · Inter. {fmt(g.intermediate)} · Adv. {fmt(g.advanced)} · Elite {fmt(g.elite)}
+              </p>
+            </div>
+          );
+        })}
+      </div>
+
+      <label className="flex items-start gap-2 text-sm pt-1">
+        <Checkbox
+          checked={dontKnow}
+          onCheckedChange={(v) => {
+            const known = !v;
+            onChange({
+              intake_lifts_known: known ? null : false,
+              ...(known
+                ? {}
+                : {
+                    intake_squat_1rm: null,
+                    intake_bench_1rm: null,
+                    intake_deadlift_1rm: null,
+                  }),
+            });
+          }}
+        />
+        <span>I don't know my 1-rep maxes yet — we'll test together.</span>
+      </label>
     </div>
   );
 }

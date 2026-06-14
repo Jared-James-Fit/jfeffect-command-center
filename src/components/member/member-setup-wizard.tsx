@@ -13,6 +13,25 @@ import { Progress } from "@/components/ui/progress";
 import { ProfilePictureCapture } from "@/components/profile-picture-capture";
 import { toast } from "sonner";
 import { CheckCircle2 } from "lucide-react";
+import { cn } from "@/lib/utils";
+
+const GOAL_OPTIONS = [
+  "Get stronger",
+  "Lose fat",
+  "Build muscle",
+  "Get back in shape",
+  "General fitness",
+  "Powerlifting meet",
+  "Bodybuilding",
+  "Athletic performance",
+] as const;
+
+const EXPERIENCE_OPTIONS = [
+  { value: "new", label: "New to lifting", hint: "< 6 months" },
+  { value: "beginner", label: "Beginner", hint: "6 mo – 2 yrs" },
+  { value: "intermediate", label: "Intermediate", hint: "2 – 5 yrs" },
+  { value: "advanced", label: "Advanced", hint: "5+ yrs" },
+] as const;
 
 type Step = "photo" | "contact" | "basics" | "goals";
 const STEPS: Step[] = ["photo", "contact", "basics", "goals"];
@@ -56,7 +75,9 @@ export function MemberSetupWizard({
         }
       }
       if (step === "goals") {
+        if (form.goals_tags !== undefined) patch.goals_tags = form.goals_tags;
         if (form.goals !== undefined) patch.goals = form.goals;
+        if (form.experience_level !== undefined) patch.experience_level = form.experience_level;
         if (form.training_background !== undefined) patch.training_background = form.training_background;
       }
       if (Object.keys(patch).length) {
@@ -169,26 +190,7 @@ export function MemberSetupWizard({
         )}
 
         {step === "goals" && (
-          <div className="space-y-3">
-            <div>
-              <Label>Your goals</Label>
-              <Textarea
-                rows={3}
-                placeholder="What do you want from your membership? Strength, fat loss, hypertrophy, getting back in shape…"
-                value={value("goals")}
-                onChange={(e) => set("goals", e.target.value)}
-              />
-            </div>
-            <div>
-              <Label>Training background</Label>
-              <Textarea
-                rows={3}
-                placeholder="How long have you trained? Lifting experience? Injuries to work around?"
-                value={value("training_background")}
-                onChange={(e) => set("training_background", e.target.value)}
-              />
-            </div>
-          </div>
+          <GoalsStep form={form} setForm={setForm} member={m} />
         )}
 
         <DialogFooter className="mt-2 flex-row justify-between gap-2 sm:justify-between">
@@ -214,5 +216,95 @@ export function MemberSetupWizard({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function GoalsStep({
+  form,
+  setForm,
+  member,
+}: {
+  form: any;
+  setForm: (updater: any) => void;
+  member: any;
+}) {
+  const selected: string[] = form.goals_tags ?? member?.goals_tags ?? [];
+  const level: string = form.experience_level ?? member?.experience_level ?? "";
+  const toggle = (g: string) =>
+    setForm((f: any) => {
+      const cur: string[] = f.goals_tags ?? member?.goals_tags ?? [];
+      const next = cur.includes(g) ? cur.filter((x) => x !== g) : [...cur, g];
+      return { ...f, goals_tags: next };
+    });
+  const showOther = form.goals !== undefined || !!member?.goals;
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <Label>What are you focused on? (pick any)</Label>
+        <div className="mt-2 flex flex-wrap gap-2">
+          {GOAL_OPTIONS.map((g) => {
+            const on = selected.includes(g);
+            return (
+              <button
+                key={g}
+                type="button"
+                onClick={() => toggle(g)}
+                className={cn(
+                  "rounded-full border px-3 py-1.5 text-xs font-medium transition",
+                  on
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "border-border bg-secondary/40 hover:bg-secondary",
+                )}
+              >
+                {g}
+              </button>
+            );
+          })}
+        </div>
+        {!showOther ? (
+          <button
+            type="button"
+            className="mt-2 text-xs text-muted-foreground underline"
+            onClick={() => setForm((f: any) => ({ ...f, goals: "" }))}
+          >
+            + Add something specific
+          </button>
+        ) : (
+          <Textarea
+            rows={2}
+            className="mt-2"
+            placeholder="Anything specific we should know?"
+            value={form.goals ?? member?.goals ?? ""}
+            onChange={(e) => setForm((f: any) => ({ ...f, goals: e.target.value }))}
+          />
+        )}
+      </div>
+
+      <div>
+        <Label>Lifting experience</Label>
+        <div className="mt-2 grid gap-2 sm:grid-cols-2">
+          {EXPERIENCE_OPTIONS.map((opt) => {
+            const on = level === opt.value;
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => setForm((f: any) => ({ ...f, experience_level: opt.value }))}
+                className={cn(
+                  "rounded-md border p-3 text-left text-sm transition",
+                  on
+                    ? "border-primary bg-primary/10"
+                    : "border-border bg-secondary/40 hover:bg-secondary",
+                )}
+              >
+                <div className="font-semibold">{opt.label}</div>
+                <div className="text-xs text-muted-foreground">{opt.hint}</div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </div>
   );
 }

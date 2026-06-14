@@ -16,6 +16,8 @@ const SetupPatch = z.object({
   emergency_contact_name: z.string().max(120).optional(),
   emergency_contact_phone: z.string().max(40).optional(),
   goals: z.string().max(2000).optional(),
+  goals_tags: z.array(z.string().max(60)).max(20).optional(),
+  experience_level: z.enum(["new", "beginner", "intermediate", "advanced"]).optional(),
   training_background: z.string().max(2000).optional(),
   full_name: z.string().max(200).optional(),
 });
@@ -65,7 +67,7 @@ export const getMySetupStatus = createServerFn({ method: "GET" })
     const { supabase, userId } = context;
     const { data: m } = await supabase
       .from("app_members")
-      .select("id, account_type, avatar_url, phone, sms_opt_out, sms_consent_at, date_of_birth, address_line1, address_city, address_state, address_zip, address_country, emergency_contact_name, emergency_contact_phone, goals, training_background, full_name, setup_completed_at, is_admin_sandbox")
+      .select("id, account_type, avatar_url, phone, sms_opt_out, sms_consent_at, date_of_birth, address_line1, address_city, address_state, address_zip, address_country, emergency_contact_name, emergency_contact_phone, goals, goals_tags, experience_level, training_background, full_name, setup_completed_at, is_admin_sandbox")
       .eq("user_id", userId)
       .maybeSingle();
     if (!m) return { member: null, complete: true, missing: [] as string[] };
@@ -78,8 +80,10 @@ export const getMySetupStatus = createServerFn({ method: "GET" })
     if (!m.address_line1) missing.push("address_line1");
     if (!m.emergency_contact_name) missing.push("emergency_contact_name");
     if (!m.emergency_contact_phone) missing.push("emergency_contact_phone");
-    if (!m.goals) missing.push("goals");
-    if (!m.training_background) missing.push("training_background");
+    const hasGoals = !!m.goals || (Array.isArray(m.goals_tags) && m.goals_tags.length > 0);
+    if (!hasGoals) missing.push("goals");
+    const hasBackground = !!m.training_background || !!m.experience_level;
+    if (!hasBackground) missing.push("training_background");
     return { member: m, complete: missing.length === 0, missing };
   });
 
