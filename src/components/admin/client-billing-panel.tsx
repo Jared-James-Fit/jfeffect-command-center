@@ -215,7 +215,7 @@ function RecordPaymentDialog({ purchase, onDone }: { purchase: any; onDone: () =
   const [note, setNote] = useState("");
   const m = useMutation({
     mutationFn: async () => fn({ data: {
-      client_id: purchase.client_id, purchase_id: purchase.id, txn_type: "payment",
+      purchase_id: purchase.id,
       method: method as any, amount_minor: Math.round(parseFloat(amount) * 100),
       currency: purchase.currency ?? "CAD", transaction_date: date,
       external_reference: ref || undefined, internal_note: note || undefined,
