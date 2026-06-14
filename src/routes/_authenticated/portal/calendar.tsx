@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Calendar as CalIcon, ExternalLink, MapPin, Clock } from "lucide-react";
 import { statusTone, fmtTimeRange } from "@/lib/pt-sessions";
+import { CalendarBoard } from "@/components/calendar/calendar-board";
+import { useClientCalendarSources } from "@/lib/calendar-sources";
 
 export const Route = createFileRoute("/_authenticated/portal/calendar")({ component: CalendarPage });
 
@@ -18,6 +20,7 @@ function CalendarPage() {
     enabled: !!portalUserId,
     queryFn: async () => (await supabase.from("clients").select("*").eq("user_id", portalUserId!).maybeSingle()).data,
   });
+  const { items, isLoading } = useClientCalendarSources(client?.id);
 
   const { data: sessions = [] } = useQuery({
     queryKey: ["my-sessions", client?.id],
@@ -41,6 +44,12 @@ function CalendarPage() {
     <>
       <PageHeader title="Calendar" subtitle="Your upcoming training sessions." />
       <div className="p-6 md:p-8 space-y-6">
+        <CalendarBoard
+          items={items}
+          isLoading={isLoading}
+          emptyHint="Workouts, events, check-ins, and sessions will appear here as your coach schedules them."
+        />
+
         {client?.calendar_link && (
           <Card className="border-border bg-card p-6 flex flex-wrap items-center justify-between gap-3">
             <div>
