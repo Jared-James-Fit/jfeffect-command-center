@@ -15,6 +15,8 @@ import { StickyMobileCta } from "@/components/sales/sticky-mobile-cta";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { CheckCircle2 } from "lucide-react";
+import { Reveal } from "@/components/sales/reveal";
+import coachingHeroImg from "@/assets/coaching-hero.jpg";
 
 export const Route = createFileRoute("/coaching")({
   component: CoachingPage,
@@ -52,7 +54,7 @@ function CoachingPage() {
         eyebrow="Private Coaching · By application"
         headline={p?.hero_headline ?? "1:1 coaching for people who are done guessing."}
         sub={p?.hero_subheadline ?? "A coach builds your program, reviews your check-ins every week, and adjusts the plan based on your data. Inside the JF Effect app."}
-        image={p?.hero_image_url ?? null}
+        image={p?.hero_image_url ?? coachingHeroImg}
         primary={<HeroCta onClick={handleApply}>{p?.primary_cta_label ?? "Apply for Private Coaching"}</HeroCta>}
         secondary={
           <Link to={(p?.secondary_cta_href ?? "/join") as any}>
@@ -61,48 +63,50 @@ function CoachingPage() {
         }
       />
 
-      <CoachingProcess />
+      <Reveal><CoachingProcess /></Reveal>
 
       {Array.isArray(s.who_for) && s.who_for.length > 0 && (
-        <Section>
+        <Reveal as={Section}>
           <SectionTitle eyebrow="Who this is for" title="This is for you if:" />
           <div className="mx-auto grid max-w-3xl gap-2">
-            {s.who_for.map((line: string) => (
-              <Card key={line} className="flex items-center gap-3 p-4">
+            {s.who_for.map((line: string, i: number) => (
+              <Reveal key={line} delay={i * 60}>
+              <Card className="flex items-center gap-3 p-4">
                 <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-400" />
                 <span className="text-sm">{line}</span>
               </Card>
+              </Reveal>
             ))}
           </div>
-        </Section>
+        </Reveal>
       )}
 
-      <IncludedNotIncluded
+      <Reveal><IncludedNotIncluded
         includedTitle="What coaching includes"
         notIncludedTitle="What coaching is not"
         included={s.included ?? []}
         notIncluded={s.not_included ?? []}
-      />
+      /></Reveal>
 
       {Array.isArray(s.options) && s.options.length > 0 && (
-        <OptionsGrid items={s.options} onApply={handleApply} />
+        <Reveal><OptionsGrid items={s.options} onApply={handleApply} /></Reveal>
       )}
 
-      <ProofWall
+      <Reveal><ProofWall
         testimonials={p?.testimonials ?? []}
         images={(p?.visuals ?? []).filter((v) => v.slot === "proof")}
-      />
+      /></Reveal>
 
       {Array.isArray(s.how_it_works) && s.how_it_works.length > 0 && (
-        <HowItWorks items={s.how_it_works} />
+        <Reveal><HowItWorks items={s.how_it_works} /></Reveal>
       )}
 
-      <CoachingVsMembership onApply={handleApply} />
+      <Reveal><CoachingVsMembership onApply={handleApply} /></Reveal>
 
-      <FaqAccordion items={s.faq ?? []} />
+      <Reveal><FaqAccordion items={s.faq ?? []} /></Reveal>
 
       <div id="cta" />
-      <FinalCta
+      <Reveal><FinalCta
         headline={s.final_cta?.headline ?? "If you already know you need coaching, stop waiting."}
         primary={<Button size="lg" onClick={handleApply} className="h-12 px-6 text-base font-bold">{s.final_cta?.primary_label ?? "Apply for Private Coaching"}</Button>}
         secondary={
@@ -110,7 +114,7 @@ function CoachingPage() {
             <Button size="lg" variant="outline" className="h-12 px-6 text-base">{s.final_cta?.secondary_label ?? "Explore Membership Instead"}</Button>
           </Link>
         }
-      />
+      /></Reveal>
 
       <div className="pb-24 md:pb-0" />
       <StickyMobileCta label={p?.primary_cta_label ?? "Apply for Private Coaching"} onClick={handleApply} />
