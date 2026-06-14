@@ -62,16 +62,13 @@ export function isBasicInfoComplete(c: Record<string, any> | null | undefined): 
 export function isIntakeLiftsComplete(c: Record<string, any> | null | undefined): boolean {
   if (!c) return false;
   if (c.intake_lifts_known === false) return true;
-  if (c.intake_lifts_known === true) {
-    const unit = c.intake_lift_unit;
-    return (
-      (unit === "kg" || unit === "lb") &&
-      Number(c.intake_squat_1rm) > 0 &&
-      Number(c.intake_bench_1rm) > 0 &&
-      Number(c.intake_deadlift_1rm) > 0
-    );
-  }
-  return false;
+  const unit = c.intake_lift_unit;
+  return (
+    (unit === "kg" || unit === "lb") &&
+    Number(c.intake_squat_1rm) > 0 &&
+    Number(c.intake_bench_1rm) > 0 &&
+    Number(c.intake_deadlift_1rm) > 0
+  );
 }
 
 // Strength standards (approximate male intermediate, kg) used as quick guidance
