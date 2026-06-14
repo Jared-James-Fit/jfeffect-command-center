@@ -67,6 +67,9 @@ export function ExercisesAdmin({ embedded = false }: { embedded?: boolean } = {}
     if (category !== "all" && e.category !== category) return false;
     if (search && !e.name.toLowerCase().includes(search.toLowerCase())) return false;
     if (migration === "all") return true;
+    if (migration === "needs_volume_tags") {
+      return !e.primary_movement_pattern || !e.variation_type;
+    }
     if (migration === "missing_vimeo") return !e.vimeo_video_id;
     if (migration === "quality_warning") return !!e.quality_warning;
     if (migration === "youtube_fallback_enabled") return e.youtube_fallback_allowed === true;
