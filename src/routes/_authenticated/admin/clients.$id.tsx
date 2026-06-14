@@ -56,6 +56,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { listForms as listNativeForms, type NfForm } from "@/lib/native-forms";
 import { replaceClientNativeFormAssignments } from "@/lib/native-forms.functions";
 import { ActionButton } from "@/components/action-button";
+import { ClientBillingPanel } from "@/components/admin/client-billing-panel";
 
 function AssignedCoachSelect({ value, onChange }: { value: string | null; onChange: (v: string | null) => void }) {
   const { data: coaches = [] } = useQuery({
