@@ -144,7 +144,12 @@ function ClientDetail() {
     },
   });
 
-  useEffect(() => { if (data) setForm(data); }, [data]);
+  // Seed local form state from server data on initial load only. Subsequent
+  // background refetches must not overwrite in-flight edits made by the admin.
+  useEffect(() => {
+    if (data && form === null) setForm(data);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data]);
 
   if (!form) return <div className="p-10 text-muted-foreground">Loading…</div>;
 
@@ -877,7 +882,7 @@ function ClientDetail() {
             </div>
             <BasicInfoForm
               values={form}
-              onChange={(p) => setForm({ ...form, ...p })}
+              onChange={(p: Record<string, any>) => setForm({ ...form, ...p })}
             />
             <div className="grid gap-2 rounded-md border border-border bg-secondary/30 p-3 text-xs md:grid-cols-2">
               <div><span className="text-muted-foreground">Last account info update:</span> {fmtDate(form.info_last_updated_at)}</div>
