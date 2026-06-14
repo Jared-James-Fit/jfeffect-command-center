@@ -233,6 +233,15 @@ export function ExercisesAdmin({ embedded = false }: { embedded?: boolean } = {}
         open={!!warmupTarget}
         onClose={() => setWarmupTarget(null)}
       />
+      <Dialog open={!!volumeTarget} onOpenChange={(o) => !o && setVolumeTarget(null)}>
+        {volumeTarget && (
+          <ExerciseVolumeTagsDialog
+            exercise={volumeTarget}
+            onClose={() => setVolumeTarget(null)}
+            onSaved={() => qc.invalidateQueries({ queryKey: ["exercises"] })}
+          />
+        )}
+      </Dialog>
     </>
   );
 }
