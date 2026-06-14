@@ -38,6 +38,7 @@ import { listClientMaxes, buildMaxIndex, computeRowLoad, type ClientMaxRow } fro
 import { MaxEditorDialog } from "@/components/client-maxes-panel";
 import { BlockMaxesButton } from "@/components/block-maxes-panel";
 import { AlertCircle as PbAlertCircle, Calculator as PbCalculator } from "lucide-react";
+import { WeeklyVolumeSummary } from "@/components/volume/weekly-volume-summary";
 import {
   normalizeTemplatePayload,
   serializeTemplatePayload,
