@@ -1583,9 +1583,13 @@ function SetRow({
   const hasAnyTarget = suggestedWeight != null || repChipValues.length > 0 || rpeChipValues.length > 0 || rirChipValues.length > 0;
 
   return (
-    <div className={cn("border-t border-border/60", isConfirmed && "bg-green-500/5", isDraft && "bg-amber-500/5")}>
     <div className={cn(
-      "grid items-center gap-2 border-t border-border/60 px-3 py-2",
+      "border-t border-builder-card-border/70 transition-colors",
+      isConfirmed && "bg-green-500/10",
+      isDraft && "bg-amber-500/10",
+    )}>
+    <div className={cn(
+      "grid items-center gap-2 px-3 py-2.5",
       focusMode ? "grid-cols-[44px_1fr_1fr_1fr_64px]" : "grid-cols-[36px_1fr_1fr_1fr_56px]",
     )}>
       <span className={cn("font-mono text-muted-foreground", focusMode ? "text-sm" : "text-xs")}>{setIndex}</span>
