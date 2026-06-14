@@ -1,12 +1,20 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { adminListNotificationAttempts } from "@/lib/launch-readiness.functions";
+import {
+  getJfNotificationSettings,
+  updateJfNotificationSettings,
+  type NotificationMode,
+} from "@/lib/jf-notification-settings.functions";
 
 export const Route = createFileRoute("/_authenticated/admin/membership/notifications")({
   component: NotifPage,
@@ -26,6 +34,7 @@ function NotifPage() {
   return (
     <div className="space-y-5">
       <PageHeader title="Notification Attempts" subtitle="Every JF Membership notification, including dry-run and suppressed. Recipients redacted." />
+      <NotificationModeCard />
       <Card className="p-3 flex flex-wrap gap-2">
         {DECISIONS.map((d) => (
           <Button key={d || "all"} size="sm" variant={decision === d ? "default" : "outline"} onClick={() => setDecision(d)}>
