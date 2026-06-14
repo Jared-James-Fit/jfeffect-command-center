@@ -472,7 +472,9 @@ export function ClientBlockView({
                           <div className="min-w-0">
                             <div className="break-words text-[13px] font-bold leading-snug">{name}</div>
                             <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[10px] font-semibold uppercase tracking-wide text-foreground/70">
-                              <span className={cn("break-words rounded border px-1 py-0", purposeLabelBadgeClass(purpose[i]))}>{purpose[i]}</span>
+                              {purpose[i] && (
+                                <span className={cn("break-words rounded border px-1 py-0", purposeLabelBadgeClass(purpose[i]))}>{purpose[i]}</span>
+                              )}
                               {isComp && <span className="shrink-0 rounded bg-primary/15 px-1 text-primary">Comp</span>}
                               <span className="break-words text-foreground/50">· {cat}</span>
                             </div>
