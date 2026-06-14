@@ -221,12 +221,20 @@ export function AgreementsAdminPage({ embedded = false }: { embedded?: boolean }
                       qc.invalidateQueries({ queryKey: ["agreement-templates"] });
                       toast.success(t.is_active ? "Template deactivated" : "Template activated");
                     }}><Power className="h-3 w-3 mr-1" /> {t.is_active ? "Deactivate" : "Activate"}</Button>
-                    <Button size="sm" variant="ghost" onClick={async () => {
-                      if (!confirm(`Delete "${t.name}"? It will be hidden from the templates list. Existing signed agreements stay intact.`)) return;
-                      await archiveFn({ data: { id: t.id } });
-                      qc.invalidateQueries({ queryKey: ["agreement-templates"] });
-                      toast.success("Template deleted");
-                    }}><Trash2 className="h-3 w-3 mr-1" /> Delete</Button>
+                    {(t as any).manually_hidden || (t as any).archived ? (
+                      <Button size="sm" variant="ghost" onClick={async () => {
+                        await setHiddenFn({ data: { id: t.id, hidden: false } });
+                        qc.invalidateQueries({ queryKey: ["agreement-templates"] });
+                        toast.success("Template restored");
+                      }}><Eye className="h-3 w-3 mr-1" /> Show</Button>
+                    ) : (
+                      <Button size="sm" variant="ghost" onClick={async () => {
+                        if (!confirm(`Hide "${t.name}" from the templates list? Sync will not bring it back. Existing signed agreements stay intact.`)) return;
+                        await setHiddenFn({ data: { id: t.id, hidden: true } });
+                        qc.invalidateQueries({ queryKey: ["agreement-templates"] });
+                        toast.success("Template hidden");
+                      }}><EyeOff className="h-3 w-3 mr-1" /> Hide</Button>
+                    )}
                   </div>
                 </Card>
                 );
