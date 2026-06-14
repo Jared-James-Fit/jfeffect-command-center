@@ -184,16 +184,23 @@ function SignedAgreementsPage() {
   }, [rows, search, from, to, verif, src]);
 
   const grouped = useMemo(() => {
-    const map = new Map<string, { clientId: string; clientName: string; items: Row[] }>();
+    const map = new Map<string, { clientId: string | null; clientName: string; items: Row[] }>();
     for (const r of filtered) {
-      const cid = r.client_id;
-      const name = r.clients?.full_name ?? r.client_full_name ?? "Unknown client";
-      const entry = map.get(cid) ?? { clientId: cid, clientName: name, items: [] };
+      const cid = r.client_id ?? "__unlinked__";
+      const name = r.client_id
+        ? (r.clients?.full_name ?? r.client_full_name ?? "Unknown client")
+        : "Unlinked (no client match)";
+      const entry = map.get(cid) ?? { clientId: r.client_id, clientName: name, items: [] as Row[] };
       entry.items.push(r);
       map.set(cid, entry);
     }
     const arr = Array.from(map.values());
-    arr.sort((a, b) => a.clientName.localeCompare(b.clientName));
+    arr.sort((a, b) => {
+      // Unlinked group goes last
+      if (a.clientId === null && b.clientId !== null) return 1;
+      if (b.clientId === null && a.clientId !== null) return -1;
+      return a.clientName.localeCompare(b.clientName);
+    });
     for (const g of arr) {
       g.items.sort((a, b) => {
         const ta = a.signed_at ?? a.completed_at ?? "";
