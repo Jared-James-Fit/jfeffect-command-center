@@ -993,7 +993,7 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
   };
 
   return (
-    <Card className="relative overflow-hidden p-3 pl-4 sm:p-4 sm:pl-5">
+    <Card className="relative overflow-hidden border border-builder-card-border bg-builder-card p-4 pl-5 shadow-builder-card transition-colors hover:border-builder-card-border-strong sm:p-5 sm:pl-6">
       <div className={`absolute left-0 top-0 h-full w-1.5 ${accent}`} aria-hidden />
       {/* Row 1 — name + unit toggle */}
       <div className="flex items-start justify-between gap-2">
