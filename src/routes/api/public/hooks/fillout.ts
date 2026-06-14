@@ -25,7 +25,7 @@ export const Route = createFileRoute("/api/public/hooks/fillout")({
       POST: async ({ request }) => {
         const provided = request.headers.get("x-fillout-secret") ?? "";
         const expected = process.env.FILLOUT_WEBHOOK_SECRET ?? "";
-        if (!expected || provided !== expected) {
+        if (!expected || !timingSafeEqualStr(provided, expected)) {
           return new Response("Unauthorized", { status: 401 });
         }
 
@@ -126,3 +126,10 @@ export const Route = createFileRoute("/api/public/hooks/fillout")({
     },
   },
 });
+
+function timingSafeEqualStr(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}

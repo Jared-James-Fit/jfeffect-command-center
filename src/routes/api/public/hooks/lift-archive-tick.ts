@@ -16,11 +16,7 @@ export const Route = createFileRoute("/api/public/hooks/lift-archive-tick")({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        const provided = request.headers.get("apikey") ?? "";
-        const expected = process.env.SUPABASE_PUBLISHABLE_KEY ?? "";
-        if (!provided || !expected || provided !== expected) {
-          return json({ error: "Unauthorized" }, { status: 401 });
-        }
+        if (!authorizeWorker(request)) return json({ error: "Unauthorized" }, { status: 401 });
         try {
           const { runLiftArchiveTick } = await import("@/lib/lift-archive.server");
           const result = await runLiftArchiveTick(5);
@@ -33,3 +29,15 @@ export const Route = createFileRoute("/api/public/hooks/lift-archive-tick")({
     },
   },
 });
+
+function authorizeWorker(request: Request): boolean {
+  const expected = process.env.SCHEDULED_WORKER_SECRET ?? "";
+  if (!expected) return false;
+  const url = new URL(request.url);
+  const provided =
+    request.headers.get("x-worker-secret") ?? url.searchParams.get("secret") ?? "";
+  if (!provided || provided.length !== expected.length) return false;
+  let diff = 0;
+  for (let i = 0; i < provided.length; i++) diff |= provided.charCodeAt(i) ^ expected.charCodeAt(i);
+  return diff === 0;
+}

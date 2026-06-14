@@ -9,11 +9,7 @@ export const Route = createFileRoute("/api/public/hooks/media-archive")({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        const key = request.headers.get("apikey") ?? request.headers.get("x-apikey");
-        const expected = process.env.SUPABASE_PUBLISHABLE_KEY ?? process.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-        if (!expected || key !== expected) {
-          return new Response("Unauthorized", { status: 401 });
-        }
+        if (!authorizeWorker(request)) return new Response("Unauthorized", { status: 401 });
         try {
           const result = await runAutoArchiveInternal();
           return Response.json({ ok: true, ...result });
@@ -25,3 +21,15 @@ export const Route = createFileRoute("/api/public/hooks/media-archive")({
     },
   },
 });
+
+function authorizeWorker(request: Request): boolean {
+  const expected = process.env.SCHEDULED_WORKER_SECRET ?? "";
+  if (!expected) return false;
+  const url = new URL(request.url);
+  const provided =
+    request.headers.get("x-worker-secret") ?? url.searchParams.get("secret") ?? "";
+  if (!provided || provided.length !== expected.length) return false;
+  let diff = 0;
+  for (let i = 0; i < provided.length; i++) diff |= provided.charCodeAt(i) ^ expected.charCodeAt(i);
+  return diff === 0;
+}
