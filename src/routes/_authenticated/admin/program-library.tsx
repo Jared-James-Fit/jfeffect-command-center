@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   Plus, BookOpen, UserPlus, Eye, Pencil, Copy, Archive as ArchiveIcon,
-  ArchiveRestore, Trash2, Clock, Calendar, Layers, MoreVertical, Search, Users, AlertTriangle,
+  ArchiveRestore, Trash2, Clock, Calendar, Layers, MoreVertical, Search, Users, AlertTriangle, Share2, Inbox,
 } from "lucide-react";
 import { toast } from "sonner";
 import { runJob } from "@/lib/progress-jobs";
@@ -31,6 +31,9 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { ShareProgramSheet } from "@/components/programs/share-program-sheet";
+import { DestinationBadges } from "@/components/programs/destination-badges";
+import { listShares, summarizeShares, type TemplateShare } from "@/lib/programs/sharing";
 
 export const Route = createFileRoute("/_authenticated/admin/program-library")({ component: ProgramLibraryRedirect });
 
@@ -76,6 +79,7 @@ export function ProgramLibrary({ embedded = false }: { embedded?: boolean } = {}
   const [openNew, setOpenNew] = useState(false);
   const [previewId, setPreviewId] = useState<string | null>(null);
   const [assignTpl, setAssignTpl] = useState<any | null>(null);
+  const [shareTpl, setShareTpl] = useState<any | null>(null);
 
   const showArchived = chip.kind === "archived";
   const type = chip.kind === "type" ? chip.v : ("all" as const);
@@ -115,6 +119,11 @@ export function ProgramLibrary({ embedded = false }: { embedded?: boolean } = {}
           <Button onClick={() => setOpenNew(true)} className="ml-auto">
             <Plus className="mr-2 h-4 w-4" /> New Template
           </Button>
+          <Button variant="outline" asChild>
+            <Link to="/admin/program-submissions">
+              <Inbox className="mr-2 h-4 w-4" /> Submissions
+            </Link>
+          </Button>
         </div>
 
         {/* Filter chips */}
@@ -137,6 +146,7 @@ export function ProgramLibrary({ embedded = false }: { embedded?: boolean } = {}
                 tpl={t}
                 onPreview={() => setPreviewId(t.id)}
                 onAssign={() => setAssignTpl(t)}
+                onShare={() => setShareTpl(t)}
                 onChanged={invalidate}
               />
             ))}
@@ -147,6 +157,12 @@ export function ProgramLibrary({ embedded = false }: { embedded?: boolean } = {}
       <NewTemplateDialog open={openNew} onOpenChange={setOpenNew} onCreated={invalidate} />
       <PreviewDialog templateId={previewId} onClose={() => setPreviewId(null)} onAssign={(tpl) => { setPreviewId(null); setAssignTpl(tpl); }} />
       <AssignDialog template={assignTpl} onClose={() => setAssignTpl(null)} />
+      <ShareProgramSheet
+        template={shareTpl}
+        open={!!shareTpl}
+        onOpenChange={(v) => !v && setShareTpl(null)}
+        viewerRole="admin"
+      />
     </>
   );
 }
