@@ -83,7 +83,7 @@ export interface ExerciseBlock {
   tempo: string | null;
   amrap: boolean;
   notes: string | null;
-  config: Record<string, unknown>;
+  config: Record<string, any>;
   set_rows?: BlockSetRow[];
   drop_stages?: BlockDropStage[];
 }

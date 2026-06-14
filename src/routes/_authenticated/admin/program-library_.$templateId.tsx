@@ -30,6 +30,9 @@ import { useScrollRestoration } from "@/lib/scroll-restore";
 import { TemplateBuilderIdentityBadge } from "@/components/builder-identity-header";
 import { ActionButton } from "@/components/action-button";
 import { copyRows, useClip } from "@/lib/program-builder-clipboard";
+import { ExerciseBlocksEditor } from "@/components/exercise-blocks-editor";
+import { useMultiBlockBuilderFlag } from "@/lib/admin-flags";
+import { Layers } from "lucide-react";
 import { createContext, useContext } from "react";
 import { listClientMaxes, buildMaxIndex, computeRowLoad, type ClientMaxRow } from "@/lib/pl-maxes";
 import { MaxEditorDialog } from "@/components/client-maxes-panel";
@@ -1858,6 +1861,8 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
     });
     toast.success("Card reset");
   };
+  const multiBlockFlag = useMultiBlockBuilderFlag();
+  const [blocksOpen, setBlocksOpen] = useState(false);
   return (
     <div
       data-pb-row
@@ -1976,6 +1981,17 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
             <ClipboardCopy className="h-3.5 w-3.5" />
           </Button>
           <SwapExerciseButton row={row} setRow={setRow} exercises={exercises} />
+          {multiBlockFlag && row._dbId && (
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-7 w-7 text-primary"
+              onClick={() => setBlocksOpen(true)}
+              title="Multi-block editor (preview)"
+            >
+              <Layers className="h-3.5 w-3.5" />
+            </Button>
+          )}
           <Popover>
             <PopoverTrigger asChild>
               <Button size="icon" variant="ghost" className="h-7 w-7" title="Advanced settings (exercise classification)">
@@ -2287,6 +2303,14 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
           existing={maxes}
           onClose={() => setMaxEditor(null)}
           onSaved={() => { setMaxEditor(null); refresh(); }}
+        />
+      )}
+      {multiBlockFlag && row._dbId && (
+        <ExerciseBlocksEditor
+          open={blocksOpen}
+          onOpenChange={setBlocksOpen}
+          rowId={row._dbId}
+          exerciseName={exName || "Exercise"}
         />
       )}
     </div>

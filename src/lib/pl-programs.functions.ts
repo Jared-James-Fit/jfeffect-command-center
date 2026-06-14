@@ -60,6 +60,16 @@ export const applyTemplateToClientFn = createServerFn({ method: "POST" })
     const ctx = { supabase: context.supabase, userId: context.userId };
     await authorizeClient(ctx, data.clientId);
 
+    // Slice 3 note: templates store their structure in `pl_templates.payload`
+    // (jsonb) — they do NOT use `pl_exercise_rows` / `pl_exercise_blocks`.
+    // Multi-block prescriptions in slice 3 only land on directly-edited
+    // assigned blocks via `saveBlocksForRowFn`, so there is nothing to
+    // guard at template-assignment time yet. The assignment RPC's
+    // block-aware copy + reference_block_id remap ships in slices 4+5,
+    // alongside the matching client logger. Until then the editor itself
+    // warns coaches that new blocks are Preview-only and not visible to
+    // the client.
+
     const placement: Placement = data.placement ?? { mode: "standalone_block" };
     const { data: result, error } = await ctx.supabase.rpc("pl_assign_template_to_client", {
       p_template_id: data.templateId,
