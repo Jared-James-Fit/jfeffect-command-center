@@ -1316,7 +1316,7 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
             <div className="flex w-max items-center gap-1">
               {weeksData.map((w: any, i: number) => (
                 <button key={i} onClick={() => setActiveIdx(i)} className={`h-8 w-[112px] shrink-0 rounded-md border px-2 py-1 text-xs ${activeIdx === i ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground"}`}>
-                  Week {w.week_index}
+                  Week {w.week_index}{w.phase ? ` · ${w.phase}` : ""}
                 </button>
               ))}
               {weeksData[activeIdx] && (
@@ -1367,6 +1367,11 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
                       )}
                     >
                       <span className="min-w-0 truncate text-xs font-bold uppercase tracking-wide text-primary">Week {w.week_index}</span>
+                      {w.phase && (
+                        <span className="shrink-0 rounded bg-primary/15 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
+                          {w.phase}
+                        </span>
+                      )}
                       <span className="shrink-0 text-[10px] font-semibold text-muted-foreground">
                         {s.days}d · {s.rows} rows · {fmtDur(s.minutes)}
                       </span>
