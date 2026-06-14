@@ -169,6 +169,7 @@ function render(state: TodayState): View {
         iconBg: "bg-amber-500",
         borderClass: "border-amber-500",
         bgClass: "bg-amber-500",
+        statusPillClass: "bg-amber-500 text-black",
         primary: startBtn(it, "Continue Workout", <Play className="mr-2 h-4 w-4" />),
       };
     }
@@ -182,6 +183,7 @@ function render(state: TodayState): View {
         iconBg: "bg-sky-500",
         borderClass: "border-sky-500/60",
         bgClass: "bg-sky-500",
+        statusPillClass: "bg-sky-500 text-white",
         primary: next ? (
           <Link to="/portal/workouts/$dayId" params={{ dayId: next.day.id }}>
             <Button size="lg" variant="outline" className="font-bold uppercase">
@@ -228,6 +230,7 @@ function render(state: TodayState): View {
         iconBg: "bg-destructive",
         borderClass: "border-destructive/60",
         bgClass: "bg-destructive",
+        statusPillClass: "bg-destructive text-destructive-foreground",
         primary: startBtn(it, "Complete Missed Workout", <Play className="mr-2 h-4 w-4" />),
       };
     }
@@ -240,6 +243,7 @@ function render(state: TodayState): View {
         iconBg: "bg-emerald-500",
         borderClass: "border-emerald-500/60",
         bgClass: "bg-emerald-500",
+        statusPillClass: "bg-emerald-500 text-white",
         primary: (
           <Link to="/portal/workouts">
             <Button size="lg" variant="outline" className="font-bold uppercase">
