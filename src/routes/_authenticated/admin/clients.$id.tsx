@@ -900,10 +900,12 @@ function ClientDetail() {
               <Label>Email</Label>
               <Input value={form.email ?? ""} onChange={(e) => set("email", e.target.value)} />
             </div>
-            <BasicInfoForm
-              values={form}
-              onChange={(p: Record<string, any>) => setForm({ ...form, ...p })}
-            />
+            <Suspense fallback={<TabFallback />}>
+              <BasicInfoForm
+                values={form}
+                onChange={(p: Record<string, any>) => setForm({ ...form, ...p })}
+              />
+            </Suspense>
             <div className="grid gap-2 rounded-md border border-border bg-secondary/30 p-3 text-xs md:grid-cols-2">
               <div><span className="text-muted-foreground">Last account info update:</span> {fmtDate(form.info_last_updated_at)}</div>
               <div><span className="text-muted-foreground">Updated by:</span> {form.info_last_updated_by ?? "—"}</div>
@@ -917,12 +919,14 @@ function ClientDetail() {
 
           <Card className="border-border bg-card p-6 space-y-3">
             <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Profile Picture</h3>
-            <ProfilePictureCapture
-              userId={form.user_id ?? id}
-              currentUrl={form.profile_picture_url}
-              onUploaded={adminUpdatePicture}
-              allowFileUpload
-            />
+            <Suspense fallback={<TabFallback />}>
+              <ProfilePictureCapture
+                userId={form.user_id ?? id}
+                currentUrl={form.profile_picture_url}
+                onUploaded={adminUpdatePicture}
+                allowFileUpload
+              />
+            </Suspense>
             <div className="flex flex-wrap items-center gap-2">
               <Button size="sm" variant="outline" onClick={requestPictureUpdate}>
                 {form.profile_picture_needs_update ? "Update reminder active" : "Request client to update"}
@@ -1023,7 +1027,11 @@ function ClientDetail() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-      <PriceCardPickerDialog open={priceCardOpen} onClose={() => setPriceCardOpen(false)} fixedClientId={id} />
+      {priceCardOpen ? (
+        <Suspense fallback={null}>
+          <PriceCardPickerDialog open={priceCardOpen} onClose={() => setPriceCardOpen(false)} fixedClientId={id} />
+        </Suspense>
+      ) : null}
       <SendBookingLinkDialog
         open={bookingLinkOpen}
         onOpenChange={setBookingLinkOpen}
