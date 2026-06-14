@@ -26,7 +26,7 @@ function NativeAgreementsIndex() {
 
   return (
     <div className="space-y-4">
-      <PageHeader title="Native Agreements" description="Structured agreements with versioned snapshots and immutable signatures." />
+      <PageHeader title="Native Agreements" subtitle="Structured agreements with versioned snapshots and immutable signatures." />
       <Card className="p-4">
         {isLoading ? <div className="text-sm text-muted-foreground">Loading…</div> : (
           <div className="space-y-2">
