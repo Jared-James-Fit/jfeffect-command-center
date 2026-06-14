@@ -338,6 +338,11 @@ function BlockRow({
         <div className="flex items-center gap-2">
           <Dumbbell className="h-3.5 w-3.5 text-primary shrink-0" />
           <div className="font-semibold text-sm truncate">{block.name}</div>
+          {block.training_focus && (
+            <Badge variant="secondary" className="text-[10px] bg-primary/15 text-primary border-primary/30">
+              {block.training_focus}
+            </Badge>
+          )}
           <Badge variant="outline" className={`text-[10px] ${statusTone(block.status)}`}>{block.status ?? "—"}</Badge>
         </div>
         <div className="text-[11px] text-muted-foreground">

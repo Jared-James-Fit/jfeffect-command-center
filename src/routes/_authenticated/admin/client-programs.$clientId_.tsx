@@ -13,7 +13,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ArrowLeft, Plus, Calendar, Target, Layers, History, BarChart3, BookOpen, CalendarClock } from "lucide-react";
 import { toast } from "sonner";
-import { listClientPreps, listClientBlocks, createPrep, createBlock, countdownLabel, updatePrep, updateBlock, GOAL_TYPES, TRAINING_FOCUSES, PREP_STATUSES, BLOCK_STATUSES, type PrepStatus, type BlockStatus } from "@/lib/pl-programs";
+import { listClientPreps, listClientBlocks, createPrep, createBlock, countdownLabel, updatePrep, updateBlock, GOAL_TYPES, PREP_STATUSES, BLOCK_STATUSES, type PrepStatus, type BlockStatus } from "@/lib/pl-programs";
+import { BLOCK_PHASE_OPTIONS } from "@/lib/pl-template-blocks";
 import { ClientTrainingIntelCard } from "@/components/client-training-intel-card";
 
 export const Route = createFileRoute("/_authenticated/admin/client-programs/$clientId_")({ component: ClientProgramsPage });
@@ -227,7 +228,14 @@ function BlockRow({ b, templateLookup, onRefresh }: { b: any; templateLookup: an
     <Card className="p-3 flex items-center justify-between hover:bg-secondary/30">
       <Link to="/admin/blocks/$blockId" params={{ blockId: b.id }} className="flex-1">
         <div>
-          <div className="font-bold">{b.name}</div>
+          <div className="flex items-center gap-2">
+            <span className="font-bold">{b.name}</span>
+            {b.training_focus && (
+              <Badge variant="secondary" className="text-[10px] bg-primary/15 text-primary border-primary/30">
+                {b.training_focus}
+              </Badge>
+            )}
+          </div>
           <div className="text-xs text-muted-foreground">
             {b.weeks} weeks · {b.training_focus ?? "—"}
             {b.start_date && ` · ${b.start_date}`}{b.end_date && ` – ${b.end_date}`}
@@ -298,7 +306,7 @@ function NewPrepDialog({ open, onOpenChange, clientId, onCreated }: any) {
 }
 
 function NewBlockDialog({ open, onOpenChange, clientId, preps, onCreated }: any) {
-  const [form, setForm] = useState({ name: "", weeks: 4, training_focus: "Volume", prep_id: "none" });
+  const [form, setForm] = useState({ name: "", weeks: 4, training_focus: "Accumulation", prep_id: "none" });
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
@@ -310,7 +318,7 @@ function NewBlockDialog({ open, onOpenChange, clientId, preps, onCreated }: any)
             <div><Label>Focus</Label>
               <Select value={form.training_focus} onValueChange={(v) => setForm({ ...form, training_focus: v })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>{TRAINING_FOCUSES.map((f) => <SelectItem key={f} value={f}>{f}</SelectItem>)}</SelectContent>
+                <SelectContent>{BLOCK_PHASE_OPTIONS.map((f) => <SelectItem key={f} value={f}>{f}</SelectItem>)}</SelectContent>
               </Select>
             </div>
           </div>
