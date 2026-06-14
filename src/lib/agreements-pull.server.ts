@@ -95,13 +95,17 @@ export async function pullSignedDocumentForAgreement(
 
   // Mirror to clients table when terminal
   if (patch.status === "Signed" || patch.status === "Needs Manual Verification") {
-    await supabaseAdmin.from("clients").update({
-      agreement_signed: patch.status === "Signed",
-      agreement_signed_date: (patch.signed_at as string).slice(0, 10),
-      agreement_status: patch.status,
-    } as any).eq("id", ag.client_id);
+    if (ag.client_id) {
+      await supabaseAdmin.from("clients").update({
+        agreement_signed: patch.status === "Signed",
+        agreement_signed_date: (patch.signed_at as string).slice(0, 10),
+        agreement_status: patch.status,
+      } as any).eq("id", ag.client_id);
+    }
   } else if (patch.status === "Cancelled" || patch.status === "Expired") {
-    await supabaseAdmin.from("clients").update({ agreement_status: patch.status } as any).eq("id", ag.client_id);
+    if (ag.client_id) {
+      await supabaseAdmin.from("clients").update({ agreement_status: patch.status } as any).eq("id", ag.client_id);
+    }
   }
 
   await supabaseAdmin.from("agreement_audit_log").insert({
