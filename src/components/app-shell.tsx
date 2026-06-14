@@ -635,11 +635,11 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
               variant="outline"
               size="sm"
               onClick={() => setPaletteOpen(true)}
-              aria-label="Search keywords"
+              aria-label="Search workout library"
               className="h-8 gap-1.5 border-primary/40 bg-primary/5 px-2 text-xs font-semibold text-foreground hover:bg-primary/10"
             >
               <Search className="h-3.5 w-3.5 text-primary" />
-              Search
+              Workouts
             </Button>
             <SettingsMenu
               items={items}
