@@ -7,7 +7,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { ChevronLeft, ChevronRight, Calendar as CalIcon, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { KIND_META, type CalendarItem, type CalendarKind } from "@/lib/calendar-sources";
+import { KIND_META, ctaLabel, type CalendarItem, type CalendarKind } from "@/lib/calendar-sources";
 
 type ViewMode = "month" | "week" | "day" | "upcoming";
 
@@ -402,7 +402,7 @@ function EventDetailSheet({
               )}
               {item.href && (
                 <Link to={item.href.to as any} params={item.href.params as any} onClick={onClose}>
-                  <Button size="sm" className="w-full bg-gradient-primary font-bold uppercase">Open</Button>
+                  <Button size="sm" className="w-full bg-gradient-primary font-bold uppercase">{ctaLabel(item)}</Button>
                 </Link>
               )}
             </div>
