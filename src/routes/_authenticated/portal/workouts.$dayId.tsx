@@ -605,7 +605,12 @@ function WorkoutDay() {
         backTo="/portal/workouts"
         backLabel="Back to Workouts"
         title={day.title || `Day ${day.day_index}`}
-        subtitle={day.focus ?? ""}
+        subtitle={[
+          block?.name,
+          week?.week_index != null ? `Week ${week.week_index}` : null,
+          (week as any)?.phase || null,
+          day.focus || null,
+        ].filter(Boolean).join(" · ")}
         actions={!readonly ? <UndoButton /> : undefined}
       />
       <div className="p-4 md:p-8 space-y-4">
