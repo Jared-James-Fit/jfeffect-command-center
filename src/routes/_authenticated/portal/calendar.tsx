@@ -1,12 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { usePortalUserId } from "@/lib/client-impersonation";
+import { usePortalUserId, useClientImpersonation } from "@/lib/client-impersonation";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Calendar as CalIcon, ExternalLink, MapPin, Clock } from "lucide-react";
+import { Calendar as CalIcon, ExternalLink, MapPin, Clock, AlertTriangle, ChevronDown } from "lucide-react";
 import { statusTone, fmtTimeRange } from "@/lib/pt-sessions";
 import { CalendarBoard } from "@/components/calendar/calendar-board";
 import { useClientCalendarSources } from "@/lib/calendar-sources";
@@ -16,6 +16,7 @@ export const Route = createFileRoute("/_authenticated/portal/calendar")({ compon
 
 function CalendarPage() {
   const portalUserId = usePortalUserId();
+  const { isImpersonating, client: povClient } = useClientImpersonation();
   const { data: client } = useQuery({
     queryKey: ["my-client", portalUserId],
     enabled: !!portalUserId,
@@ -59,12 +60,28 @@ function CalendarPage() {
     <>
       <PageHeader title="Calendar" subtitle="Your day at a glance — workouts, check-ins, sessions, and key dates." />
       <div className="p-6 md:p-8 space-y-6">
+        {isImpersonating && (
+          <Card className="border-amber-500/40 bg-amber-500/10 p-3 text-amber-200">
+            <div className="flex items-start gap-2 text-xs">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <div>
+                <div className="font-bold uppercase tracking-widest">Admin POV — {povClient?.full_name ?? "Client"}</div>
+                <div className="mt-0.5 text-amber-200/80">
+                  Calendar reads use your admin session, so RLS-scoped sources (events, check-ins, PT sessions, appointments)
+                  may surface admin-visible rows rather than only this client's view. Treat any client-private chip as an
+                  approximation until verified from the client's own session.
+                </div>
+              </div>
+            </div>
+          </Card>
+        )}
+
         <ClientTodayPanel items={items} nutritionUpdatedAt={nutritionUpdated ?? null} />
 
         <CalendarBoard
           items={items}
           isLoading={isLoading}
-          emptyHint="Workouts, events, check-ins, and sessions will appear here as your coach schedules them."
+          emptyHint="Workouts, check-ins, appointments, PT sessions, and coach events will appear here as they're scheduled."
         />
 
         {client?.calendar_link && (
@@ -79,26 +96,35 @@ function CalendarPage() {
           </Card>
         )}
 
-        <Card className="border-border bg-card p-6">
-          <h2 className="mb-4 flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-muted-foreground">
-            <CalIcon className="h-4 w-4" /> Upcoming Sessions
-          </h2>
-          {upcoming.length === 0 ? (
-            <div className="rounded-md border border-dashed border-border p-6 text-center text-sm text-muted-foreground">No upcoming sessions.</div>
-          ) : (
-            <ul className="space-y-3">
-              {upcoming.map((s: any) => <SessionRow key={s.id} s={s} />)}
-            </ul>
-          )}
-        </Card>
-
-        {past.length > 0 && (
-          <Card className="border-border bg-card p-6">
-            <h2 className="mb-4 text-sm font-bold uppercase tracking-widest text-muted-foreground">Past Sessions</h2>
-            <ul className="space-y-2">
-              {past.slice(0, 20).map((s: any) => <SessionRow key={s.id} s={s} compact />)}
-            </ul>
-          </Card>
+        {(upcoming.length > 0 || past.length > 0) && (
+          <details className="group rounded-md border border-border bg-card/60">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-2 p-4 text-xs font-bold uppercase tracking-widest text-muted-foreground hover:text-foreground">
+              <span className="flex items-center gap-2">
+                <CalIcon className="h-3.5 w-3.5" /> PT Session Details
+                <Badge variant="outline" className="text-[10px]">{upcoming.length} upcoming</Badge>
+                {past.length > 0 && <Badge variant="outline" className="text-[10px]">{past.length} past</Badge>}
+              </span>
+              <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" />
+            </summary>
+            <div className="space-y-4 border-t border-border p-4">
+              {upcoming.length > 0 && (
+                <div>
+                  <div className="mb-2 text-[10px] font-black uppercase tracking-widest text-muted-foreground">Upcoming</div>
+                  <ul className="space-y-2">
+                    {upcoming.map((s: any) => <SessionRow key={s.id} s={s} />)}
+                  </ul>
+                </div>
+              )}
+              {past.length > 0 && (
+                <div>
+                  <div className="mb-2 text-[10px] font-black uppercase tracking-widest text-muted-foreground">Past</div>
+                  <ul className="space-y-2">
+                    {past.slice(0, 20).map((s: any) => <SessionRow key={s.id} s={s} compact />)}
+                  </ul>
+                </div>
+              )}
+            </div>
+          </details>
         )}
       </div>
     </>
