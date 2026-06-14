@@ -1321,7 +1321,17 @@ export const getSignedAgreementUrl = createServerFn({ method: "POST" })
     // Belt-and-suspenders: explicitly re-validate the caller can access this
     // agreement's client. Defends against future RLS regressions and produces
     // a clear server-side audit if someone tries to fish for IDs.
-    const accessRole = await assertClientAccess(supabase, userId, ag.client_id);
+    // Unlinked agreements (no client_id) are admin-only.
+    let accessRole: string;
+    if (ag.client_id) {
+      accessRole = await assertClientAccess(supabase, userId, ag.client_id);
+    } else {
+      const { data: roleRows } = await supabase
+        .from("user_roles").select("role").eq("user_id", userId);
+      const roles = (roleRows ?? []).map((r: any) => r.role);
+      if (!roles.includes("admin")) throw new Error("Forbidden");
+      accessRole = "admin";
+    }
 
     if (!ag.signed_copy_storage_path) {
       return {
