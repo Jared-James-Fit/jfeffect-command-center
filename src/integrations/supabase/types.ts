@@ -4853,16 +4853,19 @@ export type Database = {
           email_lc: string
           first_trial_at: string
           stripe_customer_id: string | null
+          stripe_mode: string
         }
         Insert: {
           email_lc: string
           first_trial_at?: string
           stripe_customer_id?: string | null
+          stripe_mode?: string
         }
         Update: {
           email_lc?: string
           first_trial_at?: string
           stripe_customer_id?: string | null
+          stripe_mode?: string
         }
         Relationships: []
       }
