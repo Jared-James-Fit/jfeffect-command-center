@@ -12,10 +12,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Plus, Edit2, Archive, ExternalLink, ShieldCheck, Loader2, UserPlus, Copy, Search, Power, Trash2, Info, Settings, FolderArchive } from "lucide-react";
+import { Plus, Edit2, Archive, ExternalLink, ShieldCheck, Loader2, UserPlus, Copy, Search, Power, Trash2, Info, Settings, FolderArchive, EyeOff, Eye } from "lucide-react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
-import { createTemplate, updateTemplate, archiveTemplate, setTemplateActive, createAgreement, syncSignNowTemplates } from "@/lib/agreements.functions";
+import { createTemplate, updateTemplate, archiveTemplate, setTemplateActive, createAgreement, syncSignNowTemplates, setTemplateManualHidden } from "@/lib/agreements.functions";
 import { AGREEMENT_TYPES, type AgreementTemplate } from "@/lib/agreements";
 import { AgreementStatusBadge } from "@/components/agreement-status-badge";
 import { SentAgreementsManager } from "@/components/sent-agreements-manager";
@@ -41,12 +41,19 @@ export function AgreementsAdminPage({ embedded = false }: { embedded?: boolean }
   const archiveFn = useServerFn(archiveTemplate);
   const setActiveFn = useServerFn(setTemplateActive);
   const syncFn = useServerFn(syncSignNowTemplates);
+  const setHiddenFn = useServerFn(setTemplateManualHidden);
   const [syncing, setSyncing] = useState(false);
+  const [showHidden, setShowHidden] = useState(false);
 
   const { data: templates = [] } = useQuery({
-    queryKey: ["agreement-templates"],
-    queryFn: async () => (await supabase.from("agreement_templates")
-      .select("*").eq("archived", false).order("created_at", { ascending: false })).data ?? [],
+    queryKey: ["agreement-templates", showHidden],
+    queryFn: async () => {
+      let q = supabase.from("agreement_templates").select("*").order("created_at", { ascending: false });
+      if (!showHidden) {
+        q = q.eq("archived", false).eq("manually_hidden", false);
+      }
+      return (await q).data ?? [];
+    },
   });
 
   const { data: signnow } = useQuery({
