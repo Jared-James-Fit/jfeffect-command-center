@@ -11847,6 +11847,174 @@ export type Database = {
         }
         Relationships: []
       }
+      service_conversions: {
+        Row: {
+          amount_due_cents: number
+          client_id: string
+          created_at: string
+          created_by: string | null
+          credit_applied_cents: number
+          effective_date: string
+          id: string
+          new_price_cents: number
+          new_purchase_id: string | null
+          notes: string | null
+          original_contract_value_cents: number
+          original_disposition: string
+          original_purchase_id: string
+          reason: string | null
+          refund_owed_cents: number
+          sessions_remaining: number | null
+          sessions_used: number | null
+          value_delivered_cents: number
+        }
+        Insert: {
+          amount_due_cents?: number
+          client_id: string
+          created_at?: string
+          created_by?: string | null
+          credit_applied_cents?: number
+          effective_date: string
+          id?: string
+          new_price_cents?: number
+          new_purchase_id?: string | null
+          notes?: string | null
+          original_contract_value_cents: number
+          original_disposition?: string
+          original_purchase_id: string
+          reason?: string | null
+          refund_owed_cents?: number
+          sessions_remaining?: number | null
+          sessions_used?: number | null
+          value_delivered_cents: number
+        }
+        Update: {
+          amount_due_cents?: number
+          client_id?: string
+          created_at?: string
+          created_by?: string | null
+          credit_applied_cents?: number
+          effective_date?: string
+          id?: string
+          new_price_cents?: number
+          new_purchase_id?: string | null
+          notes?: string | null
+          original_contract_value_cents?: number
+          original_disposition?: string
+          original_purchase_id?: string
+          reason?: string | null
+          refund_owed_cents?: number
+          sessions_remaining?: number | null
+          sessions_used?: number | null
+          value_delivered_cents?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "service_conversions_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_conversions_new_purchase_id_fkey"
+            columns: ["new_purchase_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_records"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_conversions_original_purchase_id_fkey"
+            columns: ["original_purchase_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_records"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      session_ledger_events: {
+        Row: {
+          client_id: string
+          created_at: string
+          created_by: string | null
+          currency: string | null
+          effective_date: string
+          event_type: string
+          expires_at: string | null
+          id: string
+          note: string | null
+          pt_session_id: string | null
+          purchase_id: string | null
+          related_event_id: string | null
+          session_count: number
+          source: string
+          unit_value_minor: number | null
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          created_by?: string | null
+          currency?: string | null
+          effective_date?: string
+          event_type: string
+          expires_at?: string | null
+          id?: string
+          note?: string | null
+          pt_session_id?: string | null
+          purchase_id?: string | null
+          related_event_id?: string | null
+          session_count: number
+          source?: string
+          unit_value_minor?: number | null
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          created_by?: string | null
+          currency?: string | null
+          effective_date?: string
+          event_type?: string
+          expires_at?: string | null
+          id?: string
+          note?: string | null
+          pt_session_id?: string | null
+          purchase_id?: string | null
+          related_event_id?: string | null
+          session_count?: number
+          source?: string
+          unit_value_minor?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "session_ledger_events_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "session_ledger_events_pt_session_id_fkey"
+            columns: ["pt_session_id"]
+            isOneToOne: false
+            referencedRelation: "pt_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "session_ledger_events_purchase_id_fkey"
+            columns: ["purchase_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_records"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "session_ledger_events_related_event_id_fkey"
+            columns: ["related_event_id"]
+            isOneToOne: false
+            referencedRelation: "session_ledger_events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       setup_prompt_dismissals: {
         Row: {
           created_at: string
@@ -13197,6 +13365,49 @@ export type Database = {
         Args: { _template_id: string; _user_id: string }
         Returns: boolean
       }
+      consume_session_for_pt: {
+        Args: { _pt_session_id: string }
+        Returns: undefined
+      }
+      convert_client_service: {
+        Args: {
+          _credit_applied_cents: number
+          _effective_date: string
+          _new_offer_id: string
+          _new_offer_name: string
+          _new_price_cents: number
+          _original_disposition?: string
+          _original_purchase_id: string
+          _reason?: string
+          _value_delivered_cents: number
+        }
+        Returns: {
+          amount_due_cents: number
+          client_id: string
+          created_at: string
+          created_by: string | null
+          credit_applied_cents: number
+          effective_date: string
+          id: string
+          new_price_cents: number
+          new_purchase_id: string | null
+          notes: string | null
+          original_contract_value_cents: number
+          original_disposition: string
+          original_purchase_id: string
+          reason: string | null
+          refund_owed_cents: number
+          sessions_remaining: number | null
+          sessions_used: number | null
+          value_delivered_cents: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "service_conversions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       count_active_admins: { Args: never; Returns: number }
       crm_last_contacted_map: {
         Args: { _ids: string[] }
@@ -13215,6 +13426,7 @@ export type Database = {
         Args: { payload: Json; queue_name: string }
         Returns: number
       }
+      expire_overdue_sessions: { Args: never; Returns: number }
       finalize_message_send: {
         Args: { _error?: string; _message_id: string; _status: string }
         Returns: undefined
@@ -13242,6 +13454,10 @@ export type Database = {
           last_run_status: string
           schedule: string
         }[]
+      }
+      grant_sessions_if_paid_in_full: {
+        Args: { _purchase_id: string }
+        Returns: undefined
       }
       has_role: {
         Args: {
@@ -13601,6 +13817,19 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      session_balance: {
+        Args: { _client_id: string }
+        Returns: {
+          expired: number
+          expires_at: string
+          granted: number
+          offer_name: string
+          purchase_id: string
+          remaining: number
+          transferred: number
+          used: number
+        }[]
       }
       user_can_see_broadcast: {
         Args: { _broadcast_id: string; _user_id: string }
