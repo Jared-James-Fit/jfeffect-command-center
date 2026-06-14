@@ -476,6 +476,11 @@ export const completeJfSignup = createServerFn({ method: "POST" })
           .from("legal_document_versions")
           .select("id, document_id, body, status")
           .in("id", versionIds);
+        const bundledAck =
+          (pending?.acknowledgement_text as string | null) ??
+          "Accepted at JF Membership checkout";
+        const ua = (pending?.user_agent as string | null) ?? null;
+        const ip = (pending?.ip_address as string | null) ?? null;
         for (const v of versions ?? []) {
           if ((v as any).status !== "published") continue;
           await supabaseAdmin
@@ -488,8 +493,10 @@ export const completeJfSignup = createServerFn({ method: "POST" })
               context_ref: session.id,
               signature_method: "checkbox",
               checkbox_checked: true,
-              acknowledgement_text: "Accepted at JF Membership checkout",
+              acknowledgement_text: bundledAck,
               rendered_snapshot: (v as any).body,
+              user_agent: ua,
+              ip_address: ip,
             })
             .then(({ error }) => {
               // Idempotent: duplicates from a retried complete are fine.
