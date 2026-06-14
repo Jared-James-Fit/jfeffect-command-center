@@ -4518,40 +4518,49 @@ export type Database = {
       }
       jf_pending_signups: {
         Row: {
+          acknowledgement_text: string | null
           created_at: string
           email: string
           expires_at: string
           full_name: string
           id: string
+          ip_address: unknown
           legal_acceptance_ids: string[]
           password_hash: string
           phone: string | null
           session_id: string
           sms_consent: boolean
+          user_agent: string | null
         }
         Insert: {
+          acknowledgement_text?: string | null
           created_at?: string
           email: string
           expires_at?: string
           full_name: string
           id?: string
+          ip_address?: unknown
           legal_acceptance_ids?: string[]
           password_hash: string
           phone?: string | null
           session_id: string
           sms_consent?: boolean
+          user_agent?: string | null
         }
         Update: {
+          acknowledgement_text?: string | null
           created_at?: string
           email?: string
           expires_at?: string
           full_name?: string
           id?: string
+          ip_address?: unknown
           legal_acceptance_ids?: string[]
           password_hash?: string
           phone?: string | null
           session_id?: string
           sms_consent?: boolean
+          user_agent?: string | null
         }
         Relationships: []
       }
