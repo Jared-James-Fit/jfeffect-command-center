@@ -1,73 +1,94 @@
-## Existing architecture (audited)
 
-- **Single program table**: `public.pl_templates` (admin-managed today, no per-user ownership beyond `created_by`). Versioning already exists via `payload_revision` + `pl_template_operations` (append-only undo/redo log).
-- **Membership distribution**: `public.member_plans` (denormalized `published_payload`, `status` Draft/Published/Archived, `featured`, `required_access_level`) + `member_plan_enrollments` + `featured_member_items`. Already wired into the member workout logger.
-- **Coach/client programs**: `pl_preps` → `pl_blocks` → `pl_weeks` → `pl_days` → `pl_exercise_rows` → `pl_row_results`. Untouched — this is per-client assigned programming and stays as-is.
-- **Routes**: `admin/program-library.tsx` (list), `admin/program-library_.$templateId.tsx` (editor), `admin/programs.tsx`, `admin/programming.tsx`. No coach or member library routes exist yet.
-- **RLS today**: admin full; coach read-all (non-archived); members read published `member_plans` only. No coach ownership, no sharing, no submissions, no public exposure.
+# Billing, Payments, Packages & PT Session Tracking — Phased Build
 
-## Scope confirmation — this spec is 4 large phases
+This is a very large system (18 logical sections, 13+ new tables, multi-currency money handling, Stripe webhook reconciliation, PT entitlement ledger, plan-conversion engine, Google Sheets backup, admin + client UIs, RLS, reports, statements, receipts, migration of existing data).
 
-Per your stated "IMPLEMENTATION ORDER", I plan to ship **Phase 1 only** in this batch (ownership + sharing + submissions + status badges). Phases 2–4 (Membership publishing pipeline upgrades, Public pages, Distribution Status Center) are tracked but deferred to subsequent batches so each lands reviewable and the migration risk stays bounded.
+I cannot ship all of it in a single turn without producing something shallow — which is exactly what you told me not to do. So I'm going to **build it in sequential phases, one phase per turn**, and start Phase 1 immediately after you confirm scope. Each phase ends with a real, working slice you can use.
 
-If you want a single mega-batch instead, say so and I'll re-scope — but it will be a multi-thousand-line change touching ~30 files and 4 migrations, with much higher regression risk on the existing builder/logger.
+Before I start, I need 2 quick scope decisions (below). Everything else I'll decide from the existing codebase audit.
 
-## Phase 1 — ownership, sharing, submissions (this batch)
+---
 
-### Database (one migration)
+## Audit summary (existing systems I will reuse, not duplicate)
 
-1. **Extend `pl_templates`** (additive, backfill-safe):
-   - `owner_user_id uuid` (nullable; backfill = `created_by`; admin-created = admin user)
-   - `owner_role text` ('admin' | 'coach', backfill from `user_roles`)
-   - `visibility text` default `'private'` ('private' | 'team')
-   - `current_draft_revision bigint` mirrors `payload_revision` (already there — alias only)
-2. **New `pl_template_shares`** — one row per (template, destination, target):
-   - `template_id`, `destination` ('team' | 'coach' | 'membership_submission' | 'public_submission' | 'team_submission'), `target_coach_id` (nullable), `permission` ('read' | 'duplicate'), `status` ('shared' | 'pending' | 'changes_requested' | 'approved' | 'rejected' | 'removed'), `shared_version`, `created_by`, `reviewed_by`, `reviewed_at`, `notes`, `idempotency_key`. Unique active (template, destination, target_coach_id).
-3. **New `pl_template_distribution_events`** — append-only audit (template_id, destination, version, action, prev_status, new_status, actor, notes, created_at).
-4. **RLS rewrite for `pl_templates`**:
-   - admin: all
-   - coach: read own (`owner_user_id = auth.uid()`) OR shared-to-me (via `pl_template_shares`) OR `visibility='team'` (active coaches only)
-   - coach: insert/update/delete only when `owner_user_id = auth.uid()` AND not `team`-locked
-5. **RLS for `pl_template_shares`**: admin all; coach read own submissions + shares targeting them; coach insert submissions for own templates only.
-6. **Triggers**: distribution events on share/status change; prevent duplicate active submissions per (template, destination, version).
+- **Products / Offers**: `offers`, `coaching_products` (already has Stripe product/price/payment_link, payment_structure, mode auto/manual). Extend, don't replace.
+- **Purchases**: `purchase_records` (72 cols, already has stripe fields, payment_status, term dates). Extend, don't replace.
+- **Payments**: today payment state lives **on** `purchase_records` (amount_paid, payment_status). There is **no append-only ledger** → I will add one.
+- **PT Sessions**: `pt_sessions` (23 cols, scheduled/completed/cancelled/no-show). No entitlement ledger today → I will add one.
+- **Stripe**: `processed_stripe_events` exists (idempotency table). `stripe-checkout.functions.ts` + `payments.functions.ts` handle checkout + manual payment updates. I will add webhook reconciliation into the ledger without touching live checkout.
+- **Memberships**: `app_members`, `member_plan_enrollments`, JF billing events — separate flow; I will **not** rewrite. Membership subscriptions will continue to flow through their existing path and only mirror summary rows into the new ledger.
+- **Google Drive**: `client_drive_folders` + `drive.functions.ts` exist. I will reuse for the per-client billing workbook.
+- **Google Sheets**: no current integration → new `google_sheets` connector + sync queue.
+- **Admin client profile**: exists under `/admin/clients/...` — I will add a "Billing & Services" section as new tabs, not a parallel page.
 
-### Code
+Nothing in the existing checkout, Stripe Price IDs, legal acceptance, or notification settings will be modified.
 
-- `src/lib/programs/sharing.ts` — typed share/submit/approve/reject server functions (createServerFn + requireSupabaseAuth).
-- `src/components/programs/program-card.tsx` — reusable card with destination + status badges (Private, Team Live, Shared with N Coaches, Pending Approval, Changes Requested, Rejected). Drop-in for existing list pages.
-- `src/components/programs/share-program-sheet.tsx` — right-side sheet with destination rows (Team, Coaches w/ search + multiselect, Membership submission, Public submission). Each row: status badge, primary action, expandable settings.
-- `src/components/programs/availability-distribution.tsx` — "Availability & Distribution" section embedded in the program editor.
-- **Admin routes** (extend existing):
-  - `admin/program-library.tsx` — add tabs: My Library / Team Library / Coach Submissions. Reuse current list as "Team Library".
-  - `admin/program-submissions.tsx` (new) — submissions inbox with approve/reject/request-changes + notes.
-- **Coach routes** (new tree under `_authenticated/coach/`):
-  - `coach/programs.tsx` — tabs: My Library / Shared With Me / Team Library / My Submissions.
-  - `coach/programs.$templateId.tsx` — editor (reuses existing builder, gated to owner).
-  - "Duplicate to My Library" action (server fn deep-copies payload, new template owned by caller).
+---
 
-### Phase 1 explicitly does NOT include
+## Phase plan
 
-- Membership publishing UI changes (current `member_plans` flow untouched)
-- Public program pages / SEO / slugs
-- Distribution Status Center (Phase 4)
-- Live verification function (Phase 4)
-- Version migration of active enrollments (Phase 2)
-- Scheduled publication (Phase 2/3)
+### Phase 1 — Financial foundation (DB + money + ledger)
+- Migrations:
+  - `products_v2` extension columns on `offers` (product_type enum, session config, release cadence, expiration rules, cancellation policy, client-facing terms, internal/client descriptions split).
+  - `client_purchases` view/alias over `purchase_records` + new columns: `offer_snapshot jsonb` (immutable), `amount_outstanding_cents`, `amount_credited_cents`, `amount_refunded_cents`, `contract_value_cents`, `purchase_status enum`, `service_status enum`.
+  - **New**: `payment_ledger` (append-only, integer minor units, txn_type enum, method enum, reversal_of FK, stripe_event_id unique, allocated_to_purchase_id, created_by, audit fields).
+  - **New**: `payment_allocations` (one payment → many purchases).
+  - **New**: `client_account_credits` (issued, applied, balance derived).
+  - **New**: `financial_audit_events` (before/after JSON, actor, reason).
+  - GRANTs + RLS (admin full, coach read-only on assigned clients, client read-only on own).
+- Server fns: `recordPayment`, `voidPayment`, `refundPayment`, `applyCredit`, `getPurchaseSummary` (derives status from ledger — admins cannot type a fake status).
+- Backfill: replay every existing `purchase_records.amount_paid > 0` as a single historical `payment_ledger` row with `method='legacy_backfill'`, source-tagged so it can't be voided.
 
-## Phase 2–4 — deferred (will plan separately when Phase 1 ships)
+### Phase 2 — PT entitlement ledger + calendar wiring
+- Migrations: `session_ledger_events` (event_type enum, qty signed int, pt_session_id FK nullable, purchase_id FK, reversal_of FK), `service_entitlements` materialized summary per purchase.
+- Triggers / server fns:
+  - On `pt_sessions.status → Completed` → write `Session Completed` ledger event against the oldest eligible active purchase (admin can pre-select a different purchase). Idempotent per `pt_session_id`.
+  - On reversal of completed → reversal event.
+  - Late cancel / no-show only deducts when the purchase snapshot's policy says so.
+- New admin UI: PT Sessions tab on client profile with the 10 counters (purchased / released / available / used / scheduled / contract-remaining / not-yet-released / expired / transferred / adjusted).
+- Override flow with mandatory reason.
 
-- **Phase 2**: Membership publishing wired to `pl_template_shares` (destination='membership'), version pinning on enrollments, "Update Available" detection, Preview as Member, active enrollment counts on cards.
-- **Phase 3**: Public pages — new `pl_public_pages` table + `/p/$slug` route, access modes, anon-safe RLS, SEO metadata.
-- **Phase 4**: `admin/distribution-status.tsx` with summary cards, live verification fn, publication history timeline component, Copy Link / View Live everywhere.
+### Phase 3 — Admin Billing & Services UI (client profile)
+- Add 8-tab section (Overview, Services & Purchases, Payments, PT Sessions, Plan Changes, Documents, Google Sync, Audit History) to `/admin/clients/$clientId`.
+- Top summary cards (9 metrics).
+- Action sheets with before/after preview ("Recording this $3,000 payment will change …").
+- Confirmation gates on refunds, reversals, deductions, cancellations.
 
-## Risk + safety
+### Phase 4 — Plan Change / Service Conversion engine
+- Migrations: `service_change_events` (original_purchase_id, new_purchase_id, sessions_transferred, value_method enum, credit_created_cents, credit_applied_cents, refund_cents, reason).
+- One transactional server fn `convertClientService` — either fully commits all six possible side effects (cancel future entitlements, create credit ledger row, apply credit allocation, create new purchase, refund row, audit) or rolls back.
+- Preview endpoint returns the calculation before commit.
+- Nicolas Galli scenario becomes an automated integration test.
 
-- All existing admin flows keep working: `pl_templates` columns are additive, existing policies preserved for admin, coach read-policy widened (still gated to active coaches).
-- No changes to `pl_preps`, `pl_blocks`, `pl_row_results`, `member_plans`, `member_plan_enrollments`, exercise library, logger, or assignment RPCs.
-- Migration backfills `owner_user_id = created_by` and `owner_role = 'admin'` so every existing template stays in admin's My Library by default.
+### Phase 5 — Client portal billing view + statements/receipts
+- Read-only `/portal/billing` page (active services, payments, PT counters, upcoming sessions, receipts).
+- Statement generator (PDF + CSV) using existing PDF infra.
+- Sequential receipt numbers per Stripe-or-manual payment.
 
-## Confirm before I start
+### Phase 6 — Stripe webhook reconciliation
+- Extend the existing webhook entry point (or add `/api/public/hooks/stripe`) to write into `payment_ledger` for `payment_intent.succeeded`, `invoice.paid`, `charge.refunded`, `customer.subscription.*`, `checkout.session.completed`. Idempotent via `processed_stripe_events` + `stripe_event_id` unique constraint on ledger.
+- Unmatched-transaction queue UI for admin.
+- **Live checkout behavior, Price IDs, settings — untouched.**
 
-1. **Ship Phase 1 only now**, then iterate? (recommended) — or do you want one mega-batch?
-2. **Coach route tree** — OK to introduce `src/routes/_authenticated/coach/*`? (No coach routes exist today; admins currently use admin routes.)
-3. **Existing template ownership** — backfill all current `pl_templates` as **admin-owned, visibility='team'** (i.e. they show up in Team Library immediately, not Private)? That matches current behavior where all coaches already see them.
+### Phase 7 — Google Drive + Sheets backup (one-way mirror)
+- Connector connection (workspace-level `google_sheets`).
+- Master workbook + per-client workbook (saved IDs on `client_drive_folders`).
+- Queue + worker (`google_sync_jobs`), cron via `pg_cron` → `/api/public/hooks/sheets-sync-tick`.
+- Safe-disconnected state: if creds missing, UI shows "Not connected" + checklist; billing keeps working.
+
+### Phase 8 — Reports, migration review, QA
+- Admin billing dashboard with per-currency totals.
+- "Migration Review" page for ambiguous backfilled rows.
+- Vitest coverage for: ledger math, Nicolas Galli conversion, idempotent webhook, oldest-eligible session selection, no double-deduction, RLS.
+
+---
+
+## Two scope questions before I start Phase 1
+
+I will not pause between subsequent phases — only this one decision matters for the foundation.
+
+1. **Money storage** — I want to store **all** money as integer minor units (cents) on the new ledger tables, and keep the legacy decimal columns on `purchase_records` for read-back. Existing `purchase_records.amount_paid` (numeric dollars) stays untouched; the new `payment_ledger.amount_minor` is the source of truth going forward. Confirm OK?
+
+2. **Memberships scope** — JF Memberships already have their own subscription pipeline (`jf_billing_events`, Stripe subscription via `app_members`). For this build I will **mirror** membership invoices into the new `payment_ledger` for unified reporting, but **not** route membership lifecycle through the new system. Confirm OK?
+
+Reply "go" (with any tweaks) and I'll ship Phase 1 in the next turn — full migration, RLS, server fns, backfill, and the first usable Payments tab on the admin client profile.
