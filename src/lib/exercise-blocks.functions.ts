@@ -155,7 +155,7 @@ export const listBlocksForRowFn = createServerFn({ method: "POST" })
       tempo: b.tempo,
       amrap: !!b.amrap,
       notes: b.notes,
-      config: (b.config as Record<string, unknown>) ?? {},
+      config: (b.config as Record<string, any>) ?? {},
       set_rows: byBlockSet.get(b.id) ?? [],
       drop_stages: byBlockDrop.get(b.id) ?? [],
     }));
@@ -317,7 +317,7 @@ export const saveBlocksForRowFn = createServerFn({ method: "POST" })
     }
 
     // Re-fetch the canonical state so the client gets server-generated ids.
-    return await listBlocksForRowFn({ data: { rowId: data.rowId } });
+    return (await listBlocksForRowFn({ data: { rowId: data.rowId } })) as ExerciseBlock[];
   });
 
 /**
