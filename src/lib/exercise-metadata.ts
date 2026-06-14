@@ -94,23 +94,59 @@ export type PurposeLabel =
 const ORDERED: PurposeLabel[] = ["Primary", "Secondary", "Tertiary", "Quaternary"];
 
 /**
+ * Identify the competition-lift colour group a row belongs to.
+ * Source-of-truth for the Primary/Secondary/Tertiary sequencing — matches
+ * the same metadata that drives the card colour accent (exerciseAccent):
+ *   • per-row card_color override (yellow=squat, sky=bench, emerald=deadlift)
+ *   • else exercise.competition_lift_type
+ * Returns null for any row that is not in a lift colour group (assistance,
+ * neutral variations, etc.) so those rows do NOT advance the sequence.
+ */
+export function liftColorGroup(
+  meta?: ExerciseMeta | null,
+  cardColorOverride?: string | null,
+): "squat" | "bench" | "deadlift" | null {
+  const o = (cardColorOverride ?? "").toLowerCase();
+  if (o === "yellow") return "squat";
+  if (o === "sky") return "bench";
+  if (o === "emerald") return "deadlift";
+  const t = meta?.competition_lift_type;
+  if (t === "squat" || t === "bench" || t === "deadlift") return t;
+  return null;
+}
+
+/**
  * Derive purpose labels for an ordered list of rows in a workout day.
- * Competition / variation rows get ordered Primary/Secondary/Tertiary/Quaternary
- * based on top-to-bottom position. Assistance rows get "Assistance".
+ *
+ * Sequencing is calculated SEPARATELY within each competition-lift colour
+ * group (squat / bench / deadlift). The first row in each group is
+ * "Primary", the second "Secondary", the third "Tertiary", the fourth
+ * "Quaternary"; any 5th+ row in the same group returns "" (no badge).
+ *
+ * Rows that do not belong to a squat/bench/deadlift colour group never
+ * advance any sequence and are labelled "Assistance" (unless they have a
+ * manual `purpose_label`).
+ *
  * Manual `purpose_label` on a row always wins.
  */
-export function derivePurposeLabels<R extends { purpose_label?: string | null }>(
+export function derivePurposeLabels<
+  R extends { purpose_label?: string | null; card_color?: string | null },
+>(
   rows: R[],
   resolveMeta: (row: R) => ExerciseMeta | null | undefined,
 ): PurposeLabel[] {
-  let primaryIdx = 0;
+  const counters: Record<"squat" | "bench" | "deadlift", number> = {
+    squat: 0,
+    bench: 0,
+    deadlift: 0,
+  };
   return rows.map((row) => {
     if (row.purpose_label && row.purpose_label.trim()) return row.purpose_label.trim();
-    const cat = resolveCategory(resolveMeta(row));
-    if (cat === "competition" || cat === "variation") {
-      const label = ORDERED[Math.min(primaryIdx, ORDERED.length - 1)];
-      primaryIdx += 1;
-      return label;
+    const meta = resolveMeta(row);
+    const group = liftColorGroup(meta, row.card_color ?? null);
+    if (group) {
+      const idx = counters[group]++;
+      return idx < ORDERED.length ? ORDERED[idx] : "";
     }
     return "Assistance";
   });
