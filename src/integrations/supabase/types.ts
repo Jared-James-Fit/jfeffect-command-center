@@ -4405,6 +4405,116 @@ export type Database = {
           },
         ]
       }
+      health_screening_answers: {
+        Row: {
+          answer_bool: boolean | null
+          answer_text: string | null
+          answered_at: string
+          explanation: string | null
+          follow_up_of: string | null
+          id: string
+          question_key: string
+          screening_id: string
+        }
+        Insert: {
+          answer_bool?: boolean | null
+          answer_text?: string | null
+          answered_at?: string
+          explanation?: string | null
+          follow_up_of?: string | null
+          id?: string
+          question_key: string
+          screening_id: string
+        }
+        Update: {
+          answer_bool?: boolean | null
+          answer_text?: string | null
+          answered_at?: string
+          explanation?: string | null
+          follow_up_of?: string | null
+          id?: string
+          question_key?: string
+          screening_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "health_screening_answers_screening_id_fkey"
+            columns: ["screening_id"]
+            isOneToOne: false
+            referencedRelation: "health_screenings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      health_screenings: {
+        Row: {
+          clearance_notes: string | null
+          cleared_at: string | null
+          cleared_by: string | null
+          client_id: string
+          completed_at: string | null
+          created_at: string
+          expires_at: string | null
+          id: string
+          package_id: string | null
+          permission_record: string | null
+          questionnaire_slug: string
+          questionnaire_version: string
+          source: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          clearance_notes?: string | null
+          cleared_at?: string | null
+          cleared_by?: string | null
+          client_id: string
+          completed_at?: string | null
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          package_id?: string | null
+          permission_record?: string | null
+          questionnaire_slug: string
+          questionnaire_version: string
+          source: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          clearance_notes?: string | null
+          cleared_at?: string | null
+          cleared_by?: string | null
+          client_id?: string
+          completed_at?: string | null
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          package_id?: string | null
+          permission_record?: string | null
+          questionnaire_slug?: string
+          questionnaire_version?: string
+          source?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "health_screenings_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "health_screenings_package_id_fkey"
+            columns: ["package_id"]
+            isOneToOne: false
+            referencedRelation: "na_packages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       important_dates: {
         Row: {
           approaching_soon_days: number
@@ -4731,6 +4841,146 @@ export type Database = {
           stripe_customer_id?: string | null
         }
         Relationships: []
+      }
+      jurisdiction_profiles: {
+        Row: {
+          approved_cancellation_wording: string | null
+          business_address: string | null
+          code: string
+          country: string
+          created_at: string
+          created_by: string | null
+          disclosure_text: string | null
+          display_name: string
+          id: string
+          legal_notice_email: string | null
+          legal_operator_name: string | null
+          legal_review_date: string | null
+          legal_reviewer: string | null
+          max_initial_term_months: number | null
+          metadata: Json
+          operating_business_name: string | null
+          published_at: string | null
+          region: string | null
+          requires_cancellation_disclosure: boolean
+          requires_installment_option: boolean
+          retired_at: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          approved_cancellation_wording?: string | null
+          business_address?: string | null
+          code: string
+          country: string
+          created_at?: string
+          created_by?: string | null
+          disclosure_text?: string | null
+          display_name: string
+          id?: string
+          legal_notice_email?: string | null
+          legal_operator_name?: string | null
+          legal_review_date?: string | null
+          legal_reviewer?: string | null
+          max_initial_term_months?: number | null
+          metadata?: Json
+          operating_business_name?: string | null
+          published_at?: string | null
+          region?: string | null
+          requires_cancellation_disclosure?: boolean
+          requires_installment_option?: boolean
+          retired_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          approved_cancellation_wording?: string | null
+          business_address?: string | null
+          code?: string
+          country?: string
+          created_at?: string
+          created_by?: string | null
+          disclosure_text?: string | null
+          display_name?: string
+          id?: string
+          legal_notice_email?: string | null
+          legal_operator_name?: string | null
+          legal_review_date?: string | null
+          legal_reviewer?: string | null
+          max_initial_term_months?: number | null
+          metadata?: Json
+          operating_business_name?: string | null
+          published_at?: string | null
+          region?: string | null
+          requires_cancellation_disclosure?: boolean
+          requires_installment_option?: boolean
+          retired_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      legacy_agreement_records: {
+        Row: {
+          agreement_type: string | null
+          client_email: string | null
+          client_full_name: string | null
+          client_id: string | null
+          drive_file_url: string | null
+          id: string
+          imported_at: string
+          metadata: Json
+          signed_at: string | null
+          signed_copy_url: string | null
+          signnow_document_id: string | null
+          source_record_id: string | null
+          source_system: string
+          status: string | null
+          template_name: string | null
+        }
+        Insert: {
+          agreement_type?: string | null
+          client_email?: string | null
+          client_full_name?: string | null
+          client_id?: string | null
+          drive_file_url?: string | null
+          id?: string
+          imported_at?: string
+          metadata?: Json
+          signed_at?: string | null
+          signed_copy_url?: string | null
+          signnow_document_id?: string | null
+          source_record_id?: string | null
+          source_system: string
+          status?: string | null
+          template_name?: string | null
+        }
+        Update: {
+          agreement_type?: string | null
+          client_email?: string | null
+          client_full_name?: string | null
+          client_id?: string | null
+          drive_file_url?: string | null
+          id?: string
+          imported_at?: string
+          metadata?: Json
+          signed_at?: string | null
+          signed_copy_url?: string | null
+          signnow_document_id?: string | null
+          source_record_id?: string | null
+          source_system?: string
+          status?: string | null
+          template_name?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "legacy_agreement_records_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       legal_acceptance_requirements: {
         Row: {
@@ -5244,6 +5494,123 @@ export type Database = {
             referencedColumns: ["current_version_id"]
           },
         ]
+      }
+      legal_module_versions: {
+        Row: {
+          blocks: Json
+          conditions: Json
+          content_hash: string
+          created_at: string
+          created_by: string | null
+          effective_date: string | null
+          id: string
+          jurisdiction_profile_id: string | null
+          legal_review_date: string | null
+          legal_reviewer: string | null
+          module_id: string
+          notes: string | null
+          published_at: string | null
+          required_acknowledgements: Json
+          required_signers: Json
+          retired_at: string | null
+          status: string
+          updated_at: string
+          variables: Json
+          version: number
+        }
+        Insert: {
+          blocks?: Json
+          conditions?: Json
+          content_hash: string
+          created_at?: string
+          created_by?: string | null
+          effective_date?: string | null
+          id?: string
+          jurisdiction_profile_id?: string | null
+          legal_review_date?: string | null
+          legal_reviewer?: string | null
+          module_id: string
+          notes?: string | null
+          published_at?: string | null
+          required_acknowledgements?: Json
+          required_signers?: Json
+          retired_at?: string | null
+          status?: string
+          updated_at?: string
+          variables?: Json
+          version: number
+        }
+        Update: {
+          blocks?: Json
+          conditions?: Json
+          content_hash?: string
+          created_at?: string
+          created_by?: string | null
+          effective_date?: string | null
+          id?: string
+          jurisdiction_profile_id?: string | null
+          legal_review_date?: string | null
+          legal_reviewer?: string | null
+          module_id?: string
+          notes?: string | null
+          published_at?: string | null
+          required_acknowledgements?: Json
+          required_signers?: Json
+          retired_at?: string | null
+          status?: string
+          updated_at?: string
+          variables?: Json
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "legal_module_versions_jurisdiction_profile_id_fkey"
+            columns: ["jurisdiction_profile_id"]
+            isOneToOne: false
+            referencedRelation: "jurisdiction_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "legal_module_versions_module_id_fkey"
+            columns: ["module_id"]
+            isOneToOne: false
+            referencedRelation: "legal_modules"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      legal_modules: {
+        Row: {
+          archived: boolean
+          category: string
+          client_facing_title: string
+          created_at: string
+          id: string
+          internal_name: string
+          slug: string
+          updated_at: string
+        }
+        Insert: {
+          archived?: boolean
+          category: string
+          client_facing_title: string
+          created_at?: string
+          id?: string
+          internal_name: string
+          slug: string
+          updated_at?: string
+        }
+        Update: {
+          archived?: boolean
+          category?: string
+          client_facing_title?: string
+          created_at?: string
+          id?: string
+          internal_name?: string
+          slug?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
       lift_video_comments: {
         Row: {
@@ -5815,6 +6182,94 @@ export type Database = {
         }
         Relationships: []
       }
+      media_consents: {
+        Row: {
+          client_id: string
+          consent_anonymous: boolean
+          consent_before_after: boolean
+          consent_paid_advertising: boolean
+          consent_social_media: boolean
+          consent_testimonial: boolean
+          consent_training_video: boolean
+          consent_use_first_name: boolean
+          consent_use_full_name: boolean
+          consent_website: boolean
+          created_at: string
+          effective_at: string
+          id: string
+          package_id: string | null
+          signer_id: string | null
+          superseded_at: string | null
+          withdrawal_reason: string | null
+          withdrawn_at: string | null
+          withdrawn_by: string | null
+        }
+        Insert: {
+          client_id: string
+          consent_anonymous?: boolean
+          consent_before_after?: boolean
+          consent_paid_advertising?: boolean
+          consent_social_media?: boolean
+          consent_testimonial?: boolean
+          consent_training_video?: boolean
+          consent_use_first_name?: boolean
+          consent_use_full_name?: boolean
+          consent_website?: boolean
+          created_at?: string
+          effective_at?: string
+          id?: string
+          package_id?: string | null
+          signer_id?: string | null
+          superseded_at?: string | null
+          withdrawal_reason?: string | null
+          withdrawn_at?: string | null
+          withdrawn_by?: string | null
+        }
+        Update: {
+          client_id?: string
+          consent_anonymous?: boolean
+          consent_before_after?: boolean
+          consent_paid_advertising?: boolean
+          consent_social_media?: boolean
+          consent_testimonial?: boolean
+          consent_training_video?: boolean
+          consent_use_first_name?: boolean
+          consent_use_full_name?: boolean
+          consent_website?: boolean
+          created_at?: string
+          effective_at?: string
+          id?: string
+          package_id?: string | null
+          signer_id?: string | null
+          superseded_at?: string | null
+          withdrawal_reason?: string | null
+          withdrawn_at?: string | null
+          withdrawn_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "media_consents_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "media_consents_package_id_fkey"
+            columns: ["package_id"]
+            isOneToOne: false
+            referencedRelation: "na_packages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "media_consents_signer_id_fkey"
+            columns: ["signer_id"]
+            isOneToOne: false
+            referencedRelation: "na_signers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       media_drive_settings: {
         Row: {
           created_at: string
@@ -6162,6 +6617,47 @@ export type Database = {
           urgent_flag?: boolean
         }
         Relationships: []
+      }
+      medical_clearance_documents: {
+        Row: {
+          file_hash: string | null
+          id: string
+          notes: string | null
+          screening_id: string
+          storage_bucket: string
+          storage_path: string
+          uploaded_at: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          file_hash?: string | null
+          id?: string
+          notes?: string | null
+          screening_id: string
+          storage_bucket: string
+          storage_path: string
+          uploaded_at?: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          file_hash?: string | null
+          id?: string
+          notes?: string | null
+          screening_id?: string
+          storage_bucket?: string
+          storage_path?: string
+          uploaded_at?: string
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "medical_clearance_documents_screening_id_fkey"
+            columns: ["screening_id"]
+            isOneToOne: false
+            referencedRelation: "health_screenings"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       member_access: {
         Row: {
@@ -6948,6 +7444,859 @@ export type Database = {
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      na_acknowledgements: {
+        Row: {
+          accepted_at: string
+          ack_key: string
+          exact_wording: string
+          id: string
+          ip: string | null
+          module_version_id: string | null
+          package_id: string
+          signer_id: string
+          snapshot_id: string
+          user_agent: string | null
+        }
+        Insert: {
+          accepted_at?: string
+          ack_key: string
+          exact_wording: string
+          id?: string
+          ip?: string | null
+          module_version_id?: string | null
+          package_id: string
+          signer_id: string
+          snapshot_id: string
+          user_agent?: string | null
+        }
+        Update: {
+          accepted_at?: string
+          ack_key?: string
+          exact_wording?: string
+          id?: string
+          ip?: string | null
+          module_version_id?: string | null
+          package_id?: string
+          signer_id?: string
+          snapshot_id?: string
+          user_agent?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "na_acknowledgements_module_version_id_fkey"
+            columns: ["module_version_id"]
+            isOneToOne: false
+            referencedRelation: "legal_module_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "na_acknowledgements_package_id_fkey"
+            columns: ["package_id"]
+            isOneToOne: false
+            referencedRelation: "na_packages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "na_acknowledgements_signer_id_fkey"
+            columns: ["signer_id"]
+            isOneToOne: false
+            referencedRelation: "na_signers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "na_acknowledgements_snapshot_id_fkey"
+            columns: ["snapshot_id"]
+            isOneToOne: false
+            referencedRelation: "na_snapshots"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      na_documents: {
+        Row: {
+          byte_size: number | null
+          created_at: string
+          document_version: number
+          drive_account: string | null
+          drive_file_id: string | null
+          drive_file_url: string | null
+          drive_folder_id: string | null
+          drive_last_attempt_at: string | null
+          drive_last_error: string | null
+          drive_sync_attempts: number
+          drive_sync_status: string | null
+          final_pdf_hash: string | null
+          generated_at: string | null
+          id: string
+          kind: string
+          package_id: string
+          renderer: string | null
+          renderer_version: string | null
+          snapshot_hash: string
+          snapshot_id: string
+          storage_bucket: string | null
+          storage_path: string | null
+          updated_at: string
+        }
+        Insert: {
+          byte_size?: number | null
+          created_at?: string
+          document_version?: number
+          drive_account?: string | null
+          drive_file_id?: string | null
+          drive_file_url?: string | null
+          drive_folder_id?: string | null
+          drive_last_attempt_at?: string | null
+          drive_last_error?: string | null
+          drive_sync_attempts?: number
+          drive_sync_status?: string | null
+          final_pdf_hash?: string | null
+          generated_at?: string | null
+          id?: string
+          kind: string
+          package_id: string
+          renderer?: string | null
+          renderer_version?: string | null
+          snapshot_hash: string
+          snapshot_id: string
+          storage_bucket?: string | null
+          storage_path?: string | null
+          updated_at?: string
+        }
+        Update: {
+          byte_size?: number | null
+          created_at?: string
+          document_version?: number
+          drive_account?: string | null
+          drive_file_id?: string | null
+          drive_file_url?: string | null
+          drive_folder_id?: string | null
+          drive_last_attempt_at?: string | null
+          drive_last_error?: string | null
+          drive_sync_attempts?: number
+          drive_sync_status?: string | null
+          final_pdf_hash?: string | null
+          generated_at?: string | null
+          id?: string
+          kind?: string
+          package_id?: string
+          renderer?: string | null
+          renderer_version?: string | null
+          snapshot_hash?: string
+          snapshot_id?: string
+          storage_bucket?: string | null
+          storage_path?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "na_documents_package_id_fkey"
+            columns: ["package_id"]
+            isOneToOne: false
+            referencedRelation: "na_packages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "na_documents_snapshot_id_fkey"
+            columns: ["snapshot_id"]
+            isOneToOne: false
+            referencedRelation: "na_snapshots"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      na_events: {
+        Row: {
+          actor_role: string | null
+          actor_user_id: string | null
+          created_at: string
+          details: Json
+          event_type: string
+          id: string
+          ip: string | null
+          package_id: string
+          signer_id: string | null
+          snapshot_id: string | null
+          user_agent: string | null
+        }
+        Insert: {
+          actor_role?: string | null
+          actor_user_id?: string | null
+          created_at?: string
+          details?: Json
+          event_type: string
+          id?: string
+          ip?: string | null
+          package_id: string
+          signer_id?: string | null
+          snapshot_id?: string | null
+          user_agent?: string | null
+        }
+        Update: {
+          actor_role?: string | null
+          actor_user_id?: string | null
+          created_at?: string
+          details?: Json
+          event_type?: string
+          id?: string
+          ip?: string | null
+          package_id?: string
+          signer_id?: string | null
+          snapshot_id?: string | null
+          user_agent?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "na_events_package_id_fkey"
+            columns: ["package_id"]
+            isOneToOne: false
+            referencedRelation: "na_packages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "na_events_signer_id_fkey"
+            columns: ["signer_id"]
+            isOneToOne: false
+            referencedRelation: "na_signers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "na_events_snapshot_id_fkey"
+            columns: ["snapshot_id"]
+            isOneToOne: false
+            referencedRelation: "na_snapshots"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      na_guest_tokens: {
+        Row: {
+          created_at: string
+          email_to_verify: string
+          expires_at: string
+          id: string
+          package_id: string
+          rate_limit_count: number
+          rate_limit_window_start: string
+          revoke_reason: string | null
+          revoked_at: string | null
+          revoked_by: string | null
+          signer_id: string
+          token_hash: string
+          used_at: string | null
+        }
+        Insert: {
+          created_at?: string
+          email_to_verify: string
+          expires_at: string
+          id?: string
+          package_id: string
+          rate_limit_count?: number
+          rate_limit_window_start?: string
+          revoke_reason?: string | null
+          revoked_at?: string | null
+          revoked_by?: string | null
+          signer_id: string
+          token_hash: string
+          used_at?: string | null
+        }
+        Update: {
+          created_at?: string
+          email_to_verify?: string
+          expires_at?: string
+          id?: string
+          package_id?: string
+          rate_limit_count?: number
+          rate_limit_window_start?: string
+          revoke_reason?: string | null
+          revoked_at?: string | null
+          revoked_by?: string | null
+          signer_id?: string
+          token_hash?: string
+          used_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "na_guest_tokens_package_id_fkey"
+            columns: ["package_id"]
+            isOneToOne: false
+            referencedRelation: "na_packages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "na_guest_tokens_signer_id_fkey"
+            columns: ["signer_id"]
+            isOneToOne: true
+            referencedRelation: "na_signers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      na_package_modules: {
+        Row: {
+          conditions_met: Json
+          created_at: string
+          id: string
+          module_version_id: string
+          ordinal: number
+          package_id: string
+          required: boolean
+        }
+        Insert: {
+          conditions_met?: Json
+          created_at?: string
+          id?: string
+          module_version_id: string
+          ordinal: number
+          package_id: string
+          required?: boolean
+        }
+        Update: {
+          conditions_met?: Json
+          created_at?: string
+          id?: string
+          module_version_id?: string
+          ordinal?: number
+          package_id?: string
+          required?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "na_package_modules_module_version_id_fkey"
+            columns: ["module_version_id"]
+            isOneToOne: false
+            referencedRelation: "legal_module_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "na_package_modules_package_id_fkey"
+            columns: ["package_id"]
+            isOneToOne: false
+            referencedRelation: "na_packages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      na_packages: {
+        Row: {
+          active_modules: Json
+          client_id: string
+          completed_at: string | null
+          contract_value_minor: number | null
+          created_at: string
+          created_by: string | null
+          currency: string | null
+          custom_title: string | null
+          expires_at: string | null
+          financial_terms: Json
+          first_viewed_at: string | null
+          id: string
+          jurisdiction_block_reasons: Json
+          jurisdiction_profile_id: string
+          jurisdiction_supported: boolean
+          parent_package_id: string | null
+          purchase_record_id: string | null
+          replaces_package_id: string | null
+          scheduled_send_at: string | null
+          sent_at: string | null
+          service_order: Json
+          status: string
+          template_version_id: string
+          updated_at: string
+          void_reason: string | null
+          voided_at: string | null
+          voided_by: string | null
+        }
+        Insert: {
+          active_modules?: Json
+          client_id: string
+          completed_at?: string | null
+          contract_value_minor?: number | null
+          created_at?: string
+          created_by?: string | null
+          currency?: string | null
+          custom_title?: string | null
+          expires_at?: string | null
+          financial_terms?: Json
+          first_viewed_at?: string | null
+          id?: string
+          jurisdiction_block_reasons?: Json
+          jurisdiction_profile_id: string
+          jurisdiction_supported?: boolean
+          parent_package_id?: string | null
+          purchase_record_id?: string | null
+          replaces_package_id?: string | null
+          scheduled_send_at?: string | null
+          sent_at?: string | null
+          service_order?: Json
+          status?: string
+          template_version_id: string
+          updated_at?: string
+          void_reason?: string | null
+          voided_at?: string | null
+          voided_by?: string | null
+        }
+        Update: {
+          active_modules?: Json
+          client_id?: string
+          completed_at?: string | null
+          contract_value_minor?: number | null
+          created_at?: string
+          created_by?: string | null
+          currency?: string | null
+          custom_title?: string | null
+          expires_at?: string | null
+          financial_terms?: Json
+          first_viewed_at?: string | null
+          id?: string
+          jurisdiction_block_reasons?: Json
+          jurisdiction_profile_id?: string
+          jurisdiction_supported?: boolean
+          parent_package_id?: string | null
+          purchase_record_id?: string | null
+          replaces_package_id?: string | null
+          scheduled_send_at?: string | null
+          sent_at?: string | null
+          service_order?: Json
+          status?: string
+          template_version_id?: string
+          updated_at?: string
+          void_reason?: string | null
+          voided_at?: string | null
+          voided_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "na_packages_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "na_packages_jurisdiction_profile_id_fkey"
+            columns: ["jurisdiction_profile_id"]
+            isOneToOne: false
+            referencedRelation: "jurisdiction_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "na_packages_parent_package_id_fkey"
+            columns: ["parent_package_id"]
+            isOneToOne: false
+            referencedRelation: "na_packages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "na_packages_purchase_record_id_fkey"
+            columns: ["purchase_record_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_records"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "na_packages_replaces_package_id_fkey"
+            columns: ["replaces_package_id"]
+            isOneToOne: false
+            referencedRelation: "na_packages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "na_packages_template_version_id_fkey"
+            columns: ["template_version_id"]
+            isOneToOne: false
+            referencedRelation: "na_template_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      na_reminders: {
+        Row: {
+          channel: string
+          created_at: string
+          id: string
+          last_error: string | null
+          package_id: string
+          scheduled_for: string
+          sent_at: string | null
+          signer_id: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          channel: string
+          created_at?: string
+          id?: string
+          last_error?: string | null
+          package_id: string
+          scheduled_for: string
+          sent_at?: string | null
+          signer_id?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          channel?: string
+          created_at?: string
+          id?: string
+          last_error?: string | null
+          package_id?: string
+          scheduled_for?: string
+          sent_at?: string | null
+          signer_id?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "na_reminders_package_id_fkey"
+            columns: ["package_id"]
+            isOneToOne: false
+            referencedRelation: "na_packages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "na_reminders_signer_id_fkey"
+            columns: ["signer_id"]
+            isOneToOne: false
+            referencedRelation: "na_signers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      na_signatures: {
+        Row: {
+          auth_session_ref: string | null
+          displayed_local_time: string | null
+          guest_token_id: string | null
+          id: string
+          intent_wording: string
+          ip: string | null
+          package_id: string
+          signature_method: string
+          signature_representation: string | null
+          signature_style: string | null
+          signed_at_server: string
+          signed_at_utc: string
+          signer_id: string
+          signer_role: string
+          signer_timezone: string | null
+          snapshot_hash: string
+          snapshot_id: string
+          typed_legal_name: string
+          user_agent: string | null
+          verification_method: string | null
+        }
+        Insert: {
+          auth_session_ref?: string | null
+          displayed_local_time?: string | null
+          guest_token_id?: string | null
+          id?: string
+          intent_wording: string
+          ip?: string | null
+          package_id: string
+          signature_method: string
+          signature_representation?: string | null
+          signature_style?: string | null
+          signed_at_server?: string
+          signed_at_utc?: string
+          signer_id: string
+          signer_role: string
+          signer_timezone?: string | null
+          snapshot_hash: string
+          snapshot_id: string
+          typed_legal_name: string
+          user_agent?: string | null
+          verification_method?: string | null
+        }
+        Update: {
+          auth_session_ref?: string | null
+          displayed_local_time?: string | null
+          guest_token_id?: string | null
+          id?: string
+          intent_wording?: string
+          ip?: string | null
+          package_id?: string
+          signature_method?: string
+          signature_representation?: string | null
+          signature_style?: string | null
+          signed_at_server?: string
+          signed_at_utc?: string
+          signer_id?: string
+          signer_role?: string
+          signer_timezone?: string | null
+          snapshot_hash?: string
+          snapshot_id?: string
+          typed_legal_name?: string
+          user_agent?: string | null
+          verification_method?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "na_signatures_package_id_fkey"
+            columns: ["package_id"]
+            isOneToOne: false
+            referencedRelation: "na_packages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "na_signatures_signer_id_fkey"
+            columns: ["signer_id"]
+            isOneToOne: false
+            referencedRelation: "na_signers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "na_signatures_snapshot_id_fkey"
+            columns: ["snapshot_id"]
+            isOneToOne: false
+            referencedRelation: "na_snapshots"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      na_signers: {
+        Row: {
+          created_at: string
+          decline_reason: string | null
+          declined_at: string | null
+          email: string
+          first_viewed_at: string | null
+          full_name: string
+          id: string
+          invited_at: string | null
+          ordinal: number
+          package_id: string
+          payor_obligation: Json | null
+          payor_relationship: string | null
+          phone: string | null
+          role: string
+          signed_at: string | null
+          status: string
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          decline_reason?: string | null
+          declined_at?: string | null
+          email: string
+          first_viewed_at?: string | null
+          full_name: string
+          id?: string
+          invited_at?: string | null
+          ordinal?: number
+          package_id: string
+          payor_obligation?: Json | null
+          payor_relationship?: string | null
+          phone?: string | null
+          role: string
+          signed_at?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          decline_reason?: string | null
+          declined_at?: string | null
+          email?: string
+          first_viewed_at?: string | null
+          full_name?: string
+          id?: string
+          invited_at?: string | null
+          ordinal?: number
+          package_id?: string
+          payor_obligation?: Json | null
+          payor_relationship?: string | null
+          phone?: string | null
+          role?: string
+          signed_at?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "na_signers_package_id_fkey"
+            columns: ["package_id"]
+            isOneToOne: false
+            referencedRelation: "na_packages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      na_snapshots: {
+        Row: {
+          content: Json
+          created_at: string
+          created_by: string | null
+          financial_terms_snapshot: Json
+          id: string
+          jurisdiction_profile_snapshot: Json
+          modules_snapshot: Json
+          package_id: string
+          required_acknowledgements_snapshot: Json
+          sealed: boolean
+          sealed_at: string | null
+          service_order_snapshot: Json
+          signers_snapshot: Json
+          snapshot_hash: string
+          template_version_snapshot: Json
+        }
+        Insert: {
+          content: Json
+          created_at?: string
+          created_by?: string | null
+          financial_terms_snapshot: Json
+          id?: string
+          jurisdiction_profile_snapshot: Json
+          modules_snapshot: Json
+          package_id: string
+          required_acknowledgements_snapshot: Json
+          sealed?: boolean
+          sealed_at?: string | null
+          service_order_snapshot: Json
+          signers_snapshot: Json
+          snapshot_hash: string
+          template_version_snapshot: Json
+        }
+        Update: {
+          content?: Json
+          created_at?: string
+          created_by?: string | null
+          financial_terms_snapshot?: Json
+          id?: string
+          jurisdiction_profile_snapshot?: Json
+          modules_snapshot?: Json
+          package_id?: string
+          required_acknowledgements_snapshot?: Json
+          sealed?: boolean
+          sealed_at?: string | null
+          service_order_snapshot?: Json
+          signers_snapshot?: Json
+          snapshot_hash?: string
+          template_version_snapshot?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "na_snapshots_package_id_fkey"
+            columns: ["package_id"]
+            isOneToOne: false
+            referencedRelation: "na_packages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      na_template_versions: {
+        Row: {
+          countersignature_required: boolean
+          created_at: string
+          created_by: string | null
+          id: string
+          legal_review_date: string | null
+          legal_reviewer: string | null
+          module_refs: Json
+          package_rules: Json
+          published_at: string | null
+          retired_at: string | null
+          status: string
+          template_id: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          countersignature_required?: boolean
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          legal_review_date?: string | null
+          legal_reviewer?: string | null
+          module_refs?: Json
+          package_rules?: Json
+          published_at?: string | null
+          retired_at?: string | null
+          status?: string
+          template_id: string
+          updated_at?: string
+          version: number
+        }
+        Update: {
+          countersignature_required?: boolean
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          legal_review_date?: string | null
+          legal_reviewer?: string | null
+          module_refs?: Json
+          package_rules?: Json
+          published_at?: string | null
+          retired_at?: string | null
+          status?: string
+          template_id?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "na_template_versions_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "na_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      na_templates: {
+        Row: {
+          archived: boolean
+          client_facing_title: string
+          countersignature_required: boolean
+          created_at: string
+          default_jurisdiction_id: string | null
+          id: string
+          internal_name: string
+          requires_health_screening: boolean
+          service_type: string
+          slug: string
+          updated_at: string
+        }
+        Insert: {
+          archived?: boolean
+          client_facing_title: string
+          countersignature_required?: boolean
+          created_at?: string
+          default_jurisdiction_id?: string | null
+          id?: string
+          internal_name: string
+          requires_health_screening?: boolean
+          service_type: string
+          slug: string
+          updated_at?: string
+        }
+        Update: {
+          archived?: boolean
+          client_facing_title?: string
+          countersignature_required?: boolean
+          created_at?: string
+          default_jurisdiction_id?: string | null
+          id?: string
+          internal_name?: string
+          requires_health_screening?: boolean
+          service_type?: string
+          slug?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "na_templates_default_jurisdiction_id_fkey"
+            columns: ["default_jurisdiction_id"]
+            isOneToOne: false
+            referencedRelation: "jurisdiction_profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -9643,6 +10992,87 @@ export type Database = {
         }
         Relationships: []
       }
+      proposal_records: {
+        Row: {
+          accepted_at: string | null
+          accepted_signer_name: string | null
+          client_id: string | null
+          converted_to_package_id: string | null
+          created_at: string
+          created_by: string | null
+          currency: string | null
+          deliverables: Json
+          expires_at: string | null
+          id: string
+          notes: string | null
+          offered_price_minor: number | null
+          prospect_email: string | null
+          prospect_name: string | null
+          service: string
+          standard_price_minor: number | null
+          status: string
+          term: string | null
+          updated_at: string
+        }
+        Insert: {
+          accepted_at?: string | null
+          accepted_signer_name?: string | null
+          client_id?: string | null
+          converted_to_package_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          currency?: string | null
+          deliverables?: Json
+          expires_at?: string | null
+          id?: string
+          notes?: string | null
+          offered_price_minor?: number | null
+          prospect_email?: string | null
+          prospect_name?: string | null
+          service: string
+          standard_price_minor?: number | null
+          status?: string
+          term?: string | null
+          updated_at?: string
+        }
+        Update: {
+          accepted_at?: string | null
+          accepted_signer_name?: string | null
+          client_id?: string | null
+          converted_to_package_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          currency?: string | null
+          deliverables?: Json
+          expires_at?: string | null
+          id?: string
+          notes?: string | null
+          offered_price_minor?: number | null
+          prospect_email?: string | null
+          prospect_name?: string | null
+          service?: string
+          standard_price_minor?: number | null
+          status?: string
+          term?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "proposal_records_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proposal_records_converted_to_package_id_fkey"
+            columns: ["converted_to_package_id"]
+            isOneToOne: false
+            referencedRelation: "na_packages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pt_sessions: {
         Row: {
           client_id: string
@@ -11957,6 +13387,49 @@ export type Database = {
           source_queue: string
         }
         Returns: number
+      }
+      na_transition_package: {
+        Args: {
+          _details?: Json
+          _event_type: string
+          _package_id: string
+          _signer_id?: string
+        }
+        Returns: {
+          active_modules: Json
+          client_id: string
+          completed_at: string | null
+          contract_value_minor: number | null
+          created_at: string
+          created_by: string | null
+          currency: string | null
+          custom_title: string | null
+          expires_at: string | null
+          financial_terms: Json
+          first_viewed_at: string | null
+          id: string
+          jurisdiction_block_reasons: Json
+          jurisdiction_profile_id: string
+          jurisdiction_supported: boolean
+          parent_package_id: string | null
+          purchase_record_id: string | null
+          replaces_package_id: string | null
+          scheduled_send_at: string | null
+          sent_at: string | null
+          service_order: Json
+          status: string
+          template_version_id: string
+          updated_at: string
+          void_reason: string | null
+          voided_at: string | null
+          voided_by: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "na_packages"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       nf_publish_form_version: {
         Args: { _form_id: string; _reason?: string }
