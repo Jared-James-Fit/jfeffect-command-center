@@ -112,7 +112,7 @@ function SignupJf() {
   // Build the *exact* bundled acknowledgement statement displayed to the user.
   const monthlyPrice = settings?.monthly_price_display ?? "$29 USD/month";
   const trialDaysLocal = settings?.trial_days ?? 3;
-  const bundledStatement = `I agree to the Terms of Service, Privacy Policy, JF Membership Agreement, Recurring Billing Disclosure, and Cancellation & Refund Policy. I understand my membership starts with a ${trialDaysLocal}-day free trial, then automatically renews at ${monthlyPrice} plus applicable taxes until I cancel through my billing page.`;
+  const bundledStatement = `I agree to the Membership Agreement, Terms of Service, Recurring Billing Disclosure, and Cancellation & Refund Policy, and I acknowledge the Privacy Policy. Billing: ${trialDaysLocal}-day free trial, then ${monthlyPrice} plus applicable taxes, renews automatically until cancelled.`;
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -120,7 +120,7 @@ function SignupJf() {
     if (checkoutBlocked) {
       return toast.error(gate?.message ?? "Membership checkout is temporarily unavailable. Please contact support.");
     }
-    if (!bundledAccepted) return toast.error("Please accept the membership agreement to continue.");
+    if (!bundledAccepted) return toast.error("Please review and accept the membership terms before continuing.");
     if (!nameValid(form.first_name) || !nameValid(form.last_name)) return toast.error("First and last name are required.");
     if (!emailValid(form.email)) return toast.error("Please enter a valid email address.");
     if (!phoneValid) return toast.error("Please enter a valid phone number (include country code for international).");
@@ -340,7 +340,10 @@ function SignupJf() {
                   <Receipt className="h-3.5 w-3.5" /> Billing
                 </div>
                 <p className="mt-1 text-xs leading-relaxed text-foreground">
-                  <span className="font-bold">$0 today.</span> First charge {firstChargeLabel ?? `in ${trialDays} days`} — {settings?.monthly_price_display ?? "$29 USD/month"} plus applicable taxes. Renews automatically until cancelled through your <span className="font-semibold">billing page</span>.
+                  <span className="font-bold">{trialDays}-day free trial</span>, then {settings?.monthly_price_display ?? "$29 USD/month"} plus applicable taxes. Renews automatically until cancelled.
+                </p>
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  $0 today. First charge {firstChargeLabel ?? `in ${trialDays} days`} via your billing page.
                 </p>
               </div>
             )}
@@ -357,12 +360,11 @@ function SignupJf() {
                   />
                   <span>
                     I agree to the{" "}
+                    <DocLink slug="membership-agreement">Membership Agreement</DocLink>,{" "}
                     <DocLink slug="terms-of-service">Terms of Service</DocLink>,{" "}
-                    <DocLink slug="privacy-policy">Privacy Policy</DocLink>,{" "}
-                    <DocLink slug="membership-agreement">JF Membership Agreement</DocLink>,{" "}
                     <DocLink slug="recurring-billing-disclosure">Recurring Billing Disclosure</DocLink>, and{" "}
-                    <DocLink slug="cancellation-and-refund-policy">Cancellation &amp; Refund Policy</DocLink>.
-                    {" "}I understand my membership starts with a {trialDays}-day free trial, then automatically renews at {settings?.monthly_price_display ?? "$29 USD/month"} plus applicable taxes until I cancel through my billing page.
+                    <DocLink slug="cancellation-and-refund-policy">Cancellation &amp; Refund Policy</DocLink>, and I acknowledge the{" "}
+                    <DocLink slug="privacy-policy">Privacy Policy</DocLink>.
                   </span>
                 </label>
                 <button
