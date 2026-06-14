@@ -360,12 +360,11 @@ function SignupJf() {
                   />
                   <span>
                     I agree to the{" "}
+                    <DocLink slug="membership-agreement">Membership Agreement</DocLink>,{" "}
                     <DocLink slug="terms-of-service">Terms of Service</DocLink>,{" "}
-                    <DocLink slug="privacy-policy">Privacy Policy</DocLink>,{" "}
-                    <DocLink slug="membership-agreement">JF Membership Agreement</DocLink>,{" "}
                     <DocLink slug="recurring-billing-disclosure">Recurring Billing Disclosure</DocLink>, and{" "}
-                    <DocLink slug="cancellation-and-refund-policy">Cancellation &amp; Refund Policy</DocLink>.
-                    {" "}I understand my membership starts with a {trialDays}-day free trial, then automatically renews at {settings?.monthly_price_display ?? "$29 USD/month"} plus applicable taxes until I cancel through my billing page.
+                    <DocLink slug="cancellation-and-refund-policy">Cancellation &amp; Refund Policy</DocLink>, and I acknowledge the{" "}
+                    <DocLink slug="privacy-policy">Privacy Policy</DocLink>.
                   </span>
                 </label>
                 <button
