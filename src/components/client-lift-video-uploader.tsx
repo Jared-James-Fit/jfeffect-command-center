@@ -158,6 +158,7 @@ export function ClientLiftVideoUploader({ clientId, clientName, userId, onSaved 
   const [previewClip, setPreviewClip] = useState<Clip | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [showOverall, setShowOverall] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
 
   const multiUploadRef = useRef<HTMLInputElement | null>(null);
   const multiRecordRef = useRef<HTMLInputElement | null>(null);
@@ -553,11 +554,37 @@ export function ClientLiftVideoUploader({ clientId, clientName, userId, onSaved 
 
         {/* Media carousel or empty state */}
         {clips.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-border bg-muted/30 px-4 py-8 text-center">
-            <Film className="mx-auto h-7 w-7 text-muted-foreground/60" />
-            <div className="mt-2 text-sm font-medium">No lift videos selected yet.</div>
-            <div className="text-xs text-muted-foreground">Choose or record a clip to send.</div>
-          </div>
+          <button
+            type="button"
+            onClick={() => openPicker("photos")}
+            onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setIsDragging(true); }}
+            onDragEnter={(e) => { e.preventDefault(); e.stopPropagation(); setIsDragging(true); }}
+            onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); setIsDragging(false); }}
+            onDrop={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setIsDragging(false);
+              if (e.dataTransfer?.files?.length) addFiles(e.dataTransfer.files);
+            }}
+            className={`flex w-full flex-col items-center justify-center rounded-2xl border-2 border-dashed px-6 py-16 text-center transition ${
+              isDragging
+                ? "border-primary bg-primary/10"
+                : "border-border bg-muted/30 hover:border-primary/60 hover:bg-muted/50"
+            }`}
+          >
+            <div className={`flex h-14 w-14 items-center justify-center rounded-full ${isDragging ? "bg-primary/20" : "bg-muted"}`}>
+              <Upload className={`h-7 w-7 ${isDragging ? "text-primary" : "text-muted-foreground"}`} />
+            </div>
+            <div className="mt-4 text-base font-semibold text-foreground">
+              {isDragging ? "Drop your video here" : "Drag & drop your lift video"}
+            </div>
+            <div className="mt-1 text-xs text-muted-foreground">
+              or tap to choose from Photos · MP4 / MOV / video files
+            </div>
+            <div className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-background/60 px-3 py-1 text-[11px] font-medium text-muted-foreground">
+              <Film className="h-3 w-3" /> No lift videos selected yet
+            </div>
+          </button>
         ) : (
           <div className="space-y-3">
             <div className="flex items-center justify-between">
