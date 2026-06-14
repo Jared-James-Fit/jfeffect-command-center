@@ -1,0 +1,1 @@
+UPDATE public.sales_pages SET hero_image_url = NULL, updated_at = now() WHERE page_key = 'join';
