@@ -1682,16 +1682,16 @@ function SetRow({
   return (
     <div className={cn(
       "border-t border-builder-card-border/70 transition-colors",
-      isConfirmed && "bg-green-500/10",
-      isDraft && "bg-amber-500/10",
+      isConfirmed && "bg-emerald-500/[0.07] border-l-2 border-l-emerald-500/70",
+      isDraft && "bg-amber-500/[0.07] border-l-2 border-l-amber-500/60",
     )}>
     <div className={cn(
-      "grid items-center gap-2 px-3 py-2.5",
-      focusMode ? "grid-cols-[44px_1fr_1fr_1fr_64px]" : "grid-cols-[36px_1fr_1fr_1fr_56px]",
+      "grid items-center gap-1.5 px-2.5 py-1.5",
+      focusMode ? "grid-cols-[36px_1.1fr_1.1fr_1fr_52px]" : "grid-cols-[28px_1.1fr_1.1fr_1fr_44px]",
     )}>
       <span className={cn("font-mono text-muted-foreground", focusMode ? "text-sm" : "text-xs")}>{setIndex}</span>
       <Input
-        className={cn(focusMode ? "h-11 text-base" : "h-9 text-sm", "bg-white text-black placeholder:text-gray-500")}
+        className={cn(focusMode ? "h-9 text-base px-2" : "h-8 text-sm px-2", "bg-white text-black placeholder:text-gray-500")}
         inputMode="numeric"
         type="text"
         pattern="[0-9]*"
@@ -1705,7 +1705,7 @@ function SetRow({
         disabled={readonly}
       />
       <Input
-        className={cn(focusMode ? "h-11 text-base" : "h-9 text-sm", "bg-white text-black placeholder:text-gray-500")}
+        className={cn(focusMode ? "h-9 text-base px-2" : "h-8 text-sm px-2", "bg-white text-black placeholder:text-gray-500")}
         inputMode="decimal"
         type="text"
         pattern="[0-9]*\.?[0-9]*"
@@ -1719,7 +1719,7 @@ function SetRow({
         disabled={readonly}
       />
       <Input
-        className={cn(focusMode ? "h-11 text-base" : "h-9 text-sm", "bg-white text-black placeholder:text-gray-500")}
+        className={cn(focusMode ? "h-9 text-base px-2" : "h-8 text-sm px-2", "bg-white text-black placeholder:text-gray-500")}
         inputMode="decimal"
         type="text"
         pattern="[0-9]*\.?[0-9]*"
