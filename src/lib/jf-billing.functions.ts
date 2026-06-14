@@ -171,7 +171,13 @@ const SignupInput = z.object({
   first_name: z.string().trim().min(1).max(80),
   last_name: z.string().trim().min(1).max(80),
   email: z.string().trim().email().max(255),
-  phone: z.string().trim().max(40).optional().or(z.literal("")),
+  /**
+   * Phone is REQUIRED. Accepts international formatting (digits, spaces,
+   * dashes, parens, leading +). We normalize to a best-effort E.164 string
+   * server-side. The original raw value is rejected if it doesn't contain
+   * at least 7 digits.
+   */
+  phone: z.string().trim().min(7, "Phone number is required").max(40),
   password: z.string().min(8).max(200),
   sms_consent: z.boolean().optional(),
   origin: z.string().url(),
@@ -185,7 +191,25 @@ const SignupInput = z.object({
     version_id: z.string().uuid(),
   })).min(1),
   acknowledgement_text: z.string().trim().min(1).max(500).default("I agree to the JF Membership terms shown at checkout."),
+  /**
+   * UA captured client-side. Stashed on the pending row so the eventual
+   * legal_acceptances rows record the device that consented.
+   */
+  user_agent: z.string().trim().max(500).optional().or(z.literal("")),
 });
+
+/**
+ * Best-effort E.164 normalization. Strips formatting, keeps a leading '+'
+ * when present, requires at least 7 digits. Returns null when invalid.
+ */
+function normalizePhoneE164(raw: string): string | null {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const hasPlus = trimmed.startsWith("+");
+  const digits = trimmed.replace(/\D+/g, "");
+  if (digits.length < 7 || digits.length > 15) return null;
+  return hasPlus ? `+${digits}` : digits;
+}
 
 export const createJfSignupCheckout = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => SignupInput.parse(d))
@@ -193,6 +217,17 @@ export const createJfSignupCheckout = createServerFn({ method: "POST" })
     const s = await loadSettings();
     if (!s.monthly_price_id) throw new Error("Membership pricing isn't configured yet. Please contact support.");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    // Phone is required and must normalize.
+    const phoneE164 = normalizePhoneE164(data.phone);
+    if (!phoneE164) {
+      throw new Error("Please enter a valid phone number (include country code for international).");
+    }
+    // Reject whitespace-only names defensively (Zod .trim().min(1) covers this,
+    // but we re-check after .trim() so an all-space input via odd clients fails fast).
+    if (!data.first_name.trim() || !data.last_name.trim()) {
+      throw new Error("First and last name are required.");
+    }
 
     // Phase 4 — Launch Gate: refuse session creation when not launch-ready.
     const { resolveMembershipLaunchGate } = await import("@/lib/membership-launch-gate.functions");
@@ -214,6 +249,22 @@ export const createJfSignupCheckout = createServerFn({ method: "POST" })
         throw new Error(`The ${req.title} has been updated. Please reload the page and accept the latest version.`);
       }
     }
+    // Defensive: every gate-required version MUST be present in the submission.
+    // (Catches a client that sent fewer pairs than the gate currently requires.)
+    for (const [documentId] of requiredByDoc) {
+      if (!submittedByDoc.has(documentId)) {
+        const req = requiredByDoc.get(documentId)!;
+        throw new Error(`Please accept ${req.title} to continue.`);
+      }
+    }
+
+    // Best-effort IP capture from edge headers.
+    let ipAddress: string | null = null;
+    try {
+      const { getRequestHeader } = await import("@tanstack/react-start/server");
+      const xff = getRequestHeader("x-forwarded-for");
+      if (xff) ipAddress = xff.split(",")[0]?.trim() || null;
+    } catch { /* ignore */ }
 
     // Resolve Stripe mode + key
     const mode: StripeMode = (s.stripe_mode === "test" ? "test" : "live");
@@ -268,7 +319,7 @@ export const createJfSignupCheckout = createServerFn({ method: "POST" })
       "tax_id_collection[enabled]": "true",
       "metadata[kind]": "jf_membership",
       "metadata[full_name]": fullName,
-      "metadata[phone]": data.phone || "",
+      "metadata[phone]": phoneE164,
       "metadata[sms_consent]": data.sms_consent ? "1" : "0",
       "subscription_data[metadata][kind]": "jf_membership",
       "subscription_data[metadata][email_lc]": emailLc,
@@ -293,13 +344,18 @@ export const createJfSignupCheckout = createServerFn({ method: "POST" })
       session_id: session.id,
       email: emailLc,
       full_name: fullName,
-      phone: data.phone || null,
+      phone: phoneE164,
       password_hash: passwordHash,
       sms_consent: !!data.sms_consent,
       // Phase 4 — remember which legal versions were accepted at /join.
       // These are turned into legal_acceptances rows in completeJfSignup once
       // we have the auth user_id to attach to.
       legal_acceptance_ids: data.legal_acceptances.map((a) => a.version_id),
+      // Persist the exact bundled consent statement the user saw + best-effort
+      // device evidence, so legal_acceptances rows can reproduce the moment.
+      acknowledgement_text: data.acknowledgement_text,
+      user_agent: data.user_agent || null,
+      ip_address: ipAddress,
     });
 
     return { url: session.url as string, used_trial: useTrial };
