@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
-import { Eye, EyeOff, Receipt, ChevronDown, ChevronUp, ExternalLink, Check, X as XIcon } from "lucide-react";
+import { Eye, EyeOff, Receipt, Check, X as XIcon } from "lucide-react";
 import { SalesPageShell, Section } from "@/components/sales/sales-page-shell";
 import { MembershipHero, MemberHeroCta, MemberHeroGhost } from "@/components/sales/membership-hero";
 import { FeatureTabs } from "@/components/sales/feature-tabs";
