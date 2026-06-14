@@ -61,6 +61,7 @@ export const adminNav: NavItem[] = [
   { to: "/admin/events", label: "Events", icon: Calendar, group: "Business" },
   // DOCUMENTS
   { to: "/admin/agreements", label: "Agreements", icon: FileSignature, group: "Documents" },
+  { to: "/admin/agreements-native", label: "Native Agreements", icon: FileSignature, group: "Documents", keywords: ["native", "agreements", "snapshot", "sign"] },
   { to: "/admin/forms", label: "Forms", icon: FileEdit, group: "Documents" },
   { to: "/admin/resources", label: "Resources", icon: FolderOpen, group: "Documents" },
   // TEAM / OPS

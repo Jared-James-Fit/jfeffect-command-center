@@ -24,6 +24,7 @@ import { Route as ApplyRouteImport } from './routes/apply'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SignupJfRouteImport } from './routes/signup.jf'
+import { Route as SignTokenRouteImport } from './routes/sign.$token'
 import { Route as MWelcomeRouteImport } from './routes/m.welcome'
 import { Route as LegalSlugRouteImport } from './routes/legal.$slug'
 import { Route as CoachingApplyRouteImport } from './routes/coaching.apply'
@@ -155,6 +156,7 @@ import { Route as AuthenticatedAdminCrmIndexRouteImport } from './routes/_authen
 import { Route as AuthenticatedAdminCoachesIndexRouteImport } from './routes/_authenticated/admin/coaches.index'
 import { Route as AuthenticatedAdminClientsIndexRouteImport } from './routes/_authenticated/admin/clients.index'
 import { Route as AuthenticatedAdminAgreementsIndexRouteImport } from './routes/_authenticated/admin/agreements.index'
+import { Route as AuthenticatedAdminAgreementsNativeIndexRouteImport } from './routes/_authenticated/admin/agreements-native.index'
 import { Route as LovableEmailQueueProcessRouteImport } from './routes/lovable/email/queue/process'
 import { Route as LovableEmailAuthWebhookRouteImport } from './routes/lovable/email/auth/webhook'
 import { Route as LovableEmailAuthPreviewRouteImport } from './routes/lovable/email/auth/preview'
@@ -217,6 +219,8 @@ import { Route as AuthenticatedAdminClientProgramsClientIdRouteImport } from './
 import { Route as AuthenticatedAdminBroadcastsBroadcastIdRouteImport } from './routes/_authenticated/admin/broadcasts.$broadcastId'
 import { Route as AuthenticatedAdminBlocksBlockIdRouteImport } from './routes/_authenticated/admin/blocks.$blockId'
 import { Route as AuthenticatedAdminAgreementsSignedRouteImport } from './routes/_authenticated/admin/agreements.signed'
+import { Route as AuthenticatedAdminAgreementsNativeNewRouteImport } from './routes/_authenticated/admin/agreements-native.new'
+import { Route as AuthenticatedAdminAgreementsNativePackageIdRouteImport } from './routes/_authenticated/admin/agreements-native.$packageId'
 import { Route as AuthenticatedAdminCrmContactsIndexRouteImport } from './routes/_authenticated/admin/crm.contacts.index'
 import { Route as ApiPublicGoogleOauthCallbackRouteImport } from './routes/api/public/google/oauth/callback'
 import { Route as AuthenticatedAdminCrmContactsIdRouteImport } from './routes/_authenticated/admin/crm.contacts.$id'
@@ -296,6 +300,11 @@ const IndexRoute = IndexRouteImport.update({
 const SignupJfRoute = SignupJfRouteImport.update({
   id: '/signup/jf',
   path: '/signup/jf',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SignTokenRoute = SignTokenRouteImport.update({
+  id: '/sign/$token',
+  path: '/sign/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
 const MWelcomeRoute = MWelcomeRouteImport.update({
@@ -1053,6 +1062,12 @@ const AuthenticatedAdminAgreementsIndexRoute =
     path: '/agreements/',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
+const AuthenticatedAdminAgreementsNativeIndexRoute =
+  AuthenticatedAdminAgreementsNativeIndexRouteImport.update({
+    id: '/agreements-native/',
+    path: '/agreements-native/',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
 const LovableEmailQueueProcessRoute =
   LovableEmailQueueProcessRouteImport.update({
     id: '/lovable/email/queue/process',
@@ -1422,6 +1437,18 @@ const AuthenticatedAdminAgreementsSignedRoute =
     path: '/agreements/signed',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
+const AuthenticatedAdminAgreementsNativeNewRoute =
+  AuthenticatedAdminAgreementsNativeNewRouteImport.update({
+    id: '/agreements-native/new',
+    path: '/agreements-native/new',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
+const AuthenticatedAdminAgreementsNativePackageIdRoute =
+  AuthenticatedAdminAgreementsNativePackageIdRouteImport.update({
+    id: '/agreements-native/$packageId',
+    path: '/agreements-native/$packageId',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
 const AuthenticatedAdminCrmContactsIndexRoute =
   AuthenticatedAdminCrmContactsIndexRouteImport.update({
     id: '/crm/contacts/',
@@ -1483,6 +1510,7 @@ export interface FileRoutesByFullPath {
   '/coaching/apply': typeof CoachingApplyRoute
   '/legal/$slug': typeof LegalSlugRoute
   '/m/welcome': typeof MWelcomeRoute
+  '/sign/$token': typeof SignTokenRoute
   '/signup/jf': typeof SignupJfRoute
   '/admin/account': typeof AuthenticatedAdminAccountRoute
   '/admin/appointments': typeof AuthenticatedAdminAppointmentsRoute
@@ -1593,6 +1621,8 @@ export interface FileRoutesByFullPath {
   '/m/': typeof AuthenticatedMIndexRoute
   '/media/': typeof AuthenticatedMediaIndexRoute
   '/portal/': typeof AuthenticatedPortalIndexRoute
+  '/admin/agreements-native/$packageId': typeof AuthenticatedAdminAgreementsNativePackageIdRoute
+  '/admin/agreements-native/new': typeof AuthenticatedAdminAgreementsNativeNewRoute
   '/admin/agreements/signed': typeof AuthenticatedAdminAgreementsSignedRoute
   '/admin/blocks/$blockId': typeof AuthenticatedAdminBlocksBlockIdRoute
   '/admin/broadcasts/$broadcastId': typeof AuthenticatedAdminBroadcastsBroadcastIdRoute
@@ -1655,6 +1685,7 @@ export interface FileRoutesByFullPath {
   '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
   '/lovable/email/auth/webhook': typeof LovableEmailAuthWebhookRoute
   '/lovable/email/queue/process': typeof LovableEmailQueueProcessRoute
+  '/admin/agreements-native/': typeof AuthenticatedAdminAgreementsNativeIndexRoute
   '/admin/agreements/': typeof AuthenticatedAdminAgreementsIndexRoute
   '/admin/clients/': typeof AuthenticatedAdminClientsIndexRoute
   '/admin/coaches/': typeof AuthenticatedAdminCoachesIndexRoute
@@ -1694,6 +1725,7 @@ export interface FileRoutesByTo {
   '/coaching/apply': typeof CoachingApplyRoute
   '/legal/$slug': typeof LegalSlugRoute
   '/m/welcome': typeof MWelcomeRoute
+  '/sign/$token': typeof SignTokenRoute
   '/signup/jf': typeof SignupJfRoute
   '/admin/account': typeof AuthenticatedAdminAccountRoute
   '/admin/appointments': typeof AuthenticatedAdminAppointmentsRoute
@@ -1803,6 +1835,8 @@ export interface FileRoutesByTo {
   '/m': typeof AuthenticatedMIndexRoute
   '/media': typeof AuthenticatedMediaIndexRoute
   '/portal': typeof AuthenticatedPortalIndexRoute
+  '/admin/agreements-native/$packageId': typeof AuthenticatedAdminAgreementsNativePackageIdRoute
+  '/admin/agreements-native/new': typeof AuthenticatedAdminAgreementsNativeNewRoute
   '/admin/agreements/signed': typeof AuthenticatedAdminAgreementsSignedRoute
   '/admin/blocks/$blockId': typeof AuthenticatedAdminBlocksBlockIdRoute
   '/admin/broadcasts/$broadcastId': typeof AuthenticatedAdminBroadcastsBroadcastIdRoute
@@ -1865,6 +1899,7 @@ export interface FileRoutesByTo {
   '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
   '/lovable/email/auth/webhook': typeof LovableEmailAuthWebhookRoute
   '/lovable/email/queue/process': typeof LovableEmailQueueProcessRoute
+  '/admin/agreements-native': typeof AuthenticatedAdminAgreementsNativeIndexRoute
   '/admin/agreements': typeof AuthenticatedAdminAgreementsIndexRoute
   '/admin/clients': typeof AuthenticatedAdminClientsIndexRoute
   '/admin/coaches': typeof AuthenticatedAdminCoachesIndexRoute
@@ -1910,6 +1945,7 @@ export interface FileRoutesById {
   '/coaching/apply': typeof CoachingApplyRoute
   '/legal/$slug': typeof LegalSlugRoute
   '/m/welcome': typeof MWelcomeRoute
+  '/sign/$token': typeof SignTokenRoute
   '/signup/jf': typeof SignupJfRoute
   '/_authenticated/admin/account': typeof AuthenticatedAdminAccountRoute
   '/_authenticated/admin/appointments': typeof AuthenticatedAdminAppointmentsRoute
@@ -2020,6 +2056,8 @@ export interface FileRoutesById {
   '/_authenticated/m/': typeof AuthenticatedMIndexRoute
   '/_authenticated/media/': typeof AuthenticatedMediaIndexRoute
   '/_authenticated/portal/': typeof AuthenticatedPortalIndexRoute
+  '/_authenticated/admin/agreements-native/$packageId': typeof AuthenticatedAdminAgreementsNativePackageIdRoute
+  '/_authenticated/admin/agreements-native/new': typeof AuthenticatedAdminAgreementsNativeNewRoute
   '/_authenticated/admin/agreements/signed': typeof AuthenticatedAdminAgreementsSignedRoute
   '/_authenticated/admin/blocks/$blockId': typeof AuthenticatedAdminBlocksBlockIdRoute
   '/_authenticated/admin/broadcasts/$broadcastId': typeof AuthenticatedAdminBroadcastsBroadcastIdRoute
@@ -2082,6 +2120,7 @@ export interface FileRoutesById {
   '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
   '/lovable/email/auth/webhook': typeof LovableEmailAuthWebhookRoute
   '/lovable/email/queue/process': typeof LovableEmailQueueProcessRoute
+  '/_authenticated/admin/agreements-native/': typeof AuthenticatedAdminAgreementsNativeIndexRoute
   '/_authenticated/admin/agreements/': typeof AuthenticatedAdminAgreementsIndexRoute
   '/_authenticated/admin/clients/': typeof AuthenticatedAdminClientsIndexRoute
   '/_authenticated/admin/coaches/': typeof AuthenticatedAdminCoachesIndexRoute
@@ -2127,6 +2166,7 @@ export interface FileRouteTypes {
     | '/coaching/apply'
     | '/legal/$slug'
     | '/m/welcome'
+    | '/sign/$token'
     | '/signup/jf'
     | '/admin/account'
     | '/admin/appointments'
@@ -2237,6 +2277,8 @@ export interface FileRouteTypes {
     | '/m/'
     | '/media/'
     | '/portal/'
+    | '/admin/agreements-native/$packageId'
+    | '/admin/agreements-native/new'
     | '/admin/agreements/signed'
     | '/admin/blocks/$blockId'
     | '/admin/broadcasts/$broadcastId'
@@ -2299,6 +2341,7 @@ export interface FileRouteTypes {
     | '/lovable/email/auth/preview'
     | '/lovable/email/auth/webhook'
     | '/lovable/email/queue/process'
+    | '/admin/agreements-native/'
     | '/admin/agreements/'
     | '/admin/clients/'
     | '/admin/coaches/'
@@ -2338,6 +2381,7 @@ export interface FileRouteTypes {
     | '/coaching/apply'
     | '/legal/$slug'
     | '/m/welcome'
+    | '/sign/$token'
     | '/signup/jf'
     | '/admin/account'
     | '/admin/appointments'
@@ -2447,6 +2491,8 @@ export interface FileRouteTypes {
     | '/m'
     | '/media'
     | '/portal'
+    | '/admin/agreements-native/$packageId'
+    | '/admin/agreements-native/new'
     | '/admin/agreements/signed'
     | '/admin/blocks/$blockId'
     | '/admin/broadcasts/$broadcastId'
@@ -2509,6 +2555,7 @@ export interface FileRouteTypes {
     | '/lovable/email/auth/preview'
     | '/lovable/email/auth/webhook'
     | '/lovable/email/queue/process'
+    | '/admin/agreements-native'
     | '/admin/agreements'
     | '/admin/clients'
     | '/admin/coaches'
@@ -2553,6 +2600,7 @@ export interface FileRouteTypes {
     | '/coaching/apply'
     | '/legal/$slug'
     | '/m/welcome'
+    | '/sign/$token'
     | '/signup/jf'
     | '/_authenticated/admin/account'
     | '/_authenticated/admin/appointments'
@@ -2663,6 +2711,8 @@ export interface FileRouteTypes {
     | '/_authenticated/m/'
     | '/_authenticated/media/'
     | '/_authenticated/portal/'
+    | '/_authenticated/admin/agreements-native/$packageId'
+    | '/_authenticated/admin/agreements-native/new'
     | '/_authenticated/admin/agreements/signed'
     | '/_authenticated/admin/blocks/$blockId'
     | '/_authenticated/admin/broadcasts/$broadcastId'
@@ -2725,6 +2775,7 @@ export interface FileRouteTypes {
     | '/lovable/email/auth/preview'
     | '/lovable/email/auth/webhook'
     | '/lovable/email/queue/process'
+    | '/_authenticated/admin/agreements-native/'
     | '/_authenticated/admin/agreements/'
     | '/_authenticated/admin/clients/'
     | '/_authenticated/admin/coaches/'
@@ -2764,6 +2815,7 @@ export interface RootRouteChildren {
   BookSlugRoute: typeof BookSlugRoute
   LegalSlugRoute: typeof LegalSlugRoute
   MWelcomeRoute: typeof MWelcomeRoute
+  SignTokenRoute: typeof SignTokenRoute
   SignupJfRoute: typeof SignupJfRoute
   ApiPublic_replay73ae9c8e4bcdc04ea9fd65f84f0752daRoute: typeof ApiPublic_replay73ae9c8e4bcdc04ea9fd65f84f0752daRoute
   ApiPublicSignnowWebhookRoute: typeof ApiPublicSignnowWebhookRoute
@@ -2887,6 +2939,13 @@ declare module '@tanstack/react-router' {
       path: '/signup/jf'
       fullPath: '/signup/jf'
       preLoaderRoute: typeof SignupJfRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sign/$token': {
+      id: '/sign/$token'
+      path: '/sign/$token'
+      fullPath: '/sign/$token'
+      preLoaderRoute: typeof SignTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/m/welcome': {
@@ -3806,6 +3865,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminAgreementsIndexRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
+    '/_authenticated/admin/agreements-native/': {
+      id: '/_authenticated/admin/agreements-native/'
+      path: '/agreements-native'
+      fullPath: '/admin/agreements-native/'
+      preLoaderRoute: typeof AuthenticatedAdminAgreementsNativeIndexRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
     '/lovable/email/queue/process': {
       id: '/lovable/email/queue/process'
       path: '/lovable/email/queue/process'
@@ -4240,6 +4306,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminAgreementsSignedRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
+    '/_authenticated/admin/agreements-native/new': {
+      id: '/_authenticated/admin/agreements-native/new'
+      path: '/agreements-native/new'
+      fullPath: '/admin/agreements-native/new'
+      preLoaderRoute: typeof AuthenticatedAdminAgreementsNativeNewRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
+    '/_authenticated/admin/agreements-native/$packageId': {
+      id: '/_authenticated/admin/agreements-native/$packageId'
+      path: '/agreements-native/$packageId'
+      fullPath: '/admin/agreements-native/$packageId'
+      preLoaderRoute: typeof AuthenticatedAdminAgreementsNativePackageIdRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
     '/_authenticated/admin/crm/contacts/': {
       id: '/_authenticated/admin/crm/contacts/'
       path: '/crm/contacts'
@@ -4447,6 +4527,8 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminTrainingPhasesRoute: typeof AuthenticatedAdminTrainingPhasesRoute
   AuthenticatedAdminWarmupProtocolsRoute: typeof AuthenticatedAdminWarmupProtocolsRoute
   AuthenticatedAdminIndexRoute: typeof AuthenticatedAdminIndexRoute
+  AuthenticatedAdminAgreementsNativePackageIdRoute: typeof AuthenticatedAdminAgreementsNativePackageIdRoute
+  AuthenticatedAdminAgreementsNativeNewRoute: typeof AuthenticatedAdminAgreementsNativeNewRoute
   AuthenticatedAdminAgreementsSignedRoute: typeof AuthenticatedAdminAgreementsSignedRoute
   AuthenticatedAdminBlocksBlockIdRoute: typeof AuthenticatedAdminBlocksBlockIdRoute
   AuthenticatedAdminClientProgramsClientIdRoute: typeof AuthenticatedAdminClientProgramsClientIdRoute
@@ -4466,6 +4548,7 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminSalesMembershipRoute: typeof AuthenticatedAdminSalesMembershipRoute
   AuthenticatedAdminSettingsChatRoute: typeof AuthenticatedAdminSettingsChatRoute
   AuthenticatedAdminSettingsSmsRoute: typeof AuthenticatedAdminSettingsSmsRoute
+  AuthenticatedAdminAgreementsNativeIndexRoute: typeof AuthenticatedAdminAgreementsNativeIndexRoute
   AuthenticatedAdminAgreementsIndexRoute: typeof AuthenticatedAdminAgreementsIndexRoute
   AuthenticatedAdminClientsIndexRoute: typeof AuthenticatedAdminClientsIndexRoute
   AuthenticatedAdminCoachesIndexRoute: typeof AuthenticatedAdminCoachesIndexRoute
@@ -4557,6 +4640,10 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
     AuthenticatedAdminWarmupProtocolsRoute:
       AuthenticatedAdminWarmupProtocolsRoute,
     AuthenticatedAdminIndexRoute: AuthenticatedAdminIndexRoute,
+    AuthenticatedAdminAgreementsNativePackageIdRoute:
+      AuthenticatedAdminAgreementsNativePackageIdRoute,
+    AuthenticatedAdminAgreementsNativeNewRoute:
+      AuthenticatedAdminAgreementsNativeNewRoute,
     AuthenticatedAdminAgreementsSignedRoute:
       AuthenticatedAdminAgreementsSignedRoute,
     AuthenticatedAdminBlocksBlockIdRoute: AuthenticatedAdminBlocksBlockIdRoute,
@@ -4587,6 +4674,8 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
       AuthenticatedAdminSalesMembershipRoute,
     AuthenticatedAdminSettingsChatRoute: AuthenticatedAdminSettingsChatRoute,
     AuthenticatedAdminSettingsSmsRoute: AuthenticatedAdminSettingsSmsRoute,
+    AuthenticatedAdminAgreementsNativeIndexRoute:
+      AuthenticatedAdminAgreementsNativeIndexRoute,
     AuthenticatedAdminAgreementsIndexRoute:
       AuthenticatedAdminAgreementsIndexRoute,
     AuthenticatedAdminClientsIndexRoute: AuthenticatedAdminClientsIndexRoute,
@@ -4923,6 +5012,7 @@ const rootRouteChildren: RootRouteChildren = {
   BookSlugRoute: BookSlugRoute,
   LegalSlugRoute: LegalSlugRoute,
   MWelcomeRoute: MWelcomeRoute,
+  SignTokenRoute: SignTokenRoute,
   SignupJfRoute: SignupJfRoute,
   ApiPublic_replay73ae9c8e4bcdc04ea9fd65f84f0752daRoute:
     ApiPublic_replay73ae9c8e4bcdc04ea9fd65f84f0752daRoute,
