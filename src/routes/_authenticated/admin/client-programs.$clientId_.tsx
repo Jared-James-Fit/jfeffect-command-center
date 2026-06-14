@@ -228,7 +228,14 @@ function BlockRow({ b, templateLookup, onRefresh }: { b: any; templateLookup: an
     <Card className="p-3 flex items-center justify-between hover:bg-secondary/30">
       <Link to="/admin/blocks/$blockId" params={{ blockId: b.id }} className="flex-1">
         <div>
-          <div className="font-bold">{b.name}</div>
+          <div className="flex items-center gap-2">
+            <span className="font-bold">{b.name}</span>
+            {b.training_focus && (
+              <Badge variant="secondary" className="text-[10px] bg-primary/15 text-primary border-primary/30">
+                {b.training_focus}
+              </Badge>
+            )}
+          </div>
           <div className="text-xs text-muted-foreground">
             {b.weeks} weeks · {b.training_focus ?? "—"}
             {b.start_date && ` · ${b.start_date}`}{b.end_date && ` – ${b.end_date}`}
