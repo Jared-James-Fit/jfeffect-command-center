@@ -82,11 +82,23 @@ export function useClientCalendarSources(clientId: string | null | undefined) {
     queryKey: ["cal-client-events", clientId],
     enabled,
     queryFn: async () => {
-      // RLS already scopes to the signed-in client.
-      const { data } = await (supabase.from("events") as any)
-        .select("id,name,event_type,event_date,start_time,end_time,timezone,location,importance,status,client_facing_notes,description")
-        .in("status", ["Active", "Completed"]);
-      return (data ?? []) as any[];
+      // Explicit client_id scoping (not RLS-dependent) so admin POV does not
+      // leak admin-visible events. We accept rows that are either:
+      //   - assigned to this client via event_assignments, OR
+      //   - scoped to all_coaching audience.
+      const [assignsRes, eventsRes] = await Promise.all([
+        (supabase.from("event_assignments") as any)
+          .select("event_id")
+          .eq("client_id", clientId!),
+        (supabase.from("events") as any)
+          .select("id,name,event_type,event_date,start_time,end_time,timezone,location,importance,status,client_facing_notes,description,audience_scope")
+          .in("status", ["Active", "Completed"]),
+      ]);
+      const assignedIds = new Set<string>(((assignsRes.data ?? []) as any[]).map((r) => r.event_id));
+      const events = ((eventsRes.data ?? []) as any[]).filter(
+        (e) => assignedIds.has(e.id) || e.audience_scope === "all_coaching",
+      );
+      return events;
     },
   });
 
