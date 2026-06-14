@@ -6386,8 +6386,10 @@ export type Database = {
       }
       member_set_logs: {
         Row: {
+          block_id: string | null
           created_at: string
           day_index: number
+          drop_stage_id: string | null
           enrollment_id: string
           entered_unit: string | null
           entered_value: number | null
@@ -6403,12 +6405,15 @@ export type Database = {
           rir: number | null
           rpe: number | null
           set_index: number
+          set_row_id: string | null
           updated_at: string
           week_index: number
         }
         Insert: {
+          block_id?: string | null
           created_at?: string
           day_index: number
+          drop_stage_id?: string | null
           enrollment_id: string
           entered_unit?: string | null
           entered_value?: number | null
@@ -6424,12 +6429,15 @@ export type Database = {
           rir?: number | null
           rpe?: number | null
           set_index: number
+          set_row_id?: string | null
           updated_at?: string
           week_index: number
         }
         Update: {
+          block_id?: string | null
           created_at?: string
           day_index?: number
+          drop_stage_id?: string | null
           enrollment_id?: string
           entered_unit?: string | null
           entered_value?: number | null
@@ -6445,15 +6453,37 @@ export type Database = {
           rir?: number | null
           rpe?: number | null
           set_index?: number
+          set_row_id?: string | null
           updated_at?: string
           week_index?: number
         }
         Relationships: [
           {
+            foreignKeyName: "member_set_logs_block_id_fkey"
+            columns: ["block_id"]
+            isOneToOne: false
+            referencedRelation: "pl_exercise_blocks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "member_set_logs_drop_stage_id_fkey"
+            columns: ["drop_stage_id"]
+            isOneToOne: false
+            referencedRelation: "pl_block_drop_stages"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "member_set_logs_enrollment_id_fkey"
             columns: ["enrollment_id"]
             isOneToOne: false
             referencedRelation: "member_plan_enrollments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "member_set_logs_set_row_id_fkey"
+            columns: ["set_row_id"]
+            isOneToOne: false
+            referencedRelation: "pl_block_set_rows"
             referencedColumns: ["id"]
           },
         ]
@@ -7637,6 +7667,109 @@ export type Database = {
           },
         ]
       }
+      pl_block_drop_stages: {
+        Row: {
+          amrap: boolean
+          block_id: string
+          created_at: string
+          id: string
+          reduction_type: string | null
+          reduction_value: number | null
+          reps_text: string | null
+          rest_seconds: number | null
+          rir: string | null
+          rpe: string | null
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          amrap?: boolean
+          block_id: string
+          created_at?: string
+          id?: string
+          reduction_type?: string | null
+          reduction_value?: number | null
+          reps_text?: string | null
+          rest_seconds?: number | null
+          rir?: string | null
+          rpe?: string | null
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          amrap?: boolean
+          block_id?: string
+          created_at?: string
+          id?: string
+          reduction_type?: string | null
+          reduction_value?: number | null
+          reps_text?: string | null
+          rest_seconds?: number | null
+          rir?: string | null
+          rpe?: string | null
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pl_block_drop_stages_block_id_fkey"
+            columns: ["block_id"]
+            isOneToOne: false
+            referencedRelation: "pl_exercise_blocks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pl_block_set_rows: {
+        Row: {
+          amrap: boolean
+          block_id: string
+          created_at: string
+          id: string
+          load_unit: string | null
+          load_value: number | null
+          reps_text: string | null
+          rir: string | null
+          rpe: string | null
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          amrap?: boolean
+          block_id: string
+          created_at?: string
+          id?: string
+          load_unit?: string | null
+          load_value?: number | null
+          reps_text?: string | null
+          rir?: string | null
+          rpe?: string | null
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          amrap?: boolean
+          block_id?: string
+          created_at?: string
+          id?: string
+          load_unit?: string | null
+          load_value?: number | null
+          reps_text?: string | null
+          rir?: string | null
+          rpe?: string | null
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pl_block_set_rows_block_id_fkey"
+            columns: ["block_id"]
+            isOneToOne: false
+            referencedRelation: "pl_exercise_blocks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pl_blocks: {
         Row: {
           archived: boolean
@@ -8053,6 +8186,90 @@ export type Database = {
             columns: ["week_id"]
             isOneToOne: false
             referencedRelation: "pl_weeks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pl_exercise_blocks: {
+        Row: {
+          amrap: boolean
+          block_type: string
+          config: Json
+          created_at: string
+          id: string
+          label: string | null
+          load_type: string | null
+          load_unit: string | null
+          load_value: number | null
+          notes: string | null
+          reference_block_id: string | null
+          reps_text: string | null
+          rest_seconds_override: number | null
+          rir: string | null
+          row_id: string
+          rpe: string | null
+          sets: number | null
+          sort_order: number
+          tempo: string | null
+          updated_at: string
+        }
+        Insert: {
+          amrap?: boolean
+          block_type?: string
+          config?: Json
+          created_at?: string
+          id?: string
+          label?: string | null
+          load_type?: string | null
+          load_unit?: string | null
+          load_value?: number | null
+          notes?: string | null
+          reference_block_id?: string | null
+          reps_text?: string | null
+          rest_seconds_override?: number | null
+          rir?: string | null
+          row_id: string
+          rpe?: string | null
+          sets?: number | null
+          sort_order?: number
+          tempo?: string | null
+          updated_at?: string
+        }
+        Update: {
+          amrap?: boolean
+          block_type?: string
+          config?: Json
+          created_at?: string
+          id?: string
+          label?: string | null
+          load_type?: string | null
+          load_unit?: string | null
+          load_value?: number | null
+          notes?: string | null
+          reference_block_id?: string | null
+          reps_text?: string | null
+          rest_seconds_override?: number | null
+          rir?: string | null
+          row_id?: string
+          rpe?: string | null
+          sets?: number | null
+          sort_order?: number
+          tempo?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pl_exercise_blocks_reference_block_id_fkey"
+            columns: ["reference_block_id"]
+            isOneToOne: false
+            referencedRelation: "pl_exercise_blocks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pl_exercise_blocks_row_id_fkey"
+            columns: ["row_id"]
+            isOneToOne: false
+            referencedRelation: "pl_exercise_rows"
             referencedColumns: ["id"]
           },
         ]
