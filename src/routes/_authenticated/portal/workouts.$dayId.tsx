@@ -48,7 +48,7 @@ import { enqueueOfflineWrite, registerQueueHandler } from "@/lib/workout-offline
 import { ActiveRestTimerProvider, useRestTimer } from "@/components/active-rest-timer";
 import { ExerciseHistoryButton } from "@/components/exercise-history-sheet";
 import { convertWeight } from "@/lib/progress-metrics";
-import { WorkoutFeedbackSheet, WorkoutFeedbackReminder } from "@/components/workout-feedback-sheet";
+import { WorkoutFeedbackSheet, WorkoutFeedbackReminder, WorkoutFeedbackEditButton } from "@/components/workout-feedback-sheet";
 
 /* -------------------------------------------------------------------------- */
 /* Target-parsing helpers (Suggested → Draft → Confirmed fast-logging)         */
@@ -565,11 +565,12 @@ function WorkoutDay() {
     queryFn: async () =>
       (await (sb as any)
         .from("pl_workout_feedback")
-        .select("id, overall_rating, session_rpe, pain")
+        .select("id, overall_rating, session_rpe, pain, pain_level, pain_area, pain_note, client_note, reviewed_at, reviewed_by")
         .eq("completion_id", completion!.id)
         .maybeSingle()).data,
   });
   const hasFeedback = !!existingFeedback;
+  const feedbackLocked = !!(existingFeedback?.reviewed_at || existingFeedback?.reviewed_by);
   const feedbackSkipped = !!(completion?.id && typeof window !== "undefined"
     && localStorage.getItem(`lov.wfb.skip:${completion.id}`));
 
