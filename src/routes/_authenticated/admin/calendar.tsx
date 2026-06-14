@@ -9,8 +9,9 @@ import { BookingLinksPage } from "./booking-links";
 import { GoogleCalendarPage } from "./google-calendar";
 import { PtCalendarPanel } from "@/components/admin-calendar/pt-calendar-panel";
 import { AdminEventsPage } from "./events.index";
+import { AdminCalendarBoardPanel } from "@/components/admin-calendar/board-panel";
 
-const TAB_VALUES = ["upcoming", "events", "availability", "booking-links", "pt-calendar", "google-calendar"] as const;
+const TAB_VALUES = ["board", "upcoming", "events", "availability", "booking-links", "pt-calendar", "google-calendar"] as const;
 type TabValue = typeof TAB_VALUES[number];
 const LS_KEY = "admin.calendar.lastTab";
 
@@ -35,7 +36,7 @@ function AdminCalendarShell() {
   const navigate = useNavigate({ from: "/admin/calendar" });
 
   // Resolve active tab: URL > localStorage > default
-  let active: TabValue = "upcoming";
+  let active: TabValue = "board";
   if (search.tab) {
     active = search.tab;
   } else if (typeof window !== "undefined") {
@@ -70,6 +71,7 @@ function AdminCalendarShell() {
         <div className="px-3 sm:px-6 md:px-8 py-2 sm:py-3 overflow-x-auto">
           <Tabs value={active} onValueChange={setTab}>
             <TabsList className="flex w-max gap-1 h-auto flex-nowrap">
+              <TabsTrigger value="board">Board</TabsTrigger>
               <TabsTrigger value="upcoming">Upcoming</TabsTrigger>
               <TabsTrigger value="events">Events</TabsTrigger>
               <TabsTrigger value="availability">Availability</TabsTrigger>
@@ -80,6 +82,7 @@ function AdminCalendarShell() {
           </Tabs>
         </div>
       </div>
+      {active === "board" && <AdminCalendarBoardPanel />}
       {active === "upcoming" && <UpcomingPanel />}
       {active === "events" && <div className="p-3 sm:p-4 md:p-6"><AdminEventsPage embedded /></div>}
       {active === "availability" && <AvailabilityPlaceholder />}
