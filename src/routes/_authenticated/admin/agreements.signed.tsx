@@ -18,11 +18,11 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Download, ExternalLink, RefreshCw, FileText, Loader2, Search, User, Mail, DownloadCloud, Trash2 } from "lucide-react";
+import { Download, ExternalLink, RefreshCw, FileText, Loader2, Search, User, Mail, DownloadCloud, Trash2, Pencil, Link as LinkIcon } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
-import { getSignedAgreementUrl, refreshAllPendingAgreements, refreshAgreementStatus, importSignNowSignedDocuments, bulkDeleteAgreements } from "@/lib/agreements.functions";
+import { getSignedAgreementUrl, refreshAllPendingAgreements, refreshAgreementStatus, importSignNowSignedDocuments, bulkDeleteAgreements, setAgreementCustomTitle, linkAgreementToClient } from "@/lib/agreements.functions";
 import { AgreementStatusBadge } from "@/components/agreement-status-badge";
 import { VERIFICATION_BADGE } from "@/lib/agreements";
 
@@ -32,8 +32,9 @@ export const Route = createFileRoute("/_authenticated/admin/agreements/signed")(
 
 type Row = {
   id: string;
-  client_id: string;
+  client_id: string | null;
   template_name: string | null;
+  custom_title: string | null;
   agreement_type: string | null;
   status: string;
   verification_status: string;
@@ -49,6 +50,8 @@ type Row = {
   signnow_document_id: string | null;
   client_full_name: string | null;
   client_email: string | null;
+  signer_email: string | null;
+  signer_name: string | null;
   clients: { id: string; full_name: string; email: string | null } | null;
 };
 
