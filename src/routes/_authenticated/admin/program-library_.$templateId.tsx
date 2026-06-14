@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { AlertTriangle, ArrowLeft, Plus, Trash2, Save, Clock, Copy, LayoutGrid, CalendarRange, ArrowRight, ZoomIn, ZoomOut, Maximize2, Minimize2, PanelLeftClose, PanelLeftOpen, Rows3, ChevronDown, ChevronUp, Settings2, Undo2, Redo2, ClipboardCopy, ClipboardPaste, Expand, RotateCcw } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Plus, Trash2, Save, Clock, Copy, LayoutGrid, CalendarRange, ArrowRight, ZoomIn, ZoomOut, Maximize2, Minimize2, PanelLeftClose, PanelLeftOpen, Rows3, ChevronDown, ChevronUp, Settings2, Undo2, Redo2, ClipboardCopy, ClipboardPaste, Expand, RotateCcw, ArrowLeftRight } from "lucide-react";
 import { toast } from "sonner";
 import {
   getTemplate, updateTemplate, summarizeTemplatePayload, TIME_PROFILES,
@@ -1916,6 +1916,7 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
           <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => { copyRows([row]); toast.success("Exercise copied"); }} title="Copy exercise">
             <ClipboardCopy className="h-3.5 w-3.5" />
           </Button>
+          <SwapExerciseButton row={row} setRow={setRow} exercises={exercises} />
           <Popover>
             <PopoverTrigger asChild>
               <Button size="icon" variant="ghost" className="h-7 w-7" title="Advanced settings (exercise classification)">
