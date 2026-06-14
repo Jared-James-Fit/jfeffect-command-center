@@ -3,7 +3,23 @@ import { createFileRoute } from "@tanstack/react-router";
 export const Route = createFileRoute("/api/public/hooks/appointment-reminders")({
   server: {
     handlers: {
-      POST: async () => {
+      POST: async ({ request }) => {
+        // ---------- Worker secret guard ----------
+        const expected = process.env.SCHEDULED_WORKER_SECRET ?? "";
+        const url = new URL(request.url);
+        const provided =
+          request.headers.get("x-worker-secret") ??
+          url.searchParams.get("secret") ??
+          "";
+        if (
+          !expected ||
+          !provided ||
+          provided.length !== expected.length ||
+          !timingSafeEqualStr(provided, expected)
+        ) {
+          return new Response("unauthorized", { status: 401 });
+        }
+
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
         const now = new Date().toISOString();
         const { data: due } = await supabaseAdmin
@@ -91,4 +107,12 @@ async function sendSms(to: string, from: string, body: string) {
     const t = await res.text().catch(() => "");
     throw new Error(`Twilio ${res.status}: ${t.slice(0, 200)}`);
   }
+}
+
+/** Constant-time string compare. Strings must already be the same length. */
+function timingSafeEqualStr(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
 }
