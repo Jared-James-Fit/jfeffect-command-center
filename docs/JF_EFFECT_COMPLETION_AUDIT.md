@@ -2,6 +2,8 @@
 
 _Generated: 2026-06-14. Evidence-based, no code changes performed._
 
+_Re-verified: 2026-06-14 (same day). Confirmed against live DB: storage policies B6 still bound to `{-}` (catch-all), legal doc state unchanged (5/12 published, enforcement off across all 12), notification mode has progressed `dry_run` → `allowlist` (1 phone + 1 email allowlisted) — B2 partially cleared; remaining P0/P1 items below all still apply._
+
 ---
 
 ## A. EXECUTIVE SUMMARY

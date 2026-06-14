@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite dev",
     "build": "vite build",
-    "build:dev": "vite build --mode development",
+    "build:dev": "sh -c 'NODE_OPTIONS=\"--dns-result-order=ipv4first --max-old-space-size=8192 --max-semi-space-size=128 --expose-gc\" vite build --mode development'",
     "preview": "vite preview",
     "lint": "eslint .",
     "format": "prettier --write .",
