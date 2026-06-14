@@ -360,6 +360,35 @@ function DocumentDetail({ documentId }: { documentId: string }) {
           ))}
         </ul>
       </Card>
+      <AlertDialog
+        open={!!confirmState}
+        onOpenChange={(o) => { if (!o && !confirmBusy) setConfirmState(null); }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {confirmState?.kind === "publish" ? "Publish this version?" : "Archive this version?"}
+            </AlertDialogTitle>
+            <AlertDialogDescription className="whitespace-pre-line">
+              {confirmState?.kind === "publish"
+                ? "Publishing makes this version legally effective.\n\nConfirm that the wording has been reviewed by a qualified attorney for the jurisdictions where you operate. The previously published version (if any) will be replaced and historical acceptance records will continue to point to their original accepted version."
+                : "Archive this version? Historical acceptance evidence is preserved."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={confirmBusy}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={confirmBusy}
+              onClick={(e) => { e.preventDefault(); runConfirm(); }}
+              className={confirmState?.kind === "publish" ? "bg-emerald-600 hover:bg-emerald-700" : undefined}
+            >
+              {confirmBusy
+                ? (confirmState?.kind === "publish" ? "Publishing…" : "Archiving…")
+                : (confirmState?.kind === "publish" ? "Publish" : "Archive")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
