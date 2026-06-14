@@ -190,26 +190,7 @@ export function MemberSetupWizard({
         )}
 
         {step === "goals" && (
-          <div className="space-y-3">
-            <div>
-              <Label>Your goals</Label>
-              <Textarea
-                rows={3}
-                placeholder="What do you want from your membership? Strength, fat loss, hypertrophy, getting back in shape…"
-                value={value("goals")}
-                onChange={(e) => set("goals", e.target.value)}
-              />
-            </div>
-            <div>
-              <Label>Training background</Label>
-              <Textarea
-                rows={3}
-                placeholder="How long have you trained? Lifting experience? Injuries to work around?"
-                value={value("training_background")}
-                onChange={(e) => set("training_background", e.target.value)}
-              />
-            </div>
-          </div>
+          <GoalsStep form={form} setForm={setForm} member={m} />
         )}
 
         <DialogFooter className="mt-2 flex-row justify-between gap-2 sm:justify-between">
