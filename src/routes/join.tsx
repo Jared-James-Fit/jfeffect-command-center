@@ -77,10 +77,9 @@ function SignupJf() {
 
   const [form, setForm] = useState({
     first_name: "", last_name: "", email: "", phone: "",
-    password: "", confirm: "", marketing_consent: false,
+    password: "", confirm: "",
   });
   const [bundledAccepted, setBundledAccepted] = useState(false);
-  const [showReview, setShowReview] = useState(false);
   const [busy, setBusy] = useState(false);
   const [showPw, setShowPw] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -112,7 +111,7 @@ function SignupJf() {
   // Build the *exact* bundled acknowledgement statement displayed to the user.
   const monthlyPrice = settings?.monthly_price_display ?? "$29 USD/month";
   const trialDaysLocal = settings?.trial_days ?? 3;
-  const bundledStatement = `I agree to the Membership Agreement, Terms of Service, Recurring Billing Disclosure, and Cancellation & Refund Policy, and I acknowledge the Privacy Policy. Billing: ${trialDaysLocal}-day free trial, then ${monthlyPrice} plus applicable taxes, renews automatically until cancelled.`;
+  const bundledStatement = `I agree to the JF Membership Terms, recurring billing, and cancellation policy, and acknowledge the Privacy Policy. Billing: ${trialDaysLocal}-day free trial, then ${monthlyPrice} plus applicable taxes, renews automatically until cancelled.`;
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -135,7 +134,7 @@ function SignupJf() {
         email: form.email.trim(),
         phone: form.phone.trim(),
         password: form.password,
-        sms_consent: !!form.marketing_consent,
+        sms_consent: false,
         origin: window.location.origin,
         legal_acceptances: requiredDocs.map((d) => ({
           document_id: d.document_id,
