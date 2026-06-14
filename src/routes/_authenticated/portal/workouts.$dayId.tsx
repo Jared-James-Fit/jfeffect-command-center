@@ -567,8 +567,9 @@ function WorkoutDay() {
               <Minimize2 className="mr-1 h-4 w-4" /> Exit Full Screen
             </Button>
           </div>
-          <div className="mx-auto max-w-3xl space-y-4 p-4 md:p-6">
+          <div className="mx-auto max-w-3xl p-4 md:p-6">
             <WorkoutLoadBoundary clientId={client?.id ?? null} clientName={(client as any)?.full_name ?? null} dayId={dayId} route={`/portal/workouts/${dayId}`}>
+              <div className="space-y-4 rounded-lg bg-builder-canvas p-3 sm:p-4 ring-1 ring-builder-card-border/40">
               {rowsLoaded && (rows as any[]).length === 0 ? (
                 <WorkoutEmptyCard
                   clientId={client?.id ?? null}
@@ -597,6 +598,7 @@ function WorkoutDay() {
                   purposeLabel={purposeLabelById.get(r.id) ?? null}
                 />
               ))}
+              </div>
             </WorkoutLoadBoundary>
           </div>
         </div>
