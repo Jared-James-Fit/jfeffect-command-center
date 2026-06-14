@@ -218,3 +218,93 @@ export function MemberSetupWizard({
     </Dialog>
   );
 }
+
+function GoalsStep({
+  form,
+  setForm,
+  member,
+}: {
+  form: any;
+  setForm: (updater: any) => void;
+  member: any;
+}) {
+  const selected: string[] = form.goals_tags ?? member?.goals_tags ?? [];
+  const level: string = form.experience_level ?? member?.experience_level ?? "";
+  const toggle = (g: string) =>
+    setForm((f: any) => {
+      const cur: string[] = f.goals_tags ?? member?.goals_tags ?? [];
+      const next = cur.includes(g) ? cur.filter((x) => x !== g) : [...cur, g];
+      return { ...f, goals_tags: next };
+    });
+  const showOther = form.goals !== undefined || !!member?.goals;
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <Label>What are you focused on? (pick any)</Label>
+        <div className="mt-2 flex flex-wrap gap-2">
+          {GOAL_OPTIONS.map((g) => {
+            const on = selected.includes(g);
+            return (
+              <button
+                key={g}
+                type="button"
+                onClick={() => toggle(g)}
+                className={cn(
+                  "rounded-full border px-3 py-1.5 text-xs font-medium transition",
+                  on
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "border-border bg-secondary/40 hover:bg-secondary",
+                )}
+              >
+                {g}
+              </button>
+            );
+          })}
+        </div>
+        {!showOther ? (
+          <button
+            type="button"
+            className="mt-2 text-xs text-muted-foreground underline"
+            onClick={() => setForm((f: any) => ({ ...f, goals: "" }))}
+          >
+            + Add something specific
+          </button>
+        ) : (
+          <Textarea
+            rows={2}
+            className="mt-2"
+            placeholder="Anything specific we should know?"
+            value={form.goals ?? member?.goals ?? ""}
+            onChange={(e) => setForm((f: any) => ({ ...f, goals: e.target.value }))}
+          />
+        )}
+      </div>
+
+      <div>
+        <Label>Lifting experience</Label>
+        <div className="mt-2 grid gap-2 sm:grid-cols-2">
+          {EXPERIENCE_OPTIONS.map((opt) => {
+            const on = level === opt.value;
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => setForm((f: any) => ({ ...f, experience_level: opt.value }))}
+                className={cn(
+                  "rounded-md border p-3 text-left text-sm transition",
+                  on
+                    ? "border-primary bg-primary/10"
+                    : "border-border bg-secondary/40 hover:bg-secondary",
+                )}
+              >
+                <div className="font-semibold">{opt.label}</div>
+                <div className="text-xs text-muted-foreground">{opt.hint}</div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
