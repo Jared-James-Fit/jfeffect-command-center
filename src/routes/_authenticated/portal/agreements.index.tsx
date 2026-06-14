@@ -11,7 +11,7 @@ import type { Agreement } from "@/lib/agreements";
 import { useServerFn } from "@tanstack/react-start";
 import { getSignedAgreementUrl } from "@/lib/agreements.functions";
 import { toast } from "sonner";
-import { usePortalUserId } from "@/lib/auth";
+import { usePortalUserId } from "@/lib/client-impersonation";
 
 export const Route = createFileRoute("/_authenticated/portal/agreements/")({
   component: PortalAgreementsPage,
