@@ -60,6 +60,31 @@ export const applyTemplateToClientFn = createServerFn({ method: "POST" })
     const ctx = { supabase: context.supabase, userId: context.userId };
     await authorizeClient(ctx, data.clientId);
 
+    // SLICE 3 GUARD: until the slice 4+5 assignment RPC + client logger
+    // ship together, refuse to assign templates that contain new
+    // multi-block prescriptions. The backfill created exactly one
+    // "straight" block per row; any row with >1 block, or any block
+    // whose type is not "straight", is unsafe to flatten and would
+    // either be lost on assign or render incorrectly to the client.
+    {
+      const { data: rows, error: gErr } = await ctx.supabase
+        .from("pl_exercise_rows")
+        .select("id, pl_days!inner(pl_weeks!inner(template_id)), pl_exercise_blocks(id, block_type)")
+        .eq("pl_days.pl_weeks.template_id", data.templateId);
+      if (gErr) throw new Error(gErr.message);
+      let bad = 0;
+      for (const r of (rows ?? []) as any[]) {
+        const blocks = (r.pl_exercise_blocks ?? []) as Array<{ block_type: string }>;
+        if (blocks.length > 1) { bad++; continue; }
+        if (blocks.length === 1 && blocks[0].block_type !== "straight") { bad++; continue; }
+      }
+      if (bad > 0) {
+        throw new Error(
+          `This template uses ${bad} multi-block prescription${bad === 1 ? "" : "s"} (top sets, backoffs, ascending sets, drop sets, warm-ups, or custom blocks). The client-side logger for these blocks ships in the next release. Until then, please remove or convert these blocks to a single Straight Sets prescription before assigning, or assign a different template.`,
+        );
+      }
+    }
+
     const placement: Placement = data.placement ?? { mode: "standalone_block" };
     const { data: result, error } = await ctx.supabase.rpc("pl_assign_template_to_client", {
       p_template_id: data.templateId,
