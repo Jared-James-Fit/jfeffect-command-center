@@ -11,6 +11,7 @@ import type { Agreement } from "@/lib/agreements";
 import { useServerFn } from "@tanstack/react-start";
 import { getSignedAgreementUrl } from "@/lib/agreements.functions";
 import { toast } from "sonner";
+import { usePortalUserId } from "@/lib/client-impersonation";
 
 export const Route = createFileRoute("/_authenticated/portal/agreements/")({
   component: PortalAgreementsPage,
@@ -18,16 +19,30 @@ export const Route = createFileRoute("/_authenticated/portal/agreements/")({
 
 function PortalAgreementsPage() {
   const getUrl = useServerFn(getSignedAgreementUrl);
+  const portalUserId = usePortalUserId();
   const downloadSigned = async (id: string) => {
     const r: any = await getUrl({ data: { id } });
     if (r?.url) window.open(r.url, "_blank", "noopener,noreferrer");
     else throw new Error("No signed copy available yet.");
   };
+  // Defense-in-depth: explicitly scope the query to this user's client row.
+  // RLS already enforces this, but an explicit filter prevents any accidental
+  // cross-client read if a policy ever regresses.
+  const { data: clientRow } = useQuery({
+    queryKey: ["portal-agreements-client-id", portalUserId],
+    enabled: !!portalUserId,
+    queryFn: async () =>
+      (await supabase.from("clients").select("id").eq("user_id", portalUserId!).maybeSingle()).data,
+  });
+  const clientId = clientRow?.id ?? null;
   const { data = [], isLoading } = useQuery({
-    queryKey: ["portal-agreements"],
+    queryKey: ["portal-agreements", clientId],
+    enabled: !!clientId,
     queryFn: async () => {
       const { data, error } = await supabase.from("agreements")
-        .select("*").order("created_at", { ascending: false });
+        .select("*")
+        .eq("client_id", clientId!)
+        .order("created_at", { ascending: false });
       if (error) throw error;
       return (data ?? []) as Agreement[];
     },
