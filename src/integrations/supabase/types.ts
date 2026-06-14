@@ -8669,6 +8669,66 @@ export type Database = {
           },
         ]
       }
+      pl_template_distribution_events: {
+        Row: {
+          action: string
+          actor_user_id: string | null
+          created_at: string
+          destination: string
+          id: string
+          new_status: string | null
+          notes: string | null
+          previous_status: string | null
+          share_id: string | null
+          target_coach_id: string | null
+          template_id: string
+          version: number | null
+        }
+        Insert: {
+          action: string
+          actor_user_id?: string | null
+          created_at?: string
+          destination: string
+          id?: string
+          new_status?: string | null
+          notes?: string | null
+          previous_status?: string | null
+          share_id?: string | null
+          target_coach_id?: string | null
+          template_id: string
+          version?: number | null
+        }
+        Update: {
+          action?: string
+          actor_user_id?: string | null
+          created_at?: string
+          destination?: string
+          id?: string
+          new_status?: string | null
+          notes?: string | null
+          previous_status?: string | null
+          share_id?: string | null
+          target_coach_id?: string | null
+          template_id?: string
+          version?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pl_template_distribution_events_share_id_fkey"
+            columns: ["share_id"]
+            isOneToOne: false
+            referencedRelation: "pl_template_shares"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pl_template_distribution_events_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "pl_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pl_template_operations: {
         Row: {
           actor_user_id: string | null
@@ -8734,6 +8794,75 @@ export type Database = {
           },
         ]
       }
+      pl_template_shares: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          destination: string
+          id: string
+          notes: string | null
+          permission: string
+          removed_at: string | null
+          review_notes: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          shared_version: number | null
+          status: string
+          target_coach_id: string | null
+          template_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          destination: string
+          id?: string
+          notes?: string | null
+          permission?: string
+          removed_at?: string | null
+          review_notes?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          shared_version?: number | null
+          status?: string
+          target_coach_id?: string | null
+          template_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          destination?: string
+          id?: string
+          notes?: string | null
+          permission?: string
+          removed_at?: string | null
+          review_notes?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          shared_version?: number | null
+          status?: string
+          target_coach_id?: string | null
+          template_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pl_template_shares_target_coach_id_fkey"
+            columns: ["target_coach_id"]
+            isOneToOne: false
+            referencedRelation: "coaches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pl_template_shares_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "pl_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pl_templates: {
         Row: {
           archived: boolean
@@ -8747,6 +8876,8 @@ export type Database = {
           id: string
           name: string
           notes: string | null
+          owner_role: string
+          owner_user_id: string | null
           payload: Json
           payload_revision: number
           status: string
@@ -8755,6 +8886,7 @@ export type Database = {
           training_focus: string | null
           training_style: string
           updated_at: string
+          visibility: string
           weeks: number | null
         }
         Insert: {
@@ -8769,6 +8901,8 @@ export type Database = {
           id?: string
           name: string
           notes?: string | null
+          owner_role?: string
+          owner_user_id?: string | null
           payload?: Json
           payload_revision?: number
           status?: string
@@ -8777,6 +8911,7 @@ export type Database = {
           training_focus?: string | null
           training_style?: string
           updated_at?: string
+          visibility?: string
           weeks?: number | null
         }
         Update: {
@@ -8791,6 +8926,8 @@ export type Database = {
           id?: string
           name?: string
           notes?: string | null
+          owner_role?: string
+          owner_user_id?: string | null
           payload?: Json
           payload_revision?: number
           status?: string
@@ -8799,6 +8936,7 @@ export type Database = {
           training_focus?: string | null
           training_style?: string
           updated_at?: string
+          visibility?: string
           weeks?: number | null
         }
         Relationships: []
@@ -11300,6 +11438,10 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      coach_has_template_share: {
+        Args: { _template_id: string; _user_id: string }
+        Returns: boolean
+      }
       count_active_admins: { Args: never; Returns: number }
       crm_last_contacted_map: {
         Args: { _ids: string[] }
@@ -11353,6 +11495,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_active_coach: { Args: { _user_id: string }; Returns: boolean }
       is_admin_or_media_manager: { Args: { _uid: string }; Returns: boolean }
       is_assigned_coach: { Args: { _client_id: string }; Returns: boolean }
       is_coach_or_admin: { Args: { _user_id: string }; Returns: boolean }
@@ -11365,6 +11508,10 @@ export type Database = {
         Returns: boolean
       }
       is_media_manager: { Args: { _uid: string }; Returns: boolean }
+      is_pl_template_owner: {
+        Args: { _template_id: string; _user_id: string }
+        Returns: boolean
+      }
       jf_member_has_full_access: {
         Args: { _user_id: string }
         Returns: boolean
