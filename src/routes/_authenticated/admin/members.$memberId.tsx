@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import {
   getMember, updateAppMember, generateSetupLink, generatePasswordResetLink,
-  grantAccess, revokeAccess,
+  grantAccess, revokeAccess, deleteAdminMember,
 } from "@/lib/members.functions";
 import { copyPovFromMember } from "@/lib/pov.functions";
 import { adminUpdateMemberSetup } from "@/lib/member-setup.functions";
@@ -46,6 +46,7 @@ function MemberProfile() {
   const grant = useServerFn(grantAccess);
   const revoke = useServerFn(revokeAccess);
   const copyPov = useServerFn(copyPovFromMember);
+  const deleteMemberFn = useServerFn(deleteAdminMember);
   const navigate = useNavigate();
 
   const { data } = useQuery({ queryKey: ["admin-member", memberId], queryFn: () => fetch({ data: { memberId } }) });
