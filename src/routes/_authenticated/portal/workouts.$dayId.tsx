@@ -1093,8 +1093,8 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
         </p>
       )}
 
-      <div className={cn("mt-3 overflow-hidden rounded-md border border-border", focusMode && "text-base")}>
-        <div className={cn("grid items-center gap-2 border-b border-border bg-muted/40 px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground", focusMode ? "grid-cols-[44px_1fr_1fr_1fr_64px] text-xs" : "grid-cols-[36px_1fr_1fr_1fr_56px]")}>
+      <div className={cn("mt-3 overflow-hidden rounded-md border border-builder-card-border bg-builder-inset", focusMode && "text-base")}>
+        <div className={cn("grid items-center gap-2 border-b border-builder-card-border bg-builder-card/60 px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground", focusMode ? "grid-cols-[44px_1fr_1fr_1fr_64px] text-xs" : "grid-cols-[36px_1fr_1fr_1fr_56px]")}>
           <span>Set</span>
           <span>Reps</span>
           <span className="truncate">Wt ({unit.toUpperCase()})</span>
