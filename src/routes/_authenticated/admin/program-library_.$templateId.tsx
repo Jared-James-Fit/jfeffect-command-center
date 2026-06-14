@@ -1041,6 +1041,11 @@ function MultiBlockStructureEditor({ type, payload, setPayload, exercises, compa
               <button type="button" className="font-semibold" onClick={() => setActive(b.id)} title={`${b.weeks.length} weeks`}>
                 {b.name}
               </button>
+              {(b.phase || b.training_focus) && (
+                <span className="rounded bg-primary/15 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+                  {b.phase || b.training_focus}
+                </span>
+              )}
               <span className="text-[10px] opacity-70">·{b.weeks.length}w</span>
               <Popover>
                 <PopoverTrigger asChild>
