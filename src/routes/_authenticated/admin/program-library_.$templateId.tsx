@@ -1418,12 +1418,26 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
                       <span className={cn("min-w-0 truncate text-muted-foreground max-sm:col-span-2", compact ? "text-[10px]" : "text-[11px]")}> 
                         {s.days} day{s.days === 1 ? "" : "s"} · {s.rows} row{s.rows === 1 ? "" : "s"} · Est {fmtDur(s.minutes)}
                       </span>
-                      <Input
-                        className={cn("min-w-0 border-0 bg-transparent text-xs focus-visible:ring-1 max-sm:col-span-2", compact ? "h-6" : "h-7")}
-                        placeholder="Week notes"
-                        value={w.notes ?? ""}
-                        onChange={(e) => { const c = [...weeksData]; c[wi] = { ...w, notes: e.target.value }; setWeeksData(c); }}
-                      />
+                      <div className={cn("flex min-w-0 items-center gap-1 max-sm:col-span-2")}>
+                        <Select
+                          value={w.phase || "__none"}
+                          onValueChange={(v) => { const c = [...weeksData]; c[wi] = { ...w, phase: v === "__none" ? null : v }; setWeeksData(c); }}
+                        >
+                          <SelectTrigger className={cn("w-[130px] shrink-0 text-[11px]", compact ? "h-6" : "h-7")}>
+                            <SelectValue placeholder="Week label" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__none">No label</SelectItem>
+                            {BLOCK_PHASE_OPTIONS.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                        <Input
+                          className={cn("min-w-0 border-0 bg-transparent text-xs focus-visible:ring-1", compact ? "h-6" : "h-7")}
+                          placeholder="Week notes"
+                          value={w.notes ?? ""}
+                          onChange={(e) => { const c = [...weeksData]; c[wi] = { ...w, notes: e.target.value }; setWeeksData(c); }}
+                        />
+                      </div>
                       <div className="col-start-2 row-start-1 flex shrink-0 gap-1 sm:col-start-auto sm:row-start-auto">
                         <Button size="sm" variant="ghost" className="h-7 text-[11px]" onClick={() => copyWeekToFuture(wi)} title="Copy week → all future weeks">
                           <Copy className="mr-1 h-3 w-3" /> → future
