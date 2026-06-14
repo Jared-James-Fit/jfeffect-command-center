@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect, useState, lazy, Suspense, type ComponentType } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
@@ -19,31 +19,13 @@ import { inviteClient, deleteClient, getSetupLink, getPasswordResetLink, sendPas
 import { sendAuthLinkBySms } from "@/lib/sms-links.functions";
 import { deactivateClient, reactivateClient, DEACTIVATION_REASONS } from "@/lib/client-deactivation.functions";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { TrainingPhasesPanel } from "@/components/training-phases-panel";
-import { ClientMaxesPanel } from "@/components/client-maxes-panel";
-import { ImportantDatesPanel } from "@/components/important-dates-panel";
-import { PtSessionsPanel } from "@/components/pt-sessions-panel";
-import { NutritionTargetsPanel } from "@/components/nutrition-targets-panel";
-import { CardioTargetsPanel } from "@/components/cardio-targets-panel";
-import { LiftVideosPanel } from "@/components/lift-videos-panel";
-import { ProgressMetricsPanel } from "@/components/progress-metrics-panel";
-import { BasicInfoForm } from "@/components/basic-info-form";
 import { calcAge, formatHeight } from "@/lib/basic-info";
 import { Switch } from "@/components/ui/switch";
 import { COMMON_TIMEZONES } from "@/lib/pt-sessions";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { ClientExerciseNotesCard } from "@/components/client-exercise-notes-card";
-import { ProfilePictureCapture } from "@/components/profile-picture-capture";
-import { MessageThread } from "@/components/message-thread";
 import type { ConversationState } from "@/lib/messages";
-import { AgreementStatusPanel } from "@/components/agreement-status-panel";
 import { ClientDriveFolderPanel } from "@/components/client-drive-folder-panel";
-import { PurchaseRecordsPanel } from "@/components/purchase-records-panel";
-import { PriceCardPickerDialog } from "@/components/price-card-picker-dialog";
-import { AgreementsPanel } from "@/components/agreements-panel";
 import { TrainingScheduleCard } from "@/components/training-schedule-card";
-import { AssignedProgramsCard } from "@/components/assigned-programs-card";
-import { ClientWarmupCard } from "@/components/client-warmup-card";
 import { PowerlifterBadge, POWERLIFTER_BADGE_LABELS } from "@/components/powerlifter-badge";
 import { SocialHandlesEditor } from "@/components/social-handles-editor";
 import { SocialIcons } from "@/components/social-icons";
@@ -56,7 +38,36 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { listForms as listNativeForms, type NfForm } from "@/lib/native-forms";
 import { replaceClientNativeFormAssignments } from "@/lib/native-forms.functions";
 import { ActionButton } from "@/components/action-button";
-import { ClientBillingPanel } from "@/components/admin/client-billing-panel";
+
+// Heavy panels — code-split so visiting a client only loads the active tab's code.
+const lazyDefault = <T,>(loader: () => Promise<{ [k: string]: T }>, name: string) =>
+  lazy(async () => {
+    const m = await loader();
+    return { default: (m as any)[name] as ComponentType<any> };
+  });
+const TrainingPhasesPanel = lazyDefault(() => import("@/components/training-phases-panel"), "TrainingPhasesPanel");
+const ClientMaxesPanel = lazyDefault(() => import("@/components/client-maxes-panel"), "ClientMaxesPanel");
+const ImportantDatesPanel = lazyDefault(() => import("@/components/important-dates-panel"), "ImportantDatesPanel");
+const PtSessionsPanel = lazyDefault(() => import("@/components/pt-sessions-panel"), "PtSessionsPanel");
+const NutritionTargetsPanel = lazyDefault(() => import("@/components/nutrition-targets-panel"), "NutritionTargetsPanel");
+const CardioTargetsPanel = lazyDefault(() => import("@/components/cardio-targets-panel"), "CardioTargetsPanel");
+const LiftVideosPanel = lazyDefault(() => import("@/components/lift-videos-panel"), "LiftVideosPanel");
+const ProgressMetricsPanel = lazyDefault(() => import("@/components/progress-metrics-panel"), "ProgressMetricsPanel");
+const BasicInfoForm = lazyDefault(() => import("@/components/basic-info-form"), "BasicInfoForm");
+const ClientExerciseNotesCard = lazyDefault(() => import("@/components/client-exercise-notes-card"), "ClientExerciseNotesCard");
+const ProfilePictureCapture = lazyDefault(() => import("@/components/profile-picture-capture"), "ProfilePictureCapture");
+const MessageThread = lazyDefault(() => import("@/components/message-thread"), "MessageThread");
+const AgreementStatusPanel = lazyDefault(() => import("@/components/agreement-status-panel"), "AgreementStatusPanel");
+const PurchaseRecordsPanel = lazyDefault(() => import("@/components/purchase-records-panel"), "PurchaseRecordsPanel");
+const PriceCardPickerDialog = lazyDefault(() => import("@/components/price-card-picker-dialog"), "PriceCardPickerDialog");
+const AgreementsPanel = lazyDefault(() => import("@/components/agreements-panel"), "AgreementsPanel");
+const AssignedProgramsCard = lazyDefault(() => import("@/components/assigned-programs-card"), "AssignedProgramsCard");
+const ClientWarmupCard = lazyDefault(() => import("@/components/client-warmup-card"), "ClientWarmupCard");
+const ClientBillingPanel = lazyDefault(() => import("@/components/admin/client-billing-panel"), "ClientBillingPanel");
+
+function TabFallback() {
+  return <div className="md:col-span-3 p-6 text-sm text-muted-foreground">Loading…</div>;
+}
 
 function AssignedCoachSelect({ value, onChange }: { value: string | null; onChange: (v: string | null) => void }) {
   const { data: coaches = [] } = useQuery({
@@ -133,7 +144,12 @@ function ClientDetail() {
     },
   });
 
-  useEffect(() => { if (data) setForm(data); }, [data]);
+  // Seed local form state from server data on initial load only. Subsequent
+  // background refetches must not overwrite in-flight edits made by the admin.
+  useEffect(() => {
+    if (data && form === null) setForm(data);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data]);
 
   if (!form) return <div className="p-10 text-muted-foreground">Loading…</div>;
 
@@ -673,39 +689,51 @@ function ClientDetail() {
         </TabsContent>
 
         <TabsContent value="training" className="grid gap-6 md:grid-cols-3">
-          <div className="md:col-span-3"><TrainingScheduleCard client={form} /></div>
-          <AssignedProgramsCard clientId={id} mode="admin" />
-          <TrainingPhasesPanel clientId={id} />
-          <ImportantDatesPanel clientId={id} />
-          <ClientExerciseNotesCard clientId={id} />
-          <ClientMaxesPanel clientId={id} />
-          <ClientWarmupCard clientId={id} />
+          <Suspense fallback={<TabFallback />}>
+            <div className="md:col-span-3"><TrainingScheduleCard client={form} /></div>
+            <AssignedProgramsCard clientId={id} mode="admin" />
+            <TrainingPhasesPanel clientId={id} />
+            <ImportantDatesPanel clientId={id} />
+            <ClientExerciseNotesCard clientId={id} />
+            <ClientMaxesPanel clientId={id} />
+            <ClientWarmupCard clientId={id} />
+          </Suspense>
         </TabsContent>
 
         <TabsContent value="nutrition" className="grid gap-6 md:grid-cols-3">
-          <NutritionTargetsPanel clientId={id} />
+          <Suspense fallback={<TabFallback />}>
+            <NutritionTargetsPanel clientId={id} />
+          </Suspense>
         </TabsContent>
 
         <TabsContent value="cardio" className="grid gap-6 md:grid-cols-3">
-          <div className="md:col-span-3"><TrainingScheduleCard client={form} /></div>
-          <CardioTargetsPanel clientId={id} />
+          <Suspense fallback={<TabFallback />}>
+            <div className="md:col-span-3"><TrainingScheduleCard client={form} /></div>
+            <CardioTargetsPanel clientId={id} />
+          </Suspense>
         </TabsContent>
 
         <TabsContent value="metrics" className="grid gap-6 md:grid-cols-3">
-          <ProgressMetricsPanel
-            clientId={id}
-            defaultUnit={(form?.preferred_weight_unit as "lb" | "kg") ?? "lb"}
-            canEdit
-            showExport
-          />
+          <Suspense fallback={<TabFallback />}>
+            <ProgressMetricsPanel
+              clientId={id}
+              defaultUnit={(form?.preferred_weight_unit as "lb" | "kg") ?? "lb"}
+              canEdit
+              showExport
+            />
+          </Suspense>
         </TabsContent>
 
         <TabsContent value="messages" className="grid gap-6">
-          <ClientMessagesTab clientId={id} />
+          <Suspense fallback={<TabFallback />}>
+            <ClientMessagesTab clientId={id} />
+          </Suspense>
         </TabsContent>
 
         <TabsContent value="lift-videos" className="grid gap-6 md:grid-cols-3">
-          <LiftVideosPanel clientId={id} />
+          <Suspense fallback={<TabFallback />}>
+            <LiftVideosPanel clientId={id} />
+          </Suspense>
         </TabsContent>
 
         <TabsContent value="documents" className="grid gap-6 md:grid-cols-3">
@@ -777,6 +805,7 @@ function ClientDetail() {
         </TabsContent>
 
         <TabsContent value="sessions" className="grid gap-6 md:grid-cols-3">
+          <Suspense fallback={<TabFallback />}>
           <PtSessionsPanel clientId={id} client={form} />
 
         <Card className="border-border bg-card p-6 md:col-span-3 space-y-4">
@@ -813,20 +842,27 @@ function ClientDetail() {
           </div>
           <p className="text-xs text-muted-foreground">Reminder emails are sent in the client's time zone. Defaults to America/Winnipeg if not set.</p>
         </Card>
+          </Suspense>
         </TabsContent>
 
         <TabsContent value="purchases" className="grid gap-6 md:grid-cols-3">
-          <AgreementStatusPanel client={form} />
-          <PurchaseRecordsPanel clientId={id} />
+          <Suspense fallback={<TabFallback />}>
+            <AgreementStatusPanel client={form} />
+            <PurchaseRecordsPanel clientId={id} />
+          </Suspense>
         </TabsContent>
 
         <TabsContent value="billing" className="grid gap-6 md:grid-cols-3">
-          <ClientBillingPanel clientId={id} />
+          <Suspense fallback={<TabFallback />}>
+            <ClientBillingPanel clientId={id} />
+          </Suspense>
         </TabsContent>
 
         <TabsContent value="agreements" className="grid gap-6 md:grid-cols-3">
-          <AgreementStatusPanel client={form} />
-          <AgreementsPanel clientId={id} clientName={form?.full_name} />
+          <Suspense fallback={<TabFallback />}>
+            <AgreementStatusPanel client={form} />
+            <AgreementsPanel clientId={id} clientName={form?.full_name} />
+          </Suspense>
         </TabsContent>
 
         <TabsContent value="notes" className="grid gap-6 md:grid-cols-3">
@@ -864,10 +900,12 @@ function ClientDetail() {
               <Label>Email</Label>
               <Input value={form.email ?? ""} onChange={(e) => set("email", e.target.value)} />
             </div>
-            <BasicInfoForm
-              values={form}
-              onChange={(p) => setForm({ ...form, ...p })}
-            />
+            <Suspense fallback={<TabFallback />}>
+              <BasicInfoForm
+                values={form}
+                onChange={(p: Record<string, any>) => setForm({ ...form, ...p })}
+              />
+            </Suspense>
             <div className="grid gap-2 rounded-md border border-border bg-secondary/30 p-3 text-xs md:grid-cols-2">
               <div><span className="text-muted-foreground">Last account info update:</span> {fmtDate(form.info_last_updated_at)}</div>
               <div><span className="text-muted-foreground">Updated by:</span> {form.info_last_updated_by ?? "—"}</div>
@@ -881,12 +919,14 @@ function ClientDetail() {
 
           <Card className="border-border bg-card p-6 space-y-3">
             <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Profile Picture</h3>
-            <ProfilePictureCapture
-              userId={form.user_id ?? id}
-              currentUrl={form.profile_picture_url}
-              onUploaded={adminUpdatePicture}
-              allowFileUpload
-            />
+            <Suspense fallback={<TabFallback />}>
+              <ProfilePictureCapture
+                userId={form.user_id ?? id}
+                currentUrl={form.profile_picture_url}
+                onUploaded={adminUpdatePicture}
+                allowFileUpload
+              />
+            </Suspense>
             <div className="flex flex-wrap items-center gap-2">
               <Button size="sm" variant="outline" onClick={requestPictureUpdate}>
                 {form.profile_picture_needs_update ? "Update reminder active" : "Request client to update"}
@@ -987,7 +1027,11 @@ function ClientDetail() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-      <PriceCardPickerDialog open={priceCardOpen} onClose={() => setPriceCardOpen(false)} fixedClientId={id} />
+      {priceCardOpen ? (
+        <Suspense fallback={null}>
+          <PriceCardPickerDialog open={priceCardOpen} onClose={() => setPriceCardOpen(false)} fixedClientId={id} />
+        </Suspense>
+      ) : null}
       <SendBookingLinkDialog
         open={bookingLinkOpen}
         onOpenChange={setBookingLinkOpen}
