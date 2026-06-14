@@ -25,7 +25,7 @@ export const Route = createFileRoute("/api/public/hooks/fillout")({
       POST: async ({ request }) => {
         const provided = request.headers.get("x-fillout-secret") ?? "";
         const expected = process.env.FILLOUT_WEBHOOK_SECRET ?? "";
-        if (!expected || provided !== expected) {
+        if (!expected || !timingSafeEqualStr(provided, expected)) {
           return new Response("Unauthorized", { status: 401 });
         }
 
