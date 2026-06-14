@@ -1044,6 +1044,8 @@ function BottomNavSlot({ item, pathname, navBadges, onNavigate }: {
       onNavigate(id);
       if (id === "__search__") {
         try { window.dispatchEvent(new CustomEvent("open-command-palette")); } catch {}
+      } else if (id === "__client_pov__") {
+        try { window.dispatchEvent(new CustomEvent("open-client-pov-picker")); } catch {}
       } else {
         navigate({ to: id });
       }
