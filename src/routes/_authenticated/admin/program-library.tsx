@@ -24,6 +24,7 @@ import {
   listTemplateAssignments,
   type TemplateType, type TrainingStyle, type TemplatePlacement,
 } from "@/lib/pl-programs";
+import { BLOCK_PHASE_OPTIONS } from "@/lib/pl-template-blocks";
 import { supabase } from "@/integrations/supabase/client";
 import { findOverlappingBlock, suggestNextStartISO } from "@/lib/block-schedule";
 import {
