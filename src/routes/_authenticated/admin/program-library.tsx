@@ -342,7 +342,18 @@ function NewTemplateDialog({ open, onOpenChange, onCreated }: { open: boolean; o
     name: "", template_type: "block" as TemplateType, training_style: "powerlifting" as TrainingStyle,
     training_focus: "", weeks: 4, days_per_week: 4, est_duration_min: 60, notes: "", tags: "",
     blocks: 1,
+    blockFocuses: [""] as string[],
   });
+  // Keep per-block focus array length in sync with the blocks count.
+  const blockCount = Math.max(1, form.blocks || 1);
+  const blockFocuses = form.blockFocuses.length === blockCount
+    ? form.blockFocuses
+    : Array.from({ length: blockCount }, (_, i) => form.blockFocuses[i] ?? "");
+  const setBlockFocus = (i: number, v: string) => {
+    const next = [...blockFocuses];
+    next[i] = v;
+    setForm({ ...form, blockFocuses: next });
+  };
   const seedPayload = () => {
     const buildWeeksData = () =>
       Array.from({ length: Math.max(1, form.weeks) }, (_, i) => ({
@@ -359,6 +370,7 @@ function NewTemplateDialog({ open, onOpenChange, onCreated }: { open: boolean; o
           weeks: Math.max(1, form.weeks),
           days_per_week: Math.max(1, form.days_per_week),
           est_duration_min: form.est_duration_min || null,
+          training_focus: (blockFocuses[i] || form.training_focus || "").trim() || null,
           weeks_data: buildWeeksData(),
         }));
         return { prep: { event_name: null, event_date: null }, blocks_data };
