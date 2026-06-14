@@ -168,6 +168,7 @@
 @utility shadow-glow { box-shadow: var(--shadow-glow); }
 @utility shadow-analytics-blue { box-shadow: var(--shadow-analytics-blue); }
 @utility shadow-card-elegant { box-shadow: var(--shadow-card); }
+@utility shadow-builder-card { box-shadow: var(--shadow-builder-card); }
 @utility text-balance { text-wrap: balance; }
 
 /* ============================================================
