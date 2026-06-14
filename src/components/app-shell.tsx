@@ -4,7 +4,7 @@ import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import {
   LogOut, ChevronLeft, ChevronRight, ChevronDown, Search, Settings as SettingsIcon, ArrowLeft, MoreHorizontal,
-  Star, Pin, ChevronsDownUp, ChevronsUpDown,
+  Star, Pin, ChevronsDownUp, ChevronsUpDown, BookOpen,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { NotificationBell } from "@/components/notification-bell";
