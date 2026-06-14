@@ -2,7 +2,18 @@
 
 _Generated: 2026-06-14. Evidence-based, no code changes performed._
 
-_Re-verified: 2026-06-14 (same day). Confirmed against live DB: storage policies B6 still bound to `{-}` (catch-all), legal doc state unchanged (5/12 published, enforcement off across all 12), notification mode has progressed `dry_run` → `allowlist` (1 phone + 1 email allowlisted) — B2 partially cleared; remaining P0/P1 items below all still apply._
+_Re-verified: 2026-06-14 (3rd pass). Delta since last pass:_
+- ✅ **B1 kill switch** — `public_checkout_enabled = true` in `jf_membership_settings`. /join is now public-facing. Audit downgrades from P0 blocker to P0 "verify live purchase still works end-to-end."
+- ✅ **B5 sales-page key** — `launch-readiness.functions.ts:303` and `routes/join.tsx:72` both query `page_key="join"`. The `membership` row no longer exists in DB. RESOLVED.
+- ✅ **B9 portal agreements** — `routes/_authenticated/portal/agreements.index.tsx` now resolves the caller's `clients.id` and applies `.eq("client_id", clientId)` as defense-in-depth. RESOLVED.
+- ✅ **B11 cron handler auth** — `appointment-reminders.ts`, `sms-reminders.ts`, `media-archive.ts`, `cleanup-pending-signups.ts`, `lift-archive-tick.ts` all require `SCHEDULED_WORKER_SECRET` via `x-worker-secret`/`?secret=` with constant-time compare; `fillout.ts` uses constant-time compare against `FILLOUT_WEBHOOK_SECRET`. RESOLVED.
+- ⚠️ **B2 notifications** — still `allowlist` (1 phone + 1 email). Needs flip to `live` after Batch 3 QA.
+- ❌ **B6 storage policies** — `Admins manage client-action-files`, `Clients read own client-action-files`, `Coaches manage client-action-files for assigned clients` all still `roles={public}`. UNCHANGED.
+- ❌ **B7 cross-coach support leak** — `member_support_messages.msm_coach_select` QUAL is still bare `is_coach_or_admin(auth.uid())` with no assigned-client scope. UNCHANGED.
+- ❌ **B4 legal enforcement** — 0 of 12 documents have `enforcement_enabled=true`. UNCHANGED. (Publication count still 5/12.)
+- ❌ **B8 `client_action_requests` writes** — still direct client-side Supabase from `src/lib/client-action-requests.ts`. UNCHANGED.
+
+**Updated launch-blocker count: 7** (down from 11). The remaining hard blockers are B2 (live SMS), B3 (runtime secrets), B4 (legal enforcement), B6 (storage role), B7 (support-thread scoping), B8 (action-request server auth), B10 (pg_cron schedule for cleanup).
 
 ---
 
