@@ -18,13 +18,20 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Link2, KeyRound, Trash2, Plus, Eye } from "lucide-react";
 import { toast } from "sonner";
-import { useState } from "react";
+import { useState, lazy, Suspense } from "react";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import { MemberAccessSummary } from "@/components/admin/member-access-summary";
-import { MemberFeatureToggles } from "@/components/admin/member-feature-toggles";
-import { JfAdminBillingCard } from "@/components/billing/jf-admin-billing-card";
+const MemberFeatureToggles = lazy(() =>
+  import("@/components/admin/member-feature-toggles").then((m) => ({ default: m.MemberFeatureToggles })),
+);
+const JfAdminBillingCard = lazy(() =>
+  import("@/components/billing/jf-admin-billing-card").then((m) => ({ default: m.JfAdminBillingCard })),
+);
+function PanelFallback() {
+  return <div className="p-5 text-sm text-muted-foreground">Loading…</div>;
+}
 import { ACCOUNT_TYPES, type AccountType } from "@/lib/membership";
 
 export const Route = createFileRoute("/_authenticated/admin/members/$memberId")({ component: MemberProfile });
@@ -213,7 +220,11 @@ function MemberProfile() {
         {/* ───────────── Subscription ───────────── */}
         <TabsContent value="subscription" className="space-y-5">
           {member.account_type === "jf_member"
-            ? <JfAdminBillingCard member={member} />
+            ? (
+              <Suspense fallback={<PanelFallback />}>
+                <JfAdminBillingCard member={member} />
+              </Suspense>
+            )
             : (
               <Card className="p-5 text-sm text-muted-foreground">
                 This member is on the <b>{acctLabel}</b> plan — no recurring subscription is tracked here.
@@ -240,7 +251,9 @@ function MemberProfile() {
 
         {/* ───────────── Access ───────────── */}
         <TabsContent value="access" className="space-y-5">
-          <MemberFeatureToggles memberId={memberId} levels={levels as any} access={access as any} />
+          <Suspense fallback={<PanelFallback />}>
+            <MemberFeatureToggles memberId={memberId} levels={levels as any} access={access as any} />
+          </Suspense>
           <Card className="space-y-3 p-5">
             <div className="flex items-center justify-between">
               <div className="text-xs uppercase tracking-wider text-muted-foreground">Manual access grants (advanced)</div>

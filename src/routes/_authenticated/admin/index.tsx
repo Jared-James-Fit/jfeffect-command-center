@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, lazy, Suspense } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
@@ -20,7 +20,9 @@ import { formatDistanceToNow, parseISO, format, startOfWeek, endOfWeek, isToday 
 import { UpcomingBirthdaysWidget } from "@/components/upcoming-birthdays-widget";
 import { UpcomingEventsPanel } from "@/components/events/upcoming-events-panel";
 import { UpcomingAppointmentsCard } from "@/components/appointments/upcoming-appointments-card";
-import { PriceCardPickerDialog } from "@/components/price-card-picker-dialog";
+const PriceCardPickerDialog = lazy(() =>
+  import("@/components/price-card-picker-dialog").then((m) => ({ default: m.PriceCardPickerDialog })),
+);
 import { UserAvatar } from "@/components/user-avatar";
 import { getCoachIntel, filterIntel, LABEL_META } from "@/lib/coach-intel";
 
@@ -770,11 +772,15 @@ function AdminDashboard() {
         </div>
       </div>
 
-      <PriceCardPickerDialog
-        open={!!sellTo}
-        fixedClientId={sellTo?.id}
-        onClose={() => setSellTo(null)}
-      />
+      {sellTo ? (
+        <Suspense fallback={null}>
+          <PriceCardPickerDialog
+            open={!!sellTo}
+            fixedClientId={sellTo?.id}
+            onClose={() => setSellTo(null)}
+          />
+        </Suspense>
+      ) : null}
     </>
   );
 }

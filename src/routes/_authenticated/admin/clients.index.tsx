@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useMemo, useState, lazy, Suspense } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
@@ -28,9 +28,13 @@ import { PowerlifterBadge } from "@/components/powerlifter-badge";
 import { UserAvatar } from "@/components/user-avatar";
 import { format, parseISO, differenceInDays } from "date-fns";
 import type { ConversationState, Message } from "@/lib/messages";
-import { QuickAssignTemplateDialog } from "@/components/quick-assign-template-dialog";
 import { ClientMobileCard } from "@/components/clients-mobile-card";
-import { PriceCardPickerDialog } from "@/components/price-card-picker-dialog";
+const QuickAssignTemplateDialog = lazy(() =>
+  import("@/components/quick-assign-template-dialog").then((m) => ({ default: m.QuickAssignTemplateDialog })),
+);
+const PriceCardPickerDialog = lazy(() =>
+  import("@/components/price-card-picker-dialog").then((m) => ({ default: m.PriceCardPickerDialog })),
+);
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { SlidersHorizontal } from "lucide-react";
 
@@ -810,18 +814,24 @@ function ClientsPage() {
         </AlertDialogContent>
       </AlertDialog>
       {assignTo && (
-        <QuickAssignTemplateDialog
-          open={!!assignTo}
-          onOpenChange={(o) => { if (!o) setAssignTo(null); }}
-          clientId={assignTo.id}
-          clientName={assignTo.name}
-        />
+        <Suspense fallback={null}>
+          <QuickAssignTemplateDialog
+            open={!!assignTo}
+            onOpenChange={(o) => { if (!o) setAssignTo(null); }}
+            clientId={assignTo.id}
+            clientName={assignTo.name}
+          />
+        </Suspense>
       )}
-      <PriceCardPickerDialog
-        open={!!sellTo}
-        fixedClientId={sellTo?.id}
-        onClose={() => setSellTo(null)}
-      />
+      {sellTo ? (
+        <Suspense fallback={null}>
+          <PriceCardPickerDialog
+            open={!!sellTo}
+            fixedClientId={sellTo?.id}
+            onClose={() => setSellTo(null)}
+          />
+        </Suspense>
+      ) : null}
     </>
   );
 }
