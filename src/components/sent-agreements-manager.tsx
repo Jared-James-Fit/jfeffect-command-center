@@ -263,13 +263,33 @@ export function SentAgreementsManager() {
         </div>
 
         {filtered.length > 0 && (
-          <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
-            <Checkbox
-              checked={sel.allSelected ? true : sel.someSelected ? "indeterminate" : false}
-              onCheckedChange={() => sel.toggleAll()}
-            />
-            Select all visible
-          </label>
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-secondary/40 px-3 py-2">
+            <label className="flex items-center gap-2 text-sm font-medium cursor-pointer">
+              <Checkbox
+                checked={sel.allSelected ? true : sel.someSelected ? "indeterminate" : false}
+                onCheckedChange={() => sel.toggleAll()}
+              />
+              {sel.count > 0
+                ? `${sel.count} selected`
+                : `Select all (${filtered.length})`}
+            </label>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {sel.count > 0 && (
+                <>
+                  <Button size="sm" variant="ghost" onClick={() => sel.clear()}>Clear</Button>
+                  <Button size="sm" variant="ghost" onClick={() => bulkAction("verify")}>
+                    <ShieldCheck className="h-3.5 w-3.5 mr-1" />Verify
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => bulkAction("archive")}>
+                    <Archive className="h-3.5 w-3.5 mr-1" />Archive
+                  </Button>
+                  <Button size="sm" variant="destructive" onClick={() => bulkAction("delete")}>
+                    <Trash2 className="h-3.5 w-3.5 mr-1" />Delete selected
+                  </Button>
+                </>
+              )}
+            </div>
+          </div>
         )}
 
         {filtered.length === 0 ? (
