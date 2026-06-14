@@ -49,7 +49,7 @@ function CoachingPage() {
 
   const s = p?.sections ?? {};
   return (
-    <SalesPageShell>
+    <SalesPageShell pageId="coaching">
       <CoachingHero
         eyebrow="Private Coaching · By application"
         headline={p?.hero_headline ?? "1:1 coaching for people who are done guessing."}

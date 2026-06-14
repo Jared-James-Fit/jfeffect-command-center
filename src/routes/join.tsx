@@ -118,7 +118,7 @@ function SignupJf() {
   }, [trialDays]);
 
   return (
-    <SalesPageShell>
+    <SalesPageShell pageId="membership-join">
       <MembershipHero
         priceChip={settings?.monthly_price_display ?? "$29/month USD"}
         headline={p?.hero_headline ?? "Train with the JF Effect system. On your own time, inside the app."}

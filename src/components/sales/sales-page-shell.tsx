@@ -2,9 +2,9 @@ import { Link } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import type { ReactNode } from "react";
 
-export function SalesPageShell({ children }: { children: ReactNode }) {
+export function SalesPageShell({ children, pageId }: { children: ReactNode; pageId?: string }) {
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="min-h-screen bg-background text-foreground" data-page-id={pageId}>
       <header className="sticky top-0 z-40 border-b border-border bg-background/80 backdrop-blur">
         <div className="container mx-auto flex items-center justify-between px-4 py-3">
           <Link to="/" className="text-lg font-black tracking-tight">JF Effect</Link>
