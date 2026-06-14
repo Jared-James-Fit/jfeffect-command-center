@@ -112,7 +112,7 @@ function SignupJf() {
   // Build the *exact* bundled acknowledgement statement displayed to the user.
   const monthlyPrice = settings?.monthly_price_display ?? "$29 USD/month";
   const trialDaysLocal = settings?.trial_days ?? 3;
-  const bundledStatement = `I agree to the Terms of Service, Privacy Policy, JF Membership Agreement, Recurring Billing Disclosure, and Cancellation & Refund Policy. I understand my membership starts with a ${trialDaysLocal}-day free trial, then automatically renews at ${monthlyPrice} plus applicable taxes until I cancel through my billing page.`;
+  const bundledStatement = `I agree to the Membership Agreement, Terms of Service, Recurring Billing Disclosure, and Cancellation & Refund Policy, and I acknowledge the Privacy Policy. Billing: ${trialDaysLocal}-day free trial, then ${monthlyPrice} plus applicable taxes, renews automatically until cancelled.`;
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -120,7 +120,7 @@ function SignupJf() {
     if (checkoutBlocked) {
       return toast.error(gate?.message ?? "Membership checkout is temporarily unavailable. Please contact support.");
     }
-    if (!bundledAccepted) return toast.error("Please accept the membership agreement to continue.");
+    if (!bundledAccepted) return toast.error("Please review and accept the membership terms before continuing.");
     if (!nameValid(form.first_name) || !nameValid(form.last_name)) return toast.error("First and last name are required.");
     if (!emailValid(form.email)) return toast.error("Please enter a valid email address.");
     if (!phoneValid) return toast.error("Please enter a valid phone number (include country code for international).");
