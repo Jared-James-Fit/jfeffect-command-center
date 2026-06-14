@@ -584,7 +584,19 @@ function TemplateEditor() {
                     <SelectContent>{STYLES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
-                <div><Label>Focus</Label><Input value={meta.training_focus} onChange={(e) => setM({ training_focus: e.target.value })} /></div>
+                <div>
+                  <Label>Focus</Label>
+                  <Select
+                    value={meta.training_focus || "__none"}
+                    onValueChange={(v) => setM({ training_focus: v === "__none" ? "" : v })}
+                  >
+                    <SelectTrigger><SelectValue placeholder="Optional focus" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none">— None —</SelectItem>
+                      {BLOCK_PHASE_OPTIONS.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
               <div className="grid grid-cols-3 gap-3">
                 <div><Label>Weeks</Label><Input type="number" inputMode="numeric" value={meta.weeks} onChange={(e) => setM({ weeks: parseInt(e.target.value) || 0 })} /></div>
