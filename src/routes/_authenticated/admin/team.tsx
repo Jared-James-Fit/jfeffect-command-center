@@ -1,10 +1,21 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useMemo } from "react";
+import { useMemo, lazy, Suspense } from "react";
 import { PageHeader } from "@/components/app-shell";
 import { cn } from "@/lib/utils";
-import { CoachesPage } from "./coaches.index";
-import { StaffPage } from "./staff";
-import { BusinessSystemsHub } from "./business-systems";
+
+const CoachesPage = lazy(() =>
+  import("./coaches.index").then((m) => ({ default: m.CoachesPage })),
+);
+const StaffPage = lazy(() =>
+  import("./staff").then((m) => ({ default: m.StaffPage })),
+);
+const BusinessSystemsHub = lazy(() =>
+  import("./business-systems").then((m) => ({ default: m.BusinessSystemsHub })),
+);
+
+const TabFallback = () => (
+  <div className="p-8 text-sm text-muted-foreground">Loading…</div>
+);
 
 type TabKey = "people" | "staff-media" | "operations";
 const TABS: { value: TabKey; label: string }[] = [
@@ -48,9 +59,11 @@ function TeamWorkspace() {
         </div>
       </div>
       <div>
-        {tab === "people" && <CoachesPage embedded />}
-        {tab === "staff-media" && <StaffPage embedded />}
-        {tab === "operations" && <BusinessSystemsHub embedded />}
+        <Suspense fallback={<TabFallback />}>
+          {tab === "people" && <CoachesPage embedded />}
+          {tab === "staff-media" && <StaffPage embedded />}
+          {tab === "operations" && <BusinessSystemsHub embedded />}
+        </Suspense>
       </div>
     </>
   );

@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useParams } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useMemo, useState, lazy, Suspense } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
@@ -14,7 +14,11 @@ import { useServerFn } from "@tanstack/react-start";
 import { assignClientToCoach, setCoachStatus } from "@/lib/coaches.functions";
 import { useAuth } from "@/lib/auth";
 import { UserAvatar } from "@/components/user-avatar";
-import { ProfilePictureCapture } from "@/components/profile-picture-capture";
+const ProfilePictureCapture = lazy(() =>
+  import("@/components/profile-picture-capture").then((m) => ({
+    default: m.ProfilePictureCapture,
+  })),
+);
 import { Camera, X, Trash2 } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/admin/coaches/$id")({
@@ -167,14 +171,16 @@ function CoachDetailPage() {
                   <X className="h-3.5 w-3.5" />
                 </Button>
               </div>
-              <ProfilePictureCapture
-                userId={coach.user_id}
-                currentUrl={coach.profile_picture_url}
-                onUploaded={onPicUploaded}
-                allowFileUpload
-                mode="admin"
-                hidePreviewThumbnail
-              />
+              <Suspense fallback={<div className="text-xs text-muted-foreground">Loading uploader…</div>}>
+                <ProfilePictureCapture
+                  userId={coach.user_id}
+                  currentUrl={coach.profile_picture_url}
+                  onUploaded={onPicUploaded}
+                  allowFileUpload
+                  mode="admin"
+                  hidePreviewThumbnail
+                />
+              </Suspense>
             </div>
           )}
           {editingPic && !coach.user_id && (
