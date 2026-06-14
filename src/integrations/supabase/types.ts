@@ -1570,6 +1570,70 @@ export type Database = {
         }
         Relationships: []
       }
+      client_account_credits: {
+        Row: {
+          amount_minor: number
+          applied_to_purchase_id: string | null
+          client_id: string
+          created_at: string
+          created_by: string | null
+          currency: string
+          id: string
+          internal_note: string | null
+          kind: string
+          reason: string | null
+          source_ledger_id: string | null
+        }
+        Insert: {
+          amount_minor: number
+          applied_to_purchase_id?: string | null
+          client_id: string
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          id?: string
+          internal_note?: string | null
+          kind: string
+          reason?: string | null
+          source_ledger_id?: string | null
+        }
+        Update: {
+          amount_minor?: number
+          applied_to_purchase_id?: string | null
+          client_id?: string
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          id?: string
+          internal_note?: string | null
+          kind?: string
+          reason?: string | null
+          source_ledger_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_account_credits_applied_to_purchase_id_fkey"
+            columns: ["applied_to_purchase_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_records"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_account_credits_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_account_credits_source_ledger_id_fkey"
+            columns: ["source_ledger_id"]
+            isOneToOne: false
+            referencedRelation: "payment_ledger"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       client_action_requests: {
         Row: {
           client_id: string
@@ -3932,6 +3996,56 @@ export type Database = {
             columns: ["form_id"]
             isOneToOne: false
             referencedRelation: "nf_forms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      financial_audit_events: {
+        Row: {
+          action: string
+          actor_role: string | null
+          actor_user_id: string | null
+          after_state: Json | null
+          before_state: Json | null
+          client_id: string | null
+          created_at: string
+          id: string
+          reason: string | null
+          record_id: string | null
+          record_type: string
+        }
+        Insert: {
+          action: string
+          actor_role?: string | null
+          actor_user_id?: string | null
+          after_state?: Json | null
+          before_state?: Json | null
+          client_id?: string | null
+          created_at?: string
+          id?: string
+          reason?: string | null
+          record_id?: string | null
+          record_type: string
+        }
+        Update: {
+          action?: string
+          actor_role?: string | null
+          actor_user_id?: string | null
+          after_state?: Json | null
+          before_state?: Json | null
+          client_id?: string | null
+          created_at?: string
+          id?: string
+          reason?: string | null
+          record_id?: string | null
+          record_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "financial_audit_events_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
             referencedColumns: ["id"]
           },
         ]
@@ -7673,6 +7787,148 @@ export type Database = {
           },
         ]
       }
+      payment_allocations: {
+        Row: {
+          amount_minor: number
+          created_at: string
+          id: string
+          ledger_id: string
+          purchase_id: string
+        }
+        Insert: {
+          amount_minor: number
+          created_at?: string
+          id?: string
+          ledger_id: string
+          purchase_id: string
+        }
+        Update: {
+          amount_minor?: number
+          created_at?: string
+          id?: string
+          ledger_id?: string
+          purchase_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_allocations_ledger_id_fkey"
+            columns: ["ledger_id"]
+            isOneToOne: false
+            referencedRelation: "payment_ledger"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_allocations_purchase_id_fkey"
+            columns: ["purchase_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_records"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payment_ledger: {
+        Row: {
+          amount_minor: number
+          client_id: string
+          client_note: string | null
+          created_at: string
+          created_by: string | null
+          currency: string
+          external_reference: string | null
+          id: string
+          internal_note: string | null
+          method: string
+          purchase_id: string | null
+          receipt_number: string | null
+          received_at: string
+          reversal_of: string | null
+          source: string
+          stripe_charge_id: string | null
+          stripe_event_id: string | null
+          stripe_invoice_id: string | null
+          stripe_payment_intent_id: string | null
+          tax_minor: number
+          transaction_date: string
+          txn_type: string
+          void_reason: string | null
+          voided: boolean
+        }
+        Insert: {
+          amount_minor: number
+          client_id: string
+          client_note?: string | null
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          external_reference?: string | null
+          id?: string
+          internal_note?: string | null
+          method: string
+          purchase_id?: string | null
+          receipt_number?: string | null
+          received_at?: string
+          reversal_of?: string | null
+          source?: string
+          stripe_charge_id?: string | null
+          stripe_event_id?: string | null
+          stripe_invoice_id?: string | null
+          stripe_payment_intent_id?: string | null
+          tax_minor?: number
+          transaction_date?: string
+          txn_type: string
+          void_reason?: string | null
+          voided?: boolean
+        }
+        Update: {
+          amount_minor?: number
+          client_id?: string
+          client_note?: string | null
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          external_reference?: string | null
+          id?: string
+          internal_note?: string | null
+          method?: string
+          purchase_id?: string | null
+          receipt_number?: string | null
+          received_at?: string
+          reversal_of?: string | null
+          source?: string
+          stripe_charge_id?: string | null
+          stripe_event_id?: string | null
+          stripe_invoice_id?: string | null
+          stripe_payment_intent_id?: string | null
+          tax_minor?: number
+          transaction_date?: string
+          txn_type?: string
+          void_reason?: string | null
+          voided?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_ledger_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_ledger_purchase_id_fkey"
+            columns: ["purchase_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_records"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_ledger_reversal_of_fkey"
+            columns: ["reversal_of"]
+            isOneToOne: false
+            referencedRelation: "payment_ledger"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pl_assignment_operations: {
         Row: {
           actor_user_id: string | null
@@ -9484,13 +9740,18 @@ export type Database = {
           agreement_signed_at_purchase: boolean | null
           agreement_signed_date: string | null
           agreement_version: string | null
+          amount_credited_cents: number
           amount_due_today: number | null
+          amount_outstanding_cents: number | null
           amount_paid: number | null
+          amount_paid_cents: number
+          amount_refunded_cents: number
           assigned_at: string
           assigned_by: string | null
           cancellation_policy: string | null
           client_id: string
           confirmation_email_sent_at: string | null
+          contract_value_cents: number | null
           created_at: string
           currency: string | null
           deposit_amount: number | null
@@ -9509,6 +9770,7 @@ export type Database = {
           number_of_payments: number | null
           offer_id: string | null
           offer_name: string
+          offer_snapshot: Json | null
           offer_type: string | null
           offer_version: number | null
           package_expiry_date: string | null
@@ -9518,6 +9780,7 @@ export type Database = {
           payment_status: string
           payment_structure: string | null
           purchase_disclaimer: string | null
+          purchase_status_v2: string | null
           purchased_at: string
           refund_policy: string | null
           service_status: string
@@ -9558,13 +9821,18 @@ export type Database = {
           agreement_signed_at_purchase?: boolean | null
           agreement_signed_date?: string | null
           agreement_version?: string | null
+          amount_credited_cents?: number
           amount_due_today?: number | null
+          amount_outstanding_cents?: number | null
           amount_paid?: number | null
+          amount_paid_cents?: number
+          amount_refunded_cents?: number
           assigned_at?: string
           assigned_by?: string | null
           cancellation_policy?: string | null
           client_id: string
           confirmation_email_sent_at?: string | null
+          contract_value_cents?: number | null
           created_at?: string
           currency?: string | null
           deposit_amount?: number | null
@@ -9583,6 +9851,7 @@ export type Database = {
           number_of_payments?: number | null
           offer_id?: string | null
           offer_name: string
+          offer_snapshot?: Json | null
           offer_type?: string | null
           offer_version?: number | null
           package_expiry_date?: string | null
@@ -9592,6 +9861,7 @@ export type Database = {
           payment_status?: string
           payment_structure?: string | null
           purchase_disclaimer?: string | null
+          purchase_status_v2?: string | null
           purchased_at?: string
           refund_policy?: string | null
           service_status?: string
@@ -9632,13 +9902,18 @@ export type Database = {
           agreement_signed_at_purchase?: boolean | null
           agreement_signed_date?: string | null
           agreement_version?: string | null
+          amount_credited_cents?: number
           amount_due_today?: number | null
+          amount_outstanding_cents?: number | null
           amount_paid?: number | null
+          amount_paid_cents?: number
+          amount_refunded_cents?: number
           assigned_at?: string
           assigned_by?: string | null
           cancellation_policy?: string | null
           client_id?: string
           confirmation_email_sent_at?: string | null
+          contract_value_cents?: number | null
           created_at?: string
           currency?: string | null
           deposit_amount?: number | null
@@ -9657,6 +9932,7 @@ export type Database = {
           number_of_payments?: number | null
           offer_id?: string | null
           offer_name?: string
+          offer_snapshot?: Json | null
           offer_type?: string | null
           offer_version?: number | null
           package_expiry_date?: string | null
@@ -9666,6 +9942,7 @@ export type Database = {
           payment_status?: string
           payment_structure?: string | null
           purchase_disclaimer?: string | null
+          purchase_status_v2?: string | null
           purchased_at?: string
           refund_policy?: string | null
           service_status?: string
@@ -11811,6 +12088,10 @@ export type Database = {
           msg_id: number
           read_ct: number
         }[]
+      }
+      recompute_purchase_totals: {
+        Args: { _purchase_id: string }
+        Returns: undefined
       }
       release_message_claim: {
         Args: { _message_id: string }
