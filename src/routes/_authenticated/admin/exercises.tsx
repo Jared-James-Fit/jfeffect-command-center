@@ -10,12 +10,14 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Search, Trash2, Youtube, Pencil, CheckCircle2, AlertTriangle, Flame } from "lucide-react";
+import { Plus, Search, Trash2, Youtube, Pencil, CheckCircle2, AlertTriangle, Flame, BarChart3 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { buildCleanVimeoEmbedUrl, vimeoUrlFromId, MIGRATION_STATUSES } from "@/lib/exercise-video";
 import { ExerciseWarmupDialog } from "@/components/exercise-warmup-dialog";
+import { ExerciseVolumeTagsDialog } from "@/components/volume/exercise-volume-tags-dialog";
+import { MOVEMENT_PATTERN_LABELS, VARIATION_LABELS } from "@/lib/volume";
 
 export const Route = createFileRoute("/_authenticated/admin/exercises")({
   component: ExercisesRedirect,
@@ -33,6 +35,7 @@ const CATEGORIES = ["Squat", "Bench", "Deadlift", "Upper Body", "Lower Body", "B
 
 const MIGRATION_FILTERS: { value: string; label: string }[] = [
   { value: "all", label: "All exercises" },
+  { value: "needs_volume_tags", label: "Needs volume tags" },
   { value: "youtube_pending", label: "YouTube pending" },
   { value: "vimeo_uploaded", label: "Vimeo uploaded" },
   { value: "ready_for_review", label: "Ready for review" },
