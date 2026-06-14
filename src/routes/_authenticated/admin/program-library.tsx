@@ -425,7 +425,16 @@ function NewTemplateDialog({ open, onOpenChange, onCreated }: { open: boolean; o
             </div>
             <div>
               <Label>Focus</Label>
-              <Input value={form.training_focus} onChange={(e) => setForm({ ...form, training_focus: e.target.value })} placeholder="Volume / Strength / Peak…" />
+              <Select
+                value={form.training_focus || "__none"}
+                onValueChange={(v) => setForm({ ...form, training_focus: v === "__none" ? "" : v })}
+              >
+                <SelectTrigger><SelectValue placeholder="Optional focus" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none">— None —</SelectItem>
+                  {BLOCK_PHASE_OPTIONS.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+                </SelectContent>
+              </Select>
             </div>
           </div>
           {(form.template_type === "block" || form.template_type === "full_prep") && (
@@ -458,11 +467,18 @@ function NewTemplateDialog({ open, onOpenChange, onCreated }: { open: boolean; o
                     {blockFocuses.map((v, i) => (
                       <div key={i} className="flex items-center gap-2">
                         <span className="w-16 shrink-0 text-[11px] text-muted-foreground">Block {i + 1}</span>
-                        <Input
-                          value={v}
-                          onChange={(e) => setBlockFocus(i, e.target.value)}
-                          placeholder={form.training_focus || "Focus (e.g. Volume/Accumulation)"}
-                        />
+                        <Select
+                          value={v || "__none"}
+                          onValueChange={(val) => setBlockFocus(i, val === "__none" ? "" : val)}
+                        >
+                          <SelectTrigger className="flex-1">
+                            <SelectValue placeholder={form.training_focus || "Pick a focus"} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__none">— None —</SelectItem>
+                            {BLOCK_PHASE_OPTIONS.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
                       </div>
                     ))}
                   </div>
