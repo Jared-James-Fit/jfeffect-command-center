@@ -2,7 +2,17 @@
 
 _Generated: 2026-06-14. Evidence-based, no code changes performed._
 
-_Re-verified: 2026-06-14 (3rd pass). Delta since last pass:_
+_Re-verified: 2026-06-14 (4th pass). DB state confirmed via live queries; no new code changes since pass 3. Delta:_
+- ✅ Confirmed `public_checkout_enabled = true` (B1 cleared).
+- ✅ Confirmed all cron/webhook handlers use `SCHEDULED_WORKER_SECRET` / `FILLOUT_WEBHOOK_SECRET` with constant-time compare (B11 cleared).
+- ⚠️ Notifications still `allowlist` (1 phone, 1 email) — not yet `live`.
+- ❌ Storage policies for `client-action-files` still `{public}` role (B6).
+- ❌ `member_support_messages` still lacks assigned-coach scope (B7).
+- ❌ 0/12 legal documents have `enforcement_enabled=true` (B4).
+- ❌ `client_action_requests` writes still client-side only (B8).
+- ❌ `jf_pending_signups` pg_cron job not scheduled (B10).
+
+_Earlier pass-3 notes retained below:_
 - ✅ **B1 kill switch** — `public_checkout_enabled = true` in `jf_membership_settings`. /join is now public-facing. Audit downgrades from P0 blocker to P0 "verify live purchase still works end-to-end."
 - ✅ **B5 sales-page key** — `launch-readiness.functions.ts:303` and `routes/join.tsx:72` both query `page_key="join"`. The `membership` row no longer exists in DB. RESOLVED.
 - ✅ **B9 portal agreements** — `routes/_authenticated/portal/agreements.index.tsx` now resolves the caller's `clients.id` and applies `.eq("client_id", clientId)` as defense-in-depth. RESOLVED.
