@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { CheckCircle2, IdCard } from "lucide-react";
 import { toast } from "sonner";
 import { BasicInfoForm, type BasicInfoValues } from "@/components/basic-info-form";
-import { isBasicInfoComplete, REQUIRED_BASIC_INFO_FIELDS } from "@/lib/basic-info";
+import { isBasicInfoComplete, isIntakeLiftsComplete, REQUIRED_BASIC_INFO_FIELDS } from "@/lib/basic-info";
 
 /**
  * Blocks the client portal until required Basic Information fields are filled.
@@ -27,7 +27,7 @@ export function ClientBasicInfoGate({ children }: { children: ReactNode }) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("clients")
-        .select("id, user_id, full_name, first_name, last_name, preferred_name, email, phone, date_of_birth, height_cm, preferred_height_unit, address, city, province, postal_code, country, timezone, emergency_contact_name, emergency_contact_phone, basic_info_completed_at")
+        .select("id, user_id, full_name, first_name, last_name, preferred_name, email, phone, date_of_birth, height_cm, preferred_height_unit, address, city, province, postal_code, country, timezone, emergency_contact_name, emergency_contact_phone, basic_info_completed_at, intake_lifts_known, intake_lift_unit, intake_squat_1rm, intake_bench_1rm, intake_deadlift_1rm")
         .eq("user_id", user!.id)
         .maybeSingle();
       if (error) throw error;
@@ -54,6 +54,11 @@ export function ClientBasicInfoGate({ children }: { children: ReactNode }) {
       timezone: client.timezone ?? "America/Winnipeg",
       emergency_contact_name: client.emergency_contact_name ?? "",
       emergency_contact_phone: client.emergency_contact_phone ?? "",
+      intake_lifts_known: client.intake_lifts_known ?? null,
+      intake_lift_unit: (client.intake_lift_unit as "kg" | "lb" | null) ?? "lb",
+      intake_squat_1rm: client.intake_squat_1rm != null ? Number(client.intake_squat_1rm) : null,
+      intake_bench_1rm: client.intake_bench_1rm != null ? Number(client.intake_bench_1rm) : null,
+      intake_deadlift_1rm: client.intake_deadlift_1rm != null ? Number(client.intake_deadlift_1rm) : null,
     });
   }, [client]);
 
@@ -63,9 +68,11 @@ export function ClientBasicInfoGate({ children }: { children: ReactNode }) {
   if (isBasicInfoComplete(client)) return <>{children}</>;
   if (!form) return <>{children}</>;
 
-  const missing = REQUIRED_BASIC_INFO_FIELDS.filter(
+  const missingBase = REQUIRED_BASIC_INFO_FIELDS.filter(
     (f) => !((form as any)[f] !== null && (form as any)[f] !== undefined && String((form as any)[f]).trim() !== ""),
   );
+  const intakeOk = isIntakeLiftsComplete(form);
+  const missing = [...missingBase, ...(intakeOk ? [] : ["intake_lifts"])];
 
   const save = async () => {
     if (missing.length) {
@@ -90,6 +97,13 @@ export function ClientBasicInfoGate({ children }: { children: ReactNode }) {
       timezone: form.timezone || "America/Winnipeg",
       emergency_contact_name: form.emergency_contact_name || null,
       emergency_contact_phone: form.emergency_contact_phone || null,
+      intake_lifts_known:
+        form.intake_lifts_known === false ? false : true,
+      intake_lift_unit: form.intake_lifts_known === false ? null : (form.intake_lift_unit ?? "lb"),
+      intake_squat_1rm: form.intake_lifts_known === false ? null : form.intake_squat_1rm,
+      intake_bench_1rm: form.intake_lifts_known === false ? null : form.intake_bench_1rm,
+      intake_deadlift_1rm: form.intake_lifts_known === false ? null : form.intake_deadlift_1rm,
+      intake_lifts_recorded_at: new Date().toISOString(),
       basic_info_completed_at: new Date().toISOString(),
       info_last_updated_at: new Date().toISOString(),
       info_last_updated_by: "client",
