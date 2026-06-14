@@ -99,6 +99,7 @@ import { Route as AuthenticatedAdminPtCalendarRouteImport } from './routes/_auth
 import { Route as AuthenticatedAdminPromoCodesRouteImport } from './routes/_authenticated/admin/promo-codes'
 import { Route as AuthenticatedAdminProgramsRouteImport } from './routes/_authenticated/admin/programs'
 import { Route as AuthenticatedAdminProgrammingRouteImport } from './routes/_authenticated/admin/programming'
+import { Route as AuthenticatedAdminProgramSubmissionsRouteImport } from './routes/_authenticated/admin/program-submissions'
 import { Route as AuthenticatedAdminProgramLibraryRouteImport } from './routes/_authenticated/admin/program-library'
 import { Route as AuthenticatedAdminPopupsRouteImport } from './routes/_authenticated/admin/popups'
 import { Route as AuthenticatedAdminPaymentsRouteImport } from './routes/_authenticated/admin/payments'
@@ -717,6 +718,12 @@ const AuthenticatedAdminProgrammingRoute =
   AuthenticatedAdminProgrammingRouteImport.update({
     id: '/programming',
     path: '/programming',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
+const AuthenticatedAdminProgramSubmissionsRoute =
+  AuthenticatedAdminProgramSubmissionsRouteImport.update({
+    id: '/program-submissions',
+    path: '/program-submissions',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
 const AuthenticatedAdminProgramLibraryRoute =
@@ -1504,6 +1511,7 @@ export interface FileRoutesByFullPath {
   '/admin/payments': typeof AuthenticatedAdminPaymentsRoute
   '/admin/popups': typeof AuthenticatedAdminPopupsRoute
   '/admin/program-library': typeof AuthenticatedAdminProgramLibraryRoute
+  '/admin/program-submissions': typeof AuthenticatedAdminProgramSubmissionsRoute
   '/admin/programming': typeof AuthenticatedAdminProgrammingRoute
   '/admin/programs': typeof AuthenticatedAdminProgramsRoute
   '/admin/promo-codes': typeof AuthenticatedAdminPromoCodesRoute
@@ -1711,6 +1719,7 @@ export interface FileRoutesByTo {
   '/admin/payments': typeof AuthenticatedAdminPaymentsRoute
   '/admin/popups': typeof AuthenticatedAdminPopupsRoute
   '/admin/program-library': typeof AuthenticatedAdminProgramLibraryRoute
+  '/admin/program-submissions': typeof AuthenticatedAdminProgramSubmissionsRoute
   '/admin/programming': typeof AuthenticatedAdminProgrammingRoute
   '/admin/programs': typeof AuthenticatedAdminProgramsRoute
   '/admin/promo-codes': typeof AuthenticatedAdminPromoCodesRoute
@@ -1925,6 +1934,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/payments': typeof AuthenticatedAdminPaymentsRoute
   '/_authenticated/admin/popups': typeof AuthenticatedAdminPopupsRoute
   '/_authenticated/admin/program-library': typeof AuthenticatedAdminProgramLibraryRoute
+  '/_authenticated/admin/program-submissions': typeof AuthenticatedAdminProgramSubmissionsRoute
   '/_authenticated/admin/programming': typeof AuthenticatedAdminProgrammingRoute
   '/_authenticated/admin/programs': typeof AuthenticatedAdminProgramsRoute
   '/_authenticated/admin/promo-codes': typeof AuthenticatedAdminPromoCodesRoute
@@ -2139,6 +2149,7 @@ export interface FileRouteTypes {
     | '/admin/payments'
     | '/admin/popups'
     | '/admin/program-library'
+    | '/admin/program-submissions'
     | '/admin/programming'
     | '/admin/programs'
     | '/admin/promo-codes'
@@ -2346,6 +2357,7 @@ export interface FileRouteTypes {
     | '/admin/payments'
     | '/admin/popups'
     | '/admin/program-library'
+    | '/admin/program-submissions'
     | '/admin/programming'
     | '/admin/programs'
     | '/admin/promo-codes'
@@ -2559,6 +2571,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/payments'
     | '/_authenticated/admin/popups'
     | '/_authenticated/admin/program-library'
+    | '/_authenticated/admin/program-submissions'
     | '/_authenticated/admin/programming'
     | '/_authenticated/admin/programs'
     | '/_authenticated/admin/promo-codes'
@@ -3374,6 +3387,13 @@ declare module '@tanstack/react-router' {
       path: '/programming'
       fullPath: '/admin/programming'
       preLoaderRoute: typeof AuthenticatedAdminProgrammingRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
+    '/_authenticated/admin/program-submissions': {
+      id: '/_authenticated/admin/program-submissions'
+      path: '/program-submissions'
+      fullPath: '/admin/program-submissions'
+      preLoaderRoute: typeof AuthenticatedAdminProgramSubmissionsRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
     '/_authenticated/admin/program-library': {
@@ -4369,6 +4389,7 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminPaymentsRoute: typeof AuthenticatedAdminPaymentsRoute
   AuthenticatedAdminPopupsRoute: typeof AuthenticatedAdminPopupsRoute
   AuthenticatedAdminProgramLibraryRoute: typeof AuthenticatedAdminProgramLibraryRoute
+  AuthenticatedAdminProgramSubmissionsRoute: typeof AuthenticatedAdminProgramSubmissionsRoute
   AuthenticatedAdminProgrammingRoute: typeof AuthenticatedAdminProgrammingRoute
   AuthenticatedAdminProgramsRoute: typeof AuthenticatedAdminProgramsRoute
   AuthenticatedAdminPromoCodesRoute: typeof AuthenticatedAdminPromoCodesRoute
@@ -4473,6 +4494,8 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
     AuthenticatedAdminPopupsRoute: AuthenticatedAdminPopupsRoute,
     AuthenticatedAdminProgramLibraryRoute:
       AuthenticatedAdminProgramLibraryRoute,
+    AuthenticatedAdminProgramSubmissionsRoute:
+      AuthenticatedAdminProgramSubmissionsRoute,
     AuthenticatedAdminProgrammingRoute: AuthenticatedAdminProgrammingRoute,
     AuthenticatedAdminProgramsRoute: AuthenticatedAdminProgramsRoute,
     AuthenticatedAdminPromoCodesRoute: AuthenticatedAdminPromoCodesRoute,
