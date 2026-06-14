@@ -400,17 +400,22 @@ export const getPublicLegalDocument = createServerFn({ method: "GET" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: doc, error } = await supabaseAdmin
       .from("legal_documents")
-      .select("id, slug, title, doc_type, public_read_allowed, archived, emergency_disabled, current_version_id, current_version:legal_document_versions!legal_documents_current_version_id_fkey(id, version_number, title, summary, body, effective_date, status, needs_legal_review, published_at)")
+      .select("id, slug, title, doc_type, public_read_allowed, archived, emergency_disabled, current_version_id")
       .eq("slug", data.slug)
       .eq("public_read_allowed", true)
       .eq("archived", false)
       .eq("emergency_disabled", false)
       .maybeSingle();
     if (error) throw new Error(error.message);
-    if (!doc || !doc.current_version || (doc.current_version as any).status !== "published") {
-      return null;
-    }
-    const v: any = doc.current_version;
+    if (!doc || !doc.current_version_id) return null;
+    const { data: v, error: vErr } = await supabaseAdmin
+      .from("legal_document_versions")
+      .select("id, version_number, title, summary, body, effective_date, status, needs_legal_review, published_at")
+      .eq("id", doc.current_version_id)
+      .eq("status", "published")
+      .maybeSingle();
+    if (vErr) throw new Error(vErr.message);
+    if (!v) return null;
     return {
       slug: doc.slug,
       title: doc.title,
