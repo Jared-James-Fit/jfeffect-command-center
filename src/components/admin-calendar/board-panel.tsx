@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Filter } from "lucide-react";
 import { CalendarBoard } from "@/components/calendar/calendar-board";
 import { useAdminCalendarSources, KIND_META, type CalendarKind } from "@/lib/calendar-sources";
+import { AdminNeedsAttentionPanel } from "@/components/calendar/needs-attention-panel";
 import { cn } from "@/lib/utils";
 
 const ALL_KINDS: CalendarKind[] = ["event", "important_date", "appointment", "pt_session"];
@@ -73,7 +74,8 @@ export function AdminCalendarBoardPanel() {
   return (
     <>
       <PageHeader title="Calendar Board" subtitle="Month, week, day, and upcoming views across all client activity." />
-      <div className="p-3 sm:p-6 md:p-8">
+      <div className="p-3 sm:p-6 md:p-8 space-y-4">
+        <AdminNeedsAttentionPanel items={items} />
         <Card className="border-border bg-card p-3 sm:p-4">
           <CalendarBoard items={items} isLoading={isLoading} showClientName toolbar={toolbar} />
         </Card>
