@@ -309,7 +309,7 @@ function ApplyCreditDialog({ purchase, clientId, onDone }: { purchase: any; clie
   const [reason, setReason] = useState("");
   const m = useMutation({
     mutationFn: async () => fn({ data: {
-      client_id: clientId, purchase_id: purchase.id,
+      purchase_id: purchase.id,
       amount_minor: Math.round(parseFloat(amount) * 100), reason,
     } }),
     onSuccess: () => { toast.success("Credit applied"); setOpen(false); onDone(); },
