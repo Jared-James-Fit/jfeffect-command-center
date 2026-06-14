@@ -48,7 +48,7 @@ import { enqueueOfflineWrite, registerQueueHandler } from "@/lib/workout-offline
 import { ActiveRestTimerProvider, useRestTimer } from "@/components/active-rest-timer";
 import { ExerciseHistoryButton } from "@/components/exercise-history-sheet";
 import { convertWeight } from "@/lib/progress-metrics";
-import { WorkoutFeedbackSheet, WorkoutFeedbackReminder } from "@/components/workout-feedback-sheet";
+import { WorkoutFeedbackSheet, WorkoutFeedbackReminder, WorkoutFeedbackEditButton } from "@/components/workout-feedback-sheet";
 
 /* -------------------------------------------------------------------------- */
 /* Target-parsing helpers (Suggested → Draft → Confirmed fast-logging)         */
@@ -490,7 +490,21 @@ function WorkoutDay() {
     if (!focusMode) return;
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    return () => { document.body.style.overflow = prev; };
+    // Hide the mobile bottom nav while in full-screen logging so it can't
+    // overlap controls and so opened Sheets (z-50) are not trapped behind it.
+    document.body.setAttribute("data-workout-focus", "1");
+    const navEls = document.querySelectorAll<HTMLElement>("[data-mobile-bottom-nav]");
+    const restores: Array<() => void> = [];
+    navEls.forEach((el) => {
+      const prevDisplay = el.style.display;
+      el.style.display = "none";
+      restores.push(() => { el.style.display = prevDisplay; });
+    });
+    return () => {
+      document.body.style.overflow = prev;
+      document.body.removeAttribute("data-workout-focus");
+      restores.forEach((fn) => fn());
+    };
   }, [focusMode]);
 
   // Restore any unsynced draft for this workout's notes/duration before render.
@@ -565,11 +579,12 @@ function WorkoutDay() {
     queryFn: async () =>
       (await (sb as any)
         .from("pl_workout_feedback")
-        .select("id, overall_rating, session_rpe, pain")
+        .select("id, overall_rating, session_rpe, pain, pain_level, pain_area, pain_note, client_note, reviewed_at, reviewed_by")
         .eq("completion_id", completion!.id)
         .maybeSingle()).data,
   });
   const hasFeedback = !!existingFeedback;
+  const feedbackLocked = !!(existingFeedback?.reviewed_at || existingFeedback?.reviewed_by);
   const feedbackSkipped = !!(completion?.id && typeof window !== "undefined"
     && localStorage.getItem(`lov.wfb.skip:${completion.id}`));
 
@@ -591,7 +606,10 @@ function WorkoutDay() {
   return (
     <>
       {focusMode && (
-        <div className="fixed inset-0 z-[60] overflow-y-auto bg-background">
+        <div
+          className="fixed inset-0 z-40 overflow-y-auto bg-background"
+          data-workout-focus
+        >
           <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-background/95 px-4 py-3 backdrop-blur">
             <div className="font-bold">{day.title || `Day ${day.day_index}`} · Full Screen</div>
             {/* Global KG/LB toggle removed — each exercise carries its own
@@ -821,6 +839,10 @@ function WorkoutDay() {
         {!readonly && completion?.completed_at && !hasFeedback && feedbackSkipped && (
           <WorkoutFeedbackReminder onOpen={() => setFeedbackOpen(true)} />
         )}
+        {/* Always offer view/edit after feedback has been submitted. */}
+        {!readonly && completion?.completed_at && hasFeedback && (
+          <WorkoutFeedbackEditButton locked={feedbackLocked} onOpen={() => setFeedbackOpen(true)} />
+        )}
       </div>
 
       {/* Sticky general-notes shortcut */}
@@ -835,11 +857,12 @@ function WorkoutDay() {
       {/* Post-workout feedback sheet. Client POV (readonly) never opens it. */}
       {!readonly && client?.id && (
         <WorkoutFeedbackSheet
-          open={feedbackOpen && !hasFeedback && !!completion?.id}
+          open={feedbackOpen && !!completion?.id}
           onOpenChange={setFeedbackOpen}
           completionId={completion?.id ?? null}
           clientId={client.id}
           dayId={dayId}
+          existing={existingFeedback ?? null}
           onSubmitted={() => qc.invalidateQueries({ queryKey: ["pl-workout-feedback", completion?.id] })}
         />
       )}

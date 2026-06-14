@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { AlertTriangle, Loader2 } from "lucide-react";
+import { AlertTriangle, Loader2, Lock, Pencil } from "lucide-react";
 
 const RATING_OPTIONS: { value: number; label: string; emoji: string }[] = [
   { value: 1, label: "Rough", emoji: "😖" },
@@ -36,16 +36,30 @@ const BODY_AREAS = [
   "Other",
 ];
 
+export type ExistingFeedback = {
+  id: string;
+  overall_rating: number | null;
+  session_rpe: number | null;
+  pain: boolean | null;
+  pain_level: number | null;
+  pain_area: string | null;
+  pain_note: string | null;
+  client_note: string | null;
+  reviewed_at?: string | null;
+  reviewed_by?: string | null;
+} | null;
+
 type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   completionId: string | null;
   clientId: string;
   dayId: string;
+  existing?: ExistingFeedback;
   onSubmitted?: () => void;
 };
 
-export function WorkoutFeedbackSheet({ open, onOpenChange, completionId, clientId, dayId, onSubmitted }: Props) {
+export function WorkoutFeedbackSheet({ open, onOpenChange, completionId, clientId, dayId, existing, onSubmitted }: Props) {
   const [rating, setRating] = useState<number | null>(null);
   const [rpe, setRpe] = useState<number | null>(null);
   const [pain, setPain] = useState<boolean | null>(null);
@@ -55,14 +69,26 @@ export function WorkoutFeedbackSheet({ open, onOpenChange, completionId, clientI
   const [note, setNote] = useState<string>("");
   const [submitting, setSubmitting] = useState(false);
 
-  // Reset whenever the sheet (re)opens for a different completion.
+  const isEdit = !!existing?.id;
+  const isLocked = !!(existing?.reviewed_at || existing?.reviewed_by);
+
+  // Reset / prefill whenever the sheet (re)opens for a different completion.
   useEffect(() => {
-    if (open) {
+    if (!open) return;
+    if (existing) {
+      setRating(existing.overall_rating ?? null);
+      setRpe(existing.session_rpe ?? null);
+      setPain(existing.pain ?? null);
+      setPainLevel(existing.pain_level ?? null);
+      setPainArea(existing.pain_area ?? "");
+      setPainNote(existing.pain_note ?? "");
+      setNote(existing.client_note ?? "");
+    } else {
       setRating(null); setRpe(null); setPain(null);
       setPainLevel(null); setPainArea(""); setPainNote(""); setNote("");
-      setSubmitting(false);
     }
-  }, [open, completionId]);
+    setSubmitting(false);
+  }, [open, completionId, existing?.id]);
 
   const canSubmit = useMemo(() => {
     if (rating == null || rpe == null || pain == null) return false;
@@ -71,12 +97,9 @@ export function WorkoutFeedbackSheet({ open, onOpenChange, completionId, clientI
   }, [rating, rpe, pain, painLevel, painArea, submitting]);
 
   const submit = async () => {
-    if (!completionId || !canSubmit) return;
+    if (!completionId || !canSubmit || isLocked) return;
     setSubmitting(true);
-    const payload = {
-      completion_id: completionId,
-      client_id: clientId,
-      day_id: dayId,
+    const fields = {
       overall_rating: rating!,
       session_rpe: rpe!,
       pain: pain!,
@@ -85,32 +108,46 @@ export function WorkoutFeedbackSheet({ open, onOpenChange, completionId, clientI
       pain_note: pain && painNote.trim() ? painNote.trim() : null,
       client_note: note.trim() ? note.trim() : null,
     };
-    // INSERT only — never overwrite an existing submission. UNIQUE(completion_id)
-    // is the source of truth; on duplicate (23505) treat as "already submitted".
-    const { error } = await (supabase as any)
-      .from("pl_workout_feedback")
-      .insert(payload);
-    if (error) {
-      const isDup =
-        (error as any).code === "23505" ||
-        /duplicate key|unique/i.test(String((error as any).message ?? ""));
-      setSubmitting(false);
-      if (isDup) {
+
+    let error: any = null;
+    if (isEdit && existing?.id) {
+      const res = await (supabase as any)
+        .from("pl_workout_feedback")
+        .update(fields)
+        .eq("id", existing.id);
+      error = res.error;
+    } else {
+      const payload = {
+        completion_id: completionId,
+        client_id: clientId,
+        day_id: dayId,
+        ...fields,
+      };
+      const res = await (supabase as any).from("pl_workout_feedback").insert(payload);
+      error = res.error;
+      if (error && ((error.code === "23505") || /duplicate key|unique/i.test(String(error.message ?? "")))) {
+        setSubmitting(false);
         toast.message("Feedback already submitted for this workout.");
         onSubmitted?.();
         onOpenChange(false);
         return;
       }
-      toast.error("Couldn't save feedback", { description: (error as any).message });
+    }
+
+    if (error) {
+      setSubmitting(false);
+      toast.error(isEdit ? "Couldn't update feedback" : "Couldn't save feedback", {
+        description: error.message,
+      });
       return;
     }
-    toast.success("Workout logged. Feedback sent to your coach.");
+    toast.success(isEdit ? "Feedback updated." : "Workout logged. Feedback sent to your coach.");
     onSubmitted?.();
     onOpenChange(false);
   };
 
   const skip = () => {
-    if (completionId) {
+    if (completionId && !isEdit) {
       // Subtle once-per-completion dismissal — workout history may still show a
       // gentle reminder card, but the sheet will not auto-reopen on refresh.
       try { localStorage.setItem(`lov.wfb.skip:${completionId}`, "1"); } catch {}
@@ -122,16 +159,30 @@ export function WorkoutFeedbackSheet({ open, onOpenChange, completionId, clientI
     <Sheet open={open} onOpenChange={(v) => { if (!v) skip(); else onOpenChange(v); }}>
       <SheetContent
         side="bottom"
-        className="max-h-[92svh] overflow-y-auto rounded-t-3xl p-0 pb-[env(safe-area-inset-bottom)]"
+        className="z-[70] max-h-[92svh] overflow-y-auto rounded-t-3xl p-0 pb-[env(safe-area-inset-bottom)]"
       >
         <div className="px-5 pt-5">
           <SheetHeader className="space-y-1 text-left">
-            <SheetTitle className="text-xl font-black">Workout complete</SheetTitle>
-            <SheetDescription>Quick feedback — under 10 seconds.</SheetDescription>
+            <SheetTitle className="text-xl font-black">
+              {isEdit ? "Edit workout feedback" : "Workout complete"}
+            </SheetTitle>
+            <SheetDescription>
+              {isLocked
+                ? "Your coach has reviewed this — it's locked."
+                : isEdit
+                  ? "Update anything that changed."
+                  : "Quick feedback — under 10 seconds."}
+            </SheetDescription>
           </SheetHeader>
+          {isLocked && (
+            <div className="mt-3 flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+              <Lock className="h-3.5 w-3.5" />
+              Reviewed by your coach — read-only.
+            </div>
+          )}
         </div>
 
-        <div className="space-y-6 px-5 pb-4 pt-5">
+        <fieldset disabled={isLocked} className="space-y-6 px-5 pb-4 pt-5 disabled:opacity-90">
           {/* Overall rating */}
           <fieldset className="space-y-2">
             <legend className="text-sm font-bold">How was today's workout?</legend>
@@ -296,16 +347,18 @@ export function WorkoutFeedbackSheet({ open, onOpenChange, completionId, clientI
               maxLength={600}
             />
           </div>
-        </div>
+        </fieldset>
 
         <SheetFooter className="sticky bottom-0 z-10 flex-row gap-2 border-t bg-background/95 px-5 py-3 backdrop-blur sm:flex-row">
           <Button variant="ghost" className="flex-1" onClick={skip} disabled={submitting}>
-            Not now
+            {isLocked || isEdit ? "Close" : "Not now"}
           </Button>
-          <Button className="flex-1" onClick={submit} disabled={!canSubmit}>
-            {submitting && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
-            Submit feedback
-          </Button>
+          {!isLocked && (
+            <Button className="flex-1" onClick={submit} disabled={!canSubmit}>
+              {submitting && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+              {isEdit ? "Save changes" : "Submit feedback"}
+            </Button>
+          )}
         </SheetFooter>
       </SheetContent>
     </Sheet>
@@ -325,6 +378,33 @@ export function WorkoutFeedbackReminder({ onOpen }: { onOpen: () => void }) {
         <span className="ml-auto text-xs font-bold text-amber-700 dark:text-amber-300">Open →</span>
       </div>
       <p className="mt-1 text-xs text-muted-foreground">Takes under 10 seconds. Your coach uses it to adjust.</p>
+    </button>
+  );
+}
+
+export function WorkoutFeedbackEditButton({ onOpen, locked }: { onOpen: () => void; locked?: boolean }) {
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="w-full rounded-2xl border border-emerald-500/30 bg-emerald-500/5 px-4 py-3 text-left transition-colors hover:bg-emerald-500/10"
+    >
+      <div className="flex items-center gap-2 text-sm">
+        {locked ? (
+          <Lock className="h-4 w-4 text-emerald-700 dark:text-emerald-300" />
+        ) : (
+          <Pencil className="h-4 w-4 text-emerald-700 dark:text-emerald-300" />
+        )}
+        <span className="font-bold text-foreground">
+          {locked ? "View workout feedback" : "View / edit feedback"}
+        </span>
+        <span className="ml-auto text-xs font-bold text-emerald-700 dark:text-emerald-300">Open →</span>
+      </div>
+      <p className="mt-1 text-xs text-muted-foreground">
+        {locked
+          ? "Reviewed by your coach — read-only."
+          : "Update anything that changed since you submitted."}
+      </p>
     </button>
   );
 }
