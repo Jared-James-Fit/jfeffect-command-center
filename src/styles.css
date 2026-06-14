@@ -263,3 +263,9 @@ html[data-keyboard-open="true"] { --bottom-nav-clearance: 0px; }
   50%  { transform: translateX(50%); }
   100% { transform: translateX(300%); }
 }
+
+/* Hero floating cards — subtle drift used by membership-hero floating panels */
+@keyframes heroFloat {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-8px); }
+}

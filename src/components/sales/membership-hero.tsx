@@ -76,7 +76,7 @@ export function MembershipHero({
           <PhoneFrame heroImage={heroImage ?? null} />
 
           {/* Floating analytics card — top right */}
-          <div className="pointer-events-none absolute -right-2 top-6 hidden w-[200px] rounded-2xl border border-border/80 bg-card/95 p-3 shadow-2xl shadow-primary/10 backdrop-blur md:block">
+          <div className="pointer-events-none absolute -right-2 top-6 hidden w-[200px] animate-[heroFloat_6s_ease-in-out_infinite] rounded-2xl border border-border/80 bg-card/95 p-3 shadow-2xl shadow-primary/10 backdrop-blur md:block">
             <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
               <TrendingUp className="h-3 w-3 text-primary" /> Weekly volume
             </div>
@@ -93,7 +93,7 @@ export function MembershipHero({
           </div>
 
           {/* Floating program card — bottom left */}
-          <div className="pointer-events-none absolute -left-2 bottom-8 hidden w-[210px] rounded-2xl border border-border/80 bg-card/95 p-3 shadow-2xl shadow-primary/10 backdrop-blur md:block">
+          <div className="pointer-events-none absolute -left-2 bottom-8 hidden w-[210px] animate-[heroFloat_7s_ease-in-out_infinite_reverse] rounded-2xl border border-border/80 bg-card/95 p-3 shadow-2xl shadow-primary/10 backdrop-blur md:block" style={{ animationDelay: "-2s" }}>
             <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
               <Dumbbell className="h-3 w-3 text-primary" /> Today's session
             </div>

@@ -21,6 +21,7 @@ import { ComparisonCard } from "@/components/sales/comparison";
 import { ProofWall } from "@/components/sales/proof-wall";
 import { FaqAccordion } from "@/components/sales/faq-accordion";
 import { StickyMobileCta } from "@/components/sales/sticky-mobile-cta";
+import { Reveal } from "@/components/sales/reveal";
 
 export const Route = createFileRoute("/join")({
   component: SignupJf,
@@ -122,29 +123,29 @@ function SignupJf() {
         trialNote={`${trialDays}-day free trial · ${settings?.monthly_price_display ?? "$29/month USD"} after · cancel anytime`}
       />
 
-      <FeatureTabs />
+      <Reveal><FeatureTabs /></Reveal>
 
       {Array.isArray(s.features) && s.features.length > 0 && (
-        <FeatureGrid title="What's inside Membership" items={s.features} />
+        <Reveal><FeatureGrid title="What's inside Membership" items={s.features} /></Reveal>
       )}
 
-      <IncludedNotIncluded
+      <Reveal><IncludedNotIncluded
         includedTitle="What's included"
         notIncludedTitle="Not included"
         included={s.included ?? []}
         notIncluded={s.not_included ?? []}
-      />
+      /></Reveal>
 
       {s.comparison?.left && s.comparison?.right && (
-        <ComparisonCard left={s.comparison.left} right={s.comparison.right} />
+        <Reveal><ComparisonCard left={s.comparison.left} right={s.comparison.right} /></Reveal>
       )}
 
-      <ProofWall
+      <Reveal><ProofWall
         testimonials={p?.testimonials ?? []}
         images={(p?.visuals ?? []).filter((v) => v.slot === "proof")}
-      />
+      /></Reveal>
 
-      <FaqAccordion items={mergeTaxFaq(s.faq ?? [])} />
+      <Reveal><FaqAccordion items={mergeTaxFaq(s.faq ?? [])} /></Reveal>
 
       {/* Signup form */}
       <Section className="!pt-4">
