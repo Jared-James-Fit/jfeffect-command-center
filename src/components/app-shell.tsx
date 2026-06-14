@@ -14,6 +14,7 @@ import { UserAvatar } from "@/components/user-avatar";
 import { SettingsMenu } from "@/components/settings-menu";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { ClientPovQuickPicker } from "@/components/client-pov-quick-picker";
 import {
   Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
 } from "@/components/ui/tooltip";
@@ -825,6 +826,7 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
           </CommandGroup>
         </CommandList>
       </CommandDialog>
+      <ClientPovQuickPicker />
     </div>
     </TooltipProvider>
   );
@@ -996,6 +998,22 @@ function BottomNavSlot({ item, pathname, navBadges, onNavigate }: {
         </button>
       );
     }
+    if (item.to === "__client_pov__") {
+      return (
+        <button
+          type="button"
+          onClick={() => { try { window.dispatchEvent(new CustomEvent("open-client-pov-picker")); } catch {} }}
+          style={{ WebkitTapHighlightColor: "transparent" }}
+          className="relative flex min-h-[64px] flex-col items-center justify-center gap-0.5 px-0.5 pt-2 pb-2 text-[10px] font-medium text-warning hover:text-warning/80 touch-manipulation select-none"
+          aria-label="Open Client POV picker"
+        >
+          <div className="relative">
+            <Icon className="h-5 w-5" />
+          </div>
+          <span className="w-full px-0.5 text-center text-[9.5px] leading-tight tracking-tight">{item.label}</span>
+        </button>
+      );
+    }
     const active = pathname === item.to;
     return (
       <Link
@@ -1027,6 +1045,8 @@ function BottomNavSlot({ item, pathname, navBadges, onNavigate }: {
       onNavigate(id);
       if (id === "__search__") {
         try { window.dispatchEvent(new CustomEvent("open-command-palette")); } catch {}
+      } else if (id === "__client_pov__") {
+        try { window.dispatchEvent(new CustomEvent("open-client-pov-picker")); } catch {}
       } else {
         navigate({ to: id });
       }
@@ -1090,6 +1110,30 @@ function BottomNavSlot({ item, pathname, navBadges, onNavigate }: {
                     className={cn(
                       "flex w-full items-center gap-2.5 rounded-md px-2.5 py-2.5 text-sm font-medium transition-colors select-none text-left",
                       highlighted ? "bg-accent text-accent-foreground scale-[1.01]" : "hover:bg-accent",
+                    )}
+                  >
+                    <div className="relative">
+                      <CIcon className="h-4 w-4" />
+                    </div>
+                    <span className="flex-1 truncate">{c.label}</span>
+                  </button>
+                </li>
+              );
+            }
+            if (c.to === "__client_pov__") {
+              return (
+                <li key={c.to}>
+                  <button
+                    type="button"
+                    data-bar-option={c.to}
+                    onClick={() => {
+                      setOpen(false);
+                      try { window.dispatchEvent(new CustomEvent("open-client-pov-picker")); } catch {}
+                    }}
+                    style={{ WebkitTapHighlightColor: "transparent" }}
+                    className={cn(
+                      "flex w-full items-center gap-2.5 rounded-md px-2.5 py-2.5 text-sm font-medium transition-colors select-none text-left",
+                      highlighted ? "bg-accent text-accent-foreground scale-[1.01]" : "hover:bg-accent text-warning",
                     )}
                   >
                     <div className="relative">
