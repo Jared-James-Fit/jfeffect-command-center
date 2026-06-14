@@ -254,7 +254,8 @@ function WorkoutDay() {
 
   const blockEnded = block?.end_date ? new Date(block.end_date) < today : false;
   const blockCompleted = block?.status === "Completed" || block?.status === "Archived";
-  const readonly = search.readonly === 1 || blockEnded || blockCompleted;
+  const { isImpersonating } = useClientImpersonation();
+  const readonly = search.readonly === 1 || blockEnded || blockCompleted || isImpersonating;
 
   const { data: rows = [], isSuccess: rowsLoaded } = useQuery({
     queryKey: ["pl-day-rows", dayId],
