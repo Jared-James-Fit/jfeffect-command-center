@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
-import { Eye, EyeOff, Lock, Receipt } from "lucide-react";
+import { Eye, EyeOff, Receipt, ChevronDown, ChevronUp, ExternalLink, Check, X as XIcon } from "lucide-react";
 import { SalesPageShell, Section } from "@/components/sales/sales-page-shell";
 import { MembershipHero, MemberHeroCta, MemberHeroGhost } from "@/components/sales/membership-hero";
 import { FeatureTabs } from "@/components/sales/feature-tabs";
@@ -77,13 +77,14 @@ function SignupJf() {
 
   const [form, setForm] = useState({
     first_name: "", last_name: "", email: "", phone: "",
-    password: "", confirm: "", sms_consent: false,
+    password: "", confirm: "", marketing_consent: false,
   });
-  // Per-document acceptance state. Keyed by document_id.
-  const [accepted, setAccepted] = useState<Record<string, boolean>>({});
+  const [bundledAccepted, setBundledAccepted] = useState(false);
+  const [showReview, setShowReview] = useState(false);
   const [busy, setBusy] = useState(false);
   const [showPw, setShowPw] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
 
   const [cancelled, setCancelled] = useState(false);
   useEffect(() => {
@@ -92,28 +93,56 @@ function SignupJf() {
   const [firstChargeLabel, setFirstChargeLabel] = useState<string | null>(null);
   const checkoutBlocked = (settings && !settings.has_monthly_price) || (gate && !gate.ok);
   const requiredDocs = gate?.required_docs ?? [];
-  const allAccepted = requiredDocs.length > 0 && requiredDocs.every((d) => accepted[d.document_id]);
+
+  // Validation helpers
+  const nameValid = (v: string) => v.trim().length >= 1 && v.trim().length <= 80;
+  const emailValid = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
+  const phoneDigits = form.phone.replace(/\D+/g, "");
+  const phoneValid = phoneDigits.length >= 7 && phoneDigits.length <= 15;
+  const pwValid = form.password.length >= 8;
+  const pwMatch = form.password.length > 0 && form.password === form.confirm;
+
+  const allDocsReady = requiredDocs.length === 5;
+
+  const formValid =
+    nameValid(form.first_name) && nameValid(form.last_name) &&
+    emailValid(form.email) && phoneValid && pwValid && pwMatch &&
+    bundledAccepted && allDocsReady && !checkoutBlocked;
+
+  // Build the *exact* bundled acknowledgement statement displayed to the user.
+  const monthlyPrice = settings?.monthly_price_display ?? "$29 USD/month";
+  const trialDaysLocal = settings?.trial_days ?? 3;
+  const bundledStatement = `I agree to the Terms of Service, Privacy Policy, JF Membership Agreement, Recurring Billing Disclosure, and Cancellation & Refund Policy. I understand my membership starts with a ${trialDaysLocal}-day free trial, then automatically renews at ${monthlyPrice} plus applicable taxes until I cancel through my billing page.`;
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setTouched({ first_name: true, last_name: true, email: true, phone: true, password: true, confirm: true });
     if (checkoutBlocked) {
       return toast.error(gate?.message ?? "Membership checkout is temporarily unavailable. Please contact support.");
     }
-    if (!allAccepted) return toast.error("Please accept each required document to continue.");
-    if (form.password.length < 8) return toast.error("Password must be at least 8 characters.");
-    if (form.password !== form.confirm) return toast.error("Passwords don't match.");
+    if (!bundledAccepted) return toast.error("Please accept the membership agreement to continue.");
+    if (!nameValid(form.first_name) || !nameValid(form.last_name)) return toast.error("First and last name are required.");
+    if (!emailValid(form.email)) return toast.error("Please enter a valid email address.");
+    if (!phoneValid) return toast.error("Please enter a valid phone number (include country code for international).");
+    if (!pwValid) return toast.error("Password must be at least 8 characters.");
+    if (!pwMatch) return toast.error("Passwords don't match.");
+    if (!allDocsReady) return toast.error("Membership agreements aren't loaded yet. Please refresh and try again.");
     setBusy(true);
     try {
       const r = await createCheckout({ data: {
-        first_name: form.first_name, last_name: form.last_name, email: form.email,
-        phone: form.phone || undefined, password: form.password,
-        sms_consent: !!(form.phone && form.sms_consent),
+        first_name: form.first_name.trim(),
+        last_name: form.last_name.trim(),
+        email: form.email.trim(),
+        phone: form.phone.trim(),
+        password: form.password,
+        sms_consent: !!form.marketing_consent,
         origin: window.location.origin,
         legal_acceptances: requiredDocs.map((d) => ({
           document_id: d.document_id,
           version_id: d.version_id,
         })),
-        acknowledgement_text: "I have read and agree to the documents listed at JF Membership checkout.",
+        acknowledgement_text: bundledStatement,
+        user_agent: typeof navigator !== "undefined" ? navigator.userAgent : "",
       }});
       window.location.assign(r.url);
     } catch (e: any) {
@@ -125,12 +154,26 @@ function SignupJf() {
   const s = p?.sections ?? {};
   const trialDays = settings?.trial_days ?? 3;
   const ctaLabel = p?.primary_cta_label ?? `Start ${trialDays}-Day Free Trial`;
+  const pausedLabel = "Signups Temporarily Paused";
 
   useEffect(() => {
     setFirstChargeLabel(
       new Date(Date.now() + trialDays * 24 * 60 * 60 * 1000).toLocaleDateString(),
     );
   }, [trialDays]);
+
+  // Map slug -> doc for inline checkbox links
+  const docBySlug: Record<string, typeof requiredDocs[number] | undefined> = {};
+  for (const d of requiredDocs) docBySlug[d.slug] = d;
+  function DocLink({ slug, children }: { slug: string; children: React.ReactNode }) {
+    const d = docBySlug[slug];
+    if (!d || !d.public_read_allowed) return <span className="font-semibold underline-offset-2">{children}</span>;
+    return (
+      <Link to="/legal/$slug" params={{ slug: d.slug }} target="_blank" className="font-semibold text-primary underline underline-offset-2 hover:text-primary/80">
+        {children}
+      </Link>
+    );
+  }
 
   return (
     <SalesPageShell pageId="membership-join">
@@ -179,12 +222,11 @@ function SignupJf() {
       {/* Signup form */}
       <Section className="!pt-4">
         <div ref={formRef} id="cta" />
-        <Card className="mx-auto max-w-xl p-6 md:p-8">
+        <Card className="mx-auto max-w-xl p-4 md:p-8">
           <h2 className="text-2xl font-black tracking-tight">Create your account</h2>
           <p className="mt-1 text-sm text-foreground">
-            {trialDays} days free, then {settings?.monthly_price_display ?? "$29/month USD"}.
+            $0 today. After your {trialDays}-day trial, your membership renews automatically at {settings?.monthly_price_display ?? "$29 USD/month"} plus applicable taxes until cancelled.
           </p>
-          <p className="text-xs text-muted-foreground">Taxes calculated at checkout where applicable.</p>
           {cancelled && (
             <div className="mt-3 rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-200">
               Checkout was cancelled. You can try again below.
@@ -197,37 +239,53 @@ function SignupJf() {
             </div>
           )}
 
-          {/* Phase 4 — Recurring billing disclosure (always visible above legal acceptances) */}
-          {!checkoutBlocked && requiredDocs.length > 0 && (
-            <div className="mt-4 rounded-lg border border-border bg-muted/30 p-4">
-              <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">
-                <Receipt className="h-3.5 w-3.5" /> Recurring billing
-              </div>
-              <ul className="mt-2 space-y-1 text-xs text-foreground">
-                <li>· {settings?.monthly_price_display ?? "$29/month USD"} after a {trialDays}-day free trial</li>
-                <li>· Due today: $0 (you won't be charged until your trial ends)</li>
-                <li>· First charge: {firstChargeLabel ?? `in ${trialDays} days`}</li>
-                <li>· Billing renews automatically every month until you cancel</li>
-                <li>· Cancel anytime — access continues until the end of your current billing period</li>
-              </ul>
-            </div>
-          )}
           <form onSubmit={submit} className="mt-4 grid gap-3">
+            <fieldset disabled={!!checkoutBlocked} className="contents">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div><Label>First name</Label><Input required value={form.first_name} onChange={(e) => setForm({ ...form, first_name: e.target.value })} /></div>
-              <div><Label>Last name</Label><Input required value={form.last_name} onChange={(e) => setForm({ ...form, last_name: e.target.value })} /></div>
+              <div>
+                <Label htmlFor="first_name">First name</Label>
+                <Input id="first_name" required autoComplete="given-name" value={form.first_name}
+                  onChange={(e) => setForm({ ...form, first_name: e.target.value })}
+                  onBlur={() => setTouched((t) => ({ ...t, first_name: true }))} />
+                {touched.first_name && !nameValid(form.first_name) && <FieldError>First name is required.</FieldError>}
+              </div>
+              <div>
+                <Label htmlFor="last_name">Last name</Label>
+                <Input id="last_name" required autoComplete="family-name" value={form.last_name}
+                  onChange={(e) => setForm({ ...form, last_name: e.target.value })}
+                  onBlur={() => setTouched((t) => ({ ...t, last_name: true }))} />
+                {touched.last_name && !nameValid(form.last_name) && <FieldError>Last name is required.</FieldError>}
+              </div>
             </div>
-            <div><Label>Email</Label><Input type="email" required value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
-            <div><Label>Phone (optional)</Label><Input type="tel" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></div>
             <div>
-              <Label>Password</Label>
+              <Label htmlFor="email">Email</Label>
+              <Input id="email" type="email" required autoComplete="email" inputMode="email"
+                value={form.email}
+                onChange={(e) => setForm({ ...form, email: e.target.value })}
+                onBlur={() => setTouched((t) => ({ ...t, email: true }))} />
+              {touched.email && !emailValid(form.email) && <FieldError>Please enter a valid email.</FieldError>}
+            </div>
+            <div>
+              <Label htmlFor="phone">Phone number</Label>
+              <Input id="phone" type="tel" required autoComplete="tel" inputMode="tel"
+                placeholder="+1 555 123 4567"
+                value={form.phone}
+                onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                onBlur={() => setTouched((t) => ({ ...t, phone: true }))} />
+              <p className="mt-1 text-[11px] text-muted-foreground">Include country code for international numbers. Used for account, security and billing messages.</p>
+              {touched.phone && !phoneValid && <FieldError>Please enter a valid phone number (7–15 digits).</FieldError>}
+            </div>
+            <div>
+              <Label htmlFor="password">Password</Label>
               <div className="relative">
                 <Input
+                  id="password"
                   type={showPw ? "text" : "password"}
                   required minLength={8}
                   autoComplete="new-password"
                   value={form.password}
                   onChange={(e) => setForm({ ...form, password: e.target.value })}
+                  onBlur={() => setTouched((t) => ({ ...t, password: true }))}
                   className="pr-10"
                 />
                 <button
@@ -240,16 +298,20 @@ function SignupJf() {
                   {showPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
+              <p className="mt-1 text-[11px] text-muted-foreground">At least 8 characters.</p>
+              {touched.password && !pwValid && <FieldError>Password must be at least 8 characters.</FieldError>}
             </div>
             <div>
-              <Label>Confirm password</Label>
+              <Label htmlFor="confirm">Confirm password</Label>
               <div className="relative">
                 <Input
+                  id="confirm"
                   type={showConfirm ? "text" : "password"}
                   required minLength={8}
                   autoComplete="new-password"
                   value={form.confirm}
                   onChange={(e) => setForm({ ...form, confirm: e.target.value })}
+                  onBlur={() => setTouched((t) => ({ ...t, confirm: true }))}
                   className="pr-10"
                 />
                 <button
@@ -262,66 +324,133 @@ function SignupJf() {
                   {showConfirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
+              {form.confirm.length > 0 && (
+                pwMatch ? (
+                  <p className="mt-1 inline-flex items-center gap-1 text-[11px] text-emerald-400"><Check className="h-3 w-3" /> Passwords match</p>
+                ) : (
+                  <p className="mt-1 inline-flex items-center gap-1 text-[11px] text-rose-400"><XIcon className="h-3 w-3" /> Passwords don't match</p>
+                )
+              )}
             </div>
-            {/* Phase 4 — per-document legal acceptances (server-validated). */}
-            {requiredDocs.length > 0 && (
-              <div className="rounded-md border border-border p-3 space-y-2">
-                <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">
-                  <Lock className="h-3.5 w-3.5" /> Required agreements
+
+            {/* Compact billing summary */}
+            {!checkoutBlocked && (
+              <div className="rounded-lg border border-border bg-muted/30 p-3">
+                <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
+                  <Receipt className="h-3.5 w-3.5" /> Billing
                 </div>
-                {requiredDocs.map((d) => (
-                  <label key={d.document_id} className="flex items-start gap-2 text-xs text-foreground">
-                    <Checkbox
-                      checked={!!accepted[d.document_id]}
-                      onCheckedChange={(c) => setAccepted((s) => ({ ...s, [d.document_id]: !!c }))}
-                    />
-                    <span>
-                      I agree to the{" "}
-                      {d.public_read_allowed ? (
-                        <Link to="/legal/$slug" params={{ slug: d.slug }} target="_blank" className="underline">
-                          {d.title}
-                        </Link>
-                      ) : (
-                        <span className="font-medium">{d.title}</span>
-                      )}
-                      <span className="ml-1 text-muted-foreground">(v{d.version_number})</span>.
-                    </span>
-                  </label>
-                ))}
+                <p className="mt-1 text-xs leading-relaxed text-foreground">
+                  <span className="font-bold">$0 today.</span> First charge {firstChargeLabel ?? `in ${trialDays} days`} — {settings?.monthly_price_display ?? "$29 USD/month"} plus applicable taxes. Renews automatically until cancelled through your <span className="font-semibold">billing page</span>.
+                </p>
               </div>
             )}
-            {form.phone && (
+
+            {/* Single bundled legal acceptance */}
+            {!checkoutBlocked && allDocsReady && (
+              <div className="rounded-md border border-border p-3">
+                <label className="flex items-start gap-2 text-xs leading-relaxed text-foreground">
+                  <Checkbox
+                    className="mt-0.5"
+                    checked={bundledAccepted}
+                    onCheckedChange={(c) => setBundledAccepted(!!c)}
+                    aria-label="I agree to the membership terms"
+                  />
+                  <span>
+                    I agree to the{" "}
+                    <DocLink slug="terms-of-service">Terms of Service</DocLink>,{" "}
+                    <DocLink slug="privacy-policy">Privacy Policy</DocLink>,{" "}
+                    <DocLink slug="membership-agreement">JF Membership Agreement</DocLink>,{" "}
+                    <DocLink slug="recurring-billing-disclosure">Recurring Billing Disclosure</DocLink>, and{" "}
+                    <DocLink slug="cancellation-and-refund-policy">Cancellation &amp; Refund Policy</DocLink>.
+                    {" "}I understand my membership starts with a {trialDays}-day free trial, then automatically renews at {settings?.monthly_price_display ?? "$29 USD/month"} plus applicable taxes until I cancel through my billing page.
+                  </span>
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setShowReview((v) => !v)}
+                  className="mt-2 inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground hover:text-foreground"
+                >
+                  {showReview ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                  Review membership terms
+                </button>
+                {showReview && (
+                  <ul className="mt-2 space-y-1.5 rounded-md border border-border bg-background/50 p-2">
+                    {requiredDocs.map((d) => (
+                      <li key={d.document_id} className="flex items-center justify-between gap-2 text-[11px]">
+                        <div className="min-w-0">
+                          <div className="truncate font-semibold">{d.title}</div>
+                          <div className="text-muted-foreground">Active version v{d.version_number}</div>
+                        </div>
+                        {d.public_read_allowed ? (
+                          <Link to="/legal/$slug" params={{ slug: d.slug }} target="_blank"
+                            className="inline-flex shrink-0 items-center gap-1 rounded border border-border px-2 py-1 text-[10px] font-bold uppercase tracking-widest text-foreground hover:bg-secondary">
+                            Open <ExternalLink className="h-3 w-3" />
+                          </Link>
+                        ) : (
+                          <span className="text-[10px] text-muted-foreground">Available at checkout</span>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+
+            {/* Separate optional marketing consent */}
+            {!checkoutBlocked && (
               <label className="flex items-start gap-2 text-xs text-muted-foreground">
-                <Checkbox checked={form.sms_consent} onCheckedChange={(c) => setForm({ ...form, sms_consent: !!c })} />
-                <span>I agree to receive transactional and marketing SMS. Msg/data rates may apply. Reply STOP to opt out.</span>
+                <Checkbox
+                  className="mt-0.5"
+                  checked={form.marketing_consent}
+                  onCheckedChange={(c) => setForm({ ...form, marketing_consent: !!c })}
+                />
+                <span>Send me occasional coaching updates and offers by email or SMS. I can unsubscribe anytime.</span>
               </label>
             )}
+
+            {/* Concise cancellation summary (full policy still linked above) */}
+            <p className="text-[11px] leading-relaxed text-muted-foreground">
+              Cancel anytime through your billing page. Access remains active until the end of the applicable trial or billing period. Payments are generally non-refundable once a paid billing period begins.{" "}
+              {docBySlug["cancellation-and-refund-policy"]?.public_read_allowed && (
+                <Link to="/legal/$slug" params={{ slug: "cancellation-and-refund-policy" }} target="_blank" className="underline">
+                  Read the Cancellation &amp; Refund Policy
+                </Link>
+              )}
+            </p>
+
+            {/* Desktop-only inline CTA. On mobile the sticky bar is the only CTA. */}
             <Button
               type="submit"
               size="lg"
-              disabled={busy || !!checkoutBlocked || !allAccepted}
-              className="mt-2 h-12 text-base font-bold"
+              disabled={busy || !formValid}
+              className="mt-2 hidden h-12 text-base font-bold md:inline-flex"
             >
-              {busy ? "Starting checkout…" : ctaLabel}
+              {busy ? "Starting checkout…" : checkoutBlocked ? pausedLabel : ctaLabel}
             </Button>
-            <p className="text-[11px] text-center text-muted-foreground">
+            <p className="hidden text-[11px] text-center text-muted-foreground md:block">
               You'll be redirected to Stripe to enter card details. You won't be charged until the trial ends.
             </p>
-            <p className="text-[11px] text-center text-muted-foreground">
-              Taxes calculated at checkout where applicable.
-            </p>
+            </fieldset>
           </form>
-          {settings?.refund_policy && (
-            <div className="mt-6 border-t border-border pt-4">
-              <div className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-2">Refund / cancellation policy</div>
-              <p className="text-xs leading-relaxed text-muted-foreground whitespace-pre-line">{settings.refund_policy}</p>
-            </div>
-          )}
         </Card>
       </Section>
 
-      <div className="pb-24 md:pb-0" />
-      <StickyMobileCta label={ctaLabel} onClick={scrollToForm} />
+      {/* Bottom spacing for the sticky CTA + iOS safe-area inset. */}
+      <div style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 5.5rem)" }} className="md:hidden" />
+      <StickyMobileCta
+        label={checkoutBlocked ? pausedLabel : (busy ? "Starting checkout…" : ctaLabel)}
+        disabled={!!checkoutBlocked || busy || !formValid}
+        paused={!!checkoutBlocked}
+        onClick={() => {
+          if (checkoutBlocked) return;
+          if (!formValid) { scrollToForm(); return; }
+          submit(new Event("submit") as unknown as React.FormEvent);
+        }}
+      />
     </SalesPageShell>
   );
+}
+
+function FieldError({ children }: { children: React.ReactNode }) {
+  return <p className="mt-1 text-[11px] font-medium text-rose-400">{children}</p>;
 }
