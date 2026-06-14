@@ -56,7 +56,7 @@ export const listLegalDocuments = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     const { data, error } = await context.supabase
       .from("legal_documents")
-      .select("*, current_version:legal_document_versions!legal_documents_current_version_id_fkey(*)")
+      .select("*, current_version:legal_document_versions!fk_legal_documents_current_version(*)")
       .order("doc_type", { ascending: true });
     if (error) throw new Error(error.message);
     return data ?? [];
