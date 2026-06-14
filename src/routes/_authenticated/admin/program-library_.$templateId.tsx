@@ -1599,8 +1599,8 @@ function DayEditor({ day, setDay, exercises, compact }: { day: any; setDay: (d: 
   return (
     <div
       className={cn(
-        "space-y-2 rounded-md transition-colors",
-        dragOver && "ring-2 ring-primary ring-offset-1 bg-primary/5",
+        "space-y-3 rounded-lg bg-builder-canvas p-3 sm:p-4 ring-1 ring-builder-card-border/40 transition-colors",
+        dragOver && "ring-2 ring-primary ring-offset-1 ring-offset-background bg-primary/5",
       )}
       onDragOver={(e) => {
         if (Array.from(e.dataTransfer.types).includes(DND_EXERCISE)) {
@@ -1633,11 +1633,11 @@ function DayEditor({ day, setDay, exercises, compact }: { day: any; setDay: (d: 
         </div>
       </div>
       {rows.length === 0 ? (
-        <p className="rounded-md border border-dashed border-border p-3 text-center text-xs text-muted-foreground">
+        <p className="rounded-md border border-dashed border-builder-card-border p-4 text-center text-xs text-muted-foreground">
           {dragOver ? "Drop exercise here" : "Drag exercises from the library, or click + Row"}
         </p>
       ) : (
-        <div className="space-y-1.5" data-pb-day>
+        <div className="space-y-3" data-pb-day>
           {rows.map((r: any, i: number) => (
             <div
               key={i}
@@ -1769,7 +1769,7 @@ function SwapExerciseButton({ row, setRow, exercises }: { row: any; setRow: (r: 
 function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMoveDown, canMoveUp, canMoveDown, onDragStartRow, onDragEndRow, isDragging, purposeLabel }: { row: any; setRow: (r: any) => void; onDelete?: () => void; exercises: any[]; compact?: boolean; onMoveUp?: () => void; onMoveDown?: () => void; canMoveUp?: boolean; canMoveDown?: boolean; onDragStartRow?: (e: React.DragEvent) => void; onDragEndRow?: () => void; isDragging?: boolean; purposeLabel?: string }) {
   const Field = ({ label, className, children }: { label: string; className?: string; children: React.ReactNode }) => (
     <div className={cn("flex flex-col gap-0.5 min-w-0", className)}>
-      <span className="px-0.5 text-[11px] font-semibold uppercase tracking-wide text-foreground leading-none">{label}</span>
+      <span className="px-0.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground leading-none">{label}</span>
       {children}
     </div>
   );
@@ -1870,9 +1870,9 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
         }
       }}
       className={cn(
-        "relative overflow-hidden rounded-md border-2 border-border bg-card shadow-sm transition-shadow hover:border-foreground/30 hover:shadow",
+        "relative overflow-hidden rounded-lg border border-builder-card-border bg-builder-card shadow-builder-card transition-colors hover:border-builder-card-border-strong",
         isDragging && "opacity-50 ring-2 ring-primary",
-        compact ? "p-1.5 pl-4 space-y-1" : "p-2 pl-5 space-y-1",
+        compact ? "p-3 pl-5 space-y-1.5" : "p-4 pl-6 space-y-2",
       )}
     >
       <div className={`absolute left-0 top-0 h-full w-2 ${accent}`} aria-hidden />
@@ -2160,9 +2160,9 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
       {expanded && (
       <div className="grid grid-cols-12 items-start gap-2">
         {/* ---- Suggested Load: one coherent group ---- */}
-        <div className={cn("col-span-12", loadMode === "none" ? "md:col-span-6" : "md:col-span-9", "rounded-md border border-border/60 bg-muted/20 p-1.5")}>
+        <div className={cn("col-span-12", loadMode === "none" ? "md:col-span-6" : "md:col-span-9", "rounded-md border border-builder-card-border/70 bg-builder-inset p-2")}>
           <div className="mb-1 flex items-center justify-between gap-2 px-0.5">
-            <span className="text-[11px] font-semibold uppercase tracking-wide text-foreground leading-none">Suggested load</span>
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground leading-none">Suggested load</span>
             <button
               type="button"
               role="switch"
