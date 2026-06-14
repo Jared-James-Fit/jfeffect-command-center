@@ -896,6 +896,39 @@ function SuggestedLoadBadge({ load, unit, exerciseName }: { load: number; unit: 
   );
 }
 
+/**
+ * Slice 3 client fail-safe card. Rendered in place of `<ExerciseBlock />`
+ * for any row whose pl_exercise_blocks contain anything the legacy logger
+ * does not understand (multi-block prescriptions, drop sets, ascending sets,
+ * etc.). Server-side guards prevent this state from reaching client-visible
+ * programs under normal flow — this card exists as a defensive fail-safe so
+ * a client never sees broken legacy inputs, can never fake completion, and
+ * never creates incorrect set logs. The rest of the workout remains
+ * loggable as normal.
+ */
+function UnsupportedExerciseCard({ row }: { row: any }) {
+  const name = row.exercises?.name ?? row.exercise_name_override ?? "Exercise";
+  return (
+    <Card className="border-amber-500/40 bg-amber-500/5 p-4">
+      <div className="flex items-start gap-3">
+        <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-500" />
+        <div className="space-y-1">
+          <div className="text-sm font-bold">{name}</div>
+          <p className="text-sm text-foreground/90">
+            This exercise prescription needs an updated logging format. Contact your coach before completing this exercise.
+          </p>
+          <Link
+            to="/portal/messages"
+            className="mt-2 inline-flex items-center gap-1 rounded-md bg-primary px-2.5 py-1 text-xs font-semibold text-primary-foreground"
+          >
+            <MessageCircle className="h-3 w-3" /> Message Coach
+          </Link>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
 function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResults, existingNote, readonly = false, unit = "kg", onUnitChange, focusMode = false, onChange, onNoteChange, purposeLabel = null }: { row: any; dayId: string; dayTitle: string; clientId: string | undefined; blockId?: string | null; existingResults: any[]; existingNote?: any; readonly?: boolean; unit?: "kg" | "lb"; onUnitChange?: (u: "kg" | "lb") => void; focusMode?: boolean; onChange: () => void; onNoteChange: () => void; purposeLabel?: string | null }) {
   const name = row.exercises?.name ?? row.exercise_name_override ?? "Exercise";
   const exercise = row.exercises ?? null;
