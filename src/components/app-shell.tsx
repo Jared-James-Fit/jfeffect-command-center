@@ -13,7 +13,6 @@ import { useKeyboardOpen } from "@/hooks/use-keyboard-open";
 import { UserAvatar } from "@/components/user-avatar";
 import { SettingsMenu } from "@/components/settings-menu";
 import { listTemplates } from "@/lib/pl-programs";
-import type { TemplateType, TrainingStyle } from "@/lib/pl-programs";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { ClientPovQuickPicker } from "@/components/client-pov-quick-picker";
