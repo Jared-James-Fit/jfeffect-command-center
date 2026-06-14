@@ -1,52 +1,122 @@
-## Multi-Block Program Templates — Plan
+# Multi-Block Exercise Prescriptions
 
-### Scope reality check
-This request spans the data model, builder UI, assignment, client progression, undo/redo, trash, permissions, and full QA across 24 sections. Honestly: this is **multi-day work** (10+ migrations, a builder refactor, assignment flow rewrite, client progression rewrite). Trying to ship all 24 sections in one turn will produce shallow, half-wired surfaces — exactly the failure mode prior audits flagged.
+This is a large structural change: schema, builder UI, client logger, copy/duplicate, calculations, and legacy migration. Posting the plan first because it touches the two largest files in the app (builder ~2.3k LOC, logger ~1.9k LOC) and the core `pl_exercise_rows` / `pl_row_results` / `member_set_logs` data model.
 
-I want to confirm the approach before I touch anything.
+## Goals
 
-### Current architecture (quick audit)
-- `pl_templates` — program template header (single block today)
-- `pl_blocks` — the block itself, also doubles as the client-assigned instance
-- `pl_weeks` → `pl_days` → `pl_exercise_rows` → `pl_row_results`
-- `pl_bulk_operations` — existing undo log (reusable)
-- Builder lives in `src/components/program-builder.tsx` + `src/routes/_authenticated/admin/program-library_.$templateId.tsx`
-- A "template" today = one block. There is no parent→many-blocks relationship in templates.
+- One exercise card holds an ordered list of **prescription blocks** (Straight, Top, Backoff, Ascending, Drop, Warm-up, Custom).
+- Every block's inputs are visibly editable inline (no modal-only config, no note-only blocks).
+- Every programmed set/drop produces its own client logging row with weight/reps/RPE/RIR/completion.
+- Legacy single-prescription rows continue to work without data loss.
 
-### Proposed phased delivery (each phase is shippable and tested before the next)
+## Data Model
 
-**Phase 1 — Data model + Block selector (foundation)**
-- Migration: add `pl_template_blocks` join (template_id, block_id, sort_order, archived_at, trashed_at) OR add `template_id` + `sort_order` + `archived_at` + `trashed_at` directly to `pl_blocks` (whichever fits existing FKs cleanest — I'll verify in the audit).
-- Backfill: every existing template gets one block linked at sort_order=0.
-- Builder header gets a Block tab strip + `?block=<id>` URL persistence.
-- Add Block (blank + duplicate current).
-- Switch blocks preserves week/day/mode params and autosave.
+New tables, additive — `pl_exercise_rows` keeps its current columns so legacy reads still work.
 
-**Phase 2 — Block lifecycle**
-- Rename, reorder (drag + buttons), archive/restore, trash/restore, permanent delete with history-guard.
-- Wire all of it into existing `pl_bulk_operations` so global Undo/Redo (Cmd+Z) covers block ops.
-- Atomic server fns with operation IDs.
+```text
+pl_exercise_blocks
+  id uuid pk
+  row_id uuid fk → pl_exercise_rows(id) on delete cascade
+  sort_order int
+  block_type text   -- straight|top|backoff|ascending|drop|warmup|custom
+  label text
+  -- prescription (nullable; only relevant fields used per type)
+  sets int
+  reps_text text
+  rpe text, rir text
+  load_type text    -- fixed|pct_1rm|rpe_choice|rir_choice|pct_below_ref|kg_below_ref|pct_of_ref|manual|none
+  load_value numeric
+  load_unit text    -- kg|lb|%
+  reference_block_id uuid fk → pl_exercise_blocks(id) nullable
+  rest_seconds_override int
+  tempo text
+  amrap bool
+  notes text
+  config jsonb      -- type-specific extras (ascending mode, generator params, etc.)
+  created_at, updated_at
 
-**Phase 3 — Program overview + Copy Block to another Program**
-- Overview card (blocks / weeks / days / est. duration).
-- Copy block across templates.
-- Validation warnings (empty block, empty week, etc.).
+pl_block_set_rows         -- explicit ascending rows + warm-up rows
+  id, block_id fk, sort_order, reps_text, load_value, load_unit, rpe, rir, amrap
 
-**Phase 4 — Multi-block assignment + client progression**
-- Assign entire program | selected blocks | start from block N.
-- Client view shows current/upcoming/completed blocks.
-- Manual activate-next, skip, reorder on the client copy.
+pl_block_drop_stages       -- drop-set stages after the initial set
+  id, block_id fk, sort_order, reduction_type, reduction_value,
+  reps_text, rpe, rir, amrap, rest_seconds
 
-**Phase 5 — Full QA pass**
-- 1/2/4/10+ blocks, empty, archived, trashed, long names, refresh, back/forward, mobile/tablet/desktop, autosave, regression of existing Week/Day/Full Screen/bulk ops.
+member_set_logs           -- ADD nullable columns:
+  block_id uuid (nullable, fk pl_exercise_blocks)
+  set_row_id uuid (nullable, fk pl_block_set_rows)
+  drop_stage_id uuid (nullable, fk pl_block_drop_stages)
+  -- existing (row_id, set_index) stay populated for legacy/compat
+```
 
-### Question for you
-Do you want me to:
+All new tables get the standard `GRANT … TO authenticated` + `service_role`, RLS enabled, and policies mirroring `pl_exercise_rows` (coach owns via day→week→block→template; client reads via enrollment).
 
-**A)** Ship Phase 1 this turn (data model + selector + add/switch/URL), fully working and regression-tested, then continue phases in follow-up turns. **Recommended** — each phase lands solid.
+## Legacy Compatibility
 
-**B)** Attempt all 5 phases this turn and accept that several surfaces (assignment, client progression, redo, validation, full QA matrix) will land partially wired and likely need follow-up fixes.
+- No backfill required at write time. On read, if a row has zero blocks, the UI materializes a virtual "Straight Sets" block from the existing `sets/reps_text/rpe/rir/load_*/rest_seconds/tempo/percentage*` columns.
+- First time a coach edits that exercise, we persist that virtual block to `pl_exercise_blocks` and stop reading the legacy columns for that row (legacy columns retained as fallback / for old client logs).
+- `member_set_logs` without `block_id` keep rendering against the legacy row (current behavior).
 
-**C)** A different sequence you specify.
+## Builder UI (`program-library_.$templateId.tsx`)
 
-I won't start writing migrations or code until you pick.
+- Replace the single prescription grid inside `ExerciseCard` with a `<BlockList>` containing one `<BlockEditor>` per block.
+- `BlockEditor` props: `block`, `siblings` (for reference dropdown), `onChange`, `onDuplicate`, `onDelete`, `onMove`.
+- Header: drag handle, type selector, editable label, collapse toggle, ⋮ menu (duplicate / move up / move down / delete).
+- Collapsed: one-line summary (e.g. `Backoff · 3 × 5 · −10% from Top Set · RPE 7`).
+- Expanded: type-specific input grid using existing `Field` / compact input styling and the existing tokens (`bg-builder-inset`, `border-builder-card-border`).
+- `+ Add Set Block` button at the bottom of the card.
+- Per-type input matrices implemented exactly as spec:
+  - Straight, Top, Backoff (with reference-block dropdown + reduction type + value), Ascending (Explicit Rows + Generated Progression w/ "Convert to Editable Rows"), Drop (initial + ordered drop stages with `+ Add Drop Stage`), Warm-up (explicit rows), Custom (full field set).
+- Load type selector always renders its dependent value/unit inputs immediately.
+- Inline validation: zero sets, negative reps, ≥100% reductions, self-reference, forward-reference, empty ascending, drop without initial.
+
+## Client Logger (`portal/workouts.$dayId.tsx` + `client-block-view.tsx`)
+
+For each exercise:
+1. Load blocks for the row. If none → synthesize one Straight block from legacy fields.
+2. For each block, expand to logging rows:
+   - Straight/Top/Backoff: N rows (`sets` count), each `{ block_id, set_index }`.
+   - Ascending explicit: one row per `pl_block_set_rows` entry, keyed by `set_row_id`.
+   - Ascending generated: rows derived from generator (then on save coach should convert; for now we materialize N transient rows by set_index).
+   - Drop: 1 initial row + one row per `pl_block_drop_stages`, keyed by `drop_stage_id`.
+   - Warm-up: rows from `pl_block_set_rows`, visually de-emphasized; not counted as working volume.
+3. Each row renders the same input cluster currently used (weight / reps / RPE / RIR / complete) — reusing existing completion + autosave + unit-toggle + suggested-load helpers.
+4. Suggested-load calculation:
+   - Resolve reference block's first completed logged set (or its prescribed weight).
+   - Apply reduction (`pct_below_ref`, `kg_below_ref`, `pct_of_ref`, etc.) using existing rounding helper.
+   - Show "Complete Top Set to calculate backoff load" placeholder when the reference has no completed load yet.
+   - Do not overwrite the client's manually entered weight on recompute.
+
+## Copy / Duplicate / Reorder
+
+Extend the existing template/day/week copy paths (`pl-bulk.functions.ts`, `pl-template-blocks.ts`, duplicate-exercise/day handlers) to:
+- Deep-copy `pl_exercise_blocks`, `pl_block_set_rows`, `pl_block_drop_stages` per copied row.
+- Build an `oldBlockId → newBlockId` map and remap every `reference_block_id` so copied backoffs point at the copied top set, never the original.
+
+## Files (high-level)
+
+- New migration: `supabase/migrations/<ts>_exercise_blocks.sql` (tables + RLS + grants).
+- `src/integrations/supabase/types.ts` — regenerate types (already a generated file; will be edited).
+- New: `src/lib/exercise-blocks.ts` — types, legacy synthesizer, suggested-load resolver, validation, copy helpers.
+- New: `src/components/builder/block-editor.tsx`, `block-list.tsx`, `block-type-fields/*.tsx` (one per type).
+- Edit: `src/routes/_authenticated/admin/program-library_.$templateId.tsx` — swap single prescription grid for `<BlockList>`.
+- Edit: `src/routes/_authenticated/portal/workouts.$dayId.tsx` and `src/components/client-block-view.tsx` — per-block logging rows + suggested-load.
+- Edit: `src/lib/pl-bulk.functions.ts`, `src/lib/pl-template-blocks.ts`, any duplicate/copy server fns — deep-copy + remap references.
+- Edit: `src/lib/exercise-metadata.ts` is **not** touched — purpose/colour logic stays.
+
+## Out of Scope (explicit)
+
+- No change to competition-lift colour grouping or Primary/Secondary/Tertiary derivation.
+- No change to exercise selection, video, substitutions, instructions, accent colours, autosave cadence, or unit-toggle behaviour beyond plumbing per-row.
+- Block-level rest/tempo override only — exercise-level defaults stay where they are; "Inherited from exercise" affordance added.
+
+## Rollout / Risk
+
+- Builder file is 2.3k LOC and logger is 1.9k LOC; the safer path is to land this as **one PR that ships behind nothing** because the schema is additive and the UI swap is contained to the prescription grid inside each card. No feature flag — legacy synthesizer guarantees existing exercises render identically until the coach edits them.
+- Heaviest risks: copy/remap correctness and suggested-load recompute not stomping on user input. Both have explicit handling above and will be exercised by the required test cases.
+
+## Estimated Effort
+
+This is roughly a full day of focused work (migration + ~1500 new LOC + ~600 LOC of edits in the two big files + the copy paths). I want to confirm scope before I start — once I begin, the intermediate states will be large.
+
+**Approve this plan and I'll implement it end-to-end, or tell me which slice to ship first** (e.g. "schema + builder only, logger next turn", or "Straight + Top + Backoff first, Ascending/Drop/Warm-up after").
