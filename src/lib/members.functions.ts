@@ -19,6 +19,40 @@ async function assertAdmin(ctx: any) {
   if (!data) throw new Error("Admin required");
 }
 
+export const deleteAdminMember = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { memberId: string }) => z.object({ memberId: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    const { supabase, userId } = context as any;
+    const { data: member, error: getErr } = await supabase
+      .from("app_members")
+      .select("id, user_id, email")
+      .eq("id", data.memberId)
+      .maybeSingle();
+    if (getErr) throw new Error(getErr.message);
+    if (!member) throw new Error("Member not found");
+    if (member.user_id === userId) throw new Error("You cannot delete your own account");
+
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    // Delete the app_members row first (RLS bypassed via service role)
+    const { error: delErr } = await supabaseAdmin
+      .from("app_members")
+      .delete()
+      .eq("id", data.memberId);
+    if (delErr) throw new Error(`Failed to delete member row: ${delErr.message}`);
+
+    // Best-effort delete of the auth user; don't fail the whole op if user is already gone
+    if (member.user_id) {
+      const { error: authErr } = await supabaseAdmin.auth.admin.deleteUser(member.user_id);
+      if (authErr && !/not[_ ]found/i.test(authErr.message)) {
+        throw new Error(`Member row deleted but auth account removal failed: ${authErr.message}`);
+      }
+    }
+    return { success: true } as const;
+  });
+
 /* ---------- list / read ---------- */
 
 export const listMembers = createServerFn({ method: "GET" })
