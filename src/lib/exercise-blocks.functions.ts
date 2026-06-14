@@ -348,3 +348,76 @@ export const countNonLegacyTemplateBlocksFn = createServerFn({ method: "POST" })
     }
     return { rowIds: bad, total: bad.length };
   });
+
+/**
+ * Per-row "is this row legacy or unsupported?" summary used by:
+ *   - the client logger fail-safe (workouts.$dayId.tsx) to swap a
+ *     legacy input card for an "unavailable" card on any row that
+ *     carries non-legacy blocks, and
+ *   - any coach surface that wants to refuse an action involving
+ *     unsupported-block rows.
+ * Always safe: a row with zero blocks (legacy) returns `false`. A row
+ * with one Straight block (the slice-2 backfill) also returns `false`.
+ */
+export const getRowBlockSummariesFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { rowIds: string[] }) => {
+    if (!Array.isArray(d?.rowIds)) throw new Error("rowIds must be an array");
+    return d;
+  })
+  .handler(async ({ data, context }): Promise<Record<string, boolean>> => {
+    if (data.rowIds.length === 0) return {};
+    const { data: rows, error } = await context.supabase
+      .from("pl_exercise_blocks")
+      .select("row_id, block_type")
+      .in("row_id", data.rowIds);
+    if (error) throw new Error(error.message);
+    const byRow = new Map<string, Array<{ block_type: string }>>();
+    for (const r of (rows ?? []) as any[]) {
+      const arr = byRow.get(r.row_id) ?? [];
+      arr.push({ block_type: r.block_type });
+      byRow.set(r.row_id, arr);
+    }
+    const out: Record<string, boolean> = {};
+    for (const id of data.rowIds) {
+      const blocks = byRow.get(id) ?? [];
+      out[id] = blocks.length > 1 || blocks.some((b) => b.block_type !== "straight");
+    }
+    return out;
+  });
+
+/**
+ * Copy blocks (with the same two-pass reference remap and idempotency
+ * the bulk-clone path uses) from one or more source rows to one or
+ * more destination rows. Used by the in-memory row clipboard's paste
+ * flow after the destination rows have been inserted by
+ * `applyPayloadDiff`. Calling this with an empty mapping array is a
+ * no-op; calling it twice with the same mapping creates duplicate
+ * blocks — callers must guard at the paste site (we do, by clearing
+ * `_sourceDbId` immediately after the first successful clone).
+ */
+export const cloneBlocksForRowsFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { mappings: Array<{ source_row_id: string; dest_row_id: string }> }) => {
+    if (!Array.isArray(d?.mappings)) throw new Error("mappings must be an array");
+    for (const m of d.mappings) {
+      if (!isUuid(m.source_row_id) || !isUuid(m.dest_row_id)) {
+        throw new Error("Each mapping must have UUID source_row_id and dest_row_id");
+      }
+    }
+    return d;
+  })
+  .handler(async ({ data, context }): Promise<{ cloned: number }> => {
+    const ctx = { supabase: context.supabase, userId: context.userId };
+    if (data.mappings.length === 0) return { cloned: 0 };
+    // Authorize every dest row — the caller can only paste into rows
+    // they own (admin OR assigned coach).
+    for (const m of data.mappings) {
+      await authorizeRow(ctx, m.dest_row_id);
+    }
+    const { data: total, error } = await ctx.supabase.rpc("pl_clone_blocks_for_rows", {
+      p_mappings: data.mappings,
+    });
+    if (error) throw new Error(error.message);
+    return { cloned: Number(total ?? 0) };
+  });
