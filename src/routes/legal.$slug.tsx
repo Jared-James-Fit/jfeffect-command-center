@@ -1,6 +1,6 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { getPublicLegalDocument } from "@/lib/legal.functions";
-import { ArrowLeft, ShieldAlert } from "lucide-react";
+import { ArrowLeft, ShieldAlert, FileText } from "lucide-react";
 
 export const Route = createFileRoute("/legal/$slug")({
   loader: async ({ params }) => {
@@ -40,6 +40,7 @@ export const Route = createFileRoute("/legal/$slug")({
 function PublicLegalPage() {
   const { doc } = Route.useLoaderData();
   const v = doc.version;
+  const isMembershipTerms = doc.slug === "membership-agreement";
   return (
     <article className="mx-auto max-w-3xl px-4 py-10">
       <Link to="/" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
@@ -60,11 +61,52 @@ function PublicLegalPage() {
           </div>
         ) : null}
       </header>
+      {isMembershipTerms ? (
+        <aside className="mt-4 rounded-md border border-border bg-muted/30 p-4">
+          <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            JF Membership Terms include
+          </div>
+          <ul className="mt-2 grid gap-2 sm:grid-cols-2">
+            <li>
+              <Link
+                to="/legal/$slug"
+                params={{ slug: "membership-agreement" }}
+                className="inline-flex items-center gap-2 text-sm font-medium text-foreground hover:underline"
+              >
+                <FileText className="h-4 w-4" /> JF Membership Agreement (this page)
+              </Link>
+            </li>
+            <li>
+              <Link
+                to="/legal/$slug"
+                params={{ slug: "terms-of-service" }}
+                className="inline-flex items-center gap-2 text-sm font-medium text-foreground hover:underline"
+              >
+                <FileText className="h-4 w-4" /> Terms of Service
+              </Link>
+            </li>
+          </ul>
+          <p className="mt-2 text-xs text-muted-foreground">
+            Both documents apply to your JF Effect membership.
+          </p>
+        </aside>
+      ) : null}
       <div
         className="prose prose-sm dark:prose-invert mt-6 max-w-none whitespace-pre-wrap"
         // Body is plain text/markdown stored server-side; rendered as preformatted
         // text to avoid HTML injection. Markdown rendering can be layered on later.
       >{v.body}</div>
+      {isMembershipTerms ? (
+        <div className="mt-8 border-t border-border pt-4 text-sm">
+          <Link
+            to="/legal/$slug"
+            params={{ slug: "terms-of-service" }}
+            className="font-medium underline underline-offset-2 hover:text-foreground"
+          >
+            Read the Terms of Service →
+          </Link>
+        </div>
+      ) : null}
     </article>
   );
 }

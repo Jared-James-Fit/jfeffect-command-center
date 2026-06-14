@@ -410,6 +410,7 @@ export type Database = {
           current_period_end: string | null
           date_of_birth: string | null
           email: string
+          email_marketing_opt_in: boolean
           emergency_contact_name: string | null
           emergency_contact_phone: string | null
           full_name: string | null
@@ -467,6 +468,7 @@ export type Database = {
           current_period_end?: string | null
           date_of_birth?: string | null
           email: string
+          email_marketing_opt_in?: boolean
           emergency_contact_name?: string | null
           emergency_contact_phone?: string | null
           full_name?: string | null
@@ -524,6 +526,7 @@ export type Database = {
           current_period_end?: string | null
           date_of_birth?: string | null
           email?: string
+          email_marketing_opt_in?: boolean
           emergency_contact_name?: string | null
           emergency_contact_phone?: string | null
           full_name?: string | null

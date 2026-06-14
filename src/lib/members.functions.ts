@@ -257,7 +257,8 @@ export const getCurrentMember = createServerFn({ method: "GET" })
 /* ---------- self: update own marketing preferences ---------- */
 
 const UpdateMyMarketingPrefsInput = z.object({
-  sms_opt_out: z.boolean(),
+  email_marketing_opt_in: z.boolean().optional(),
+  sms_marketing_on: z.boolean().optional(),
 });
 
 export const updateMyMarketingPrefs = createServerFn({ method: "POST" })
@@ -268,9 +269,23 @@ export const updateMyMarketingPrefs = createServerFn({ method: "POST" })
     const { data: member } = await supabase
       .from("app_members").select("id").eq("user_id", userId).maybeSingle();
     if (!member) throw new Error("Member profile not found");
-    const patch = data.sms_opt_out
-      ? { sms_opt_out: true }
-      : { sms_opt_out: false, sms_consent_at: new Date().toISOString() };
+    const patch: {
+      email_marketing_opt_in?: boolean;
+      sms_opt_out?: boolean;
+      sms_consent_at?: string;
+    } = {};
+    if (typeof data.email_marketing_opt_in === "boolean") {
+      patch.email_marketing_opt_in = data.email_marketing_opt_in;
+    }
+    if (typeof data.sms_marketing_on === "boolean") {
+      if (data.sms_marketing_on) {
+        patch.sms_opt_out = false;
+        patch.sms_consent_at = new Date().toISOString();
+      } else {
+        patch.sms_opt_out = true;
+      }
+    }
+    if (Object.keys(patch).length === 0) return { ok: true };
     const { error } = await supabase
       .from("app_members").update(patch).eq("id", member.id);
     if (error) throw new Error(error.message);
