@@ -300,7 +300,7 @@ export const getLaunchReadiness = createServerFn({ method: "GET" })
 
     const { data: sales } = await supabaseAdmin
       .from("sales_pages").select("page_key, published")
-      .eq("page_key", "membership").maybeSingle();
+      .eq("page_key", "join").maybeSingle();
     push({
       key: "sales_published",
       group: "Sales",
