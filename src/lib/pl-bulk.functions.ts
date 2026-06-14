@@ -236,13 +236,36 @@ async function cloneExerciseRows(
     .select("*")
     .eq("day_id", sourceDayId)
     .order("sort_order");
+  // Collect old→new row mappings so we can clone any attached
+  // pl_exercise_blocks (+ set_rows + drop_stages) in a single atomic
+  // two-pass RPC. Reference_block_ids are remapped server-side; cross-row
+  // references that escape this batch fail loudly.
+  const blockCloneMappings: Array<{ source_row_id: string; dest_row_id: string }> = [];
   for (const r of (rows ?? []) as any[]) {
     const payload: Record<string, unknown> = { day_id: newDayId };
     for (const f of EXERCISE_ROW_CLONE_FIELDS) {
       if (f in r && r[f] !== undefined) payload[f] = r[f];
     }
-    const { error } = await supabase.from("pl_exercise_rows").insert(payload);
-    if (error) throw new Error(`Failed to clone exercise row: ${error.message}`);
+    const { data: inserted, error } = await supabase
+      .from("pl_exercise_rows")
+      .insert(payload)
+      .select("id")
+      .single();
+    if (error || !inserted) throw new Error(`Failed to clone exercise row: ${error?.message ?? "no insert returned"}`);
+    blockCloneMappings.push({ source_row_id: r.id, dest_row_id: inserted.id });
+  }
+  if (blockCloneMappings.length) {
+    // pl_clone_blocks_for_rows is SECURITY DEFINER, runs in the same
+    // transaction as the row inserts (single SQL call) and remaps every
+    // reference_block_id to the freshly inserted siblings. The trigger
+    // pl_guard_block_save still fires for each insert: if the dest day
+    // belongs to a client-visible program, any non-legacy source blocks
+    // cause the whole bulk operation to roll back — exactly the safety
+    // contract for slice 3.
+    const { error: cloneErr } = await supabase.rpc("pl_clone_blocks_for_rows", {
+      p_mappings: blockCloneMappings,
+    });
+    if (cloneErr) throw new Error(`Failed to clone exercise blocks: ${cloneErr.message}`);
   }
 }
 
