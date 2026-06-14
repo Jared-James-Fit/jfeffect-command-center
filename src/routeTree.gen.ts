@@ -32,6 +32,7 @@ import { Route as ApiDriveUploadRouteImport } from './routes/api/drive-upload'
 import { Route as AuthenticatedPortalRouteRouteImport } from './routes/_authenticated/portal/route'
 import { Route as AuthenticatedMediaRouteRouteImport } from './routes/_authenticated/media/route'
 import { Route as AuthenticatedMRouteRouteImport } from './routes/_authenticated/m/route'
+import { Route as AuthenticatedCoachRouteRouteImport } from './routes/_authenticated/coach/route'
 import { Route as AuthenticatedAdminRouteRouteImport } from './routes/_authenticated/admin/route'
 import { Route as AuthenticatedPortalIndexRouteImport } from './routes/_authenticated/portal/index'
 import { Route as AuthenticatedMediaIndexRouteImport } from './routes/_authenticated/media/index'
@@ -335,6 +336,11 @@ const AuthenticatedMediaRouteRoute = AuthenticatedMediaRouteRouteImport.update({
 const AuthenticatedMRouteRoute = AuthenticatedMRouteRouteImport.update({
   id: '/m',
   path: '/m',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedCoachRouteRoute = AuthenticatedCoachRouteRouteImport.update({
+  id: '/coach',
+  path: '/coach',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedAdminRouteRoute = AuthenticatedAdminRouteRouteImport.update({
@@ -1461,6 +1467,7 @@ export interface FileRoutesByFullPath {
   '/staff-setup': typeof StaffSetupRoute
   '/terms': typeof TermsRoute
   '/admin': typeof AuthenticatedAdminRouteRouteWithChildren
+  '/coach': typeof AuthenticatedCoachRouteRoute
   '/m': typeof AuthenticatedMRouteRouteWithChildren
   '/media': typeof AuthenticatedMediaRouteRouteWithChildren
   '/portal': typeof AuthenticatedPortalRouteRouteWithChildren
@@ -1673,6 +1680,7 @@ export interface FileRoutesByTo {
   '/sitemap': typeof SitemapRoute
   '/staff-setup': typeof StaffSetupRoute
   '/terms': typeof TermsRoute
+  '/coach': typeof AuthenticatedCoachRouteRoute
   '/api/drive-upload': typeof ApiDriveUploadRoute
   '/book/$slug': typeof BookSlugRoute
   '/coaching/apply': typeof CoachingApplyRoute
@@ -1884,6 +1892,7 @@ export interface FileRoutesById {
   '/staff-setup': typeof StaffSetupRoute
   '/terms': typeof TermsRoute
   '/_authenticated/admin': typeof AuthenticatedAdminRouteRouteWithChildren
+  '/_authenticated/coach': typeof AuthenticatedCoachRouteRoute
   '/_authenticated/m': typeof AuthenticatedMRouteRouteWithChildren
   '/_authenticated/media': typeof AuthenticatedMediaRouteRouteWithChildren
   '/_authenticated/portal': typeof AuthenticatedPortalRouteRouteWithChildren
@@ -2099,6 +2108,7 @@ export interface FileRouteTypes {
     | '/staff-setup'
     | '/terms'
     | '/admin'
+    | '/coach'
     | '/m'
     | '/media'
     | '/portal'
@@ -2311,6 +2321,7 @@ export interface FileRouteTypes {
     | '/sitemap'
     | '/staff-setup'
     | '/terms'
+    | '/coach'
     | '/api/drive-upload'
     | '/book/$slug'
     | '/coaching/apply'
@@ -2521,6 +2532,7 @@ export interface FileRouteTypes {
     | '/staff-setup'
     | '/terms'
     | '/_authenticated/admin'
+    | '/_authenticated/coach'
     | '/_authenticated/m'
     | '/_authenticated/media'
     | '/_authenticated/portal'
@@ -2918,6 +2930,13 @@ declare module '@tanstack/react-router' {
       path: '/m'
       fullPath: '/m'
       preLoaderRoute: typeof AuthenticatedMRouteRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/coach': {
+      id: '/_authenticated/coach'
+      path: '/coach'
+      fullPath: '/coach'
+      preLoaderRoute: typeof AuthenticatedCoachRouteRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/admin': {
@@ -4822,6 +4841,7 @@ const AuthenticatedPortalRouteRouteWithChildren =
 
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedAdminRouteRoute: typeof AuthenticatedAdminRouteRouteWithChildren
+  AuthenticatedCoachRouteRoute: typeof AuthenticatedCoachRouteRoute
   AuthenticatedMRouteRoute: typeof AuthenticatedMRouteRouteWithChildren
   AuthenticatedMediaRouteRoute: typeof AuthenticatedMediaRouteRouteWithChildren
   AuthenticatedPortalRouteRoute: typeof AuthenticatedPortalRouteRouteWithChildren
@@ -4829,6 +4849,7 @@ interface AuthenticatedRouteRouteChildren {
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAdminRouteRoute: AuthenticatedAdminRouteRouteWithChildren,
+  AuthenticatedCoachRouteRoute: AuthenticatedCoachRouteRoute,
   AuthenticatedMRouteRoute: AuthenticatedMRouteRouteWithChildren,
   AuthenticatedMediaRouteRoute: AuthenticatedMediaRouteRouteWithChildren,
   AuthenticatedPortalRouteRoute: AuthenticatedPortalRouteRouteWithChildren,
