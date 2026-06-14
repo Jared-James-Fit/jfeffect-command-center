@@ -110,6 +110,48 @@ function SignedAgreementsPage() {
   const refreshOneFn = useServerFn(refreshAgreementStatus);
   const importFn = useServerFn(importSignNowSignedDocuments);
   const bulkDeleteFn = useServerFn(bulkDeleteAgreements);
+  const setTitleFn = useServerFn(setAgreementCustomTitle);
+  const linkFn = useServerFn(linkAgreementToClient);
+  const [editingTitleId, setEditingTitleId] = useState<string | null>(null);
+  const [titleDraft, setTitleDraft] = useState("");
+  const [linkingId, setLinkingId] = useState<string | null>(null);
+  const [linkSearch, setLinkSearch] = useState("");
+
+  const { data: clientChoices = [] } = useQuery({
+    queryKey: ["link-client-search", linkSearch],
+    enabled: linkingId !== null,
+    queryFn: async () => {
+      let q = supabase.from("clients").select("id, full_name, email").eq("archived", false).order("full_name").limit(20);
+      const s = linkSearch.trim();
+      if (s) q = q.or(`full_name.ilike.%${s}%,email.ilike.%${s}%`);
+      return (await q).data ?? [];
+    },
+  });
+
+  async function saveCustomTitle(id: string) {
+    const v = titleDraft.trim();
+    try {
+      await setTitleFn({ data: { id, custom_title: v || null } });
+      toast.success(v ? "Custom title saved" : "Custom title cleared");
+      setEditingTitleId(null);
+      setTitleDraft("");
+      refetch();
+    } catch (e: any) {
+      toast.error(e?.message ?? "Could not save title");
+    }
+  }
+
+  async function linkToClient(id: string, clientId: string) {
+    try {
+      await linkFn({ data: { id, client_id: clientId } });
+      toast.success("Document linked to client");
+      setLinkingId(null);
+      setLinkSearch("");
+      refetch();
+    } catch (e: any) {
+      toast.error(e?.message ?? "Link failed");
+    }
+  }
 
   const importMutation = useMutation({
     mutationFn: async (): Promise<ImportSummary> => {
