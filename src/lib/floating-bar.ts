@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { NavItem } from "@/components/app-shell";
-import { Search } from "lucide-react";
+import { Search, Eye } from "lucide-react";
 
 const KEY = "jf-floating-bar-v2";
 const EVT = "floating-bar-updated";
@@ -16,10 +16,23 @@ export const SEARCH_BAR_ITEM: NavItem = {
   group: "Actions",
 };
 
+/**
+ * Synthetic nav item — not a route. Opens the Client POV quick picker so
+ * an admin/coach can instantly impersonate a client from the mobile bar.
+ */
+export const CLIENT_POV_BAR_ITEM: NavItem = {
+  to: "__client_pov__",
+  label: "Client POV",
+  icon: Eye,
+  group: "Actions",
+};
+
 /** Returns nav plus any synthetic action items the bar can use. */
 export function withBarActionItems(nav: NavItem[]): NavItem[] {
-  if (nav.some((n) => n.to === SEARCH_BAR_ITEM.to)) return nav;
-  return [...nav, SEARCH_BAR_ITEM];
+  const out = [...nav];
+  if (!out.some((n) => n.to === SEARCH_BAR_ITEM.to)) out.push(SEARCH_BAR_ITEM);
+  if (!out.some((n) => n.to === CLIENT_POV_BAR_ITEM.to)) out.push(CLIENT_POV_BAR_ITEM);
+  return out;
 }
 
 export type BarScope = "admin" | "coach";
