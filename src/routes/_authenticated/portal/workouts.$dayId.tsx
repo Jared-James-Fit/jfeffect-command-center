@@ -567,8 +567,9 @@ function WorkoutDay() {
               <Minimize2 className="mr-1 h-4 w-4" /> Exit Full Screen
             </Button>
           </div>
-          <div className="mx-auto max-w-3xl space-y-4 p-4 md:p-6">
+          <div className="mx-auto max-w-3xl p-4 md:p-6">
             <WorkoutLoadBoundary clientId={client?.id ?? null} clientName={(client as any)?.full_name ?? null} dayId={dayId} route={`/portal/workouts/${dayId}`}>
+              <div className="space-y-4 rounded-lg bg-builder-canvas p-3 sm:p-4 ring-1 ring-builder-card-border/40">
               {rowsLoaded && (rows as any[]).length === 0 ? (
                 <WorkoutEmptyCard
                   clientId={client?.id ?? null}
@@ -597,6 +598,7 @@ function WorkoutDay() {
                   purposeLabel={purposeLabelById.get(r.id) ?? null}
                 />
               ))}
+              </div>
             </WorkoutLoadBoundary>
           </div>
         </div>
@@ -674,7 +676,7 @@ function WorkoutDay() {
         {day.notes && <Card className="p-4 text-sm whitespace-pre-wrap bg-secondary/30">{day.notes}</Card>}
 
         <WorkoutLoadBoundary clientId={client?.id ?? null} clientName={(client as any)?.full_name ?? null} dayId={dayId} route={`/portal/workouts/${dayId}`}>
-          <div className="space-y-3">
+          <div className="space-y-4 rounded-lg bg-builder-canvas p-3 sm:p-4 ring-1 ring-builder-card-border/40">
             {rowsLoaded && (rows as any[]).length === 0 ? (
               <WorkoutEmptyCard
                 clientId={client?.id ?? null}
@@ -991,7 +993,7 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
   };
 
   return (
-    <Card className="relative overflow-hidden p-3 pl-4 sm:p-4 sm:pl-5">
+    <Card className="relative overflow-hidden border border-builder-card-border bg-builder-card p-4 pl-5 shadow-builder-card transition-colors hover:border-builder-card-border-strong sm:p-5 sm:pl-6">
       <div className={`absolute left-0 top-0 h-full w-1.5 ${accent}`} aria-hidden />
       {/* Row 1 — name + unit toggle */}
       <div className="flex items-start justify-between gap-2">
@@ -1091,8 +1093,8 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
         </p>
       )}
 
-      <div className={cn("mt-3 overflow-hidden rounded-md border border-border", focusMode && "text-base")}>
-        <div className={cn("grid items-center gap-2 border-b border-border bg-muted/40 px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground", focusMode ? "grid-cols-[44px_1fr_1fr_1fr_64px] text-xs" : "grid-cols-[36px_1fr_1fr_1fr_56px]")}>
+      <div className={cn("mt-3 overflow-hidden rounded-md border border-builder-card-border bg-builder-inset", focusMode && "text-base")}>
+        <div className={cn("grid items-center gap-2 border-b border-builder-card-border bg-builder-card/60 px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground", focusMode ? "grid-cols-[44px_1fr_1fr_1fr_64px] text-xs" : "grid-cols-[36px_1fr_1fr_1fr_56px]")}>
           <span>Set</span>
           <span>Reps</span>
           <span className="truncate">Wt ({unit.toUpperCase()})</span>
@@ -1581,9 +1583,13 @@ function SetRow({
   const hasAnyTarget = suggestedWeight != null || repChipValues.length > 0 || rpeChipValues.length > 0 || rirChipValues.length > 0;
 
   return (
-    <div className={cn("border-t border-border/60", isConfirmed && "bg-green-500/5", isDraft && "bg-amber-500/5")}>
     <div className={cn(
-      "grid items-center gap-2 border-t border-border/60 px-3 py-2",
+      "border-t border-builder-card-border/70 transition-colors",
+      isConfirmed && "bg-green-500/10",
+      isDraft && "bg-amber-500/10",
+    )}>
+    <div className={cn(
+      "grid items-center gap-2 px-3 py-2.5",
       focusMode ? "grid-cols-[44px_1fr_1fr_1fr_64px]" : "grid-cols-[36px_1fr_1fr_1fr_56px]",
     )}>
       <span className={cn("font-mono text-muted-foreground", focusMode ? "text-sm" : "text-xs")}>{setIndex}</span>
