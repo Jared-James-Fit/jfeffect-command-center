@@ -299,7 +299,7 @@ function NewPrepDialog({ open, onOpenChange, clientId, onCreated }: any) {
 }
 
 function NewBlockDialog({ open, onOpenChange, clientId, preps, onCreated }: any) {
-  const [form, setForm] = useState({ name: "", weeks: 4, training_focus: "Volume", prep_id: "none" });
+  const [form, setForm] = useState({ name: "", weeks: 4, training_focus: "Accumulation", prep_id: "none" });
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
@@ -311,7 +311,7 @@ function NewBlockDialog({ open, onOpenChange, clientId, preps, onCreated }: any)
             <div><Label>Focus</Label>
               <Select value={form.training_focus} onValueChange={(v) => setForm({ ...form, training_focus: v })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>{TRAINING_FOCUSES.map((f) => <SelectItem key={f} value={f}>{f}</SelectItem>)}</SelectContent>
+                <SelectContent>{BLOCK_PHASE_OPTIONS.map((f) => <SelectItem key={f} value={f}>{f}</SelectItem>)}</SelectContent>
               </Select>
             </div>
           </div>
