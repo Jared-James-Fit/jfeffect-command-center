@@ -5,9 +5,6 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
-import {
   ChevronLeft, ChevronRight, Clock, Play, RotateCcw, CheckCircle2,
   Eye, Lock, Crosshair, Dumbbell,
 } from "lucide-react";
@@ -169,6 +166,13 @@ export function ClientBlockView({
 
   // Scroll the active day into view on mount / when activeDayIdx changes (mobile).
   const carouselRef = useRef<HTMLDivElement | null>(null);
+  const weekStripRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const root = weekStripRef.current;
+    if (!root || !resolvedWeek?.id) return;
+    const el = root.querySelector<HTMLElement>(`[data-week-id="${resolvedWeek.id}"]`);
+    el?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+  }, [resolvedWeek?.id]);
   useEffect(() => {
     if (!days.length) return;
     const d = days[activeDayIdx];
@@ -235,67 +239,102 @@ export function ClientBlockView({
     if (cur) onWeekChange(cur.week_index);
   };
 
+  // Per-week completion stats for the horizontal week strip.
+  const weekStats = useMemo(() => {
+    const m = new Map<string, { total: number; done: number }>();
+    for (const w of weeks as any[]) {
+      const ds = (tree?.days ?? []).filter((d: any) => d.week_id === w.id);
+      let done = 0;
+      for (const d of ds) if (completionByDay.get(d.id)?.completed_at) done++;
+      m.set(w.id, { total: ds.length, done });
+    }
+    return m;
+  }, [weeks, tree?.days, completionByDay]);
+
   return (
     <section className="space-y-3">
       {/* Sticky week selector — sits below the app header */}
       <div className="sticky top-0 z-30 -mx-3 border-b border-border bg-background/95 px-3 py-2 backdrop-blur">
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex items-center gap-1">
-            <Button
-              size="icon" variant="outline" className="h-8 w-8"
-              disabled={!prevWeek}
-              onClick={() => prevWeek && onWeekChange(prevWeek.week_index)}
-              aria-label="Previous week"
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <Select
-              value={String(resolvedWeek?.week_index ?? "")}
-              onValueChange={(v) => onWeekChange(parseInt(v, 10))}
-            >
-              <SelectTrigger className="h-8 w-[200px] text-sm font-semibold">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {weeks.map((w: any) => {
-                  const r = weekDisplayRange(block, w);
-                  const isCur = isCurrentWeek(r);
-                  return (
-                    <SelectItem key={w.id} value={String(w.week_index)}>
-                      Week {w.week_index}
-                      {r ? ` · ${formatWeekRange(r.start, r.end)}` : ""}
-                      {isCur ? " · Now" : ""}
-                    </SelectItem>
-                  );
-                })}
-              </SelectContent>
-            </Select>
-            <Button
-              size="icon" variant="outline" className="h-8 w-8"
-              disabled={!nextWeek}
-              onClick={() => nextWeek && onWeekChange(nextWeek.week_index)}
-              aria-label="Next week"
-            >
-              <ChevronRight className="h-4 w-4" />
-            </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            size="icon" variant="outline" className="h-8 w-8 shrink-0"
+            disabled={!prevWeek}
+            onClick={() => prevWeek && onWeekChange(prevWeek.week_index)}
+            aria-label="Previous week"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+
+          {/* Horizontal swipeable week strip */}
+          <div
+            ref={weekStripRef}
+            className="-mx-1 flex flex-1 snap-x snap-mandatory items-center gap-1.5 overflow-x-auto px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            aria-label="Weeks"
+          >
+            {weeks.map((w: any) => {
+              const r = weekDisplayRange(block, w);
+              const isCur = isCurrentWeek(r);
+              const isSel = w.id === resolvedWeek?.id;
+              const stats = weekStats.get(w.id) ?? { total: 0, done: 0 };
+              const allDone = stats.total > 0 && stats.done === stats.total;
+              return (
+                <button
+                  key={w.id}
+                  type="button"
+                  data-week-id={w.id}
+                  onClick={() => onWeekChange(w.week_index)}
+                  className={cn(
+                    "snap-start shrink-0 rounded-md border px-3 py-1.5 text-left transition-colors",
+                    isSel
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-border bg-card text-foreground/80 hover:bg-secondary/60",
+                  )}
+                  aria-pressed={isSel}
+                  aria-label={`Week ${w.week_index}${isCur ? " — current" : ""}`}
+                >
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-black uppercase tracking-wider">W{w.week_index}</span>
+                    {isCur && (
+                      <Crosshair className={cn("h-3 w-3", isSel ? "" : "text-primary")} />
+                    )}
+                    {allDone && <CheckCircle2 className="h-3 w-3 text-emerald-500" />}
+                  </div>
+                  {stats.total > 0 && (
+                    <div className={cn("mt-0.5 text-[9px] font-semibold tabular-nums", isSel ? "text-primary-foreground/80" : "text-foreground/55")}>
+                      {stats.done}/{stats.total}
+                    </div>
+                  )}
+                </button>
+              );
+            })}
           </div>
+
+          <Button
+            size="icon" variant="outline" className="h-8 w-8 shrink-0"
+            disabled={!nextWeek}
+            onClick={() => nextWeek && onWeekChange(nextWeek.week_index)}
+            aria-label="Next week"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
+
+        <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[11px] text-foreground/70">
+          {weekRange && (
+            <span>{formatWeekRange(weekRange.start, weekRange.end)} · {days.length} day{days.length === 1 ? "" : "s"}</span>
+          )}
           {weekIsCurrent ? (
-            <Badge className="h-6 border-primary/40 bg-primary/15 text-[10px] font-bold text-primary hover:bg-primary/20">
-              <Crosshair className="mr-1 h-3 w-3" />Current week
+            <Badge className="h-5 border-primary/40 bg-primary/15 px-1.5 text-[9px] font-bold text-primary hover:bg-primary/20">
+              <Crosshair className="mr-1 h-2.5 w-2.5" />Current
             </Badge>
           ) : (
-            <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={goCurrentWeek}>
+            <Button size="sm" variant="ghost" className="h-6 px-2 text-[11px]" onClick={goCurrentWeek}>
               <Crosshair className="mr-1 h-3 w-3" /> Jump to current
             </Button>
           )}
-          {weekRange && (
-            <span className="ml-auto text-xs text-foreground/70">
-              {formatWeekRange(weekRange.start, weekRange.end)} · {days.length} day{days.length === 1 ? "" : "s"}
-            </span>
-          )}
           {weekLocked && (
-            <Badge variant="outline" className="text-[10px]">
-              <Lock className="mr-1 h-3 w-3" /> Locked
+            <Badge variant="outline" className="h-5 px-1.5 text-[9px]">
+              <Lock className="mr-1 h-2.5 w-2.5" /> Locked
             </Badge>
           )}
         </div>

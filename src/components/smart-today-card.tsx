@@ -39,30 +39,70 @@ export function SmartTodayCard({
 
 function SmartTodayCardInner({ state }: { state: TodayState }) {
   const view = render(state);
+  // Pull block / week / day title out of state where available so the hero
+  // hierarchy (Block → Day → Week/Status → CTA) is always front and centre.
+  const it: WorkoutItem | undefined = (state as any).item;
+  const blockName: string | null = it?.block?.name ?? (state as any).block?.name ?? null;
+  const weekIdx: number | null = it?.week?.week_index ?? null;
+  const dayTitle: string | null = it ? dayDisplayTitle(it) : null;
+  const dayFocus: string | null = it?.day?.focus ?? null;
+
   return (
-    <Card className={cn("relative overflow-hidden border-2 p-5 md:p-6", view.borderClass)}>
-      <div className={cn("absolute inset-0 opacity-[0.06]", view.bgClass)} />
-      <div className="relative space-y-3">
-        <div className="flex items-center gap-2">
-          <div className={cn("inline-flex h-9 w-9 items-center justify-center rounded-full", view.iconBg)}>
-            {view.icon}
-          </div>
-          <div>
-            <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{view.eyebrow}</div>
-            <div className="text-lg font-black leading-tight md:text-xl">{view.title}</div>
-          </div>
+    <Card
+      className={cn(
+        "relative overflow-hidden border p-0 text-foreground",
+        "bg-gradient-to-br from-zinc-950 via-zinc-900 to-zinc-950",
+        view.borderClass,
+      )}
+    >
+      {/* Brand red glow accents — screenshot-worthy without being noisy */}
+      <div className="pointer-events-none absolute -top-24 -right-16 h-64 w-64 rounded-full bg-primary/25 blur-3xl" />
+      <div className="pointer-events-none absolute -bottom-24 -left-16 h-56 w-56 rounded-full bg-primary/10 blur-3xl" />
+      <div className="pointer-events-none absolute inset-0 opacity-[0.04] [background-image:radial-gradient(circle_at_1px_1px,white_1px,transparent_0)] [background-size:18px_18px]" />
+
+      <div className="relative space-y-4 p-5 md:p-7">
+        {/* Eyebrow row: status pill + week */}
+        <div className="flex flex-wrap items-center gap-2">
+          <span
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.18em]",
+              view.statusPillClass ?? "bg-primary text-primary-foreground",
+            )}
+          >
+            <span className="inline-flex h-3.5 w-3.5 items-center justify-center">{view.icon}</span>
+            {view.eyebrow}
+          </span>
+          {weekIdx != null && (
+            <span className="rounded-full border border-white/15 px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest text-white/70">
+              Week {weekIdx}
+            </span>
+          )}
         </div>
-        {view.subtitle && (
-          <p className="text-sm text-muted-foreground">{view.subtitle}</p>
-        )}
-        {view.meta && view.meta.length > 0 && (
-          <div className="flex flex-wrap items-center gap-1.5">
-            {view.meta.map((m, i) => (
-              <Badge key={i} variant="outline" className="text-[10px]">{m}</Badge>
-            ))}
+
+        {/* Block title — the big screenshot moment */}
+        {blockName ? (
+          <div className="text-[11px] font-black uppercase tracking-[0.22em] text-primary/90">
+            {blockName}
+          </div>
+        ) : null}
+
+        {/* Day title — primary headline */}
+        <h2 className="text-3xl font-black leading-[1.05] tracking-tight text-white md:text-4xl">
+          {dayTitle ?? view.title}
+        </h2>
+        {dayFocus && (
+          <div className="text-sm font-semibold uppercase tracking-wide text-white/60">
+            {dayFocus}
           </div>
         )}
-        <div className="flex flex-wrap items-center gap-2 pt-1">
+        {!dayTitle && view.subtitle && (
+          <p className="text-sm text-white/70">{view.subtitle}</p>
+        )}
+        {dayTitle && view.subtitle && (
+          <p className="text-sm text-white/70">{view.subtitle}</p>
+        )}
+
+        <div className="flex flex-wrap items-center gap-2 pt-1 [&_a]:w-full [&_a]:sm:w-auto [&_button]:w-full [&_button]:sm:w-auto">
           {view.primary}
           {view.secondary}
         </div>
@@ -80,6 +120,7 @@ type View = {
   iconBg: string;
   borderClass: string;
   bgClass: string;
+  statusPillClass?: string;
   primary: React.ReactNode;
   secondary?: React.ReactNode;
 };
@@ -128,6 +169,7 @@ function render(state: TodayState): View {
         iconBg: "bg-amber-500",
         borderClass: "border-amber-500",
         bgClass: "bg-amber-500",
+        statusPillClass: "bg-amber-500 text-black",
         primary: startBtn(it, "Continue Workout", <Play className="mr-2 h-4 w-4" />),
       };
     }
@@ -141,6 +183,7 @@ function render(state: TodayState): View {
         iconBg: "bg-sky-500",
         borderClass: "border-sky-500/60",
         bgClass: "bg-sky-500",
+        statusPillClass: "bg-sky-500 text-white",
         primary: next ? (
           <Link to="/portal/workouts/$dayId" params={{ dayId: next.day.id }}>
             <Button size="lg" variant="outline" className="font-bold uppercase">
@@ -187,6 +230,7 @@ function render(state: TodayState): View {
         iconBg: "bg-destructive",
         borderClass: "border-destructive/60",
         bgClass: "bg-destructive",
+        statusPillClass: "bg-destructive text-destructive-foreground",
         primary: startBtn(it, "Complete Missed Workout", <Play className="mr-2 h-4 w-4" />),
       };
     }
@@ -199,6 +243,7 @@ function render(state: TodayState): View {
         iconBg: "bg-emerald-500",
         borderClass: "border-emerald-500/60",
         bgClass: "bg-emerald-500",
+        statusPillClass: "bg-emerald-500 text-white",
         primary: (
           <Link to="/portal/workouts">
             <Button size="lg" variant="outline" className="font-bold uppercase">
