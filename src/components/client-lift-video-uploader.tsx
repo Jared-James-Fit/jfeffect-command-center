@@ -158,6 +158,7 @@ export function ClientLiftVideoUploader({ clientId, clientName, userId, onSaved 
   const [previewClip, setPreviewClip] = useState<Clip | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [showOverall, setShowOverall] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
 
   const multiUploadRef = useRef<HTMLInputElement | null>(null);
   const multiRecordRef = useRef<HTMLInputElement | null>(null);
