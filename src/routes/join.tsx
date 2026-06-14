@@ -339,10 +339,7 @@ function SignupJf() {
                   <Receipt className="h-3.5 w-3.5" /> Billing
                 </div>
                 <p className="mt-1 text-xs leading-relaxed text-foreground">
-                  <span className="font-bold">{trialDays}-day free trial</span>, then {settings?.monthly_price_display ?? "$29 USD/month"} plus applicable taxes. Renews automatically until cancelled.
-                </p>
-                <p className="mt-1 text-[11px] text-muted-foreground">
-                  $0 today. First charge {firstChargeLabel ?? `in ${trialDays} days`} via your billing page.
+                  <span className="font-bold">$0 today.</span> First charge {firstChargeLabel ?? `in ${trialDays} days`} — {settings?.monthly_price_display ?? "$29/month USD"} plus applicable taxes. Renews automatically until cancelled through your billing page.
                 </p>
               </div>
             )}
@@ -376,12 +373,12 @@ function SignupJf() {
               </div>
             )}
 
-            {/* Concise cancellation summary (full policy still linked above) */}
+            {/* Concise cancellation summary */}
             <p className="text-[11px] leading-relaxed text-muted-foreground">
-              Cancel anytime through your billing page. Access remains active until the end of the applicable trial or billing period. Payments are generally non-refundable once a paid billing period begins.{" "}
+              Cancel anytime through your billing page. Access remains active until the end of your current trial or billing period.{" "}
               {docBySlug["cancellation-and-refund-policy"]?.public_read_allowed && (
                 <Link to="/legal/$slug" params={{ slug: "cancellation-and-refund-policy" }} target="_blank" className="underline">
-                  Read the Cancellation &amp; Refund Policy
+                  Cancellation &amp; Refund Policy
                 </Link>
               )}
             </p>
