@@ -351,10 +351,13 @@ export const getClientBillingOverview = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context as any;
     await assertAdmin(supabase, userId);
-    const [purchasesRes, ledgerRes, creditsRes] = await Promise.all([
+    const [purchasesRes, ledgerRes, creditsRes, sessionsRes, convRes, balanceRes] = await Promise.all([
       supabase.from("purchase_records").select("*").eq("client_id", data.client_id).order("purchased_at", { ascending: false }),
       supabase.from("payment_ledger").select("*").eq("client_id", data.client_id).order("transaction_date", { ascending: false }),
       supabase.from("client_account_credits").select("*").eq("client_id", data.client_id).order("created_at", { ascending: false }),
+      supabase.from("session_ledger_events").select("*").eq("client_id", data.client_id).order("effective_date", { ascending: false }),
+      supabase.from("service_conversions").select("*").eq("client_id", data.client_id).order("effective_date", { ascending: false }),
+      supabase.rpc("session_balance", { _client_id: data.client_id }),
     ]);
 
     const credits = creditsRes.data ?? [];
@@ -367,5 +370,87 @@ export const getClientBillingOverview = createServerFn({ method: "POST" })
       ledger: ledgerRes.data ?? [],
       credits,
       credit_balance_minor: issued - applied,
+      session_events: sessionsRes.data ?? [],
+      session_balance: balanceRes.data ?? [],
+      conversions: convRes.data ?? [],
     };
+  });
+
+// -------- Convert service (PT -> online coaching, etc.) --------
+const ConvertService = z.object({
+  original_purchase_id: z.string().uuid(),
+  new_offer_id: z.string().uuid().nullable().optional(),
+  new_offer_name: z.string().min(1),
+  effective_date: z.string(),
+  value_delivered_cents: z.number().int().nonnegative(),
+  new_price_cents: z.number().int().nonnegative(),
+  credit_applied_cents: z.number().int().nonnegative(),
+  original_disposition: z.enum(["ended","partially_replaced","continues"]).default("ended"),
+  reason: z.string().optional(),
+});
+
+export const convertClientService = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => ConvertService.parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context as any;
+    await assertAdmin(supabase, userId);
+    const { data: conv, error } = await supabase.rpc("convert_client_service", {
+      _original_purchase_id: data.original_purchase_id,
+      _new_offer_id: data.new_offer_id ?? null,
+      _new_offer_name: data.new_offer_name,
+      _effective_date: data.effective_date,
+      _value_delivered_cents: data.value_delivered_cents,
+      _new_price_cents: data.new_price_cents,
+      _credit_applied_cents: data.credit_applied_cents,
+      _original_disposition: data.original_disposition,
+      _reason: data.reason ?? null,
+    });
+    if (error) throw new Error(error.message);
+    await logAudit(supabase, {
+      clientId: null,
+      actorUserId: userId,
+      action: "convert_service",
+      recordType: "service_conversion",
+      recordId: conv?.id ?? null,
+      after: data,
+      reason: data.reason,
+    });
+    return { ok: true, conversion: conv };
+  });
+
+// -------- Manual grant / expire helpers --------
+const GrantSessions = z.object({
+  purchase_id: z.string().uuid(),
+  count: z.number().int().positive(),
+  note: z.string().optional(),
+});
+
+export const grantSessionsManually = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => GrantSessions.parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context as any;
+    await assertAdmin(supabase, userId);
+    const { data: pr } = await supabase.from("purchase_records")
+      .select("id, client_id, currency, package_expiry_date").eq("id", data.purchase_id).single();
+    if (!pr) throw new Error("Purchase not found");
+    const { error } = await supabase.from("session_ledger_events").insert({
+      client_id: pr.client_id, purchase_id: pr.id, event_type: "granted",
+      session_count: data.count, currency: pr.currency ?? "CAD",
+      expires_at: pr.package_expiry_date, source: "admin_adjust",
+      note: data.note ?? "Manually granted", created_by: userId,
+    });
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+export const runExpireSessions = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { supabase, userId } = context as any;
+    await assertAdmin(supabase, userId);
+    const { data, error } = await supabase.rpc("expire_overdue_sessions");
+    if (error) throw new Error(error.message);
+    return { ok: true, expired: data ?? 0 };
   });
