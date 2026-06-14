@@ -340,7 +340,10 @@ function SignupJf() {
                   <Receipt className="h-3.5 w-3.5" /> Billing
                 </div>
                 <p className="mt-1 text-xs leading-relaxed text-foreground">
-                  <span className="font-bold">$0 today.</span> First charge {firstChargeLabel ?? `in ${trialDays} days`} — {settings?.monthly_price_display ?? "$29 USD/month"} plus applicable taxes. Renews automatically until cancelled through your <span className="font-semibold">billing page</span>.
+                  <span className="font-bold">{trialDays}-day free trial</span>, then {settings?.monthly_price_display ?? "$29 USD/month"} plus applicable taxes. Renews automatically until cancelled.
+                </p>
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  $0 today. First charge {firstChargeLabel ?? `in ${trialDays} days`} via your billing page.
                 </p>
               </div>
             )}
