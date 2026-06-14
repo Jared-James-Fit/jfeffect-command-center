@@ -10,6 +10,7 @@ import { Calendar as CalIcon, ExternalLink, MapPin, Clock } from "lucide-react";
 import { statusTone, fmtTimeRange } from "@/lib/pt-sessions";
 import { CalendarBoard } from "@/components/calendar/calendar-board";
 import { useClientCalendarSources } from "@/lib/calendar-sources";
+import { ClientTodayPanel } from "@/components/calendar/today-panel";
 
 export const Route = createFileRoute("/_authenticated/portal/calendar")({ component: CalendarPage });
 
@@ -21,6 +22,20 @@ function CalendarPage() {
     queryFn: async () => (await supabase.from("clients").select("*").eq("user_id", portalUserId!).maybeSingle()).data,
   });
   const { items, isLoading } = useClientCalendarSources(client?.id);
+
+  const { data: nutritionUpdated } = useQuery({
+    queryKey: ["my-nutrition-updated", client?.id],
+    enabled: !!client?.id,
+    queryFn: async () => {
+      const { data } = await (supabase.from("nutrition_targets") as any)
+        .select("updated_at")
+        .eq("client_id", client!.id)
+        .order("updated_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      return data?.updated_at as string | null;
+    },
+  });
 
   const { data: sessions = [] } = useQuery({
     queryKey: ["my-sessions", client?.id],
@@ -42,8 +57,10 @@ function CalendarPage() {
 
   return (
     <>
-      <PageHeader title="Calendar" subtitle="Your upcoming training sessions." />
+      <PageHeader title="Calendar" subtitle="Your day at a glance — workouts, check-ins, sessions, and key dates." />
       <div className="p-6 md:p-8 space-y-6">
+        <ClientTodayPanel items={items} nutritionUpdatedAt={nutritionUpdated ?? null} />
+
         <CalendarBoard
           items={items}
           isLoading={isLoading}
