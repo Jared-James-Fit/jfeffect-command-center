@@ -724,6 +724,9 @@ function WorkoutDay() {
               />
             ) : null}
             {(rows as any[]).map((r) => (
+              unsupportedRows[r.id] ? (
+                <UnsupportedExerciseCard key={r.id} row={r} />
+              ) : (
               <ExerciseBlock
                 key={r.id}
                 row={r}
@@ -740,6 +743,7 @@ function WorkoutDay() {
                 onNoteChange={refreshNotes}
                 purposeLabel={purposeLabelById.get(r.id) ?? null}
               />
+              )
             ))}
           </div>
         </WorkoutLoadBoundary>
