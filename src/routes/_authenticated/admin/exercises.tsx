@@ -167,11 +167,27 @@ export function ExercisesAdmin({ embedded = false }: { embedded?: boolean } = {}
                 </div>
                 <div className="flex gap-1">
                   <Button variant="ghost" size="sm" onClick={() => setEditing(e)}><Pencil className="h-3 w-3" /></Button>
+                  <Button variant="ghost" size="sm" title="Volume tags" onClick={() => setVolumeTarget(e)}><BarChart3 className="h-3 w-3 text-primary" /></Button>
                   <Button variant="ghost" size="sm" title="Warm-up settings" onClick={() => setWarmupTarget(e)}><Flame className="h-3 w-3 text-orange-500" /></Button>
                   <Button variant="ghost" size="sm" onClick={() => del(e.id)}><Trash2 className="h-3 w-3" /></Button>
                 </div>
               </div>
               <div className="flex flex-wrap gap-1">
+                {e.primary_movement_pattern ? (
+                  <Badge variant="secondary" className="text-[10px]">
+                    {(MOVEMENT_PATTERN_LABELS as any)[e.primary_movement_pattern] ?? e.primary_movement_pattern}
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="text-[10px] border-amber-500/40 text-amber-600 dark:text-amber-400">
+                    no pattern
+                  </Badge>
+                )}
+                {e.variation_type && (
+                  <Badge variant="outline" className="text-[10px]">
+                    {(VARIATION_LABELS as any)[e.variation_type] ?? e.variation_type}
+                    {e.volume_multiplier != null ? ` ×${Number(e.volume_multiplier)}` : ""}
+                  </Badge>
+                )}
                 <Badge variant={e.video_provider === "vimeo" ? "default" : "secondary"} className="text-[10px]">
                   {e.video_provider ?? "—"}
                 </Badge>
