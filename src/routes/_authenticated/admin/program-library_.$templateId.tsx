@@ -1870,9 +1870,9 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
         }
       }}
       className={cn(
-        "relative overflow-hidden rounded-md border-2 border-border bg-card shadow-sm transition-shadow hover:border-foreground/30 hover:shadow",
+        "relative overflow-hidden rounded-lg border border-builder-card-border bg-builder-card shadow-builder-card transition-colors hover:border-builder-card-border-strong",
         isDragging && "opacity-50 ring-2 ring-primary",
-        compact ? "p-1.5 pl-4 space-y-1" : "p-2 pl-5 space-y-1",
+        compact ? "p-3 pl-5 space-y-1.5" : "p-4 pl-6 space-y-2",
       )}
     >
       <div className={`absolute left-0 top-0 h-full w-2 ${accent}`} aria-hidden />
