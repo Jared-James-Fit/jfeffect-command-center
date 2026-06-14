@@ -18,6 +18,21 @@ import { CheckCircle2 } from "lucide-react";
 import { Reveal } from "@/components/sales/reveal";
 import coachingHeroImg from "@/assets/coaching-hero.jpg";
 
+function HeroSkeleton() {
+  return (
+    <section className="container mx-auto grid gap-10 px-4 py-14 md:py-20 lg:grid-cols-2 lg:items-center">
+      <div className="space-y-4">
+        <div className="h-6 w-48 rounded-full bg-muted/50 animate-pulse" />
+        <div className="h-12 w-full max-w-xl rounded-md bg-muted/50 animate-pulse" />
+        <div className="h-12 w-3/4 rounded-md bg-muted/50 animate-pulse" />
+        <div className="h-5 w-full max-w-md rounded-md bg-muted/40 animate-pulse" />
+        <div className="h-12 w-48 rounded-md bg-muted/50 animate-pulse" />
+      </div>
+      <div className="aspect-[4/3] rounded-2xl bg-muted/40 animate-pulse" />
+    </section>
+  );
+}
+
 export const Route = createFileRoute("/coaching")({
   component: CoachingPage,
   head: () => ({
@@ -50,6 +65,9 @@ function CoachingPage() {
   const s = p?.sections ?? {};
   return (
     <SalesPageShell pageId="coaching">
+      {p === undefined ? (
+        <HeroSkeleton />
+      ) : (
       <CoachingHero
         eyebrow="Private Coaching · By application"
         headline={p?.hero_headline ?? "1:1 coaching for people who are done guessing."}
@@ -62,6 +80,7 @@ function CoachingPage() {
           </Link>
         }
       />
+      )}
 
       <Reveal><CoachingProcess /></Reveal>
 
