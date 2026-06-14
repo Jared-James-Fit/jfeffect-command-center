@@ -223,6 +223,21 @@ export const testSignNowConnection = createServerFn({ method: "POST" })
 // by signnow_template_id. Every template returned by SignNow is synced as
 // active + unarchived so admins see the full template library. Admins can
 // archive or deactivate individual templates from the UI afterward.
+const AUTO_HIDE_NAME_PATTERNS: RegExp[] = [
+  /^\s*\(?\s*OLD\b/i,
+  /^\s*Duplicate of\b/i,
+  /^\s*\(\s*Testing\b/i,
+];
+
+function shouldAutoHideByName(name: string | null | undefined): string | null {
+  const n = (name ?? "").trim();
+  if (!n) return null;
+  for (const re of AUTO_HIDE_NAME_PATTERNS) {
+    if (re.test(n)) return "name_pattern";
+  }
+  return null;
+}
+
 export const syncSignNowTemplates = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
@@ -232,10 +247,8 @@ export const syncSignNowTemplates = createServerFn({ method: "POST" })
       throw new Error("SignNow API is not configured. Add the SIGNNOW_* secrets to enable template sync.");
     }
     const remote = await listSignNowTemplates();
-    // Dedupe by name — SignNow often contains multiple templates that share a
-    // name (folder copies, old revisions, "Duplicate of…" leftovers). Keep the
-    // most-recently-updated one per name; treat the rest as not synced so we
-    // never re-create them locally and we archive any stale local rows.
+    // Track winners per-name (latest-updated). Older same-name copies are
+    // auto-hidden so the picker mirrors the visible SignNow Templates list.
     const byName = new Map<string, typeof remote[number]>();
     for (const r of remote) {
       const key = (r.name ?? "").trim().toLowerCase();
@@ -246,10 +259,10 @@ export const syncSignNowTemplates = createServerFn({ method: "POST" })
       const newU = typeof r.updated === "number" ? r.updated : 0;
       if (newU >= curU) byName.set(key, r);
     }
-    const dedupedRemote = Array.from(byName.values());
+    const winnerIds = new Set(Array.from(byName.values()).map((r) => r.id));
     const { data: existing } = await supabase
       .from("agreement_templates")
-      .select("id, signnow_template_id, name, is_active");
+      .select("id, signnow_template_id, name, is_active, manually_hidden");
     const byId = new Map<string, any>();
     for (const t of existing ?? []) {
       if (t.signnow_template_id) byId.set(t.signnow_template_id, t);
@@ -258,11 +271,21 @@ export const syncSignNowTemplates = createServerFn({ method: "POST" })
     let updated = 0;
     let skipped = 0;
     const seenRemoteIds = new Set<string>();
-    for (const r of dedupedRemote) {
+    for (const r of remote) {
       seenRemoteIds.add(r.id);
       const match = byId.get(r.id);
+      const nameReason = shouldAutoHideByName(r.name);
+      const isWinner = winnerIds.has(r.id);
+      const autoHide = !isWinner || !!nameReason;
+      const reason = nameReason ?? (!isWinner ? "duplicate_name" : null);
       if (match) {
-        const patch: any = { is_active: true, archived: false };
+        // Never override a manual hide.
+        if (match.manually_hidden) { skipped += 1; continue; }
+        const patch: any = {
+          is_active: !autoHide,
+          archived: autoHide,
+          auto_hide_reason: reason,
+        };
         if (match.name !== r.name) patch.name = r.name;
         await supabase.from("agreement_templates")
           .update(patch).eq("id", match.id);
@@ -272,28 +295,47 @@ export const syncSignNowTemplates = createServerFn({ method: "POST" })
           name: r.name,
           signnow_template_id: r.id,
           version: "1",
-          is_active: true,
-          archived: false,
+          is_active: !autoHide,
+          archived: autoHide,
+          auto_hide_reason: reason,
           created_by: userId,
           notes: "Synced from SignNow.",
         } as any);
         created += 1;
       }
     }
-    // Archive + deactivate any previously-synced rows whose remote template no
-    // longer exists in SignNow OR was de-duplicated above (older same-name
-    // copy). Historical agreements already created from them are untouched.
+    // Anything previously synced but no longer present in SignNow → archive,
+    // unless manually hidden (preserve user's choice and stamp).
     for (const [sid, row] of byId.entries()) {
-      if (!seenRemoteIds.has(sid) && (row.is_active || !row.archived)) {
+      if (!seenRemoteIds.has(sid) && !row.manually_hidden && (row.is_active || !row.archived)) {
         await supabase.from("agreement_templates")
-          .update({ is_active: false, archived: true } as any).eq("id", row.id);
+          .update({ is_active: false, archived: true, auto_hide_reason: "removed_remote" } as any)
+          .eq("id", row.id);
         skipped += 1;
       }
     }
     await supabase.from("signnow_settings").update({
       last_synced_at: new Date().toISOString(),
     } as any).eq("singleton", true);
-    return { ok: true, total: dedupedRemote.length, fetched: remote.length, created, updated, skipped };
+    return { ok: true, total: winnerIds.size, fetched: remote.length, created, updated, skipped };
+  });
+
+/** Manually hide a template row from the picker without deleting it.
+ *  Sync will never re-show a row whose `manually_hidden` is true. */
+export const setTemplateManualHidden = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i: unknown) =>
+    z.object({ id: z.string().uuid(), hidden: z.boolean() }).parse(i),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    await assertAdminOrCoach(supabase, userId);
+    const patch: any = data.hidden
+      ? { manually_hidden: true, is_active: false, archived: true }
+      : { manually_hidden: false, is_active: true, archived: false, auto_hide_reason: null };
+    const { error } = await supabase.from("agreement_templates").update(patch).eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
   });
 
 export const createAgreement = createServerFn({ method: "POST" })
