@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Camera, RefreshCw, Upload, X, AlertTriangle, Loader2 } from "lucide-react";
+import { Camera, RefreshCw, Upload, X, AlertTriangle, Loader2, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -116,7 +116,13 @@ export function ProfilePictureCapture({
     canvas.height = size;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
+    // Mirror the canvas so the saved photo matches the live (selfie) preview
+    // exactly — what they see is what gets submitted.
+    ctx.save();
+    ctx.translate(size, 0);
+    ctx.scale(-1, 1);
     ctx.drawImage(video, (video.videoWidth - size) / 2, (video.videoHeight - size) / 2, size, size, 0, 0, size, size);
+    ctx.restore();
     setPreview(canvas.toDataURL("image/jpeg", 0.9));
     stopCamera();
   };
@@ -158,8 +164,14 @@ export function ProfilePictureCapture({
         <div className="text-center">
           <h3 className="text-lg font-semibold text-foreground">Add Your Profile Picture</h3>
           <p className="mt-1 text-sm text-muted-foreground">
-            Use good lighting. Face the camera. Make sure your face is visible.
+            Use good lighting. Face the camera. Make sure your full face is clearly visible.
           </p>
+          <div className="mx-auto mt-3 flex max-w-sm items-start gap-2 rounded-md border border-primary/30 bg-primary/10 p-3 text-left text-xs text-foreground">
+            <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+            <span>
+              <strong>Required for ID verification.</strong> Your photo confirms your identity for in-person sessions, billing, and waivers. Please use a clear, current photo of yourself — no sunglasses, hats covering your face, or group shots.
+            </span>
+          </div>
         </div>
       )}
 
