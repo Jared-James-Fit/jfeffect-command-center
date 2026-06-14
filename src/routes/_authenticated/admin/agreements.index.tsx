@@ -38,7 +38,8 @@ export function AgreementsAdminPage({ embedded = false }: { embedded?: boolean }
   const [actioning, setActioning] = useState<{ template: AgreementTemplate } | null>(null);
   const createFn = useServerFn(createTemplate);
   const updateFn = useServerFn(updateTemplate);
-  const archiveFn = useServerFn(archiveTemplate);
+  // archiveTemplate kept available for legacy callers; manual hide goes through setHiddenFn.
+  void useServerFn(archiveTemplate);
   const setActiveFn = useServerFn(setTemplateActive);
   const syncFn = useServerFn(syncSignNowTemplates);
   const setHiddenFn = useServerFn(setTemplateManualHidden);
