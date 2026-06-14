@@ -1769,7 +1769,7 @@ function SwapExerciseButton({ row, setRow, exercises }: { row: any; setRow: (r: 
 function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMoveDown, canMoveUp, canMoveDown, onDragStartRow, onDragEndRow, isDragging, purposeLabel }: { row: any; setRow: (r: any) => void; onDelete?: () => void; exercises: any[]; compact?: boolean; onMoveUp?: () => void; onMoveDown?: () => void; canMoveUp?: boolean; canMoveDown?: boolean; onDragStartRow?: (e: React.DragEvent) => void; onDragEndRow?: () => void; isDragging?: boolean; purposeLabel?: string }) {
   const Field = ({ label, className, children }: { label: string; className?: string; children: React.ReactNode }) => (
     <div className={cn("flex flex-col gap-0.5 min-w-0", className)}>
-      <span className="px-0.5 text-[11px] font-semibold uppercase tracking-wide text-foreground leading-none">{label}</span>
+      <span className="px-0.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground leading-none">{label}</span>
       {children}
     </div>
   );
