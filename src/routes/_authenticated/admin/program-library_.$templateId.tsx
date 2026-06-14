@@ -1861,6 +1861,8 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
     });
     toast.success("Card reset");
   };
+  const multiBlockFlag = useMultiBlockBuilderFlag();
+  const [blocksOpen, setBlocksOpen] = useState(false);
   return (
     <div
       data-pb-row
