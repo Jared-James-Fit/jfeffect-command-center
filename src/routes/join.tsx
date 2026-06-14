@@ -359,54 +359,21 @@ function SignupJf() {
                   />
                   <span>
                     I agree to the{" "}
-                    <DocLink slug="membership-agreement">Membership Agreement</DocLink>,{" "}
-                    <DocLink slug="terms-of-service">Terms of Service</DocLink>,{" "}
-                    <DocLink slug="recurring-billing-disclosure">Recurring Billing Disclosure</DocLink>, and{" "}
-                    <DocLink slug="cancellation-and-refund-policy">Cancellation &amp; Refund Policy</DocLink>, and I acknowledge the{" "}
+                    <DocLink slug="membership-agreement">JF Membership Terms</DocLink>,{" "}
+                    <DocLink slug="recurring-billing-disclosure">recurring billing</DocLink>, and{" "}
+                    <DocLink slug="cancellation-and-refund-policy">cancellation policy</DocLink>, and acknowledge the{" "}
                     <DocLink slug="privacy-policy">Privacy Policy</DocLink>.
                   </span>
                 </label>
-                <button
-                  type="button"
-                  onClick={() => setShowReview((v) => !v)}
-                  className="mt-2 inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground hover:text-foreground"
+                <Link
+                  to="/legal/$slug"
+                  params={{ slug: "membership-agreement" }}
+                  target="_blank"
+                  className="mt-2 inline-block text-[11px] text-muted-foreground underline underline-offset-2 hover:text-foreground"
                 >
-                  {showReview ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-                  Review membership terms
-                </button>
-                {showReview && (
-                  <ul className="mt-2 space-y-1.5 rounded-md border border-border bg-background/50 p-2">
-                    {requiredDocs.map((d) => (
-                      <li key={d.document_id} className="flex items-center justify-between gap-2 text-[11px]">
-                        <div className="min-w-0">
-                          <div className="truncate font-semibold">{d.title}</div>
-                          <div className="text-muted-foreground">Active version v{d.version_number}</div>
-                        </div>
-                        {d.public_read_allowed ? (
-                          <Link to="/legal/$slug" params={{ slug: d.slug }} target="_blank"
-                            className="inline-flex shrink-0 items-center gap-1 rounded border border-border px-2 py-1 text-[10px] font-bold uppercase tracking-widest text-foreground hover:bg-secondary">
-                            Open <ExternalLink className="h-3 w-3" />
-                          </Link>
-                        ) : (
-                          <span className="text-[10px] text-muted-foreground">Available at checkout</span>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                )}
+                  Review all membership terms
+                </Link>
               </div>
-            )}
-
-            {/* Separate optional marketing consent */}
-            {!checkoutBlocked && (
-              <label className="flex items-start gap-2 text-xs text-muted-foreground">
-                <Checkbox
-                  className="mt-0.5"
-                  checked={form.marketing_consent}
-                  onCheckedChange={(c) => setForm({ ...form, marketing_consent: !!c })}
-                />
-                <span>Send me occasional coaching updates and offers by email or SMS. I can unsubscribe anytime.</span>
-              </label>
             )}
 
             {/* Concise cancellation summary (full policy still linked above) */}
