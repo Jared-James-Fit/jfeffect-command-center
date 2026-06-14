@@ -269,7 +269,11 @@ export const updateMyMarketingPrefs = createServerFn({ method: "POST" })
     const { data: member } = await supabase
       .from("app_members").select("id").eq("user_id", userId).maybeSingle();
     if (!member) throw new Error("Member profile not found");
-    const patch: Record<string, unknown> = {};
+    const patch: {
+      email_marketing_opt_in?: boolean;
+      sms_opt_out?: boolean;
+      sms_consent_at?: string;
+    } = {};
     if (typeof data.email_marketing_opt_in === "boolean") {
       patch.email_marketing_opt_in = data.email_marketing_opt_in;
     }
