@@ -285,6 +285,38 @@ function WorkoutDay() {
     },
   });
 
+  // Slice 3 client fail-safe. A row "is unsupported" when it carries
+  // any non-Straight block, or more than one block — i.e. anything the
+  // legacy logger would otherwise mis-render or silently flatten. The
+  // server-side activation guard prevents this state from reaching a
+  // client-visible program under normal flow; the fail-safe exists for
+  // exactly the rare scenario where a row slipped through (e.g. logger
+  // toggled on, then a program containing unsupported blocks is opened
+  // while the toggle is off again).
+  const rowBlockSummariesFn = useServerFn(getRowBlockSummariesFn);
+  const { data: unsupportedRows = {} } = useQuery<Record<string, boolean>>({
+    queryKey: ["pl-day-row-block-summaries", dayId, (rows as any[]).map((r) => r.id).sort().join(",")],
+    enabled: (rows as any[]).length > 0,
+    queryFn: async () => {
+      const rowIds = (rows as any[]).map((r) => r.id);
+      if (!rowIds.length) return {} as Record<string, boolean>;
+      const summary = await rowBlockSummariesFn({ data: { rowIds } });
+      // Best-effort client diagnosis log: any unsupported row reaching
+      // a client is an error condition that admin needs to see.
+      const bad = Object.entries(summary as Record<string, boolean>)
+        .filter(([, v]) => v)
+        .map(([k]) => k);
+      if (bad.length) {
+        // eslint-disable-next-line no-console
+        console.warn("[pl-block-failsafe] Unsupported block rows in this workout", {
+          dayId,
+          rowIds: bad,
+        });
+      }
+      return summary;
+    },
+  });
+
   const { data: completion } = useQuery({
     queryKey: ["pl-day-completion", dayId, client?.id],
     enabled: !!client?.id,
