@@ -676,7 +676,7 @@ function WorkoutDay() {
         {day.notes && <Card className="p-4 text-sm whitespace-pre-wrap bg-secondary/30">{day.notes}</Card>}
 
         <WorkoutLoadBoundary clientId={client?.id ?? null} clientName={(client as any)?.full_name ?? null} dayId={dayId} route={`/portal/workouts/${dayId}`}>
-          <div className="space-y-3">
+          <div className="space-y-4 rounded-lg bg-builder-canvas p-3 sm:p-4 ring-1 ring-builder-card-border/40">
             {rowsLoaded && (rows as any[]).length === 0 ? (
               <WorkoutEmptyCard
                 clientId={client?.id ?? null}
