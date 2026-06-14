@@ -1308,19 +1308,76 @@ export const importSignNowSignedDocuments = createServerFn({ method: "POST" })
     }
 
     const details: Array<{ documentId: string; outcome: string; reason?: string; agreementId?: string }> = [];
-    let imported = 0, skipped = 0, unmatched = 0, errors = 0;
+    let imported = 0, skipped = 0, unmatched = 0, errors = 0, createdLinked = 0, createdUnlinked = 0;
+
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
     for (const s of summaries) {
-      const agreementId = existingById.get(s.id);
+      let agreementId = existingById.get(s.id);
+
+      // Not yet in our DB → try to fetch signer info and create a row
+      // (linked when email matches a client, otherwise unlinked).
       if (!agreementId) {
-        // Refresh-only mode: never insert. Report as unmatched so the admin
-        // can see which SignNow docs have no corresponding agreement row.
-        unmatched += 1;
-        details.push({ documentId: s.id, outcome: "unlinked", reason: "no existing agreement linked to this SignNow document" });
-        continue;
+        // Only consider docs that appear to be signed/completed to avoid
+        // inserting noise from drafts.
+        if (!s.allSigned && !s.cancelled) {
+          // We still inspect — list endpoint hints can be incomplete.
+        }
+        try {
+          const detail = await getSignNowDocument(s.id);
+          if (detail.status !== "completed" && detail.status !== "signed") {
+            skipped += 1;
+            details.push({ documentId: s.id, outcome: "skipped", reason: `status=${detail.status}` });
+            continue;
+          }
+          const signerEmail = (detail.signerEmail ?? "").trim().toLowerCase() || null;
+          let matchedClient: { id: string; full_name: string | null } | null = null;
+          if (signerEmail) {
+            const { data: c } = await supabaseAdmin
+              .from("clients")
+              .select("id, full_name")
+              .eq("email", signerEmail)
+              .eq("archived", false)
+              .maybeSingle();
+            if (c) matchedClient = { id: c.id, full_name: c.full_name ?? null };
+          }
+          const insertRow: any = {
+            client_id: matchedClient?.id ?? null,
+            client_full_name: matchedClient?.full_name ?? detail.signerName ?? null,
+            client_email: signerEmail,
+            signer_email: signerEmail,
+            signer_name: detail.signerName ?? null,
+            template_name: detail.documentName ?? "Imported from SignNow",
+            agreement_type: "Imported",
+            status: "Signed",
+            verification_status: matchedClient ? "Auto-Matched" : "Not Verified",
+            signed_at: detail.signedAt,
+            completed_at: detail.signedAt,
+            signnow_document_id: s.id,
+            signnow_completed_link: null,
+            signing_method: "Imported from SignNow",
+          };
+          const { data: inserted, error: insErr } = await supabaseAdmin
+            .from("agreements")
+            .insert(insertRow)
+            .select("id")
+            .single();
+          if (insErr || !inserted) {
+            errors += 1;
+            details.push({ documentId: s.id, outcome: "error", reason: insErr?.message ?? "insert failed" });
+            continue;
+          }
+          agreementId = inserted.id;
+          if (matchedClient) createdLinked += 1; else createdUnlinked += 1;
+        } catch (e: any) {
+          errors += 1;
+          details.push({ documentId: s.id, outcome: "error", reason: e?.message ?? "fetch failed" });
+          continue;
+        }
       }
+
       try {
-        const res = await pullSignedDocumentForAgreement(agreementId, { event: "sync_refresh" });
+        const res = await pullSignedDocumentForAgreement(agreementId!, { event: "sync_refresh" });
         if (res.ok) {
           imported += 1;
           details.push({ documentId: s.id, outcome: "refreshed", agreementId, reason: res.reason });
@@ -1333,6 +1390,9 @@ export const importSignNowSignedDocuments = createServerFn({ method: "POST" })
         details.push({ documentId: s.id, outcome: "error", agreementId, reason: e?.message ?? "unknown" });
       }
     }
+    // "unmatched" is kept for backward compatibility with the UI summary,
+    // but the new flow inserts those rows as unlinked instead of skipping.
+    unmatched = createdUnlinked;
 
     return {
       ok: true,
