@@ -119,6 +119,9 @@ function SignupJf() {
 
   return (
     <SalesPageShell pageId="membership-join">
+      {p === undefined ? (
+        <HeroSkeleton />
+      ) : (
       <MembershipHero
         priceChip={settings?.monthly_price_display ?? "$29/month USD"}
         headline={p?.hero_headline ?? "Train with the JF Effect system. On your own time, inside the app."}
@@ -132,6 +135,7 @@ function SignupJf() {
         }
         trialNote={`${trialDays}-day free trial · ${settings?.monthly_price_display ?? "$29/month USD"} after · cancel anytime`}
       />
+      )}
 
       <Reveal><FeatureTabs /></Reveal>
 
