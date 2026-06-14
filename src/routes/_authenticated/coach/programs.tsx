@@ -123,12 +123,16 @@ function MyLibrary({ userId }: { userId: string }) {
         </div>
       )}
 
-      <ShareProgramSheet
-        template={shareTpl}
-        open={!!shareTpl}
-        onOpenChange={(v) => !v && setShareTpl(null)}
-        viewerRole="coach"
-      />
+      {shareTpl ? (
+        <Suspense fallback={null}>
+          <ShareProgramSheet
+            template={shareTpl}
+            open={!!shareTpl}
+            onOpenChange={(v) => !v && setShareTpl(null)}
+            viewerRole="coach"
+          />
+        </Suspense>
+      ) : null}
     </>
   );
 }
