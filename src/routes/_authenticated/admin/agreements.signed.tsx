@@ -151,7 +151,7 @@ function SignedAgreementsPage() {
     queryFn: async (): Promise<Row[]> => {
       const { data, error } = await supabase
         .from("agreements")
-        .select("id, client_id, template_name, agreement_type, status, verification_status, signer_mismatch, signed_at, completed_at, updated_at, signing_method, signed_in_person, signed_copy_storage_path, signed_copy_url, signnow_completed_link, signnow_document_id, client_full_name, client_email, clients(id, full_name, email)")
+        .select("id, client_id, template_name, custom_title, agreement_type, status, verification_status, signer_mismatch, signed_at, completed_at, updated_at, signing_method, signed_in_person, signed_copy_storage_path, signed_copy_url, signnow_completed_link, signnow_document_id, client_full_name, client_email, signer_email, signer_name, clients(id, full_name, email)")
         .or("status.in.(Signed,Completed,Verified),signed_copy_storage_path.not.is.null,signed_at.not.is.null")
         .order("signed_at", { ascending: false, nullsFirst: false })
         .order("updated_at", { ascending: false })
