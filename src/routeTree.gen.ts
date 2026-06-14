@@ -219,6 +219,7 @@ import { Route as AuthenticatedAdminClientProgramsClientIdRouteImport } from './
 import { Route as AuthenticatedAdminBroadcastsBroadcastIdRouteImport } from './routes/_authenticated/admin/broadcasts.$broadcastId'
 import { Route as AuthenticatedAdminBlocksBlockIdRouteImport } from './routes/_authenticated/admin/blocks.$blockId'
 import { Route as AuthenticatedAdminAgreementsSignedRouteImport } from './routes/_authenticated/admin/agreements.signed'
+import { Route as AuthenticatedAdminAgreementsNativeNewRouteImport } from './routes/_authenticated/admin/agreements-native.new'
 import { Route as AuthenticatedAdminAgreementsNativePackageIdRouteImport } from './routes/_authenticated/admin/agreements-native.$packageId'
 import { Route as AuthenticatedAdminCrmContactsIndexRouteImport } from './routes/_authenticated/admin/crm.contacts.index'
 import { Route as ApiPublicGoogleOauthCallbackRouteImport } from './routes/api/public/google/oauth/callback'
@@ -1436,6 +1437,12 @@ const AuthenticatedAdminAgreementsSignedRoute =
     path: '/agreements/signed',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
+const AuthenticatedAdminAgreementsNativeNewRoute =
+  AuthenticatedAdminAgreementsNativeNewRouteImport.update({
+    id: '/agreements-native/new',
+    path: '/agreements-native/new',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
 const AuthenticatedAdminAgreementsNativePackageIdRoute =
   AuthenticatedAdminAgreementsNativePackageIdRouteImport.update({
     id: '/agreements-native/$packageId',
@@ -1615,6 +1622,7 @@ export interface FileRoutesByFullPath {
   '/media/': typeof AuthenticatedMediaIndexRoute
   '/portal/': typeof AuthenticatedPortalIndexRoute
   '/admin/agreements-native/$packageId': typeof AuthenticatedAdminAgreementsNativePackageIdRoute
+  '/admin/agreements-native/new': typeof AuthenticatedAdminAgreementsNativeNewRoute
   '/admin/agreements/signed': typeof AuthenticatedAdminAgreementsSignedRoute
   '/admin/blocks/$blockId': typeof AuthenticatedAdminBlocksBlockIdRoute
   '/admin/broadcasts/$broadcastId': typeof AuthenticatedAdminBroadcastsBroadcastIdRoute
@@ -1828,6 +1836,7 @@ export interface FileRoutesByTo {
   '/media': typeof AuthenticatedMediaIndexRoute
   '/portal': typeof AuthenticatedPortalIndexRoute
   '/admin/agreements-native/$packageId': typeof AuthenticatedAdminAgreementsNativePackageIdRoute
+  '/admin/agreements-native/new': typeof AuthenticatedAdminAgreementsNativeNewRoute
   '/admin/agreements/signed': typeof AuthenticatedAdminAgreementsSignedRoute
   '/admin/blocks/$blockId': typeof AuthenticatedAdminBlocksBlockIdRoute
   '/admin/broadcasts/$broadcastId': typeof AuthenticatedAdminBroadcastsBroadcastIdRoute
@@ -2048,6 +2057,7 @@ export interface FileRoutesById {
   '/_authenticated/media/': typeof AuthenticatedMediaIndexRoute
   '/_authenticated/portal/': typeof AuthenticatedPortalIndexRoute
   '/_authenticated/admin/agreements-native/$packageId': typeof AuthenticatedAdminAgreementsNativePackageIdRoute
+  '/_authenticated/admin/agreements-native/new': typeof AuthenticatedAdminAgreementsNativeNewRoute
   '/_authenticated/admin/agreements/signed': typeof AuthenticatedAdminAgreementsSignedRoute
   '/_authenticated/admin/blocks/$blockId': typeof AuthenticatedAdminBlocksBlockIdRoute
   '/_authenticated/admin/broadcasts/$broadcastId': typeof AuthenticatedAdminBroadcastsBroadcastIdRoute
@@ -2268,6 +2278,7 @@ export interface FileRouteTypes {
     | '/media/'
     | '/portal/'
     | '/admin/agreements-native/$packageId'
+    | '/admin/agreements-native/new'
     | '/admin/agreements/signed'
     | '/admin/blocks/$blockId'
     | '/admin/broadcasts/$broadcastId'
@@ -2481,6 +2492,7 @@ export interface FileRouteTypes {
     | '/media'
     | '/portal'
     | '/admin/agreements-native/$packageId'
+    | '/admin/agreements-native/new'
     | '/admin/agreements/signed'
     | '/admin/blocks/$blockId'
     | '/admin/broadcasts/$broadcastId'
@@ -2700,6 +2712,7 @@ export interface FileRouteTypes {
     | '/_authenticated/media/'
     | '/_authenticated/portal/'
     | '/_authenticated/admin/agreements-native/$packageId'
+    | '/_authenticated/admin/agreements-native/new'
     | '/_authenticated/admin/agreements/signed'
     | '/_authenticated/admin/blocks/$blockId'
     | '/_authenticated/admin/broadcasts/$broadcastId'
@@ -4293,6 +4306,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminAgreementsSignedRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
+    '/_authenticated/admin/agreements-native/new': {
+      id: '/_authenticated/admin/agreements-native/new'
+      path: '/agreements-native/new'
+      fullPath: '/admin/agreements-native/new'
+      preLoaderRoute: typeof AuthenticatedAdminAgreementsNativeNewRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
     '/_authenticated/admin/agreements-native/$packageId': {
       id: '/_authenticated/admin/agreements-native/$packageId'
       path: '/agreements-native/$packageId'
@@ -4508,6 +4528,7 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminWarmupProtocolsRoute: typeof AuthenticatedAdminWarmupProtocolsRoute
   AuthenticatedAdminIndexRoute: typeof AuthenticatedAdminIndexRoute
   AuthenticatedAdminAgreementsNativePackageIdRoute: typeof AuthenticatedAdminAgreementsNativePackageIdRoute
+  AuthenticatedAdminAgreementsNativeNewRoute: typeof AuthenticatedAdminAgreementsNativeNewRoute
   AuthenticatedAdminAgreementsSignedRoute: typeof AuthenticatedAdminAgreementsSignedRoute
   AuthenticatedAdminBlocksBlockIdRoute: typeof AuthenticatedAdminBlocksBlockIdRoute
   AuthenticatedAdminClientProgramsClientIdRoute: typeof AuthenticatedAdminClientProgramsClientIdRoute
@@ -4621,6 +4642,8 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
     AuthenticatedAdminIndexRoute: AuthenticatedAdminIndexRoute,
     AuthenticatedAdminAgreementsNativePackageIdRoute:
       AuthenticatedAdminAgreementsNativePackageIdRoute,
+    AuthenticatedAdminAgreementsNativeNewRoute:
+      AuthenticatedAdminAgreementsNativeNewRoute,
     AuthenticatedAdminAgreementsSignedRoute:
       AuthenticatedAdminAgreementsSignedRoute,
     AuthenticatedAdminBlocksBlockIdRoute: AuthenticatedAdminBlocksBlockIdRoute,
