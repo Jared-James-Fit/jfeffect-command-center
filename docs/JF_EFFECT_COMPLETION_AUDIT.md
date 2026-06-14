@@ -82,11 +82,10 @@ The product is structurally complete: 172/172 tables have RLS on, the membership
 - HTTP handler exists (`src/routes/api/public/hooks/cleanup-pending-signups.ts`). Auth guard is anon-key only (any visitor who knows the publishable key can trigger). `pg_cron` job `jf-cleanup-pending-signups-hourly` reports `exists_=false` per `get_membership_cleanup_job_status`.
 - **Work:** Schedule the cron via pg_cron migration; tighten the handler to require `SCHEDULED_WORKER_SECRET`.
 
-### B11. Two cron handlers lack signature verification
-- `appointment-reminders.ts` — ✅ RESOLVED 2026-06-14: now requires `SCHEDULED_WORKER_SECRET` via `x-worker-secret` header or `?secret=` query param with timing-safe compare; returns 401 otherwise.
-- `sms-reminders.ts`, `media-archive.ts`, `cleanup-pending-signups.ts`, `lift-archive-tick.ts` — anon/publishable key only (weak; any visitor can trigger).
-- `fillout.ts` — bearer-string equality, not timing-safe.
-- **Work:** Standardize on `SCHEDULED_WORKER_SECRET` + `timingSafeEqual` for all cron endpoints.
+### B11. Cron/webhook handler signature verification — ✅ RESOLVED 2026-06-14
+- `appointment-reminders.ts`, `sms-reminders.ts`, `media-archive.ts`, `cleanup-pending-signups.ts`, `lift-archive-tick.ts` — all now require `SCHEDULED_WORKER_SECRET` via `x-worker-secret` header or `?secret=` query param with constant-time compare; return 401 otherwise. Old `apikey`/publishable-key acceptance removed.
+- `fillout.ts` — `x-fillout-secret` check upgraded to constant-time compare against `FILLOUT_WEBHOOK_SECRET`.
+- **Follow-up:** ensure `SCHEDULED_WORKER_SECRET` is set in runtime env (tracked in B3) and any pg_cron job rows for these endpoints are updated to send the new header.
 
 ---
 
