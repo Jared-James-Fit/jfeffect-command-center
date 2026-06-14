@@ -839,6 +839,10 @@ function WorkoutDay() {
         {!readonly && completion?.completed_at && !hasFeedback && feedbackSkipped && (
           <WorkoutFeedbackReminder onOpen={() => setFeedbackOpen(true)} />
         )}
+        {/* Always offer view/edit after feedback has been submitted. */}
+        {!readonly && completion?.completed_at && hasFeedback && (
+          <WorkoutFeedbackEditButton locked={feedbackLocked} onOpen={() => setFeedbackOpen(true)} />
+        )}
       </div>
 
       {/* Sticky general-notes shortcut */}
@@ -853,11 +857,12 @@ function WorkoutDay() {
       {/* Post-workout feedback sheet. Client POV (readonly) never opens it. */}
       {!readonly && client?.id && (
         <WorkoutFeedbackSheet
-          open={feedbackOpen && !hasFeedback && !!completion?.id}
+          open={feedbackOpen && !!completion?.id}
           onOpenChange={setFeedbackOpen}
           completionId={completion?.id ?? null}
           clientId={client.id}
           dayId={dayId}
+          existing={existingFeedback ?? null}
           onSubmitted={() => qc.invalidateQueries({ queryKey: ["pl-workout-feedback", completion?.id] })}
         />
       )}
