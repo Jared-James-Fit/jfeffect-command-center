@@ -4,8 +4,9 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { Checkbox } from "@/components/ui/checkbox";
 import { COMMON_TIMEZONES } from "@/lib/pt-sessions";
-import { calcAge, cmToFtIn, ftInToCm } from "@/lib/basic-info";
+import { calcAge, cmToFtIn, ftInToCm, SBD_GUIDANCE_KG } from "@/lib/basic-info";
 
 const COUNTRIES = ["Canada", "United States", "United Kingdom", "Australia", "New Zealand", "Other"];
 
@@ -26,6 +27,11 @@ export type BasicInfoValues = {
   emergency_contact_name?: string | null;
   emergency_contact_phone?: string | null;
   notes?: string | null; // maps to lifestyle_notes for client self-entry
+  intake_lifts_known?: boolean | null;
+  intake_lift_unit?: "kg" | "lb" | null;
+  intake_squat_1rm?: number | null;
+  intake_bench_1rm?: number | null;
+  intake_deadlift_1rm?: number | null;
 };
 
 export function BasicInfoForm({
