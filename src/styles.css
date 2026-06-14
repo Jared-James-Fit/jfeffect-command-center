@@ -60,6 +60,11 @@
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-analytics-blue: var(--analytics-blue);
+  --color-builder-canvas: var(--builder-canvas);
+  --color-builder-card: var(--builder-card);
+  --color-builder-card-border: var(--builder-card-border);
+  --color-builder-card-border-strong: var(--builder-card-border-strong);
+  --color-builder-inset: var(--builder-inset);
 }
 
 :root {
@@ -110,6 +115,15 @@
   --analytics-blue-glow: oklch(0.66 0.19 255);
   --gradient-analytics-blue: linear-gradient(135deg, var(--analytics-blue), var(--analytics-blue-glow));
   --shadow-analytics-blue: 0 0 40px -8px color-mix(in oklab, var(--analytics-blue) 45%, transparent);
+
+  /* Workout builder surface stack — page → canvas → card → inset.
+     Tuned for strong dark-on-dark separation without leaving the dark theme. */
+  --builder-canvas: oklch(0.235 0.005 280);        /* charcoal grey  ~#202126 */
+  --builder-card: oklch(0.17 0.006 280);           /* deeper near-black ~#121318 */
+  --builder-card-border: oklch(0.32 0.008 280);    /* neutral grey 1px border ~#34363D */
+  --builder-card-border-strong: oklch(0.42 0.01 280); /* hover/focus border */
+  --builder-inset: oklch(0.20 0.006 280);          /* nested inset surface ~#191A20 */
+  --shadow-builder-card: 0 1px 0 0 oklch(1 0 0 / 0.04) inset, 0 2px 6px -2px oklch(0 0 0 / 0.55), 0 4px 14px -6px oklch(0 0 0 / 0.45);
 }
 
 @layer base {
