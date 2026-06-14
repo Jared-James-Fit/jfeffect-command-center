@@ -63,7 +63,9 @@ export async function pullSignedDocumentForAgreement(
     // Download & upload signed PDF (idempotent)
     if (!storagePath) {
       const { bytes, contentType } = await downloadSignedDocument(ag.signnow_document_id);
-      storagePath = `clients/${ag.client_id}/${ag.id}.pdf`;
+      storagePath = ag.client_id
+        ? `clients/${ag.client_id}/${ag.id}.pdf`
+        : `unlinked/${ag.id}.pdf`;
       const { error: upErr } = await supabaseAdmin.storage
         .from("agreements")
         .upload(storagePath, bytes, { contentType, upsert: true });
@@ -95,13 +97,17 @@ export async function pullSignedDocumentForAgreement(
 
   // Mirror to clients table when terminal
   if (patch.status === "Signed" || patch.status === "Needs Manual Verification") {
-    await supabaseAdmin.from("clients").update({
-      agreement_signed: patch.status === "Signed",
-      agreement_signed_date: (patch.signed_at as string).slice(0, 10),
-      agreement_status: patch.status,
-    } as any).eq("id", ag.client_id);
+    if (ag.client_id) {
+      await supabaseAdmin.from("clients").update({
+        agreement_signed: patch.status === "Signed",
+        agreement_signed_date: (patch.signed_at as string).slice(0, 10),
+        agreement_status: patch.status,
+      } as any).eq("id", ag.client_id);
+    }
   } else if (patch.status === "Cancelled" || patch.status === "Expired") {
-    await supabaseAdmin.from("clients").update({ agreement_status: patch.status } as any).eq("id", ag.client_id);
+    if (ag.client_id) {
+      await supabaseAdmin.from("clients").update({ agreement_status: patch.status } as any).eq("id", ag.client_id);
+    }
   }
 
   await supabaseAdmin.from("agreement_audit_log").insert({

@@ -18,11 +18,11 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Download, ExternalLink, RefreshCw, FileText, Loader2, Search, User, Mail, DownloadCloud, Trash2 } from "lucide-react";
+import { Download, ExternalLink, RefreshCw, FileText, Loader2, Search, User, Mail, DownloadCloud, Trash2, Pencil, Link as LinkIcon } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
-import { getSignedAgreementUrl, refreshAllPendingAgreements, refreshAgreementStatus, importSignNowSignedDocuments, bulkDeleteAgreements } from "@/lib/agreements.functions";
+import { getSignedAgreementUrl, refreshAllPendingAgreements, refreshAgreementStatus, importSignNowSignedDocuments, bulkDeleteAgreements, setAgreementCustomTitle, linkAgreementToClient } from "@/lib/agreements.functions";
 import { AgreementStatusBadge } from "@/components/agreement-status-badge";
 import { VERIFICATION_BADGE } from "@/lib/agreements";
 
@@ -32,8 +32,9 @@ export const Route = createFileRoute("/_authenticated/admin/agreements/signed")(
 
 type Row = {
   id: string;
-  client_id: string;
+  client_id: string | null;
   template_name: string | null;
+  custom_title: string | null;
   agreement_type: string | null;
   status: string;
   verification_status: string;
@@ -49,6 +50,8 @@ type Row = {
   signnow_document_id: string | null;
   client_full_name: string | null;
   client_email: string | null;
+  signer_email: string | null;
+  signer_name: string | null;
   clients: { id: string; full_name: string; email: string | null } | null;
 };
 
@@ -107,6 +110,48 @@ function SignedAgreementsPage() {
   const refreshOneFn = useServerFn(refreshAgreementStatus);
   const importFn = useServerFn(importSignNowSignedDocuments);
   const bulkDeleteFn = useServerFn(bulkDeleteAgreements);
+  const setTitleFn = useServerFn(setAgreementCustomTitle);
+  const linkFn = useServerFn(linkAgreementToClient);
+  const [editingTitleId, setEditingTitleId] = useState<string | null>(null);
+  const [titleDraft, setTitleDraft] = useState("");
+  const [linkingId, setLinkingId] = useState<string | null>(null);
+  const [linkSearch, setLinkSearch] = useState("");
+
+  const { data: clientChoices = [] } = useQuery({
+    queryKey: ["link-client-search", linkSearch],
+    enabled: linkingId !== null,
+    queryFn: async () => {
+      let q = supabase.from("clients").select("id, full_name, email").eq("archived", false).order("full_name").limit(20);
+      const s = linkSearch.trim();
+      if (s) q = q.or(`full_name.ilike.%${s}%,email.ilike.%${s}%`);
+      return (await q).data ?? [];
+    },
+  });
+
+  async function saveCustomTitle(id: string) {
+    const v = titleDraft.trim();
+    try {
+      await setTitleFn({ data: { id, custom_title: v || null } });
+      toast.success(v ? "Custom title saved" : "Custom title cleared");
+      setEditingTitleId(null);
+      setTitleDraft("");
+      refetch();
+    } catch (e: any) {
+      toast.error(e?.message ?? "Could not save title");
+    }
+  }
+
+  async function linkToClient(id: string, clientId: string) {
+    try {
+      await linkFn({ data: { id, client_id: clientId } });
+      toast.success("Document linked to client");
+      setLinkingId(null);
+      setLinkSearch("");
+      refetch();
+    } catch (e: any) {
+      toast.error(e?.message ?? "Link failed");
+    }
+  }
 
   const importMutation = useMutation({
     mutationFn: async (): Promise<ImportSummary> => {
@@ -148,7 +193,7 @@ function SignedAgreementsPage() {
     queryFn: async (): Promise<Row[]> => {
       const { data, error } = await supabase
         .from("agreements")
-        .select("id, client_id, template_name, agreement_type, status, verification_status, signer_mismatch, signed_at, completed_at, updated_at, signing_method, signed_in_person, signed_copy_storage_path, signed_copy_url, signnow_completed_link, signnow_document_id, client_full_name, client_email, clients(id, full_name, email)")
+        .select("id, client_id, template_name, custom_title, agreement_type, status, verification_status, signer_mismatch, signed_at, completed_at, updated_at, signing_method, signed_in_person, signed_copy_storage_path, signed_copy_url, signnow_completed_link, signnow_document_id, client_full_name, client_email, signer_email, signer_name, clients(id, full_name, email)")
         .or("status.in.(Signed,Completed,Verified),signed_copy_storage_path.not.is.null,signed_at.not.is.null")
         .order("signed_at", { ascending: false, nullsFirst: false })
         .order("updated_at", { ascending: false })
@@ -181,16 +226,23 @@ function SignedAgreementsPage() {
   }, [rows, search, from, to, verif, src]);
 
   const grouped = useMemo(() => {
-    const map = new Map<string, { clientId: string; clientName: string; items: Row[] }>();
+    const map = new Map<string, { clientId: string | null; clientName: string; items: Row[] }>();
     for (const r of filtered) {
-      const cid = r.client_id;
-      const name = r.clients?.full_name ?? r.client_full_name ?? "Unknown client";
-      const entry = map.get(cid) ?? { clientId: cid, clientName: name, items: [] };
+      const cid = r.client_id ?? "__unlinked__";
+      const name = r.client_id
+        ? (r.clients?.full_name ?? r.client_full_name ?? "Unknown client")
+        : "Unlinked (no client match)";
+      const entry = map.get(cid) ?? { clientId: r.client_id, clientName: name, items: [] as Row[] };
       entry.items.push(r);
       map.set(cid, entry);
     }
     const arr = Array.from(map.values());
-    arr.sort((a, b) => a.clientName.localeCompare(b.clientName));
+    arr.sort((a, b) => {
+      // Unlinked group goes last
+      if (a.clientId === null && b.clientId !== null) return 1;
+      if (b.clientId === null && a.clientId !== null) return -1;
+      return a.clientName.localeCompare(b.clientName);
+    });
     for (const g of arr) {
       g.items.sort((a, b) => {
         const ta = a.signed_at ?? a.completed_at ?? "";
@@ -458,7 +510,7 @@ function SignedAgreementsPage() {
           ) : (
             <div className="space-y-6">
               {grouped.map((g) => (
-                <div key={g.clientId}>
+                <div key={g.clientId ?? "unlinked"}>
                   <div className="flex items-center justify-between border-b border-border pb-2 mb-2">
                     <div className="flex items-center gap-2">
                       <Checkbox
@@ -471,14 +523,21 @@ function SignedAgreementsPage() {
                         onCheckedChange={(v) => toggleGroup(g.items.map((i) => i.id), v === true)}
                         aria-label={`Select all documents for ${g.clientName}`}
                       />
-                      <Link
-                        to="/admin/clients/$id"
-                        params={{ id: g.clientId }}
-                        className="flex items-center gap-2 font-semibold hover:underline"
-                      >
-                        <User className="h-4 w-4 text-muted-foreground" />
-                        {g.clientName}
-                      </Link>
+                      {g.clientId ? (
+                        <Link
+                          to="/admin/clients/$id"
+                          params={{ id: g.clientId }}
+                          className="flex items-center gap-2 font-semibold hover:underline"
+                        >
+                          <User className="h-4 w-4 text-muted-foreground" />
+                          {g.clientName}
+                        </Link>
+                      ) : (
+                        <span className="flex items-center gap-2 font-semibold text-amber-500">
+                          <LinkIcon className="h-4 w-4" />
+                          {g.clientName}
+                        </span>
+                      )}
                     </div>
                     <span className="text-xs text-muted-foreground">
                       {g.items.length} document{g.items.length === 1 ? "" : "s"}
@@ -488,7 +547,9 @@ function SignedAgreementsPage() {
                     {g.items.map((a) => {
                       const signedDate = a.signed_at ?? a.completed_at;
                       const hasFile = !!a.signed_copy_storage_path || !!a.signed_copy_url;
-                      const email = a.clients?.email ?? a.client_email ?? null;
+                      const email = a.clients?.email ?? a.client_email ?? a.signer_email ?? null;
+                      const displayTitle = a.custom_title ?? a.template_name ?? a.agreement_type ?? "Agreement";
+                      const isEditingTitle = editingTitleId === a.id;
                       return (
                         <li key={a.id} className="flex flex-wrap items-center gap-3 py-3 text-sm">
                           <Checkbox
@@ -498,9 +559,41 @@ function SignedAgreementsPage() {
                           />
                           <FileText className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                           <div className="min-w-0 flex-1">
-                            <div className="font-medium truncate">
-                              {a.template_name ?? a.agreement_type ?? "Agreement"}
-                            </div>
+                            {isEditingTitle ? (
+                              <div className="flex items-center gap-1">
+                                <Input
+                                  autoFocus
+                                  value={titleDraft}
+                                  onChange={(e) => setTitleDraft(e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") saveCustomTitle(a.id);
+                                    if (e.key === "Escape") { setEditingTitleId(null); setTitleDraft(""); }
+                                  }}
+                                  placeholder={a.template_name ?? "Custom title"}
+                                  className="h-7 text-sm"
+                                />
+                                <Button size="sm" variant="default" className="h-7" onClick={() => saveCustomTitle(a.id)}>Save</Button>
+                                <Button size="sm" variant="ghost" className="h-7" onClick={() => { setEditingTitleId(null); setTitleDraft(""); }}>Cancel</Button>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-medium truncate">{displayTitle}</span>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-6 px-1.5"
+                                  onClick={() => { setEditingTitleId(a.id); setTitleDraft(a.custom_title ?? ""); }}
+                                  title="Set custom title"
+                                >
+                                  <Pencil className="h-3 w-3" />
+                                </Button>
+                                {a.custom_title && (
+                                  <span className="text-[10px] text-muted-foreground truncate">
+                                    (orig: {a.template_name ?? "Untitled"})
+                                  </span>
+                                )}
+                              </div>
+                            )}
                             <div className="text-xs text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-0.5">
                               <span className="font-medium text-foreground/80">
                                 {signedDate
@@ -511,6 +604,9 @@ function SignedAgreementsPage() {
                                 <span className="inline-flex items-center gap-1">
                                   <Mail className="h-3 w-3" /> {email}
                                 </span>
+                              )}
+                              {a.signer_name && !a.client_id && (
+                                <span>· Signer: {a.signer_name}</span>
                               )}
                               <span>· {methodOf(a)}</span>
                               <span>· {sourceOf(a)}</span>
@@ -563,14 +659,50 @@ function SignedAgreementsPage() {
                                 <ExternalLink className="h-3 w-3" /> SignNow
                               </a>
                             )}
-                            <Link
-                              to="/admin/clients/$id"
-                              params={{ id: a.client_id }}
-                              className="text-xs text-primary hover:underline inline-flex items-center gap-1"
-                            >
-                              <User className="h-3 w-3" /> Client
-                            </Link>
+                            {a.client_id ? (
+                              <Link
+                                to="/admin/clients/$id"
+                                params={{ id: a.client_id }}
+                                className="text-xs text-primary hover:underline inline-flex items-center gap-1"
+                              >
+                                <User className="h-3 w-3" /> Client
+                              </Link>
+                            ) : (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => { setLinkingId(a.id); setLinkSearch(a.signer_email ?? ""); }}
+                                title="Link this document to a client"
+                              >
+                                <LinkIcon className="h-3 w-3 mr-1" /> Link to client
+                              </Button>
+                            )}
                           </div>
+                          {linkingId === a.id && (
+                            <div className="w-full mt-2 rounded-md border border-border bg-secondary/30 p-3 space-y-2">
+                              <div className="flex items-center gap-2">
+                                <Search className="h-3.5 w-3.5 text-muted-foreground" />
+                                <Input
+                                  autoFocus
+                                  value={linkSearch}
+                                  onChange={(e) => setLinkSearch(e.target.value)}
+                                  placeholder="Search client by name or email…"
+                                  className="h-8 text-sm"
+                                />
+                                <Button size="sm" variant="ghost" onClick={() => { setLinkingId(null); setLinkSearch(""); }}>Cancel</Button>
+                              </div>
+                              <ul className="max-h-48 overflow-auto divide-y divide-border text-sm">
+                                {clientChoices.length === 0 ? (
+                                  <li className="py-2 text-xs text-muted-foreground">No matching clients</li>
+                                ) : clientChoices.map((c: any) => (
+                                  <li key={c.id} className="flex items-center justify-between py-1.5">
+                                    <span className="truncate"><span className="font-medium">{c.full_name}</span> <span className="text-muted-foreground text-xs">{c.email ?? ""}</span></span>
+                                    <Button size="sm" variant="outline" onClick={() => linkToClient(a.id, c.id)}>Link</Button>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
                         </li>
                       );
                     })}

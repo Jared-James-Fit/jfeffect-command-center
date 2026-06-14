@@ -11,6 +11,7 @@ import {
   remindSignNowInvite,
   SignNowNotConfiguredError,
   SignNowApiError,
+  getSignNowDocument,
 } from "@/lib/signnow.server";
 import { listAllSignNowDocuments } from "@/lib/signnow.server";
 
@@ -223,6 +224,21 @@ export const testSignNowConnection = createServerFn({ method: "POST" })
 // by signnow_template_id. Every template returned by SignNow is synced as
 // active + unarchived so admins see the full template library. Admins can
 // archive or deactivate individual templates from the UI afterward.
+const AUTO_HIDE_NAME_PATTERNS: RegExp[] = [
+  /^\s*\(?\s*OLD\b/i,
+  /^\s*Duplicate of\b/i,
+  /^\s*\(\s*Testing\b/i,
+];
+
+function shouldAutoHideByName(name: string | null | undefined): string | null {
+  const n = (name ?? "").trim();
+  if (!n) return null;
+  for (const re of AUTO_HIDE_NAME_PATTERNS) {
+    if (re.test(n)) return "name_pattern";
+  }
+  return null;
+}
+
 export const syncSignNowTemplates = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
@@ -232,10 +248,8 @@ export const syncSignNowTemplates = createServerFn({ method: "POST" })
       throw new Error("SignNow API is not configured. Add the SIGNNOW_* secrets to enable template sync.");
     }
     const remote = await listSignNowTemplates();
-    // Dedupe by name — SignNow often contains multiple templates that share a
-    // name (folder copies, old revisions, "Duplicate of…" leftovers). Keep the
-    // most-recently-updated one per name; treat the rest as not synced so we
-    // never re-create them locally and we archive any stale local rows.
+    // Track winners per-name (latest-updated). Older same-name copies are
+    // auto-hidden so the picker mirrors the visible SignNow Templates list.
     const byName = new Map<string, typeof remote[number]>();
     for (const r of remote) {
       const key = (r.name ?? "").trim().toLowerCase();
@@ -246,10 +260,10 @@ export const syncSignNowTemplates = createServerFn({ method: "POST" })
       const newU = typeof r.updated === "number" ? r.updated : 0;
       if (newU >= curU) byName.set(key, r);
     }
-    const dedupedRemote = Array.from(byName.values());
+    const winnerIds = new Set(Array.from(byName.values()).map((r) => r.id));
     const { data: existing } = await supabase
       .from("agreement_templates")
-      .select("id, signnow_template_id, name, is_active");
+      .select("id, signnow_template_id, name, is_active, manually_hidden");
     const byId = new Map<string, any>();
     for (const t of existing ?? []) {
       if (t.signnow_template_id) byId.set(t.signnow_template_id, t);
@@ -258,11 +272,21 @@ export const syncSignNowTemplates = createServerFn({ method: "POST" })
     let updated = 0;
     let skipped = 0;
     const seenRemoteIds = new Set<string>();
-    for (const r of dedupedRemote) {
+    for (const r of remote) {
       seenRemoteIds.add(r.id);
       const match = byId.get(r.id);
+      const nameReason = shouldAutoHideByName(r.name);
+      const isWinner = winnerIds.has(r.id);
+      const autoHide = !isWinner || !!nameReason;
+      const reason = nameReason ?? (!isWinner ? "duplicate_name" : null);
       if (match) {
-        const patch: any = { is_active: true, archived: false };
+        // Never override a manual hide.
+        if (match.manually_hidden) { skipped += 1; continue; }
+        const patch: any = {
+          is_active: !autoHide,
+          archived: autoHide,
+          auto_hide_reason: reason,
+        };
         if (match.name !== r.name) patch.name = r.name;
         await supabase.from("agreement_templates")
           .update(patch).eq("id", match.id);
@@ -272,28 +296,47 @@ export const syncSignNowTemplates = createServerFn({ method: "POST" })
           name: r.name,
           signnow_template_id: r.id,
           version: "1",
-          is_active: true,
-          archived: false,
+          is_active: !autoHide,
+          archived: autoHide,
+          auto_hide_reason: reason,
           created_by: userId,
           notes: "Synced from SignNow.",
         } as any);
         created += 1;
       }
     }
-    // Archive + deactivate any previously-synced rows whose remote template no
-    // longer exists in SignNow OR was de-duplicated above (older same-name
-    // copy). Historical agreements already created from them are untouched.
+    // Anything previously synced but no longer present in SignNow → archive,
+    // unless manually hidden (preserve user's choice and stamp).
     for (const [sid, row] of byId.entries()) {
-      if (!seenRemoteIds.has(sid) && (row.is_active || !row.archived)) {
+      if (!seenRemoteIds.has(sid) && !row.manually_hidden && (row.is_active || !row.archived)) {
         await supabase.from("agreement_templates")
-          .update({ is_active: false, archived: true } as any).eq("id", row.id);
+          .update({ is_active: false, archived: true, auto_hide_reason: "removed_remote" } as any)
+          .eq("id", row.id);
         skipped += 1;
       }
     }
     await supabase.from("signnow_settings").update({
       last_synced_at: new Date().toISOString(),
     } as any).eq("singleton", true);
-    return { ok: true, total: dedupedRemote.length, fetched: remote.length, created, updated, skipped };
+    return { ok: true, total: winnerIds.size, fetched: remote.length, created, updated, skipped };
+  });
+
+/** Manually hide a template row from the picker without deleting it.
+ *  Sync will never re-show a row whose `manually_hidden` is true. */
+export const setTemplateManualHidden = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i: unknown) =>
+    z.object({ id: z.string().uuid(), hidden: z.boolean() }).parse(i),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    await assertAdminOrCoach(supabase, userId);
+    const patch: any = data.hidden
+      ? { manually_hidden: true, is_active: false, archived: true }
+      : { manually_hidden: false, is_active: true, archived: false, auto_hide_reason: null };
+    const { error } = await supabase.from("agreement_templates").update(patch).eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
   });
 
 export const createAgreement = createServerFn({ method: "POST" })
@@ -1265,19 +1308,76 @@ export const importSignNowSignedDocuments = createServerFn({ method: "POST" })
     }
 
     const details: Array<{ documentId: string; outcome: string; reason?: string; agreementId?: string }> = [];
-    let imported = 0, skipped = 0, unmatched = 0, errors = 0;
+    let imported = 0, skipped = 0, unmatched = 0, errors = 0, createdLinked = 0, createdUnlinked = 0;
+
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
     for (const s of summaries) {
-      const agreementId = existingById.get(s.id);
+      let agreementId = existingById.get(s.id);
+
+      // Not yet in our DB → try to fetch signer info and create a row
+      // (linked when email matches a client, otherwise unlinked).
       if (!agreementId) {
-        // Refresh-only mode: never insert. Report as unmatched so the admin
-        // can see which SignNow docs have no corresponding agreement row.
-        unmatched += 1;
-        details.push({ documentId: s.id, outcome: "unlinked", reason: "no existing agreement linked to this SignNow document" });
-        continue;
+        // Only consider docs that appear to be signed/completed to avoid
+        // inserting noise from drafts.
+        if (!s.allSigned && !s.cancelled) {
+          // We still inspect — list endpoint hints can be incomplete.
+        }
+        try {
+          const detail = await getSignNowDocument(s.id);
+          if (detail.status !== "completed" && detail.status !== "signed") {
+            skipped += 1;
+            details.push({ documentId: s.id, outcome: "skipped", reason: `status=${detail.status}` });
+            continue;
+          }
+          const signerEmail = (detail.signerEmail ?? "").trim().toLowerCase() || null;
+          let matchedClient: { id: string; full_name: string | null } | null = null;
+          if (signerEmail) {
+            const { data: c } = await supabaseAdmin
+              .from("clients")
+              .select("id, full_name")
+              .eq("email", signerEmail)
+              .eq("archived", false)
+              .maybeSingle();
+            if (c) matchedClient = { id: c.id, full_name: c.full_name ?? null };
+          }
+          const insertRow: any = {
+            client_id: matchedClient?.id ?? null,
+            client_full_name: matchedClient?.full_name ?? detail.signerName ?? null,
+            client_email: signerEmail,
+            signer_email: signerEmail,
+            signer_name: detail.signerName ?? null,
+            template_name: detail.documentName ?? "Imported from SignNow",
+            agreement_type: "Imported",
+            status: "Signed",
+            verification_status: matchedClient ? "Auto-Matched" : "Not Verified",
+            signed_at: detail.signedAt,
+            completed_at: detail.signedAt,
+            signnow_document_id: s.id,
+            signnow_completed_link: null,
+            signing_method: "Imported from SignNow",
+          };
+          const { data: inserted, error: insErr } = await supabaseAdmin
+            .from("agreements")
+            .insert(insertRow)
+            .select("id")
+            .single();
+          if (insErr || !inserted) {
+            errors += 1;
+            details.push({ documentId: s.id, outcome: "error", reason: insErr?.message ?? "insert failed" });
+            continue;
+          }
+          agreementId = inserted.id;
+          if (matchedClient) createdLinked += 1; else createdUnlinked += 1;
+        } catch (e: any) {
+          errors += 1;
+          details.push({ documentId: s.id, outcome: "error", reason: e?.message ?? "fetch failed" });
+          continue;
+        }
       }
+
       try {
-        const res = await pullSignedDocumentForAgreement(agreementId, { event: "sync_refresh" });
+        const res = await pullSignedDocumentForAgreement(agreementId!, { event: "sync_refresh" });
         if (res.ok) {
           imported += 1;
           details.push({ documentId: s.id, outcome: "refreshed", agreementId, reason: res.reason });
@@ -1290,6 +1390,9 @@ export const importSignNowSignedDocuments = createServerFn({ method: "POST" })
         details.push({ documentId: s.id, outcome: "error", agreementId, reason: e?.message ?? "unknown" });
       }
     }
+    // "unmatched" is kept for backward compatibility with the UI summary,
+    // but the new flow inserts those rows as unlinked instead of skipping.
+    unmatched = createdUnlinked;
 
     return {
       ok: true,
@@ -1321,7 +1424,17 @@ export const getSignedAgreementUrl = createServerFn({ method: "POST" })
     // Belt-and-suspenders: explicitly re-validate the caller can access this
     // agreement's client. Defends against future RLS regressions and produces
     // a clear server-side audit if someone tries to fish for IDs.
-    const accessRole = await assertClientAccess(supabase, userId, ag.client_id);
+    // Unlinked agreements (no client_id) are admin-only.
+    let accessRole: string;
+    if (ag.client_id) {
+      accessRole = await assertClientAccess(supabase, userId, ag.client_id);
+    } else {
+      const { data: roleRows } = await supabase
+        .from("user_roles").select("role").eq("user_id", userId);
+      const roles = (roleRows ?? []).map((r: any) => r.role);
+      if (!roles.includes("admin")) throw new Error("Forbidden");
+      accessRole = "admin";
+    }
 
     if (!ag.signed_copy_storage_path) {
       return {
@@ -1415,4 +1528,66 @@ export const getSignedAgreementUrlsForPurchase = createServerFn({ method: "POST"
       });
     }
     return { accessRole, agreements: out };
+  });
+
+/** Admin: set or clear the custom display title on an agreement row. */
+export const setAgreementCustomTitle = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i: unknown) =>
+    z.object({
+      id: z.string().uuid(),
+      custom_title: z.string().trim().max(200).nullable(),
+    }).parse(i),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const { data: roleRows } = await supabase
+      .from("user_roles").select("role").eq("user_id", userId);
+    const roles = (roleRows ?? []).map((r: any) => r.role);
+    if (!roles.includes("admin")) throw new Error("Forbidden: admin only.");
+    const value = data.custom_title && data.custom_title.length ? data.custom_title : null;
+    const { error } = await supabase
+      .from("agreements")
+      .update({ custom_title: value } as any)
+      .eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+/** Admin: link an unlinked signed document to a client. */
+export const linkAgreementToClient = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i: unknown) =>
+    z.object({
+      id: z.string().uuid(),
+      client_id: z.string().uuid().nullable(),
+    }).parse(i),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const { data: roleRows } = await supabase
+      .from("user_roles").select("role").eq("user_id", userId);
+    const roles = (roleRows ?? []).map((r: any) => r.role);
+    if (!roles.includes("admin")) throw new Error("Forbidden: admin only.");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    let patch: any = { client_id: data.client_id };
+    if (data.client_id) {
+      const { data: c } = await supabaseAdmin
+        .from("clients").select("full_name, email").eq("id", data.client_id).maybeSingle();
+      if (c) {
+        patch.client_full_name = c.full_name ?? null;
+        patch.client_email = c.email ?? null;
+      }
+    }
+    const { error } = await supabaseAdmin
+      .from("agreements").update(patch).eq("id", data.id);
+    if (error) throw new Error(error.message);
+    await supabaseAdmin.from("agreement_audit_log").insert({
+      agreement_id: data.id,
+      event: data.client_id ? "linked_to_client" : "unlinked_from_client",
+      actor_user_id: userId,
+      actor_role: "admin",
+      details: { client_id: data.client_id } as any,
+    } as any);
+    return { ok: true };
   });

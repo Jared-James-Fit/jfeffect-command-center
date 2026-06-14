@@ -12,10 +12,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Plus, Edit2, Archive, ExternalLink, ShieldCheck, Loader2, UserPlus, Copy, Search, Power, Trash2, Info, Settings, FolderArchive } from "lucide-react";
+import { Plus, Edit2, Archive, ExternalLink, ShieldCheck, Loader2, UserPlus, Copy, Search, Power, Trash2, Info, Settings, FolderArchive, EyeOff, Eye } from "lucide-react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
-import { createTemplate, updateTemplate, archiveTemplate, setTemplateActive, createAgreement, syncSignNowTemplates } from "@/lib/agreements.functions";
+import { createTemplate, updateTemplate, archiveTemplate, setTemplateActive, createAgreement, syncSignNowTemplates, setTemplateManualHidden } from "@/lib/agreements.functions";
 import { AGREEMENT_TYPES, type AgreementTemplate } from "@/lib/agreements";
 import { AgreementStatusBadge } from "@/components/agreement-status-badge";
 import { SentAgreementsManager } from "@/components/sent-agreements-manager";
@@ -38,15 +38,23 @@ export function AgreementsAdminPage({ embedded = false }: { embedded?: boolean }
   const [actioning, setActioning] = useState<{ template: AgreementTemplate } | null>(null);
   const createFn = useServerFn(createTemplate);
   const updateFn = useServerFn(updateTemplate);
-  const archiveFn = useServerFn(archiveTemplate);
+  // archiveTemplate kept available for legacy callers; manual hide goes through setHiddenFn.
+  void useServerFn(archiveTemplate);
   const setActiveFn = useServerFn(setTemplateActive);
   const syncFn = useServerFn(syncSignNowTemplates);
+  const setHiddenFn = useServerFn(setTemplateManualHidden);
   const [syncing, setSyncing] = useState(false);
+  const [showHidden, setShowHidden] = useState(false);
 
   const { data: templates = [] } = useQuery({
-    queryKey: ["agreement-templates"],
-    queryFn: async () => (await supabase.from("agreement_templates")
-      .select("*").eq("archived", false).order("created_at", { ascending: false })).data ?? [],
+    queryKey: ["agreement-templates", showHidden],
+    queryFn: async () => {
+      let q = supabase.from("agreement_templates").select("*").order("created_at", { ascending: false });
+      if (!showHidden) {
+        q = q.eq("archived", false).eq("manually_hidden", false);
+      }
+      return (await q).data ?? [];
+    },
   });
 
   const { data: signnow } = useQuery({
@@ -107,6 +115,15 @@ export function AgreementsAdminPage({ embedded = false }: { embedded?: boolean }
               <h2 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">Agreement Templates</h2>
             </div>
             <div className="flex gap-2 flex-wrap">
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setShowHidden((v) => !v)}
+                title={showHidden ? "Hide archived/hidden templates" : "Show archived/hidden templates"}
+              >
+                {showHidden ? <Eye className="h-3.5 w-3.5 mr-1" /> : <EyeOff className="h-3.5 w-3.5 mr-1" />}
+                {showHidden ? "Hide hidden" : "Show hidden"}
+              </Button>
               <Button
                 size="sm"
                 variant="outline"
@@ -205,12 +222,20 @@ export function AgreementsAdminPage({ embedded = false }: { embedded?: boolean }
                       qc.invalidateQueries({ queryKey: ["agreement-templates"] });
                       toast.success(t.is_active ? "Template deactivated" : "Template activated");
                     }}><Power className="h-3 w-3 mr-1" /> {t.is_active ? "Deactivate" : "Activate"}</Button>
-                    <Button size="sm" variant="ghost" onClick={async () => {
-                      if (!confirm(`Delete "${t.name}"? It will be hidden from the templates list. Existing signed agreements stay intact.`)) return;
-                      await archiveFn({ data: { id: t.id } });
-                      qc.invalidateQueries({ queryKey: ["agreement-templates"] });
-                      toast.success("Template deleted");
-                    }}><Trash2 className="h-3 w-3 mr-1" /> Delete</Button>
+                    {(t as any).manually_hidden || (t as any).archived ? (
+                      <Button size="sm" variant="ghost" onClick={async () => {
+                        await setHiddenFn({ data: { id: t.id, hidden: false } });
+                        qc.invalidateQueries({ queryKey: ["agreement-templates"] });
+                        toast.success("Template restored");
+                      }}><Eye className="h-3 w-3 mr-1" /> Show</Button>
+                    ) : (
+                      <Button size="sm" variant="ghost" onClick={async () => {
+                        if (!confirm(`Hide "${t.name}" from the templates list? Sync will not bring it back. Existing signed agreements stay intact.`)) return;
+                        await setHiddenFn({ data: { id: t.id, hidden: true } });
+                        qc.invalidateQueries({ queryKey: ["agreement-templates"] });
+                        toast.success("Template hidden");
+                      }}><EyeOff className="h-3 w-3 mr-1" /> Hide</Button>
+                    )}
                   </div>
                 </Card>
                 );
