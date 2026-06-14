@@ -77,7 +77,17 @@ export function AdminCalendarBoardPanel() {
       <div className="p-3 sm:p-6 md:p-8 space-y-4">
         <AdminNeedsAttentionPanel items={items} />
         <Card className="border-border bg-card p-3 sm:p-4">
-          <CalendarBoard items={items} isLoading={isLoading} showClientName toolbar={toolbar} />
+          <CalendarBoard
+            items={items}
+            isLoading={isLoading}
+            showClientName
+            toolbar={toolbar}
+            emptyHint={
+              activeFilterCount > 0
+                ? "No calendar items match your current filters. Try clearing filters or widening the date range."
+                : "Nothing scheduled yet. Create an event in the Events tab or add appointments/PT sessions to populate the board."
+            }
+          />
         </Card>
       </div>
     </>
