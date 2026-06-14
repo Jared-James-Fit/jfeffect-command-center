@@ -139,12 +139,14 @@ export type Database = {
           archived: boolean
           archived_at: string | null
           archived_by: string | null
+          auto_hide_reason: string | null
           created_at: string
           created_by: string | null
           description: string | null
           id: string
           is_active: boolean
           last_used_at: string | null
+          manually_hidden: boolean
           name: string
           notes: string | null
           signnow_template_id: string | null
@@ -159,12 +161,14 @@ export type Database = {
           archived?: boolean
           archived_at?: string | null
           archived_by?: string | null
+          auto_hide_reason?: string | null
           created_at?: string
           created_by?: string | null
           description?: string | null
           id?: string
           is_active?: boolean
           last_used_at?: string | null
+          manually_hidden?: boolean
           name: string
           notes?: string | null
           signnow_template_id?: string | null
@@ -179,12 +183,14 @@ export type Database = {
           archived?: boolean
           archived_at?: string | null
           archived_by?: string | null
+          auto_hide_reason?: string | null
           created_at?: string
           created_by?: string | null
           description?: string | null
           id?: string
           is_active?: boolean
           last_used_at?: string | null
+          manually_hidden?: boolean
           name?: string
           notes?: string | null
           signnow_template_id?: string | null
@@ -209,7 +215,7 @@ export type Database = {
           client_dob: string | null
           client_email: string | null
           client_full_name: string | null
-          client_id: string
+          client_id: string | null
           client_marked_complete_at: string | null
           client_marked_complete_by: string | null
           client_phone: string | null
@@ -217,6 +223,7 @@ export type Database = {
           correct_client_name: string | null
           created_at: string
           created_by: string | null
+          custom_title: string | null
           drive_file_id: string | null
           drive_file_url: string | null
           expires_at: string | null
@@ -231,7 +238,9 @@ export type Database = {
           signed_copy_url: string | null
           signed_in_person: boolean
           signed_pdf_pulled_at: string | null
+          signer_email: string | null
           signer_mismatch: boolean
+          signer_name: string | null
           signer_name_in_signnow: string | null
           signing_method: string | null
           signnow_completed_link: string | null
@@ -261,7 +270,7 @@ export type Database = {
           client_dob?: string | null
           client_email?: string | null
           client_full_name?: string | null
-          client_id: string
+          client_id?: string | null
           client_marked_complete_at?: string | null
           client_marked_complete_by?: string | null
           client_phone?: string | null
@@ -269,6 +278,7 @@ export type Database = {
           correct_client_name?: string | null
           created_at?: string
           created_by?: string | null
+          custom_title?: string | null
           drive_file_id?: string | null
           drive_file_url?: string | null
           expires_at?: string | null
@@ -283,7 +293,9 @@ export type Database = {
           signed_copy_url?: string | null
           signed_in_person?: boolean
           signed_pdf_pulled_at?: string | null
+          signer_email?: string | null
           signer_mismatch?: boolean
+          signer_name?: string | null
           signer_name_in_signnow?: string | null
           signing_method?: string | null
           signnow_completed_link?: string | null
@@ -313,7 +325,7 @@ export type Database = {
           client_dob?: string | null
           client_email?: string | null
           client_full_name?: string | null
-          client_id?: string
+          client_id?: string | null
           client_marked_complete_at?: string | null
           client_marked_complete_by?: string | null
           client_phone?: string | null
@@ -321,6 +333,7 @@ export type Database = {
           correct_client_name?: string | null
           created_at?: string
           created_by?: string | null
+          custom_title?: string | null
           drive_file_id?: string | null
           drive_file_url?: string | null
           expires_at?: string | null
@@ -335,7 +348,9 @@ export type Database = {
           signed_copy_url?: string | null
           signed_in_person?: boolean
           signed_pdf_pulled_at?: string | null
+          signer_email?: string | null
           signer_mismatch?: boolean
+          signer_name?: string | null
           signer_name_in_signnow?: string | null
           signing_method?: string | null
           signnow_completed_link?: string | null
