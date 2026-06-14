@@ -822,7 +822,11 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
             query={debouncedPaletteQuery}
             onPick={(tpl) => {
               setPaletteOpen(false);
-              navigate({ to: "/admin/program-library/$templateId", params: { templateId: tpl.id } });
+              if (tpl.id === "__library__") {
+                navigate({ to: "/admin/program-library" });
+              } else {
+                navigate({ to: "/admin/program-library/$templateId", params: { templateId: tpl.id } });
+              }
             }}
           />
           <CommandGroup heading="Actions">
