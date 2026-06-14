@@ -592,7 +592,10 @@ function WorkoutDay() {
   return (
     <>
       {focusMode && (
-        <div className="fixed inset-0 z-[60] overflow-y-auto bg-background">
+        <div
+          className="fixed inset-0 z-40 overflow-y-auto bg-background"
+          data-workout-focus
+        >
           <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-background/95 px-4 py-3 backdrop-blur">
             <div className="font-bold">{day.title || `Day ${day.day_index}`} · Full Screen</div>
             {/* Global KG/LB toggle removed — each exercise carries its own
