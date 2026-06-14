@@ -846,6 +846,114 @@ export interface Crumb {
   to?: string;
 }
 
+// ------- ⌘K palette: workout library results -------
+const TEMPLATE_TYPE_LABEL: Record<string, string> = {
+  full_prep: "Full Prep",
+  block: "Block",
+  week: "Week",
+  day: "Day",
+  exercise_row: "Exercise Row",
+};
+const TRAINING_STYLE_LABEL: Record<string, string> = {
+  powerlifting: "Powerlifting",
+  bodybuilding: "Bodybuilding",
+  strength: "Strength",
+  lifestyle: "Lifestyle",
+  hybrid: "Hybrid",
+  rehab: "Rehab",
+  conditioning: "Conditioning",
+  custom: "Custom",
+};
+
+type TemplateRow = {
+  id: string;
+  name: string;
+  template_type: string;
+  training_style: string;
+  training_focus?: string | null;
+  tags?: string[] | null;
+  weeks?: number | null;
+  days_per_week?: number | null;
+  est_duration_min?: number | null;
+};
+
+function WorkoutLibraryResults({
+  query,
+  onPick,
+}: {
+  query: string;
+  onPick: (tpl: TemplateRow) => void;
+}) {
+  const { data: templates = [], isLoading } = useQuery({
+    queryKey: ["cmd-k-templates", query],
+    queryFn: () => listTemplates({ q: query, limit: query ? 50 : 12 } as any),
+    staleTime: 30_000,
+  });
+
+  if (isLoading) {
+    return <CommandEmpty>Searching workouts…</CommandEmpty>;
+  }
+  if (!templates.length) {
+    return (
+      <CommandEmpty>
+        {query ? "No workouts match that search." : "No workouts in your library yet."}
+      </CommandEmpty>
+    );
+  }
+
+  // Group by template_type so a long list stays scannable.
+  const grouped = new Map<string, TemplateRow[]>();
+  for (const t of templates as TemplateRow[]) {
+    const key = t.template_type || "other";
+    if (!grouped.has(key)) grouped.set(key, []);
+    grouped.get(key)!.push(t);
+  }
+
+  return (
+    <>
+      {Array.from(grouped.entries()).map(([typeKey, rows]) => (
+        <CommandGroup key={typeKey} heading={TEMPLATE_TYPE_LABEL[typeKey] ?? typeKey}>
+          {rows.map((tpl) => {
+            const style = TRAINING_STYLE_LABEL[tpl.training_style] ?? tpl.training_style;
+            const meta = [
+              style,
+              tpl.training_focus,
+              tpl.weeks != null ? `${tpl.weeks}w` : null,
+              tpl.days_per_week != null ? `${tpl.days_per_week}d/wk` : null,
+            ].filter(Boolean).join(" · ");
+            const tags = (tpl.tags ?? []).slice(0, 3).join(" · ");
+            const haystack = [tpl.name, meta, tags, style, tpl.training_focus, ...(tpl.tags ?? [])]
+              .filter(Boolean).join(" ");
+            return (
+              <CommandItem
+                key={tpl.id}
+                value={haystack}
+                onSelect={() => onPick(tpl)}
+              >
+                <BookOpen className="mr-2 h-4 w-4 shrink-0 text-primary" />
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-semibold">{tpl.name}</div>
+                  {meta && <div className="truncate text-[11px] text-muted-foreground">{meta}</div>}
+                </div>
+              </CommandItem>
+            );
+          })}
+        </CommandGroup>
+      ))}
+      <CommandGroup heading="Quick links">
+        <CommandItem
+          value="open workout library"
+          onSelect={() => {
+            onPick({ id: "__library__" } as any);
+          }}
+        >
+          <BookOpen className="mr-2 h-4 w-4" /> Open full workout library
+        </CommandItem>
+      </CommandGroup>
+    </>
+  );
+}
+
 // ------- Mobile bottom-nav helpers (grouped item + long-press) -------
 /**
  * Hold-to-open + drag-to-select gesture for the floating bar.
