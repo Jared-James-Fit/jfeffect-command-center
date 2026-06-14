@@ -166,6 +166,13 @@ export function ClientBlockView({
 
   // Scroll the active day into view on mount / when activeDayIdx changes (mobile).
   const carouselRef = useRef<HTMLDivElement | null>(null);
+  const weekStripRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const root = weekStripRef.current;
+    if (!root || !resolvedWeek?.id) return;
+    const el = root.querySelector<HTMLElement>(`[data-week-id="${resolvedWeek.id}"]`);
+    el?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+  }, [resolvedWeek?.id]);
   useEffect(() => {
     if (!days.length) return;
     const d = days[activeDayIdx];
