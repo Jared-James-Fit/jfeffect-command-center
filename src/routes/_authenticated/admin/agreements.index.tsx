@@ -116,6 +116,15 @@ export function AgreementsAdminPage({ embedded = false }: { embedded?: boolean }
             <div className="flex gap-2 flex-wrap">
               <Button
                 size="sm"
+                variant="ghost"
+                onClick={() => setShowHidden((v) => !v)}
+                title={showHidden ? "Hide archived/hidden templates" : "Show archived/hidden templates"}
+              >
+                {showHidden ? <Eye className="h-3.5 w-3.5 mr-1" /> : <EyeOff className="h-3.5 w-3.5 mr-1" />}
+                {showHidden ? "Hide hidden" : "Show hidden"}
+              </Button>
+              <Button
+                size="sm"
                 variant="outline"
                 disabled={!apiConnected || syncing}
                 onClick={async () => {
