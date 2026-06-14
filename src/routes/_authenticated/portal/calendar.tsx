@@ -67,9 +67,10 @@ function CalendarPage() {
               <div>
                 <div className="font-bold uppercase tracking-widest">Admin POV — {povClient?.full_name ?? "Client"}</div>
                 <div className="mt-0.5 text-amber-200/80">
-                  Calendar reads use your admin session, so RLS-scoped sources (events, check-ins, PT sessions, appointments)
-                  may surface admin-visible rows rather than only this client's view. Treat any client-private chip as an
-                  approximation until verified from the client's own session.
+                  Viewing this client's calendar as admin. All sources (events, check-ins, PT sessions, appointments,
+                  workouts, key dates) are explicitly scoped to this client's id — but the underlying queries still run
+                  under your admin JWT, so any row your admin role cannot read at all (e.g. a future RLS lockdown) would
+                  also be hidden here.
                 </div>
               </div>
             </div>
