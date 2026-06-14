@@ -267,6 +267,7 @@ export function ClientBlockView({
 
           {/* Horizontal swipeable week strip */}
           <div
+            ref={weekStripRef}
             className="-mx-1 flex flex-1 snap-x snap-mandatory items-center gap-1.5 overflow-x-auto px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
             aria-label="Weeks"
           >
@@ -280,6 +281,7 @@ export function ClientBlockView({
                 <button
                   key={w.id}
                   type="button"
+                  data-week-id={w.id}
                   onClick={() => onWeekChange(w.week_index)}
                   className={cn(
                     "snap-start shrink-0 rounded-md border px-3 py-1.5 text-left transition-colors",
