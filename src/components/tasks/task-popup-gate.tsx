@@ -122,7 +122,14 @@ export function TaskPopupGate({ scope = "admin" }: { scope?: "admin" | "media_ma
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) skipForToday(); else setOpen(true); }}>
-      <DialogContent className="max-w-md">
+      <DialogContent
+        className="max-w-md"
+        // Non-modal: keep the sidebar and the rest of the UI clickable while
+        // the daily task summary is on screen. Otherwise the modal overlay
+        // captures every click and makes the app feel broken.
+        modal={false}
+        onInteractOutside={(e) => e.preventDefault()}
+      >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <ListChecks className="h-5 w-5 text-primary" />
