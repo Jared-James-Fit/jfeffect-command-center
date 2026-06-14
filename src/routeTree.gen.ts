@@ -24,6 +24,7 @@ import { Route as ApplyRouteImport } from './routes/apply'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SignupJfRouteImport } from './routes/signup.jf'
+import { Route as SignTokenRouteImport } from './routes/sign.$token'
 import { Route as MWelcomeRouteImport } from './routes/m.welcome'
 import { Route as LegalSlugRouteImport } from './routes/legal.$slug'
 import { Route as CoachingApplyRouteImport } from './routes/coaching.apply'
@@ -298,6 +299,11 @@ const IndexRoute = IndexRouteImport.update({
 const SignupJfRoute = SignupJfRouteImport.update({
   id: '/signup/jf',
   path: '/signup/jf',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SignTokenRoute = SignTokenRouteImport.update({
+  id: '/sign/$token',
+  path: '/sign/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
 const MWelcomeRoute = MWelcomeRouteImport.update({
@@ -1497,6 +1503,7 @@ export interface FileRoutesByFullPath {
   '/coaching/apply': typeof CoachingApplyRoute
   '/legal/$slug': typeof LegalSlugRoute
   '/m/welcome': typeof MWelcomeRoute
+  '/sign/$token': typeof SignTokenRoute
   '/signup/jf': typeof SignupJfRoute
   '/admin/account': typeof AuthenticatedAdminAccountRoute
   '/admin/appointments': typeof AuthenticatedAdminAppointmentsRoute
@@ -1710,6 +1717,7 @@ export interface FileRoutesByTo {
   '/coaching/apply': typeof CoachingApplyRoute
   '/legal/$slug': typeof LegalSlugRoute
   '/m/welcome': typeof MWelcomeRoute
+  '/sign/$token': typeof SignTokenRoute
   '/signup/jf': typeof SignupJfRoute
   '/admin/account': typeof AuthenticatedAdminAccountRoute
   '/admin/appointments': typeof AuthenticatedAdminAppointmentsRoute
@@ -1928,6 +1936,7 @@ export interface FileRoutesById {
   '/coaching/apply': typeof CoachingApplyRoute
   '/legal/$slug': typeof LegalSlugRoute
   '/m/welcome': typeof MWelcomeRoute
+  '/sign/$token': typeof SignTokenRoute
   '/signup/jf': typeof SignupJfRoute
   '/_authenticated/admin/account': typeof AuthenticatedAdminAccountRoute
   '/_authenticated/admin/appointments': typeof AuthenticatedAdminAppointmentsRoute
@@ -2147,6 +2156,7 @@ export interface FileRouteTypes {
     | '/coaching/apply'
     | '/legal/$slug'
     | '/m/welcome'
+    | '/sign/$token'
     | '/signup/jf'
     | '/admin/account'
     | '/admin/appointments'
@@ -2360,6 +2370,7 @@ export interface FileRouteTypes {
     | '/coaching/apply'
     | '/legal/$slug'
     | '/m/welcome'
+    | '/sign/$token'
     | '/signup/jf'
     | '/admin/account'
     | '/admin/appointments'
@@ -2577,6 +2588,7 @@ export interface FileRouteTypes {
     | '/coaching/apply'
     | '/legal/$slug'
     | '/m/welcome'
+    | '/sign/$token'
     | '/signup/jf'
     | '/_authenticated/admin/account'
     | '/_authenticated/admin/appointments'
@@ -2790,6 +2802,7 @@ export interface RootRouteChildren {
   BookSlugRoute: typeof BookSlugRoute
   LegalSlugRoute: typeof LegalSlugRoute
   MWelcomeRoute: typeof MWelcomeRoute
+  SignTokenRoute: typeof SignTokenRoute
   SignupJfRoute: typeof SignupJfRoute
   ApiPublic_replay73ae9c8e4bcdc04ea9fd65f84f0752daRoute: typeof ApiPublic_replay73ae9c8e4bcdc04ea9fd65f84f0752daRoute
   ApiPublicSignnowWebhookRoute: typeof ApiPublicSignnowWebhookRoute
@@ -2913,6 +2926,13 @@ declare module '@tanstack/react-router' {
       path: '/signup/jf'
       fullPath: '/signup/jf'
       preLoaderRoute: typeof SignupJfRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sign/$token': {
+      id: '/sign/$token'
+      path: '/sign/$token'
+      fullPath: '/sign/$token'
+      preLoaderRoute: typeof SignTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/m/welcome': {
@@ -4969,6 +4989,7 @@ const rootRouteChildren: RootRouteChildren = {
   BookSlugRoute: BookSlugRoute,
   LegalSlugRoute: LegalSlugRoute,
   MWelcomeRoute: MWelcomeRoute,
+  SignTokenRoute: SignTokenRoute,
   SignupJfRoute: SignupJfRoute,
   ApiPublic_replay73ae9c8e4bcdc04ea9fd65f84f0752daRoute:
     ApiPublic_replay73ae9c8e4bcdc04ea9fd65f84f0752daRoute,
