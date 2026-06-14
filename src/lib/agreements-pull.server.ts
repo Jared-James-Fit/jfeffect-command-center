@@ -63,7 +63,9 @@ export async function pullSignedDocumentForAgreement(
     // Download & upload signed PDF (idempotent)
     if (!storagePath) {
       const { bytes, contentType } = await downloadSignedDocument(ag.signnow_document_id);
-      storagePath = `clients/${ag.client_id}/${ag.id}.pdf`;
+      storagePath = ag.client_id
+        ? `clients/${ag.client_id}/${ag.id}.pdf`
+        : `unlinked/${ag.id}.pdf`;
       const { error: upErr } = await supabaseAdmin.storage
         .from("agreements")
         .upload(storagePath, bytes, { contentType, upsert: true });
