@@ -1599,8 +1599,8 @@ function DayEditor({ day, setDay, exercises, compact }: { day: any; setDay: (d: 
   return (
     <div
       className={cn(
-        "space-y-2 rounded-md transition-colors",
-        dragOver && "ring-2 ring-primary ring-offset-1 bg-primary/5",
+        "space-y-3 rounded-lg bg-builder-canvas p-3 sm:p-4 ring-1 ring-builder-card-border/40 transition-colors",
+        dragOver && "ring-2 ring-primary ring-offset-1 ring-offset-background bg-primary/5",
       )}
       onDragOver={(e) => {
         if (Array.from(e.dataTransfer.types).includes(DND_EXERCISE)) {
@@ -1633,11 +1633,11 @@ function DayEditor({ day, setDay, exercises, compact }: { day: any; setDay: (d: 
         </div>
       </div>
       {rows.length === 0 ? (
-        <p className="rounded-md border border-dashed border-border p-3 text-center text-xs text-muted-foreground">
+        <p className="rounded-md border border-dashed border-builder-card-border p-4 text-center text-xs text-muted-foreground">
           {dragOver ? "Drop exercise here" : "Drag exercises from the library, or click + Row"}
         </p>
       ) : (
-        <div className="space-y-1.5" data-pb-day>
+        <div className="space-y-3" data-pb-day>
           {rows.map((r: any, i: number) => (
             <div
               key={i}
