@@ -303,12 +303,12 @@ export const getGuestSigningContext = createServerFn({ method: "POST" })
 
     const { data: pkg } = await supabaseAdmin
       .from("na_packages")
-      .select("id, status, custom_title, contract_value_minor, currency, service_order, financial_terms, jurisdiction_profiles(display_name, legal_operator_name, business_address)")
+      .select("id, status, custom_title, contract_value_minor, currency, service_order, financial_terms, first_viewed_at, jurisdiction_profiles(display_name, legal_operator_name, business_address)")
       .eq("id", gt.package_id)
       .maybeSingle();
     if (!pkg) throw new Error("Package not found");
-    if (!["sent", "delivered", "viewed", "in_progress"].includes(pkg.status)) {
-      throw new Error("This agreement is no longer available for signing (status: " + pkg.status + ")");
+    if (!["sent", "delivered", "viewed", "in_progress"].includes(pkg.status as string)) {
+      throw new Error("This agreement is no longer available for signing (status: " + (pkg as any).status + ")");
     }
 
     const { data: signer } = await supabaseAdmin.from("na_signers").select("*").eq("id", gt.signer_id).maybeSingle();
@@ -323,10 +323,10 @@ export const getGuestSigningContext = createServerFn({ method: "POST" })
     if (!snap) throw new Error("Snapshot missing");
 
     // Mark first-view if not already
-    if (!pkg.first_viewed_at) {
-      await supabaseAdmin.from("na_packages").update({ first_viewed_at: new Date().toISOString(), status: pkg.status === "sent" ? "viewed" : pkg.status }).eq("id", pkg.id);
+    if (!(pkg as any).first_viewed_at) {
+      await supabaseAdmin.from("na_packages").update({ first_viewed_at: new Date().toISOString(), status: (pkg as any).status === "sent" ? "viewed" : (pkg as any).status }).eq("id", (pkg as any).id);
       await supabaseAdmin.from("na_events").insert({
-        package_id: pkg.id, snapshot_id: snap.id, signer_id: signer?.id,
+        package_id: (pkg as any).id, snapshot_id: snap.id, signer_id: signer?.id,
         event_type: "package.viewed", actor_role: "signer", details: { via: "guest_token" },
       });
     }
