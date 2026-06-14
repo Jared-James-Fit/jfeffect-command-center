@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, lazy, Suspense } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
@@ -20,7 +20,6 @@ import { formatDistanceToNow, parseISO, format, startOfWeek, endOfWeek, isToday 
 import { UpcomingBirthdaysWidget } from "@/components/upcoming-birthdays-widget";
 import { UpcomingEventsPanel } from "@/components/events/upcoming-events-panel";
 import { UpcomingAppointmentsCard } from "@/components/appointments/upcoming-appointments-card";
-import { lazy, Suspense } from "react";
 const PriceCardPickerDialog = lazy(() =>
   import("@/components/price-card-picker-dialog").then((m) => ({ default: m.PriceCardPickerDialog })),
 );
