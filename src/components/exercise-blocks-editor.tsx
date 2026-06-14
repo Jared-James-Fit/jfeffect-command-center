@@ -31,6 +31,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import {
   BLOCK_TYPES,
@@ -138,6 +139,16 @@ export function ExerciseBlocksEditor({ open, onOpenChange, rowId, exerciseName }
   };
 
   const errors = useMemo(() => blocks.flatMap(validateBlock), [blocks]);
+
+  // Slice 3 containment: any non-Straight block, or more than one
+  // block, is gated behind the server-side trigger. The save will
+  // succeed only if the owning program is hidden from the client
+  // (`pl_blocks.client_visible = false`). Surface this BEFORE the
+  // save so the coach is never surprised by a Postgres error.
+  const hasUnsupportedBlocks = useMemo(
+    () => blocks.length > 1 || blocks.some((b) => b.block_type !== "straight"),
+    [blocks],
+  );
 
   const onSave = () => {
     if (errors.length) {
