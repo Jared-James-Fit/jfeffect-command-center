@@ -8576,6 +8576,7 @@ export type Database = {
           manual_completed_by: string | null
           manually_completed: boolean
           notes: string | null
+          phase: string | null
           start_date: string | null
           status: string
           training_days: string[]
@@ -8598,6 +8599,7 @@ export type Database = {
           manual_completed_by?: string | null
           manually_completed?: boolean
           notes?: string | null
+          phase?: string | null
           start_date?: string | null
           status?: string
           training_days?: string[]
@@ -8620,6 +8622,7 @@ export type Database = {
           manual_completed_by?: string | null
           manually_completed?: boolean
           notes?: string | null
+          phase?: string | null
           start_date?: string | null
           status?: string
           training_days?: string[]
