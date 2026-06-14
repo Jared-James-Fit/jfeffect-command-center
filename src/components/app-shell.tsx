@@ -452,7 +452,7 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
           )}
         </div>
 
-        {/* Keyword search / Cmd+K trigger */}
+        {/* Workout library quick search / Cmd+K trigger */}
         <div className={cn("border-b border-sidebar-border", isCollapsed ? "p-1.5" : "p-2")}>
           {isCollapsed ? (
             <Tooltip>
@@ -460,12 +460,12 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
                 <button
                   onClick={() => setPaletteOpen(true)}
                   className="mx-auto flex h-8 w-8 items-center justify-center rounded-md text-primary ring-1 ring-primary/40 hover:bg-primary/10"
-                  aria-label="Search keywords"
+                  aria-label="Search workout library"
                 >
                   <Search className="h-4 w-4" />
                 </button>
               </TooltipTrigger>
-              <TooltipContent side="right">Search keywords (⌘K)</TooltipContent>
+              <TooltipContent side="right">Search workouts (⌘K)</TooltipContent>
             </Tooltip>
           ) : (
             <button
@@ -473,7 +473,7 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
               className="flex w-full items-center gap-2 rounded-md border border-primary/40 bg-primary/5 px-2.5 py-2 text-left text-xs font-semibold text-foreground shadow-sm hover:bg-primary/10"
             >
               <Search className="h-3.5 w-3.5 text-primary" />
-              <span className="flex-1 truncate">Search keywords…</span>
+              <span className="flex-1 truncate">Search workouts…</span>
               <kbd className="rounded border border-primary/40 bg-card px-1 py-0.5 text-[9px] font-mono text-primary">⌘K</kbd>
             </button>
           )}
