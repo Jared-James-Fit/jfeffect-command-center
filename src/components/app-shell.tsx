@@ -826,6 +826,7 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
           </CommandGroup>
         </CommandList>
       </CommandDialog>
+      <ClientPovQuickPicker />
     </div>
     </TooltipProvider>
   );
