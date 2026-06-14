@@ -254,7 +254,7 @@ function RecordRefundDialog({ purchase, onDone }: { purchase: any; onDone: () =>
   const m = useMutation({
     mutationFn: async () => fn({ data: {
       purchase_id: purchase.id, amount_minor: Math.round(parseFloat(amount) * 100), reason,
-      method: "etransfer", transaction_date: new Date().toISOString().slice(0,10),
+      method: "etransfer",
     } }),
     onSuccess: () => { toast.success("Refund recorded"); setOpen(false); onDone(); },
     onError: (e: any) => toast.error(e.message),
