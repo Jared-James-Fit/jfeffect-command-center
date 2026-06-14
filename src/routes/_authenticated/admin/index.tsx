@@ -20,7 +20,10 @@ import { formatDistanceToNow, parseISO, format, startOfWeek, endOfWeek, isToday 
 import { UpcomingBirthdaysWidget } from "@/components/upcoming-birthdays-widget";
 import { UpcomingEventsPanel } from "@/components/events/upcoming-events-panel";
 import { UpcomingAppointmentsCard } from "@/components/appointments/upcoming-appointments-card";
-import { PriceCardPickerDialog } from "@/components/price-card-picker-dialog";
+import { lazy, Suspense } from "react";
+const PriceCardPickerDialog = lazy(() =>
+  import("@/components/price-card-picker-dialog").then((m) => ({ default: m.PriceCardPickerDialog })),
+);
 import { UserAvatar } from "@/components/user-avatar";
 import { getCoachIntel, filterIntel, LABEL_META } from "@/lib/coach-intel";
 
@@ -770,11 +773,15 @@ function AdminDashboard() {
         </div>
       </div>
 
-      <PriceCardPickerDialog
-        open={!!sellTo}
-        fixedClientId={sellTo?.id}
-        onClose={() => setSellTo(null)}
-      />
+      {sellTo ? (
+        <Suspense fallback={null}>
+          <PriceCardPickerDialog
+            open={!!sellTo}
+            fixedClientId={sellTo?.id}
+            onClose={() => setSellTo(null)}
+          />
+        </Suspense>
+      ) : null}
     </>
   );
 }
