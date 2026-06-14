@@ -13,6 +13,10 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import {
+  AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogAction, AlertDialogCancel,
+} from "@/components/ui/alert-dialog";
 import { ShieldAlert, FileText, Eye, History, Plus } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -178,6 +182,16 @@ function DocumentDetail({ documentId }: { documentId: string }) {
   const published = versions.find((v: any) => v.status === "published");
   const editing = draft ?? null;
 
+  // Confirmation dialog state. Replaces the native window.confirm() which can
+  // block the renderer (especially inside iframed previews) and was reported
+  // to hang the page for 45s+ on publish.
+  const [confirmState, setConfirmState] = useState<
+    | { kind: "publish"; versionId: string }
+    | { kind: "archive"; versionId: string }
+    | null
+  >(null);
+  const [confirmBusy, setConfirmBusy] = useState(false);
+
   const [form, setForm] = useState<any>(null);
   const current = form ?? editing ?? {
     document_id: documentId,
@@ -214,26 +228,28 @@ function DocumentDetail({ documentId }: { documentId: string }) {
     } catch (e: any) { toast.error(e?.message ?? "Save failed"); }
   };
 
-  const publish = async (versionId: string) => {
-    const ok = confirm(
-      "Publishing makes this version legally effective.\n\nConfirm that the wording has been reviewed by a qualified attorney for the jurisdictions where you operate. The previously published version (if any) will be replaced and historical acceptance records will continue to point to their original accepted version.\n\nContinue?",
-    );
-    if (!ok) return;
-    try {
-      await publishFn({ data: { versionId, confirmLegalReview: true } });
-      toast.success("Published.");
-      qc.invalidateQueries({ queryKey: ["legal-versions", documentId] });
-      qc.invalidateQueries({ queryKey: ["legal-admin-docs"] });
-    } catch (e: any) { toast.error(e?.message ?? "Publish failed"); }
-  };
+  const publish = (versionId: string) => setConfirmState({ kind: "publish", versionId });
+  const archive = (versionId: string) => setConfirmState({ kind: "archive", versionId });
 
-  const archive = async (versionId: string) => {
-    if (!confirm("Archive this version? Historical acceptance evidence is preserved.")) return;
+  const runConfirm = async () => {
+    if (!confirmState || confirmBusy) return;
+    setConfirmBusy(true);
     try {
-      await archiveFn({ data: { versionId } });
+      if (confirmState.kind === "publish") {
+        await publishFn({ data: { versionId: confirmState.versionId, confirmLegalReview: true } });
+        toast.success("Published.");
+      } else {
+        await archiveFn({ data: { versionId: confirmState.versionId } });
+        toast.success("Archived.");
+      }
       qc.invalidateQueries({ queryKey: ["legal-versions", documentId] });
       qc.invalidateQueries({ queryKey: ["legal-admin-docs"] });
-    } catch (e: any) { toast.error(e?.message ?? "Archive failed"); }
+      setConfirmState(null);
+    } catch (e: any) {
+      toast.error(e?.message ?? (confirmState.kind === "publish" ? "Publish failed" : "Archive failed"));
+    } finally {
+      setConfirmBusy(false);
+    }
   };
 
   return (
@@ -344,6 +360,35 @@ function DocumentDetail({ documentId }: { documentId: string }) {
           ))}
         </ul>
       </Card>
+      <AlertDialog
+        open={!!confirmState}
+        onOpenChange={(o) => { if (!o && !confirmBusy) setConfirmState(null); }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {confirmState?.kind === "publish" ? "Publish this version?" : "Archive this version?"}
+            </AlertDialogTitle>
+            <AlertDialogDescription className="whitespace-pre-line">
+              {confirmState?.kind === "publish"
+                ? "Publishing makes this version legally effective.\n\nConfirm that the wording has been reviewed by a qualified attorney for the jurisdictions where you operate. The previously published version (if any) will be replaced and historical acceptance records will continue to point to their original accepted version."
+                : "Archive this version? Historical acceptance evidence is preserved."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={confirmBusy}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={confirmBusy}
+              onClick={(e) => { e.preventDefault(); runConfirm(); }}
+              className={confirmState?.kind === "publish" ? "bg-emerald-600 hover:bg-emerald-700" : undefined}
+            >
+              {confirmBusy
+                ? (confirmState?.kind === "publish" ? "Publishing…" : "Archiving…")
+                : (confirmState?.kind === "publish" ? "Publish" : "Archive")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
