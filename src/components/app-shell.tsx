@@ -14,6 +14,7 @@ import { UserAvatar } from "@/components/user-avatar";
 import { SettingsMenu } from "@/components/settings-menu";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { ClientPovQuickPicker } from "@/components/client-pov-quick-picker";
 import {
   Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
 } from "@/components/ui/tooltip";
@@ -988,6 +989,22 @@ function BottomNavSlot({ item, pathname, navBadges, onNavigate }: {
           style={{ WebkitTapHighlightColor: "transparent" }}
           className="relative flex min-h-[64px] flex-col items-center justify-center gap-0.5 px-0.5 pt-2 pb-2 text-[10px] font-medium text-muted-foreground hover:text-foreground touch-manipulation select-none"
           aria-label="Search keywords"
+        >
+          <div className="relative">
+            <Icon className="h-5 w-5" />
+          </div>
+          <span className="w-full px-0.5 text-center text-[9.5px] leading-tight tracking-tight">{item.label}</span>
+        </button>
+      );
+    }
+    if (item.to === "__client_pov__") {
+      return (
+        <button
+          type="button"
+          onClick={() => { try { window.dispatchEvent(new CustomEvent("open-client-pov-picker")); } catch {} }}
+          style={{ WebkitTapHighlightColor: "transparent" }}
+          className="relative flex min-h-[64px] flex-col items-center justify-center gap-0.5 px-0.5 pt-2 pb-2 text-[10px] font-medium text-warning hover:text-warning/80 touch-manipulation select-none"
+          aria-label="Open Client POV picker"
         >
           <div className="relative">
             <Icon className="h-5 w-5" />
