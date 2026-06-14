@@ -32,6 +32,7 @@ import { Route as ApiDriveUploadRouteImport } from './routes/api/drive-upload'
 import { Route as AuthenticatedPortalRouteRouteImport } from './routes/_authenticated/portal/route'
 import { Route as AuthenticatedMediaRouteRouteImport } from './routes/_authenticated/media/route'
 import { Route as AuthenticatedMRouteRouteImport } from './routes/_authenticated/m/route'
+import { Route as AuthenticatedCoachRouteRouteImport } from './routes/_authenticated/coach/route'
 import { Route as AuthenticatedAdminRouteRouteImport } from './routes/_authenticated/admin/route'
 import { Route as AuthenticatedPortalIndexRouteImport } from './routes/_authenticated/portal/index'
 import { Route as AuthenticatedMediaIndexRouteImport } from './routes/_authenticated/media/index'
@@ -82,6 +83,7 @@ import { Route as AuthenticatedMMyPlansRouteImport } from './routes/_authenticat
 import { Route as AuthenticatedMBillingRouteImport } from './routes/_authenticated/m/billing'
 import { Route as AuthenticatedMAnnouncementsRouteImport } from './routes/_authenticated/m/announcements'
 import { Route as AuthenticatedMAccountRouteImport } from './routes/_authenticated/m/account'
+import { Route as AuthenticatedCoachProgramsRouteImport } from './routes/_authenticated/coach/programs'
 import { Route as AuthenticatedAdminWarmupProtocolsRouteImport } from './routes/_authenticated/admin/warmup-protocols'
 import { Route as AuthenticatedAdminTrainingPhasesRouteImport } from './routes/_authenticated/admin/training-phases'
 import { Route as AuthenticatedAdminTrainingIntelligenceRouteImport } from './routes/_authenticated/admin/training-intelligence'
@@ -99,6 +101,7 @@ import { Route as AuthenticatedAdminPtCalendarRouteImport } from './routes/_auth
 import { Route as AuthenticatedAdminPromoCodesRouteImport } from './routes/_authenticated/admin/promo-codes'
 import { Route as AuthenticatedAdminProgramsRouteImport } from './routes/_authenticated/admin/programs'
 import { Route as AuthenticatedAdminProgrammingRouteImport } from './routes/_authenticated/admin/programming'
+import { Route as AuthenticatedAdminProgramSubmissionsRouteImport } from './routes/_authenticated/admin/program-submissions'
 import { Route as AuthenticatedAdminProgramLibraryRouteImport } from './routes/_authenticated/admin/program-library'
 import { Route as AuthenticatedAdminPopupsRouteImport } from './routes/_authenticated/admin/popups'
 import { Route as AuthenticatedAdminPaymentsRouteImport } from './routes/_authenticated/admin/payments'
@@ -334,6 +337,11 @@ const AuthenticatedMediaRouteRoute = AuthenticatedMediaRouteRouteImport.update({
 const AuthenticatedMRouteRoute = AuthenticatedMRouteRouteImport.update({
   id: '/m',
   path: '/m',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedCoachRouteRoute = AuthenticatedCoachRouteRouteImport.update({
+  id: '/coach',
+  path: '/coach',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedAdminRouteRoute = AuthenticatedAdminRouteRouteImport.update({
@@ -621,6 +629,12 @@ const AuthenticatedMAccountRoute = AuthenticatedMAccountRouteImport.update({
   path: '/account',
   getParentRoute: () => AuthenticatedMRouteRoute,
 } as any)
+const AuthenticatedCoachProgramsRoute =
+  AuthenticatedCoachProgramsRouteImport.update({
+    id: '/programs',
+    path: '/programs',
+    getParentRoute: () => AuthenticatedCoachRouteRoute,
+  } as any)
 const AuthenticatedAdminWarmupProtocolsRoute =
   AuthenticatedAdminWarmupProtocolsRouteImport.update({
     id: '/warmup-protocols',
@@ -717,6 +731,12 @@ const AuthenticatedAdminProgrammingRoute =
   AuthenticatedAdminProgrammingRouteImport.update({
     id: '/programming',
     path: '/programming',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
+const AuthenticatedAdminProgramSubmissionsRoute =
+  AuthenticatedAdminProgramSubmissionsRouteImport.update({
+    id: '/program-submissions',
+    path: '/program-submissions',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
 const AuthenticatedAdminProgramLibraryRoute =
@@ -1454,6 +1474,7 @@ export interface FileRoutesByFullPath {
   '/staff-setup': typeof StaffSetupRoute
   '/terms': typeof TermsRoute
   '/admin': typeof AuthenticatedAdminRouteRouteWithChildren
+  '/coach': typeof AuthenticatedCoachRouteRouteWithChildren
   '/m': typeof AuthenticatedMRouteRouteWithChildren
   '/media': typeof AuthenticatedMediaRouteRouteWithChildren
   '/portal': typeof AuthenticatedPortalRouteRouteWithChildren
@@ -1504,6 +1525,7 @@ export interface FileRoutesByFullPath {
   '/admin/payments': typeof AuthenticatedAdminPaymentsRoute
   '/admin/popups': typeof AuthenticatedAdminPopupsRoute
   '/admin/program-library': typeof AuthenticatedAdminProgramLibraryRoute
+  '/admin/program-submissions': typeof AuthenticatedAdminProgramSubmissionsRoute
   '/admin/programming': typeof AuthenticatedAdminProgrammingRoute
   '/admin/programs': typeof AuthenticatedAdminProgramsRoute
   '/admin/promo-codes': typeof AuthenticatedAdminPromoCodesRoute
@@ -1521,6 +1543,7 @@ export interface FileRoutesByFullPath {
   '/admin/training-intelligence': typeof AuthenticatedAdminTrainingIntelligenceRoute
   '/admin/training-phases': typeof AuthenticatedAdminTrainingPhasesRoute
   '/admin/warmup-protocols': typeof AuthenticatedAdminWarmupProtocolsRoute
+  '/coach/programs': typeof AuthenticatedCoachProgramsRoute
   '/m/account': typeof AuthenticatedMAccountRoute
   '/m/announcements': typeof AuthenticatedMAnnouncementsRoute
   '/m/billing': typeof AuthenticatedMBillingRoute
@@ -1665,6 +1688,7 @@ export interface FileRoutesByTo {
   '/sitemap': typeof SitemapRoute
   '/staff-setup': typeof StaffSetupRoute
   '/terms': typeof TermsRoute
+  '/coach': typeof AuthenticatedCoachRouteRouteWithChildren
   '/api/drive-upload': typeof ApiDriveUploadRoute
   '/book/$slug': typeof BookSlugRoute
   '/coaching/apply': typeof CoachingApplyRoute
@@ -1711,6 +1735,7 @@ export interface FileRoutesByTo {
   '/admin/payments': typeof AuthenticatedAdminPaymentsRoute
   '/admin/popups': typeof AuthenticatedAdminPopupsRoute
   '/admin/program-library': typeof AuthenticatedAdminProgramLibraryRoute
+  '/admin/program-submissions': typeof AuthenticatedAdminProgramSubmissionsRoute
   '/admin/programming': typeof AuthenticatedAdminProgrammingRoute
   '/admin/programs': typeof AuthenticatedAdminProgramsRoute
   '/admin/promo-codes': typeof AuthenticatedAdminPromoCodesRoute
@@ -1728,6 +1753,7 @@ export interface FileRoutesByTo {
   '/admin/training-intelligence': typeof AuthenticatedAdminTrainingIntelligenceRoute
   '/admin/training-phases': typeof AuthenticatedAdminTrainingPhasesRoute
   '/admin/warmup-protocols': typeof AuthenticatedAdminWarmupProtocolsRoute
+  '/coach/programs': typeof AuthenticatedCoachProgramsRoute
   '/m/account': typeof AuthenticatedMAccountRoute
   '/m/announcements': typeof AuthenticatedMAnnouncementsRoute
   '/m/billing': typeof AuthenticatedMBillingRoute
@@ -1875,6 +1901,7 @@ export interface FileRoutesById {
   '/staff-setup': typeof StaffSetupRoute
   '/terms': typeof TermsRoute
   '/_authenticated/admin': typeof AuthenticatedAdminRouteRouteWithChildren
+  '/_authenticated/coach': typeof AuthenticatedCoachRouteRouteWithChildren
   '/_authenticated/m': typeof AuthenticatedMRouteRouteWithChildren
   '/_authenticated/media': typeof AuthenticatedMediaRouteRouteWithChildren
   '/_authenticated/portal': typeof AuthenticatedPortalRouteRouteWithChildren
@@ -1925,6 +1952,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/payments': typeof AuthenticatedAdminPaymentsRoute
   '/_authenticated/admin/popups': typeof AuthenticatedAdminPopupsRoute
   '/_authenticated/admin/program-library': typeof AuthenticatedAdminProgramLibraryRoute
+  '/_authenticated/admin/program-submissions': typeof AuthenticatedAdminProgramSubmissionsRoute
   '/_authenticated/admin/programming': typeof AuthenticatedAdminProgrammingRoute
   '/_authenticated/admin/programs': typeof AuthenticatedAdminProgramsRoute
   '/_authenticated/admin/promo-codes': typeof AuthenticatedAdminPromoCodesRoute
@@ -1942,6 +1970,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/training-intelligence': typeof AuthenticatedAdminTrainingIntelligenceRoute
   '/_authenticated/admin/training-phases': typeof AuthenticatedAdminTrainingPhasesRoute
   '/_authenticated/admin/warmup-protocols': typeof AuthenticatedAdminWarmupProtocolsRoute
+  '/_authenticated/coach/programs': typeof AuthenticatedCoachProgramsRoute
   '/_authenticated/m/account': typeof AuthenticatedMAccountRoute
   '/_authenticated/m/announcements': typeof AuthenticatedMAnnouncementsRoute
   '/_authenticated/m/billing': typeof AuthenticatedMBillingRoute
@@ -2089,6 +2118,7 @@ export interface FileRouteTypes {
     | '/staff-setup'
     | '/terms'
     | '/admin'
+    | '/coach'
     | '/m'
     | '/media'
     | '/portal'
@@ -2139,6 +2169,7 @@ export interface FileRouteTypes {
     | '/admin/payments'
     | '/admin/popups'
     | '/admin/program-library'
+    | '/admin/program-submissions'
     | '/admin/programming'
     | '/admin/programs'
     | '/admin/promo-codes'
@@ -2156,6 +2187,7 @@ export interface FileRouteTypes {
     | '/admin/training-intelligence'
     | '/admin/training-phases'
     | '/admin/warmup-protocols'
+    | '/coach/programs'
     | '/m/account'
     | '/m/announcements'
     | '/m/billing'
@@ -2300,6 +2332,7 @@ export interface FileRouteTypes {
     | '/sitemap'
     | '/staff-setup'
     | '/terms'
+    | '/coach'
     | '/api/drive-upload'
     | '/book/$slug'
     | '/coaching/apply'
@@ -2346,6 +2379,7 @@ export interface FileRouteTypes {
     | '/admin/payments'
     | '/admin/popups'
     | '/admin/program-library'
+    | '/admin/program-submissions'
     | '/admin/programming'
     | '/admin/programs'
     | '/admin/promo-codes'
@@ -2363,6 +2397,7 @@ export interface FileRouteTypes {
     | '/admin/training-intelligence'
     | '/admin/training-phases'
     | '/admin/warmup-protocols'
+    | '/coach/programs'
     | '/m/account'
     | '/m/announcements'
     | '/m/billing'
@@ -2509,6 +2544,7 @@ export interface FileRouteTypes {
     | '/staff-setup'
     | '/terms'
     | '/_authenticated/admin'
+    | '/_authenticated/coach'
     | '/_authenticated/m'
     | '/_authenticated/media'
     | '/_authenticated/portal'
@@ -2559,6 +2595,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/payments'
     | '/_authenticated/admin/popups'
     | '/_authenticated/admin/program-library'
+    | '/_authenticated/admin/program-submissions'
     | '/_authenticated/admin/programming'
     | '/_authenticated/admin/programs'
     | '/_authenticated/admin/promo-codes'
@@ -2576,6 +2613,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/training-intelligence'
     | '/_authenticated/admin/training-phases'
     | '/_authenticated/admin/warmup-protocols'
+    | '/_authenticated/coach/programs'
     | '/_authenticated/m/account'
     | '/_authenticated/m/announcements'
     | '/_authenticated/m/billing'
@@ -2905,6 +2943,13 @@ declare module '@tanstack/react-router' {
       path: '/m'
       fullPath: '/m'
       preLoaderRoute: typeof AuthenticatedMRouteRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/coach': {
+      id: '/_authenticated/coach'
+      path: '/coach'
+      fullPath: '/coach'
+      preLoaderRoute: typeof AuthenticatedCoachRouteRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/admin': {
@@ -3257,6 +3302,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedMAccountRouteImport
       parentRoute: typeof AuthenticatedMRouteRoute
     }
+    '/_authenticated/coach/programs': {
+      id: '/_authenticated/coach/programs'
+      path: '/programs'
+      fullPath: '/coach/programs'
+      preLoaderRoute: typeof AuthenticatedCoachProgramsRouteImport
+      parentRoute: typeof AuthenticatedCoachRouteRoute
+    }
     '/_authenticated/admin/warmup-protocols': {
       id: '/_authenticated/admin/warmup-protocols'
       path: '/warmup-protocols'
@@ -3374,6 +3426,13 @@ declare module '@tanstack/react-router' {
       path: '/programming'
       fullPath: '/admin/programming'
       preLoaderRoute: typeof AuthenticatedAdminProgrammingRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
+    '/_authenticated/admin/program-submissions': {
+      id: '/_authenticated/admin/program-submissions'
+      path: '/program-submissions'
+      fullPath: '/admin/program-submissions'
+      preLoaderRoute: typeof AuthenticatedAdminProgramSubmissionsRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
     '/_authenticated/admin/program-library': {
@@ -4369,6 +4428,7 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminPaymentsRoute: typeof AuthenticatedAdminPaymentsRoute
   AuthenticatedAdminPopupsRoute: typeof AuthenticatedAdminPopupsRoute
   AuthenticatedAdminProgramLibraryRoute: typeof AuthenticatedAdminProgramLibraryRoute
+  AuthenticatedAdminProgramSubmissionsRoute: typeof AuthenticatedAdminProgramSubmissionsRoute
   AuthenticatedAdminProgrammingRoute: typeof AuthenticatedAdminProgrammingRoute
   AuthenticatedAdminProgramsRoute: typeof AuthenticatedAdminProgramsRoute
   AuthenticatedAdminPromoCodesRoute: typeof AuthenticatedAdminPromoCodesRoute
@@ -4473,6 +4533,8 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
     AuthenticatedAdminPopupsRoute: AuthenticatedAdminPopupsRoute,
     AuthenticatedAdminProgramLibraryRoute:
       AuthenticatedAdminProgramLibraryRoute,
+    AuthenticatedAdminProgramSubmissionsRoute:
+      AuthenticatedAdminProgramSubmissionsRoute,
     AuthenticatedAdminProgrammingRoute: AuthenticatedAdminProgrammingRoute,
     AuthenticatedAdminProgramsRoute: AuthenticatedAdminProgramsRoute,
     AuthenticatedAdminPromoCodesRoute: AuthenticatedAdminPromoCodesRoute,
@@ -4549,6 +4611,20 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
 const AuthenticatedAdminRouteRouteWithChildren =
   AuthenticatedAdminRouteRoute._addFileChildren(
     AuthenticatedAdminRouteRouteChildren,
+  )
+
+interface AuthenticatedCoachRouteRouteChildren {
+  AuthenticatedCoachProgramsRoute: typeof AuthenticatedCoachProgramsRoute
+}
+
+const AuthenticatedCoachRouteRouteChildren: AuthenticatedCoachRouteRouteChildren =
+  {
+    AuthenticatedCoachProgramsRoute: AuthenticatedCoachProgramsRoute,
+  }
+
+const AuthenticatedCoachRouteRouteWithChildren =
+  AuthenticatedCoachRouteRoute._addFileChildren(
+    AuthenticatedCoachRouteRouteChildren,
   )
 
 interface AuthenticatedMMyPlansRouteChildren {
@@ -4799,6 +4875,7 @@ const AuthenticatedPortalRouteRouteWithChildren =
 
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedAdminRouteRoute: typeof AuthenticatedAdminRouteRouteWithChildren
+  AuthenticatedCoachRouteRoute: typeof AuthenticatedCoachRouteRouteWithChildren
   AuthenticatedMRouteRoute: typeof AuthenticatedMRouteRouteWithChildren
   AuthenticatedMediaRouteRoute: typeof AuthenticatedMediaRouteRouteWithChildren
   AuthenticatedPortalRouteRoute: typeof AuthenticatedPortalRouteRouteWithChildren
@@ -4806,6 +4883,7 @@ interface AuthenticatedRouteRouteChildren {
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAdminRouteRoute: AuthenticatedAdminRouteRouteWithChildren,
+  AuthenticatedCoachRouteRoute: AuthenticatedCoachRouteRouteWithChildren,
   AuthenticatedMRouteRoute: AuthenticatedMRouteRouteWithChildren,
   AuthenticatedMediaRouteRoute: AuthenticatedMediaRouteRouteWithChildren,
   AuthenticatedPortalRouteRoute: AuthenticatedPortalRouteRouteWithChildren,

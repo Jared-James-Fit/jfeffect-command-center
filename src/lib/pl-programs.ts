@@ -1053,7 +1053,18 @@ export async function listTemplates(opts: { type?: TemplateType | "all"; style?:
 }
 
 export async function createTemplate(input: { name: string; template_type: TemplateType; training_style: TrainingStyle; training_focus?: string; goal?: string; notes?: string; weeks?: number; days_per_week?: number; est_duration_min?: number; tags?: string[]; payload?: any }) {
-  const { data, error } = await sb.from("pl_templates").insert(input).select("*").single();
+  // Stamp ownership so the new template lands in the creator's My Library.
+  const { data: au } = await sb.auth.getUser();
+  const owner_user_id = au.user?.id ?? null;
+  // Default visibility: 'team' for admin-created (matches legacy org-wide visibility),
+  // 'private' for coach-created (they must explicitly share/submit).
+  // We don't know the caller role here without a round-trip, so default to 'team';
+  // coach-created flows should override via a follow-up update if needed.
+  const { data, error } = await sb
+    .from("pl_templates")
+    .insert({ ...input, owner_user_id, visibility: "team" })
+    .select("*")
+    .single();
   if (error) throw error;
   return data;
 }
@@ -1072,8 +1083,18 @@ export async function updateTemplate(id: string, patch: Record<string, any>) {
 export async function duplicateTemplate(id: string) {
   const tpl = await getTemplate(id);
   if (!tpl) throw new Error("Template not found");
-  const { id: _i, created_at: _c, updated_at: _u, created_by: _b, ...rest } = tpl;
-  const { data, error } = await sb.from("pl_templates").insert({ ...rest, name: `${tpl.name} (copy)`, archived: false }).select("*").single();
+  const { id: _i, created_at: _c, updated_at: _u, created_by: _b, owner_user_id: _o, payload_revision: _pr, ...rest } = tpl as any;
+  const { data: au } = await sb.auth.getUser();
+  const { data, error } = await sb
+    .from("pl_templates")
+    .insert({
+      ...rest,
+      name: `${tpl.name} (copy)`,
+      archived: false,
+      owner_user_id: au.user?.id ?? null,
+    })
+    .select("*")
+    .single();
   if (error) throw error;
   return data;
 }

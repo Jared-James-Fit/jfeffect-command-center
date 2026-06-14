@@ -1,122 +1,73 @@
-# Multi-Block Exercise Prescriptions
+## Existing architecture (audited)
 
-This is a large structural change: schema, builder UI, client logger, copy/duplicate, calculations, and legacy migration. Posting the plan first because it touches the two largest files in the app (builder ~2.3k LOC, logger ~1.9k LOC) and the core `pl_exercise_rows` / `pl_row_results` / `member_set_logs` data model.
+- **Single program table**: `public.pl_templates` (admin-managed today, no per-user ownership beyond `created_by`). Versioning already exists via `payload_revision` + `pl_template_operations` (append-only undo/redo log).
+- **Membership distribution**: `public.member_plans` (denormalized `published_payload`, `status` Draft/Published/Archived, `featured`, `required_access_level`) + `member_plan_enrollments` + `featured_member_items`. Already wired into the member workout logger.
+- **Coach/client programs**: `pl_preps` → `pl_blocks` → `pl_weeks` → `pl_days` → `pl_exercise_rows` → `pl_row_results`. Untouched — this is per-client assigned programming and stays as-is.
+- **Routes**: `admin/program-library.tsx` (list), `admin/program-library_.$templateId.tsx` (editor), `admin/programs.tsx`, `admin/programming.tsx`. No coach or member library routes exist yet.
+- **RLS today**: admin full; coach read-all (non-archived); members read published `member_plans` only. No coach ownership, no sharing, no submissions, no public exposure.
 
-## Goals
+## Scope confirmation — this spec is 4 large phases
 
-- One exercise card holds an ordered list of **prescription blocks** (Straight, Top, Backoff, Ascending, Drop, Warm-up, Custom).
-- Every block's inputs are visibly editable inline (no modal-only config, no note-only blocks).
-- Every programmed set/drop produces its own client logging row with weight/reps/RPE/RIR/completion.
-- Legacy single-prescription rows continue to work without data loss.
+Per your stated "IMPLEMENTATION ORDER", I plan to ship **Phase 1 only** in this batch (ownership + sharing + submissions + status badges). Phases 2–4 (Membership publishing pipeline upgrades, Public pages, Distribution Status Center) are tracked but deferred to subsequent batches so each lands reviewable and the migration risk stays bounded.
 
-## Data Model
+If you want a single mega-batch instead, say so and I'll re-scope — but it will be a multi-thousand-line change touching ~30 files and 4 migrations, with much higher regression risk on the existing builder/logger.
 
-New tables, additive — `pl_exercise_rows` keeps its current columns so legacy reads still work.
+## Phase 1 — ownership, sharing, submissions (this batch)
 
-```text
-pl_exercise_blocks
-  id uuid pk
-  row_id uuid fk → pl_exercise_rows(id) on delete cascade
-  sort_order int
-  block_type text   -- straight|top|backoff|ascending|drop|warmup|custom
-  label text
-  -- prescription (nullable; only relevant fields used per type)
-  sets int
-  reps_text text
-  rpe text, rir text
-  load_type text    -- fixed|pct_1rm|rpe_choice|rir_choice|pct_below_ref|kg_below_ref|pct_of_ref|manual|none
-  load_value numeric
-  load_unit text    -- kg|lb|%
-  reference_block_id uuid fk → pl_exercise_blocks(id) nullable
-  rest_seconds_override int
-  tempo text
-  amrap bool
-  notes text
-  config jsonb      -- type-specific extras (ascending mode, generator params, etc.)
-  created_at, updated_at
+### Database (one migration)
 
-pl_block_set_rows         -- explicit ascending rows + warm-up rows
-  id, block_id fk, sort_order, reps_text, load_value, load_unit, rpe, rir, amrap
+1. **Extend `pl_templates`** (additive, backfill-safe):
+   - `owner_user_id uuid` (nullable; backfill = `created_by`; admin-created = admin user)
+   - `owner_role text` ('admin' | 'coach', backfill from `user_roles`)
+   - `visibility text` default `'private'` ('private' | 'team')
+   - `current_draft_revision bigint` mirrors `payload_revision` (already there — alias only)
+2. **New `pl_template_shares`** — one row per (template, destination, target):
+   - `template_id`, `destination` ('team' | 'coach' | 'membership_submission' | 'public_submission' | 'team_submission'), `target_coach_id` (nullable), `permission` ('read' | 'duplicate'), `status` ('shared' | 'pending' | 'changes_requested' | 'approved' | 'rejected' | 'removed'), `shared_version`, `created_by`, `reviewed_by`, `reviewed_at`, `notes`, `idempotency_key`. Unique active (template, destination, target_coach_id).
+3. **New `pl_template_distribution_events`** — append-only audit (template_id, destination, version, action, prev_status, new_status, actor, notes, created_at).
+4. **RLS rewrite for `pl_templates`**:
+   - admin: all
+   - coach: read own (`owner_user_id = auth.uid()`) OR shared-to-me (via `pl_template_shares`) OR `visibility='team'` (active coaches only)
+   - coach: insert/update/delete only when `owner_user_id = auth.uid()` AND not `team`-locked
+5. **RLS for `pl_template_shares`**: admin all; coach read own submissions + shares targeting them; coach insert submissions for own templates only.
+6. **Triggers**: distribution events on share/status change; prevent duplicate active submissions per (template, destination, version).
 
-pl_block_drop_stages       -- drop-set stages after the initial set
-  id, block_id fk, sort_order, reduction_type, reduction_value,
-  reps_text, rpe, rir, amrap, rest_seconds
+### Code
 
-member_set_logs           -- ADD nullable columns:
-  block_id uuid (nullable, fk pl_exercise_blocks)
-  set_row_id uuid (nullable, fk pl_block_set_rows)
-  drop_stage_id uuid (nullable, fk pl_block_drop_stages)
-  -- existing (row_id, set_index) stay populated for legacy/compat
-```
+- `src/lib/programs/sharing.ts` — typed share/submit/approve/reject server functions (createServerFn + requireSupabaseAuth).
+- `src/components/programs/program-card.tsx` — reusable card with destination + status badges (Private, Team Live, Shared with N Coaches, Pending Approval, Changes Requested, Rejected). Drop-in for existing list pages.
+- `src/components/programs/share-program-sheet.tsx` — right-side sheet with destination rows (Team, Coaches w/ search + multiselect, Membership submission, Public submission). Each row: status badge, primary action, expandable settings.
+- `src/components/programs/availability-distribution.tsx` — "Availability & Distribution" section embedded in the program editor.
+- **Admin routes** (extend existing):
+  - `admin/program-library.tsx` — add tabs: My Library / Team Library / Coach Submissions. Reuse current list as "Team Library".
+  - `admin/program-submissions.tsx` (new) — submissions inbox with approve/reject/request-changes + notes.
+- **Coach routes** (new tree under `_authenticated/coach/`):
+  - `coach/programs.tsx` — tabs: My Library / Shared With Me / Team Library / My Submissions.
+  - `coach/programs.$templateId.tsx` — editor (reuses existing builder, gated to owner).
+  - "Duplicate to My Library" action (server fn deep-copies payload, new template owned by caller).
 
-All new tables get the standard `GRANT … TO authenticated` + `service_role`, RLS enabled, and policies mirroring `pl_exercise_rows` (coach owns via day→week→block→template; client reads via enrollment).
+### Phase 1 explicitly does NOT include
 
-## Legacy Compatibility
+- Membership publishing UI changes (current `member_plans` flow untouched)
+- Public program pages / SEO / slugs
+- Distribution Status Center (Phase 4)
+- Live verification function (Phase 4)
+- Version migration of active enrollments (Phase 2)
+- Scheduled publication (Phase 2/3)
 
-- No backfill required at write time. On read, if a row has zero blocks, the UI materializes a virtual "Straight Sets" block from the existing `sets/reps_text/rpe/rir/load_*/rest_seconds/tempo/percentage*` columns.
-- First time a coach edits that exercise, we persist that virtual block to `pl_exercise_blocks` and stop reading the legacy columns for that row (legacy columns retained as fallback / for old client logs).
-- `member_set_logs` without `block_id` keep rendering against the legacy row (current behavior).
+## Phase 2–4 — deferred (will plan separately when Phase 1 ships)
 
-## Builder UI (`program-library_.$templateId.tsx`)
+- **Phase 2**: Membership publishing wired to `pl_template_shares` (destination='membership'), version pinning on enrollments, "Update Available" detection, Preview as Member, active enrollment counts on cards.
+- **Phase 3**: Public pages — new `pl_public_pages` table + `/p/$slug` route, access modes, anon-safe RLS, SEO metadata.
+- **Phase 4**: `admin/distribution-status.tsx` with summary cards, live verification fn, publication history timeline component, Copy Link / View Live everywhere.
 
-- Replace the single prescription grid inside `ExerciseCard` with a `<BlockList>` containing one `<BlockEditor>` per block.
-- `BlockEditor` props: `block`, `siblings` (for reference dropdown), `onChange`, `onDuplicate`, `onDelete`, `onMove`.
-- Header: drag handle, type selector, editable label, collapse toggle, ⋮ menu (duplicate / move up / move down / delete).
-- Collapsed: one-line summary (e.g. `Backoff · 3 × 5 · −10% from Top Set · RPE 7`).
-- Expanded: type-specific input grid using existing `Field` / compact input styling and the existing tokens (`bg-builder-inset`, `border-builder-card-border`).
-- `+ Add Set Block` button at the bottom of the card.
-- Per-type input matrices implemented exactly as spec:
-  - Straight, Top, Backoff (with reference-block dropdown + reduction type + value), Ascending (Explicit Rows + Generated Progression w/ "Convert to Editable Rows"), Drop (initial + ordered drop stages with `+ Add Drop Stage`), Warm-up (explicit rows), Custom (full field set).
-- Load type selector always renders its dependent value/unit inputs immediately.
-- Inline validation: zero sets, negative reps, ≥100% reductions, self-reference, forward-reference, empty ascending, drop without initial.
+## Risk + safety
 
-## Client Logger (`portal/workouts.$dayId.tsx` + `client-block-view.tsx`)
+- All existing admin flows keep working: `pl_templates` columns are additive, existing policies preserved for admin, coach read-policy widened (still gated to active coaches).
+- No changes to `pl_preps`, `pl_blocks`, `pl_row_results`, `member_plans`, `member_plan_enrollments`, exercise library, logger, or assignment RPCs.
+- Migration backfills `owner_user_id = created_by` and `owner_role = 'admin'` so every existing template stays in admin's My Library by default.
 
-For each exercise:
-1. Load blocks for the row. If none → synthesize one Straight block from legacy fields.
-2. For each block, expand to logging rows:
-   - Straight/Top/Backoff: N rows (`sets` count), each `{ block_id, set_index }`.
-   - Ascending explicit: one row per `pl_block_set_rows` entry, keyed by `set_row_id`.
-   - Ascending generated: rows derived from generator (then on save coach should convert; for now we materialize N transient rows by set_index).
-   - Drop: 1 initial row + one row per `pl_block_drop_stages`, keyed by `drop_stage_id`.
-   - Warm-up: rows from `pl_block_set_rows`, visually de-emphasized; not counted as working volume.
-3. Each row renders the same input cluster currently used (weight / reps / RPE / RIR / complete) — reusing existing completion + autosave + unit-toggle + suggested-load helpers.
-4. Suggested-load calculation:
-   - Resolve reference block's first completed logged set (or its prescribed weight).
-   - Apply reduction (`pct_below_ref`, `kg_below_ref`, `pct_of_ref`, etc.) using existing rounding helper.
-   - Show "Complete Top Set to calculate backoff load" placeholder when the reference has no completed load yet.
-   - Do not overwrite the client's manually entered weight on recompute.
+## Confirm before I start
 
-## Copy / Duplicate / Reorder
-
-Extend the existing template/day/week copy paths (`pl-bulk.functions.ts`, `pl-template-blocks.ts`, duplicate-exercise/day handlers) to:
-- Deep-copy `pl_exercise_blocks`, `pl_block_set_rows`, `pl_block_drop_stages` per copied row.
-- Build an `oldBlockId → newBlockId` map and remap every `reference_block_id` so copied backoffs point at the copied top set, never the original.
-
-## Files (high-level)
-
-- New migration: `supabase/migrations/<ts>_exercise_blocks.sql` (tables + RLS + grants).
-- `src/integrations/supabase/types.ts` — regenerate types (already a generated file; will be edited).
-- New: `src/lib/exercise-blocks.ts` — types, legacy synthesizer, suggested-load resolver, validation, copy helpers.
-- New: `src/components/builder/block-editor.tsx`, `block-list.tsx`, `block-type-fields/*.tsx` (one per type).
-- Edit: `src/routes/_authenticated/admin/program-library_.$templateId.tsx` — swap single prescription grid for `<BlockList>`.
-- Edit: `src/routes/_authenticated/portal/workouts.$dayId.tsx` and `src/components/client-block-view.tsx` — per-block logging rows + suggested-load.
-- Edit: `src/lib/pl-bulk.functions.ts`, `src/lib/pl-template-blocks.ts`, any duplicate/copy server fns — deep-copy + remap references.
-- Edit: `src/lib/exercise-metadata.ts` is **not** touched — purpose/colour logic stays.
-
-## Out of Scope (explicit)
-
-- No change to competition-lift colour grouping or Primary/Secondary/Tertiary derivation.
-- No change to exercise selection, video, substitutions, instructions, accent colours, autosave cadence, or unit-toggle behaviour beyond plumbing per-row.
-- Block-level rest/tempo override only — exercise-level defaults stay where they are; "Inherited from exercise" affordance added.
-
-## Rollout / Risk
-
-- Builder file is 2.3k LOC and logger is 1.9k LOC; the safer path is to land this as **one PR that ships behind nothing** because the schema is additive and the UI swap is contained to the prescription grid inside each card. No feature flag — legacy synthesizer guarantees existing exercises render identically until the coach edits them.
-- Heaviest risks: copy/remap correctness and suggested-load recompute not stomping on user input. Both have explicit handling above and will be exercised by the required test cases.
-
-## Estimated Effort
-
-This is roughly a full day of focused work (migration + ~1500 new LOC + ~600 LOC of edits in the two big files + the copy paths). I want to confirm scope before I start — once I begin, the intermediate states will be large.
-
-**Approve this plan and I'll implement it end-to-end, or tell me which slice to ship first** (e.g. "schema + builder only, logger next turn", or "Straight + Top + Backoff first, Ascending/Drop/Warm-up after").
+1. **Ship Phase 1 only now**, then iterate? (recommended) — or do you want one mega-batch?
+2. **Coach route tree** — OK to introduce `src/routes/_authenticated/coach/*`? (No coach routes exist today; admins currently use admin routes.)
+3. **Existing template ownership** — backfill all current `pl_templates` as **admin-owned, visibility='team'** (i.e. they show up in Team Library immediately, not Private)? That matches current behavior where all coaches already see them.
