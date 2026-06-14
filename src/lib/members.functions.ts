@@ -268,8 +268,9 @@ export const updateMyMarketingPrefs = createServerFn({ method: "POST" })
     const { data: member } = await supabase
       .from("app_members").select("id").eq("user_id", userId).maybeSingle();
     if (!member) throw new Error("Member profile not found");
-    const patch: Record<string, unknown> = { sms_opt_out: data.sms_opt_out };
-    if (!data.sms_opt_out) patch.sms_consent_at = new Date().toISOString();
+    const patch = data.sms_opt_out
+      ? { sms_opt_out: true }
+      : { sms_opt_out: false, sms_consent_at: new Date().toISOString() };
     const { error } = await supabase
       .from("app_members").update(patch).eq("id", member.id);
     if (error) throw new Error(error.message);
