@@ -109,7 +109,7 @@ export function ExercisesAdmin({ embedded = false }: { embedded?: boolean } = {}
     <>
       {!embedded && <PageHeader
         title="Exercise Library"
-        subtitle={`${exercises.length} exercises · ${stillYouTubeCount} still serving YouTube to clients`}
+        subtitle={`${exercises.length} exercises · ${stillYouTubeCount} still on YouTube · ${needsTagsCount} need volume tags`}
         actions={
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
