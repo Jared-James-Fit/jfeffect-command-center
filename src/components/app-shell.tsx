@@ -161,6 +161,22 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
   const [moreOpen, setMoreOpen] = useState(false);
   const [moreQuery, setMoreQuery] = useState("");
   const [moreOpenGroup, setMoreOpenGroup] = useState<string | null>(null);
+  const [paletteQuery, setPaletteQuery] = useState("");
+  const [debouncedPaletteQuery, setDebouncedPaletteQuery] = useState("");
+
+  // Debounce the workout-library search so we don't fire a query on every keystroke.
+  useEffect(() => {
+    const t = window.setTimeout(() => setDebouncedPaletteQuery(paletteQuery), 200);
+    return () => window.clearTimeout(t);
+  }, [paletteQuery]);
+
+  // Reset the query whenever the palette opens/closes so reopening starts fresh.
+  useEffect(() => {
+    if (!paletteOpen) {
+      setPaletteQuery("");
+      setDebouncedPaletteQuery("");
+    }
+  }, [paletteOpen]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
