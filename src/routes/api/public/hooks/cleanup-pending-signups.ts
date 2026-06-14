@@ -11,11 +11,7 @@ export const Route = createFileRoute("/api/public/hooks/cleanup-pending-signups"
   server: {
     handlers: {
       POST: async ({ request }) => {
-        const token = (request.headers.get("apikey") ?? "").trim();
-        const expected = (process.env.SUPABASE_PUBLISHABLE_KEY ?? "").trim();
-        if (!expected || token !== expected) {
-          return new Response("Unauthorized", { status: 401 });
-        }
+        if (!authorizeWorker(request)) return new Response("Unauthorized", { status: 401 });
 
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
@@ -69,3 +65,15 @@ export const Route = createFileRoute("/api/public/hooks/cleanup-pending-signups"
     },
   },
 });
+
+function authorizeWorker(request: Request): boolean {
+  const expected = process.env.SCHEDULED_WORKER_SECRET ?? "";
+  if (!expected) return false;
+  const url = new URL(request.url);
+  const provided =
+    request.headers.get("x-worker-secret") ?? url.searchParams.get("secret") ?? "";
+  if (!provided || provided.length !== expected.length) return false;
+  let diff = 0;
+  for (let i = 0; i < provided.length; i++) diff |= provided.charCodeAt(i) ^ expected.charCodeAt(i);
+  return diff === 0;
+}
