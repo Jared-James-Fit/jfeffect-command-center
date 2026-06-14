@@ -8,6 +8,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "
 import { ChevronLeft, ChevronRight, Calendar as CalIcon, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { KIND_META, ctaLabel, type CalendarItem, type CalendarKind } from "@/lib/calendar-sources";
+import { CalendarEmptyState } from "./empty-state";
 
 type ViewMode = "month" | "week" | "day" | "upcoming";
 
@@ -45,6 +46,8 @@ export function CalendarBoard({
   const [view, setView] = useState<ViewMode>("month");
   const [cursor, setCursor] = useState<Date>(() => startOfDay(new Date()));
   const [selected, setSelected] = useState<CalendarItem | null>(null);
+
+  const isEmpty = !isLoading && items.length === 0;
 
   const itemsByDate = useMemo(() => {
     const m = new Map<string, CalendarItem[]>();
@@ -107,6 +110,13 @@ export function CalendarBoard({
         <LegendRow items={items} />
       </Card>
 
+      {isEmpty ? (
+        <CalendarEmptyState
+          title={emptyHint ? "No calendar items yet" : "No calendar items"}
+          hint={emptyHint}
+        />
+      ) : (
+        <>
       {view === "month" && (
         <MonthGrid cursor={cursor} itemsByDate={itemsByDate} onSelectItem={setSelected} onSelectDay={(d) => { setCursor(d); setView("day"); }} />
       )}
@@ -118,6 +128,8 @@ export function CalendarBoard({
       )}
       {view === "upcoming" && (
         <UpcomingList items={items} onSelectItem={setSelected} showClientName={showClientName} isLoading={isLoading} emptyHint={emptyHint} />
+      )}
+        </>
       )}
 
       <EventDetailSheet item={selected} onClose={() => setSelected(null)} showClientName={showClientName} />
