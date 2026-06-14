@@ -809,31 +809,22 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
         </SheetContent>
       </Sheet>
 
-      {/* Command palette */}
+      {/* Command palette — Workout Library search (⌘K / Ctrl+K) */}
       <CommandDialog open={paletteOpen} onOpenChange={setPaletteOpen}>
-        <CommandInput placeholder="Search keywords — type to jump to any page…" />
+        <CommandInput
+          autoFocus
+          value={paletteQuery}
+          onValueChange={setPaletteQuery}
+          placeholder="Search workout library — name, focus, style, tag…"
+        />
         <CommandList>
-          <CommandEmpty>No matches.</CommandEmpty>
-          {grouped.map((group) => (
-            <CommandGroup key={group.label ?? "all"} heading={group.label}>
-              {group.items.map((item) => {
-                const Icon = item.icon;
-                return (
-                  <CommandItem
-                    key={item.to}
-                    value={`${group.label ?? ""} ${item.label} ${item.to} ${(item.keywords ?? []).join(" ")}`}
-                    onSelect={() => {
-                      setPaletteOpen(false);
-                      navigate({ to: item.to });
-                    }}
-                  >
-                    <Icon className="mr-2 h-4 w-4" />
-                    {item.label}
-                  </CommandItem>
-                );
-              })}
-            </CommandGroup>
-          ))}
+          <WorkoutLibraryResults
+            query={debouncedPaletteQuery}
+            onPick={(tpl) => {
+              setPaletteOpen(false);
+              navigate({ to: "/admin/program-library/$templateId", params: { templateId: tpl.id } });
+            }}
+          />
           <CommandGroup heading="Actions">
             <CommandItem onSelect={() => { setPaletteOpen(false); handleSignOut(); }}>
               <LogOut className="mr-2 h-4 w-4" /> Sign out
