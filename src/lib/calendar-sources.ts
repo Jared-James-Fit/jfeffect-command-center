@@ -42,6 +42,23 @@ export const KIND_META: Record<CalendarKind, { label: string; chip: string; dot:
   check_in:       { label: "Check-In",     chip: "bg-rose-500/15 text-rose-300 border-rose-500/30",             dot: "bg-rose-400" },
 };
 
+/** Per-kind action label so clients/admins see the *thing they can do*, not just "Open". */
+export const CTA_LABELS: Record<CalendarKind, string> = {
+  event:          "View Event Details",
+  important_date: "View Details",
+  appointment:    "Open Appointment",
+  pt_session:     "View Session Details",
+  workout:        "Open Workout",
+  check_in:       "Submit Check-In",
+};
+export function ctaLabel(item: { kind: CalendarKind; raw?: any }): string {
+  if (item.kind === "event") {
+    const t = (item.raw?.event_type ?? "").toLowerCase();
+    if (t.includes("meet") || t.includes("competition")) return "View Meet Details";
+  }
+  return CTA_LABELS[item.kind];
+}
+
 function toLocalDate(iso: string): string {
   const d = new Date(iso);
   const y = d.getFullYear();
