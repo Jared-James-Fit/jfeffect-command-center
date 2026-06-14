@@ -433,3 +433,13 @@ export const generateAgreementPdf = createServerFn({ method: "POST" })
     const res = await renderAgreementPdf(data.packageId);
     return res;
   });
+
+export const getPdfDownloadUrl = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { documentId: string }) => d)
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context as any;
+    await assertAdmin(supabase, userId);
+    const { getSignedPdfUrl } = await import("@/lib/native-agreements-pdf.server");
+    return { url: await getSignedPdfUrl(data.documentId, 600) };
+  });
