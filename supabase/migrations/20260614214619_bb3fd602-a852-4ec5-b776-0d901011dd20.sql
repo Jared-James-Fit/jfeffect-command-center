@@ -1,0 +1,1 @@
+ALTER TABLE public.app_members ADD COLUMN IF NOT EXISTS email_marketing_opt_in boolean NOT NULL DEFAULT false;
