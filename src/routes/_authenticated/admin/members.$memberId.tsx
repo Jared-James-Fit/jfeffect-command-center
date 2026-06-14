@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import {
   getMember, updateAppMember, generateSetupLink, generatePasswordResetLink,
-  grantAccess, revokeAccess,
+  grantAccess, revokeAccess, deleteAdminMember,
 } from "@/lib/members.functions";
 import { copyPovFromMember } from "@/lib/pov.functions";
 import { adminUpdateMemberSetup } from "@/lib/member-setup.functions";
@@ -46,6 +46,7 @@ function MemberProfile() {
   const grant = useServerFn(grantAccess);
   const revoke = useServerFn(revokeAccess);
   const copyPov = useServerFn(copyPovFromMember);
+  const deleteMemberFn = useServerFn(deleteAdminMember);
   const navigate = useNavigate();
 
   const { data } = useQuery({ queryKey: ["admin-member", memberId], queryFn: () => fetch({ data: { memberId } }) });
@@ -338,7 +339,75 @@ function MemberProfile() {
           <MemberSetupInfoCard member={member} memberId={memberId} />
         </TabsContent>
       </Tabs>
+
+      <DangerZone
+        memberEmail={member.email}
+        onDelete={async () => {
+          await deleteMemberFn({ data: { memberId } });
+          toast.success("Member account deleted");
+          await qc.invalidateQueries({ queryKey: ["admin-members"] });
+          navigate({ to: "/admin/members" });
+        }}
+      />
     </div>
+  );
+}
+
+function DangerZone({ memberEmail, onDelete }: { memberEmail: string; onDelete: () => Promise<void> }) {
+  const [open, setOpen] = useState(false);
+  const [confirmEmail, setConfirmEmail] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const matches = confirmEmail.trim().toLowerCase() === (memberEmail ?? "").trim().toLowerCase();
+
+  async function handleDelete() {
+    if (!matches) return;
+    setDeleting(true);
+    try {
+      await onDelete();
+    } catch (e: any) {
+      toast.error(e?.message ?? "Delete failed");
+      setDeleting(false);
+    }
+  }
+
+  return (
+    <Card className="space-y-4 border-destructive/40 bg-destructive/5 p-5">
+      <div>
+        <div className="text-xs uppercase tracking-wider text-destructive">Danger zone</div>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Permanently deletes the member row and removes their auth account. This cannot be undone.
+        </p>
+      </div>
+      {!open ? (
+        <Button variant="destructive" onClick={() => setOpen(true)}>
+          <Trash2 className="mr-2 h-4 w-4" /> Delete Account
+        </Button>
+      ) : (
+        <div className="space-y-3">
+          <div>
+            <Label className="text-xs">
+              Type <span className="font-mono">{memberEmail}</span> to confirm
+            </Label>
+            <Input
+              autoFocus
+              value={confirmEmail}
+              onChange={(e) => setConfirmEmail(e.target.value)}
+              placeholder={memberEmail}
+              className="mt-1"
+              disabled={deleting}
+            />
+          </div>
+          <div className="flex gap-2">
+            <Button variant="destructive" disabled={!matches || deleting} onClick={handleDelete}>
+              {deleting ? "Deleting…" : "Permanently delete account"}
+            </Button>
+            <Button variant="ghost" disabled={deleting} onClick={() => { setOpen(false); setConfirmEmail(""); }}>
+              Cancel
+            </Button>
+          </div>
+        </div>
+      )}
+    </Card>
   );
 }
 
