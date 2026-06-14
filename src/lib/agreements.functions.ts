@@ -1529,3 +1529,65 @@ export const getSignedAgreementUrlsForPurchase = createServerFn({ method: "POST"
     }
     return { accessRole, agreements: out };
   });
+
+/** Admin: set or clear the custom display title on an agreement row. */
+export const setAgreementCustomTitle = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i: unknown) =>
+    z.object({
+      id: z.string().uuid(),
+      custom_title: z.string().trim().max(200).nullable(),
+    }).parse(i),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const { data: roleRows } = await supabase
+      .from("user_roles").select("role").eq("user_id", userId);
+    const roles = (roleRows ?? []).map((r: any) => r.role);
+    if (!roles.includes("admin")) throw new Error("Forbidden: admin only.");
+    const value = data.custom_title && data.custom_title.length ? data.custom_title : null;
+    const { error } = await supabase
+      .from("agreements")
+      .update({ custom_title: value } as any)
+      .eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+/** Admin: link an unlinked signed document to a client. */
+export const linkAgreementToClient = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i: unknown) =>
+    z.object({
+      id: z.string().uuid(),
+      client_id: z.string().uuid().nullable(),
+    }).parse(i),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const { data: roleRows } = await supabase
+      .from("user_roles").select("role").eq("user_id", userId);
+    const roles = (roleRows ?? []).map((r: any) => r.role);
+    if (!roles.includes("admin")) throw new Error("Forbidden: admin only.");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    let patch: any = { client_id: data.client_id };
+    if (data.client_id) {
+      const { data: c } = await supabaseAdmin
+        .from("clients").select("full_name, email").eq("id", data.client_id).maybeSingle();
+      if (c) {
+        patch.client_full_name = c.full_name ?? null;
+        patch.client_email = c.email ?? null;
+      }
+    }
+    const { error } = await supabaseAdmin
+      .from("agreements").update(patch).eq("id", data.id);
+    if (error) throw new Error(error.message);
+    await supabaseAdmin.from("agreement_audit_log").insert({
+      agreement_id: data.id,
+      event: data.client_id ? "linked_to_client" : "unlinked_from_client",
+      actor_user_id: userId,
+      actor_role: "admin",
+      details: { client_id: data.client_id } as any,
+    } as any);
+    return { ok: true };
+  });
