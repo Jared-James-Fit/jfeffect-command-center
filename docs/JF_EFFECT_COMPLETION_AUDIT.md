@@ -83,7 +83,7 @@ The product is structurally complete: 172/172 tables have RLS on, the membership
 - **Work:** Schedule the cron via pg_cron migration; tighten the handler to require `SCHEDULED_WORKER_SECRET`.
 
 ### B11. Two cron handlers lack signature verification
-- `appointment-reminders.ts` — no visible secret guard at all.
+- `appointment-reminders.ts` — ✅ RESOLVED 2026-06-14: now requires `SCHEDULED_WORKER_SECRET` via `x-worker-secret` header or `?secret=` query param with timing-safe compare; returns 401 otherwise.
 - `sms-reminders.ts`, `media-archive.ts`, `cleanup-pending-signups.ts`, `lift-archive-tick.ts` — anon/publishable key only (weak; any visitor can trigger).
 - `fillout.ts` — bearer-string equality, not timing-safe.
 - **Work:** Standardize on `SCHEDULED_WORKER_SECRET` + `timingSafeEqual` for all cron endpoints.
