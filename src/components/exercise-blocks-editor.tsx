@@ -31,6 +31,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import {
   BLOCK_TYPES,
@@ -139,6 +140,16 @@ export function ExerciseBlocksEditor({ open, onOpenChange, rowId, exerciseName }
 
   const errors = useMemo(() => blocks.flatMap(validateBlock), [blocks]);
 
+  // Slice 3 containment: any non-Straight block, or more than one
+  // block, is gated behind the server-side trigger. The save will
+  // succeed only if the owning program is hidden from the client
+  // (`pl_blocks.client_visible = false`). Surface this BEFORE the
+  // save so the coach is never surprised by a Postgres error.
+  const hasUnsupportedBlocks = useMemo(
+    () => blocks.length > 1 || blocks.some((b) => b.block_type !== "straight"),
+    [blocks],
+  );
+
   const onSave = () => {
     if (errors.length) {
       toast.error(errors[0]);
@@ -165,6 +176,20 @@ export function ExerciseBlocksEditor({ open, onOpenChange, rowId, exerciseName }
           <div className="py-8 text-center text-sm text-muted-foreground">Loading blocks…</div>
         ) : (
           <div className="space-y-3">
+            {hasUnsupportedBlocks && (
+              <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-xs text-foreground">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+                <div>
+                  <div className="font-semibold">Builder preview only</div>
+                  <p className="mt-1 text-muted-foreground">
+                    Multi-block prescriptions are currently available in builder preview only.
+                    Client assignment will unlock after the block logger is enabled. Saving here
+                    on a program that is already visible to the client will be rejected by the
+                    server with this same message.
+                  </p>
+                </div>
+              </div>
+            )}
             {blocks.map((b, idx) => (
               <BlockCard
                 key={b.id}

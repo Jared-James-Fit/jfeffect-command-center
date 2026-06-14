@@ -33,6 +33,7 @@ import { dayScheduledDate } from "@/lib/workout-today";
 import { format, startOfDay } from "date-fns";
 import { useServerFn } from "@tanstack/react-start";
 import { notifyCoachOfWorkoutFailure } from "@/lib/support-alerts.functions";
+import { getRowBlockSummariesFn } from "@/lib/exercise-blocks.functions";
 import { runJob } from "@/lib/progress-jobs";
 import { cn } from "@/lib/utils";
 import { WorkoutEmptyCard } from "@/components/workout-empty-state";
@@ -281,6 +282,38 @@ function WorkoutDay() {
       const r = (await sb.from("pl_row_results").select("*").in("row_id", rowIds).eq("client_id", client!.id)).data ?? [];
       writePlanCache(cacheScope, `results:${client!.id}`, r);
       return r;
+    },
+  });
+
+  // Slice 3 client fail-safe. A row "is unsupported" when it carries
+  // any non-Straight block, or more than one block — i.e. anything the
+  // legacy logger would otherwise mis-render or silently flatten. The
+  // server-side activation guard prevents this state from reaching a
+  // client-visible program under normal flow; the fail-safe exists for
+  // exactly the rare scenario where a row slipped through (e.g. logger
+  // toggled on, then a program containing unsupported blocks is opened
+  // while the toggle is off again).
+  const rowBlockSummariesFn = useServerFn(getRowBlockSummariesFn);
+  const { data: unsupportedRows = {} } = useQuery<Record<string, boolean>>({
+    queryKey: ["pl-day-row-block-summaries", dayId, (rows as any[]).map((r) => r.id).sort().join(",")],
+    enabled: (rows as any[]).length > 0,
+    queryFn: async () => {
+      const rowIds = (rows as any[]).map((r) => r.id);
+      if (!rowIds.length) return {} as Record<string, boolean>;
+      const summary = await rowBlockSummariesFn({ data: { rowIds } });
+      // Best-effort client diagnosis log: any unsupported row reaching
+      // a client is an error condition that admin needs to see.
+      const bad = Object.entries(summary as Record<string, boolean>)
+        .filter(([, v]) => v)
+        .map(([k]) => k);
+      if (bad.length) {
+        // eslint-disable-next-line no-console
+        console.warn("[pl-block-failsafe] Unsupported block rows in this workout", {
+          dayId,
+          rowIds: bad,
+        });
+      }
+      return summary;
     },
   });
 
@@ -580,6 +613,9 @@ function WorkoutDay() {
                 />
               ) : null}
               {(rows as any[]).map((r) => (
+                unsupportedRows[r.id] ? (
+                  <UnsupportedExerciseCard key={r.id} row={r} />
+                ) : (
                 <ExerciseBlock
                   key={r.id}
                   row={r}
@@ -597,6 +633,7 @@ function WorkoutDay() {
                   onNoteChange={refreshNotes}
                   purposeLabel={purposeLabelById.get(r.id) ?? null}
                 />
+                )
               ))}
               </div>
             </WorkoutLoadBoundary>
@@ -687,6 +724,9 @@ function WorkoutDay() {
               />
             ) : null}
             {(rows as any[]).map((r) => (
+              unsupportedRows[r.id] ? (
+                <UnsupportedExerciseCard key={r.id} row={r} />
+              ) : (
               <ExerciseBlock
                 key={r.id}
                 row={r}
@@ -703,6 +743,7 @@ function WorkoutDay() {
                 onNoteChange={refreshNotes}
                 purposeLabel={purposeLabelById.get(r.id) ?? null}
               />
+              )
             ))}
           </div>
         </WorkoutLoadBoundary>
@@ -860,6 +901,39 @@ function SuggestedLoadBadge({ load, unit, exerciseName }: { load: number; unit: 
         </Popover>
       )}
     </div>
+  );
+}
+
+/**
+ * Slice 3 client fail-safe card. Rendered in place of `<ExerciseBlock />`
+ * for any row whose pl_exercise_blocks contain anything the legacy logger
+ * does not understand (multi-block prescriptions, drop sets, ascending sets,
+ * etc.). Server-side guards prevent this state from reaching client-visible
+ * programs under normal flow — this card exists as a defensive fail-safe so
+ * a client never sees broken legacy inputs, can never fake completion, and
+ * never creates incorrect set logs. The rest of the workout remains
+ * loggable as normal.
+ */
+function UnsupportedExerciseCard({ row }: { row: any }) {
+  const name = row.exercises?.name ?? row.exercise_name_override ?? "Exercise";
+  return (
+    <Card className="border-amber-500/40 bg-amber-500/5 p-4">
+      <div className="flex items-start gap-3">
+        <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-500" />
+        <div className="space-y-1">
+          <div className="text-sm font-bold">{name}</div>
+          <p className="text-sm text-foreground/90">
+            This exercise prescription needs an updated logging format. Contact your coach before completing this exercise.
+          </p>
+          <Link
+            to="/portal/messages"
+            className="mt-2 inline-flex items-center gap-1 rounded-md bg-primary px-2.5 py-1 text-xs font-semibold text-primary-foreground"
+          >
+            <MessageCircle className="h-3 w-3" /> Message Coach
+          </Link>
+        </div>
+      </div>
+    </Card>
   );
 }
 

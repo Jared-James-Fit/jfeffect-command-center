@@ -11,6 +11,7 @@ import {
   getBlockTree, updateBlock, addWeek as addWeekFn, deleteWeek, addDay as addDayFn, updateDay,
   deleteDay, updateRow, deleteRow,
 } from "@/lib/pl-programs";
+import { cloneBlocksForRowsFn } from "@/lib/exercise-blocks.functions";
 import type { ExerciseRef } from "@/components/program-builder";
 import {
   StructureCanvas,
@@ -98,6 +99,14 @@ async function applyPayloadDiff(blockId: string, originalTree: any, current: any
   const origWeeks: any[] = original.weeks_data;
   const curWeeks: any[] = current.weeks_data ?? [];
 
+  // Slice 3 containment: collect every paste mapping
+  // (source row id from the in-memory clipboard → freshly inserted dest row id)
+  // so attached pl_exercise_blocks survive copy/paste. The mapping is applied
+  // once at the very end via a single atomic two-pass RPC. Any per-row
+  // `_sourceDbId` is cleared after a successful clone so re-saving never
+  // duplicates blocks (idempotency: clone runs exactly once per paste).
+  const blockCloneMappings: Array<{ source_row_id: string; dest_row_id: string; carrier: any }> = [];
+
   // Delete weeks the user removed
   const keepWeekIds = new Set(curWeeks.filter((w) => w._dbId).map((w) => w._dbId));
   for (const ow of origWeeks) {
@@ -183,8 +192,41 @@ async function applyPayloadDiff(blockId: string, originalTree: any, current: any
             .single();
           if (error) throw error;
           cr._dbId = ins.id;
+          // If this row came from a copy/paste of a persisted source
+          // row, queue a block clone for it. The clone runs after the
+          // whole tree has been materialized so backoffs / refs that
+          // point at sibling-copied rows resolve through the same map.
+          if (cr._sourceDbId && typeof cr._sourceDbId === "string") {
+            blockCloneMappings.push({
+              source_row_id: cr._sourceDbId,
+              dest_row_id: ins.id,
+              carrier: cr,
+            });
+          }
         }
       }
+    }
+  }
+
+  // Atomic two-pass block clone. SECURITY DEFINER + transactional, so a
+  // single failure rolls back the entire block-copy step. The
+  // pl_guard_block_save trigger still fires for each insert: pasting a
+  // multi-block prescription into a client-visible program is rejected
+  // with the slice-3 message, exactly as required.
+  if (blockCloneMappings.length) {
+    await cloneBlocksForRowsFn({
+      data: {
+        mappings: blockCloneMappings.map(({ source_row_id, dest_row_id }) => ({
+          source_row_id,
+          dest_row_id,
+        })),
+      },
+    });
+    // Idempotency: strip _sourceDbId now that the clone has succeeded.
+    // A later save() with the same in-memory payload will see no
+    // mappings and skip the RPC entirely.
+    for (const m of blockCloneMappings) {
+      delete (m.carrier as any)._sourceDbId;
     }
   }
 }

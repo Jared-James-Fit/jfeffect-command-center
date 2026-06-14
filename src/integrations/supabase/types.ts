@@ -11531,6 +11531,8 @@ export type Database = {
         }
         Returns: Json
       }
+      pl_block_logger_enabled: { Args: never; Returns: boolean }
+      pl_clone_blocks_for_rows: { Args: { p_mappings: Json }; Returns: number }
       pl_move_row: {
         Args: { p_direction: string; p_row_id: string }
         Returns: {
@@ -11543,6 +11545,10 @@ export type Database = {
         Returns: string
       }
       pl_recompute_week_status: { Args: { _week_id: string }; Returns: string }
+      pl_row_has_unsupported_blocks: {
+        Args: { p_row_id: string }
+        Returns: boolean
+      }
       pl_template_apply_payload: {
         Args: {
           _affected_block_keys: string[]
