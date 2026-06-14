@@ -413,8 +413,10 @@ export type Database = {
           email_marketing_opt_in: boolean
           emergency_contact_name: string | null
           emergency_contact_phone: string | null
+          experience_level: string | null
           full_name: string | null
           goals: string | null
+          goals_tags: string[]
           grace_period_ends_at: string | null
           hold_plan_started_at: string | null
           id: string
@@ -471,8 +473,10 @@ export type Database = {
           email_marketing_opt_in?: boolean
           emergency_contact_name?: string | null
           emergency_contact_phone?: string | null
+          experience_level?: string | null
           full_name?: string | null
           goals?: string | null
+          goals_tags?: string[]
           grace_period_ends_at?: string | null
           hold_plan_started_at?: string | null
           id?: string
@@ -529,8 +533,10 @@ export type Database = {
           email_marketing_opt_in?: boolean
           emergency_contact_name?: string | null
           emergency_contact_phone?: string | null
+          experience_level?: string | null
           full_name?: string | null
           goals?: string | null
+          goals_tags?: string[]
           grace_period_ends_at?: string | null
           hold_plan_started_at?: string | null
           id?: string
@@ -2214,6 +2220,12 @@ export type Database = {
           info_update_requested_at: string | null
           injuries: string | null
           instagram: string | null
+          intake_bench_1rm: number | null
+          intake_deadlift_1rm: number | null
+          intake_lift_unit: string | null
+          intake_lifts_known: boolean | null
+          intake_lifts_recorded_at: string | null
+          intake_squat_1rm: number | null
           invite_expires_at: string | null
           invite_last_resent_at: string | null
           invite_sent_at: string | null
@@ -2373,6 +2385,12 @@ export type Database = {
           info_update_requested_at?: string | null
           injuries?: string | null
           instagram?: string | null
+          intake_bench_1rm?: number | null
+          intake_deadlift_1rm?: number | null
+          intake_lift_unit?: string | null
+          intake_lifts_known?: boolean | null
+          intake_lifts_recorded_at?: string | null
+          intake_squat_1rm?: number | null
           invite_expires_at?: string | null
           invite_last_resent_at?: string | null
           invite_sent_at?: string | null
@@ -2532,6 +2550,12 @@ export type Database = {
           info_update_requested_at?: string | null
           injuries?: string | null
           instagram?: string | null
+          intake_bench_1rm?: number | null
+          intake_deadlift_1rm?: number | null
+          intake_lift_unit?: string | null
+          intake_lifts_known?: boolean | null
+          intake_lifts_recorded_at?: string | null
+          intake_squat_1rm?: number | null
           invite_expires_at?: string | null
           invite_last_resent_at?: string | null
           invite_sent_at?: string | null
