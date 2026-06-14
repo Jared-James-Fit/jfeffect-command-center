@@ -449,6 +449,24 @@ function NewTemplateDialog({ open, onOpenChange, onCreated }: { open: boolean; o
                 <div><Label>Days/week</Label><Input type="number" inputMode="numeric" value={form.days_per_week} onChange={(e) => setForm({ ...form, days_per_week: parseInt(e.target.value) || 0 })} /></div>
                 <div><Label>Est min</Label><Input type="number" inputMode="numeric" value={form.est_duration_min} onChange={(e) => setForm({ ...form, est_duration_min: parseInt(e.target.value) || 0 })} /></div>
               </div>
+              {(form.template_type === "full_prep" || (form.blocks || 1) > 1) && (
+                <div className="space-y-1">
+                  <Label>Per-block focus</Label>
+                  <p className="text-[11px] text-muted-foreground">Label each block (e.g. Volume/Accumulation, Strength, Peak). Optional — you can edit later.</p>
+                  <div className="space-y-1">
+                    {blockFocuses.map((v, i) => (
+                      <div key={i} className="flex items-center gap-2">
+                        <span className="w-16 shrink-0 text-[11px] text-muted-foreground">Block {i + 1}</span>
+                        <Input
+                          value={v}
+                          onChange={(e) => setBlockFocus(i, e.target.value)}
+                          placeholder={form.training_focus || "Focus (e.g. Volume/Accumulation)"}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </>
           )}
           <div>
