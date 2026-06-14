@@ -1119,6 +1119,30 @@ function BottomNavSlot({ item, pathname, navBadges, onNavigate }: {
                 </li>
               );
             }
+            if (c.to === "__client_pov__") {
+              return (
+                <li key={c.to}>
+                  <button
+                    type="button"
+                    data-bar-option={c.to}
+                    onClick={() => {
+                      setOpen(false);
+                      try { window.dispatchEvent(new CustomEvent("open-client-pov-picker")); } catch {}
+                    }}
+                    style={{ WebkitTapHighlightColor: "transparent" }}
+                    className={cn(
+                      "flex w-full items-center gap-2.5 rounded-md px-2.5 py-2.5 text-sm font-medium transition-colors select-none text-left",
+                      highlighted ? "bg-accent text-accent-foreground scale-[1.01]" : "hover:bg-accent text-warning",
+                    )}
+                  >
+                    <div className="relative">
+                      <CIcon className="h-4 w-4" />
+                    </div>
+                    <span className="flex-1 truncate">{c.label}</span>
+                  </button>
+                </li>
+              );
+            }
             return (
               <li key={c.to}>
                 <Link
