@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import {
-  Users, UserPlus, Send, ShieldCheck, Globe, Layers,
+  Users, UserPlus, Send, ShieldCheck, Layers,
   Check, Trash2, Search,
 } from "lucide-react";
 import {
@@ -157,36 +157,6 @@ export function ShareProgramSheet({
                   templateId={template.id}
                   version={template.payload_revision}
                   destination="membership_submission"
-                  onDone={invalidate}
-                />
-              )
-            }
-          />
-
-          {/* Public submission */}
-          <DestinationRow
-            icon={<Globe className="h-5 w-5" />}
-            title="Public Library"
-            audience="Anyone with the public link"
-            statusBadge={
-              pending("public_submission") ? (
-                <Badge variant="secondary">Pending Approval</Badge>
-              ) : (
-                <Badge variant="outline">Not Submitted</Badge>
-              )
-            }
-            primary={
-              viewerRole === "admin" ? (
-                <Badge variant="outline" className="text-[10px]">
-                  Public pages — Phase 3
-                </Badge>
-              ) : pending("public_submission") ? (
-                <Badge variant="secondary">Awaiting Admin</Badge>
-              ) : (
-                <SubmitButton
-                  templateId={template.id}
-                  version={template.payload_revision}
-                  destination="public_submission"
                   onDone={invalidate}
                 />
               )

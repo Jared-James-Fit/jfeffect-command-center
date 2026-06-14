@@ -6253,17 +6253,27 @@ export type Database = {
           featured: boolean
           goal: string | null
           id: string
+          last_verified_at: string | null
           logging_enabled: boolean
+          membership_status: string
           name: string
+          published_at: string | null
+          published_by: string | null
           published_payload: Json
+          published_version: number | null
           required_access_level: string
+          scheduled_at: string | null
           source_block_id: string | null
           source_template_id: string | null
           status: string
           tags: string[]
           tracking_enabled: boolean
           training_style: string
+          unpublish_reason: string | null
+          unpublished_at: string | null
           updated_at: string
+          verification_reason: string | null
+          verification_status: string
           weeks: number
           workouts_total: number
         }
@@ -6279,17 +6289,27 @@ export type Database = {
           featured?: boolean
           goal?: string | null
           id?: string
+          last_verified_at?: string | null
           logging_enabled?: boolean
+          membership_status?: string
           name: string
+          published_at?: string | null
+          published_by?: string | null
           published_payload?: Json
+          published_version?: number | null
           required_access_level?: string
+          scheduled_at?: string | null
           source_block_id?: string | null
           source_template_id?: string | null
           status?: string
           tags?: string[]
           tracking_enabled?: boolean
           training_style?: string
+          unpublish_reason?: string | null
+          unpublished_at?: string | null
           updated_at?: string
+          verification_reason?: string | null
+          verification_status?: string
           weeks?: number
           workouts_total?: number
         }
@@ -6305,17 +6325,27 @@ export type Database = {
           featured?: boolean
           goal?: string | null
           id?: string
+          last_verified_at?: string | null
           logging_enabled?: boolean
+          membership_status?: string
           name?: string
+          published_at?: string | null
+          published_by?: string | null
           published_payload?: Json
+          published_version?: number | null
           required_access_level?: string
+          scheduled_at?: string | null
           source_block_id?: string | null
           source_template_id?: string | null
           status?: string
           tags?: string[]
           tracking_enabled?: boolean
           training_style?: string
+          unpublish_reason?: string | null
+          unpublished_at?: string | null
           updated_at?: string
+          verification_reason?: string | null
+          verification_status?: string
           weeks?: number
           workouts_total?: number
         }
