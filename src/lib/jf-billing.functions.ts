@@ -517,11 +517,12 @@ export const completeJfSignup = createServerFn({ method: "POST" })
       console.error("[jf-billing] legal acceptance persistence failed", e);
     }
 
-    // Mark trial email used (only on first trial)
+    // Mark trial email used (only on first trial), scoped by Stripe mode so
+    // a test-mode trial doesn't suppress a future live-mode trial.
     if (subscription?.trial_end) {
       await supabaseAdmin.from("jf_trial_emails").upsert(
-        { email_lc: emailLc, stripe_customer_id: subscription.customer ?? null },
-        { onConflict: "email_lc", ignoreDuplicates: true } as any,
+        { email_lc: emailLc, stripe_mode: mode, stripe_customer_id: subscription.customer ?? null },
+        { onConflict: "email_lc,stripe_mode", ignoreDuplicates: true } as any,
       );
     }
 
