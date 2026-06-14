@@ -237,22 +237,23 @@ No missing GRANTs detected — project uses schema-level grants combined with RL
 2. [ ] Add `STRIPE_SECRET_KEY` + `STRIPE_WEBHOOK_SECRET` to runtime secrets (live mode)
 3. [ ] Add `TWILIO_API_KEY` (and any other Twilio creds the chosen client expects) to runtime secrets
 4. [ ] Add `RESEND_API_KEY` to runtime secrets
-5. [ ] Add `SCHEDULED_WORKER_SECRET` to runtime secrets
+5. [ ] Add `SCHEDULED_WORKER_SECRET` to runtime secrets — **now required by 5 cron handlers**, all return 401 without it
 6. [ ] Add `SIGNNOW_CLIENT_ID`, `SIGNNOW_CLIENT_SECRET`, `SIGNNOW_WEBHOOK_SECRET` to runtime secrets
-7. [ ] Fix sales-page key mismatch — make `/join` and Launch Readiness agree on one `page_key` ("join")
-8. [ ] Publish the membership sales page row at `/admin/sales/membership` and confirm `/join` renders the live copy (not the hardcoded fallback)
-9. [ ] Migration: `ALTER POLICY` for all 3 `client-action-files` storage policies → role `authenticated`
-10. [ ] Migration: scope `member_support_messages.msm_coach_select` to assigned clients only
+7. [x] ~~Sales-page key mismatch~~ — RESOLVED, both call sites use `page_key="join"`
+8. [ ] Confirm the published `sales_pages.join` row renders the live copy on `/join` (not the hardcoded fallback) — `published=true` already verified
+9. [ ] Migration: `ALTER POLICY` for all 3 `client-action-files` storage policies → role `authenticated` (still `{public}` as of 2026-06-14)
+10. [ ] Migration: scope `member_support_messages.msm_coach_select` to assigned clients only (still bare `is_coach_or_admin`)
 11. [ ] Migration: add admin-only RLS policies on `jf_pending_signups` (and document SECURITY DEFINER-only writes)
 12. [ ] Convert `createClientActionRequest`/`deleteClientActionRequest`/`resendClientActionRequest` to server fns with `requireSupabaseAuth` + `is_assigned_coach` / admin check
-13. [ ] Add explicit `.eq("client_id", client.id)` filter in `src/routes/_authenticated/portal/agreements.index.tsx:30`
-14. [ ] Add `SCHEDULED_WORKER_SECRET` header check (timing-safe) to: `appointment-reminders.ts`, `sms-reminders.ts`, `media-archive.ts`, `cleanup-pending-signups.ts`, `lift-archive-tick.ts`
-15. [ ] Replace plain string equality in `hooks/fillout.ts` with `timingSafeEqual`
-16. [ ] Create pg_cron schedule for `jf-cleanup-pending-signups-hourly` calling the cleanup endpoint
-17. [ ] Verify Stripe Customer Portal flow from `/m/billing` against the live key, end-to-end
-18. [ ] Publish current draft for ToS and Membership Agreement OR mark notice-only intentionally, then flip `enforcement_enabled=true` on at least those two
-19. [ ] Verify `sms_automations` rows exist for each of the 11 wired membership triggers; activate `notification_mode=allowlist`, send a test, then flip to `live`
-20. [ ] Flip `jf_membership_settings.public_checkout_enabled = true`
+13. [x] ~~Portal agreements client_id filter~~ — RESOLVED (`portal/agreements.index.tsx` now scopes by resolved `clientId`)
+14. [x] ~~`SCHEDULED_WORKER_SECRET` guard on 5 cron handlers~~ — RESOLVED (all use header/query + constant-time compare)
+15. [x] ~~Timing-safe Fillout signature~~ — RESOLVED (`hooks/fillout.ts` uses constant-time compare)
+16. [ ] Create pg_cron schedule for `jf-cleanup-pending-signups-hourly` — must POST `x-worker-secret: $SCHEDULED_WORKER_SECRET` (handler no longer accepts the publishable key)
+17. [ ] Re-schedule existing pg_cron jobs hitting `sms-reminders`, `media-archive`, `lift-archive-tick`, `appointment-reminders` to send `x-worker-secret` — current `apikey`-only jobs now 401
+18. [ ] Verify Stripe Customer Portal flow from `/m/billing` against the live key, end-to-end
+19. [ ] Publish current draft for ToS and Membership Agreement OR mark notice-only intentionally, then flip `enforcement_enabled=true` on at least those two
+20. [ ] Verify `sms_automations` rows exist for each of the 11 wired membership triggers; QA in `allowlist` mode (currently 1 phone + 1 email), then flip `app_settings.jf_membership_notifications.mode` to `live`
+21. [x] ~~Flip `public_checkout_enabled = true`~~ — RESOLVED (already true); **action: monitor first live purchase**
 
 ### P1 — Immediately after P0
 
