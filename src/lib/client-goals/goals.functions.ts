@@ -1,8 +1,14 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { clientGoalsSetupSchema } from "@/lib/client-goals/schema";
 
 const clientIdInput = z.object({ clientId: z.string().uuid() });
+
+const saveGoalsSetupInput = z.object({
+  clientId: z.string().uuid(),
+  patch: clientGoalsSetupSchema.partial().extend({ completed: z.boolean().optional() }),
+});
 
 async function assertCoachOrAdmin(ctx: any, clientId: string) {
   // admin or coach role, or assigned coach for this client.
@@ -20,6 +26,36 @@ async function assertCoachOrAdmin(ctx: any, clientId: string) {
   if (isAssigned) return;
   throw new Error("Forbidden");
 }
+
+async function assertClientOwnerOrCoachOrAdmin(ctx: any, clientId: string) {
+  const { data: isOwner } = await ctx.supabase.rpc("is_client_owner", {
+    _client_id: clientId,
+  });
+  if (isOwner) return;
+  await assertCoachOrAdmin(ctx, clientId);
+}
+
+/** Save a client's Goals & Setup answers after confirming the caller is allowed to edit them. */
+export const saveGoalsSetupFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data) => saveGoalsSetupInput.parse(data))
+  .handler(async ({ data, context }) => {
+    await assertClientOwnerOrCoachOrAdmin(context, data.clientId);
+
+    const { completed, ...patch } = data.patch;
+    const body: Record<string, unknown> = {
+      client_id: data.clientId,
+      ...patch,
+    };
+    if (completed) body.completed_at = new Date().toISOString();
+
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { error } = await supabaseAdmin
+      .from("client_goals_setup")
+      .upsert(body as any, { onConflict: "client_id" });
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
 
 /** Mark the client's Goals & Setup as reviewed by the current coach/admin. */
 export const markGoalsReviewedFn = createServerFn({ method: "POST" })
