@@ -1943,19 +1943,40 @@ function DayEditor({ day, setDay, exercises, compact, dayKey }: { day: any; setD
       <div className="mt-2 space-y-1">
         <div className="flex items-center justify-between">
           <Label className={cn("text-xs font-semibold", compact && "text-[11px]")}>
-            Description <span className="font-normal text-muted-foreground">(optional)</span>
+            Workout Description <span className="font-normal text-muted-foreground">(optional)</span>
           </Label>
           <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
-            Visible to client / member
+            Displayed to the client / member with this workout
           </span>
         </div>
         <Textarea
           className={cn(compact && "text-xs")}
-          placeholder="Add context, intent, or instructions — your client will see this above their workout."
+          placeholder="Explain the workout focus, pacing, technique priorities, or anything the client should know before starting."
           value={day.notes ?? ""}
-          onChange={(e) => setDay({ ...day, notes: e.target.value })}
+          onChange={(e) => setDay({ ...day, notes: e.target.value, notes_client_visible: true })}
           rows={compact ? 2 : 3}
         />
+        {day.notes && day.notes.trim().length > 0 && day.notes_client_visible === false && (
+          <div className="mt-1 flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-[11px] text-amber-700 dark:text-amber-300">
+            <span className="flex-1">
+              This day has an older note that may contain private/internal coaching info. It’s hidden from the client until you confirm it’s safe to share.
+            </span>
+            <button
+              type="button"
+              className="rounded bg-amber-600 px-2 py-0.5 text-[11px] font-semibold text-white hover:bg-amber-700"
+              onClick={() => setDay({ ...day, notes_client_visible: true })}
+            >
+              Show to client
+            </button>
+            <button
+              type="button"
+              className="rounded border border-amber-600/60 px-2 py-0.5 text-[11px] font-semibold text-amber-700 hover:bg-amber-500/20 dark:text-amber-300"
+              onClick={() => setDay({ ...day, notes: "", notes_client_visible: true })}
+            >
+              Clear
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
