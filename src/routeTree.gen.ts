@@ -110,6 +110,7 @@ import { Route as AuthenticatedAdminPaymentsRouteImport } from './routes/_authen
 import { Route as AuthenticatedAdminPaymentLinksRouteImport } from './routes/_authenticated/admin/payment-links'
 import { Route as AuthenticatedAdminOffersRouteImport } from './routes/_authenticated/admin/offers'
 import { Route as AuthenticatedAdminNutritionTargetsRouteImport } from './routes/_authenticated/admin/nutrition-targets'
+import { Route as AuthenticatedAdminNutritionDashboardRouteImport } from './routes/_authenticated/admin/nutrition-dashboard'
 import { Route as AuthenticatedAdminNativeFormsRouteImport } from './routes/_authenticated/admin/native-forms'
 import { Route as AuthenticatedAdminMessagesRouteImport } from './routes/_authenticated/admin/messages'
 import { Route as AuthenticatedAdminMembershipRouteImport } from './routes/_authenticated/admin/membership'
@@ -792,6 +793,12 @@ const AuthenticatedAdminNutritionTargetsRoute =
   AuthenticatedAdminNutritionTargetsRouteImport.update({
     id: '/nutrition-targets',
     path: '/nutrition-targets',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
+const AuthenticatedAdminNutritionDashboardRoute =
+  AuthenticatedAdminNutritionDashboardRouteImport.update({
+    id: '/nutrition-dashboard',
+    path: '/nutrition-dashboard',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
 const AuthenticatedAdminNativeFormsRoute =
@@ -1575,6 +1582,7 @@ export interface FileRoutesByFullPath {
   '/admin/membership': typeof AuthenticatedAdminMembershipRouteWithChildren
   '/admin/messages': typeof AuthenticatedAdminMessagesRoute
   '/admin/native-forms': typeof AuthenticatedAdminNativeFormsRoute
+  '/admin/nutrition-dashboard': typeof AuthenticatedAdminNutritionDashboardRoute
   '/admin/nutrition-targets': typeof AuthenticatedAdminNutritionTargetsRoute
   '/admin/offers': typeof AuthenticatedAdminOffersRoute
   '/admin/payment-links': typeof AuthenticatedAdminPaymentLinksRoute
@@ -1793,6 +1801,7 @@ export interface FileRoutesByTo {
   '/admin/media-review': typeof AuthenticatedAdminMediaReviewRoute
   '/admin/messages': typeof AuthenticatedAdminMessagesRoute
   '/admin/native-forms': typeof AuthenticatedAdminNativeFormsRoute
+  '/admin/nutrition-dashboard': typeof AuthenticatedAdminNutritionDashboardRoute
   '/admin/nutrition-targets': typeof AuthenticatedAdminNutritionTargetsRoute
   '/admin/offers': typeof AuthenticatedAdminOffersRoute
   '/admin/payment-links': typeof AuthenticatedAdminPaymentLinksRoute
@@ -2018,6 +2027,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/membership': typeof AuthenticatedAdminMembershipRouteWithChildren
   '/_authenticated/admin/messages': typeof AuthenticatedAdminMessagesRoute
   '/_authenticated/admin/native-forms': typeof AuthenticatedAdminNativeFormsRoute
+  '/_authenticated/admin/nutrition-dashboard': typeof AuthenticatedAdminNutritionDashboardRoute
   '/_authenticated/admin/nutrition-targets': typeof AuthenticatedAdminNutritionTargetsRoute
   '/_authenticated/admin/offers': typeof AuthenticatedAdminOffersRoute
   '/_authenticated/admin/payment-links': typeof AuthenticatedAdminPaymentLinksRoute
@@ -2243,6 +2253,7 @@ export interface FileRouteTypes {
     | '/admin/membership'
     | '/admin/messages'
     | '/admin/native-forms'
+    | '/admin/nutrition-dashboard'
     | '/admin/nutrition-targets'
     | '/admin/offers'
     | '/admin/payment-links'
@@ -2461,6 +2472,7 @@ export interface FileRouteTypes {
     | '/admin/media-review'
     | '/admin/messages'
     | '/admin/native-forms'
+    | '/admin/nutrition-dashboard'
     | '/admin/nutrition-targets'
     | '/admin/offers'
     | '/admin/payment-links'
@@ -2685,6 +2697,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/membership'
     | '/_authenticated/admin/messages'
     | '/_authenticated/admin/native-forms'
+    | '/_authenticated/admin/nutrition-dashboard'
     | '/_authenticated/admin/nutrition-targets'
     | '/_authenticated/admin/offers'
     | '/_authenticated/admin/payment-links'
@@ -3594,6 +3607,13 @@ declare module '@tanstack/react-router' {
       path: '/nutrition-targets'
       fullPath: '/admin/nutrition-targets'
       preLoaderRoute: typeof AuthenticatedAdminNutritionTargetsRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
+    '/_authenticated/admin/nutrition-dashboard': {
+      id: '/_authenticated/admin/nutrition-dashboard'
+      path: '/nutrition-dashboard'
+      fullPath: '/admin/nutrition-dashboard'
+      preLoaderRoute: typeof AuthenticatedAdminNutritionDashboardRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
     '/_authenticated/admin/native-forms': {
@@ -4601,6 +4621,7 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminMembershipRoute: typeof AuthenticatedAdminMembershipRouteWithChildren
   AuthenticatedAdminMessagesRoute: typeof AuthenticatedAdminMessagesRoute
   AuthenticatedAdminNativeFormsRoute: typeof AuthenticatedAdminNativeFormsRoute
+  AuthenticatedAdminNutritionDashboardRoute: typeof AuthenticatedAdminNutritionDashboardRoute
   AuthenticatedAdminNutritionTargetsRoute: typeof AuthenticatedAdminNutritionTargetsRoute
   AuthenticatedAdminOffersRoute: typeof AuthenticatedAdminOffersRoute
   AuthenticatedAdminPaymentLinksRoute: typeof AuthenticatedAdminPaymentLinksRoute
@@ -4708,6 +4729,8 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
       AuthenticatedAdminMembershipRouteWithChildren,
     AuthenticatedAdminMessagesRoute: AuthenticatedAdminMessagesRoute,
     AuthenticatedAdminNativeFormsRoute: AuthenticatedAdminNativeFormsRoute,
+    AuthenticatedAdminNutritionDashboardRoute:
+      AuthenticatedAdminNutritionDashboardRoute,
     AuthenticatedAdminNutritionTargetsRoute:
       AuthenticatedAdminNutritionTargetsRoute,
     AuthenticatedAdminOffersRoute: AuthenticatedAdminOffersRoute,
