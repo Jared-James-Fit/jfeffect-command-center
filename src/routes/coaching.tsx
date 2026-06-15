@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { getPublicSalesPage } from "@/lib/sales-pages.functions";
 import { SalesPageShell, Section, SectionTitle } from "@/components/sales/sales-page-shell";
-import { HeroCta, HeroCtaGhost } from "@/components/sales/sales-hero";
+import { HeroCta } from "@/components/sales/sales-hero";
 import { CoachingHero, CoachingProcess, CoachingVsMembership } from "@/components/sales/coaching-hero";
 import { IncludedNotIncluded } from "@/components/sales/included-not-included";
 import { OptionsGrid } from "@/components/sales/options-grid";
