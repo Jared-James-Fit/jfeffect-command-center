@@ -131,6 +131,7 @@ function WorkoutsPage() {
   useEffect(() => {
     try { window.localStorage.setItem(STORAGE_KEY, viewMode); } catch {}
   }, [viewMode]);
+  const [historyOpen, setHistoryOpen] = useState(false);
   // Per-view scroll memory, scoped to this client + block + view, session only.
   const scrollKey = (v: "block" | "overview") =>
     `workouts-${v}-view-scroll:${client?.id ?? "anon"}:${currentBlockId ?? "none"}`;
