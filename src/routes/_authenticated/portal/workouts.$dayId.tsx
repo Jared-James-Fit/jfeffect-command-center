@@ -9,7 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Clock, CheckCircle2, Play, StickyNote, NotebookPen, Info, Maximize2, Minimize2, AlertTriangle, RefreshCw, Send, MessageCircle, ChevronDown, ChevronUp } from "lucide-react";
+import { ArrowLeft, Clock, CheckCircle2, Play, StickyNote, NotebookPen, Info, Maximize2, Minimize2, AlertTriangle, RefreshCw, Send, MessageCircle, ChevronDown, ChevronUp, Move } from "lucide-react";
+import { MoveWorkoutSheet } from "@/components/schedule/MoveWorkoutSheet";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { getExerciseVideoSource } from "@/lib/exercise-video";
@@ -510,6 +511,7 @@ function WorkoutDay() {
 
   // Focus / full-screen logging mode.
   const [focusMode, setFocusMode] = useState(false);
+  const [moveOpen, setMoveOpen] = useState(false);
   useEffect(() => {
     if (!focusMode) return;
     const prev = document.body.style.overflow;
@@ -743,6 +745,17 @@ function WorkoutDay() {
           <div className="ml-auto flex items-center gap-2">
             {/* Global KG/LB toggle removed — per-exercise unit controls remain
                 the single source of truth for unit selection. */}
+            {!readonly && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setMoveOpen(true)}
+                className="h-9 gap-1"
+                aria-label="Move workout to another date"
+              >
+                <Move className="h-4 w-4" /> Move
+              </Button>
+            )}
             {!readonly && (
               <Button
                 size="lg"
@@ -1048,6 +1061,11 @@ function WorkoutDay() {
           durationMin={completion?.actual_duration_min ?? pendingFinalize?.durationMin ?? null}
         />
       )}
+      <MoveWorkoutSheet
+        dayId={dayId}
+        open={moveOpen}
+        onOpenChange={setMoveOpen}
+      />
     </>
   );
 }

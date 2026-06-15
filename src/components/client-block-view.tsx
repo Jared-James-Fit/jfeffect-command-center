@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   ChevronLeft, ChevronRight, Clock, Play, RotateCcw, CheckCircle2,
-  Eye, Lock, Crosshair, Dumbbell,
+  Eye, Lock, Crosshair, Dumbbell, History,
 } from "lucide-react";
 import { format, parseISO, startOfDay } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -18,6 +18,7 @@ import {
 import { weekDisplayRange, isCurrentWeek, formatWeekRange } from "@/lib/block-dates";
 import { isWeekLocked, dayScheduledDate, cleanDayTitle } from "@/lib/workout-today";
 import { localStartOfToday, parseLocalDate } from "@/lib/today";
+import { ScheduleHistoryDrawer } from "@/components/schedule/ScheduleHistoryDrawer";
 
 /* ──────────────────────────────────────────────────────────────────────────
    ClientBlockView
@@ -294,6 +295,8 @@ export function ClientBlockView({
     return m;
   }, [weeks, tree?.days, completionByDay]);
 
+  const [historyOpen, setHistoryOpen] = useState(false);
+
   if (!blockId) {
     return (
       <Card className="p-6 text-sm text-muted-foreground">
@@ -495,6 +498,16 @@ export function ClientBlockView({
               <Lock className="mr-1 h-2.5 w-2.5" /> Locked
             </Badge>
           )}
+          <div className="ml-auto flex items-center gap-1">
+            <Button
+              size="sm" variant="outline"
+              className="h-6 px-2 text-[11px]"
+              onClick={() => setHistoryOpen(true)}
+              aria-label="Schedule history"
+            >
+              <History className="mr-1 h-3 w-3" /> History
+            </Button>
+          </div>
         </div>
 
         {/* Mobile day chips — horizontal snap row, bleeds past parent
@@ -739,6 +752,11 @@ export function ClientBlockView({
           })}
         </div>
       )}
+      <ScheduleHistoryDrawer
+        clientId={block?.client_id ?? null}
+        open={historyOpen}
+        onOpenChange={setHistoryOpen}
+      />
     </section>
   );
 }

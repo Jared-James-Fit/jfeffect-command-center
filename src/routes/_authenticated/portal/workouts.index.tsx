@@ -8,6 +8,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Activity, FileText, Dumbbell, Loader2, ExternalLink, Video, Calendar as CalendarIcon, History, ListChecks, Sun, Maximize2, Minimize2 } from "lucide-react";
+import { ScheduleHistoryDrawer } from "@/components/schedule/ScheduleHistoryDrawer";
 import { cn } from "@/lib/utils";
 import { getClientWorkouts } from "@/lib/pl-programs";
 import { derivePhase, type TrainingPhase } from "@/lib/training-phases";
@@ -130,6 +131,7 @@ function WorkoutsPage() {
   useEffect(() => {
     try { window.localStorage.setItem(STORAGE_KEY, viewMode); } catch {}
   }, [viewMode]);
+  const [historyOpen, setHistoryOpen] = useState(false);
   // Per-view scroll memory, scoped to this client + block + view, session only.
   const scrollKey = (v: "block" | "overview") =>
     `workouts-${v}-view-scroll:${client?.id ?? "anon"}:${currentBlockId ?? "none"}`;
@@ -237,6 +239,18 @@ function WorkoutsPage() {
               Block View
             </button>
           </div>
+          {client?.id && (
+            <div className="ml-3 inline-flex items-center gap-1">
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 gap-1 text-xs"
+                onClick={() => setHistoryOpen(true)}
+              >
+                <History className="h-3.5 w-3.5" /> Schedule history
+              </Button>
+            </div>
+          )}
         </div>
 
         {isLoading ? (
@@ -427,6 +441,13 @@ function WorkoutsPage() {
 
         {client?.id && <WorkoutArchiveSection clientId={client.id} mode="client" />}
       </div>
+      {client?.id && (
+        <ScheduleHistoryDrawer
+          clientId={client.id}
+          open={historyOpen}
+          onOpenChange={setHistoryOpen}
+        />
+      )}
     </>
   );
 }

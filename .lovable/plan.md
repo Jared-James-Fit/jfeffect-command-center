@@ -1,114 +1,147 @@
-## Membership Workout Library — Build Plan
 
-A full publish → browse → import flow for admin workout templates, replacing the "Phase 2" stub in Share & Publish.
+# Training Schedule Manager — Phased Plan
 
----
+This is a large feature (~3–5 phases). Each phase below is independently shippable and tested before the next starts. I want your go-ahead on **the scope and phase order** before I begin — and confirmation on a few decisions in the "Open Questions" section at the bottom.
 
-### 1. Database (single migration)
+## Architectural foundation (all phases respect this)
 
-New tables (all with GRANTs + RLS):
+The schema already separates structure from schedule:
+- **Program structure** lives in `pl_blocks → pl_weeks → pl_days → pl_exercise_rows`. These never change during a reschedule.
+- **Calendar date** is `pl_days.scheduled_date` (date) + `pl_days.schedule_source` (`auto` | `manual` | `coach`) + `pl_days.schedule_locked`.
+- **Completion** is a separate row in `pl_day_completions` (with `completed_at`, `started_at`). Logs live in `pl_row_results` / `member_set_logs` and are keyed by `day_id`, not by date — so moving a date never touches logs.
 
-- `membership_library_listings` — one row per published template.
-  Fields: `template_id`, `published_version`, `status` (draft|published|unpublished), `title`, `description`, `cover_image_url`, `category_tags[]`, `difficulty`, `goal`, `days_per_week`, `duration_weeks`, `equipment[]`, `allow_full_program`, `allow_blocks`, `allow_weeks`, `allow_days`, `allow_pdf_download`, `audience_mode` (all_active | by_access_level | by_plan), `required_access_levels[]`, `eligible_plan_ids[]`, `published_at`, `published_by`, `unpublished_at`, `unpublished_by`.
-- `membership_library_versions` — historical snapshot of (`listing_id`, `version`, `payload_snapshot_jsonb`, `published_at`, `published_by`, `change_notes`). Pins imports to a specific version.
-- `membership_library_imports` — `listing_id`, `version`, `member_user_id`, `imported_program_id` (FK new copy in `pl_templates`), `import_mode` (full | partial), `selection_json`, `start_date`, `imported_at`.
-- `membership_library_events` — analytics: `listing_id`, `member_user_id`, `event_type` (preview | import | pdf_download | unpublish | publish | update_publish), `metadata`, `created_at`.
-- `membership_library_saved` — member "save for later" pins.
+Every move in this feature is a single `UPDATE pl_days SET scheduled_date=$new, schedule_source='manual' WHERE id=$dayId`. Bulk moves are wrapped in a server-fn transaction; on any failure none are persisted.
 
-RLS:
-- Admin: full manage. Coaches: read only (no manage).
-- Members: SELECT on listings where `status='published'` AND member has active/trialing membership AND (audience_mode='all_active' OR access overlap via `member_access` OR `member_plan_enrollments.plan_id` overlap). Enforced via SECURITY DEFINER `can_member_access_listing(uuid, uuid)`.
-- Members: full CRUD on their own `membership_library_imports` and `membership_library_saved` rows.
-- Inserts to `membership_library_events` allowed for the acting member (preview/download/import) and admin (publish/unpublish).
+Templates in `pl_templates` are never touched by the schedule manager. The current `auto-scheduler.ts` writes to client-instance `pl_days` only — confirmed safe.
 
-Helper RPC `clone_template_for_member(listing_id, version, selection)` (SECURITY DEFINER) duplicates `pl_templates` + `pl_blocks/weeks/days/exercise_blocks/exercise_rows` rows into a new template owned by the member, tagged with `source_listing_id` + `source_version`. Add nullable columns `source_listing_id uuid`, `source_version int`, `owner_member_user_id uuid` to `pl_templates`.
+## Phase 1 — Core single-workout move (the 80% case)
 
-### 2. Server functions (`src/lib/membership-library.functions.ts`)
+Goal: every user can tap any workout and move it to a new date, with conflicts handled, undo, and history.
 
-Admin (requires `has_role(admin)`):
-`upsertListing`, `publishListing` (snapshots current template payload into `membership_library_versions`), `unpublishListing`, `publishUpdate`, `listAdminListings`, `getListingAnalytics`, `duplicateListing`, `notifyEligibleMembers`.
+1. **DB migration**
+   - `pl_schedule_audit` table: `id, day_id, client_id, previous_date, new_date, previous_source, new_source, scope ('single'|'week'|'pattern'|'block'|'program'|'custom'), changed_by, changed_by_role, batch_id (uuid, groups bulk changes), created_at`.
+   - RLS: clients can SELECT their own rows; coaches/admins SELECT all for assigned clients; INSERT via server fn only.
 
-Member (uses `requireSupabaseAuth`):
-`listMemberLibrary` (filters via RPC), `getListingForMember` (preview payload, strips admin-only notes), `recordPreviewEvent`, `importListing` ({listingId, version, mode, selection, startDate, trainingDays, replaceActive}), `recordPdfDownload`, `saveListing`, `unsaveListing`, `listMyImports`, `checkForUpdates`.
+2. **Server functions** in `src/lib/schedule-manager.functions.ts`:
+   - `moveWorkout({ dayId, newDate, allowConflict, conflictResolution })` — single move, returns `{ conflicts, applied, batchId }`.
+   - `undoScheduleChange({ batchId })` — reverses every row in a batch back to its `previous_date`.
+   - `getScheduleHistory({ clientId, limit })` — paginated audit log.
+   - All gated by `requireSupabaseAuth`; coach/admin access via existing `has_role` + client-coach link check.
 
-PDF generator runs inside `downloadListingPdf` server fn (pdf-lib via `await import`), returns base64 → client downloads. Strips admin notes / IDs.
+3. **UI — "Manage Schedule" entry points**
+   - Add a primary `<Button>` on the Workouts page header, Block View toolbar, Calendar/Week view, and the upcoming-workout card.
+   - Add "Move workout" to the existing workout card overflow menu and to the workout-detail page (`/portal/workouts/$dayId`).
 
-### 3. Share & Publish modal rewrite
+4. **Move sheet** (`<MoveWorkoutSheet>` — mobile bottom sheet / desktop dialog)
+   - Current date, calendar picker, "Today" / "Tomorrow" quick chips, suggested nearby training days from `pl_weeks.training_days`.
+   - Conflict preview line ("You already have Upper Body scheduled here — Keep both / Swap / Pick another day").
+   - Completed/in-progress warning copy as specified.
+   - Confirm → optimistic update → success toast with **Undo** button (5s) → server invalidates queries.
 
-Replace `MembershipLibrary` card in `src/components/programs/share-program-sheet.tsx`:
-- Live status badge (Draft / Published / Unpublished / Update Available)
-- "Manage Publication" → opens new `MembershipPublishDrawer` (right sheet) with: title, description, cover image upload (Supabase storage `library-covers`), category tags, difficulty, goal, days/week, duration, equipment, granular add-permissions toggles, PDF download toggle, audience selector (all active / access levels / specific plans), notify-on-publish toggle (email/in-app/SMS), version notes.
-- Action buttons: Publish / Publish Update / Unpublish / Preview as Member (opens new tab to `/m/workout-library/$listingId?preview=admin`).
-- Shows live `imports_count`, `previews_count`, `pdf_downloads_count`, published version, eligible audience summary.
+5. **Conflict resolution**
+   - Pure helper `detectConflicts({ targetDate, dayId, blockId })` returning `{ sameDayWorkouts, appointments, adjacentFatigue, pastDate, sequenceBreak }`.
+   - "Swap" performs a two-row UPDATE in one transaction.
 
-Remove all "Phase 2" wording.
+6. **History tab**
+   - New `<ScheduleHistoryDrawer>` reachable from Manage Schedule. Read-only for clients (their own changes), full audit for coach/admin.
 
-### 4. Admin page `/admin/membership-library`
+**Acceptance for phase 1:** tap-to-move works on mobile + desktop, swap works, completed workouts show the warning copy, undo restores, logs and template untouched.
 
-Tabs: Published · Drafts · Unpublished · Categories · Member Access · Analytics.
-Toolbar: search, filters (category, goal, level, duration, equipment, plan).
-Row actions: Publish / Unpublish / Edit listing / Change access / Preview as member / Duplicate / Open source in builder / View imports list.
-Primary CTA "Publish Workout Program" → modal listing existing `pl_templates` to wrap as listings.
+## Phase 2 — Calendar surface + drag & drop
 
-Add nav entry in `src/lib/admin-nav.ts`.
+1. **New route** `/_authenticated/portal/schedule` (client) and `/_authenticated/clients/$clientId/schedule` (coach/admin) — same component, different data source.
+2. **`<ScheduleCalendar>`** with Month / Week / List tabs (default Month on desktop, List on mobile).
+   - Cell shows: workout name, "Block N · Week N · Day N", status badge (Not started / In progress / Completed / Rescheduled / Overdue) with icon + text (not color-only).
+   - Today button, prev/next month, current-block indicator banner.
+3. **Drag & drop** with `@dnd-kit` (lighter than react-dnd, mobile-friendly):
+   - Long-press to initiate on mobile; pointer drag on desktop.
+   - Auto-scroll near edges, visible drop ghost, "Cancel" zone at the bottom of the sheet.
+   - On drop: opens the same `<MoveWorkoutSheet>` pre-filled with the target date so the user still confirms — no silent moves.
+4. **Status sources**
+   - "Overdue" = `scheduled_date < today AND no completion`.
+   - "Rescheduled" = `schedule_source = 'manual'` (badge only, not blocking).
 
-### 5. Member library `/m/workout-library`
+**Acceptance for phase 2:** drag works on iOS Safari, Android Chrome, iPad, desktop; calendar reflects status correctly; all moves still go through the confirmation sheet.
 
-Listing grid (paginated 12/page): cover, title, short desc, difficulty, goal, days/week, length, equipment, "Included With Your Membership" badge, Preview + Add buttons. Locked cards show lock icon + required tier.
-Filters: search, goal, difficulty, days/week, duration, equipment, training location, quick-tag chips (Powerlifting, Bodybuilding, General strength, Fat loss, At-home).
+## Phase 3 — Scope picker & bulk preview
 
-### 6. Preview page `/m/workout-library/$listingId`
+1. **Scope step** added to the move flow when the user picks a new date:
+   - "This workout only" *(default, pre-selected)*
+   - "This week"
+   - "This workout + future matching Day N" (e.g. all future Day 2s)
+   - "All remaining weeks in this block"
+   - "All remaining program weeks"
+   - "Choose specific weeks/workouts" (opens Advanced Selection)
 
-Server-fn-fetched preview payload (no admin-only fields). Sections: overview, who-for, block/week/day outline, exercise preview, coach notes (public only), what's included. Actions: Add Full Program · Choose Specific Content · Download PDF (if enabled) · Save for Later.
+2. **Preview screen** (`<BulkMovePreview>`):
+   - Table of `original → new` rows grouped by week, with names + block/week/day labels.
+   - Conflict column inline, total count at top, Confirm / Back buttons.
 
-### 7. Add-to-account flow
+3. **Server fn** `applyBulkScheduleChange({ moves[], scope, allowConflicts })`:
+   - One transaction. Updates `pl_days.scheduled_date` for every selected row, inserts one audit row per change sharing a `batch_id`.
+   - On any error: rollback, return per-row diagnostics to the UI, keep the user's selection.
+   - Idempotent: re-running with the same payload is a no-op (skips rows already at target date).
 
-Drawer: Start date · preferred training days · add to calendar toggle · destination (Save to My Programs [default] / Replace active program [confirmation required]).
-Calls `importListing` → returns new `imported_program_id` → routes to `/m/my-plans/$enrollmentId` (or My Programs landing).
+4. **Undo** — `undoScheduleChange({ batchId })` works for the whole batch.
 
-Advanced selection: tree of blocks → weeks → days with Select All / partial checkboxes, summary of what will be added, destination picker (My Programs / existing personal program / future calendar date). Blocks injection into coach-managed programs gated by `pl_templates.member_editable=true`.
+5. **Notifications & cache**
+   - `router.invalidate()` + `queryClient.invalidateQueries({ predicate: ... })` on schedule-related keys.
+   - Existing reminder hook (`appointment_reminders` is unrelated; workout reminders are derived from `scheduled_date` so they auto-refresh — confirmed).
+   - Coach notification: one summary row in `support_alerts` ("X changed 6 dates in Block 2") on bulk; suppressed for single one-day moves unless coach opted in.
 
-### 8. PDF download
+**Acceptance for phase 3:** every bulk option produces an accurate preview, transactional save, single undo, single coach notification per batch.
 
-`downloadListingPdf` builds branded PDF, records `pdf_download` event, returns blob. Disabled when `allow_pdf_download=false` — server fn rejects + button hidden.
+## Phase 4 — Quick Weekly Schedule Editor + Advanced Selection
 
-### 9. Nav additions
+1. **`<WeeklyScheduleEditor>`** — large day buttons Mon–Sun with cards showing each workout slot; drag a workout card from one weekday to another, or use the "I train N days per week" simple selector with N dropdowns mapping Workout 1..N → weekday.
+2. **Apply scope**: This week / Next week / Selected weeks / Remaining weeks in block / All future program weeks / Custom date range — with affected-date summary under each ("June 22 – July 13 · 12 workouts will move").
+3. **`<AdvancedSelection>`** sheet (hidden by default, behind toggle):
+   - Filters by block / week / day-of-week / individual workouts, with Select All / Clear All / Select remaining / "Select this block" / weekday quick picks.
+   - Live "8 workouts selected" counter feeding into the same `<BulkMovePreview>` and `applyBulkScheduleChange`.
+4. **Sequence-break warning** ("This puts Day 3 before Day 2") with "Move only this", "Shift following workouts by same N days" (opt-in), Cancel.
 
-- Member sidebar: "Workout Library" between Plans and Tools.
-- Admin sidebar: "Membership Library" under Programming.
+**Acceptance for phase 4:** weekly editor reuses the same preview + transaction; advanced selection counts correctly; shift-following is opt-in.
 
-### 10. Notifications (admin-confirmed)
+## Phase 5 — Coach/admin overrides + missed-workout actions
 
-`notifyEligibleMembers(listingId, channels[])` — uses existing broadcast / SMS / email infra. Only sent when admin clicks "Notify eligible members" in publish drawer.
+1. **Coach/admin view** at `/clients/$clientId/schedule` — same UI with extra controls:
+   - Override completed-workout date (requires explicit "I understand this rewrites history" confirmation; logged with `scope='completed-override'`).
+   - Lock schedule editing per client (`clients.schedule_locked` boolean — new column, defaults false).
+   - "Reset to coach plan" — re-runs existing `auto-scheduler.ts` for selected weeks.
+2. **Missed-workout card** on the portal home for any overdue not-started workout: Do It Today / Move to Another Day / Skip / Ask Coach (uses existing message thread).
 
-### 11. Update flow
+**Acceptance for phase 5:** override path requires explicit confirm; client lock blocks the client's UI with explanatory message; missed-workout shortcuts work.
 
-`checkForUpdates` compares import's `source_version` vs current `published_version`. Shows "Update Available" on member's My Programs row → Preview Changes (diff summary) / Import Updated Copy (creates new clone, preserves old + completed logs) / Keep Current.
+## Files to add / change (rough inventory)
 
-### 12. Unpublish
+```text
+supabase/migrations/<ts>_schedule_manager.sql         (new) audit table, schedule_locked col
+src/lib/schedule-manager.functions.ts                 (new) move/bulk/undo/history server fns
+src/lib/schedule-conflicts.ts                         (new) pure conflict detection
+src/components/schedule/MoveWorkoutSheet.tsx          (new) phase 1
+src/components/schedule/ScheduleHistoryDrawer.tsx     (new) phase 1
+src/components/schedule/ScheduleCalendar.tsx          (new) phase 2
+src/components/schedule/ScheduleCalendarDnd.tsx       (new) phase 2
+src/components/schedule/ScopePicker.tsx               (new) phase 3
+src/components/schedule/BulkMovePreview.tsx           (new) phase 3
+src/components/schedule/WeeklyScheduleEditor.tsx      (new) phase 4
+src/components/schedule/AdvancedSelection.tsx         (new) phase 4
+src/components/schedule/CoachOverridePanel.tsx        (new) phase 5
+src/routes/_authenticated/portal/schedule.tsx         (new) phase 2
+src/routes/_authenticated/clients.$clientId.schedule.tsx (new) phase 5
+src/components/workout-list-card.tsx                  (edit) add Move entry
+src/components/client-block-view.tsx                  (edit) add Manage Schedule button
+src/routes/_authenticated/portal/workouts.$dayId.tsx  (edit) add Move button
+src/routes/_authenticated/portal/workouts.index.tsx   (edit) Manage Schedule entry
+src/components/smart-today-card.tsx                   (edit) Move quick-action
+```
 
-Confirmation modal explains: card hidden from new browsing, imports blocked, existing copies + logs preserved, audit recorded. Records `unpublished_by`/`unpublished_at` + event row.
+## Open questions (please answer before I start)
 
----
+1. **Phase order** — Phase 1 (core single move with undo + history) is the most useful first ship. Do you want me to start there, or skip straight to Phase 2 (calendar + drag-drop)?
+2. **Drag-drop library** — OK to add `@dnd-kit/core` + `@dnd-kit/sortable` (~30kb gz, the standard modern choice, mobile-friendly)?
+3. **Member portal** — do members (the `/m/...` workout flow on `member_plan_enrollments`) need the same scheduler in this round, or coaching clients only first? (Members use a different schema path, so it's a separate ~1 phase of work.)
+4. **Coach notifications channel** — OK to write summary entries into the existing `support_alerts` table, or do you want a dedicated `schedule_change_notifications` table?
+5. **Completed-workout move policy for clients** — confirm: clients see the warning copy and **can** proceed, but the move is logged as `scope='single'` with `completed_at` left untouched (only the scheduled date moves). Coach override is the only path that edits `completed_at`. Correct?
 
-### Technical details
-
-- New files:
-  `supabase/migrations/<ts>_membership_library.sql`
-  `src/lib/membership-library.functions.ts`
-  `src/lib/membership-library-pdf.server.ts`
-  `src/components/programs/membership-publish-drawer.tsx`
-  `src/routes/_authenticated/admin/membership-library.tsx`
-  `src/routes/_authenticated/admin/membership-library.$listingId.tsx`
-  `src/routes/_authenticated/m/workout-library.tsx`
-  `src/routes/_authenticated/m/workout-library.$listingId.tsx`
-- Edited:
-  `src/components/programs/share-program-sheet.tsx` (replace Membership Library card)
-  `src/lib/admin-nav.ts`, member nav component
-  `src/components/app-shell` (route registration if needed)
-  `pl_templates` — add `source_listing_id`, `source_version`, `owner_member_user_id`, `member_editable` columns
-- RLS verified per-table; no existing Team Library / Coach Sharing policies modified.
-- All server fns enforce role + access checks; URL/API tampering blocked by RLS.
-- Acceptance tests (1–20) manually verified with one admin, one eligible member, one ineligible member after build.
-
-This is ~3–4 hours of build work and will land as one cohesive change. Approve to proceed.
+Once you confirm I'll start Phase 1 immediately.

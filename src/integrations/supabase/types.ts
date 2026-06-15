@@ -2534,6 +2534,7 @@ export type Database = {
           recommended_offer: string | null
           renewal_date: string | null
           schedule_changes_weekly: boolean | null
+          schedule_locked: boolean
           schedule_notes: string | null
           schedule_updated_at: string | null
           sessions_purchased: number
@@ -2705,6 +2706,7 @@ export type Database = {
           recommended_offer?: string | null
           renewal_date?: string | null
           schedule_changes_weekly?: boolean | null
+          schedule_locked?: boolean
           schedule_notes?: string | null
           schedule_updated_at?: string | null
           sessions_purchased?: number
@@ -2876,6 +2878,7 @@ export type Database = {
           recommended_offer?: string | null
           renewal_date?: string | null
           schedule_changes_weekly?: boolean | null
+          schedule_locked?: boolean
           schedule_notes?: string | null
           schedule_updated_at?: string | null
           sessions_purchased?: number
@@ -11274,6 +11277,62 @@ export type Database = {
             columns: ["row_id"]
             isOneToOne: false
             referencedRelation: "pl_exercise_rows"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pl_schedule_audit: {
+        Row: {
+          batch_id: string
+          changed_by: string
+          changed_by_role: string
+          client_id: string
+          created_at: string
+          day_id: string
+          id: string
+          new_date: string | null
+          new_source: string | null
+          note: string | null
+          previous_date: string | null
+          previous_source: string | null
+          scope: string
+        }
+        Insert: {
+          batch_id: string
+          changed_by: string
+          changed_by_role: string
+          client_id: string
+          created_at?: string
+          day_id: string
+          id?: string
+          new_date?: string | null
+          new_source?: string | null
+          note?: string | null
+          previous_date?: string | null
+          previous_source?: string | null
+          scope: string
+        }
+        Update: {
+          batch_id?: string
+          changed_by?: string
+          changed_by_role?: string
+          client_id?: string
+          created_at?: string
+          day_id?: string
+          id?: string
+          new_date?: string | null
+          new_source?: string | null
+          note?: string | null
+          previous_date?: string | null
+          previous_source?: string | null
+          scope?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pl_schedule_audit_day_id_fkey"
+            columns: ["day_id"]
+            isOneToOne: false
+            referencedRelation: "pl_days"
             referencedColumns: ["id"]
           },
         ]
