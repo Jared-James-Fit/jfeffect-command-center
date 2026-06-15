@@ -2309,6 +2309,7 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
                   purposeLabelBadgeClass(purposeLabel),
                 )}>{purposeLabel}</span>
               )}
+              {(row.exercise_id || row.exercise_name_override) && VideoBadge}
               <span className="truncate text-sm font-semibold">{exName || <span className="italic text-muted-foreground">Unnamed exercise</span>}</span>
             </div>
             <div className="mt-0.5 truncate text-[11px] text-muted-foreground">
