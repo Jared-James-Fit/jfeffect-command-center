@@ -16,6 +16,7 @@ import { AlertTriangle } from "lucide-react";
 import { runJob } from "@/lib/progress-jobs";
 import { ProgramStatusBadge } from "@/components/programs/program-status-badge";
 import { validateTemplatePayload } from "@/lib/pl-template-validation";
+import { todayLocalISO } from "@/lib/today";
 
 type Props = {
   open: boolean;
@@ -27,7 +28,7 @@ type Props = {
 export function QuickAssignTemplateDialog({ open, onOpenChange, clientId, clientName }: Props) {
   const qc = useQueryClient();
   const navigate = useNavigate();
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayLocalISO();
   const [templateId, setTemplateId] = useState<string>("");
   const [startDate, setStartDate] = useState<string>(today);
   const [endDate, setEndDate] = useState<string>("");

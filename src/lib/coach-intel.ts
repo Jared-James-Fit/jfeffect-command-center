@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { epley1RM } from "@/lib/pl-programs";
+import { todayLocalISO } from "@/lib/today";
 
 const sb = supabase as any;
 
@@ -186,7 +187,7 @@ export async function getCoachIntel(opts?: { coachId?: string | null }): Promise
       ?? (preps as any[]).find((p) => p.client_id === c.id);
     const activeBlock = (blocks as any[]).find((b) => b.client_id === c.id && b.status === "Active");
 
-    const today = new Date().toISOString().slice(0, 10);
+    const today = todayLocalISO();
     const mySchedDays = scheduledDays.filter((d) => d.pl_weeks?.pl_blocks?.client_id === c.id);
     const dueDays = mySchedDays.filter((d) => (d.scheduled_date ?? "") <= today);
     const myComp = (completions as any[]).filter((cm) => cm.client_id === c.id);

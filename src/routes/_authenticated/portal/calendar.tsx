@@ -11,6 +11,7 @@ import { statusTone, fmtTimeRange } from "@/lib/pt-sessions";
 import { CalendarBoard } from "@/components/calendar/calendar-board";
 import { useClientCalendarSources } from "@/lib/calendar-sources";
 import { ClientTodayPanel } from "@/components/calendar/today-panel";
+import { todayLocalISO } from "@/lib/today";
 
 export const Route = createFileRoute("/_authenticated/portal/calendar")({ component: CalendarPage });
 
@@ -52,7 +53,7 @@ function CalendarPage() {
     },
   });
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayLocalISO();
   const upcoming = sessions.filter((s: any) => s.session_date >= today && s.status === "Scheduled");
   const past = sessions.filter((s: any) => s.session_date < today || s.status !== "Scheduled");
 

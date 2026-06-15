@@ -19,6 +19,7 @@ import {
   type ProgressMetric, type WeightUnit,
 } from "@/lib/progress-metrics";
 import { useBodyweightGoal } from "@/lib/use-bodyweight-goal";
+import { todayLocalISO } from "@/lib/today";
 
 interface Props {
   clientId: string;
@@ -31,7 +32,7 @@ export function BodyweightSummaryCard({ clientId, defaultUnit = "lb" }: Props) {
   const [unit, setUnit] = useState<WeightUnit>(defaultUnit);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [weight, setWeight] = useState("");
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(todayLocalISO());
   const [saving, setSaving] = useState(false);
 
   const { data: rows = [] } = useQuery({
@@ -62,7 +63,7 @@ export function BodyweightSummaryCard({ clientId, defaultUnit = "lb" }: Props) {
     setWeight(todayEntry?.bodyweight != null
       ? String(convertWeight(Number(todayEntry.bodyweight), (todayEntry.bodyweight_unit as WeightUnit) ?? unit, unit))
       : "");
-    setDate(new Date().toISOString().slice(0, 10));
+    setDate(todayLocalISO());
     setSheetOpen(true);
   };
 

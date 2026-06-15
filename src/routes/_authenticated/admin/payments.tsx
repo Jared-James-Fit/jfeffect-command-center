@@ -14,6 +14,7 @@ import { toast } from "sonner";
 import { updatePurchasePayment, sendPaymentLinkEmail } from "@/lib/payments.functions";
 import { PAYMENT_STATUS_DETAILED } from "@/lib/offers";
 import { SendPaymentRequestDialog } from "@/components/send-payment-request-dialog";
+import { todayLocalISO } from "@/lib/today";
 
 export const Route = createFileRoute("/_authenticated/admin/payments")({ component: PaymentsRedirect });
 
@@ -128,7 +129,7 @@ export function PaymentsPage({ embedded = false }: { embedded?: boolean } = {}) 
     const csv = [headers, ...rows].map((row) => row.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
-    a.download = `payments-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `payments-${todayLocalISO()}.csv`;
     a.click();
   };
 

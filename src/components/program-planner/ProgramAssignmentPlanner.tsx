@@ -32,6 +32,7 @@ import type {
   AssignmentMethod, ConflictDecision, PlannerSelection, PublishStatus, Weekday,
 } from "@/lib/program-planner/types";
 import { AssignmentCalendar, type CalendarExistingDay, type CalendarIncomingDay } from "./AssignmentCalendar";
+import { todayLocalISO } from "@/lib/today";
 
 const STEPS = ["Content", "Method", "Calendar", "Conflicts", "Review"] as const;
 const WEEKDAYS: Weekday[] = ["mon","tue","wed","thu","fri","sat","sun"];
@@ -71,7 +72,7 @@ export function ProgramAssignmentPlanner({ clientId, templateId, onDone }: Props
   const initial = useMemo<PlannerDraft>(() => {
     const d = loadDraft(clientId, templateId);
     if (d) return d;
-    const today = new Date().toISOString().slice(0, 10);
+    const today = todayLocalISO();
     return {
       step: 0,
       selection: { exerciseKeys: [] },

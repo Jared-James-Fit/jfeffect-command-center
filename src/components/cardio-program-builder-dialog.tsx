@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { CARDIO_TYPES, CARDIO_INTENSITIES, estimateCalorieRange, formatCalorieTarget } from "@/lib/nutrition-cardio";
 import { CARDIO_DAY_TYPES, formatDays } from "@/lib/training-schedule";
+import { todayLocalISO } from "@/lib/today";
 
 type Row = {
   day_type: string;
@@ -46,7 +47,7 @@ type Props = {
 
 export function CardioProgramBuilderDialog({ open, onOpenChange, clientId, client, initialTemplate }: Props) {
   const qc = useQueryClient();
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayLocalISO();
   const [programName, setProgramName] = useState("");
   const [startDate, setStartDate] = useState(today);
   const [endDate, setEndDate] = useState("");

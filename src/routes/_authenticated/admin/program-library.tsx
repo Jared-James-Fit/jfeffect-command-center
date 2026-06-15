@@ -38,6 +38,7 @@ import { ProgramStatusBadge } from "@/components/programs/program-status-badge";
 import { listShares, summarizeShares, type TemplateShare } from "@/lib/programs/sharing";
 import { listClientMaxes, upsertClientMax, type ClientMaxRow } from "@/lib/pl-maxes";
 import { notifyMissingMaxesFn } from "@/lib/missing-maxes.functions";
+import { todayLocalISO } from "@/lib/today";
 
 // Quick-pick weight class tags (admin-only). Free-form tags still supported in the input.
 const WEIGHT_CLASS_TAGS: string[] = [
@@ -984,7 +985,7 @@ function AssignDialog({ template, onClose }: { template: any; onClose: () => voi
   const [name, setName] = useState<string>("");
   const [visible, setVisible] = useState(true);
   const [newPrep, setNewPrep] = useState({ title: "", event_name: "", event_date: "" });
-  const [startDate, setStartDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
+  const [startDate, setStartDate] = useState<string>(() => todayLocalISO());
   const [endDate, setEndDate] = useState<string>("");
   // Validation gate state — set when submit detects missing requirements.
   // The dialog then switches to a confirm view that lists every issue and

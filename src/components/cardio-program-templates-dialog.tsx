@@ -10,6 +10,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Archive, Trash2 } from "lucide-react";
 import { formatCalorieTarget } from "@/lib/nutrition-cardio";
+import { todayLocalISO } from "@/lib/today";
 
 type Props = {
   open: boolean;
@@ -19,7 +20,7 @@ type Props = {
 
 export function CardioProgramTemplatesDialog({ open, onOpenChange, clientId }: Props) {
   const qc = useQueryClient();
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayLocalISO();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [startDate, setStartDate] = useState(today);
   const [endDate, setEndDate] = useState("");

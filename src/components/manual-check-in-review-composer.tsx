@@ -13,6 +13,7 @@ import { createManualReview, type ManualReviewSource } from "@/lib/manual-check-
 import { toast } from "sonner";
 import { Send } from "lucide-react";
 import { runJob } from "@/lib/progress-jobs";
+import { todayLocalISO } from "@/lib/today";
 
 export function ManualCheckInReviewComposer({
   open,
@@ -28,7 +29,7 @@ export function ManualCheckInReviewComposer({
 
   const [clientId, setClientId] = useState<string>(defaultClientId ?? "");
   const [source, setSource] = useState<ManualReviewSource>("fillout");
-  const [checkInDate, setCheckInDate] = useState<string>(new Date().toISOString().slice(0, 10));
+  const [checkInDate, setCheckInDate] = useState<string>(todayLocalISO());
   const [title, setTitle] = useState("Weekly Check-In Review");
   const [message, setMessage] = useState("");
   const [actionItems, setActionItems] = useState("");

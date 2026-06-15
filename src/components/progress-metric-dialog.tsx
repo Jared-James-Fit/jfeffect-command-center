@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import type { ProgressMetric, WeightUnit } from "@/lib/progress-metrics";
 import { useAuth } from "@/lib/auth";
+import { todayLocalISO } from "@/lib/today";
 
 interface Props {
   open: boolean;
@@ -20,7 +21,7 @@ interface Props {
 }
 
 const empty = (defaultUnit: WeightUnit) => ({
-  entry_date: new Date().toISOString().slice(0, 10),
+  entry_date: todayLocalISO(),
   bodyweight: "" as string | number,
   bodyweight_unit: defaultUnit,
   steps: "" as string | number,

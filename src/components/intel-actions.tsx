@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { MessageSquare, MoreVertical, UserCircle, Dumbbell, CheckCircle2, AlertTriangle, ClipboardCheck, PlayCircle } from "lucide-react";
 import { toast } from "sonner";
 import {
+import { todayLocalISO } from "@/lib/today";
   markAlertReviewed, markAllReviewed, setPainFlagStatus, createFollowup, setFollowupStatus,
   PAIN_STATUSES, PAIN_REGEX, type ClientIntel, type PainFlag, type Followup,
 } from "@/lib/coach-intel";
@@ -150,7 +151,7 @@ export function FollowupDialog({ open, onOpenChange, clientId, defaultReason = "
 /** Render a single follow-up row with status controls. */
 export function FollowupRow({ f }: { f: Followup }) {
   const qc = useQueryClient();
-  const overdue = f.due_date && f.due_date < new Date().toISOString().slice(0, 10) && f.status === "open";
+  const overdue = f.due_date && f.due_date < todayLocalISO() && f.status === "open";
   const update = async (status: "completed" | "dismissed" | "open") => {
     try { await setFollowupStatus(f.id, status); invalidate(qc, f.client_id); qc.invalidateQueries({ queryKey: ["followups"] }); toast.success("Updated"); }
     catch (e: any) { toast.error(e.message ?? "Failed"); }

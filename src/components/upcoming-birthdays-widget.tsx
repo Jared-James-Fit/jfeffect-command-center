@@ -29,6 +29,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { prefilledBirthdayMessage } from "@/lib/birthday-templates";
 import { cn } from "@/lib/utils";
+import { todayLocalISO } from "@/lib/today";
 
 type Status = "today" | "overdue" | "upcoming" | "wished";
 
@@ -183,7 +184,7 @@ export function UpcomingBirthdaysWidget() {
   useEffect(() => {
     const todays = rows.filter((r) => r.status === "today");
     if (todays.length === 0) return;
-    const key = `bday-toast:${new Date().toISOString().slice(0, 10)}`;
+    const key = `bday-toast:${todayLocalISO()}`;
     if (typeof window === "undefined" || sessionStorage.getItem(key)) return;
     sessionStorage.setItem(key, "1");
     const names = todays
