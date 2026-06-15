@@ -20,6 +20,8 @@ import {
   SearchableSelect,
   type SearchableOption,
 } from "@/components/analytics/searchable-select";
+import { PlannedVsActualCard } from "@/components/analytics/planned-vs-actual-card";
+import { getClientAnalyticsSettings } from "@/lib/analytics/settings";
 import {
   ANALYTICS_COLORS,
   exerciseColor,
@@ -66,6 +68,12 @@ function PortalAnalytics() {
     queryKey: ["pl-results", client?.id],
     enabled: !!client?.id,
     queryFn: () => getClientResults(client!.id),
+  });
+
+  const { data: analyticsSettings } = useQuery({
+    queryKey: ["client-analytics-settings", client?.id],
+    enabled: !!client?.id,
+    queryFn: () => getClientAnalyticsSettings(client!.id),
   });
 
   const sourceUnit: Unit = (client?.preferred_weight_unit === "kg" ? "kg" : "lb");
@@ -311,6 +319,16 @@ function PortalAnalytics() {
             </section>
 
             {/* RECENT PRS */}
+            {client?.id && (
+              <section aria-label="Planned vs Actual">
+                <PlannedVsActualCard
+                  clientId={client.id}
+                  formula={analyticsSettings?.e1rm_formula}
+                  workingRpeMin={analyticsSettings?.working_set_rpe_min}
+                />
+              </section>
+            )}
+
             <section>
               <div className="mb-3 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 sm:flex sm:flex-wrap sm:justify-between">
                 <h2 className="flex min-w-0 items-center gap-2 truncate text-base font-black uppercase tracking-wider text-foreground">
