@@ -82,6 +82,7 @@ export function ProgramAssignmentPlanner({ clientId, templateId, onDone }: Props
       publishAt: null,
       idempotencyKey: newIdempotencyKey(),
       updatedAt: Date.now(),
+      programName: null,
     };
   }, [clientId, templateId]);
 
