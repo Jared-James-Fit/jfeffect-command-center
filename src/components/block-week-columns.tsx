@@ -193,8 +193,13 @@ export function BlockWeekColumns({
                       <div className="min-w-0 flex-1">
                         <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-sm font-semibold leading-snug">
                           <span className="min-w-0 break-words">
-                            {it.day.title || `Day ${it.day.day_index}`}
+                            {cleanDayTitle(it.day.title, it.day.day_index)}
                           </span>
+                          {dayDate && (
+                            <span className="min-w-0 break-words text-xs font-normal text-muted-foreground">
+                              — {format(dayDate, "EEEE, MMM d")}
+                            </span>
+                          )}
                           {it.day.focus ? (
                             <span className="min-w-0 break-words text-xs font-normal text-muted-foreground">
                               — {it.day.focus}
