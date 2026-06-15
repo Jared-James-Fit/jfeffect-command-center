@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/app-shell";
 import { GoalsSetupFlow } from "@/components/client-goals/GoalsSetupFlow";
 import { usePortalUserId } from "@/lib/client-impersonation";
-import { Target, BellRing, CheckCircle2, Loader2 } from "lucide-react";
+import { BellRing, CheckCircle2, Loader2 } from "lucide-react";
 import { clearGoalsUpdateRequestFn } from "@/lib/client-goals/goals.functions";
 import { toast } from "sonner";
 
@@ -81,7 +81,6 @@ function PortalGoalsSetupPage() {
       <PageHeader
         title="Goals & Setup"
         subtitle="Quick answers so your coach can build the right program for you."
-        icon={Target}
       />
 
       {setup?.update_requested_at && (
