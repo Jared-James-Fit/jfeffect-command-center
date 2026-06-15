@@ -477,6 +477,7 @@ export async function copyWeek(srcWeekId: string, targetWeekId: string, opts: Co
         title: d.title,
         focus: d.focus,
         notes: opts.notes ? d.notes : null,
+        notes_client_visible: opts.notes ? d.notes_client_visible : false,
         duration_source: d.duration_source,
         duration_override_min: d.duration_override_min,
         source_day_id: d.id,
