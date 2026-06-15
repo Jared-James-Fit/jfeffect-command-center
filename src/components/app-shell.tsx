@@ -816,9 +816,19 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
           autoFocus
           value={paletteQuery}
           onValueChange={setPaletteQuery}
-          placeholder="Search workout library — name, focus, style, tag…"
+          placeholder="Search clients, coaches, accounts, programs…"
         />
         <CommandList>
+          <GlobalSearchResults
+            query={debouncedPaletteQuery}
+            onPick={(hit) => {
+              setPaletteOpen(false);
+              navigate({
+                to: hit.to,
+                search: { highlight: debouncedPaletteQuery } as any,
+              } as any);
+            }}
+          />
           <WorkoutLibraryResults
             query={debouncedPaletteQuery}
             onPick={(tpl) => {
