@@ -762,16 +762,16 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
             ) : (
               <div className="space-y-1.5">
                 {grouped.map((group) => {
-                  if (!group.label) return null;
-                  const isOpen = moreOpenGroup === group.label;
+                  const label = group.label ?? "All sections";
+                  const isOpen = moreOpenGroup === label;
                   return (
-                    <div key={group.label} className="rounded-md border border-border/60">
+                    <div key={label} className="rounded-md border border-border/60">
                       <button
                         type="button"
-                        onClick={() => setMoreOpenGroup(isOpen ? null : group.label!)}
+                        onClick={() => setMoreOpenGroup(isOpen ? null : label)}
                         className="flex w-full items-center justify-between px-3 py-2.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground"
                       >
-                        <span>{group.label}</span>
+                        <span>{label}</span>
                         <ChevronDown className={cn("h-4 w-4 transition-transform", !isOpen && "-rotate-90")} />
                       </button>
                       {isOpen && (
