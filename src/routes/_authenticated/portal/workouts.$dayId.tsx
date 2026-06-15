@@ -853,48 +853,7 @@ function WorkoutDay() {
           </Card>
         )}
 
-        {readonly && autoReadonly && !isImpersonating && (
-          <Card className="border-primary/40 bg-gradient-to-br from-primary/10 via-primary/5 to-transparent p-4">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-              <div className="flex items-start gap-3 sm:flex-1">
-                <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-primary/15 text-primary">
-                  <Lock className="h-5 w-5" />
-                </div>
-                <div className="min-w-0">
-                  <div className="text-sm font-bold text-foreground">
-                    This workout is locked
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    It's from a past block or session. Unlock to fix sets, add reps,
-                    or fill in anything you missed — your changes save automatically.
-                  </div>
-                </div>
-              </div>
-              <Button
-                size="lg"
-                onClick={() => {
-                  setUnlocked(true);
-                  toast.success("Editing unlocked — your changes will save");
-                }}
-                className="h-12 w-full gap-2 bg-primary px-5 text-base font-bold text-primary-foreground shadow-md shadow-primary/20 hover:bg-primary/90 sm:w-auto"
-              >
-                <LockOpen className="h-5 w-5" /> Unlock to edit
-              </Button>
-            </div>
-          </Card>
-        )}
-        {readonly && !autoReadonly && (
-          <Card className="flex items-start gap-2 border-border bg-secondary/30 p-3 text-xs">
-            <Lock className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-            <div>Viewing a past workout. Logs are read-only.</div>
-          </Card>
-        )}
-        {autoReadonly && unlocked && !isImpersonating && (
-          <Card className="flex items-start gap-2 border-amber-500/30 bg-amber-500/5 p-3 text-xs">
-            <Info className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
-            <div>You're editing a previous workout. Changes save automatically.</div>
-          </Card>
-        )}
+        {/* Workouts are always editable — no date/block/program lock banners. */}
 
         {!focusMode && (
         <WorkoutLoadBoundary clientId={client?.id ?? null} clientName={(client as any)?.full_name ?? null} dayId={dayId} route={`/portal/workouts/${dayId}`}>
