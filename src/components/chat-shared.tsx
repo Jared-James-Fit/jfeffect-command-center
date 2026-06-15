@@ -268,16 +268,23 @@ export function WaveformBars({
 }
 
 export function LiveWaveform({ levels }: { levels: number[] }) {
-  const padded = Array.from({ length: 40 }, (_, i) => levels[levels.length - 40 + i] ?? 0);
+  const BAR_COUNT = 48;
+  const padded = Array.from(
+    { length: BAR_COUNT },
+    (_, i) => levels[levels.length - BAR_COUNT + i] ?? 0,
+  );
   return (
-    <div className="flex h-7 flex-1 items-center gap-[2px]">
-      {padded.map((v, i) => (
-        <span
-          key={i}
-          className="w-[3px] flex-1 rounded-full bg-destructive transition-[height] duration-75"
-          style={{ height: `${Math.max(8, v * 100)}%`, opacity: v > 0 ? 1 : 0.25 }}
-        />
-      ))}
+    <div className="flex h-10 flex-1 items-center justify-center gap-[2px] overflow-hidden">
+      {padded.map((v, i) => {
+        const h = Math.max(10, Math.min(100, v * 130));
+        return (
+          <span
+            key={i}
+            className="w-[3px] flex-1 rounded-full bg-destructive shadow-[0_0_6px_rgba(239,68,68,0.45)] transition-[height,opacity] duration-100"
+            style={{ height: `${h}%`, opacity: v > 0.05 ? 1 : 0.35 }}
+          />
+        );
+      })}
     </div>
   );
 }
