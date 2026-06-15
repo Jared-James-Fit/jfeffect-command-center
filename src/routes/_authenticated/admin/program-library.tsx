@@ -127,6 +127,7 @@ export function ProgramLibrary({ embedded = false }: { embedded?: boolean } = {}
   const qc = useQueryClient();
   const [q, setQ] = useState("");
   const [chip, setChip] = useState<FilterChip>({ kind: "all" });
+  const [weightClass, setWeightClass] = useState<string | null>(null);
   const [openNew, setOpenNew] = useState(false);
   const [previewId, setPreviewId] = useState<string | null>(null);
   const [assignTpl, setAssignTpl] = useState<any | null>(null);
@@ -146,6 +147,14 @@ export function ProgramLibrary({ embedded = false }: { embedded?: boolean } = {}
         ...(showArchived ? { includeArchived: true, onlyArchived: true } : {}),
       } as any),
   });
+
+  const filteredTemplates = useMemo(() => {
+    if (!weightClass) return templates as any[];
+    const wc = weightClass.toLowerCase();
+    return (templates as any[]).filter((t) =>
+      (t.tags ?? []).some((tag: string) => String(tag).toLowerCase() === wc),
+    );
+  }, [templates, weightClass]);
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ["pl-templates"] });
 
@@ -179,19 +188,24 @@ export function ProgramLibrary({ embedded = false }: { embedded?: boolean } = {}
 
         {/* Filter chips */}
         <FilterChips chip={chip} setChip={setChip} />
+        <WeightClassFilter value={weightClass} onChange={setWeightClass} />
 
         {isLoading ? (
           <p className="text-sm text-muted-foreground">Loading…</p>
-        ) : templates.length === 0 ? (
+        ) : filteredTemplates.length === 0 ? (
           <Card className="p-12 text-center">
             <BookOpen className="mx-auto h-10 w-10 text-muted-foreground" />
             <p className="mt-3 text-sm text-muted-foreground">
-              {showArchived ? "No archived templates." : "No templates yet. Create your first reusable program."}
+              {weightClass
+                ? `No templates tagged ${weightClass}.`
+                : showArchived
+                  ? "No archived templates."
+                  : "No templates yet. Create your first reusable program."}
             </p>
           </Card>
         ) : (
           <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-            {templates.map((t: any) => (
+            {filteredTemplates.map((t: any) => (
               <TemplateCard
                 key={t.id}
                 tpl={t}
