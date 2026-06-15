@@ -1297,11 +1297,23 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
   const weekColumnWidthClass = compact
     ? "w-[88vw] max-w-[520px] sm:w-[440px] lg:w-[480px] xl:w-[520px]"
     : "w-[94vw] max-w-[720px] sm:w-[600px] lg:w-[640px] xl:w-[700px]";
+  // Track which scroller is being driven by the user so the mirrored
+  // scroller doesn't echo events back and create a feedback loop / jitter.
+  const scrollSyncSource = useRef<"header" | "cards" | null>(null);
+  const scrollSyncTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const syncWeekScroll = (source: "header" | "cards") => (e: React.UIEvent<HTMLDivElement>) => {
+    // If this scroll event was caused by our programmatic mirror, ignore it.
+    if (scrollSyncSource.current && scrollSyncSource.current !== source) return;
     const other = source === "header" ? weekCardsScrollRef.current : weekHeaderScrollRef.current;
     if (!other) return;
     const left = e.currentTarget.scrollLeft;
-    if (Math.abs(other.scrollLeft - left) > 1) other.scrollLeft = left;
+    if (Math.abs(other.scrollLeft - left) > 1) {
+      scrollSyncSource.current = source;
+      // Use instant scroll (not smooth) to avoid drift during the sync.
+      other.scrollLeft = left;
+      if (scrollSyncTimer.current) clearTimeout(scrollSyncTimer.current);
+      scrollSyncTimer.current = setTimeout(() => { scrollSyncSource.current = null; }, 80);
+    }
   };
   const addWeek = () => {
     const nextIdx = (weeksData[weeksData.length - 1]?.week_index ?? 0) + 1;
@@ -1439,7 +1451,7 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
               ref={weekHeaderScrollRef}
               onScroll={syncWeekScroll("header")}
               className={cn(
-                "sticky top-10 z-20 -mx-2 overflow-x-auto border-b border-primary/20 bg-[color-mix(in_oklab,var(--primary)_6%,var(--background))] px-3 py-2 shadow-sm backdrop-blur scroll-smooth",
+                "sticky top-10 z-20 -mx-2 overflow-x-auto overscroll-x-contain border-b border-primary/20 bg-[color-mix(in_oklab,var(--primary)_6%,var(--background))] px-3 py-2 shadow-sm backdrop-blur",
                 "[scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
               )}
             >
@@ -1491,7 +1503,7 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
             ref={weekCardsScrollRef}
             onScroll={syncWeekScroll("cards")}
             className={cn(
-            "snap-x snap-proximity overflow-x-auto overflow-y-visible pb-3 scroll-smooth",
+            "snap-x snap-proximity overflow-x-auto overflow-y-visible overscroll-x-contain pb-3",
             compact ? "px-2 scroll-pl-2" : "px-3 scroll-pl-3",
           )}>
             <div className={cn("flex w-max items-start", compact ? "gap-2" : "gap-3")}>
