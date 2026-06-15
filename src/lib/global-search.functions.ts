@@ -3,7 +3,16 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 export type GlobalSearchHit = {
-  kind: "client" | "coach" | "account" | "program";
+  kind:
+    | "client"
+    | "coach"
+    | "account"
+    | "program"
+    | "exercise"
+    | "member_plan"
+    | "recipe"
+    | "broadcast"
+    | "purchase";
   id: string;
   label: string;
   sub?: string | null;
@@ -41,7 +50,7 @@ export const globalSearchFn = createServerFn({ method: "GET" })
     const limit = data.limit ?? 8;
     const like = `%${escape(q)}%`;
 
-    const [clientsRes, coachesRes, membersRes, tplRes] = await Promise.all([
+    const [clientsRes, coachesRes, membersRes, tplRes, exRes, planRes, recipeRes, bcastRes, purchaseRes] = await Promise.all([
       supabase
         .from("clients")
         .select(
@@ -90,6 +99,35 @@ export const globalSearchFn = createServerFn({ method: "GET" })
             `training_focus.ilike.${like}`,
           ].join(","),
         )
+        .limit(limit),
+      supabase
+        .from("exercises")
+        .select("id, name, category, primary_muscle")
+        .or([`name.ilike.${like}`, `category.ilike.${like}`, `primary_muscle.ilike.${like}`].join(","))
+        .limit(limit),
+      supabase
+        .from("member_plans")
+        .select("id, name, summary, tags")
+        .or([`name.ilike.${like}`, `summary.ilike.${like}`].join(","))
+        .limit(limit),
+      supabase
+        .from("recipes")
+        .select("id, name, summary")
+        .or([`name.ilike.${like}`, `summary.ilike.${like}`].join(","))
+        .limit(limit),
+      supabase
+        .from("broadcasts")
+        .select("id, title, body")
+        .or([`title.ilike.${like}`, `body.ilike.${like}`].join(","))
+        .limit(limit),
+      supabase
+        .from("purchase_records")
+        .select("id, customer_email, customer_name, product_name, amount_total")
+        .or([
+          `customer_email.ilike.${like}`,
+          `customer_name.ilike.${like}`,
+          `product_name.ilike.${like}`,
+        ].join(","))
         .limit(limit),
     ]);
 
@@ -157,6 +195,73 @@ export const globalSearchFn = createServerFn({ method: "GET" })
         label: t.name || "Program",
         sub: m?.snippet ?? t.training_focus ?? null,
         to: `/admin/program-library/${t.id}`,
+        matchedField: m?.field ?? null,
+      });
+    }
+
+    for (const e of exRes.data ?? []) {
+      const m = pickMatch(q, { name: e.name, category: e.category, muscle: e.primary_muscle });
+      hits.push({
+        kind: "exercise",
+        id: e.id,
+        label: e.name || "Exercise",
+        sub: m?.snippet ?? e.category ?? e.primary_muscle ?? null,
+        to: `/admin/exercises?focus=${e.id}`,
+        matchedField: m?.field ?? null,
+      });
+    }
+
+    for (const p of planRes.data ?? []) {
+      const m = pickMatch(q, { name: p.name, summary: p.summary });
+      hits.push({
+        kind: "member_plan",
+        id: p.id,
+        label: p.name || "Member Plan",
+        sub: m?.snippet ?? p.summary ?? null,
+        to: `/admin/member-plans/${p.id}`,
+        matchedField: m?.field ?? null,
+      });
+    }
+
+    for (const r of recipeRes.data ?? []) {
+      const m = pickMatch(q, { name: r.name, summary: r.summary });
+      hits.push({
+        kind: "recipe",
+        id: r.id,
+        label: r.name || "Recipe",
+        sub: m?.snippet ?? r.summary ?? null,
+        to: `/admin/recipes?focus=${r.id}`,
+        matchedField: m?.field ?? null,
+      });
+    }
+
+    for (const b of bcastRes.data ?? []) {
+      const m = pickMatch(q, { title: b.title, body: b.body });
+      hits.push({
+        kind: "broadcast",
+        id: b.id,
+        label: b.title || "Broadcast",
+        sub: m?.snippet ?? null,
+        to: `/admin/broadcasts/${b.id}`,
+        matchedField: m?.field ?? null,
+      });
+    }
+
+    for (const p of purchaseRes.data ?? []) {
+      const m = pickMatch(q, {
+        email: p.customer_email,
+        name: p.customer_name,
+        product: p.product_name,
+      });
+      const sub = [p.customer_name || p.customer_email, p.product_name]
+        .filter(Boolean)
+        .join(" · ");
+      hits.push({
+        kind: "purchase",
+        id: p.id,
+        label: p.product_name || p.customer_name || p.customer_email || "Purchase",
+        sub: m?.snippet ?? sub ?? null,
+        to: `/admin/purchases/${p.id}`,
         matchedField: m?.field ?? null,
       });
     }
