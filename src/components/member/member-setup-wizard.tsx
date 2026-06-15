@@ -373,6 +373,17 @@ function GoalsStep({
           })}
         </div>
       </div>
+
+      <div>
+        <Label>Training background <span className="text-destructive">*</span></Label>
+        <Textarea
+          rows={3}
+          className="mt-2"
+          placeholder="A few sentences about your training history, recent programs, injuries, etc."
+          value={form.training_background ?? member?.training_background ?? ""}
+          onChange={(e) => setForm((f: any) => ({ ...f, training_background: e.target.value }))}
+        />
+      </div>
     </div>
   );
 }
