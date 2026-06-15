@@ -13,7 +13,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { Eye, EyeOff, Receipt, Check, X as XIcon } from "lucide-react";
 import { SalesPageShell, Section } from "@/components/sales/sales-page-shell";
-import { MembershipHero, MemberHeroCta, MemberHeroGhost } from "@/components/sales/membership-hero";
+import { MembershipHero, MemberHeroCta, MemberHeroGhost, HeroDecisionArea, MemberDetailsLink } from "@/components/sales/membership-hero";
 import { FeatureTabs } from "@/components/sales/feature-tabs";
 import { FeatureGrid } from "@/components/sales/feature-grid";
 import { IncludedNotIncluded } from "@/components/sales/included-not-included";
@@ -23,6 +23,7 @@ import { ProofWall } from "@/components/sales/proof-wall";
 import { FaqAccordion } from "@/components/sales/faq-accordion";
 import { StickyMobileCta } from "@/components/sales/sticky-mobile-cta";
 import { Reveal } from "@/components/sales/reveal";
+import { ArrowRight, Headphones } from "lucide-react";
 import { normalizePhoneToE164 } from "@/lib/phone-e164";
 
 function HeroSkeleton() {
@@ -44,15 +45,15 @@ export const Route = createFileRoute("/membership")({
   component: SignupJf,
   head: () => ({
     meta: [
-      { title: "JF Effect Membership | Self-Guided Training App" },
-      { name: "description", content: "Access structured workout programs, training analytics, progress tracking, and fitness resources through the JF Effect Membership." },
-      { property: "og:title", content: "JF Effect Membership | Self-Guided Training App" },
-      { property: "og:description", content: "Access structured workout programs, training analytics, progress tracking, and fitness resources through the JF Effect Membership." },
+      { title: "Self-Guided Membership | JF Effect Training App" },
+      { name: "description", content: "Train with the JF Effect system on your own schedule. Structured plans, workout tracking, exercise demos, analytics and nutrition resources for $29/month." },
+      { property: "og:title", content: "JF Effect — Self-Guided Membership" },
+      { property: "og:description", content: "Structured training plans, tracking and nutrition resources in the JF Effect app. 3-day free trial, then $29/month." },
       { property: "og:type", content: "website" },
       { property: "og:url", content: "https://jfeffect.com/membership" },
       { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:title", content: "JF Effect Membership | Self-Guided Training App" },
-      { name: "twitter:description", content: "Access structured workout programs, training analytics, progress tracking, and fitness resources through the JF Effect Membership." },
+      { name: "twitter:title", content: "JF Effect — Self-Guided Membership" },
+      { name: "twitter:description", content: "Structured training plans, tracking and nutrition resources in the JF Effect app. 3-day free trial, then $29/month." },
     ],
     links: [{ rel: "canonical", href: "https://jfeffect.com/membership" }],
   }),
@@ -181,20 +182,65 @@ function SignupJf() {
   }
 
   return (
-    <SalesPageShell pageId="membership-join" theme="light">
+    <SalesPageShell pageId="membership-join">
       {p === undefined ? (
         <HeroSkeleton />
       ) : (
       <MembershipHero
         priceChip={settings?.monthly_price_display ?? "$29/month USD"}
-        headline={"Train with the JF Effect system\u2014without paying for private coaching."}
-        sub={"Get structured workout plans, exercise demos, workout tracking, progress analytics, nutrition resources and member-only updates\u2014all inside the JF Effect app. Start immediately. Train on your schedule. Follow the system at your own pace."}
+        headline={"Train with a plan. Progress on purpose."}
+        sub={"Get structured training plans, workout tracking, exercise demonstrations, progress analytics, nutrition resources and member-only updates inside the JF Effect app. Follow the system independently, train on your schedule and know exactly what to do next."}
         heroImage={null}
+        decisionArea={
+          <HeroDecisionArea
+            onCoachingClick={() => { window.location.href = "/coaching"; }}
+          />
+        }
         primary={<MemberHeroCta onClick={scrollToForm}>{`Start ${trialDays}-Day Free Trial`}</MemberHeroCta>}
-        secondary={<MemberHeroGhost onClick={scrollToFeatures}>See What's Included</MemberHeroGhost>}
+        secondary={
+          <Link to="/coaching">
+            <MemberHeroGhost>Explore Private Coaching</MemberHeroGhost>
+          </Link>
+        }
         trialNote={`${trialDays}-day free trial · Then ${settings?.monthly_price_display ?? "$29/month USD"} · Cancel anytime`}
+        detailsLink={<MemberDetailsLink onClick={scrollToFeatures} />}
       />
       )}
+
+      {/* Coaching callout — sits directly under the hero so Private Coaching
+          is visible as a real path within five seconds of landing. */}
+      <Section className="!py-8">
+        <Link to="/coaching" className="block">
+          <div className="mx-auto max-w-5xl rounded-2xl border border-primary/30 bg-gradient-to-br from-[#0F1116] via-[#0B0D12] to-[#0B0D12] p-5 md:p-6 shadow-[0_20px_60px_-20px_rgba(220,38,38,0.35)] hover:border-primary/50 transition-colors">
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              <div className="flex items-start gap-3">
+                <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-primary/40 bg-primary/15 text-primary">
+                  <Headphones className="h-5 w-5" />
+                </div>
+                <div>
+                  <div className="text-base font-black tracking-tight md:text-lg">
+                    Want the Plan Built Around You?
+                  </div>
+                  <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+                    Private Coaching includes individualized programming, nutrition guidance, weekly check-ins, ongoing adjustments and direct coach support.
+                  </p>
+                  <p className="mt-1 text-[11px] uppercase tracking-[0.18em] text-muted-foreground/80">
+                    Application required · Limited client capacity
+                  </p>
+                </div>
+              </div>
+              <div className="shrink-0">
+                <Button size="lg" variant="outline" className="h-11 px-5 text-sm font-bold">
+                  View Private Coaching <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          </div>
+        </Link>
+      </Section>
+
+      {/* Offer comparison surfaced early so visitors see both paths within 5s. */}
+      <Reveal><OfferComparison accent="membership" /></Reveal>
 
       <div ref={featuresRef} id="features" />
       <Reveal><FeatureTabs /></Reveal>
@@ -214,14 +260,39 @@ function SignupJf() {
         <Reveal><ComparisonCard left={s.comparison.left} right={s.comparison.right} /></Reveal>
       )}
 
-      <Reveal><OfferComparison accent="membership" /></Reveal>
-
       <Reveal><ProofWall
         testimonials={p?.testimonials ?? []}
         images={(p?.visuals ?? []).filter((v) => v.slot === "proof")}
       /></Reveal>
 
       <Reveal><FaqAccordion items={mergeTaxFaq(s.faq ?? [])} /></Reveal>
+
+      {/* Lower coaching CTA before form / footer. */}
+      <Reveal as={Section}>
+        <div className="mx-auto max-w-3xl rounded-2xl border border-white/10 bg-gradient-to-br from-[#111318] to-[#0B0D12] p-6 md:p-8 text-center">
+          <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-primary">
+            Need More Than a Workout Plan?
+          </div>
+          <h3 className="mt-2 text-2xl font-black tracking-tight md:text-3xl">
+            Private Coaching may be the better fit.
+          </h3>
+          <p className="mt-3 text-sm text-muted-foreground md:text-base">
+            If you want individualized programming, nutrition guidance, accountability and direct coach support, apply for Private Coaching.
+          </p>
+          <div className="mt-5 flex flex-col items-center justify-center gap-3 sm:flex-row">
+            <Link to="/coaching/apply">
+              <Button size="lg" className="h-12 px-6 text-base font-bold">Apply for Private Coaching</Button>
+            </Link>
+            <button
+              type="button"
+              onClick={scrollToForm}
+              className="text-sm font-semibold text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+            >
+              Continue With Membership →
+            </button>
+          </div>
+        </div>
+      </Reveal>
 
       {/* Signup form */}
       <Section className="!pt-4">
