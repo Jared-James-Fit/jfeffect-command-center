@@ -12,11 +12,12 @@ import { ProofWall } from "@/components/sales/proof-wall";
 import { FaqAccordion } from "@/components/sales/faq-accordion";
 import { FinalCta } from "@/components/sales/final-cta";
 import { StickyMobileCta } from "@/components/sales/sticky-mobile-cta";
+import { OfferComparison } from "@/components/sales/offer-comparison";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { CheckCircle2 } from "lucide-react";
 import { Reveal } from "@/components/sales/reveal";
-import coachingHeroImg from "@/assets/coaching-hero.jpg";
+import coachingHeroImg from "@/assets/coaching-hero-duo.jpg";
 
 function HeroSkeleton() {
   return (
@@ -70,13 +71,16 @@ function CoachingPage() {
       ) : (
       <CoachingHero
         eyebrow="Private Coaching · By application"
-        headline={p?.hero_headline ?? "1:1 coaching for people who are done guessing."}
-        sub={p?.hero_subheadline ?? "A coach builds your program, reviews your check-ins every week, and adjusts the plan based on your data. Inside the JF Effect app."}
+        headline={p?.hero_headline ?? "Stop guessing. Get a plan built around you."}
+        sub={p?.hero_subheadline ?? "Private coaching gives you individualized training, nutrition guidance, weekly accountability and direct support\u2014adjusted around your goals, schedule and progress."}
         image={p?.hero_image_url ?? coachingHeroImg}
         primary={<HeroCta onClick={handleApply}>{p?.primary_cta_label ?? "Apply for Private Coaching"}</HeroCta>}
         secondary={
-          <Link to={(p?.secondary_cta_href ?? "/membership") as any}>
-            <HeroCtaGhost>{p?.secondary_cta_label ?? "Prefer self-guided? Explore Membership"}</HeroCtaGhost>
+          <Link
+            to={(p?.secondary_cta_href ?? "/membership") as any}
+            className="text-sm font-semibold text-white/70 underline-offset-4 hover:text-white hover:underline"
+          >
+            {p?.secondary_cta_label ?? "Not ready for coaching? Explore Membership →"}
           </Link>
         }
       />
@@ -121,6 +125,8 @@ function CoachingPage() {
       )}
 
       <Reveal><CoachingVsMembership onApply={handleApply} /></Reveal>
+
+      <Reveal><OfferComparison accent="coaching" /></Reveal>
 
       <Reveal><FaqAccordion items={s.faq ?? []} /></Reveal>
 
