@@ -104,10 +104,7 @@ export function TrainingAnalyticsPreviewCard({
         </div>
 
         {empty ? (
-          <p className="mt-4 text-sm text-muted-foreground">
-            Log a few working sets and your PRs, weekly volume, and lift trends will
-            light up here.
-          </p>
+          <EmptyPreview />
         ) : (
           <>
             {/* Stat grid */}
