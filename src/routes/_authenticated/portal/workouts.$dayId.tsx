@@ -798,6 +798,7 @@ function WorkoutDay() {
           </Card>
         )}
 
+        {!focusMode && (
         <WorkoutLoadBoundary clientId={client?.id ?? null} clientName={(client as any)?.full_name ?? null} dayId={dayId} route={`/portal/workouts/${dayId}`}>
           <div className="space-y-4 rounded-lg bg-builder-canvas p-3 sm:p-4 ring-1 ring-builder-card-border/40">
             {rowsLoaded && (rows as any[]).length === 0 ? (
@@ -833,6 +834,7 @@ function WorkoutDay() {
             ))}
           </div>
         </WorkoutLoadBoundary>
+        )}
 
         {!readonly && (
         <Card ref={generalNotesRef} className="p-4 space-y-3">
