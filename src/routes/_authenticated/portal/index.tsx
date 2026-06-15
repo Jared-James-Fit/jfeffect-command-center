@@ -16,6 +16,7 @@ import { ManualCheckInReviewModal } from "@/components/manual-check-in-review-mo
 import { ClientActionRequestModal } from "@/components/client-action-request-modal";
 import { UpcomingEventsPanel } from "@/components/events/upcoming-events-panel";
 import { QuickActionsGrid } from "@/components/portal/quick-actions-grid";
+import { IntakeAnswersBigButton } from "@/components/clients/intake-answers-dialog";
 import { ActionCentre, type ActionItem } from "@/components/portal/action-centre";
 import { TrainingBlockCard } from "@/components/portal/training-block-card";
 import { BodyweightSummaryCard } from "@/components/portal/bodyweight-summary-card";
@@ -382,6 +383,16 @@ function PortalHome() {
             checkInBadge={(assignedForms as any[])?.length || undefined}
             onLogWeight={() => bodyweightRef.current?.open()}
             weeklyCheckInFormId={pickWeeklyCheckInForm(assignedForms as any)?.id}
+          />
+        )}
+
+        {/* 3b — Intake & form answers (one-tap access for the client) */}
+        {client && (
+          <IntakeAnswersBigButton
+            clientId={client.id}
+            clientName={client.full_name ?? null}
+            label="My Intake & Form Answers"
+            subtitle="Review everything you’ve filled out — sign-up intake & in-app forms"
           />
         )}
 

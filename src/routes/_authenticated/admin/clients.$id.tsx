@@ -39,6 +39,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { listForms as listNativeForms, type NfForm } from "@/lib/native-forms";
 import { replaceClientNativeFormAssignments } from "@/lib/native-forms.functions";
 import { ActionButton } from "@/components/action-button";
+import { IntakeAnswersBigButton } from "@/components/clients/intake-answers-dialog";
 
 // Heavy panels — code-split so visiting a client only loads the active tab's code.
 const lazyDefault = <T,>(loader: () => Promise<{ [k: string]: T }>, name: string) =>
@@ -585,6 +586,13 @@ function ClientDetail() {
         />
 
         <TabsContent value="summary" className="grid gap-6 md:grid-cols-3">
+        <div className="md:col-span-3">
+          <IntakeAnswersBigButton
+            clientId={id}
+            clientName={form.full_name ?? null}
+            subtitle="See every intake & in-app questionnaire this client filled out"
+          />
+        </div>
         <Card className="border-border bg-card p-6 md:col-span-2 space-y-4">
           <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Profile</h3>
           <div className="grid grid-cols-2 gap-3">
