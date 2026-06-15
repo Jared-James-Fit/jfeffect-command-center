@@ -153,6 +153,19 @@ export function SmsAutomationDialog({
               </div>
             </div>
           )}
+          {f.trigger_type === "email_change_requested" && (
+            <div className="rounded-md border border-primary/30 bg-primary/5 p-3 text-xs">
+              <div className="font-semibold mb-1">Account-email change alert</div>
+              <div className="text-muted-foreground">
+                Fires when a client, member, or coach requests an email change from their gear-menu Settings.
+                Available tags: <code className="px-1 rounded bg-background">{"{first_name}"}</code>,{" "}
+                <code className="px-1 rounded bg-background">{"{brand}"}</code>,{" "}
+                <code className="px-1 rounded bg-background">{"{old_email}"}</code>,{" "}
+                <code className="px-1 rounded bg-background">{"{new_email}"}</code>.
+                Toggle this automation off below to stop the SMS — the email confirmation still sends either way.
+              </div>
+            </div>
+          )}
           <div className="grid gap-3 md:grid-cols-2">
             <div className="space-y-1.5">
               <Label>Automation name</Label>
