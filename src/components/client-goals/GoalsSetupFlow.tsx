@@ -297,7 +297,7 @@ const OTHER = "Other";
 const OTHER_PREFIX = "Other: ";
 // "Real" equipment excludes the meta chips ("All of it" and "Other"),
 // so selecting "All of it" doesn't toggle the custom-text Other chip.
-const REAL_EQUIPMENT = EQUIPMENT_OPTIONS.filter(
+const REAL_EQUIPMENT: string[] = EQUIPMENT_OPTIONS.filter(
   (o) => o !== ALL_OF_IT && o !== OTHER,
 );
 
