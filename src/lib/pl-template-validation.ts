@@ -15,12 +15,14 @@ export type RowProblem =
   | "exercise"   // no exercise picked and no custom name
   | "sets"       // sets blank
   | "reps"       // reps blank
+  | "duration"   // duration blank (time-mode)
   | "intensity"; // none of RPE / RIR / suggested load set
 
 const ROW_LABEL: Record<RowProblem, string> = {
   exercise: "exercise name",
   sets: "sets",
   reps: "reps",
+  duration: "duration",
   intensity: "RPE, RIR, or suggested load",
 };
 
@@ -31,7 +33,13 @@ function rowProblems(row: any): RowProblem[] {
     (typeof row?.exercise_name_override === "string" && row.exercise_name_override.trim().length > 0);
   if (!hasExercise) issues.push("exercise");
   if (row?.sets == null || row.sets === "") issues.push("sets");
-  if (typeof row?.reps_text !== "string" || row.reps_text.trim().length === 0) issues.push("reps");
+  const isTime = row?.measurement_type === "time";
+  if (isTime) {
+    const d = row?.duration_seconds;
+    if (d == null || d === "" || Number(d) <= 0) issues.push("duration");
+  } else {
+    if (typeof row?.reps_text !== "string" || row.reps_text.trim().length === 0) issues.push("reps");
+  }
   const hasRpe = row?.rpe != null && row.rpe !== "";
   const hasRir = row?.rir != null && row.rir !== "";
   const hasPct = row?.percentage != null && row.percentage !== "" &&
