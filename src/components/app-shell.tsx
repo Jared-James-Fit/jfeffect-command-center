@@ -311,8 +311,8 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
 
   // Open the active group when the More sheet opens, or when route changes.
   useEffect(() => {
-    if (moreOpen) setMoreOpenGroup(activeGroupLabel);
-  }, [moreOpen, activeGroupLabel]);
+    if (moreOpen) setMoreOpenGroup(activeGroupLabel ?? (grouped[0]?.label ?? "All sections"));
+  }, [moreOpen, activeGroupLabel, grouped]);
 
   const moreFiltered = useMemo(() => {
     const q = moreQuery.trim().toLowerCase();
