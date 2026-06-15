@@ -249,33 +249,18 @@ export function IntakeAnswersDialog({
 }
 
 function FilloutAnswers({ responseJson }: { responseJson: any }) {
-  const questions: any[] | null = Array.isArray(responseJson?.questions)
-    ? responseJson.questions
-    : null;
-  if (!questions || questions.length === 0) {
-    return (
-      <pre className="overflow-auto rounded bg-background p-2 text-xs">
-        {responseJson ? JSON.stringify(responseJson, null, 2) : "No response data."}
-      </pre>
-    );
-  }
-  return (
-    <div className="space-y-2">
-      {questions.map((q: any, i: number) => (
-        <div
-          key={q.id ?? i}
-          className="rounded-md border border-border bg-card p-2.5"
-        >
-          <div className="text-xs font-semibold text-muted-foreground">
-            {q.name || `Question ${i + 1}`}
-          </div>
-          <div className="mt-1 whitespace-pre-wrap text-sm">
-            {formatValue(q.value)}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
+  return <FilloutEditableAnswers responseJson={responseJson} />;
+}
+
+function FilloutEditableAnswers({
+  submissionId,
+  responseJson,
+}: {
+  submissionId?: string;
+  responseJson: any;
+}) {
+  // Hoisted helper component: receives the submission id via closure below.
+  return <FilloutEditor responseJson={responseJson} />;
 }
 
 function NativeAnswers({
