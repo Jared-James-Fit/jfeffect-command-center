@@ -633,7 +633,7 @@ export function ClientBlockView({
                     <div className="min-w-0">
                       <div className="flex min-w-0 items-center gap-2">
                         <h3 className="min-w-0 break-words text-sm font-black uppercase tracking-wide">
-                          {d.title || `Day ${d.day_index}`}
+                          {cleanDayTitle(d.title, d.day_index)}
                         </h3>
                         {isToday && !done && blockStatus === "current" && (
                           <Badge className="h-4 shrink-0 whitespace-nowrap border-primary/40 bg-primary/15 px-1 text-[9px] font-bold text-primary hover:bg-primary/20">
