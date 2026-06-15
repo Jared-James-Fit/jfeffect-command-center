@@ -430,14 +430,14 @@ function AdminDashboard() {
   void isToday; void format; void todayStr;
 
   const quickActions = [
-    { label: "Add Client", to: "/admin/clients", icon: Plus },
-    { label: "Message Client", to: "/admin/messages", icon: MessageCircle },
-    { label: "Review Check-Ins", to: "/admin/check-in-reviews", icon: ClipboardList },
-    { label: "Review Lift Videos", to: "/admin/lift-videos", icon: Video },
-    { label: "Create Program", to: "/admin/program-library", icon: FileText },
-    { label: "Send Payment Link", to: "/admin/payment-links", icon: DollarSign },
-    { label: "New Broadcast", to: "/admin/broadcasts", icon: Megaphone },
-    { label: "New Recipe", to: "/admin/recipes", icon: ChefHat },
+    { label: "Add Client",         to: "/admin/clients",            icon: Plus },
+    { label: "Message Client",     to: "/admin/messages",           icon: MessageCircle },
+    { label: "Review Check-Ins",   to: "/admin/check-in-reviews",   icon: ClipboardList },
+    { label: "Review Lift Videos", to: "/admin/lift-videos",        icon: Video },
+    { label: "Assign Program",     to: "/admin/program-library",    icon: FileText },
+    { label: "Send Payment Link",  to: "/admin/payment-links",      icon: DollarSign },
+    { label: "New Broadcast",      to: "/admin/broadcasts",         icon: Megaphone },
+    { label: "New Recipe",         to: "/admin/recipes",            icon: ChefHat },
   ];
 
   const shortcuts = [
@@ -559,11 +559,13 @@ function AdminDashboard() {
           <SectionHeader title="Quick Actions" />
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             {quickActions.map((a) => (
-              <Link key={a.label} to={a.to}>
-                <Button variant="outline" size="sm" className="w-full justify-start font-semibold h-9 text-xs">
-                  <a.icon className="mr-1.5 h-3.5 w-3.5" />
-                  <span className="truncate">{a.label}</span>
-                </Button>
+              <Link key={a.label} to={a.to} className="block">
+                <div className="flex h-full min-h-[72px] flex-col items-start justify-between gap-2 rounded-lg border border-border bg-secondary/40 p-3 transition hover:border-primary hover:bg-secondary active:scale-[0.98]">
+                  <div className="grid h-9 w-9 place-items-center rounded-md bg-primary/15 text-primary">
+                    <a.icon className="h-4 w-4" />
+                  </div>
+                  <div className="text-sm font-bold leading-tight">{a.label}</div>
+                </div>
               </Link>
             ))}
           </div>
