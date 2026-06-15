@@ -629,7 +629,7 @@ export function ClientBlockView({
                 )}
               >
                 {/* Sticky day header inside the column */}
-                <div className="sticky top-[64px] z-10 rounded-t-lg border-b border-border bg-card/95 p-3 backdrop-blur">
+                <div className="rounded-t-lg border-b border-border bg-card/95 p-3 backdrop-blur">
                   <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2">
                     <div className="min-w-0">
                       <div className="flex min-w-0 items-center gap-2">
