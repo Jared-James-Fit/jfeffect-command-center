@@ -422,6 +422,15 @@ function EquipmentStep({ value, setField }: StepProps) {
             }
             multi
           />
+          {hasOther(value.equipment) && (
+            <Input
+              value={getOtherText(value.equipment)}
+              onChange={(e) =>
+                setField("equipment", setOtherText(value.equipment, e.target.value))
+              }
+              placeholder="Tell us what other equipment you have"
+            />
+          )}
         </div>
       ) : (
         <div className="space-y-4">
@@ -456,6 +465,15 @@ function EquipmentStep({ value, setField }: StepProps) {
                   }
                   multi
                 />
+                {hasOther(byLoc[k]) && (
+                  <Input
+                    value={getOtherText(byLoc[k])}
+                    onChange={(e) =>
+                      setLocEquip(k, setOtherText(byLoc[k], e.target.value))
+                    }
+                    placeholder="Other equipment at this location"
+                  />
+                )}
               </Card>
             ))}
           </div>
