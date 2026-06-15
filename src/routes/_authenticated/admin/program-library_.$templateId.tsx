@@ -63,6 +63,7 @@ import {
 } from "@/lib/pl-template-blocks";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { ArchiveRestore, Archive as ArchiveIcon, Pencil } from "lucide-react";
+import { ProgramStatusBadge } from "@/components/programs/program-status-badge";
 
 // ---------------- Day focus + expand/collapse bus ----------------
 // Module-level event bus that lets the program builder know which day
