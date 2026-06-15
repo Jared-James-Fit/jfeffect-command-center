@@ -405,6 +405,8 @@ export type Database = {
           avatar_url: string | null
           cancel_at: string | null
           cancelled_at: string | null
+          committed_training_days: string[]
+          committed_training_frequency: number | null
           created_at: string
           cross_account_locked: boolean
           current_period_end: string | null
@@ -465,6 +467,8 @@ export type Database = {
           avatar_url?: string | null
           cancel_at?: string | null
           cancelled_at?: string | null
+          committed_training_days?: string[]
+          committed_training_frequency?: number | null
           created_at?: string
           cross_account_locked?: boolean
           current_period_end?: string | null
@@ -525,6 +529,8 @@ export type Database = {
           avatar_url?: string | null
           cancel_at?: string | null
           cancelled_at?: string | null
+          committed_training_days?: string[]
+          committed_training_frequency?: number | null
           created_at?: string
           cross_account_locked?: boolean
           current_period_end?: string | null
