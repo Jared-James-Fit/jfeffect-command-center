@@ -2223,13 +2223,22 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
   // It expands automatically when the user clicks or tabs into it, and snaps
   // back to summary when focus leaves the card.
   // Minimum requirements to be "fillable" enough to allow auto-collapse:
-  // an exercise selected/named, sets, and reps. Until those are present we
-  // keep the card expanded so coaches see the empty inputs they still owe.
+  // exercise + sets + reps + an intensity signal (RPE, RIR, or a suggested
+  // load — either a % of a basis or a manual kg/lb load). Until all of
+  // these are present we keep the card expanded so coaches see the empty
+  // inputs they still owe.
   const meetsMinimum = (() => {
     const hasEx = !!((row as any).exercise_id || (row as any).exercise_name_override);
     const hasSets = row.sets != null && row.sets !== "";
     const hasReps = !!row.reps_text;
-    return hasEx && hasSets && hasReps;
+    const hasRpe = (row as any).rpe != null && (row as any).rpe !== "";
+    const hasRir = (row as any).rir != null && (row as any).rir !== "";
+    const hasPct = (row as any).percentage != null && (row as any).percentage !== "" &&
+      (row as any).percentage_basis && (row as any).percentage_basis !== "none";
+    const hasManualLoad = ((row as any).load_kg != null && (row as any).load_kg !== "") ||
+      ((row as any).load_lb != null && (row as any).load_lb !== "");
+    const hasIntensity = hasRpe || hasRir || hasPct || hasManualLoad;
+    return hasEx && hasSets && hasReps && hasIntensity;
   })();
   const meetsMinRef = useRef(meetsMinimum);
   useEffect(() => { meetsMinRef.current = meetsMinimum; }, [meetsMinimum]);
