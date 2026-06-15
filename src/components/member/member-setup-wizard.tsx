@@ -280,15 +280,15 @@ export function MemberSetupWizard({
               </p>
             </div>
             <div className="grid grid-cols-4 gap-2 sm:grid-cols-7">
-              {WEEKDAYS.map((d) => {
-                const on = trainingDays.includes(d.key);
+              {WEEK_DAYS.map((d) => {
+                const on = trainingDays.includes(d);
                 return (
                   <button
-                    key={d.key}
+                    key={d}
                     type="button"
                     onClick={() => {
                       const cur = trainingDays;
-                      const next = on ? cur.filter((x) => x !== d.key) : [...cur, d.key];
+                      const next = on ? cur.filter((x) => x !== d) : [...cur, d];
                       set("committed_training_days", next);
                     }}
                     className={cn(
@@ -298,7 +298,7 @@ export function MemberSetupWizard({
                         : "border-border bg-secondary/40 hover:bg-secondary",
                     )}
                   >
-                    {d.short}
+                    {SHORT_DAY[d]}
                   </button>
                 );
               })}
