@@ -215,6 +215,7 @@ export function ProgramAssignmentPlanner({ clientId, templateId, onDone }: Props
       const result = await commitServer({ data: {
         clientId, templateId, selection, method, startDate, trainingDays,
         conflictDecisions, publishStatus, publishAt, idempotencyKey,
+        programName,
       } as any });
       clearDraft(clientId, templateId);
       toast.success(
