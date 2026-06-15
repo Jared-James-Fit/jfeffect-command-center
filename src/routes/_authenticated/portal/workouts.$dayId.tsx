@@ -622,6 +622,18 @@ function WorkoutDay() {
   });
   const hasFeedback = !!existingFeedback;
   const feedbackLocked = !!(existingFeedback?.reviewed_at || existingFeedback?.reviewed_by);
+  // Honor ?review=1 by auto-opening the feedback sheet as soon as we have
+  // a completion row to attach it to. Notification deep-links use this.
+  const reviewParam = search.review === 1;
+  const autoOpenedReviewRef = useRef(false);
+  useEffect(() => {
+    if (!reviewParam) { autoOpenedReviewRef.current = false; return; }
+    if (autoOpenedReviewRef.current) return;
+    if (!completion?.id) return;
+    if (feedbackLocked) return;
+    autoOpenedReviewRef.current = true;
+    setFeedbackOpen(true);
+  }, [reviewParam, completion?.id, feedbackLocked]);
   const feedbackSkipped = !!(completion?.id && typeof window !== "undefined"
     && localStorage.getItem(`lov.wfb.skip:${completion.id}`));
 
