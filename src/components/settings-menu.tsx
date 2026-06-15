@@ -1,7 +1,12 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Camera, LogOut, Settings as SettingsIcon, UserCog, ImageIcon } from "lucide-react";
+import { Camera, LogOut, Settings as SettingsIcon, UserCog, ImageIcon, Mail } from "lucide-react";
+import { useServerFn } from "@tanstack/react-start";
+import { requestEmailChange } from "@/lib/account-email.functions";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
   DropdownMenuSeparator, DropdownMenuTrigger,
@@ -41,6 +46,7 @@ export function SettingsMenu({
   const navigate = useNavigate();
   const [picOpen, setPicOpen] = useState(false);
   const [viewOpen, setViewOpen] = useState(false);
+  const [emailOpen, setEmailOpen] = useState(false);
 
   // Settings/account-style items — Account group, account/settings routes,
   // plus billing/purchases so clients & members can reach payment info from
@@ -157,6 +163,14 @@ export function SettingsMenu({
           )}
 
           <DropdownMenuSeparator />
+          <DropdownMenuLabel className="text-[10px] uppercase tracking-widest text-muted-foreground">
+            Account
+          </DropdownMenuLabel>
+          <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setEmailOpen(true); }}>
+            <Mail className="mr-2 h-4 w-4" /> Change email
+          </DropdownMenuItem>
+
+          <DropdownMenuSeparator />
           <DropdownMenuItem
             onSelect={onSignOut}
             className="text-destructive focus:text-destructive"
@@ -204,6 +218,137 @@ export function SettingsMenu({
           )}
         </DialogContent>
       </Dialog>
+
+      <ChangeEmailDialog
+        open={emailOpen}
+        onOpenChange={setEmailOpen}
+        currentEmail={user?.email ?? ""}
+      />
     </>
+  );
+}
+
+function ChangeEmailDialog({
+  open,
+  onOpenChange,
+  currentEmail,
+}: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  currentEmail: string;
+}) {
+  const submit = useServerFn(requestEmailChange);
+  const [email, setEmail] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [sent, setSent] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) {
+      setEmail("");
+      setConfirm("");
+      setSent(null);
+      setBusy(false);
+    }
+  }, [open]);
+
+  const onSubmit = async () => {
+    const next = email.trim().toLowerCase();
+    if (!next || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(next)) {
+      toast.error("Enter a valid email address");
+      return;
+    }
+    if (next !== confirm.trim().toLowerCase()) {
+      toast.error("Emails don't match");
+      return;
+    }
+    if (next === currentEmail.toLowerCase()) {
+      toast.error("That's already your email address");
+      return;
+    }
+    setBusy(true);
+    try {
+      const redirectTo = typeof window !== "undefined" ? window.location.origin : undefined;
+      await submit({ data: { newEmail: next, redirectTo } });
+      setSent(next);
+      toast.success("Confirmation link sent");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Could not request email change");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Mail className="h-4 w-4" /> Change account email
+          </DialogTitle>
+          <DialogDescription>
+            We'll send a confirmation link to your new address. Your email won't change until you click that link. If you have SMS notifications on, you'll also get a text confirming the request.
+          </DialogDescription>
+        </DialogHeader>
+
+        {sent ? (
+          <div className="space-y-3 text-sm">
+            <div className="rounded-md border border-primary/30 bg-primary/5 p-3">
+              <div className="font-semibold">Check your inbox</div>
+              <div className="mt-1 text-muted-foreground">
+                We sent a confirmation link to <span className="font-medium text-foreground">{sent}</span>. Open it on this device to finish switching your account email.
+              </div>
+            </div>
+            <div className="text-xs text-muted-foreground">
+              Didn't get it? Check spam, or try again in a few minutes.
+            </div>
+            <div className="flex justify-end">
+              <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div>
+              <Label className="text-xs text-muted-foreground">Current email</Label>
+              <div className="mt-1 truncate rounded-md border border-border bg-muted/40 px-3 py-2 text-sm">
+                {currentEmail || "—"}
+              </div>
+            </div>
+            <div>
+              <Label htmlFor="new-email">New email</Label>
+              <Input
+                id="new-email"
+                type="email"
+                autoComplete="email"
+                inputMode="email"
+                placeholder="you@newdomain.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label htmlFor="confirm-email">Confirm new email</Label>
+              <Input
+                id="confirm-email"
+                type="email"
+                autoComplete="email"
+                inputMode="email"
+                placeholder="you@newdomain.com"
+                value={confirm}
+                onChange={(e) => setConfirm(e.target.value)}
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-1">
+              <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={busy}>
+                Cancel
+              </Button>
+              <Button onClick={onSubmit} disabled={busy || !email || !confirm}>
+                {busy ? "Sending…" : "Send confirmation"}
+              </Button>
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }
