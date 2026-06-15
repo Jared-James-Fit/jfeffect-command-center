@@ -710,3 +710,86 @@ function StatCard({
     </Card>
   );
 }
+
+function AnalyticsEmptyPreview() {
+  const previewStats = [
+    { icon: <Trophy className="h-4 w-4" />, label: "PRs · 30d", value: "—", color: ANALYTICS_COLORS.green },
+    { icon: <Flame className="h-4 w-4" />, label: "Sets · 7d", value: "—", color: ANALYTICS_COLORS.red },
+    { icon: <Calendar className="h-4 w-4" />, label: "Workouts", value: "—", color: ANALYTICS_COLORS.blue },
+    { icon: <TrendingUp className="h-4 w-4" />, label: "Top gain", value: "—", color: ANALYTICS_COLORS.purple },
+  ];
+  const sections = [
+    {
+      icon: <Trophy className="h-5 w-5 text-primary" />,
+      title: "Recent PRs",
+      desc: "Every time you beat a previous best, the lift, weight, and gain land here automatically.",
+    },
+    {
+      icon: <TrendingUp className="h-5 w-5 text-primary" />,
+      title: "Estimated 1RM progress",
+      desc: "Track strength curves per exercise — your top sets get plotted over time with PR markers.",
+    },
+    {
+      icon: <Dumbbell className="h-5 w-5 text-primary" />,
+      title: "Weekly volume by muscle",
+      desc: "See how many sets each muscle group is getting so you can balance your training.",
+    },
+    {
+      icon: <Calendar className="h-5 w-5 text-primary" />,
+      title: "Planned vs actual",
+      desc: "Compare what was programmed against what you actually completed, set by set.",
+    },
+  ];
+  return (
+    <div className="space-y-6">
+      <Card className="border-dashed border-border/70 bg-card/60 p-8 text-center">
+        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-primary">
+          <Dumbbell className="h-7 w-7" />
+        </div>
+        <h2 className="mt-4 text-xl font-black tracking-tight text-foreground">
+          Your analytics will appear here
+        </h2>
+        <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
+          Log a working set from any workout and your PRs, strength trends, and weekly volume start filling in automatically — no extra setup required.
+        </p>
+      </Card>
+
+      <section aria-label="Preview" className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        {previewStats.map((s) => (
+          <Card
+            key={s.label}
+            className="relative overflow-hidden border-border/60 bg-card/60 p-3 opacity-70"
+            style={{ borderTop: `3px solid ${s.color}` }}
+          >
+            <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+              <span style={{ color: s.color }}>{s.icon}</span>
+              <span className="truncate">{s.label}</span>
+            </div>
+            <div className="mt-1 text-xl font-black tracking-tight text-muted-foreground">
+              {s.value}
+            </div>
+          </Card>
+        ))}
+      </section>
+
+      <section className="grid gap-3 md:grid-cols-2">
+        {sections.map((s) => (
+          <Card key={s.title} className="border-border/70 bg-card/60 p-4">
+            <div className="flex items-center gap-2">
+              {s.icon}
+              <h3 className="text-sm font-black uppercase tracking-wider text-foreground">
+                {s.title}
+              </h3>
+            </div>
+            <p className="mt-2 text-sm text-muted-foreground">{s.desc}</p>
+          </Card>
+        ))}
+      </section>
+
+      <Card className="border-border/70 bg-card/60 p-4 text-center text-xs text-muted-foreground">
+        Tip: head to your <span className="font-semibold text-foreground">Workouts</span> tab,
+        open today's session, and log your sets — analytics update the moment you save.
+      </Card>
+    </div>
+  );
+}
