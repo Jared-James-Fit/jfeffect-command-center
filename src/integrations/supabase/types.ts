@@ -7103,6 +7103,7 @@ export type Database = {
         Row: {
           block_id: string | null
           completed_duration_seconds: number | null
+          completion_method: string | null
           created_at: string
           day_index: number
           drop_stage_id: string | null
@@ -7122,12 +7123,15 @@ export type Database = {
           rpe: number | null
           set_index: number
           set_row_id: string | null
+          timer_completed_at: string | null
+          timer_started_at: string | null
           updated_at: string
           week_index: number
         }
         Insert: {
           block_id?: string | null
           completed_duration_seconds?: number | null
+          completion_method?: string | null
           created_at?: string
           day_index: number
           drop_stage_id?: string | null
@@ -7147,12 +7151,15 @@ export type Database = {
           rpe?: number | null
           set_index: number
           set_row_id?: string | null
+          timer_completed_at?: string | null
+          timer_started_at?: string | null
           updated_at?: string
           week_index: number
         }
         Update: {
           block_id?: string | null
           completed_duration_seconds?: number | null
+          completion_method?: string | null
           created_at?: string
           day_index?: number
           drop_stage_id?: string | null
@@ -7172,6 +7179,8 @@ export type Database = {
           rpe?: number | null
           set_index?: number
           set_row_id?: string | null
+          timer_completed_at?: string | null
+          timer_started_at?: string | null
           updated_at?: string
           week_index?: number
         }

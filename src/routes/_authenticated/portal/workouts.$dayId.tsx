@@ -49,6 +49,9 @@ import { ActiveRestTimerProvider, useRestTimer } from "@/components/active-rest-
 import { ExerciseHistoryButton } from "@/components/exercise-history-sheet";
 import { convertWeight } from "@/lib/progress-metrics";
 import { WorkoutFeedbackSheet, WorkoutFeedbackReminder, WorkoutFeedbackEditButton } from "@/components/workout-feedback-sheet";
+import { WorkoutTimerSheet, QuickConfirmDuration, type TimerCompletionPayload } from "@/components/workout-timer-sheet";
+import { formatDuration } from "@/lib/duration";
+import { Timer } from "lucide-react";
 
 /* -------------------------------------------------------------------------- */
 /* Target-parsing helpers (Suggested → Draft → Confirmed fast-logging)         */
@@ -144,8 +147,20 @@ function formatPrescription(p: {
   manualOverride: boolean | null | undefined;
   rpe: string | number | null | undefined;
   rir: string | number | null | undefined;
+  measurementType?: "reps" | "time";
+  durationSeconds?: number | null | undefined;
 }): string {
   const sets = p.sets ?? 1;
+  if (p.measurementType === "time") {
+    // Time-based prescription: "3 × 45 sec @ 20 lb | RPE 7"
+    const dur = p.durationSeconds && p.durationSeconds > 0 ? formatDuration(p.durationSeconds) : "—";
+    let load = "";
+    if (p.suggestedWeight != null) load = `@ ${fmtNum(p.suggestedWeight)} ${p.unit}`;
+    let effort = "";
+    if (p.rpe != null && String(p.rpe).trim() !== "") effort = `| RPE ${p.rpe}`;
+    else if (p.rir != null && String(p.rir).trim() !== "") effort = `| ${p.rir} RIR`;
+    return [`${sets} × ${dur}`, load, effort].filter(Boolean).join(" ");
+  }
   // Normalize "8-12" → "8–12" for readability; leave AMRAP / Max / other text untouched.
   const repsRaw = (p.repsText ?? "").toString().trim();
   const reps = repsRaw ? repsRaw.replace(/\s*-\s*/g, "–") : "?";
@@ -1203,6 +1218,8 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
           manualOverride: row.manual_override,
           rpe: row.rpe,
           rir: row.rir,
+          measurementType: (row as any).measurement_type === "time" ? "time" : "reps",
+          durationSeconds: (row as any).duration_seconds ?? null,
         })}
         {row.tempo && <span className="ml-2 text-xs font-normal text-muted-foreground">tempo {row.tempo}</span>}
       </div>
@@ -1269,7 +1286,7 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
       <div className={cn("mt-3 overflow-hidden rounded-md border border-builder-card-border bg-builder-inset", focusMode && "text-base")}>
         <div className={cn("grid items-center gap-1.5 border-b border-builder-card-border bg-builder-card/60 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground", focusMode ? "grid-cols-[36px_1.1fr_1.1fr_1fr_52px] text-xs" : "grid-cols-[28px_1.1fr_1.1fr_1fr_44px]")}>
           <span>Set</span>
-          <span>Reps</span>
+          <span>{(row as any).measurement_type === "time" ? "Time" : "Reps"}</span>
           <span className="truncate">Wt ({unit.toUpperCase()})</span>
           <span>{showRir ? "RIR" : "RPE"}</span>
           <span className="text-right">Status</span>
@@ -1290,6 +1307,9 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
               exerciseName={name}
               clientId={clientId}
               setIndex={i + 1}
+              setCount={setCount}
+              measurementType={((row as any).measurement_type === "time") ? "time" : "reps"}
+              prescribedDurationSeconds={(row as any).duration_seconds ?? null}
               existing={existing}
               prevExisting={prevExisting}
               targetReps={row.reps_text}
@@ -1524,6 +1544,7 @@ function SetRow({
   repTarget, rpeTarget, rirTarget,
   hasUncompletedAfter, onApplyToRemaining,
   readonly = false, unit = "kg", focusMode = false, onChange, onSetCompleted,
+  setCount, measurementType = "reps", prescribedDurationSeconds = null,
 }: {
   rowId: string;
   workoutId?: string | null;
@@ -1531,6 +1552,9 @@ function SetRow({
   exerciseName?: string | null;
   clientId: string | undefined;
   setIndex: number;
+  setCount?: number;
+  measurementType?: "reps" | "time";
+  prescribedDurationSeconds?: number | null;
   existing?: any;
   prevExisting?: any;
   targetReps?: string | null;
@@ -1755,6 +1779,67 @@ function SetRow({
 
   const hasAnyTarget = suggestedWeight != null || repChipValues.length > 0 || rpeChipValues.length > 0 || rirChipValues.length > 0;
 
+  // ── Time-based completion (per-set countdown timer + quick-confirm) ────
+  const isTime = measurementType === "time";
+  const prescribedSec = prescribedDurationSeconds ?? null;
+  const completedSec = (existing as any)?.completed_duration_seconds as number | null | undefined;
+  const [timerOpen, setTimerOpen] = useState(false);
+  const [quickOpen, setQuickOpen] = useState(false);
+
+  const saveTimeCompletion = async (completedSeconds: number, opts: {
+    method: "countdown_timer" | "stopwatch" | "prescribed_quick_confirm" | "manual_entry";
+    startedAt?: string | null;
+    completedAt?: string;
+    finishedEarly?: boolean;
+  }) => {
+    if (readonly || !clientId || !prescribedSec) return;
+    const nowIso = opts.completedAt ?? new Date().toISOString();
+    const payload: Record<string, any> = {
+      row_id: rowId,
+      client_id: clientId,
+      set_index: setIndex,
+      completed_duration_seconds: completedSeconds,
+      timer_started_at: opts.startedAt ?? null,
+      timer_completed_at: nowIso,
+      completion_method: opts.method,
+      completed_at: nowIso,
+    };
+    try {
+      if (existing?.id) {
+        const { error } = await sb.from("pl_row_results").update(payload).eq("id", existing.id);
+        if (error) throw error;
+      } else {
+        const { error } = await sb.from("pl_row_results").insert(payload);
+        if (error) throw error;
+      }
+      onChange();
+      if (!existing?.completed_at) onSetCompleted?.(setIndex);
+      toast.success(
+        opts.finishedEarly
+          ? `Saved ${formatDuration(completedSeconds)} of ${formatDuration(prescribedSec)}`
+          : `Set ${setIndex} complete · ${formatDuration(completedSeconds)}`,
+      );
+    } catch (e: any) {
+      // Fall through to offline queue so the completion isn't lost.
+      enqueueOfflineWrite({
+        id: `portal_set_time:${rowId}:${clientId}:${setIndex}`,
+        label: `Saved set ${setIndex}`,
+        handlerKey: "portal_table_upsert",
+        payload: { table: "pl_row_results", id: existing?.id ?? null, payload },
+      });
+      toast.message(`Saved set ${setIndex} offline — will sync`);
+    }
+  };
+
+  const onTimerComplete = (p: TimerCompletionPayload) => {
+    void saveTimeCompletion(p.completedSeconds, {
+      method: p.method === "stopwatch" ? "stopwatch" : "countdown_timer",
+      startedAt: p.startedAt,
+      completedAt: p.completedAt,
+      finishedEarly: p.finishedEarly,
+    });
+  };
+
   return (
     <div className={cn(
       "border-t border-builder-card-border/70 transition-colors",
@@ -1766,6 +1851,43 @@ function SetRow({
       focusMode ? "grid-cols-[36px_1.1fr_1.1fr_1fr_52px]" : "grid-cols-[28px_1.1fr_1.1fr_1fr_44px]",
     )}>
       <span className={cn("font-mono text-muted-foreground", focusMode ? "text-sm" : "text-xs")}>{setIndex}</span>
+      {isTime ? (
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            disabled={readonly || !prescribedSec}
+            onClick={() => setTimerOpen(true)}
+            aria-label={`Start countdown for set ${setIndex}${prescribedSec ? ` (${formatDuration(prescribedSec)})` : ""}`}
+            className={cn(
+              "inline-flex flex-1 items-center justify-center gap-1 rounded-md border px-2 font-bold tabular-nums transition-colors",
+              focusMode ? "h-9 text-sm" : "h-8 text-xs",
+              isConfirmed
+                ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-600"
+                : "border-primary/40 bg-primary/10 text-primary hover:bg-primary/20",
+              (!prescribedSec || readonly) && "cursor-not-allowed opacity-60",
+            )}
+          >
+            <Timer className="h-3.5 w-3.5" />
+            {isConfirmed && completedSec != null
+              ? formatDuration(completedSec)
+              : (prescribedSec ? formatDuration(prescribedSec) : "—")}
+          </button>
+          {!readonly && !isConfirmed && prescribedSec ? (
+            <button
+              type="button"
+              onClick={() => setQuickOpen(true)}
+              aria-label="Mark complete without timer"
+              className={cn(
+                "inline-flex shrink-0 items-center justify-center rounded-md border border-border bg-background text-muted-foreground hover:bg-secondary",
+                focusMode ? "h-9 w-9" : "h-8 w-8",
+              )}
+              title="Mark complete without timer"
+            >
+              <CheckCircle2 className="h-3.5 w-3.5" />
+            </button>
+          ) : null}
+        </div>
+      ) : (
       <Input
         className={cn(focusMode ? "h-9 text-base px-2" : "h-8 text-sm px-2", "bg-white text-black placeholder:text-gray-500")}
         inputMode="numeric"
@@ -1780,6 +1902,7 @@ function SetRow({
         readOnly={readonly}
         disabled={readonly}
       />
+      )}
       <Input
         className={cn(focusMode ? "h-9 text-base px-2" : "h-8 text-sm px-2", "bg-white text-black placeholder:text-gray-500")}
         inputMode="decimal"
@@ -1938,6 +2061,30 @@ function SetRow({
             Apply to remaining sets
         </Button>
       </div>
+    )}
+
+    {isTime && prescribedSec && (
+      <>
+        <WorkoutTimerSheet
+          open={timerOpen}
+          onOpenChange={setTimerOpen}
+          exerciseName={exerciseName ?? "Exercise"}
+          setIndex={setIndex}
+          setCount={setCount ?? 1}
+          prescribedSeconds={prescribedSec}
+          resumeKey={`${rowId}:${setIndex}:${clientId ?? "anon"}`}
+          onComplete={onTimerComplete}
+        />
+        <QuickConfirmDuration
+          open={quickOpen}
+          onOpenChange={setQuickOpen}
+          prescribedSeconds={prescribedSec}
+          onConfirm={(secs, method) => {
+            setQuickOpen(false);
+            void saveTimeCompletion(secs, { method });
+          }}
+        />
+      </>
     )}
     </div>
   );
