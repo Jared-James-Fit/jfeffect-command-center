@@ -1644,8 +1644,13 @@ function DayEditor({ day, setDay, exercises, compact }: { day: any; setDay: (d: 
       ) : (
         <div className="space-y-3" data-pb-day>
           {rows.map((r: any, i: number) => (
+            <Fragment key={i}>
+              <InlineAddExerciseButton
+                exercises={exercises}
+                onPick={(exId) => insertExercise(exId, i)}
+                label={i === 0 ? "Add exercise at the start" : "Insert exercise here"}
+              />
             <div
-              key={i}
               draggable
               onDragStart={(e) => {
                 // Don't start a row-drag when the user is interacting with
@@ -1704,7 +1709,13 @@ function DayEditor({ day, setDay, exercises, compact }: { day: any; setDay: (d: 
                 purposeLabel={purposeLabels[i]}
               />
             </div>
+            </Fragment>
           ))}
+          <InlineAddExerciseButton
+            exercises={exercises}
+            onPick={(exId) => insertExercise(exId, rows.length)}
+            label="Add exercise at the end"
+          />
         </div>
       )}
       <Textarea className={cn("mt-2", compact && "text-xs")} placeholder="Day notes" value={day.notes ?? ""} onChange={(e) => setDay({ ...day, notes: e.target.value })} rows={compact ? 1 : 2} />
