@@ -5,6 +5,7 @@ import { ClientProfilePictureGate } from "@/components/client-profile-picture-ga
 import { ClientPovBanner } from "@/components/client-pov-banner";
 import { ClientBasicInfoGate } from "@/components/client-basic-info-gate";
 import { ClientTrainingScheduleGate } from "@/components/client-training-schedule-gate";
+import { ClientGoalsSetupGate } from "@/components/client-goals-setup-gate";
 import { useActivityHeartbeat } from "@/hooks/use-activity-heartbeat";
 import { BroadcastPopupGate } from "@/components/broadcast-popup-gate";
 import { ClientBirthdayCard } from "@/components/client-birthday-card";
@@ -22,13 +23,15 @@ function PortalLayout() {
         <ClientProfilePictureGate>
           <ClientBasicInfoGate>
             <ClientTrainingScheduleGate>
-              <Outlet />
-              <BroadcastPopupGate />
-              <ClientBirthdayCard />
-              <EventPopupGate />
-              <FormPopupGate />
-              <HomeScreenSetupGate />
-              <LegalAcceptanceGate />
+              <ClientGoalsSetupGate>
+                <Outlet />
+                <BroadcastPopupGate />
+                <ClientBirthdayCard />
+                <EventPopupGate />
+                <FormPopupGate />
+                <HomeScreenSetupGate />
+                <LegalAcceptanceGate />
+              </ClientGoalsSetupGate>
             </ClientTrainingScheduleGate>
           </ClientBasicInfoGate>
         </ClientProfilePictureGate>
