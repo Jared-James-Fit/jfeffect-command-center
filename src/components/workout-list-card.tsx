@@ -1,11 +1,13 @@
+import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Dumbbell, ChevronRight, Calendar as CalendarIcon, Pencil, MessageSquare } from "lucide-react";
+import { Dumbbell, ChevronRight, Calendar as CalendarIcon, Pencil, MessageSquare, Move } from "lucide-react";
 import { format } from "date-fns";
 import { getWorkoutStatus } from "@/lib/workout-status";
 import { durationRange } from "@/lib/pl-programs";
 import { cleanDayTitle } from "@/lib/workout-today";
+import { MoveWorkoutSheet } from "@/components/schedule/MoveWorkoutSheet";
 
 export function WorkoutListCard({ item, readonly = false }: { item: any; readonly?: boolean }) {
   if (!item.day?.id) return null;
@@ -15,6 +17,7 @@ export function WorkoutListCard({ item, readonly = false }: { item: any; readonl
   const weekLabel = item.week?.week_index ? `Week ${item.week.week_index}` : "";
   const isCompleted = !!item.completion?.completed_at;
   const hasReview = !!item.completion?.has_feedback;
+  const [moveOpen, setMoveOpen] = useState(false);
   return (
     <div className="space-y-1.5">
     <Link
@@ -51,8 +54,17 @@ export function WorkoutListCard({ item, readonly = false }: { item: any; readonl
         <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
       </Card>
     </Link>
-    {isCompleted && (
-      <div className="flex flex-wrap items-center gap-1.5 pl-1">
+    <div className="flex flex-wrap items-center gap-1.5 pl-1">
+      {!readonly && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); setMoveOpen(true); }}
+          className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-2.5 py-1 text-[11px] font-semibold text-muted-foreground hover:bg-secondary hover:text-foreground"
+        >
+          <Move className="h-3 w-3" /> Move
+        </button>
+      )}
+      {isCompleted && (<>
         <Link
           to="/portal/workouts/$dayId"
           params={{ dayId: item.day.id }}
@@ -73,7 +85,14 @@ export function WorkoutListCard({ item, readonly = false }: { item: any; readonl
         >
           <MessageSquare className="h-3 w-3" /> {hasReview ? "Edit review" : "Leave review"}
         </Link>
-      </div>
+      </>)}
+    </div>
+    {!readonly && (
+      <MoveWorkoutSheet
+        dayId={item.day.id}
+        open={moveOpen}
+        onOpenChange={setMoveOpen}
+      />
     )}
     </div>
   );
