@@ -580,6 +580,152 @@ function NewTemplateDialog({ open, onOpenChange, onCreated }: { open: boolean; o
   );
 }
 
+// ------- Edit details dialog -------
+function EditTemplateDetailsDialog({
+  templateId,
+  open,
+  onOpenChange,
+  onSaved,
+}: {
+  templateId: string;
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  onSaved: () => void;
+}) {
+  const { data: tpl, isFetching } = useQuery({
+    queryKey: ["pl-template-details", templateId, open],
+    enabled: open && !!templateId,
+    queryFn: async () =>
+      (await (supabase as any).from("pl_templates").select("*").eq("id", templateId).maybeSingle()).data,
+    staleTime: 0,
+    refetchOnWindowFocus: false,
+  });
+  const [form, setForm] = useState<{
+    name: string; description: string; training_style: TrainingStyle;
+    training_focus: string; tags: string; notes: string;
+  } | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [baselineUpdatedAt, setBaselineUpdatedAt] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (open && tpl && !form) {
+      setForm({
+        name: tpl.name ?? "",
+        description: (tpl as any).description ?? "",
+        training_style: (tpl.training_style as TrainingStyle) ?? "custom",
+        training_focus: tpl.training_focus ?? "",
+        tags: (tpl.tags ?? []).join(", "),
+        notes: tpl.notes ?? "",
+      });
+      setBaselineUpdatedAt(tpl.updated_at ?? null);
+    }
+    if (!open) {
+      setForm(null);
+      setBaselineUpdatedAt(null);
+    }
+  }, [open, tpl, form]);
+
+  const onSave = async () => {
+    if (!form) return;
+    const name = form.name.trim();
+    if (!name) { toast.error("Name required"); return; }
+    setSaving(true);
+    try {
+      const { data: latest } = await (supabase as any)
+        .from("pl_templates").select("updated_at").eq("id", templateId).maybeSingle();
+      if (latest?.updated_at && baselineUpdatedAt && latest.updated_at !== baselineUpdatedAt) {
+        const proceed = confirm(
+          "This template was edited elsewhere since you opened this dialog. Overwrite with your changes?",
+        );
+        if (!proceed) { setSaving(false); return; }
+      }
+      await updateTemplate(templateId, {
+        name,
+        description: form.description.trim() || null,
+        training_style: form.training_style,
+        training_focus: form.training_focus || null,
+        tags: form.tags.split(",").map((s) => s.trim()).filter(Boolean),
+        notes: form.notes.trim() || null,
+      });
+      toast.success("Template details saved");
+      onSaved();
+      onOpenChange(false);
+    } catch (e: any) {
+      toast.error(e.message ?? "Failed to save");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { if (!saving) onOpenChange(v); }}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Edit template details</DialogTitle>
+        </DialogHeader>
+        {!form ? (
+          <p className="text-sm text-muted-foreground">{isFetching ? "Loading…" : "Template not found."}</p>
+        ) : (
+          <div className="space-y-3">
+            <div>
+              <Label>Name</Label>
+              <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+            </div>
+            <div>
+              <Label>Description <span className="font-normal text-muted-foreground">(optional)</span></Label>
+              <Textarea
+                value={form.description}
+                onChange={(e) => setForm({ ...form, description: e.target.value })}
+                rows={3}
+                placeholder="Briefly explain what this program is designed for and who it is best suited to."
+              />
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                Visible to coaches in the library / assignment preview. Clear the field to remove it.
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <Label>Style</Label>
+                <Select value={form.training_style} onValueChange={(v) => setForm({ ...form, training_style: v as TrainingStyle })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>{STYLES.map((s) => <SelectItem key={s.v} value={s.v}>{s.label}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Focus</Label>
+                <Select
+                  value={form.training_focus || "__none"}
+                  onValueChange={(v) => setForm({ ...form, training_focus: v === "__none" ? "" : v })}
+                >
+                  <SelectTrigger><SelectValue placeholder="Optional focus" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none">— None —</SelectItem>
+                    {BLOCK_PHASE_OPTIONS.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div>
+              <Label>Tags (comma-separated)</Label>
+              <Input value={form.tags} onChange={(e) => setForm({ ...form, tags: e.target.value })} placeholder="meet-prep, taper, accessories" />
+            </div>
+            <div>
+              <Label>Notes <span className="font-normal text-muted-foreground">(internal — never shown to clients/members)</span></Label>
+              <Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={3} />
+            </div>
+          </div>
+        )}
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>Cancel</Button>
+          <Button onClick={onSave} disabled={saving || !form}>
+            {saving ? "Saving…" : "Save changes"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ------- Preview dialog -------
 function PreviewDialog({ templateId, onClose, onAssign }: { templateId: string | null; onClose: () => void; onAssign: (tpl: any) => void }) {
   const { data: tpl } = useQuery({
