@@ -122,12 +122,12 @@ export const globalSearchFn = createServerFn({ method: "GET" })
         .limit(limit),
       supabase
         .from("purchase_records")
-        .select("id, terms_accepted_client_email, terms_accepted_client_name, product_name, offer_name")
+        .select("id, terms_accepted_client_email, terms_accepted_client_name, offer_name, short_description")
         .or([
           `terms_accepted_client_email.ilike.${like}`,
           `terms_accepted_client_name.ilike.${like}`,
-          `product_name.ilike.${like}`,
           `offer_name.ilike.${like}`,
+          `short_description.ilike.${like}`,
         ].join(","))
         .limit(limit),
     ]);
@@ -252,16 +252,16 @@ export const globalSearchFn = createServerFn({ method: "GET" })
       const m = pickMatch(q, {
         email: p.terms_accepted_client_email,
         name: p.terms_accepted_client_name,
-        product: p.product_name,
         offer: p.offer_name,
+        description: p.short_description,
       });
-      const sub = [p.terms_accepted_client_name || p.terms_accepted_client_email, p.product_name || p.offer_name]
+      const sub = [p.terms_accepted_client_name || p.terms_accepted_client_email, p.offer_name]
         .filter(Boolean)
         .join(" · ");
       hits.push({
         kind: "purchase",
         id: p.id,
-        label: p.product_name || p.offer_name || p.terms_accepted_client_name || p.terms_accepted_client_email || "Purchase",
+        label: p.offer_name || p.terms_accepted_client_name || p.terms_accepted_client_email || "Purchase",
         sub: m?.snippet ?? sub ?? null,
         to: `/admin/purchases/${p.id}`,
         matchedField: m?.field ?? null,
