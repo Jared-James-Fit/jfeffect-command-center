@@ -558,6 +558,42 @@ export interface ExerciseRef {
   tags?: string[] | null;
 }
 
+/**
+ * Splits a string on a search needle (case-insensitive) and wraps every match
+ * in a <mark>. Used by the exercise picker / library search to make typed
+ * keywords stand out in result rows.
+ */
+export function HighlightedText({
+  text,
+  query,
+  className,
+}: {
+  text: string;
+  query: string;
+  className?: string;
+}) {
+  const needle = query.trim();
+  if (!needle) return <span className={className}>{text}</span>;
+  const escaped = needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const parts = text.split(new RegExp(`(${escaped})`, "ig"));
+  return (
+    <span className={className}>
+      {parts.map((part, i) =>
+        part.toLowerCase() === needle.toLowerCase() ? (
+          <mark
+            key={i}
+            className="rounded-[2px] bg-yellow-300/70 px-0.5 text-foreground dark:bg-yellow-400/40"
+          >
+            {part}
+          </mark>
+        ) : (
+          <span key={i}>{part}</span>
+        ),
+      )}
+    </span>
+  );
+}
+
 const QUICK_FILTERS = [
   "Squat", "Bench", "Deadlift", "Chest", "Back", "Shoulders",
   "Quads", "Hamstrings", "Glutes", "Arms", "Accessories", "Mobility",
