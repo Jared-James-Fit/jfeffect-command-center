@@ -1981,6 +1981,19 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
   const restIsOverride = row.rest_seconds_override != null && row.rest_seconds_override !== restDefault;
   const [expanded, setExpanded] = useState(!compact);
   useEffect(() => { if (!compact) setExpanded(true); }, [compact]);
+  // "Collapsed" = the whole card is in summary/read-only mode (no input boxes).
+  // It expands automatically when the user clicks or tabs into it, and snaps
+  // back to summary when focus leaves the card.
+  const [collapsed, setCollapsed] = useState(true);
+  const collapseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scheduleCollapse = () => {
+    if (collapseTimer.current) clearTimeout(collapseTimer.current);
+    collapseTimer.current = setTimeout(() => setCollapsed(true), 120);
+  };
+  const cancelCollapse = () => {
+    if (collapseTimer.current) { clearTimeout(collapseTimer.current); collapseTimer.current = null; }
+  };
+  useEffect(() => () => { if (collapseTimer.current) clearTimeout(collapseTimer.current); }, []);
   const h = compact ? "h-7" : "h-8";
   const { clientId, blockId, index: maxesIndex, maxes, refresh } = useClientMaxesCtx();
   const [maxEditor, setMaxEditor] = useState<any>(null);
@@ -2051,9 +2064,36 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
   };
   const multiBlockFlag = useMultiBlockBuilderFlag();
   const [blocksOpen, setBlocksOpen] = useState(false);
+
+  // Build a short human summary of the prescription for the collapsed view.
+  const summaryParts: string[] = [];
+  if (row.sets != null && row.sets !== "") summaryParts.push(`${row.sets} set${row.sets === 1 ? "" : "s"}`);
+  if (row.reps_text) summaryParts.push(`${row.reps_text} reps`);
+  if (row.rpe !== "" && row.rpe != null) summaryParts.push(`RPE ${row.rpe}`);
+  if (row.rir !== "" && row.rir != null) summaryParts.push(`RIR ${row.rir}`);
+  const loadSummary = (() => {
+    if (loadMode === "none") return null;
+    if (loadMode === "pct" && row.percentage != null && row.percentage !== "") {
+      const basisLabel = (PERCENTAGE_BASES.find((p) => p.value === row.percentage_basis)?.label) ?? "%";
+      return `${row.percentage}% ${basisLabel}`;
+    }
+    const val = rowUnit === "kg" ? row.load_kg : row.load_lb;
+    if (val != null && val !== "") return `${val} ${rowUnit}`;
+    return null;
+  })();
+  if (loadSummary) summaryParts.push(loadSummary);
+  if (row.tempo) summaryParts.push(`tempo ${row.tempo}`);
+  const restSummary = `rest ${fmtRestSeconds(effectiveRest)}`;
+
   return (
     <div
       data-pb-row
+      onClickCapture={() => { if (collapsed) { cancelCollapse(); setCollapsed(false); } }}
+      onFocusCapture={() => { cancelCollapse(); setCollapsed(false); }}
+      onBlurCapture={(e) => {
+        if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node)) scheduleCollapse();
+      }}
+      onMouseLeave={() => { /* don't auto-collapse on hover-leave — only on blur */ }}
       onKeyDown={(e) => {
         // Quick key: Alt+R resets the currently focused card
         if (e.altKey && (e.key === "r" || e.key === "R")) {
@@ -2061,14 +2101,70 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
           e.stopPropagation();
           resetCard();
         }
+        if (e.key === "Escape" && !collapsed) {
+          (document.activeElement as HTMLElement | null)?.blur?.();
+          setCollapsed(true);
+        }
       }}
       className={cn(
         "relative overflow-hidden rounded-lg border border-builder-card-border bg-builder-card shadow-builder-card transition-colors hover:border-builder-card-border-strong",
         isDragging && "opacity-50 ring-2 ring-primary",
-        compact ? "p-3 pl-5 space-y-1.5" : "p-4 pl-6 space-y-2",
+        collapsed ? "p-2 pl-5 cursor-pointer hover:border-primary/50" : (compact ? "p-3 pl-5 space-y-1.5" : "p-4 pl-6 space-y-2"),
       )}
+      title={collapsed ? "Click to edit" : undefined}
     >
       <div className={`absolute left-0 top-0 h-full w-2 ${accent}`} aria-hidden />
+      {collapsed ? (
+        <div className="flex items-center gap-2 min-w-0">
+          <span
+            draggable={!!onDragStartRow}
+            onDragStart={onDragStartRow}
+            onDragEnd={onDragEndRow}
+            onClick={(e) => e.stopPropagation()}
+            title="Drag to reorder"
+            className="cursor-grab active:cursor-grabbing rounded p-0.5 text-muted-foreground hover:bg-secondary hover:text-foreground shrink-0"
+          >
+            <GripVertical className="h-4 w-4" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5 min-w-0">
+              {purposeLabel && (
+                <span className={cn(
+                  "inline-flex shrink-0 items-center rounded-full border px-1.5 py-0 text-[9px] font-bold uppercase tracking-wide",
+                  purposeLabelBadgeClass(purposeLabel),
+                )}>{purposeLabel}</span>
+              )}
+              <span className="truncate text-sm font-semibold">{exName || <span className="italic text-muted-foreground">Unnamed exercise</span>}</span>
+            </div>
+            <div className="mt-0.5 truncate text-[11px] text-muted-foreground">
+              {summaryParts.length > 0 ? summaryParts.join(" · ") : <span className="italic">No prescription yet — click to fill in</span>}
+              <span className="mx-1 opacity-40">·</span>
+              <span>{restSummary}</span>
+            </div>
+          </div>
+          <div className="flex shrink-0 items-center gap-0.5" onClick={(e) => e.stopPropagation()}>
+            {onMoveUp && (
+              <Button size="icon" variant="ghost" className="h-7 w-7" onClick={onMoveUp} disabled={canMoveUp === false} title="Move up">
+                <ChevronUp className="h-3.5 w-3.5" />
+              </Button>
+            )}
+            {onMoveDown && (
+              <Button size="icon" variant="ghost" className="h-7 w-7" onClick={onMoveDown} disabled={canMoveDown === false} title="Move down">
+                <ChevronDown className="h-3.5 w-3.5" />
+              </Button>
+            )}
+            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => { cancelCollapse(); setCollapsed(false); }} title="Edit card">
+              <Settings2 className="h-3.5 w-3.5" />
+            </Button>
+            {onDelete && (
+              <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={onDelete} title="Delete">
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            )}
+          </div>
+        </div>
+      ) : (
+      <>
       {/* ---- Header row: identity (left) + actions (right) ---- */}
       <div className="flex items-start gap-2">
         <Field className="min-w-0 flex-1" label="Exercise">
@@ -2500,6 +2596,8 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
           rowId={row._dbId}
           exerciseName={exName || "Exercise"}
         />
+      )}
+      </>
       )}
     </div>
   );
