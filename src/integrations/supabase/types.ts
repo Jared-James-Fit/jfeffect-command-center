@@ -9347,54 +9347,105 @@ export type Database = {
       pl_assignment_operations: {
         Row: {
           actor_user_id: string | null
+          assignment_method: string | null
           client_id: string
+          conflict_decisions: Json
           created_at: string
           created_block_ids: string[]
           error_message: string | null
           id: string
           idempotency_key: string
           mode: string
+          planner_payload: Json
           prep_id: string | null
+          publish_at: string | null
+          publish_status: string
+          published_at: string | null
           selected_block_keys: string[]
+          selected_day_keys: string[]
+          selected_exercise_keys: string[]
+          selected_week_keys: string[]
           status: string
           template_id: string
           template_payload_revision: number | null
           template_schema_version: number | null
+          training_weekdays: string[]
+          undone_at: string | null
+          undone_by: string | null
           updated_at: string
+          workouts_added: number
+          workouts_merged: number
+          workouts_moved: number
+          workouts_replaced: number
+          workouts_skipped: number
         }
         Insert: {
           actor_user_id?: string | null
+          assignment_method?: string | null
           client_id: string
+          conflict_decisions?: Json
           created_at?: string
           created_block_ids?: string[]
           error_message?: string | null
           id?: string
           idempotency_key: string
           mode: string
+          planner_payload?: Json
           prep_id?: string | null
+          publish_at?: string | null
+          publish_status?: string
+          published_at?: string | null
           selected_block_keys?: string[]
+          selected_day_keys?: string[]
+          selected_exercise_keys?: string[]
+          selected_week_keys?: string[]
           status?: string
           template_id: string
           template_payload_revision?: number | null
           template_schema_version?: number | null
+          training_weekdays?: string[]
+          undone_at?: string | null
+          undone_by?: string | null
           updated_at?: string
+          workouts_added?: number
+          workouts_merged?: number
+          workouts_moved?: number
+          workouts_replaced?: number
+          workouts_skipped?: number
         }
         Update: {
           actor_user_id?: string | null
+          assignment_method?: string | null
           client_id?: string
+          conflict_decisions?: Json
           created_at?: string
           created_block_ids?: string[]
           error_message?: string | null
           id?: string
           idempotency_key?: string
           mode?: string
+          planner_payload?: Json
           prep_id?: string | null
+          publish_at?: string | null
+          publish_status?: string
+          published_at?: string | null
           selected_block_keys?: string[]
+          selected_day_keys?: string[]
+          selected_exercise_keys?: string[]
+          selected_week_keys?: string[]
           status?: string
           template_id?: string
           template_payload_revision?: number | null
           template_schema_version?: number | null
+          training_weekdays?: string[]
+          undone_at?: string | null
+          undone_by?: string | null
           updated_at?: string
+          workouts_added?: number
+          workouts_merged?: number
+          workouts_moved?: number
+          workouts_replaced?: number
+          workouts_skipped?: number
         }
         Relationships: [
           {
