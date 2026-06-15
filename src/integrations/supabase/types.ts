@@ -14787,6 +14787,7 @@ export type Database = {
         Args: { p_row_id: string }
         Returns: boolean
       }
+      pl_safe_first_int: { Args: { p_text: string }; Returns: number }
       pl_template_apply_payload: {
         Args: {
           _affected_block_keys: string[]
