@@ -736,9 +736,10 @@ function TemplateEditor() {
   );
 }
 
-function EditorChrome({ meta, summary, typeLabel, autosave, save, dirty, children }: {
+function EditorChrome({ meta, summary, typeLabel, autosave, save, dirty, statusTemplate, children }: {
   meta: any; summary: any; typeLabel: string;
   autosave: any; save: () => Promise<void>; dirty: boolean;
+  statusTemplate?: any;
   children: React.ReactNode;
 }) {
   return (
@@ -755,6 +756,7 @@ function EditorChrome({ meta, summary, typeLabel, autosave, save, dirty, childre
           </span>
         </div>
         <div className="ml-auto flex items-center gap-2">
+          {statusTemplate && <ProgramStatusBadge template={statusTemplate} />}
           <SaveStatus state={autosave.state} savedAt={autosave.savedAt} />
           <ActionButton
             onAction={save}
