@@ -2597,6 +2597,8 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
           exerciseName={exName || "Exercise"}
         />
       )}
+      </>
+      )}
     </div>
   );
 }
