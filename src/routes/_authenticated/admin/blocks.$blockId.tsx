@@ -426,7 +426,7 @@ function BlockEditor() {
         <Input
           value={name}
           onChange={(e) => { setName(e.target.value); setDirty(true); }}
-          className="h-7 max-w-xs text-sm font-bold"
+          className="h-7 max-w-xs text-sm font-bold bg-builder-canvas"
           placeholder="Block name"
         />
         <span className="hidden md:inline text-[11px] text-muted-foreground whitespace-nowrap">
