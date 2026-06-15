@@ -55,7 +55,7 @@ export function BlockWeekColumns({
   const weekRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const scrollToWeek = (id: string) => {
     const el = weekRefs.current[id];
-    if (el) el.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "start" });
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
   };
 
   return (
