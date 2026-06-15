@@ -30,6 +30,7 @@ import { localStartOfToday, toLocalISO } from "@/lib/today";
 import { MoveWorkoutSheet } from "@/components/schedule/MoveWorkoutSheet";
 import { ScheduleHistoryDrawer } from "@/components/schedule/ScheduleHistoryDrawer";
 import { ClientBlockView } from "@/components/client-block-view";
+import { TrainingAnalyticsPreviewCard } from "@/components/training-analytics-preview-card";
 
 type Mode = "self" | "coach";
 
@@ -169,6 +170,9 @@ export function WorkoutsExperience({
       />
 
       <div className="space-y-4 p-4 pb-32 md:p-6">
+        {mode === "self" && (
+          <TrainingAnalyticsPreviewCard clientId={clientId} />
+        )}
         {inProgress && (
           <ResumeBanner item={inProgress} />
         )}

@@ -104,10 +104,7 @@ export function TrainingAnalyticsPreviewCard({
         </div>
 
         {empty ? (
-          <p className="mt-4 text-sm text-muted-foreground">
-            Log a few working sets and your PRs, weekly volume, and lift trends will
-            light up here.
-          </p>
+          <EmptyPreview />
         ) : (
           <>
             {/* Stat grid */}
@@ -249,5 +246,56 @@ function Stat({
         )}
       </div>
     </div>
+  );
+}
+
+function EmptyPreview() {
+  const spark = [4, 6, 5, 8, 7, 10, 9, 12, 11, 14, 13, 16].map((v, i) => ({ i, v }));
+  return (
+    <>
+      <div className="mt-5 grid grid-cols-2 gap-2.5 md:grid-cols-4">
+        <Stat icon={<Trophy className="h-3.5 w-3.5" />} label="PRs · 30d" value="0" accent />
+        <Stat icon={<Dumbbell className="h-3.5 w-3.5" />} label="Sets · 7d" value="0" />
+        <Stat icon={<Flame className="h-3.5 w-3.5" />} label="Top focus" value="—" />
+        <Stat icon={<Activity className="h-3.5 w-3.5" />} label="Sessions" value="0" />
+      </div>
+      <div className="mt-4 rounded-xl border border-dashed border-analytics-blue/30 bg-background/40 p-3 backdrop-blur">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Your trend starts here
+            </div>
+            <div className="truncate text-sm font-bold">Log your first working set</div>
+            <div className="mt-0.5 flex items-baseline gap-1.5 text-xs">
+              <TrendingUp className="h-3 w-3 text-analytics-blue" />
+              <span className="text-muted-foreground">
+                PRs, volume & lift trends will appear automatically
+              </span>
+            </div>
+          </div>
+          <div className="h-12 w-28 shrink-0 opacity-50 md:w-36">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={spark}>
+                <defs>
+                  <linearGradient id="taSparkEmpty" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="var(--analytics-blue)" stopOpacity={0.5} />
+                    <stop offset="100%" stopColor="var(--analytics-blue)" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <Area
+                  type="monotone"
+                  dataKey="v"
+                  stroke="var(--analytics-blue)"
+                  strokeWidth={2}
+                  strokeDasharray="4 4"
+                  fill="url(#taSparkEmpty)"
+                  isAnimationActive={false}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
+    </>
   );
 }
