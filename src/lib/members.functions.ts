@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { normalizePhoneToE164 } from "@/lib/phone-e164";
 
 function genToken(len = 32) {
   const arr = new Uint8Array(len);
@@ -158,6 +159,13 @@ export const updateAppMember = createServerFn({ method: "POST" })
     await assertAdmin(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { memberId, ...patch } = data;
+    if (patch.phone !== undefined && patch.phone !== null && patch.phone !== "") {
+      const normalized = normalizePhoneToE164(patch.phone);
+      if (!normalized) {
+        throw new Error("Invalid phone number. Use 10 digits for US/Canada, or include the country code with a + prefix.");
+      }
+      patch.phone = normalized;
+    }
     const { data: prev } = await supabaseAdmin.from("app_members").select("account_type").eq("id", memberId).maybeSingle();
     const { error } = await supabaseAdmin.from("app_members").update(patch).eq("id", memberId);
     if (error) throw new Error(error.message);
