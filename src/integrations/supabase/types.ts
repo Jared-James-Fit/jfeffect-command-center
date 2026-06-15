@@ -1787,6 +1787,50 @@ export type Database = {
         }
         Relationships: []
       }
+      client_analytics_settings: {
+        Row: {
+          client_id: string
+          created_at: string
+          e1rm_formula: string
+          id: string
+          muscle_volume_targets: Json
+          notes: string | null
+          share_signals: boolean
+          updated_at: string
+          working_set_rpe_min: number
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          e1rm_formula?: string
+          id?: string
+          muscle_volume_targets?: Json
+          notes?: string | null
+          share_signals?: boolean
+          updated_at?: string
+          working_set_rpe_min?: number
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          e1rm_formula?: string
+          id?: string
+          muscle_volume_targets?: Json
+          notes?: string | null
+          share_signals?: boolean
+          updated_at?: string
+          working_set_rpe_min?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_analytics_settings_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: true
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       client_birthday_card_views: {
         Row: {
           birthday_year: number
@@ -7160,6 +7204,7 @@ export type Database = {
           entered_value: number | null
           exercise_index: number
           id: string
+          is_working_set: boolean | null
           load_kg: number | null
           load_lb: number | null
           logged_at: string
@@ -7188,6 +7233,7 @@ export type Database = {
           entered_value?: number | null
           exercise_index: number
           id?: string
+          is_working_set?: boolean | null
           load_kg?: number | null
           load_lb?: number | null
           logged_at?: string
@@ -7216,6 +7262,7 @@ export type Database = {
           entered_value?: number | null
           exercise_index?: number
           id?: string
+          is_working_set?: boolean | null
           load_kg?: number | null
           load_lb?: number | null
           logged_at?: string
@@ -10815,6 +10862,7 @@ export type Database = {
           entered_unit: string | null
           entered_value: number | null
           id: string
+          is_working_set: boolean | null
           normalized_kg: number | null
           normalized_lb: number | null
           notes: string | null
@@ -10839,6 +10887,7 @@ export type Database = {
           entered_unit?: string | null
           entered_value?: number | null
           id?: string
+          is_working_set?: boolean | null
           normalized_kg?: number | null
           normalized_lb?: number | null
           notes?: string | null
@@ -10863,6 +10912,7 @@ export type Database = {
           entered_unit?: string | null
           entered_value?: number | null
           id?: string
+          is_working_set?: boolean | null
           normalized_kg?: number | null
           normalized_lb?: number | null
           notes?: string | null
