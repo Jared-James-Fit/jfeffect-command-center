@@ -36,7 +36,7 @@ export function QuickActionsMenu({ r }: { r: DirectoryRow }) {
         {hasProgram ? (
           <>
             <DropdownMenuItem asChild>
-              <Link to="/admin/client-programs/$clientId_" params={{ clientId_: r.id }} className="flex items-center gap-2">
+              <Link to="/admin/client-programs/$clientId" params={{ clientId: r.id }} className="flex items-center gap-2">
                 <BookOpen className="h-4 w-4" /> Open Program
               </Link>
             </DropdownMenuItem>
@@ -48,14 +48,14 @@ export function QuickActionsMenu({ r }: { r: DirectoryRow }) {
               </DropdownMenuItem>
             )}
             <DropdownMenuItem asChild>
-              <Link to="/admin/client-programs/$clientId_" params={{ clientId_: r.id }} className="flex items-center gap-2">
+              <Link to="/admin/client-programs/$clientId" params={{ clientId: r.id }} className="flex items-center gap-2">
                 <Plus className="h-4 w-4" /> Build Next Phase
               </Link>
             </DropdownMenuItem>
           </>
         ) : (
           <DropdownMenuItem asChild>
-            <Link to="/admin/client-programs/$clientId_" params={{ clientId_: r.id }} className="flex items-center gap-2">
+            <Link to="/admin/client-programs/$clientId" params={{ clientId: r.id }} className="flex items-center gap-2">
               <Dumbbell className="h-4 w-4" /> Assign Program
             </Link>
           </DropdownMenuItem>
@@ -142,7 +142,7 @@ export function ClientMoreMenu({
         <DropdownMenuSeparator />
         <DropdownMenuLabel className="text-xs">Training</DropdownMenuLabel>
         <DropdownMenuItem asChild>
-          <Link to="/admin/client-programs/$clientId_" params={{ clientId_: r.id }} className="flex items-center gap-2">
+          <Link to="/admin/client-programs/$clientId" params={{ clientId: r.id }} className="flex items-center gap-2">
             <Dumbbell className="h-4 w-4" /> {r.block_id ? "Open Program" : "Assign Program"}
           </Link>
         </DropdownMenuItem>
@@ -154,7 +154,7 @@ export function ClientMoreMenu({
           </DropdownMenuItem>
         )}
         <DropdownMenuItem asChild>
-          <Link to="/admin/client-programs/$clientId_/history" params={{ clientId_: r.id }} className="flex items-center gap-2">
+          <Link to="/admin/client-programs/$clientId/history" params={{ clientId: r.id }} className="flex items-center gap-2">
             <BookOpen className="h-4 w-4" /> Program History
           </Link>
         </DropdownMenuItem>
