@@ -186,6 +186,8 @@ export const unpublishLibraryListing = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: plan } = await supabaseAdmin
+      .from("member_plans").select("source_template_id").eq("id", data.planId).maybeSingle();
     const { error } = await supabaseAdmin.from("member_plans").update({
       status: "Draft",
       membership_status: "unpublished",
