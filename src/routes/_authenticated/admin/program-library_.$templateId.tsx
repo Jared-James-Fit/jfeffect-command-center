@@ -1647,7 +1647,7 @@ function DayEditor({ day, setDay, exercises, compact }: { day: any; setDay: (d: 
             <Fragment key={i}>
               <InlineAddExerciseButton
                 exercises={exercises}
-                onPick={(exId) => insertExercise(exId, i)}
+                onPick={(exId: string) => insertExercise(exId, i)}
                 label={i === 0 ? "Add exercise at the start" : "Insert exercise here"}
               />
             <div
@@ -1713,7 +1713,7 @@ function DayEditor({ day, setDay, exercises, compact }: { day: any; setDay: (d: 
           ))}
           <InlineAddExerciseButton
             exercises={exercises}
-            onPick={(exId) => insertExercise(exId, rows.length)}
+            onPick={(exId: string) => insertExercise(exId, rows.length)}
             label="Add exercise at the end"
           />
         </div>
