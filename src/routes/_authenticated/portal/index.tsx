@@ -398,6 +398,7 @@ function PortalHome() {
             messageBadge={unreadMsgs.length}
             checkInBadge={(assignedForms as any[])?.length || undefined}
             onLogWeight={() => bodyweightRef.current?.open()}
+            weeklyCheckInFormId={pickWeeklyCheckInForm(assignedForms as any)?.id}
           />
         )}
 
