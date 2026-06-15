@@ -440,11 +440,15 @@ export function NotificationBell() {
                   ? "/portal"
                   : it.kind === "appointment"
                   ? (role === "admin" ? "/admin/appointments" : "/portal/appointments")
+                  : it.kind === "workout_feedback"
+                  ? "/portal/workouts/$dayId"
                   : (role === "admin" ? "/admin/messages" : "/portal/messages")
               }
               params={
                 role === "admin" && (it.kind === "agreement" || it.kind === "exercise_note")
                   ? { id: it.clientId }
+                  : it.kind === "workout_feedback" && it.dayId
+                  ? { dayId: it.dayId }
                   : undefined as any
               }
               search={
