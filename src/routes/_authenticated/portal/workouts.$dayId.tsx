@@ -782,8 +782,6 @@ function WorkoutDay() {
           </Card>
         )}
 
-        {day.notes && day.notes_client_visible && <CoachDescriptionCard text={day.notes} />}
-
         <WorkoutLoadBoundary clientId={client?.id ?? null} clientName={(client as any)?.full_name ?? null} dayId={dayId} route={`/portal/workouts/${dayId}`}>
           <div className="space-y-4 rounded-lg bg-builder-canvas p-3 sm:p-4 ring-1 ring-builder-card-border/40">
             {rowsLoaded && (rows as any[]).length === 0 ? (
