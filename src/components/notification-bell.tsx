@@ -16,7 +16,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { listUpcomingForBell, listMyPortalAppointments } from "@/lib/appointments.functions";
 
 type BellItem = {
-  kind: "message" | "lift_video" | "agreement" | "exercise_note" | "group_message" | "check_in_review" | "appointment";
+  kind: "message" | "lift_video" | "agreement" | "exercise_note" | "group_message" | "check_in_review" | "appointment" | "workout_feedback";
   clientId: string;
   groupId?: string;
   videoId?: string;
@@ -24,6 +24,7 @@ type BellItem = {
   noteId?: string;
   reviewId?: string;
   appointmentId?: string;
+  dayId?: string;
   meetLink?: string | null;
   name: string;
   title: string;
