@@ -1,4 +1,5 @@
 import { Link } from "@tanstack/react-router";
+import { useState } from "react";
 import { UserAvatar } from "@/components/user-avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -13,6 +14,8 @@ import type { DirectoryRow } from "@/lib/clients-directory.functions";
 import type { DirectoryNextAction } from "@/lib/clients-directory.functions";
 import { format, parseISO, differenceInDays } from "date-fns";
 import { QuickActionsMenu, ClientMoreMenu } from "./quick-actions";
+import { ClientQuickSheet, type QuickPanelKind } from "./client-quick-sheet";
+import { AssignProgramDialog } from "./assign-program-dialog";
 
 function fmtRange(start: string | null, end: string | null) {
   if (!start && !end) return null;
