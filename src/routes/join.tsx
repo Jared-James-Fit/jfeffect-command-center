@@ -22,6 +22,7 @@ import { ProofWall } from "@/components/sales/proof-wall";
 import { FaqAccordion } from "@/components/sales/faq-accordion";
 import { StickyMobileCta } from "@/components/sales/sticky-mobile-cta";
 import { Reveal } from "@/components/sales/reveal";
+import { normalizePhoneToE164 } from "@/lib/phone-e164";
 
 function HeroSkeleton() {
   return (
