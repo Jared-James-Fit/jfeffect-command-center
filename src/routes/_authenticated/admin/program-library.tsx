@@ -399,7 +399,6 @@ function NewTemplateDialog({ open, onOpenChange, onCreated }: { open: boolean; o
           name: `Block ${i + 1}`,
           weeks: Math.max(1, form.weeks),
           days_per_week: Math.max(1, form.days_per_week),
-          est_duration_min: form.est_duration_min || null,
           training_focus: (blockFocuses[i] || form.training_focus || "").trim() || null,
           weeks_data: buildWeeksData(),
         }));
