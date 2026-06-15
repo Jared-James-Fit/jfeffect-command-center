@@ -278,10 +278,7 @@ function WorkoutDay() {
   // The only way a workout becomes read-only is an explicit manual lock
   // (currently none exist). Admin/coach POV mode also stays fully editable so
   // they can fix client logs in place.
-  const autoReadonly = false;
   const readonly = false;
-  const unlocked = true;
-  const setUnlocked = (_: boolean) => {};
 
   const { data: rows = [], isSuccess: rowsLoaded } = useQuery({
     queryKey: ["pl-day-rows", dayId],
