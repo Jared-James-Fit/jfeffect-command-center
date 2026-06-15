@@ -743,12 +743,6 @@ function WorkoutDay() {
           {completion && !completion.completed_at && (completion.in_progress_at || completion.started_at) && (
             <Badge variant="outline" className="border-amber-500/30 bg-amber-500/10 text-amber-500">In progress</Badge>
           )}
-          {readonly && <Badge variant="outline" className="border-muted-foreground/30 bg-muted/30 text-muted-foreground"><Lock className="mr-1 h-3 w-3" /> Read-only</Badge>}
-          {autoReadonly && !isImpersonating && unlocked && (
-            <Button size="sm" variant="ghost" onClick={() => setUnlocked(false)}>
-              <Lock className="mr-1 h-3 w-3" /> Lock again
-            </Button>
-          )}
           <div className="ml-auto flex items-center gap-2">
             {/* Global KG/LB toggle removed — per-exercise unit controls remain
                 the single source of truth for unit selection. */}
