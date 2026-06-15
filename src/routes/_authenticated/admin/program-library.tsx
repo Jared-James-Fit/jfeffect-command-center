@@ -1372,3 +1372,118 @@ function AssignDialog({ template, onClose }: { template: any; onClose: () => voi
     </Dialog>
   );
 }
+
+// ------- Maxes gate (blocks assign when client has no 1RM / TM) -------
+function MaxesGate({
+  clientId, clientName, templateName, notifying,
+  onCancel, onSaved, onNotifyAndContinue,
+}: {
+  clientId: string;
+  clientName: string;
+  templateName: string;
+  notifying: boolean;
+  onCancel: () => void;
+  onSaved: () => void | Promise<void>;
+  onNotifyAndContinue: () => void | Promise<void>;
+}) {
+  const COMMON_LIFTS = ["Competition Squat", "Competition Bench Press", "Competition Deadlift"];
+  const [lift, setLift] = useState<string>(COMMON_LIFTS[0]);
+  const [oneRm, setOneRm] = useState<string>("");
+  const [tm, setTm] = useState<string>("");
+  const [unit, setUnit] = useState<"kg" | "lb">("kg");
+  const [saving, setSaving] = useState(false);
+
+  const save = async () => {
+    const orm = oneRm ? Number(oneRm) : null;
+    const trm = tm ? Number(tm) : null;
+    if (!lift.trim()) return toast.error("Pick a lift");
+    if (orm == null && trm == null) return toast.error("Enter 1RM or Training Max");
+    try {
+      setSaving(true);
+      await upsertClientMax({
+        client_id: clientId,
+        lift: lift.trim(),
+        one_rm: orm,
+        training_max: trm,
+        unit,
+        source: "manual",
+        active: true,
+        manual_override: false,
+        rounding_mode: "nearest",
+        rounding_step: unit === "kg" ? 2.5 : 5,
+      } as any);
+      await onSaved();
+    } catch (e: any) {
+      toast.error(e?.message ?? "Could not save max");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <>
+      <DialogHeader>
+        <DialogTitle className="flex items-center gap-2 text-amber-600 dark:text-amber-300">
+          <AlertTriangle className="h-4 w-4" />
+          Set 1RM / Training Max for {clientName}
+        </DialogTitle>
+      </DialogHeader>
+      <div className="space-y-3 text-sm">
+        <p>
+          <span className="font-semibold">{clientName}</span> has no 1RM or Training Max
+          on file. Percentage-based prescriptions in{" "}
+          <span className="font-semibold">"{templateName}"</span> won't calculate until at
+          least one is added.
+        </p>
+        <div className="rounded-md border border-border bg-secondary/30 p-3 space-y-2">
+          <div>
+            <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Lift</Label>
+            <Select value={lift} onValueChange={setLift}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {COMMON_LIFTS.map((l) => <SelectItem key={l} value={l}>{l}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            <div>
+              <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">1RM</Label>
+              <Input inputMode="decimal" value={oneRm} onChange={(e) => setOneRm(e.target.value)} placeholder="e.g. 200" />
+            </div>
+            <div>
+              <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Training Max</Label>
+              <Input inputMode="decimal" value={tm} onChange={(e) => setTm(e.target.value)} placeholder="e.g. 180" />
+            </div>
+            <div>
+              <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Unit</Label>
+              <Select value={unit} onValueChange={(v) => setUnit(v as "kg" | "lb")}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="kg">kg</SelectItem>
+                  <SelectItem value="lb">lb</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </div>
+        <p className="text-[11px] text-muted-foreground">
+          Need to add more lifts? Save this one first, then open the client's profile to add the rest.
+          Or skip & we'll email + SMS you so you don't forget.
+        </p>
+      </div>
+      <DialogFooter className="gap-2 sm:gap-2">
+        <Button variant="outline" onClick={onCancel} disabled={saving || notifying}>Back</Button>
+        <Button
+          variant="secondary"
+          onClick={onNotifyAndContinue}
+          disabled={saving || notifying}
+        >
+          {notifying ? "Notifying…" : "Skip & notify me"}
+        </Button>
+        <Button onClick={save} disabled={saving || notifying}>
+          {saving ? "Saving…" : "Save max"}
+        </Button>
+      </DialogFooter>
+    </>
+  );
+}
