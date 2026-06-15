@@ -1737,6 +1737,24 @@ function DayEditor({ day, setDay, exercises, compact, dayKey }: { day: any; setD
       <div className="flex items-center justify-between text-[11px] text-muted-foreground">
         <span className="inline-flex items-center gap-2">
           <span className="inline-flex items-center gap-1"><Clock className="h-3 w-3" /> Est {durationRange(dayMin)}</span>
+          {videoStats.total > 0 && (
+            <span
+              className={cn(
+                "inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-semibold",
+                videoStats.missing === 0
+                  ? "border-emerald-400/40 bg-emerald-500/10 text-emerald-300"
+                  : "border-amber-400/40 bg-amber-500/10 text-amber-300",
+              )}
+              title={
+                videoStats.missing === 0
+                  ? "Every exercise in this day has a demo video"
+                  : `${videoStats.missing} exercise${videoStats.missing === 1 ? "" : "s"} missing a demo video`
+              }
+            >
+              {videoStats.missing === 0 ? <Video className="h-3 w-3" /> : <VideoOff className="h-3 w-3" />}
+              Videos {videoStats.withV}/{videoStats.total}
+            </span>
+          )}
           {isActive && (
             <span className="inline-flex items-center rounded bg-primary px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-primary-foreground">
               Editing{day?.title ? ` · ${day.title}` : ""}
