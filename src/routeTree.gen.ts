@@ -110,6 +110,7 @@ import { Route as AuthenticatedAdminPaymentsRouteImport } from './routes/_authen
 import { Route as AuthenticatedAdminPaymentLinksRouteImport } from './routes/_authenticated/admin/payment-links'
 import { Route as AuthenticatedAdminOffersRouteImport } from './routes/_authenticated/admin/offers'
 import { Route as AuthenticatedAdminNutritionTargetsRouteImport } from './routes/_authenticated/admin/nutrition-targets'
+import { Route as AuthenticatedAdminNutritionDashboardRouteImport } from './routes/_authenticated/admin/nutrition-dashboard'
 import { Route as AuthenticatedAdminNativeFormsRouteImport } from './routes/_authenticated/admin/native-forms'
 import { Route as AuthenticatedAdminMessagesRouteImport } from './routes/_authenticated/admin/messages'
 import { Route as AuthenticatedAdminMembershipRouteImport } from './routes/_authenticated/admin/membership'
@@ -164,6 +165,7 @@ import { Route as LovableEmailAuthPreviewRouteImport } from './routes/lovable/em
 import { Route as ApiPublicHooksSmsRemindersRouteImport } from './routes/api/public/hooks/sms-reminders'
 import { Route as ApiPublicHooksScheduledSendWorkerRouteImport } from './routes/api/public/hooks/scheduled-send-worker'
 import { Route as ApiPublicHooksScheduledMessagesWorkerRouteImport } from './routes/api/public/hooks/scheduled-messages-worker'
+import { Route as ApiPublicHooksNutritionTickRouteImport } from './routes/api/public/hooks/nutrition-tick'
 import { Route as ApiPublicHooksMediaArchiveRouteImport } from './routes/api/public/hooks/media-archive'
 import { Route as ApiPublicHooksLiftArchiveTickRouteImport } from './routes/api/public/hooks/lift-archive-tick'
 import { Route as ApiPublicHooksFilloutRouteImport } from './routes/api/public/hooks/fillout'
@@ -181,6 +183,7 @@ import { Route as AuthenticatedMResourcesSlugRouteImport } from './routes/_authe
 import { Route as AuthenticatedMPlansPlanIdRouteImport } from './routes/_authenticated/m/plans.$planId'
 import { Route as AuthenticatedMMyPlansEnrollmentIdRouteImport } from './routes/_authenticated/m/my-plans.$enrollmentId'
 import { Route as AuthenticatedAdminSettingsSmsRouteImport } from './routes/_authenticated/admin/settings_.sms'
+import { Route as AuthenticatedAdminSettingsNutritionAutomationRouteImport } from './routes/_authenticated/admin/settings_.nutrition-automation'
 import { Route as AuthenticatedAdminSettingsChatRouteImport } from './routes/_authenticated/admin/settings_.chat'
 import { Route as AuthenticatedAdminSalesMembershipRouteImport } from './routes/_authenticated/admin/sales.membership'
 import { Route as AuthenticatedAdminSalesCoachingApplicationsRouteImport } from './routes/_authenticated/admin/sales.coaching-applications'
@@ -226,6 +229,7 @@ import { Route as AuthenticatedAdminAgreementsNativeNewRouteImport } from './rou
 import { Route as AuthenticatedAdminAgreementsNativePackageIdRouteImport } from './routes/_authenticated/admin/agreements-native.$packageId'
 import { Route as AuthenticatedAdminCrmContactsIndexRouteImport } from './routes/_authenticated/admin/crm.contacts.index'
 import { Route as ApiPublicGoogleOauthCallbackRouteImport } from './routes/api/public/google/oauth/callback'
+import { Route as AuthenticatedAdminNutritionDashboardReviewSubmissionIdRouteImport } from './routes/_authenticated/admin/nutrition-dashboard.review.$submissionId'
 import { Route as AuthenticatedAdminCrmContactsIdRouteImport } from './routes/_authenticated/admin/crm.contacts.$id'
 import { Route as AuthenticatedAdminClientProgramsClientIdHistoryRouteImport } from './routes/_authenticated/admin/client-programs.$clientId.history'
 import { Route as AuthenticatedAdminClientProgramsClientIdAnalyticsRouteImport } from './routes/_authenticated/admin/client-programs.$clientId.analytics'
@@ -793,6 +797,12 @@ const AuthenticatedAdminNutritionTargetsRoute =
     path: '/nutrition-targets',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
+const AuthenticatedAdminNutritionDashboardRoute =
+  AuthenticatedAdminNutritionDashboardRouteImport.update({
+    id: '/nutrition-dashboard',
+    path: '/nutrition-dashboard',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
 const AuthenticatedAdminNativeFormsRoute =
   AuthenticatedAdminNativeFormsRouteImport.update({
     id: '/native-forms',
@@ -1111,6 +1121,12 @@ const ApiPublicHooksScheduledMessagesWorkerRoute =
     path: '/api/public/hooks/scheduled-messages-worker',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicHooksNutritionTickRoute =
+  ApiPublicHooksNutritionTickRouteImport.update({
+    id: '/api/public/hooks/nutrition-tick',
+    path: '/api/public/hooks/nutrition-tick',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicHooksMediaArchiveRoute =
   ApiPublicHooksMediaArchiveRouteImport.update({
     id: '/api/public/hooks/media-archive',
@@ -1210,6 +1226,12 @@ const AuthenticatedAdminSettingsSmsRoute =
   AuthenticatedAdminSettingsSmsRouteImport.update({
     id: '/settings_/sms',
     path: '/settings/sms',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
+const AuthenticatedAdminSettingsNutritionAutomationRoute =
+  AuthenticatedAdminSettingsNutritionAutomationRouteImport.update({
+    id: '/settings_/nutrition-automation',
+    path: '/settings/nutrition-automation',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
 const AuthenticatedAdminSettingsChatRoute =
@@ -1482,6 +1504,12 @@ const ApiPublicGoogleOauthCallbackRoute =
     path: '/api/public/google/oauth/callback',
     getParentRoute: () => rootRouteImport,
   } as any)
+const AuthenticatedAdminNutritionDashboardReviewSubmissionIdRoute =
+  AuthenticatedAdminNutritionDashboardReviewSubmissionIdRouteImport.update({
+    id: '/review/$submissionId',
+    path: '/review/$submissionId',
+    getParentRoute: () => AuthenticatedAdminNutritionDashboardRoute,
+  } as any)
 const AuthenticatedAdminCrmContactsIdRoute =
   AuthenticatedAdminCrmContactsIdRouteImport.update({
     id: '/crm/contacts/$id',
@@ -1568,6 +1596,7 @@ export interface FileRoutesByFullPath {
   '/admin/membership': typeof AuthenticatedAdminMembershipRouteWithChildren
   '/admin/messages': typeof AuthenticatedAdminMessagesRoute
   '/admin/native-forms': typeof AuthenticatedAdminNativeFormsRoute
+  '/admin/nutrition-dashboard': typeof AuthenticatedAdminNutritionDashboardRouteWithChildren
   '/admin/nutrition-targets': typeof AuthenticatedAdminNutritionTargetsRoute
   '/admin/offers': typeof AuthenticatedAdminOffersRoute
   '/admin/payment-links': typeof AuthenticatedAdminPaymentLinksRoute
@@ -1686,6 +1715,7 @@ export interface FileRoutesByFullPath {
   '/admin/sales/coaching-applications': typeof AuthenticatedAdminSalesCoachingApplicationsRoute
   '/admin/sales/membership': typeof AuthenticatedAdminSalesMembershipRoute
   '/admin/settings/chat': typeof AuthenticatedAdminSettingsChatRoute
+  '/admin/settings/nutrition-automation': typeof AuthenticatedAdminSettingsNutritionAutomationRoute
   '/admin/settings/sms': typeof AuthenticatedAdminSettingsSmsRoute
   '/m/my-plans/$enrollmentId': typeof AuthenticatedMMyPlansEnrollmentIdRoute
   '/m/plans/$planId': typeof AuthenticatedMPlansPlanIdRoute
@@ -1703,6 +1733,7 @@ export interface FileRoutesByFullPath {
   '/api/public/hooks/fillout': typeof ApiPublicHooksFilloutRoute
   '/api/public/hooks/lift-archive-tick': typeof ApiPublicHooksLiftArchiveTickRoute
   '/api/public/hooks/media-archive': typeof ApiPublicHooksMediaArchiveRoute
+  '/api/public/hooks/nutrition-tick': typeof ApiPublicHooksNutritionTickRoute
   '/api/public/hooks/scheduled-messages-worker': typeof ApiPublicHooksScheduledMessagesWorkerRoute
   '/api/public/hooks/scheduled-send-worker': typeof ApiPublicHooksScheduledSendWorkerRoute
   '/api/public/hooks/sms-reminders': typeof ApiPublicHooksSmsRemindersRoute
@@ -1725,6 +1756,7 @@ export interface FileRoutesByFullPath {
   '/admin/client-programs/$clientId/analytics': typeof AuthenticatedAdminClientProgramsClientIdAnalyticsRoute
   '/admin/client-programs/$clientId/history': typeof AuthenticatedAdminClientProgramsClientIdHistoryRoute
   '/admin/crm/contacts/$id': typeof AuthenticatedAdminCrmContactsIdRoute
+  '/admin/nutrition-dashboard/review/$submissionId': typeof AuthenticatedAdminNutritionDashboardReviewSubmissionIdRoute
   '/api/public/google/oauth/callback': typeof ApiPublicGoogleOauthCallbackRoute
   '/admin/crm/contacts/': typeof AuthenticatedAdminCrmContactsIndexRoute
   '/m/workouts/$enrollmentId/$week/$day': typeof AuthenticatedMWorkoutsEnrollmentIdWeekDayRoute
@@ -1785,6 +1817,7 @@ export interface FileRoutesByTo {
   '/admin/media-review': typeof AuthenticatedAdminMediaReviewRoute
   '/admin/messages': typeof AuthenticatedAdminMessagesRoute
   '/admin/native-forms': typeof AuthenticatedAdminNativeFormsRoute
+  '/admin/nutrition-dashboard': typeof AuthenticatedAdminNutritionDashboardRouteWithChildren
   '/admin/nutrition-targets': typeof AuthenticatedAdminNutritionTargetsRoute
   '/admin/offers': typeof AuthenticatedAdminOffersRoute
   '/admin/payment-links': typeof AuthenticatedAdminPaymentLinksRoute
@@ -1903,6 +1936,7 @@ export interface FileRoutesByTo {
   '/admin/sales/coaching-applications': typeof AuthenticatedAdminSalesCoachingApplicationsRoute
   '/admin/sales/membership': typeof AuthenticatedAdminSalesMembershipRoute
   '/admin/settings/chat': typeof AuthenticatedAdminSettingsChatRoute
+  '/admin/settings/nutrition-automation': typeof AuthenticatedAdminSettingsNutritionAutomationRoute
   '/admin/settings/sms': typeof AuthenticatedAdminSettingsSmsRoute
   '/m/my-plans/$enrollmentId': typeof AuthenticatedMMyPlansEnrollmentIdRoute
   '/m/plans/$planId': typeof AuthenticatedMPlansPlanIdRoute
@@ -1920,6 +1954,7 @@ export interface FileRoutesByTo {
   '/api/public/hooks/fillout': typeof ApiPublicHooksFilloutRoute
   '/api/public/hooks/lift-archive-tick': typeof ApiPublicHooksLiftArchiveTickRoute
   '/api/public/hooks/media-archive': typeof ApiPublicHooksMediaArchiveRoute
+  '/api/public/hooks/nutrition-tick': typeof ApiPublicHooksNutritionTickRoute
   '/api/public/hooks/scheduled-messages-worker': typeof ApiPublicHooksScheduledMessagesWorkerRoute
   '/api/public/hooks/scheduled-send-worker': typeof ApiPublicHooksScheduledSendWorkerRoute
   '/api/public/hooks/sms-reminders': typeof ApiPublicHooksSmsRemindersRoute
@@ -1942,6 +1977,7 @@ export interface FileRoutesByTo {
   '/admin/client-programs/$clientId/analytics': typeof AuthenticatedAdminClientProgramsClientIdAnalyticsRoute
   '/admin/client-programs/$clientId/history': typeof AuthenticatedAdminClientProgramsClientIdHistoryRoute
   '/admin/crm/contacts/$id': typeof AuthenticatedAdminCrmContactsIdRoute
+  '/admin/nutrition-dashboard/review/$submissionId': typeof AuthenticatedAdminNutritionDashboardReviewSubmissionIdRoute
   '/api/public/google/oauth/callback': typeof ApiPublicGoogleOauthCallbackRoute
   '/admin/crm/contacts': typeof AuthenticatedAdminCrmContactsIndexRoute
   '/m/workouts/$enrollmentId/$week/$day': typeof AuthenticatedMWorkoutsEnrollmentIdWeekDayRoute
@@ -2009,6 +2045,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/membership': typeof AuthenticatedAdminMembershipRouteWithChildren
   '/_authenticated/admin/messages': typeof AuthenticatedAdminMessagesRoute
   '/_authenticated/admin/native-forms': typeof AuthenticatedAdminNativeFormsRoute
+  '/_authenticated/admin/nutrition-dashboard': typeof AuthenticatedAdminNutritionDashboardRouteWithChildren
   '/_authenticated/admin/nutrition-targets': typeof AuthenticatedAdminNutritionTargetsRoute
   '/_authenticated/admin/offers': typeof AuthenticatedAdminOffersRoute
   '/_authenticated/admin/payment-links': typeof AuthenticatedAdminPaymentLinksRoute
@@ -2127,6 +2164,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/sales/coaching-applications': typeof AuthenticatedAdminSalesCoachingApplicationsRoute
   '/_authenticated/admin/sales/membership': typeof AuthenticatedAdminSalesMembershipRoute
   '/_authenticated/admin/settings_/chat': typeof AuthenticatedAdminSettingsChatRoute
+  '/_authenticated/admin/settings_/nutrition-automation': typeof AuthenticatedAdminSettingsNutritionAutomationRoute
   '/_authenticated/admin/settings_/sms': typeof AuthenticatedAdminSettingsSmsRoute
   '/_authenticated/m/my-plans/$enrollmentId': typeof AuthenticatedMMyPlansEnrollmentIdRoute
   '/_authenticated/m/plans/$planId': typeof AuthenticatedMPlansPlanIdRoute
@@ -2144,6 +2182,7 @@ export interface FileRoutesById {
   '/api/public/hooks/fillout': typeof ApiPublicHooksFilloutRoute
   '/api/public/hooks/lift-archive-tick': typeof ApiPublicHooksLiftArchiveTickRoute
   '/api/public/hooks/media-archive': typeof ApiPublicHooksMediaArchiveRoute
+  '/api/public/hooks/nutrition-tick': typeof ApiPublicHooksNutritionTickRoute
   '/api/public/hooks/scheduled-messages-worker': typeof ApiPublicHooksScheduledMessagesWorkerRoute
   '/api/public/hooks/scheduled-send-worker': typeof ApiPublicHooksScheduledSendWorkerRoute
   '/api/public/hooks/sms-reminders': typeof ApiPublicHooksSmsRemindersRoute
@@ -2166,6 +2205,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/client-programs/$clientId/analytics': typeof AuthenticatedAdminClientProgramsClientIdAnalyticsRoute
   '/_authenticated/admin/client-programs/$clientId/history': typeof AuthenticatedAdminClientProgramsClientIdHistoryRoute
   '/_authenticated/admin/crm/contacts/$id': typeof AuthenticatedAdminCrmContactsIdRoute
+  '/_authenticated/admin/nutrition-dashboard/review/$submissionId': typeof AuthenticatedAdminNutritionDashboardReviewSubmissionIdRoute
   '/api/public/google/oauth/callback': typeof ApiPublicGoogleOauthCallbackRoute
   '/_authenticated/admin/crm/contacts/': typeof AuthenticatedAdminCrmContactsIndexRoute
   '/_authenticated/m/workouts/$enrollmentId/$week/$day': typeof AuthenticatedMWorkoutsEnrollmentIdWeekDayRoute
@@ -2233,6 +2273,7 @@ export interface FileRouteTypes {
     | '/admin/membership'
     | '/admin/messages'
     | '/admin/native-forms'
+    | '/admin/nutrition-dashboard'
     | '/admin/nutrition-targets'
     | '/admin/offers'
     | '/admin/payment-links'
@@ -2351,6 +2392,7 @@ export interface FileRouteTypes {
     | '/admin/sales/coaching-applications'
     | '/admin/sales/membership'
     | '/admin/settings/chat'
+    | '/admin/settings/nutrition-automation'
     | '/admin/settings/sms'
     | '/m/my-plans/$enrollmentId'
     | '/m/plans/$planId'
@@ -2368,6 +2410,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/fillout'
     | '/api/public/hooks/lift-archive-tick'
     | '/api/public/hooks/media-archive'
+    | '/api/public/hooks/nutrition-tick'
     | '/api/public/hooks/scheduled-messages-worker'
     | '/api/public/hooks/scheduled-send-worker'
     | '/api/public/hooks/sms-reminders'
@@ -2390,6 +2433,7 @@ export interface FileRouteTypes {
     | '/admin/client-programs/$clientId/analytics'
     | '/admin/client-programs/$clientId/history'
     | '/admin/crm/contacts/$id'
+    | '/admin/nutrition-dashboard/review/$submissionId'
     | '/api/public/google/oauth/callback'
     | '/admin/crm/contacts/'
     | '/m/workouts/$enrollmentId/$week/$day'
@@ -2450,6 +2494,7 @@ export interface FileRouteTypes {
     | '/admin/media-review'
     | '/admin/messages'
     | '/admin/native-forms'
+    | '/admin/nutrition-dashboard'
     | '/admin/nutrition-targets'
     | '/admin/offers'
     | '/admin/payment-links'
@@ -2568,6 +2613,7 @@ export interface FileRouteTypes {
     | '/admin/sales/coaching-applications'
     | '/admin/sales/membership'
     | '/admin/settings/chat'
+    | '/admin/settings/nutrition-automation'
     | '/admin/settings/sms'
     | '/m/my-plans/$enrollmentId'
     | '/m/plans/$planId'
@@ -2585,6 +2631,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/fillout'
     | '/api/public/hooks/lift-archive-tick'
     | '/api/public/hooks/media-archive'
+    | '/api/public/hooks/nutrition-tick'
     | '/api/public/hooks/scheduled-messages-worker'
     | '/api/public/hooks/scheduled-send-worker'
     | '/api/public/hooks/sms-reminders'
@@ -2607,6 +2654,7 @@ export interface FileRouteTypes {
     | '/admin/client-programs/$clientId/analytics'
     | '/admin/client-programs/$clientId/history'
     | '/admin/crm/contacts/$id'
+    | '/admin/nutrition-dashboard/review/$submissionId'
     | '/api/public/google/oauth/callback'
     | '/admin/crm/contacts'
     | '/m/workouts/$enrollmentId/$week/$day'
@@ -2673,6 +2721,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/membership'
     | '/_authenticated/admin/messages'
     | '/_authenticated/admin/native-forms'
+    | '/_authenticated/admin/nutrition-dashboard'
     | '/_authenticated/admin/nutrition-targets'
     | '/_authenticated/admin/offers'
     | '/_authenticated/admin/payment-links'
@@ -2791,6 +2840,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/sales/coaching-applications'
     | '/_authenticated/admin/sales/membership'
     | '/_authenticated/admin/settings_/chat'
+    | '/_authenticated/admin/settings_/nutrition-automation'
     | '/_authenticated/admin/settings_/sms'
     | '/_authenticated/m/my-plans/$enrollmentId'
     | '/_authenticated/m/plans/$planId'
@@ -2808,6 +2858,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/fillout'
     | '/api/public/hooks/lift-archive-tick'
     | '/api/public/hooks/media-archive'
+    | '/api/public/hooks/nutrition-tick'
     | '/api/public/hooks/scheduled-messages-worker'
     | '/api/public/hooks/scheduled-send-worker'
     | '/api/public/hooks/sms-reminders'
@@ -2830,6 +2881,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/client-programs/$clientId/analytics'
     | '/_authenticated/admin/client-programs/$clientId/history'
     | '/_authenticated/admin/crm/contacts/$id'
+    | '/_authenticated/admin/nutrition-dashboard/review/$submissionId'
     | '/api/public/google/oauth/callback'
     | '/_authenticated/admin/crm/contacts/'
     | '/_authenticated/m/workouts/$enrollmentId/$week/$day'
@@ -2864,6 +2916,7 @@ export interface RootRouteChildren {
   ApiPublicHooksFilloutRoute: typeof ApiPublicHooksFilloutRoute
   ApiPublicHooksLiftArchiveTickRoute: typeof ApiPublicHooksLiftArchiveTickRoute
   ApiPublicHooksMediaArchiveRoute: typeof ApiPublicHooksMediaArchiveRoute
+  ApiPublicHooksNutritionTickRoute: typeof ApiPublicHooksNutritionTickRoute
   ApiPublicHooksScheduledMessagesWorkerRoute: typeof ApiPublicHooksScheduledMessagesWorkerRoute
   ApiPublicHooksScheduledSendWorkerRoute: typeof ApiPublicHooksScheduledSendWorkerRoute
   ApiPublicHooksSmsRemindersRoute: typeof ApiPublicHooksSmsRemindersRoute
@@ -3582,6 +3635,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminNutritionTargetsRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
+    '/_authenticated/admin/nutrition-dashboard': {
+      id: '/_authenticated/admin/nutrition-dashboard'
+      path: '/nutrition-dashboard'
+      fullPath: '/admin/nutrition-dashboard'
+      preLoaderRoute: typeof AuthenticatedAdminNutritionDashboardRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
     '/_authenticated/admin/native-forms': {
       id: '/_authenticated/admin/native-forms'
       path: '/native-forms'
@@ -3960,6 +4020,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksScheduledMessagesWorkerRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/nutrition-tick': {
+      id: '/api/public/hooks/nutrition-tick'
+      path: '/api/public/hooks/nutrition-tick'
+      fullPath: '/api/public/hooks/nutrition-tick'
+      preLoaderRoute: typeof ApiPublicHooksNutritionTickRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/hooks/media-archive': {
       id: '/api/public/hooks/media-archive'
       path: '/api/public/hooks/media-archive'
@@ -4077,6 +4144,13 @@ declare module '@tanstack/react-router' {
       path: '/settings/sms'
       fullPath: '/admin/settings/sms'
       preLoaderRoute: typeof AuthenticatedAdminSettingsSmsRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
+    '/_authenticated/admin/settings_/nutrition-automation': {
+      id: '/_authenticated/admin/settings_/nutrition-automation'
+      path: '/settings/nutrition-automation'
+      fullPath: '/admin/settings/nutrition-automation'
+      preLoaderRoute: typeof AuthenticatedAdminSettingsNutritionAutomationRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
     '/_authenticated/admin/settings_/chat': {
@@ -4394,6 +4468,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicGoogleOauthCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authenticated/admin/nutrition-dashboard/review/$submissionId': {
+      id: '/_authenticated/admin/nutrition-dashboard/review/$submissionId'
+      path: '/review/$submissionId'
+      fullPath: '/admin/nutrition-dashboard/review/$submissionId'
+      preLoaderRoute: typeof AuthenticatedAdminNutritionDashboardReviewSubmissionIdRouteImport
+      parentRoute: typeof AuthenticatedAdminNutritionDashboardRoute
+    }
     '/_authenticated/admin/crm/contacts/$id': {
       id: '/_authenticated/admin/crm/contacts/$id'
       path: '/crm/contacts/$id'
@@ -4515,6 +4596,21 @@ const AuthenticatedAdminMembershipRouteWithChildren =
     AuthenticatedAdminMembershipRouteChildren,
   )
 
+interface AuthenticatedAdminNutritionDashboardRouteChildren {
+  AuthenticatedAdminNutritionDashboardReviewSubmissionIdRoute: typeof AuthenticatedAdminNutritionDashboardReviewSubmissionIdRoute
+}
+
+const AuthenticatedAdminNutritionDashboardRouteChildren: AuthenticatedAdminNutritionDashboardRouteChildren =
+  {
+    AuthenticatedAdminNutritionDashboardReviewSubmissionIdRoute:
+      AuthenticatedAdminNutritionDashboardReviewSubmissionIdRoute,
+  }
+
+const AuthenticatedAdminNutritionDashboardRouteWithChildren =
+  AuthenticatedAdminNutritionDashboardRoute._addFileChildren(
+    AuthenticatedAdminNutritionDashboardRouteChildren,
+  )
+
 interface AuthenticatedAdminProgramAssignRouteChildren {
   AuthenticatedAdminProgramAssignClientIdRoute: typeof AuthenticatedAdminProgramAssignClientIdRoute
 }
@@ -4580,6 +4676,7 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminMembershipRoute: typeof AuthenticatedAdminMembershipRouteWithChildren
   AuthenticatedAdminMessagesRoute: typeof AuthenticatedAdminMessagesRoute
   AuthenticatedAdminNativeFormsRoute: typeof AuthenticatedAdminNativeFormsRoute
+  AuthenticatedAdminNutritionDashboardRoute: typeof AuthenticatedAdminNutritionDashboardRouteWithChildren
   AuthenticatedAdminNutritionTargetsRoute: typeof AuthenticatedAdminNutritionTargetsRoute
   AuthenticatedAdminOffersRoute: typeof AuthenticatedAdminOffersRoute
   AuthenticatedAdminPaymentLinksRoute: typeof AuthenticatedAdminPaymentLinksRoute
@@ -4626,6 +4723,7 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminSalesCoachingApplicationsRoute: typeof AuthenticatedAdminSalesCoachingApplicationsRoute
   AuthenticatedAdminSalesMembershipRoute: typeof AuthenticatedAdminSalesMembershipRoute
   AuthenticatedAdminSettingsChatRoute: typeof AuthenticatedAdminSettingsChatRoute
+  AuthenticatedAdminSettingsNutritionAutomationRoute: typeof AuthenticatedAdminSettingsNutritionAutomationRoute
   AuthenticatedAdminSettingsSmsRoute: typeof AuthenticatedAdminSettingsSmsRoute
   AuthenticatedAdminAgreementsNativeIndexRoute: typeof AuthenticatedAdminAgreementsNativeIndexRoute
   AuthenticatedAdminAgreementsIndexRoute: typeof AuthenticatedAdminAgreementsIndexRoute
@@ -4687,6 +4785,8 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
       AuthenticatedAdminMembershipRouteWithChildren,
     AuthenticatedAdminMessagesRoute: AuthenticatedAdminMessagesRoute,
     AuthenticatedAdminNativeFormsRoute: AuthenticatedAdminNativeFormsRoute,
+    AuthenticatedAdminNutritionDashboardRoute:
+      AuthenticatedAdminNutritionDashboardRouteWithChildren,
     AuthenticatedAdminNutritionTargetsRoute:
       AuthenticatedAdminNutritionTargetsRoute,
     AuthenticatedAdminOffersRoute: AuthenticatedAdminOffersRoute,
@@ -4754,6 +4854,8 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
     AuthenticatedAdminSalesMembershipRoute:
       AuthenticatedAdminSalesMembershipRoute,
     AuthenticatedAdminSettingsChatRoute: AuthenticatedAdminSettingsChatRoute,
+    AuthenticatedAdminSettingsNutritionAutomationRoute:
+      AuthenticatedAdminSettingsNutritionAutomationRoute,
     AuthenticatedAdminSettingsSmsRoute: AuthenticatedAdminSettingsSmsRoute,
     AuthenticatedAdminAgreementsNativeIndexRoute:
       AuthenticatedAdminAgreementsNativeIndexRoute,
@@ -5106,6 +5208,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicHooksFilloutRoute: ApiPublicHooksFilloutRoute,
   ApiPublicHooksLiftArchiveTickRoute: ApiPublicHooksLiftArchiveTickRoute,
   ApiPublicHooksMediaArchiveRoute: ApiPublicHooksMediaArchiveRoute,
+  ApiPublicHooksNutritionTickRoute: ApiPublicHooksNutritionTickRoute,
   ApiPublicHooksScheduledMessagesWorkerRoute:
     ApiPublicHooksScheduledMessagesWorkerRoute,
   ApiPublicHooksScheduledSendWorkerRoute:
