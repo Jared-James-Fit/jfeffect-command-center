@@ -276,29 +276,25 @@ export const listMembershipLibrary = createServerFn({ method: "GET" })
     const { data: member } = await supabaseAdmin
       .from("app_members").select("id").eq("user_id", userId).maybeSingle();
     if (!member) return { plans: [] };
-    const [{ data: shares }, { data: access }] = await Promise.all([
+    // member_plans IS the source of truth for the Membership Library listing.
+    // status='Published' + membership_status='live' means the admin has
+    // published it. (Older listings predate the pl_template_shares mirror,
+    // so we no longer require a matching share row to surface a plan.)
+    const [{ data: plans }, { data: access }] = await Promise.all([
       supabaseAdmin
-        .from("pl_template_shares")
-        .select("template_id, shared_version, updated_at")
-        .eq("destination", "membership")
-        .eq("status", "shared"),
+        .from("member_plans")
+        .select(
+          "id, name, public_title, description, cover_image_url, training_style, difficulty, goal, weeks, days_per_week, workouts_total, est_minutes_per_workout, equipment_needed, required_access_level, audience_mode, allow_full_program, allow_pdf_download, featured, status, membership_status",
+        )
+        .eq("status", "Published")
+        .eq("membership_status", "live"),
       supabaseAdmin
         .from("member_access")
         .select("access_level_key")
         .eq("member_id", (member as any).id)
         .eq("active", true),
     ]);
-    const templateIds = Array.from(new Set((shares ?? []).map((s: any) => s.template_id)));
-    if (templateIds.length === 0) return { plans: [] };
     const keys = new Set((access ?? []).map((a: any) => a.access_level_key));
-    const { data: plans } = await supabaseAdmin
-      .from("member_plans")
-      .select(
-        "id, name, public_title, description, cover_image_url, training_style, difficulty, goal, weeks, days_per_week, workouts_total, est_minutes_per_workout, equipment_needed, required_access_level, audience_mode, allow_full_program, allow_pdf_download, featured, status, membership_status",
-      )
-      .in("source_template_id", templateIds)
-      .eq("status", "Published")
-      .eq("membership_status", "live");
     const visible = (plans ?? []).filter((p: any) =>
       p.audience_mode === "all_active" || keys.has(p.required_access_level),
     );
