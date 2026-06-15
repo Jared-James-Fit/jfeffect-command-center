@@ -11,6 +11,8 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { validateTemplatePayload, type DayIssue } from "@/lib/pl-template-validation";
+import { AlertTriangle } from "lucide-react";
 import {
   Plus, BookOpen, UserPlus, Eye, Pencil, Copy, Archive as ArchiveIcon,
   ArchiveRestore, Trash2, Clock, Calendar, Layers, MoreVertical, Search, Users, AlertTriangle, Share2, Inbox,
