@@ -185,6 +185,10 @@ function formatPrescription(p: {
 export const Route = createFileRoute("/_authenticated/portal/workouts/$dayId")({
   validateSearch: (s: Record<string, unknown>) => ({
     readonly: s.readonly === 1 || s.readonly === "1" || s.readonly === true ? 1 : undefined,
+    // Coach- or client-initiated "open in edit mode" — auto-unlocks past workouts
+    // and auto-opens the feedback sheet when the user wants to edit a review.
+    edit: s.edit === 1 || s.edit === "1" || s.edit === true ? 1 : undefined,
+    review: s.review === 1 || s.review === "1" || s.review === true ? 1 : undefined,
   }),
   component: () => (
     <WorkoutUndoProvider>
@@ -274,11 +278,11 @@ function WorkoutDay() {
   // out of. The client can opt-in to editing a past workout via the Edit button
   // below (`unlocked` flips this off). Impersonation always stays read-only so
   // coaches don't edit while viewing as the client.
-  const [unlocked, setUnlocked] = useState(false);
+  const [unlocked, setUnlocked] = useState<boolean>(search.edit === 1);
   const autoReadonly = search.readonly === 1 || blockEnded || blockCompleted;
   const readonly = (autoReadonly && !unlocked) || isImpersonating;
   // Reset the unlock when navigating to a different workout.
-  useEffect(() => { setUnlocked(false); }, [dayId]);
+  useEffect(() => { setUnlocked(search.edit === 1); }, [dayId, search.edit]);
 
   const { data: rows = [], isSuccess: rowsLoaded } = useQuery({
     queryKey: ["pl-day-rows", dayId],
@@ -618,6 +622,18 @@ function WorkoutDay() {
   });
   const hasFeedback = !!existingFeedback;
   const feedbackLocked = !!(existingFeedback?.reviewed_at || existingFeedback?.reviewed_by);
+  // Honor ?review=1 by auto-opening the feedback sheet as soon as we have
+  // a completion row to attach it to. Notification deep-links use this.
+  const reviewParam = search.review === 1;
+  const autoOpenedReviewRef = useRef(false);
+  useEffect(() => {
+    if (!reviewParam) { autoOpenedReviewRef.current = false; return; }
+    if (autoOpenedReviewRef.current) return;
+    if (!completion?.id) return;
+    if (feedbackLocked) return;
+    autoOpenedReviewRef.current = true;
+    setFeedbackOpen(true);
+  }, [reviewParam, completion?.id, feedbackLocked]);
   const feedbackSkipped = !!(completion?.id && typeof window !== "undefined"
     && localStorage.getItem(`lov.wfb.skip:${completion.id}`));
 

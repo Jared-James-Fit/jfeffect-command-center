@@ -365,11 +365,11 @@ export function NotificationBell() {
               kind: "workout_feedback",
               clientId: client.id,
               dayId: c.day_id,
-              name: "Workout feedback",
+              name: "Workout review",
               title: c.completed_at
-                ? "Add feedback to mark your workout complete"
-                : "Submit feedback to finish your workout",
-              body: "Tap to open the workout and submit your feedback.",
+                ? "Reminder: leave your workout review"
+                : "Finish your workout — submit your review",
+              body: "You haven't submitted your workout review yet. Tap to add it now.",
               created_at: c.completed_at ?? startedAt,
             });
           }
@@ -458,6 +458,8 @@ export function NotificationBell() {
                   ? { tab: "agreements" as any }
                   : role === "admin" && it.kind === "exercise_note"
                   ? { tab: "training" as any }
+                  : it.kind === "workout_feedback"
+                  ? ({ review: 1 } as any)
                   : undefined
               }
               className="block"
