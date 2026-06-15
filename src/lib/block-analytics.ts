@@ -89,9 +89,7 @@ function parseRPE(v: string | null | undefined): number | null {
   const n = parseFloat(v);
   return isNaN(n) ? null : n;
 }
-function epley(weight: number, reps: number): number {
-  return Math.round(weight * (1 + reps / 30) * 10) / 10;
-}
+import { epley1RM as epley } from "@/lib/analytics/e1rm";
 function isBodyweightCategory(c: string | null): boolean {
   if (!c) return false;
   const k = c.toLowerCase();
