@@ -11,7 +11,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, ExternalLink, Save, Trash2, Mail, Archive, KeyRound, Copy, CheckCircle2, AlertCircle, BellRing, Tag, Dumbbell, MessageSquare, Link2 } from "lucide-react";
+import { ArrowLeft, ExternalLink, Save, Trash2, Mail, Archive, KeyRound, Copy, CheckCircle2, AlertCircle, BellRing, Tag, Dumbbell, MessageSquare, Link2, MoreHorizontal, User as UserIcon, Apple, DollarSign } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { SendBookingLinkDialog } from "@/components/appointments/send-booking-link-dialog";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
@@ -22,7 +23,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { calcAge, formatHeight } from "@/lib/basic-info";
 import { Switch } from "@/components/ui/switch";
 import { COMMON_TIMEZONES } from "@/lib/pt-sessions";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
 import type { ConversationState } from "@/lib/messages";
 import { ClientDriveFolderPanel } from "@/components/client-drive-folder-panel";
 import { TrainingScheduleCard } from "@/components/training-schedule-card";
@@ -69,6 +70,65 @@ function TabFallback() {
   return <div className="md:col-span-3 p-6 text-sm text-muted-foreground">Loading…</div>;
 }
 
+function SectionNav({ activeTab, onChange }: { activeTab: TabValue; onChange: (v: TabValue) => void }) {
+  const activeSection = TAB_TO_SECTION[activeTab] ?? "overview";
+  const current = SECTIONS.find((s) => s.id === activeSection)!;
+  return (
+    <div className="mb-6 space-y-4">
+      <div className="grid grid-cols-2 gap-2 sm:gap-3 md:grid-cols-3 lg:grid-cols-6">
+        {SECTIONS.map((s) => {
+          const Icon = s.icon;
+          const isActive = s.id === activeSection;
+          return (
+            <button
+              key={s.id}
+              type="button"
+              onClick={() => onChange(s.tabs[0].value)}
+              className={[
+                "group flex flex-col items-start gap-1.5 rounded-xl border p-3 text-left transition-all",
+                isActive
+                  ? "border-primary bg-primary/10 shadow-sm"
+                  : "border-border bg-card hover:border-primary/40 hover:bg-secondary/40",
+              ].join(" ")}
+            >
+              <div className={[
+                "grid h-9 w-9 shrink-0 place-items-center rounded-lg",
+                isActive ? "bg-primary text-primary-foreground" : "bg-secondary text-foreground/80 group-hover:bg-primary/15 group-hover:text-primary",
+              ].join(" ")}>
+                <Icon className="h-4 w-4" />
+              </div>
+              <div className="min-w-0">
+                <div className={["text-sm font-semibold leading-tight", isActive ? "text-primary" : "text-foreground"].join(" ")}>{s.label}</div>
+                <div className="text-[11px] leading-tight text-muted-foreground line-clamp-2">{s.description}</div>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+      {current.tabs.length > 1 && (
+        <div className="flex flex-wrap gap-1.5 rounded-lg border border-border bg-secondary/30 p-1.5">
+          {current.tabs.map((t) => {
+            const isActive = t.value === activeTab;
+            return (
+              <button
+                key={t.value}
+                type="button"
+                onClick={() => onChange(t.value)}
+                className={[
+                  "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
+                  isActive ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+                ].join(" ")}
+              >
+                {t.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AssignedCoachSelect({ value, onChange }: { value: string | null; onChange: (v: string | null) => void }) {
   const { data: coaches = [] } = useQuery({
     queryKey: ["coaches-select"],
@@ -92,6 +152,41 @@ function AssignedCoachSelect({ value, onChange }: { value: string | null; onChan
 
 const TAB_VALUES = ["summary", "training", "nutrition", "cardio", "metrics", "messages", "lift-videos", "documents", "sessions", "purchases", "billing", "agreements", "notes", "info", "account"] as const;
 type TabValue = typeof TAB_VALUES[number];
+
+type SectionId = "overview" | "training" | "nutrition" | "communication" | "business" | "account";
+const SECTIONS: { id: SectionId; label: string; description: string; icon: ComponentType<any>; tabs: { value: TabValue; label: string }[] }[] = [
+  { id: "overview", label: "Overview", description: "Snapshot & profile", icon: UserIcon, tabs: [
+    { value: "summary", label: "Snapshot" },
+  ]},
+  { id: "training", label: "Training", description: "Program, metrics, sessions, videos", icon: Dumbbell, tabs: [
+    { value: "training", label: "Training Program" },
+    { value: "metrics", label: "Progress Metrics" },
+    { value: "lift-videos", label: "Lift Videos" },
+    { value: "sessions", label: "Sessions" },
+  ]},
+  { id: "nutrition", label: "Nutrition", description: "Targets & cardio", icon: Apple, tabs: [
+    { value: "nutrition", label: "Nutrition Targets" },
+    { value: "cardio", label: "Cardio Targets" },
+  ]},
+  { id: "communication", label: "Communication", description: "Messages, notes, documents", icon: MessageSquare, tabs: [
+    { value: "messages", label: "Messages" },
+    { value: "notes", label: "Notes" },
+    { value: "documents", label: "Documents & Forms" },
+  ]},
+  { id: "business", label: "Business", description: "Purchases, billing, agreements", icon: DollarSign, tabs: [
+    { value: "purchases", label: "Purchases" },
+    { value: "billing", label: "Billing" },
+    { value: "agreements", label: "Agreements" },
+  ]},
+  { id: "account", label: "Account", description: "Login, info & access", icon: KeyRound, tabs: [
+    { value: "info", label: "Account Info" },
+    { value: "account", label: "Login & Access" },
+  ]},
+];
+const TAB_TO_SECTION: Record<TabValue, SectionId> = SECTIONS.reduce((acc, s) => {
+  s.tabs.forEach((t) => { acc[t.value] = s.id; });
+  return acc;
+}, {} as Record<TabValue, SectionId>);
 
 export const Route = createFileRoute("/_authenticated/admin/clients/$id")({
   validateSearch: (s) => z.object({ tab: z.enum(TAB_VALUES).optional() }).parse(s),
@@ -384,14 +479,23 @@ function ClientDetail() {
         actions={
           <>
             <Link to="/admin/clients"><Button variant="ghost" size="sm"><ArrowLeft className="mr-2 h-4 w-4" />Back</Button></Link>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => navigate({ to: ".", params: { id }, search: { tab: "messages" }, replace: true })}
+            >
+              <MessageSquare className="mr-2 h-4 w-4" />Message
+            </Button>
             <Link to="/admin/client-programs/$clientId" params={{ clientId: id }}>
               <Button variant="outline" size="sm"><Dumbbell className="mr-2 h-4 w-4" />Training Program</Button>
             </Link>
-            {form.drive_folder_link && (
-              <a href={form.drive_folder_link} target="_blank" rel="noreferrer">
-                <Button variant="outline" size="sm"><FolderOpen className="mr-2 h-4 w-4" />Open Drive</Button>
-              </a>
-            )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => navigate({ to: ".", params: { id }, search: { tab: "nutrition" }, replace: true })}
+            >
+              <Apple className="mr-2 h-4 w-4" />Nutrition
+            </Button>
             {canPov && (
               <Button
                 size="sm"
@@ -411,20 +515,37 @@ function ClientDetail() {
                 <Eye className="mr-2 h-4 w-4" />Client POV
               </Button>
             )}
-            <Button variant="outline" size="sm" onClick={() => setPriceCardOpen(true)}><Tag className="mr-2 h-4 w-4" />Assign Offer / View Price Card</Button>
-            <Button variant="outline" size="sm" onClick={() => setBookingLinkOpen(true)}><Link2 className="mr-2 h-4 w-4" />Send Booking Link</Button>
-            <ActionButton variant="outline" size="sm" onAction={sendSetup} loadingLabel="Sending…" successLabel="Sent" successToast={false} errorToast={false} icon={<Mail className="h-4 w-4" />}>Send setup link</ActionButton>
-            {form.status === "Deactivated" ? (
-              <Button variant="outline" size="sm" onClick={() => setReactivateOpen(true)}>
-                <Eye className="mr-2 h-4 w-4" />Reactivate
-              </Button>
-            ) : (
-              <Button variant="outline" size="sm" onClick={() => setDeactivateOpen(true)}>
-                <Eye className="mr-2 h-4 w-4" />Deactivate
-              </Button>
-            )}
-            <Button variant="outline" size="sm" onClick={archive}><Archive className="mr-2 h-4 w-4" />{form.archived ? "Restore" : "Archive"}</Button>
-            <Button variant="outline" size="sm" className="text-destructive hover:text-destructive" onClick={() => setDeleteStep(1)}><Trash2 className="mr-2 h-4 w-4" />Delete</Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm"><MoreHorizontal className="mr-2 h-4 w-4" />More Actions</Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-64">
+                <DropdownMenuLabel>Setup & Access</DropdownMenuLabel>
+                <DropdownMenuItem onSelect={sendSetup}><Mail className="mr-2 h-4 w-4" />Send setup email</DropdownMenuItem>
+                <DropdownMenuItem onSelect={copySetupLink}><Copy className="mr-2 h-4 w-4" />Copy setup link</DropdownMenuItem>
+                <DropdownMenuItem onSelect={sendReset}><KeyRound className="mr-2 h-4 w-4" />Send password reset</DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel>Scheduling & Offers</DropdownMenuLabel>
+                <DropdownMenuItem onSelect={() => setBookingLinkOpen(true)}><Link2 className="mr-2 h-4 w-4" />Send booking link</DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => setPriceCardOpen(true)}><Tag className="mr-2 h-4 w-4" />Assign offer / price card</DropdownMenuItem>
+                {form.drive_folder_link && (
+                  <DropdownMenuItem onSelect={() => window.open(form.drive_folder_link, "_blank", "noreferrer")}>
+                    <FolderOpen className="mr-2 h-4 w-4" />Open Drive folder
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel>Lifecycle</DropdownMenuLabel>
+                {form.status === "Deactivated" ? (
+                  <DropdownMenuItem onSelect={() => setReactivateOpen(true)}><Eye className="mr-2 h-4 w-4" />Reactivate</DropdownMenuItem>
+                ) : (
+                  <DropdownMenuItem onSelect={() => setDeactivateOpen(true)}><Eye className="mr-2 h-4 w-4" />Deactivate</DropdownMenuItem>
+                )}
+                <DropdownMenuItem onSelect={archive}><Archive className="mr-2 h-4 w-4" />{form.archived ? "Restore" : "Archive"}</DropdownMenuItem>
+                <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => setDeleteStep(1)}>
+                  <Trash2 className="mr-2 h-4 w-4" />Delete client
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <Button size="sm" className="bg-gradient-primary uppercase font-bold" onClick={save}><Save className="mr-2 h-4 w-4" />Save</Button>
           </>
         }
@@ -456,23 +577,10 @@ function ClientDetail() {
         value={tab ?? "summary"}
         onValueChange={(v) => navigate({ to: ".", params: { id }, search: { tab: v as TabValue }, replace: true })}
       >
-        <TabsList className="mb-6 flex flex-wrap h-auto">
-          <TabsTrigger value="summary">Summary</TabsTrigger>
-          <TabsTrigger value="training">Training</TabsTrigger>
-          <TabsTrigger value="nutrition">Nutrition Targets</TabsTrigger>
-          <TabsTrigger value="cardio">Cardio Targets</TabsTrigger>
-         <TabsTrigger value="metrics">Progress Metrics</TabsTrigger>
-          <TabsTrigger value="messages">Messages</TabsTrigger>
-          <TabsTrigger value="lift-videos">Lift Videos</TabsTrigger>
-          <TabsTrigger value="documents">Documents</TabsTrigger>
-          <TabsTrigger value="sessions">Sessions</TabsTrigger>
-          <TabsTrigger value="purchases">Purchases</TabsTrigger>
-          <TabsTrigger value="billing">Billing</TabsTrigger>
-          <TabsTrigger value="agreements">Agreements</TabsTrigger>
-          <TabsTrigger value="notes">Notes</TabsTrigger>
-          <TabsTrigger value="info">Account Info</TabsTrigger>
-          <TabsTrigger value="account">Account & Access</TabsTrigger>
-        </TabsList>
+        <SectionNav
+          activeTab={(tab ?? "summary") as TabValue}
+          onChange={(v) => navigate({ to: ".", params: { id }, search: { tab: v }, replace: true })}
+        />
 
         <TabsContent value="summary" className="grid gap-6 md:grid-cols-3">
         <Card className="border-border bg-card p-6 md:col-span-2 space-y-4">
