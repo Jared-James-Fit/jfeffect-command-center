@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { AlertTriangle, ArrowLeft, Plus, Trash2, Save, Clock, Copy, LayoutGrid, CalendarRange, ArrowRight, ZoomIn, ZoomOut, Maximize2, Minimize2, PanelLeftClose, PanelLeftOpen, Rows3, ChevronDown, ChevronUp, Settings2, Undo2, Redo2, ClipboardCopy, ClipboardPaste, Expand, RotateCcw, ArrowLeftRight } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Plus, Trash2, Save, Clock, Copy, LayoutGrid, CalendarRange, ArrowRight, ZoomIn, ZoomOut, Maximize2, Minimize2, PanelLeftClose, PanelLeftOpen, Rows3, ChevronDown, ChevronUp, Settings2, Undo2, Redo2, ClipboardCopy, ClipboardPaste, Expand, RotateCcw, ArrowLeftRight, Video, VideoOff } from "lucide-react";
 import { toast } from "sonner";
 import {
   getTemplate, updateTemplate, summarizeTemplatePayload, TIME_PROFILES,
@@ -392,6 +392,13 @@ function writePrefs(p: EditorPrefs) {
   try { window.localStorage.setItem(PREFS_KEY, JSON.stringify(p)); } catch {}
 }
 
+// True when the exercise has at least one demo video link (any provider).
+function hasExerciseVideo(ex: any): boolean {
+  if (!ex) return false;
+  const fields = [ex.video_url, ex.youtube_url, ex.vimeo_url];
+  return fields.some((v) => typeof v === "string" && v.trim().length > 0);
+}
+
 // Append a row into the first day reachable inside any template payload shape.
 export function appendRowToFirstDay(payload: any, type: string, row: any) {
   // New rows default to NO suggested load (percentage_basis="none").
@@ -448,7 +455,7 @@ function TemplateEditor() {
     queryFn: async () =>
       (await supabase
         .from("exercises")
-        .select("id, name, muscle_group, category, tags, exercise_category, is_competition_lift, competition_lift_type")
+        .select("id, name, muscle_group, category, tags, exercise_category, is_competition_lift, competition_lift_type, video_url, youtube_url, vimeo_url")
         .order("name")).data ?? [],
   });
 
@@ -1602,6 +1609,17 @@ function DayEditor({ day, setDay, exercises, compact, dayKey }: { day: any; setD
     const exById = new Map<string, any>((exercises as any[]).map((e) => [e.id, e]));
     return derivePurposeLabels(rows, (r: any) => (r.exercise_id ? exById.get(r.exercise_id) : null));
   }, [rows, exercises]);
+  // Video coverage: track which prescribed exercises have a demo video link.
+  // Custom-name rows (no exercise_id) are counted as missing so coaches can spot them.
+  const videoStats = useMemo(() => {
+    const exById = new Map<string, any>((exercises as any[]).map((e) => [e.id, e]));
+    let withV = 0;
+    for (const r of rows) {
+      const ex = r.exercise_id ? exById.get(r.exercise_id) : null;
+      if (hasExerciseVideo(ex)) withV += 1;
+    }
+    return { withV, total: rows.length, missing: rows.length - withV };
+  }, [rows, exercises]);
   const [dragOver, setDragOver] = useState(false);
   const [dragRowIdx, setDragRowIdx] = useState<number | null>(null);
   const [dropTargetIdx, setDropTargetIdx] = useState<number | null>(null);
@@ -1719,6 +1737,24 @@ function DayEditor({ day, setDay, exercises, compact, dayKey }: { day: any; setD
       <div className="flex items-center justify-between text-[11px] text-muted-foreground">
         <span className="inline-flex items-center gap-2">
           <span className="inline-flex items-center gap-1"><Clock className="h-3 w-3" /> Est {durationRange(dayMin)}</span>
+          {videoStats.total > 0 && (
+            <span
+              className={cn(
+                "inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-semibold",
+                videoStats.missing === 0
+                  ? "border-emerald-400/40 bg-emerald-500/10 text-emerald-300"
+                  : "border-amber-400/40 bg-amber-500/10 text-amber-300",
+              )}
+              title={
+                videoStats.missing === 0
+                  ? "Every exercise in this day has a demo video"
+                  : `${videoStats.missing} exercise${videoStats.missing === 1 ? "" : "s"} missing a demo video`
+              }
+            >
+              {videoStats.missing === 0 ? <Video className="h-3 w-3" /> : <VideoOff className="h-3 w-3" />}
+              Videos {videoStats.withV}/{videoStats.total}
+            </span>
+          )}
           {isActive && (
             <span className="inline-flex items-center rounded bg-primary px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-primary-foreground">
               Editing{day?.title ? ` · ${day.title}` : ""}
@@ -2087,6 +2123,37 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
     "dark:bg-white dark:text-slate-900 dark:border-slate-300 dark:placeholder:text-slate-400";
   const exMeta = (exercises as any[]).find((e) => e.id === row.exercise_id) ?? null;
   const exName = exMeta?.name ?? row.exercise_name_override ?? "";
+  const rowHasVideo = hasExerciseVideo(exMeta);
+  const videoUrl: string | null = exMeta
+    ? (exMeta.video_url || exMeta.youtube_url || exMeta.vimeo_url || null)
+    : null;
+  const videoBadgeCls = cn(
+    "inline-flex shrink-0 items-center gap-0.5 rounded-full border px-1 py-0 text-[9px] font-bold uppercase tracking-wide",
+    rowHasVideo
+      ? "border-emerald-400/40 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20"
+      : "border-amber-400/50 bg-amber-500/10 text-amber-300",
+  );
+  const VideoBadge = rowHasVideo && videoUrl ? (
+    <a
+      href={videoUrl}
+      target="_blank"
+      rel="noreferrer"
+      onClick={(e) => e.stopPropagation()}
+      className={videoBadgeCls}
+      title="Open demo video in a new tab"
+    >
+      <Video className="h-2.5 w-2.5" />
+      Video
+    </a>
+  ) : (
+    <span
+      className={videoBadgeCls}
+      title={rowHasVideo ? "Demo video linked" : "No demo video on this exercise — add one in the library"}
+    >
+      {rowHasVideo ? <Video className="h-2.5 w-2.5" /> : <VideoOff className="h-2.5 w-2.5" />}
+      {rowHasVideo ? "Video" : "No video"}
+    </span>
+  );
   const accent = exerciseAccent(exMeta, row.card_color);
   const restCat = resolveCategory(exMeta);
   const restDefault = defaultRestSeconds(exMeta);
@@ -2255,6 +2322,7 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
                   purposeLabelBadgeClass(purposeLabel),
                 )}>{purposeLabel}</span>
               )}
+              {(row.exercise_id || row.exercise_name_override) && VideoBadge}
               <span className="truncate text-sm font-semibold">{exName || <span className="italic text-muted-foreground">Unnamed exercise</span>}</span>
             </div>
             <div className="mt-0.5 truncate text-[11px] text-muted-foreground">
