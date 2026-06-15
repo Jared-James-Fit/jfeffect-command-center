@@ -124,6 +124,7 @@ export function ProgramAssignmentPlanner({ clientId, templateId, onDone }: Props
   const [publishStatus, setPublishStatus] = useState<PublishStatus>(initial.publishStatus);
   const [publishAt, setPublishAt] = useState<string | null>(initial.publishAt);
   const [idempotencyKey] = useState<string>(initial.idempotencyKey);
+  const [programName, setProgramName] = useState<string | null>(initial.programName);
   const [committing, setCommitting] = useState(false);
 
   // Default-select all once payload loads if user has no prior selection.
