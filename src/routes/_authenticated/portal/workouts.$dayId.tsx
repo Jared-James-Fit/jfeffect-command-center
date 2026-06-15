@@ -510,6 +510,7 @@ function WorkoutDay() {
 
   // Focus / full-screen logging mode.
   const [focusMode, setFocusMode] = useState(false);
+  const [moveOpen, setMoveOpen] = useState(false);
   useEffect(() => {
     if (!focusMode) return;
     const prev = document.body.style.overflow;
