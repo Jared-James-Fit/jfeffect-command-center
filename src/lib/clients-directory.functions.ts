@@ -39,6 +39,11 @@ export type DirectoryRow = {
   block_start: string | null;
   block_end: string | null;
   block_status: string | null;
+  next_block_id: string | null;
+  next_block_name: string | null;
+  next_block_start: string | null;
+  next_block_end: string | null;
+  next_block_status: string | null;
   nut_end: string | null;
   card_end: string | null;
   pending_reviews: number;
