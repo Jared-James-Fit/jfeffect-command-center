@@ -280,6 +280,20 @@ export function ClientBlockView({
 
   // ── Render ────────────────────────────────────────────────────────────────
 
+  // Per-week completion stats for the horizontal week strip.
+  // MUST be declared before any conditional `return` below so hook order
+  // stays stable between loading and loaded renders (React #310).
+  const weekStats = useMemo(() => {
+    const m = new Map<string, { total: number; done: number }>();
+    for (const w of weeks as any[]) {
+      const ds = (tree?.days ?? []).filter((d: any) => d.week_id === w.id);
+      let done = 0;
+      for (const d of ds) if (completionByDay.get(d.id)?.completed_at) done++;
+      m.set(w.id, { total: ds.length, done });
+    }
+    return m;
+  }, [weeks, tree?.days, completionByDay]);
+
   if (!blockId) {
     return (
       <Card className="p-6 text-sm text-muted-foreground">
@@ -319,18 +333,6 @@ export function ClientBlockView({
     const cur = weeks.find((w: any) => isCurrentWeek(weekDisplayRange(block, w)));
     if (cur) onWeekChange(cur.week_index);
   };
-
-  // Per-week completion stats for the horizontal week strip.
-  const weekStats = useMemo(() => {
-    const m = new Map<string, { total: number; done: number }>();
-    for (const w of weeks as any[]) {
-      const ds = (tree?.days ?? []).filter((d: any) => d.week_id === w.id);
-      let done = 0;
-      for (const d of ds) if (completionByDay.get(d.id)?.completed_at) done++;
-      m.set(w.id, { total: ds.length, done });
-    }
-    return m;
-  }, [weeks, tree?.days, completionByDay]);
 
   return (
     <section className="space-y-3">
