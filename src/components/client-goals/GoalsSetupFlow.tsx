@@ -235,7 +235,7 @@ function AvailabilityStep({ value, setField }: StepProps) {
           value={(value.available_weekdays ?? []) as any}
           onChange={(v) => setField("available_weekdays", v)}
           multi
-          labelFor={(d) => WEEKDAY_LABELS[d]}
+          labelFor={(d) => WEEKDAY_LABELS[d as keyof typeof WEEKDAY_LABELS]}
         />
       </div>
       <div className="space-y-3">
