@@ -55,7 +55,7 @@ export function QuickActionsMenu({ r }: { r: DirectoryRow }) {
           </>
         ) : (
           <DropdownMenuItem asChild>
-            <Link to="/admin/client-programs/$clientId" params={{ clientId: r.id }} className="flex items-center gap-2">
+            <Link to="/admin/program-assign/$clientId" params={{ clientId: r.id }} className="flex items-center gap-2">
               <Dumbbell className="h-4 w-4" /> Assign Program
             </Link>
           </DropdownMenuItem>
@@ -142,9 +142,15 @@ export function ClientMoreMenu({
         <DropdownMenuSeparator />
         <DropdownMenuLabel className="text-xs">Training</DropdownMenuLabel>
         <DropdownMenuItem asChild>
-          <Link to="/admin/client-programs/$clientId" params={{ clientId: r.id }} className="flex items-center gap-2">
-            <Dumbbell className="h-4 w-4" /> {r.block_id ? "Open Program" : "Assign Program"}
-          </Link>
+          {r.block_id ? (
+            <Link to="/admin/client-programs/$clientId" params={{ clientId: r.id }} className="flex items-center gap-2">
+              <Dumbbell className="h-4 w-4" /> Open Program
+            </Link>
+          ) : (
+            <Link to="/admin/program-assign/$clientId" params={{ clientId: r.id }} className="flex items-center gap-2">
+              <Dumbbell className="h-4 w-4" /> Assign Program
+            </Link>
+          )}
         </DropdownMenuItem>
         {r.block_id && (
           <DropdownMenuItem asChild>
