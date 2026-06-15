@@ -1853,7 +1853,15 @@ function SwapExerciseButton({ row, setRow, exercises }: { row: any; setRow: (r: 
     const term = q.trim().toLowerCase();
     const list = (exercises as any[]).filter((e) => e.id !== row.exercise_id);
     if (!term) return list.slice(0, 100);
-    return list.filter((e) => (e.name ?? "").toLowerCase().includes(term)).slice(0, 100);
+    return list
+      .filter((e) => {
+        const hay = [e.name, e.muscle_group, e.category, ...(e.tags ?? [])]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+        return hay.includes(term);
+      })
+      .slice(0, 200);
   }, [exercises, q, row.exercise_id]);
   const pick = (ex: any) => {
     // Preserve every existing input (sets/reps/rpe/rir/load/rest/tempo/notes…)
