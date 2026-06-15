@@ -7104,17 +7104,63 @@ export type Database = {
           },
         ]
       }
+      member_plan_audit: {
+        Row: {
+          action: string
+          actor_user_id: string | null
+          created_at: string
+          id: string
+          metadata: Json
+          notes: string | null
+          plan_id: string
+          version: number | null
+        }
+        Insert: {
+          action: string
+          actor_user_id?: string | null
+          created_at?: string
+          id?: string
+          metadata?: Json
+          notes?: string | null
+          plan_id: string
+          version?: number | null
+        }
+        Update: {
+          action?: string
+          actor_user_id?: string | null
+          created_at?: string
+          id?: string
+          metadata?: Json
+          notes?: string | null
+          plan_id?: string
+          version?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "member_plan_audit_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "member_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       member_plan_enrollments: {
         Row: {
           completed_at: string | null
           created_at: string
           current_week: number
           id: string
+          import_mode: string
           member_id: string
           notes: string | null
           plan_id: string
+          selection_json: Json | null
+          source_version: number | null
+          start_date: string | null
           started_at: string
           status: string
+          training_days: string[]
           updated_at: string
           workouts_completed: number
           workouts_total: number
@@ -7124,11 +7170,16 @@ export type Database = {
           created_at?: string
           current_week?: number
           id?: string
+          import_mode?: string
           member_id: string
           notes?: string | null
           plan_id: string
+          selection_json?: Json | null
+          source_version?: number | null
+          start_date?: string | null
           started_at?: string
           status?: string
+          training_days?: string[]
           updated_at?: string
           workouts_completed?: number
           workouts_total?: number
@@ -7138,11 +7189,16 @@ export type Database = {
           created_at?: string
           current_week?: number
           id?: string
+          import_mode?: string
           member_id?: string
           notes?: string | null
           plan_id?: string
+          selection_json?: Json | null
+          source_version?: number | null
+          start_date?: string | null
           started_at?: string
           status?: string
+          training_days?: string[]
           updated_at?: string
           workouts_completed?: number
           workouts_total?: number
@@ -7164,23 +7220,116 @@ export type Database = {
           },
         ]
       }
+      member_plan_events: {
+        Row: {
+          actor_user_id: string | null
+          created_at: string
+          event_type: string
+          id: string
+          member_id: string | null
+          metadata: Json
+          plan_id: string
+        }
+        Insert: {
+          actor_user_id?: string | null
+          created_at?: string
+          event_type: string
+          id?: string
+          member_id?: string | null
+          metadata?: Json
+          plan_id: string
+        }
+        Update: {
+          actor_user_id?: string | null
+          created_at?: string
+          event_type?: string
+          id?: string
+          member_id?: string | null
+          metadata?: Json
+          plan_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "member_plan_events_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "app_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "member_plan_events_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "member_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      member_plan_saved: {
+        Row: {
+          created_at: string
+          id: string
+          member_id: string
+          plan_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          member_id: string
+          plan_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          member_id?: string
+          plan_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "member_plan_saved_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "app_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "member_plan_saved_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "member_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       member_plans: {
         Row: {
+          allow_full_program: boolean
+          allow_partial_imports: boolean
+          allow_pdf_download: boolean
+          audience_mode: string
+          change_notes: string | null
           cover_image_url: string | null
           created_at: string
           created_by: string | null
           days_per_week: number
           description: string | null
           difficulty: string
+          eligible_plan_ids: string[]
           equipment_needed: string[]
           est_minutes_per_workout: number | null
           featured: boolean
           goal: string | null
           id: string
+          imports_count: number
+          last_published_version: number | null
           last_verified_at: string | null
           logging_enabled: boolean
           membership_status: string
           name: string
+          notify_on_publish: boolean
+          pdf_downloads_count: number
+          previews_count: number
+          public_title: string | null
           published_at: string | null
           published_by: string | null
           published_payload: Json
@@ -7202,21 +7351,33 @@ export type Database = {
           workouts_total: number
         }
         Insert: {
+          allow_full_program?: boolean
+          allow_partial_imports?: boolean
+          allow_pdf_download?: boolean
+          audience_mode?: string
+          change_notes?: string | null
           cover_image_url?: string | null
           created_at?: string
           created_by?: string | null
           days_per_week?: number
           description?: string | null
           difficulty?: string
+          eligible_plan_ids?: string[]
           equipment_needed?: string[]
           est_minutes_per_workout?: number | null
           featured?: boolean
           goal?: string | null
           id?: string
+          imports_count?: number
+          last_published_version?: number | null
           last_verified_at?: string | null
           logging_enabled?: boolean
           membership_status?: string
           name: string
+          notify_on_publish?: boolean
+          pdf_downloads_count?: number
+          previews_count?: number
+          public_title?: string | null
           published_at?: string | null
           published_by?: string | null
           published_payload?: Json
@@ -7238,21 +7399,33 @@ export type Database = {
           workouts_total?: number
         }
         Update: {
+          allow_full_program?: boolean
+          allow_partial_imports?: boolean
+          allow_pdf_download?: boolean
+          audience_mode?: string
+          change_notes?: string | null
           cover_image_url?: string | null
           created_at?: string
           created_by?: string | null
           days_per_week?: number
           description?: string | null
           difficulty?: string
+          eligible_plan_ids?: string[]
           equipment_needed?: string[]
           est_minutes_per_workout?: number | null
           featured?: boolean
           goal?: string | null
           id?: string
+          imports_count?: number
+          last_published_version?: number | null
           last_verified_at?: string | null
           logging_enabled?: boolean
           membership_status?: string
           name?: string
+          notify_on_publish?: boolean
+          pdf_downloads_count?: number
+          previews_count?: number
+          public_title?: string | null
           published_at?: string | null
           published_by?: string | null
           published_payload?: Json

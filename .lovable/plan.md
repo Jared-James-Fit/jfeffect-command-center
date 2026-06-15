@@ -1,123 +1,114 @@
-## Goals & Setup — Client Profile Section
+## Membership Workout Library — Build Plan
 
-A new mobile-first questionnaire surfaced on every client profile, plus a coach-facing summary panel, private notes, and change notifications. Existing programs, workouts, and nutrition targets stay untouched.
+A full publish → browse → import flow for admin workout templates, replacing the "Phase 2" stub in Share & Publish.
 
 ---
 
-### 1. Data model (one migration)
+### 1. Database (single migration)
 
-New tables, all RLS-enabled with GRANTs:
+New tables (all with GRANTs + RLS):
 
-- `client_goals_setup` — one row per client, stores all answers as structured columns + JSONB for multi-select lists.
-  - `client_id` (FK clients, unique)
-  - `main_goal` (enum-ish text), `main_goal_other` (text)
-  - `goal_target` (text)
-  - `training_days_per_week` (int 2–6)
-  - `available_weekdays` (text[]) — mon..sun
-  - `workout_length_minutes` (int)
-  - `training_experience` (text)
-  - `training_styles` (text[])
-  - `training_location` (text)
-  - `equipment` (text[]) — flat for single location
-  - `equipment_by_location` (jsonb) — `{ locationLabel: string[] }` when multi-location
-  - `nutrition_goal` (text)
-  - `nutrition_preference` (text)
-  - `food_restrictions_has` (bool), `food_restrictions_details` (text)
-  - `nutrition_challenges` (text[]) — max 3 enforced in app + trigger
-  - `injuries_has` (bool), `injuries_details` (text)
-  - `final_notes` (text)
-  - `completed_at`, `updated_at`, `last_reviewed_at`, `last_reviewed_by`
-  - `update_requested_at`, `update_requested_by`
-
-- `client_goals_setup_notes` — private coach notes (never visible to client).
-  - `id`, `client_id`, `author_id`, `body`, `created_at`
-
-- `client_goals_setup_audit` — change history (which fields changed, when, by whom). Powers coach notifications.
-
-- Trigger: after update of notify-worthy columns (main_goal, training availability, equipment/location, injuries, nutrition_goal, food_restrictions, goal_target [for competition date]) → insert a row in existing `tasks` (or `coach_followups`) for the assigned coach.
+- `membership_library_listings` — one row per published template.
+  Fields: `template_id`, `published_version`, `status` (draft|published|unpublished), `title`, `description`, `cover_image_url`, `category_tags[]`, `difficulty`, `goal`, `days_per_week`, `duration_weeks`, `equipment[]`, `allow_full_program`, `allow_blocks`, `allow_weeks`, `allow_days`, `allow_pdf_download`, `audience_mode` (all_active | by_access_level | by_plan), `required_access_levels[]`, `eligible_plan_ids[]`, `published_at`, `published_by`, `unpublished_at`, `unpublished_by`.
+- `membership_library_versions` — historical snapshot of (`listing_id`, `version`, `payload_snapshot_jsonb`, `published_at`, `published_by`, `change_notes`). Pins imports to a specific version.
+- `membership_library_imports` — `listing_id`, `version`, `member_user_id`, `imported_program_id` (FK new copy in `pl_templates`), `import_mode` (full | partial), `selection_json`, `start_date`, `imported_at`.
+- `membership_library_events` — analytics: `listing_id`, `member_user_id`, `event_type` (preview | import | pdf_download | unpublish | publish | update_publish), `metadata`, `created_at`.
+- `membership_library_saved` — member "save for later" pins.
 
 RLS:
-- `client_goals_setup`: client can SELECT/INSERT/UPDATE their own row; assigned coach + admin via existing `has_role` / coach-of-client check.
-- `client_goals_setup_notes`: coach + admin only — no client policy.
-- `client_goals_setup_audit`: coach + admin SELECT only.
+- Admin: full manage. Coaches: read only (no manage).
+- Members: SELECT on listings where `status='published'` AND member has active/trialing membership AND (audience_mode='all_active' OR access overlap via `member_access` OR `member_plan_enrollments.plan_id` overlap). Enforced via SECURITY DEFINER `can_member_access_listing(uuid, uuid)`.
+- Members: full CRUD on their own `membership_library_imports` and `membership_library_saved` rows.
+- Inserts to `membership_library_events` allowed for the acting member (preview/download/import) and admin (publish/unpublish).
 
-### 2. Server functions (`src/lib/client-goals/goals.functions.ts`)
+Helper RPC `clone_template_for_member(listing_id, version, selection)` (SECURITY DEFINER) duplicates `pl_templates` + `pl_blocks/weeks/days/exercise_blocks/exercise_rows` rows into a new template owned by the member, tagged with `source_listing_id` + `source_version`. Add nullable columns `source_listing_id uuid`, `source_version int`, `owner_member_user_id uuid` to `pl_templates`.
 
-- `getClientGoalsSetup({ clientId })` — coach/admin or self.
-- `upsertClientGoalsSetup({ clientId, patch })` — partial save (Save & continue later). Validates with zod. Writes audit rows for changed fields. Triggers notifications via DB trigger.
-- `markGoalsReviewed({ clientId })` — coach/admin only.
-- `requestGoalsUpdate({ clientId, message? })` — coach/admin only; sets `update_requested_at`, creates a client action request.
-- `listGoalsNotes({ clientId })` / `addGoalsNote({ clientId, body })` — coach/admin only.
+### 2. Server functions (`src/lib/membership-library.functions.ts`)
 
-All use `requireSupabaseAuth`; role checks via `has_role` and the existing coach-of-client helper.
+Admin (requires `has_role(admin)`):
+`upsertListing`, `publishListing` (snapshots current template payload into `membership_library_versions`), `unpublishListing`, `publishUpdate`, `listAdminListings`, `getListingAnalytics`, `duplicateListing`, `notifyEligibleMembers`.
 
-### 3. UI — client side (mobile-first)
+Member (uses `requireSupabaseAuth`):
+`listMemberLibrary` (filters via RPC), `getListingForMember` (preview payload, strips admin-only notes), `recordPreviewEvent`, `importListing` ({listingId, version, mode, selection, startDate, trainingDays, replaceActive}), `recordPdfDownload`, `saveListing`, `unsaveListing`, `listMyImports`, `checkForUpdates`.
 
-Route: `src/routes/_authenticated/portal/goals-setup.tsx`
+PDF generator runs inside `downloadListingPdf` server fn (pdf-lib via `await import`), returns base64 → client downloads. Strips admin notes / IDs.
 
-- Stepped flow (7 steps matching the spec): Goals → Training Availability → Experience → Gym/Equipment → Nutrition → Injuries → Final notes.
-- Big tap targets, single-select chip grids, multi-select chip grids, weekday pills, length slider-as-chips.
-- Sticky bottom bar: **Back / Save & continue later / Next**. Each step autosaves on Next.
-- "Other" reveals a small text input inline.
-- Multi-location: if `training_location = "Multiple locations"`, show "Add location" rows, each with its own equipment chip grid → saved to `equipment_by_location`.
-- Entry point on portal dashboard:
-  - If incomplete → prominent **Goals & Setup incomplete** card linking to the flow.
-  - If complete → "Update Goals & Setup" link in `/portal/account`.
+### 3. Share & Publish modal rewrite
 
-### 4. UI — coach side
+Replace `MembershipLibrary` card in `src/components/programs/share-program-sheet.tsx`:
+- Live status badge (Draft / Published / Unpublished / Update Available)
+- "Manage Publication" → opens new `MembershipPublishDrawer` (right sheet) with: title, description, cover image upload (Supabase storage `library-covers`), category tags, difficulty, goal, days/week, duration, equipment, granular add-permissions toggles, PDF download toggle, audience selector (all active / access levels / specific plans), notify-on-publish toggle (email/in-app/SMS), version notes.
+- Action buttons: Publish / Publish Update / Unpublish / Preview as Member (opens new tab to `/m/workout-library/$listingId?preview=admin`).
+- Shows live `imports_count`, `previews_count`, `pdf_downloads_count`, published version, eligible audience summary.
 
-New tab on the client profile: **Goals & Setup**
-File: `src/components/clients/goals-setup-panel.tsx`, mounted from the existing client profile route.
+Remove all "Phase 2" wording.
 
-Top: **Client Profile Summary** card (read-only chips/rows) showing every field listed in the spec + last updated date.
+### 4. Admin page `/admin/membership-library`
 
-Buttons:
-- **Edit** → opens the same stepped flow in a sheet, prefilled (coach can edit on client's behalf).
-- **Request client update** → opens dialog with optional message; calls `requestGoalsUpdate`.
-- **Mark reviewed** → calls `markGoalsReviewed`; shows reviewer + timestamp.
-- **Add private coach note** → inline composer, list of past notes below.
+Tabs: Published · Drafts · Unpublished · Categories · Member Access · Analytics.
+Toolbar: search, filters (category, goal, level, duration, equipment, plan).
+Row actions: Publish / Unpublish / Edit listing / Change access / Preview as member / Duplicate / Open source in builder / View imports list.
+Primary CTA "Publish Workout Program" → modal listing existing `pl_templates` to wrap as listings.
 
-Injuries are rendered with a `warning` badge when `injuries_has = true`.
+Add nav entry in `src/lib/admin-nav.ts`.
 
-### 5. Onboarding integration
+### 5. Member library `/m/workout-library`
 
-- Add a "Goals & Setup" step to the existing client onboarding flow (non-blocking — they can skip and finish later).
-- For existing clients (no row in `client_goals_setup`): no forced redirect; profile summary shows **"Goals & Setup incomplete"** with a CTA.
+Listing grid (paginated 12/page): cover, title, short desc, difficulty, goal, days/week, length, equipment, "Included With Your Membership" badge, Preview + Add buttons. Locked cards show lock icon + required tier.
+Filters: search, goal, difficulty, days/week, duration, equipment, training location, quick-tag chips (Powerlifting, Bodybuilding, General strength, Fat loss, At-home).
 
-### 6. Equipment-aware warnings (hook only, no behavior change to existing data)
+### 6. Preview page `/m/workout-library/$listingId`
 
-- Export a helper `useClientEquipmentSet(clientId)` returning the union of equipment across locations.
-- Wire a non-blocking warning chip in the program planner's exercise picker when an exercise has a required-equipment tag missing from the client's set. Existing programs/workouts/targets remain untouched.
+Server-fn-fetched preview payload (no admin-only fields). Sections: overview, who-for, block/week/day outline, exercise preview, coach notes (public only), what's included. Actions: Add Full Program · Choose Specific Content · Download PDF (if enabled) · Save for Later.
 
-### 7. Files (new / edited)
+### 7. Add-to-account flow
 
-**New**
-- `supabase/migrations/<ts>_client_goals_setup.sql`
-- `src/lib/client-goals/goals.functions.ts`
-- `src/lib/client-goals/schema.ts` (zod + option constants)
-- `src/components/client-goals/GoalsSetupFlow.tsx` (stepped flow, shared client + coach edit)
-- `src/components/client-goals/steps/*.tsx` (one per step)
-- `src/components/client-goals/GoalsSummaryCard.tsx`
-- `src/components/clients/goals-setup-panel.tsx` (coach tab content)
-- `src/routes/_authenticated/portal/goals-setup.tsx`
+Drawer: Start date · preferred training days · add to calendar toggle · destination (Save to My Programs [default] / Replace active program [confirmation required]).
+Calls `importListing` → returns new `imported_program_id` → routes to `/m/my-plans/$enrollmentId` (or My Programs landing).
 
-**Edited**
-- Client profile route → add "Goals & Setup" tab.
-- Portal dashboard → add incomplete CTA card.
-- `src/routes/_authenticated/portal/account.tsx` → "Update Goals & Setup" link.
-- Onboarding flow → add optional Goals & Setup step.
+Advanced selection: tree of blocks → weeks → days with Select All / partial checkboxes, summary of what will be added, destination picker (My Programs / existing personal program / future calendar date). Blocks injection into coach-managed programs gated by `pl_templates.member_editable=true`.
 
-### 8. Out of scope (confirming)
+### 8. PDF download
 
-- No changes to existing assigned programs, scheduled workouts, completed workouts, or nutrition targets.
-- No automatic regeneration of plans from these answers — coach-facing summaries, filters, and warnings only.
+`downloadListingPdf` builds branded PDF, records `pdf_download` event, returns blob. Disabled when `allow_pdf_download=false` — server fn rejects + button hidden.
+
+### 9. Nav additions
+
+- Member sidebar: "Workout Library" between Plans and Tools.
+- Admin sidebar: "Membership Library" under Programming.
+
+### 10. Notifications (admin-confirmed)
+
+`notifyEligibleMembers(listingId, channels[])` — uses existing broadcast / SMS / email infra. Only sent when admin clicks "Notify eligible members" in publish drawer.
+
+### 11. Update flow
+
+`checkForUpdates` compares import's `source_version` vs current `published_version`. Shows "Update Available" on member's My Programs row → Preview Changes (diff summary) / Import Updated Copy (creates new clone, preserves old + completed logs) / Keep Current.
+
+### 12. Unpublish
+
+Confirmation modal explains: card hidden from new browsing, imports blocked, existing copies + logs preserved, audit recorded. Records `unpublished_by`/`unpublished_at` + event row.
 
 ---
 
-### Questions before I build
+### Technical details
 
-1. **Coach notifications**: do you want change-notifications to land in the existing **Tasks** queue, in **Coach followups**, or as a chat DM to the assigned coach? (Default plan: a Task assigned to the coach.)
-2. **"Request client update"**: should this also trigger an email/SMS to the client, or only show as an in-app banner in their portal? (Default plan: in-app banner + existing notification system, no email.)
-3. **Multi-location equipment**: ok to ask for short location labels ("Home", "Hotel gym", etc.) per location, or do you want a fixed list?
+- New files:
+  `supabase/migrations/<ts>_membership_library.sql`
+  `src/lib/membership-library.functions.ts`
+  `src/lib/membership-library-pdf.server.ts`
+  `src/components/programs/membership-publish-drawer.tsx`
+  `src/routes/_authenticated/admin/membership-library.tsx`
+  `src/routes/_authenticated/admin/membership-library.$listingId.tsx`
+  `src/routes/_authenticated/m/workout-library.tsx`
+  `src/routes/_authenticated/m/workout-library.$listingId.tsx`
+- Edited:
+  `src/components/programs/share-program-sheet.tsx` (replace Membership Library card)
+  `src/lib/admin-nav.ts`, member nav component
+  `src/components/app-shell` (route registration if needed)
+  `pl_templates` — add `source_listing_id`, `source_version`, `owner_member_user_id`, `member_editable` columns
+- RLS verified per-table; no existing Team Library / Coach Sharing policies modified.
+- All server fns enforce role + access checks; URL/API tampering blocked by RLS.
+- Acceptance tests (1–20) manually verified with one admin, one eligible member, one ineligible member after build.
 
-I'll proceed once you confirm or pick options.
+This is ~3–4 hours of build work and will land as one cohesive change. Approve to proceed.

@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription,
@@ -19,6 +20,8 @@ import {
   revokeCoachShare, submitForReview, listActiveCoaches,
   type ShareDestination,
 } from "@/lib/programs/sharing";
+import { getLinkedLibraryPlan } from "@/lib/membership-library.functions";
+import { MembershipPublishDrawer } from "./membership-publish-drawer";
 
 type Tpl = {
   id: string;
@@ -47,9 +50,17 @@ export function ShareProgramSheet({
     queryFn: () => (tid ? listShares(tid) : Promise.resolve([])),
     enabled: !!tid,
   });
+  const fetchLinked = useServerFn(getLinkedLibraryPlan);
+  const { data: linked } = useQuery({
+    queryKey: ["library-linked", tid],
+    queryFn: () => (tid ? fetchLinked({ data: { templateId: tid } }) : Promise.resolve(null)),
+    enabled: !!tid && viewerRole === "admin",
+  });
+  const [publishOpen, setPublishOpen] = useState(false);
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ["pl-template-shares", tid] });
     qc.invalidateQueries({ queryKey: ["pl-templates"] });
+    qc.invalidateQueries({ queryKey: ["library-linked", tid] });
   };
 
   if (!template) return null;
@@ -139,17 +150,29 @@ export function ShareProgramSheet({
             title="Membership Library"
             audience="App members with the required access level"
             statusBadge={
-              pending("membership_submission") ? (
-                <Badge variant="secondary">Pending Approval</Badge>
-              ) : (
-                <Badge variant="outline">Not Submitted</Badge>
-              )
+              viewerRole === "admin"
+                ? (() => {
+                    const lp = (linked as any)?.plan;
+                    const tRev = (linked as any)?.template_revision;
+                    if (!lp) return <Badge variant="outline">Not Published</Badge>;
+                    if (lp.status === "Published") {
+                      const hasUpdate = tRev != null && lp.last_published_version != null && tRev > lp.last_published_version;
+                      return hasUpdate
+                        ? <Badge variant="secondary">Update Available</Badge>
+                        : <Badge>Published v{lp.published_version ?? 1}</Badge>;
+                    }
+                    if (lp.membership_status === "unpublished") return <Badge variant="secondary">Unpublished</Badge>;
+                    return <Badge variant="outline">Draft</Badge>;
+                  })()
+                : pending("membership_submission")
+                  ? <Badge variant="secondary">Pending Approval</Badge>
+                  : <Badge variant="outline">Not Submitted</Badge>
             }
             primary={
               viewerRole === "admin" ? (
-                <Badge variant="outline" className="text-[10px]">
-                  Publish via Membership tab (Phase 2)
-                </Badge>
+                <Button size="sm" onClick={() => setPublishOpen(true)}>
+                  {(linked as any)?.plan ? "Manage Publication" : "Publish to Library"}
+                </Button>
               ) : pending("membership_submission") ? (
                 <Badge variant="secondary">Awaiting Admin</Badge>
               ) : (
@@ -161,7 +184,13 @@ export function ShareProgramSheet({
                 />
               )
             }
-          />
+          >
+            {viewerRole === "admin" && (linked as any)?.plan && (
+              <div className="text-[11px] text-muted-foreground">
+                {(linked as any).plan.imports_count ?? 0} imports · {(linked as any).plan.previews_count ?? 0} previews · {(linked as any).plan.pdf_downloads_count ?? 0} PDF downloads
+              </div>
+            )}
+          </DestinationRow>
 
           <Separator />
           <p className="text-[11px] text-muted-foreground">
@@ -169,6 +198,13 @@ export function ShareProgramSheet({
           </p>
         </div>
       </SheetContent>
+      {viewerRole === "admin" && (
+        <MembershipPublishDrawer
+          template={template}
+          open={publishOpen}
+          onOpenChange={setPublishOpen}
+        />
+      )}
     </Sheet>
   );
 }
