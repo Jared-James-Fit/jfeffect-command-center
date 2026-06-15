@@ -672,6 +672,10 @@ async function copyDayContent(srcDayId: string, targetWeekId: string, dayIndex: 
       tempo: opts.prescriptions ? r.tempo : null,
       time_profile: r.time_profile,
       notes: opts.notes ? r.notes : null,
+      measurement_type: r.measurement_type ?? "reps",
+      duration_seconds: opts.prescriptions ? r.duration_seconds : null,
+      reps_text_backup: opts.prescriptions ? r.reps_text_backup : null,
+      duration_seconds_backup: opts.prescriptions ? r.duration_seconds_backup : null,
     });
   }
 }
