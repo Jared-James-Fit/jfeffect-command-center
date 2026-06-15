@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
 import { ProgramAssignmentPlanner } from "@/components/program-planner/ProgramAssignmentPlanner";
 import { Card } from "@/components/ui/card";
+import { ProgramStatusBadge } from "@/components/programs/program-status-badge";
 
 type Search = { templateId?: string };
 
@@ -23,7 +24,7 @@ function PlannerPage() {
     enabled: !templateId,
     queryFn: async () => (await (supabase as any)
       .from("pl_templates")
-      .select("id, name, template_type, weeks, training_focus, tags")
+      .select("id, name, template_type, weeks, training_focus, tags, payload")
       .in("template_type", ["block","full_prep"])
       .eq("archived", false)
       .order("updated_at", { ascending: false })).data ?? [],
@@ -45,7 +46,10 @@ function PlannerPage() {
                     search={{ templateId: t.id }}
                     className="block rounded border border-border bg-secondary/20 p-2 hover:bg-secondary/40"
                   >
-                    <div className="text-sm font-semibold">{t.name}</div>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="text-sm font-semibold">{t.name}</div>
+                      <ProgramStatusBadge template={t} />
+                    </div>
                     <div className="text-[10px] text-muted-foreground">
                       {t.weeks ? `${t.weeks}w · ` : ""}{t.training_focus ?? "—"}{(t.tags ?? []).length ? ` · ${(t.tags ?? []).join(", ")}` : ""}
                     </div>

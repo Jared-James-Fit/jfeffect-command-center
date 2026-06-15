@@ -14,6 +14,8 @@ import { toast } from "sonner";
 import { findOverlappingBlock, suggestNextStartISO } from "@/lib/block-schedule";
 import { AlertTriangle } from "lucide-react";
 import { runJob } from "@/lib/progress-jobs";
+import { ProgramStatusBadge } from "@/components/programs/program-status-badge";
+import { validateTemplatePayload } from "@/lib/pl-template-validation";
 
 type Props = {
   open: boolean;
@@ -31,6 +33,7 @@ export function QuickAssignTemplateDialog({ open, onOpenChange, clientId, client
   const [endDate, setEndDate] = useState<string>("");
   const [visible, setVisible] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [ackIncomplete, setAckIncomplete] = useState(false);
 
   const { data: templates = [] } = useQuery({
     queryKey: ["pl-templates-assignable"],
@@ -45,6 +48,10 @@ export function QuickAssignTemplateDialog({ open, onOpenChange, clientId, client
 
   const selected = (templates as any[]).find((t) => t.id === templateId);
   const selectedWeeks = selected ? getTemplateWeeks(selected) : 0;
+  const selectedIssues = selected ? validateTemplatePayload(selected) : [];
+  const selectedIssueCount = selectedIssues.reduce((n, d) => n + d.missing.length, 0);
+  const isIncomplete = selectedIssueCount > 0;
+  useEffect(() => { setAckIncomplete(false); }, [templateId]);
 
   // v2 multi-block "block" templates expose individual blocks for selective assignment.
   const v2Blocks = (() => {
@@ -177,7 +184,43 @@ export function QuickAssignTemplateDialog({ open, onOpenChange, clientId, client
                 ))}
               </SelectContent>
             </Select>
+            {selected && (
+              <div className="mt-2 flex items-center justify-between gap-2">
+                <span className="text-[11px] text-muted-foreground">Build status</span>
+                <ProgramStatusBadge template={selected} size="md" />
+              </div>
+            )}
           </div>
+          {isIncomplete && (
+            <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-700 dark:text-amber-300">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                <div className="flex-1 space-y-1">
+                  <div className="font-semibold">
+                    Template is incomplete — {selectedIssueCount} {selectedIssueCount === 1 ? "field is" : "fields are"} missing
+                  </div>
+                  <ul className="max-h-32 overflow-y-auto pl-3 text-[11px]">
+                    {selectedIssues.slice(0, 6).map((d, i) => (
+                      <li key={i} className="list-disc">
+                        <span className="font-medium">{d.location}:</span> {d.missing.join("; ")}
+                      </li>
+                    ))}
+                    {selectedIssues.length > 6 && (
+                      <li className="list-disc">+{selectedIssues.length - 6} more day(s) with issues</li>
+                    )}
+                  </ul>
+                  <label className="mt-1 flex cursor-pointer items-center gap-2 text-[11px]">
+                    <input
+                      type="checkbox"
+                      checked={ackIncomplete}
+                      onChange={(e) => setAckIncomplete(e.target.checked)}
+                    />
+                    Assign anyway — I'll finish these fields later
+                  </label>
+                </div>
+              </div>
+            </div>
+          )}
           {v2Blocks.length > 1 && (() => {
             // Compute the preview of which blocks will be assigned given the mode.
             let preview = v2Blocks;
@@ -316,6 +359,7 @@ export function QuickAssignTemplateDialog({ open, onOpenChange, clientId, client
               !templateId ||
               busy ||
               !!conflict ||
+              (isIncomplete && !ackIncomplete) ||
               (v2Blocks.length > 0 && assignMode === "selected" && selectedBlockIds.length === 0)
             }
           >
