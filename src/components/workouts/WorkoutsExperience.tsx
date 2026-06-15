@@ -116,8 +116,8 @@ export function WorkoutsExperience({
             </Button>
             <Button asChild size="sm" variant="outline" className="h-8 gap-1">
               <Link
-                to={mode === "coach" ? "/admin/clients/$id/schedule" : "/portal/schedule"}
-                params={mode === "coach" ? ({ id: clientId } as any) : undefined as any}
+                to={(mode === "coach" ? "/admin/clients/$id/schedule" : "/portal/schedule") as any}
+                params={mode === "coach" ? ({ id: clientId } as any) : (undefined as any)}
                 aria-label="Open full calendar"
               >
                 <CalendarIcon className="h-3.5 w-3.5" />
@@ -137,9 +137,9 @@ export function WorkoutsExperience({
                 <DropdownMenuItem
                   onSelect={() =>
                     navigate({
-                      to: mode === "coach" ? "/admin/clients/$id/schedule" : "/portal/schedule",
-                      params: mode === "coach" ? ({ id: clientId } as any) : undefined as any,
-                    })
+                      to: (mode === "coach" ? "/admin/clients/$id/schedule" : "/portal/schedule") as any,
+                      params: mode === "coach" ? ({ id: clientId } as any) : (undefined as any),
+                    } as any)
                   }
                 >
                   <ClipboardList className="mr-2 h-4 w-4" /> Manage schedule
@@ -147,7 +147,7 @@ export function WorkoutsExperience({
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   onSelect={() =>
-                    navigate({ to: "/portal/workouts/analytics" as any })
+                    navigate({ to: "/portal/workouts/analytics" as any } as any)
                   }
                 >
                   <Activity className="mr-2 h-4 w-4" /> Training analytics
