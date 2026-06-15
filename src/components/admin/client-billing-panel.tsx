@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import {
+import { todayLocalISO } from "@/lib/today";
   getClientBillingOverview,
   recordPayment,
   voidLedgerRow,
@@ -210,7 +211,7 @@ function RecordPaymentDialog({ purchase, onDone }: { purchase: any; onDone: () =
   const [open, setOpen] = useState(false);
   const [amount, setAmount] = useState("");
   const [method, setMethod] = useState("etransfer");
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(todayLocalISO());
   const [ref, setRef] = useState("");
   const [note, setNote] = useState("");
   const m = useMutation({
@@ -334,7 +335,7 @@ function ConvertDialog({ purchase, onDone }: { purchase: any; onDone: () => void
   const fn = useServerFn(convertClientService);
   const [open, setOpen] = useState(false);
   const [newName, setNewName] = useState("");
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(todayLocalISO());
   const [delivered, setDelivered] = useState("0");
   const [newPrice, setNewPrice] = useState("");
   const [credit, setCredit] = useState("");

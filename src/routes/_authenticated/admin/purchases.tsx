@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Download } from "lucide-react";
+import { todayLocalISO } from "@/lib/today";
 
 export const Route = createFileRoute("/_authenticated/admin/purchases")({ component: PurchasesRedirect });
 
@@ -49,7 +50,7 @@ export function PurchasesPage({ embedded = false }: { embedded?: boolean } = {})
     const blob = new Blob([csv], { type: "text/csv" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = `purchase-records-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `purchase-records-${todayLocalISO()}.csv`;
     a.click();
   };
 

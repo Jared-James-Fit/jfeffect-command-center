@@ -7,6 +7,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Checkbox } from "@/components/ui/checkbox";
 import { COMMON_TIMEZONES } from "@/lib/pt-sessions";
 import { calcAge, cmToFtIn, ftInToCm } from "@/lib/basic-info";
+import { todayLocalISO } from "@/lib/today";
 
 const COUNTRIES = ["Canada", "United States", "United Kingdom", "Australia", "New Zealand", "Other"];
 
@@ -118,7 +119,7 @@ export function BasicInfoForm({
       <div className="grid gap-3 md:grid-cols-2">
         <div>
           <Label>Date of birth *</Label>
-          <Input type="date" value={values.date_of_birth ?? ""} onChange={(e) => onChange({ date_of_birth: e.target.value || null })} max={new Date().toISOString().slice(0, 10)} />
+          <Input type="date" value={values.date_of_birth ?? ""} onChange={(e) => onChange({ date_of_birth: e.target.value || null })} max={todayLocalISO()} />
           <p className="mt-1 text-[11px] text-muted-foreground">Age: {age != null ? `${age} (auto-calculated)` : "—"}</p>
         </div>
         <div>

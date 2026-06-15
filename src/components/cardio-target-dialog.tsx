@@ -12,6 +12,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { CARDIO_TYPES, CARDIO_INTENSITIES, TARGET_STATUSES, estimateCalorieRange, formatCalorieTarget } from "@/lib/nutrition-cardio";
 import { CARDIO_DAY_TYPES } from "@/lib/training-schedule";
 import { Calculator, X } from "lucide-react";
+import { todayLocalISO } from "@/lib/today";
 
 type Props = {
   open: boolean;
@@ -29,7 +30,7 @@ export function CardioTargetDialog({ open, onOpenChange, clientId, clients = [],
 
   useEffect(() => {
     if (!open) return;
-    const today = new Date().toISOString().slice(0, 10);
+    const today = todayLocalISO();
     setForm(initial ? { ...initial } : {
       client_id: clientId ?? "",
       goal: "",

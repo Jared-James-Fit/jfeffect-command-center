@@ -19,6 +19,7 @@ import { uploadLiftFileToStorage } from "@/lib/lift-video-storage-upload";
 import { friendlyDriveError } from "@/lib/drive-errors";
 import { toast } from "sonner";
 import { Upload, Link as LinkIcon, Loader2, Video as VideoIcon, Send, X, AlertTriangle, CheckCircle2, ChevronDown } from "lucide-react";
+import { todayLocalISO } from "@/lib/today";
 
 type Props = {
   open: boolean;
@@ -42,7 +43,7 @@ export function LiftVideoDialog({ open, onOpenChange, clientId, userId, clientNa
     training_day: "Day 1",
     custom_training_day: "",
     program_day: "",
-    date_performed: new Date().toISOString().slice(0, 10),
+    date_performed: todayLocalISO(),
     set_number: "",
     reps: "",
     load_text: "",
@@ -85,7 +86,7 @@ export function LiftVideoDialog({ open, onOpenChange, clientId, userId, clientNa
         training_day: initial.training_day ?? "Day 1",
         custom_training_day: initial.custom_training_day ?? "",
         program_day: initial.program_day ?? "",
-        date_performed: initial.date_performed ?? new Date().toISOString().slice(0, 10),
+        date_performed: initial.date_performed ?? todayLocalISO(),
         set_number: initial.set_number ?? "",
         reps: initial.reps ?? "",
         load_text: initial.load_text ?? "",

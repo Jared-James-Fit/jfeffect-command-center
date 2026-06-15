@@ -8,6 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Card } from "@/components/ui/card";
 import { EventCard } from "@/components/events/event-card";
 import type { EventRow } from "@/lib/events";
+import { todayLocalISO } from "@/lib/today";
 
 export const Route = createFileRoute("/_authenticated/portal/events")({
   component: PortalEventsPage,
@@ -27,7 +28,7 @@ function PortalEventsPage() {
     },
   });
 
-  const todayIso = new Date().toISOString().slice(0, 10);
+  const todayIso = todayLocalISO();
   const { upcoming, past } = useMemo(() => {
     const list = data ?? [];
     return {

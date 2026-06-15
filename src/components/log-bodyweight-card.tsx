@@ -23,6 +23,7 @@ import {
   type ProgressMetric, type RangeValue, type WeightUnit,
 } from "@/lib/progress-metrics";
 import { useBodyweightGoal } from "@/lib/use-bodyweight-goal";
+import { todayLocalISO } from "@/lib/today";
 
 interface Props {
   clientId: string;
@@ -40,7 +41,7 @@ export function LogBodyweightCard({ clientId, defaultUnit = "lb" }: Props) {
   const { user } = useAuth();
   const [unit, setUnit] = useState<WeightUnit>(defaultUnit);
   const [weight, setWeight] = useState("");
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(todayLocalISO());
   const [saving, setSaving] = useState(false);
   const [justSaved, setJustSaved] = useState(false);
   const [range, setRange] = useState<RangeValue>("30");

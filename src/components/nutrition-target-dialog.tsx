@@ -14,6 +14,7 @@ import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { NUTRITION_PHASES, NUTRITION_GOALS, NUTRITION_STRUCTURES, dayLabelsForStructure, TARGET_STATUSES } from "@/lib/nutrition-cardio";
 import { FileText, Upload, X, Plus, ChevronDown } from "lucide-react";
+import { todayLocalISO } from "@/lib/today";
 
 const QUICK_DAY_TYPES = [
   "Training Day",
@@ -113,7 +114,7 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
 
   useEffect(() => {
     if (!open) return;
-    const today = new Date().toISOString().slice(0, 10);
+    const today = todayLocalISO();
     if (initial) {
       setForm({ ...initial });
       supabase.from("nutrition_target_days").select("*").eq("target_id", initial.id).order("sort_order").then(({ data }) => {

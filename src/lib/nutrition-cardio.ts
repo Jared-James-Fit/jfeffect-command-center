@@ -1,3 +1,4 @@
+import { todayLocalISO } from "@/lib/today";
 export const NUTRITION_PHASES = [
   "Fat Loss",
   "Muscle Gain",
@@ -195,7 +196,7 @@ export const DEFAULT_CARDIO_PRESETS: CardioPreset[] = [
 ];
 
 export function presetToRow(preset: CardioPreset, clientId: string): Record<string, any> {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayLocalISO();
   return {
     client_id: clientId,
     day_type: preset.day_type,

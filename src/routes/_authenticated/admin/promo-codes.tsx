@@ -10,6 +10,7 @@ import { Ticket, RefreshCw, Download, RotateCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
+import { todayLocalISO } from "@/lib/today";
 
 export const Route = createFileRoute("/_authenticated/admin/promo-codes")({
   component: PromoCodesRedirect,
@@ -79,7 +80,7 @@ export function PromoCodesPage({ embedded = false }: { embedded?: boolean } = {}
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `promo-redemptions-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `promo-redemptions-${todayLocalISO()}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };

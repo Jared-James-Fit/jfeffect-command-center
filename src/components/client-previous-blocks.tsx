@@ -8,6 +8,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { History, Search, Loader2 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { WorkoutListCard } from "@/components/workout-list-card";
+import { todayLocalISO } from "@/lib/today";
 
 const sb = supabase as any;
 
@@ -19,7 +20,7 @@ export function ClientPreviousBlocks({
   clientId,
   mode = "client",
 }: { clientId: string; mode?: "client" | "admin" }) {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayLocalISO();
 
   const { data: blocks = [], isLoading } = useQuery({
     queryKey: ["pl-blocks-history", clientId],

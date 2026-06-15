@@ -4,9 +4,10 @@
  */
 import type { PlannerCoverage, PlannerPlacement } from "./types";
 import type { ExistingScheduledDay } from "./conflicts";
+import { todayLocalISO } from "@/lib/today";
 
 function todayISO(): string {
-  return new Date().toISOString().slice(0, 10);
+  return todayLocalISO();
 }
 function parseISO(d: string): Date {
   const [y, m, day] = d.split("-").map(Number);

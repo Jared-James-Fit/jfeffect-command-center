@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import {
+import { todayLocalISO } from "@/lib/today";
   computeCountdown, formatEventWhen, importanceBadgeClass, REMINDER_OFFSETS,
   type EventRow, type ReminderOffsetKey,
 } from "@/lib/events";
@@ -16,7 +17,7 @@ export function EventPopupGate() {
   const { data } = useQuery({
     queryKey: ["event-popup-candidates"],
     queryFn: async () => {
-      const today = new Date().toISOString().slice(0, 10);
+      const today = todayLocalISO();
       const { data: u } = await supabase.auth.getUser();
       if (!u.user) return { events: [] as EventRow[], acks: new Set<string>() };
       const { data: events } = await (supabase.from("events") as any)

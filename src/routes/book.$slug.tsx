@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Calendar as CalendarIcon, Clock, CheckCircle2, Video } from "lucide-react";
 import { toast } from "sonner";
+import { todayLocalISO } from "@/lib/today";
 
 export const Route = createFileRoute("/book/$slug")({ component: BookingPage });
 
@@ -20,7 +21,7 @@ function BookingPage() {
   const bookFn = useServerFn(bookSlotPublic);
 
   const { data: info, isLoading } = useQuery({ queryKey: ["public-link", slug], queryFn: () => getFn({ data: { slug } }) });
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(() => todayLocalISO());
   const [selected, setSelected] = useState<string | null>(null);
   const [form, setForm] = useState({ name: "", email: "", phone: "", notes: "" });
   const [success, setSuccess] = useState<{ time: string; meet: string | null } | null>(null);
@@ -84,7 +85,7 @@ function BookingPage() {
           <div className="grid md:grid-cols-[260px_1fr] gap-6">
             <div>
               <Label className="text-xs font-semibold mb-2 flex items-center gap-1"><CalendarIcon className="h-3 w-3" /> DATE</Label>
-              <Input type="date" value={date} min={new Date().toISOString().slice(0,10)} onChange={(e) => { setDate(e.target.value); setSelected(null); }} />
+              <Input type="date" value={date} min={todayLocalISO()} onChange={(e) => { setDate(e.target.value); setSelected(null); }} />
 
               <Label className="text-xs font-semibold mt-4 mb-2 block">AVAILABLE TIMES</Label>
               {loadingSlots ? (

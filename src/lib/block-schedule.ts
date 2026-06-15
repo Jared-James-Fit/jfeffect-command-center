@@ -1,3 +1,4 @@
+import { todayLocalISO } from "@/lib/today";
 // Helpers for detecting overlap between training blocks already assigned to a client
 // and suggesting the next available start date.
 
@@ -49,7 +50,7 @@ export function findOverlappingBlock(
 
 /** Suggested next start = day after the latest non-archived end_date, or today if none. */
 export function suggestNextStartISO(blocks: ScheduledBlock[]): string {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayLocalISO();
   let latest: string | null = null;
   for (const b of blocks) {
     if (!isActiveLike(b)) continue;

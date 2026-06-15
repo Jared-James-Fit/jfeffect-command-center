@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Calendar, ArrowRight } from "lucide-react";
 import { computeCountdown, formatEventWhen, importanceBadgeClass, type EventRow } from "@/lib/events";
+import { todayLocalISO } from "@/lib/today";
 
 export function UpcomingEventsPanel({
   audience, max = 5,
@@ -13,7 +14,7 @@ export function UpcomingEventsPanel({
   const { data } = useQuery({
     queryKey: ["upcoming-events", audience, max],
     queryFn: async () => {
-      const today = new Date().toISOString().slice(0, 10);
+      const today = todayLocalISO();
       let q = (supabase.from("events") as any).select("*").gte("event_date", today).order("event_date").limit(max);
       if (audience === "admin") q = q.in("status", ["Active", "Draft"]);
       else q = q.eq("status", "Active");
