@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { getCurrentMember } from "@/lib/members.functions";
 import { supabase } from "@/integrations/supabase/client";
@@ -9,9 +9,9 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { PlayCircle, RotateCcw, BookOpen, Eye, Calendar, Clock } from "lucide-react";
+import { PlayCircle, RotateCcw, BookOpen, Eye, Plus, Calendar, Clock } from "lucide-react";
 import { restartPlan } from "@/lib/member-plans.functions";
-import { listMembershipLibrary } from "@/lib/membership-library.functions";
+import { listMembershipLibrary, enrollLibraryPlan } from "@/lib/membership-library.functions";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/m/my-plans")({ component: MyPlans });
@@ -80,20 +80,41 @@ function MyPlans() {
       )}
         </TabsContent>
         <TabsContent value="library" className="space-y-3">
-          <LibraryTab />
+          <LibraryTab onEnrolled={refetch} />
         </TabsContent>
       </Tabs>
     </div>
   );
 }
 
-function LibraryTab() {
+function LibraryTab({ onEnrolled }: { onEnrolled?: () => void }) {
   const fetchLibrary = useServerFn(listMembershipLibrary);
+  const enroll = useServerFn(enrollLibraryPlan);
+  const qc = useQueryClient();
   const { data, isLoading } = useQuery({
     queryKey: ["m-membership-library"],
     queryFn: () => fetchLibrary(),
   });
   const plans = (data?.plans ?? []) as any[];
+
+  const handleAdd = async (planId: string, confirmReplace = false) => {
+    try {
+      const res = await enroll({ data: { planId, importMode: "full", confirmReplace } });
+      if (res.conflict) {
+        const ok = window.confirm(
+          "You already have an active plan. Starting this one will end your current plan. Continue?"
+        );
+        if (ok) return handleAdd(planId, true);
+        return;
+      }
+      toast.success("Program added to your training");
+      qc.invalidateQueries({ queryKey: ["m-enrollments"] });
+      onEnrolled?.();
+    } catch (e: any) {
+      toast.error(e?.message ?? "Could not add program");
+    }
+  };
+
   if (isLoading) {
     return <div className="text-sm text-muted-foreground">Loading programs…</div>;
   }
@@ -131,12 +152,15 @@ function LibraryTab() {
           {p.description && (
             <p className="mt-3 line-clamp-3 text-sm text-muted-foreground">{p.description}</p>
           )}
-          <div className="mt-auto pt-4">
-            <Link to="/m/plans/$planId" params={{ planId: p.id }} className="block">
+          <div className="mt-auto flex gap-2 pt-4">
+            <Link to="/m/plans/$planId" params={{ planId: p.id }} className="flex-1">
               <Button variant="outline" size="sm" className="w-full">
                 <Eye className="mr-1 h-3.5 w-3.5" /> Preview
               </Button>
             </Link>
+            <Button size="sm" className="flex-1" onClick={() => handleAdd(p.id)}>
+              <Plus className="mr-1 h-3.5 w-3.5" /> Add to My Training
+            </Button>
           </div>
         </Card>
       ))}
