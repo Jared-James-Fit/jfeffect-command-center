@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Clock, CheckCircle2, Play, StickyNote, NotebookPen, Info, Lock, Maximize2, Minimize2, AlertTriangle, RefreshCw, Send, MessageCircle, ChevronDown, ChevronUp } from "lucide-react";
+import { ArrowLeft, Clock, CheckCircle2, Play, StickyNote, NotebookPen, Info, Lock, LockOpen, Maximize2, Minimize2, AlertTriangle, RefreshCw, Send, MessageCircle, ChevronDown, ChevronUp } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { getExerciseVideoSource } from "@/lib/exercise-video";
@@ -742,11 +742,6 @@ function WorkoutDay() {
             <Badge variant="outline" className="border-amber-500/30 bg-amber-500/10 text-amber-500">In progress</Badge>
           )}
           {readonly && <Badge variant="outline" className="border-muted-foreground/30 bg-muted/30 text-muted-foreground"><Lock className="mr-1 h-3 w-3" /> Read-only</Badge>}
-          {autoReadonly && !isImpersonating && !unlocked && (
-            <Button size="sm" variant="outline" onClick={() => { setUnlocked(true); toast.success("Editing enabled — your changes will save"); }}>
-              Edit previous workout
-            </Button>
-          )}
           {autoReadonly && !isImpersonating && unlocked && (
             <Button size="sm" variant="ghost" onClick={() => setUnlocked(false)}>
               <Lock className="mr-1 h-3 w-3" /> Lock again
@@ -856,15 +851,40 @@ function WorkoutDay() {
           </Card>
         )}
 
-        {readonly && (
+        {readonly && autoReadonly && !isImpersonating && (
+          <Card className="border-primary/40 bg-gradient-to-br from-primary/10 via-primary/5 to-transparent p-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              <div className="flex items-start gap-3 sm:flex-1">
+                <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-primary/15 text-primary">
+                  <Lock className="h-5 w-5" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-sm font-bold text-foreground">
+                    This workout is locked
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    It's from a past block or session. Unlock to fix sets, add reps,
+                    or fill in anything you missed — your changes save automatically.
+                  </div>
+                </div>
+              </div>
+              <Button
+                size="lg"
+                onClick={() => {
+                  setUnlocked(true);
+                  toast.success("Editing unlocked — your changes will save");
+                }}
+                className="h-12 w-full gap-2 bg-primary px-5 text-base font-bold text-primary-foreground shadow-md shadow-primary/20 hover:bg-primary/90 sm:w-auto"
+              >
+                <LockOpen className="h-5 w-5" /> Unlock to edit
+              </Button>
+            </div>
+          </Card>
+        )}
+        {readonly && !autoReadonly && (
           <Card className="flex items-start gap-2 border-border bg-secondary/30 p-3 text-xs">
             <Lock className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-            <div>
-              Viewing a past workout. Logs are read-only.
-              {autoReadonly && !isImpersonating && (
-                <> Tap <strong>Edit previous workout</strong> above to update any set.</>
-              )}
-            </div>
+            <div>Viewing a past workout. Logs are read-only.</div>
           </Card>
         )}
         {autoReadonly && unlocked && !isImpersonating && (
