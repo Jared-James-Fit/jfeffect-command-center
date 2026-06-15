@@ -64,16 +64,15 @@ type ShortcutGroup = { heading: string; items: ShortcutRow[] };
 
 function buildShortcuts(mac: boolean): ShortcutGroup[] {
   const mod = mac ? "⌘" : "Ctrl";
-  const alt = mac ? "⌥" : "Alt";
-  const del = mac ? "Delete" : "Backspace";
+  const shift = "Shift";
   return [
     {
       heading: "Exercise Search",
       items: [
         { label: "Open search", combos: [["/"], [mod, "K"]] },
         { label: "Close search", combos: [["Esc"]] },
-        { label: "Clear search", combos: [[mod, del]] },
-        { label: "Refresh results", combos: [[alt, "R"]] },
+        { label: "Clear / reset search", combos: [[mod, shift, "Z"]] },
+        { label: "Refresh results", combos: [["⌥", "R"]] },
       ],
     },
     {
@@ -194,8 +193,8 @@ export function ProgramBuilderShortcutsButton({ className }: { className?: strin
         return;
       }
 
-      // Cmd/Ctrl + Delete/Backspace — clear search
-      if (mod && !isAlt && (e.key === "Backspace" || e.key === "Delete")) {
+      // Cmd/Ctrl + Shift + Z — clear / reset search
+      if (mod && !isAlt && e.shiftKey && (e.key === "z" || e.key === "Z")) {
         e.preventDefault();
         window.dispatchEvent(new CustomEvent("pb:clear-search"));
         return;
@@ -222,8 +221,8 @@ export function ProgramBuilderShortcutsButton({ className }: { className?: strin
   }, [legendOpen]);
 
   const mod = mac ? "⌘" : "Ctrl";
+  const shift = "Shift";
   const alt = mac ? "⌥" : "Alt";
-  const del = mac ? "Delete" : "Backspace";
   const groups = buildShortcuts(mac);
 
   return (
@@ -268,7 +267,7 @@ export function ProgramBuilderShortcutsButton({ className }: { className?: strin
             </li>
             <li className="flex items-center justify-between gap-2">
               <span>Clear search</span>
-              <KeyCombo keys={[mod, del]} />
+              <KeyCombo keys={[mod, shift, "Z"]} />
             </li>
             <li className="flex items-center justify-between gap-2">
               <span>Refresh results</span>
