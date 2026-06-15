@@ -361,7 +361,7 @@ export const commitAssignmentFn = createServerFn({ method: "POST" })
       p_template_id: data.templateId,
       p_client_id: data.clientId,
       p_placement: placement as any,
-      p_name: null,
+      p_name: data.programName ?? null,
       p_client_visible: visible,
       p_start_date: startDate,
       p_end_date: endDate,
