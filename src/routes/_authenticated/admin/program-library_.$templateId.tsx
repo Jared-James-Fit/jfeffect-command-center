@@ -1602,6 +1602,17 @@ function DayEditor({ day, setDay, exercises, compact, dayKey }: { day: any; setD
     const exById = new Map<string, any>((exercises as any[]).map((e) => [e.id, e]));
     return derivePurposeLabels(rows, (r: any) => (r.exercise_id ? exById.get(r.exercise_id) : null));
   }, [rows, exercises]);
+  // Video coverage: track which prescribed exercises have a demo video link.
+  // Custom-name rows (no exercise_id) are counted as missing so coaches can spot them.
+  const videoStats = useMemo(() => {
+    const exById = new Map<string, any>((exercises as any[]).map((e) => [e.id, e]));
+    let withV = 0;
+    for (const r of rows) {
+      const ex = r.exercise_id ? exById.get(r.exercise_id) : null;
+      if (hasExerciseVideo(ex)) withV += 1;
+    }
+    return { withV, total: rows.length, missing: rows.length - withV };
+  }, [rows, exercises]);
   const [dragOver, setDragOver] = useState(false);
   const [dragRowIdx, setDragRowIdx] = useState<number | null>(null);
   const [dropTargetIdx, setDropTargetIdx] = useState<number | null>(null);
