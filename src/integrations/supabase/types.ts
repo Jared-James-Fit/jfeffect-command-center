@@ -12443,6 +12443,7 @@ export type Database = {
       }
       sms_settings: {
         Row: {
+          admin_notify_phone: string | null
           brand_name: string
           enabled: boolean
           from_phone: string | null
@@ -12455,6 +12456,7 @@ export type Database = {
           updated_by: string | null
         }
         Insert: {
+          admin_notify_phone?: string | null
           brand_name?: string
           enabled?: boolean
           from_phone?: string | null
@@ -12467,6 +12469,7 @@ export type Database = {
           updated_by?: string | null
         }
         Update: {
+          admin_notify_phone?: string | null
           brand_name?: string
           enabled?: boolean
           from_phone?: string | null

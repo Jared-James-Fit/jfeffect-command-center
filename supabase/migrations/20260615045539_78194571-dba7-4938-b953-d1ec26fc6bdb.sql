@@ -1,0 +1,1 @@
+ALTER TABLE public.sms_settings ADD COLUMN IF NOT EXISTS admin_notify_phone TEXT;
