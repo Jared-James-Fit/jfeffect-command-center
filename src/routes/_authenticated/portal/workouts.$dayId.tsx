@@ -272,18 +272,19 @@ function WorkoutDay() {
   const today = startOfDay(new Date());
   const isOutsideScheduledDay = !!scheduledDate && scheduledDate.getTime() !== today.getTime();
 
-  const blockEnded = block?.end_date ? new Date(block.end_date) < today : false;
-  const blockCompleted = block?.status === "Completed" || block?.status === "Archived";
   const { isImpersonating } = useClientImpersonation();
-  // "Auto" readonly = past/closed workouts the client would otherwise be locked
-  // out of. The client can opt-in to editing a past workout via the Edit button
-  // below (`unlocked` flips this off). Impersonation always stays read-only so
-  // coaches don't edit while viewing as the client.
-  const [unlocked, setUnlocked] = useState<boolean>(search.edit === 1);
-  const autoReadonly = search.readonly === 1 || blockEnded || blockCompleted;
-  const readonly = (autoReadonly && !unlocked) || isImpersonating;
-  // Reset the unlock when navigating to a different workout.
-  useEffect(() => { setUnlocked(search.edit === 1); }, [dayId, search.edit]);
+  // Workouts are ALWAYS editable — past, today, future, completed. There is no
+  // automatic lock based on date, block status, program status, or completion.
+  // The only way a workout becomes read-only is an explicit manual lock
+  // (currently none exist). Admin/coach POV mode also stays fully editable so
+  // they can fix client logs in place.
+  const autoReadonly = false;
+  const readonly = false;
+  const unlocked = true;
+  const setUnlocked = (_: boolean) => {};
+  void setUnlocked;
+  void unlocked;
+  void autoReadonly;
 
   const { data: rows = [], isSuccess: rowsLoaded } = useQuery({
     queryKey: ["pl-day-rows", dayId],
