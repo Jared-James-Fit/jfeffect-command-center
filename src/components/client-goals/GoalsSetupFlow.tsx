@@ -292,6 +292,38 @@ function ExperienceStep({ value, setField }: StepProps) {
   );
 }
 
+const ALL_OF_IT = "All of it";
+const REAL_EQUIPMENT = EQUIPMENT_OPTIONS.filter((o) => o !== ALL_OF_IT);
+
+function equipmentDisplayValue(equipment: string[] | undefined): string[] {
+  const eq = equipment ?? [];
+  const hasAllReal = REAL_EQUIPMENT.every((o) => eq.includes(o));
+  if (hasAllReal && eq.length === REAL_EQUIPMENT.length) {
+    return [...eq, ALL_OF_IT];
+  }
+  return eq;
+}
+
+function handleEquipmentChange(
+  prev: string[] | undefined,
+  next: string[],
+  onChange: (v: string[]) => void,
+) {
+  const hadAll = (prev ?? []).includes(ALL_OF_IT);
+  const hasAll = next.includes(ALL_OF_IT);
+
+  if (hasAll && !hadAll) {
+    // Selected "All of it" → select every real option
+    onChange([...REAL_EQUIPMENT]);
+  } else if (!hasAll && hadAll) {
+    // Deselected "All of it" → clear everything
+    onChange([]);
+  } else {
+    // Normal toggle — strip "All of it" if it was manually present
+    onChange(next.filter((x) => x !== ALL_OF_IT));
+  }
+}
+
 /* ---------- Step 4: Gym & equipment ---------- */
 function EquipmentStep({ value, setField }: StepProps) {
   const multiLoc = value.training_location === "Multiple locations";
@@ -336,8 +368,12 @@ function EquipmentStep({ value, setField }: StepProps) {
           <Sub>Select all that apply.</Sub>
           <ChipGrid
             options={EQUIPMENT_OPTIONS}
-            value={value.equipment ?? []}
-            onChange={(v) => setField("equipment", v)}
+            value={equipmentDisplayValue(value.equipment)}
+            onChange={(v) =>
+              handleEquipmentChange(value.equipment, v, (eq) =>
+                setField("equipment", eq),
+              )
+            }
             multi
           />
         </div>
@@ -366,8 +402,12 @@ function EquipmentStep({ value, setField }: StepProps) {
                 </div>
                 <ChipGrid
                   options={EQUIPMENT_OPTIONS}
-                  value={byLoc[k] ?? []}
-                  onChange={(v) => setLocEquip(k, v)}
+                  value={equipmentDisplayValue(byLoc[k])}
+                  onChange={(v) =>
+                    handleEquipmentChange(byLoc[k], v, (eq) =>
+                      setLocEquip(k, eq),
+                    )
+                  }
                   multi
                 />
               </Card>
