@@ -69,7 +69,7 @@ export async function upsertClientAnalyticsSettings(
         client_id: clientId,
         e1rm_formula: next.e1rm_formula,
         working_set_rpe_min: next.working_set_rpe_min,
-        muscle_volume_targets: next.muscle_volume_targets,
+        muscle_volume_targets: next.muscle_volume_targets as any,
         share_signals: next.share_signals,
         notes: next.notes,
       },
