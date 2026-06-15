@@ -749,6 +749,19 @@ function AssignDialog({ template, onClose }: { template: any; onClose: () => voi
         `Overlaps with "${conflict.name ?? "another block"}" (${conflict.start_date ?? "?"} – ${conflict.end_date ?? "?"}). Use the suggested start date.`,
       );
     }
+    // Requirement check: every day needs an exercise + sets + reps. If any
+    // gaps exist, switch to a confirm view that lists each missing item.
+    const tplForCheck = fullTpl ?? template;
+    const issues = validateTemplatePayload(tplForCheck);
+    if (issues.length > 0) {
+      setPendingIssues(issues);
+      return;
+    }
+    await runAssignment();
+  };
+
+  const runAssignment = async () => {
+    if (!clientId) return toast.error("Pick a client");
     let placement: TemplatePlacement;
     try {
       switch (effectiveMode) {
@@ -791,6 +804,7 @@ function AssignDialog({ template, onClose }: { template: any; onClose: () => voi
           qc.invalidateQueries({ queryKey: ["assigned-blocks", clientId] });
           qc.invalidateQueries({ queryKey: ["my-workouts"] });
           job.completeStep(3);
+          setPendingIssues(null);
           onClose();
           navigate({ to: "/admin/client-programs/$clientId", params: { clientId } });
           job.completeStep(4);
