@@ -7,7 +7,8 @@
  * is idempotent on (clientId, templateId, idempotencyKey).
  */
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useServerFn } from "@tanstack/react-router";
+import { useNavigate } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
