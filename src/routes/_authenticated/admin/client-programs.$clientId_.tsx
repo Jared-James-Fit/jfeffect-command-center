@@ -11,11 +11,12 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { ArrowLeft, Plus, Calendar, Target, Layers, History, BarChart3, BookOpen, CalendarClock } from "lucide-react";
+import { ArrowLeft, Plus, Calendar, Target, Layers, History, BarChart3, BookOpen, CalendarClock, Wand2 } from "lucide-react";
 import { toast } from "sonner";
 import { listClientPreps, listClientBlocks, createPrep, createBlock, countdownLabel, updatePrep, updateBlock, GOAL_TYPES, PREP_STATUSES, BLOCK_STATUSES, type PrepStatus, type BlockStatus } from "@/lib/pl-programs";
 import { BLOCK_PHASE_OPTIONS } from "@/lib/pl-template-blocks";
 import { ClientTrainingIntelCard } from "@/components/client-training-intel-card";
+import { AssignmentHistoryPanel } from "@/components/program-planner/AssignmentHistoryPanel";
 
 export const Route = createFileRoute("/_authenticated/admin/client-programs/$clientId_")({ component: ClientProgramsPage });
 
@@ -73,6 +74,9 @@ function ClientProgramsPage() {
         <div className="flex flex-wrap gap-2">
           <Button onClick={() => setPrepOpen(true)}><Target className="mr-2 h-4 w-4" /> New Prep / Phase</Button>
           <Button onClick={() => setBlockOpen(true)} variant="outline"><Layers className="mr-2 h-4 w-4" /> New Block</Button>
+          <Link to="/admin/program-assign/$clientId" params={{ clientId }}>
+            <Button variant="default"><Wand2 className="mr-2 h-4 w-4" /> Assign from Library</Button>
+          </Link>
           <Link to="/admin/client-programs/$clientId/history" params={{ clientId }}>
             <Button variant="outline"><History className="mr-2 h-4 w-4" /> History</Button>
           </Link>
@@ -145,6 +149,11 @@ function ClientProgramsPage() {
             templateLookup={templateLookup as any}
             onRefresh={refresh}
           />
+        </section>
+
+        <section>
+          <h2 className="mb-3 text-sm font-bold uppercase tracking-widest text-muted-foreground">Recent Assignments</h2>
+          <AssignmentHistoryPanel clientId={clientId} />
         </section>
       </div>
 
