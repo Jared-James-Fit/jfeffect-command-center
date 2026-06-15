@@ -9981,6 +9981,32 @@ export type Database = {
           },
         ]
       }
+      pl_exercise_favorites: {
+        Row: {
+          created_at: string
+          exercise_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          exercise_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          exercise_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pl_exercise_favorites_exercise_id_fkey"
+            columns: ["exercise_id"]
+            isOneToOne: false
+            referencedRelation: "exercises"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pl_exercise_notes: {
         Row: {
           client_id: string
