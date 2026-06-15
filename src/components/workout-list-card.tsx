@@ -50,7 +50,7 @@ export function WorkoutListCard({ item, readonly = false }: { item: any; readonl
         <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
       </Card>
     </Link>
-    {isCompleted && !readonly && (
+    {isCompleted && (
       <div className="flex flex-wrap items-center gap-1.5 pl-1">
         <Link
           to="/portal/workouts/$dayId"
