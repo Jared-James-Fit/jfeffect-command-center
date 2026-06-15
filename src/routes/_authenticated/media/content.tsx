@@ -98,7 +98,7 @@ function CampaignsTab() {
       <div className="grid gap-3 md:grid-cols-2">
         <Card className="p-4 space-y-2">
           <h3 className="font-semibold text-sm flex items-center gap-2"><Sparkles className="h-4 w-4" /> Promo Links</h3>
-          <p className="text-xs text-muted-foreground">Public share links for /join and /coaching.</p>
+          <p className="text-xs text-muted-foreground">Public share links for /membership and /coaching.</p>
           <ShareToolbar slug="join" />
           <ShareToolbar slug="coaching" />
         </Card>

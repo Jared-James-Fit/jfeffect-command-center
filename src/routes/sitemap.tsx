@@ -72,6 +72,8 @@ function SitemapPage() {
 
   const publicPages = [
     { to: "/", label: "Landing" },
+    { to: "/membership", label: "Membership" },
+    { to: "/coaching", label: "Private Coaching" },
     { to: "/auth", label: "Sign in / Sign up" },
     { to: "/sitemap", label: "Sitemap (this page)" },
   ];

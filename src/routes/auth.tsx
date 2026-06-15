@@ -147,7 +147,7 @@ function AuthPage() {
             </div>
             <div className="mt-4 text-xs text-muted-foreground">
               New here?{" "}
-              <Link to="/join" className="text-primary underline-offset-2 hover:underline">
+              <Link to="/membership" className="text-primary underline-offset-2 hover:underline">
                 Join JF Membership
               </Link>
             </div>

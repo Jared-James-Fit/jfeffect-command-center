@@ -100,7 +100,7 @@ export function JfMembershipSettingsCard() {
           <div>
             <div className="font-bold">Public checkout is OFF (kill switch).</div>
             <div className="opacity-90">
-              <code>/join</code> shows "Membership signups are temporarily paused" and Stripe checkout sessions are refused.
+              <code>/membership</code> shows "Membership signups are temporarily paused" and Stripe checkout sessions are refused.
               Existing members, billing, and the member portal are unaffected. Save to apply changes.
             </div>
           </div>
@@ -112,7 +112,7 @@ export function JfMembershipSettingsCard() {
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
           <div>
             <div className="font-bold">JF Membership pricing is not configured.</div>
-            <div className="opacity-90">Add Stripe price IDs before sending the public signup link (/join). Until then, public checkout will be blocked with a clean error message.</div>
+            <div className="opacity-90">Add Stripe price IDs before sending the public signup link (/membership). Until then, public checkout will be blocked with a clean error message.</div>
           </div>
         </div>
       )}
@@ -136,7 +136,7 @@ export function JfMembershipSettingsCard() {
             Confirm <strong>Trial days = 3</strong> (default).
           </ChecklistItem>
           <ChecklistItem done={fullyConfigured}>
-            Save settings, then test the public link <code>/join</code>.
+            Save settings, then test the public link <code>/membership</code>.
           </ChecklistItem>
         </ul>
         <p className="mt-2 text-[11px] text-muted-foreground">
@@ -149,7 +149,7 @@ export function JfMembershipSettingsCard() {
           <div className="space-y-0.5">
             <Label className="text-sm">Public checkout enabled</Label>
             <p className="text-[11px] text-muted-foreground">
-              Master kill switch for <code>/join</code>. Turn off to immediately pause new signups while keeping the page reachable with a clear "paused" message. Existing members are not affected.
+              Master kill switch for <code>/membership</code>. Turn off to immediately pause new signups while keeping the page reachable with a clear "paused" message. Existing members are not affected.
             </p>
           </div>
           <Switch
@@ -222,7 +222,7 @@ export function JfMembershipSettingsCard() {
       </div>
       <ActionButton onClick={() => save.mutate()} jobLabel="Saving membership settings">Save settings</ActionButton>
       <p className="text-[11px] text-muted-foreground">
-        Public signup link: <code>/join</code>. Webhook endpoint is the same Stripe webhook you already configured.
+        Public signup link: <code>/membership</code>. Webhook endpoint is the same Stripe webhook you already configured.
       </p>
     </Card>
   );

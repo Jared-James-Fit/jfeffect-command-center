@@ -315,9 +315,9 @@ export const getLaunchReadiness = createServerFn({ method: "GET" })
     push({
       key: "join_cta",
       group: "Sales",
-      label: "/join CTA connected",
+      label: "/membership CTA connected",
       state: "ready",
-      detail: "Route /join present",
+      detail: "Route /membership present",
       owner: "Lovable",
       blocks_checkout: false,
       blocks_promotion: false,
