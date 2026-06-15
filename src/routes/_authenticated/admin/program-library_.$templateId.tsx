@@ -2168,7 +2168,7 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
     ? (exMeta.video_url || exMeta.youtube_url || exMeta.vimeo_url || null)
     : null;
   const videoBadgeCls = cn(
-    "inline-flex shrink-0 items-center gap-0.5 rounded-full border px-1 py-0 text-[9px] font-bold uppercase tracking-wide",
+    "inline-flex shrink-0 items-center justify-center rounded-full border p-0.5",
     rowHasVideo
       ? "border-emerald-400/40 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20"
       : "border-amber-400/50 bg-amber-500/10 text-amber-300",
@@ -2181,17 +2181,17 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
       onClick={(e) => e.stopPropagation()}
       className={videoBadgeCls}
       title="Open demo video in a new tab"
+      aria-label="Open demo video"
     >
       <Video className="h-2.5 w-2.5" />
-      Video
     </a>
   ) : (
     <span
       className={videoBadgeCls}
       title={rowHasVideo ? "Demo video linked" : "No demo video on this exercise — add one in the library"}
+      aria-label={rowHasVideo ? "Has demo video" : "Missing demo video"}
     >
       {rowHasVideo ? <Video className="h-2.5 w-2.5" /> : <VideoOff className="h-2.5 w-2.5" />}
-      {rowHasVideo ? "Video" : "No video"}
     </span>
   );
   const accent = exerciseAccent(exMeta, row.card_color);
