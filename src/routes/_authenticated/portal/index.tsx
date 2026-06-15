@@ -40,7 +40,7 @@ function PortalHome() {
   const { user } = useAuth();
   const portalUserId = usePortalUserId();
 
-  const { data: client } = useQuery({
+  const { data: client, isPending: clientPending, isSuccess: clientSettled } = useQuery({
     queryKey: ["my-client", portalUserId],
     enabled: !!portalUserId,
     queryFn: async () => {
@@ -213,7 +213,10 @@ function PortalHome() {
     qc.invalidateQueries({ queryKey: ["portal-outstanding-agreements", client?.id] });
   };
 
-  const firstName = (client?.full_name ?? user?.email?.split("@")[0] ?? "").split(" ")[0];
+  // Only derive the name from the loaded client record. Falling back to the
+  // email username mid-load caused a visible "jaredm…" → "Jared" flash.
+  const firstName = (client?.full_name ?? "").split(" ")[0];
+  void user;
 
   const primaryPurchase = (purchases as any[]).find(
     (p) => !["Cancelled", "Expired", "Refunded"].includes(p.payment_status),
@@ -350,6 +353,11 @@ function PortalHome() {
   // Bottom-sheet trigger for Log Bodyweight from the quick-actions grid.
   const bodyweightRef = useRef<{ open: () => void }>(null);
 
+  // While the core client record is loading, render a steady skeleton in the
+  // same layout shape as the real portal so the dashboard fades in once
+  // instead of popping in piece-by-piece.
+  const initialLoading = clientPending || (!!portalUserId && !clientSettled && !client);
+
   return (
     <>
       {/* Background gates / popups — keep wired exactly as before. */}
@@ -363,7 +371,11 @@ function PortalHome() {
         />
       )}
 
-      <div className="mx-auto w-full max-w-2xl space-y-5 px-4 pb-24 pt-4 md:max-w-5xl md:px-8 md:pt-6">
+      <div className="mx-auto w-full max-w-2xl space-y-5 px-4 pb-24 pt-4 md:max-w-5xl md:px-8 md:pt-6 animate-fade-in">
+        {initialLoading ? (
+          <PortalHomeSkeleton />
+        ) : (
+          <>
         {/* 1 — Compact greeting header */}
         <GreetingHeader
           firstName={firstName}
@@ -373,8 +385,10 @@ function PortalHome() {
 
         {/* 2 — Today's primary action */}
         {client && workoutItems.length > 0 ? (
-          <SmartTodayCard items={workoutItems as any[]} clientId={client.id} />
-        ) : !client ? (
+          <div className="animate-fade-in">
+            <SmartTodayCard items={workoutItems as any[]} clientId={client.id} />
+          </div>
+        ) : clientSettled && !client ? (
           <NoProfileCard />
         ) : null}
 
@@ -414,8 +428,41 @@ function PortalHome() {
             handleAgreementComplete={markAgreementComplete}
           />
         )}
+          </>
+        )}
       </div>
     </>
+  );
+}
+
+function PortalHomeSkeleton() {
+  return (
+    <div className="space-y-5 animate-fade-in">
+      {/* Greeting */}
+      <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3">
+        <div className="h-11 w-11 shrink-0 rounded-full border border-border bg-secondary/40 animate-pulse" />
+        <div className="min-w-0 space-y-2">
+          <div className="h-5 w-48 rounded bg-secondary/50 animate-pulse" />
+          <div className="h-3 w-32 rounded bg-secondary/30 animate-pulse" />
+        </div>
+        <div className="h-11 w-11 rounded-full border border-border bg-card" />
+      </div>
+      {/* Today's primary action */}
+      <div className="h-44 rounded-2xl border border-border bg-card animate-pulse" />
+      {/* Quick actions grid */}
+      <div className="grid grid-cols-2 gap-3">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div key={i} className="h-24 rounded-2xl border border-border bg-card animate-pulse" />
+        ))}
+      </div>
+      {/* Action Centre */}
+      <div className="space-y-3">
+        <div className="h-5 w-32 rounded bg-secondary/40 animate-pulse" />
+        <div className="h-16 rounded-2xl border border-border bg-card animate-pulse" />
+      </div>
+      {/* Bodyweight */}
+      <div className="h-52 rounded-2xl border border-border bg-card animate-pulse" />
+    </div>
   );
 }
 
