@@ -45,15 +45,15 @@ export const Route = createFileRoute("/membership")({
   component: SignupJf,
   head: () => ({
     meta: [
-      { title: "Self-Guided Membership | JF Effect Training App" },
-      { name: "description", content: "Train with the JF Effect system on your own schedule. Structured plans, workout tracking, exercise demos, analytics and nutrition resources for $29/month." },
-      { property: "og:title", content: "JF Effect — Self-Guided Membership" },
-      { property: "og:description", content: "Structured training plans, tracking and nutrition resources in the JF Effect app. 3-day free trial, then $29/month." },
+      { title: "The JF Effect Training App | Self-Guided Membership" },
+      { name: "description", content: "The full JF Effect system in your pocket. Structured plans, tracking, demos, analytics and nutrition — train on your schedule. 3-day free trial, then $29/month." },
+      { property: "og:title", content: "The JF Effect Training App | Self-Guided Membership" },
+      { property: "og:description", content: "The full JF Effect system in your pocket. Structured plans, tracking, demos, analytics and nutrition — train on your schedule. 3-day free trial, then $29/month." },
       { property: "og:type", content: "website" },
       { property: "og:url", content: "https://jfeffect.com/membership" },
       { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:title", content: "JF Effect — Self-Guided Membership" },
-      { name: "twitter:description", content: "Structured training plans, tracking and nutrition resources in the JF Effect app. 3-day free trial, then $29/month." },
+      { name: "twitter:title", content: "The JF Effect Training App | Self-Guided Membership" },
+      { name: "twitter:description", content: "The full JF Effect system in your pocket. Structured plans, tracking, demos, analytics and nutrition — train on your schedule. 3-day free trial, then $29/month." },
     ],
     links: [{ rel: "canonical", href: "https://jfeffect.com/membership" }],
   }),
@@ -188,8 +188,8 @@ function SignupJf() {
       ) : (
       <MembershipHero
         priceChip={settings?.monthly_price_display ?? "$29/month USD"}
-        headline={"Train with a plan. Progress on purpose."}
-        sub={"Get structured training plans, workout tracking, exercise demonstrations, progress analytics, nutrition resources and member-only updates inside the JF Effect app. Follow the system independently, train on your schedule and know exactly what to do next."}
+        headline={"Stop winging it. Start training like it matters."}
+        sub={"The same system I use with my own clients — structured plans, tracking, exercise demos, analytics and nutrition, all in the app. You show up, the plan's already there, and you always know exactly what to do next."}
         heroImage={null}
         decisionArea={
           <HeroDecisionArea
@@ -219,10 +219,10 @@ function SignupJf() {
                 </div>
                 <div>
                   <div className="text-base font-black tracking-tight md:text-lg">
-                    Want the Plan Built Around You?
+                    Want Me in Your Corner Directly?
                   </div>
                   <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-                    Private Coaching includes individualized programming, nutrition guidance, weekly check-ins, ongoing adjustments and direct coach support.
+                    Private Coaching means a plan built for you, weekly check-ins, real adjustments, and direct access to me. Application only — I keep the roster small on purpose.
                   </p>
                   <p className="mt-1 text-[11px] uppercase tracking-[0.18em] text-muted-foreground/80">
                     Application required · Limited client capacity
@@ -271,13 +271,13 @@ function SignupJf() {
       <Reveal as={Section}>
         <div className="mx-auto max-w-3xl rounded-2xl border border-white/10 bg-gradient-to-br from-[#111318] to-[#0B0D12] p-6 md:p-8 text-center">
           <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-primary">
-            Need More Than a Workout Plan?
+            Know You Need More Than an App?
           </div>
           <h3 className="mt-2 text-2xl font-black tracking-tight md:text-3xl">
             Private Coaching may be the better fit.
           </h3>
           <p className="mt-3 text-sm text-muted-foreground md:text-base">
-            If you want individualized programming, nutrition guidance, accountability and direct coach support, apply for Private Coaching.
+            If you want a plan built for you and someone holding the standard when you don't feel like it, apply for coaching.
           </p>
           <div className="mt-5 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <Link to="/coaching/apply">
