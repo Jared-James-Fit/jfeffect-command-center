@@ -4,7 +4,7 @@ import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import {
   LogOut, ChevronLeft, ChevronRight, ChevronDown, Search, Settings as SettingsIcon, ArrowLeft, MoreHorizontal,
-  Star, Pin, ChevronsDownUp, ChevronsUpDown,
+  Star, Pin, ChevronsDownUp, ChevronsUpDown, BookOpen,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { NotificationBell } from "@/components/notification-bell";
@@ -12,6 +12,7 @@ import { useClientNavBadges, markNavSeen } from "@/hooks/use-client-nav-badges";
 import { useKeyboardOpen } from "@/hooks/use-keyboard-open";
 import { UserAvatar } from "@/components/user-avatar";
 import { SettingsMenu } from "@/components/settings-menu";
+import { listTemplates } from "@/lib/pl-programs";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { ClientPovQuickPicker } from "@/components/client-pov-quick-picker";
@@ -159,6 +160,22 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
   const [moreOpen, setMoreOpen] = useState(false);
   const [moreQuery, setMoreQuery] = useState("");
   const [moreOpenGroup, setMoreOpenGroup] = useState<string | null>(null);
+  const [paletteQuery, setPaletteQuery] = useState("");
+  const [debouncedPaletteQuery, setDebouncedPaletteQuery] = useState("");
+
+  // Debounce the workout-library search so we don't fire a query on every keystroke.
+  useEffect(() => {
+    const t = window.setTimeout(() => setDebouncedPaletteQuery(paletteQuery), 200);
+    return () => window.clearTimeout(t);
+  }, [paletteQuery]);
+
+  // Reset the query whenever the palette opens/closes so reopening starts fresh.
+  useEffect(() => {
+    if (!paletteOpen) {
+      setPaletteQuery("");
+      setDebouncedPaletteQuery("");
+    }
+  }, [paletteOpen]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -450,7 +467,7 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
           )}
         </div>
 
-        {/* Keyword search / Cmd+K trigger */}
+        {/* Workout library quick search / Cmd+K trigger */}
         <div className={cn("border-b border-sidebar-border", isCollapsed ? "p-1.5" : "p-2")}>
           {isCollapsed ? (
             <Tooltip>
@@ -458,12 +475,12 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
                 <button
                   onClick={() => setPaletteOpen(true)}
                   className="mx-auto flex h-8 w-8 items-center justify-center rounded-md text-primary ring-1 ring-primary/40 hover:bg-primary/10"
-                  aria-label="Search keywords"
+                  aria-label="Search workout library"
                 >
                   <Search className="h-4 w-4" />
                 </button>
               </TooltipTrigger>
-              <TooltipContent side="right">Search keywords (⌘K)</TooltipContent>
+              <TooltipContent side="right">Search workouts (⌘K)</TooltipContent>
             </Tooltip>
           ) : (
             <button
@@ -471,7 +488,7 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
               className="flex w-full items-center gap-2 rounded-md border border-primary/40 bg-primary/5 px-2.5 py-2 text-left text-xs font-semibold text-foreground shadow-sm hover:bg-primary/10"
             >
               <Search className="h-3.5 w-3.5 text-primary" />
-              <span className="flex-1 truncate">Search keywords…</span>
+              <span className="flex-1 truncate">Search workouts…</span>
               <kbd className="rounded border border-primary/40 bg-card px-1 py-0.5 text-[9px] font-mono text-primary">⌘K</kbd>
             </button>
           )}
@@ -633,11 +650,11 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
               variant="outline"
               size="sm"
               onClick={() => setPaletteOpen(true)}
-              aria-label="Search keywords"
+              aria-label="Search workout library"
               className="h-8 gap-1.5 border-primary/40 bg-primary/5 px-2 text-xs font-semibold text-foreground hover:bg-primary/10"
             >
               <Search className="h-3.5 w-3.5 text-primary" />
-              Search
+              Workouts
             </Button>
             <SettingsMenu
               items={items}
@@ -791,31 +808,26 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
         </SheetContent>
       </Sheet>
 
-      {/* Command palette */}
+      {/* Command palette — Workout Library search (⌘K / Ctrl+K) */}
       <CommandDialog open={paletteOpen} onOpenChange={setPaletteOpen}>
-        <CommandInput placeholder="Search keywords — type to jump to any page…" />
+        <CommandInput
+          autoFocus
+          value={paletteQuery}
+          onValueChange={setPaletteQuery}
+          placeholder="Search workout library — name, focus, style, tag…"
+        />
         <CommandList>
-          <CommandEmpty>No matches.</CommandEmpty>
-          {grouped.map((group) => (
-            <CommandGroup key={group.label ?? "all"} heading={group.label}>
-              {group.items.map((item) => {
-                const Icon = item.icon;
-                return (
-                  <CommandItem
-                    key={item.to}
-                    value={`${group.label ?? ""} ${item.label} ${item.to} ${(item.keywords ?? []).join(" ")}`}
-                    onSelect={() => {
-                      setPaletteOpen(false);
-                      navigate({ to: item.to });
-                    }}
-                  >
-                    <Icon className="mr-2 h-4 w-4" />
-                    {item.label}
-                  </CommandItem>
-                );
-              })}
-            </CommandGroup>
-          ))}
+          <WorkoutLibraryResults
+            query={debouncedPaletteQuery}
+            onPick={(tpl) => {
+              setPaletteOpen(false);
+              if (tpl.id === "__library__") {
+                navigate({ to: "/admin/program-library" });
+              } else {
+                navigate({ to: "/admin/program-library/$templateId", params: { templateId: tpl.id } });
+              }
+            }}
+          />
           <CommandGroup heading="Actions">
             <CommandItem onSelect={() => { setPaletteOpen(false); handleSignOut(); }}>
               <LogOut className="mr-2 h-4 w-4" /> Sign out
@@ -835,6 +847,114 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
 export interface Crumb {
   label: ReactNode;
   to?: string;
+}
+
+// ------- ⌘K palette: workout library results -------
+const TEMPLATE_TYPE_LABEL: Record<string, string> = {
+  full_prep: "Full Prep",
+  block: "Block",
+  week: "Week",
+  day: "Day",
+  exercise_row: "Exercise Row",
+};
+const TRAINING_STYLE_LABEL: Record<string, string> = {
+  powerlifting: "Powerlifting",
+  bodybuilding: "Bodybuilding",
+  strength: "Strength",
+  lifestyle: "Lifestyle",
+  hybrid: "Hybrid",
+  rehab: "Rehab",
+  conditioning: "Conditioning",
+  custom: "Custom",
+};
+
+type TemplateRow = {
+  id: string;
+  name: string;
+  template_type: string;
+  training_style: string;
+  training_focus?: string | null;
+  tags?: string[] | null;
+  weeks?: number | null;
+  days_per_week?: number | null;
+  est_duration_min?: number | null;
+};
+
+function WorkoutLibraryResults({
+  query,
+  onPick,
+}: {
+  query: string;
+  onPick: (tpl: TemplateRow) => void;
+}) {
+  const { data: templates = [], isLoading } = useQuery({
+    queryKey: ["cmd-k-templates", query],
+    queryFn: () => listTemplates({ q: query, limit: query ? 50 : 12 } as any),
+    staleTime: 30_000,
+  });
+
+  if (isLoading) {
+    return <CommandEmpty>Searching workouts…</CommandEmpty>;
+  }
+  if (!templates.length) {
+    return (
+      <CommandEmpty>
+        {query ? "No workouts match that search." : "No workouts in your library yet."}
+      </CommandEmpty>
+    );
+  }
+
+  // Group by template_type so a long list stays scannable.
+  const grouped = new Map<string, TemplateRow[]>();
+  for (const t of templates as TemplateRow[]) {
+    const key = t.template_type || "other";
+    if (!grouped.has(key)) grouped.set(key, []);
+    grouped.get(key)!.push(t);
+  }
+
+  return (
+    <>
+      {Array.from(grouped.entries()).map(([typeKey, rows]) => (
+        <CommandGroup key={typeKey} heading={TEMPLATE_TYPE_LABEL[typeKey] ?? typeKey}>
+          {rows.map((tpl) => {
+            const style = TRAINING_STYLE_LABEL[tpl.training_style] ?? tpl.training_style;
+            const meta = [
+              style,
+              tpl.training_focus,
+              tpl.weeks != null ? `${tpl.weeks}w` : null,
+              tpl.days_per_week != null ? `${tpl.days_per_week}d/wk` : null,
+            ].filter(Boolean).join(" · ");
+            const tags = (tpl.tags ?? []).slice(0, 3).join(" · ");
+            const haystack = [tpl.name, meta, tags, style, tpl.training_focus, ...(tpl.tags ?? [])]
+              .filter(Boolean).join(" ");
+            return (
+              <CommandItem
+                key={tpl.id}
+                value={haystack}
+                onSelect={() => onPick(tpl)}
+              >
+                <BookOpen className="mr-2 h-4 w-4 shrink-0 text-primary" />
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-semibold">{tpl.name}</div>
+                  {meta && <div className="truncate text-[11px] text-muted-foreground">{meta}</div>}
+                </div>
+              </CommandItem>
+            );
+          })}
+        </CommandGroup>
+      ))}
+      <CommandGroup heading="Quick links">
+        <CommandItem
+          value="open workout library"
+          onSelect={() => {
+            onPick({ id: "__library__" } as any);
+          }}
+        >
+          <BookOpen className="mr-2 h-4 w-4" /> Open full workout library
+        </CommandItem>
+      </CommandGroup>
+    </>
+  );
 }
 
 // ------- Mobile bottom-nav helpers (grouped item + long-press) -------

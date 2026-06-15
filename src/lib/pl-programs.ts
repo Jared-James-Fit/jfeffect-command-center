@@ -1040,14 +1040,41 @@ export async function updateWeekMeta(weekId: string, patch: Partial<{ training_d
 export const PREP_STATUSES: PrepStatus[] = ["Planned", "Active", "Completed", "Archived"];
 export const BLOCK_STATUSES: BlockStatus[] = ["Draft", "Active", "Completed", "Archived"];
 
-export async function listTemplates(opts: { type?: TemplateType | "all"; style?: TrainingStyle | "all"; q?: string }) {
+export async function listTemplates(opts: {
+  type?: TemplateType | "all";
+  style?: TrainingStyle | "all";
+  q?: string;
+  /** When set, return only the N most recently updated templates (used for the empty-state of the cmd+K palette). */
+  limit?: number;
+}) {
   let q = sb.from("pl_templates").select("*");
   if (!(opts as any).includeArchived) q = q.eq("archived", false);
   else if ((opts as any).onlyArchived) q = q.eq("archived", true);
   if (opts.type && opts.type !== "all") q = q.eq("template_type", opts.type);
   if (opts.style && opts.style !== "all") q = q.eq("training_style", opts.style);
-  if (opts.q) q = q.ilike("name", `%${opts.q}%`);
-  const { data, error } = await q.order("updated_at", { ascending: false });
+  if (opts.q && opts.q.trim()) {
+    const term = `%${opts.q.trim()}%`;
+    // Match name OR training_focus OR notes OR training_style OR any tag.
+    q = q.or(
+      `name.ilike.${term},training_focus.ilike.${term},notes.ilike.${term},training_style.ilike.${term}`,
+    );
+    // Post-filter tags in JS (PostgREST can't OR into a text[] column directly).
+    const { data, error } = await q.order("updated_at", { ascending: false });
+    if (error) throw error;
+    const needle = opts.q.trim().toLowerCase();
+    const rows = (data ?? []).filter((r: any) => {
+      if (r.name?.toLowerCase().includes(needle)) return true;
+      if (r.training_focus?.toLowerCase().includes(needle)) return true;
+      if (r.notes?.toLowerCase().includes(needle)) return true;
+      if (r.training_style?.toLowerCase().includes(needle)) return true;
+      if (Array.isArray(r.tags) && r.tags.some((t: string) => t.toLowerCase().includes(needle))) return true;
+      return false;
+    });
+    return opts.limit ? rows.slice(0, opts.limit) : rows;
+  }
+  const { data, error } = await q
+    .order("updated_at", { ascending: false })
+    .limit(opts.limit ?? 1000);
   if (error) throw error;
   return data ?? [];
 }
