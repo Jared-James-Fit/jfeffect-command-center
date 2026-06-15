@@ -1535,7 +1535,7 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
   );
 }
 
-function WeekEditor({ week, setWeek, exercises, onCopyDayToFuture, hideHeader, compact }: { week: any; setWeek: (w: any) => void; exercises: any[]; onCopyDayToFuture?: (dayIdx: number) => void; hideHeader?: boolean; compact?: boolean }) {
+function WeekEditor({ week, setWeek, exercises, onCopyDayToFuture, hideHeader, compact, dayKeyPrefix }: { week: any; setWeek: (w: any) => void; exercises: any[]; onCopyDayToFuture?: (dayIdx: number) => void; hideHeader?: boolean; compact?: boolean; dayKeyPrefix?: string }) {
   const days = week.days || [];
   const addDay = () => {
     const nextIdx = (days[days.length - 1]?.day_index ?? 0) + 1;
@@ -1562,6 +1562,7 @@ function WeekEditor({ week, setWeek, exercises, onCopyDayToFuture, hideHeader, c
       <WeeklyVolumeSummary week={week} exercises={exercises as any} weekIndex={week?.week_index} />
       {days.map((d: any, i: number) => {
         const dayMinutes = estimateDayMinutes(d.rows || []);
+        const dKey = `${dayKeyPrefix ?? `wk${week.week_index ?? 0}`}:d${d.day_index ?? i}`;
         return (
         <Card key={i} className={cn("border-l-[3px] border-l-primary/40", compact ? "p-2" : "p-3")}>
           <div className={cn("flex items-center gap-2", compact ? "mb-1" : "mb-2")}>
@@ -1580,7 +1581,7 @@ function WeekEditor({ week, setWeek, exercises, onCopyDayToFuture, hideHeader, c
               <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => delDay(i)}><Trash2 className="h-3.5 w-3.5" /></Button>
             </div>
           </div>
-          <DayEditor day={d} setDay={(nd) => { const copy = [...days]; copy[i] = nd; setWeek({ ...week, days: copy }); }} exercises={exercises} compact={compact} />
+          <DayEditor day={d} setDay={(nd) => { const copy = [...days]; copy[i] = nd; setWeek({ ...week, days: copy }); }} exercises={exercises} compact={compact} dayKey={dKey} />
         </Card>
       )})}
       {hideHeader && days.length > 0 && (
