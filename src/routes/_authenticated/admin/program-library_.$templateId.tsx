@@ -286,7 +286,12 @@ export function handleRowFieldNav(
     const next = fields[idx + delta];
     if (next) {
       e.preventDefault();
-      focusField(next);
+      // Commit pending edit (via blur) FIRST, then move focus on the next
+      // frame so React has time to flush the re-render. Without this the
+      // destination input would flicker / lose focus when the parent
+      // re-rendered mid-keystroke — the "glitch" with arrow left/right.
+      target.blur();
+      requestAnimationFrame(() => focusField(next));
       return true;
     }
     // wrap to adjacent row, same column
@@ -298,7 +303,12 @@ export function handleRowFieldNav(
       if (nextRow) {
         const cols = fieldsInRow(nextRow);
         const col = cols[delta > 0 ? 0 : cols.length - 1];
-        if (col) { e.preventDefault(); focusField(col); return true; }
+        if (col) {
+          e.preventDefault();
+          target.blur();
+          requestAnimationFrame(() => focusField(col));
+          return true;
+        }
       }
     }
     return false;
@@ -317,7 +327,15 @@ export function handleRowFieldNav(
       ?? fieldsInRow(nextRow)[Math.min(idx, Math.max(fieldsInRow(nextRow).length - 1, 0))]
       ?? null;
     const peer = findPeer();
-    if (peer) { e.preventDefault(); focusField(peer); return true; }
+    if (peer) {
+      e.preventDefault();
+      target.blur();
+      requestAnimationFrame(() => {
+        const fresh = findPeer();
+        if (fresh) focusField(fresh);
+      });
+      return true;
+    }
     // Target row is collapsed → expand it by simulating a click, then focus
     // the same column on the next frame once inputs have mounted. This is
     // what made arrow-key nav feel "glitchy" — collapsed cards swallowed the
@@ -2204,9 +2222,23 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
   // "Collapsed" = the whole card is in summary/read-only mode (no input boxes).
   // It expands automatically when the user clicks or tabs into it, and snaps
   // back to summary when focus leaves the card.
-  const [collapsed, setCollapsed] = useState(true);
+  // Minimum requirements to be "fillable" enough to allow auto-collapse:
+  // an exercise selected/named, sets, and reps. Until those are present we
+  // keep the card expanded so coaches see the empty inputs they still owe.
+  const meetsMinimum = (() => {
+    const hasEx = !!((row as any).exercise_id || (row as any).exercise_name_override);
+    const hasSets = row.sets != null && row.sets !== "";
+    const hasReps = !!row.reps_text;
+    return hasEx && hasSets && hasReps;
+  })();
+  const meetsMinRef = useRef(meetsMinimum);
+  useEffect(() => { meetsMinRef.current = meetsMinimum; }, [meetsMinimum]);
+  const [collapsed, setCollapsed] = useState(meetsMinimum);
   const collapseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scheduleCollapse = () => {
+    // Don't auto-collapse incomplete cards — keep them expanded so the
+    // missing fields stay visible.
+    if (!meetsMinRef.current) return;
     if (collapseTimer.current) clearTimeout(collapseTimer.current);
     collapseTimer.current = setTimeout(() => setCollapsed(true), 120);
   };
