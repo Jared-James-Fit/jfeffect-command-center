@@ -3,6 +3,7 @@ import { Toaster } from "sonner";
 import { AuthProvider } from "@/lib/auth";
 import { ClientImpersonationProvider } from "@/lib/client-impersonation";
 import { ProgressDrawer } from "@/components/progress-drawer";
+import { GlobalHighlight } from "@/components/global-highlight";
 import {
   Outlet,
   Link,
@@ -264,6 +265,7 @@ function RootComponent() {
           <Outlet />
           <Toaster position="top-right" theme="dark" richColors />
           <ProgressDrawer />
+          <GlobalHighlight />
         </ClientImpersonationProvider>
       </AuthProvider>
     </QueryClientProvider>
