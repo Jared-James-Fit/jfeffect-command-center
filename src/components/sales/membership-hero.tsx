@@ -63,17 +63,17 @@ export function MembershipHero({
               {
                 Icon: ListChecks,
                 title: "Follow a Proven System",
-                body: "Pick a plan and walk into every session knowing exactly what to do. No more standing around deciding.",
+                body: "Choose a training plan and know exactly what to do each time you train.",
               },
               {
                 Icon: LineChart,
                 title: "Track Your Progress",
-                body: "Log every set, watch your PRs climb, and actually see whether the work is paying off.",
+                body: "Log workouts, monitor personal records and understand your training analytics.",
               },
               {
                 Icon: Sparkles,
                 title: "Get More Than Workouts",
-                body: "Demos, recipes, nutrition, education — everything you need so the plan actually sticks.",
+                body: "Access exercise demonstrations, recipes, nutrition education and member resources.",
               },
             ].map(({ Icon, title, body }) => (
               <li key={title} className="flex items-start gap-3">
@@ -295,7 +295,7 @@ export function HeroDecisionArea({ onCoachingClick }: { onCoachingClick?: () => 
             <User className="h-3.5 w-3.5 text-primary" /> Train Independently
           </div>
           <div className="mt-1 text-[11px] leading-snug text-[#B0B4BE]">
-            Get the app and run the system on your own. You set the pace.
+            Start JF Membership and follow the system on your own schedule.
           </div>
         </div>
         <button
@@ -307,7 +307,7 @@ export function HeroDecisionArea({ onCoachingClick }: { onCoachingClick?: () => 
             <Users className="h-3.5 w-3.5 text-primary" /> Work Directly With a Coach
           </div>
           <div className="mt-1 text-[11px] leading-snug text-[#B0B4BE]">
-            Apply to work with me directly — your plan, your accountability, dialed in over time.
+            Apply for personalized programming, accountability and ongoing adjustments.
           </div>
         </button>
       </div>

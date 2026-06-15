@@ -22,7 +22,7 @@ export function OfferComparison({ accent = "membership" }: { accent?: "membershi
           Which option is right for you?
         </h2>
         <p className="mt-3 text-sm text-muted-foreground md:text-base">
-          Same system, two levels of support. Pick the one that fits where you're at right now.
+          They solve different levels of need. Pick the one that fits where you are right now.
         </p>
       </div>
 
@@ -34,7 +34,7 @@ export function OfferComparison({ accent = "membership" }: { accent?: "membershi
             "You want structured workouts without direct coaching",
             "You are comfortable training independently",
             "You want app access, resources and tracking",
-            "You want in without the bigger investment yet",
+            "You want the lowest-cost way to use the JF Effect system",
           ]}
           ctaLabel="Start Membership"
           ctaHref="/membership"
@@ -48,7 +48,7 @@ export function OfferComparison({ accent = "membership" }: { accent?: "membershi
             "You need accountability and regular adjustments",
             "You want nutrition guidance",
             "You want direct access to a coach",
-            "You're ready to invest in getting it right the first time",
+            "You are prepared to invest more for personalized support",
           ]}
           ctaLabel="Apply for Coaching"
           ctaHref="/coaching/apply"
