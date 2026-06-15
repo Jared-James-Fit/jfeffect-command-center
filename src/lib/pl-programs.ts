@@ -1336,6 +1336,14 @@ export async function getClientWorkouts(clientId: string) {
   const { data: days } = weekIds.length ? await sb.from("pl_days").select("*").in("week_id", weekIds).order("day_index") : { data: [] };
   const dayIds = (days ?? []).map((d: any) => d.id);
   const { data: completions } = dayIds.length ? await sb.from("pl_day_completions").select("*").in("day_id", dayIds) : { data: [] };
+  // Look up which completions already have post-workout feedback submitted, so
+  // the workouts list can show "Leave review" vs "Edit review" without each
+  // card firing its own query.
+  const completionIds = (completions ?? []).map((c: any) => c.id).filter(Boolean);
+  const { data: feedbacks } = completionIds.length
+    ? await sb.from("pl_workout_feedback").select("completion_id").in("completion_id", completionIds)
+    : { data: [] };
+  const feedbackSet = new Set<string>((feedbacks ?? []).map((f: any) => f.completion_id));
   const blockOrder = new Map<string, number>();
   (blocks ?? []).forEach((b: any, i: number) => blockOrder.set(b.id, i));
   const daysByWeek = new Map<string, any[]>();
@@ -1350,7 +1358,8 @@ export async function getClientWorkouts(clientId: string) {
     if (weekDays.length === 0) return [{ day: null, week: w, block: b, completion: null }];
     return weekDays.map((d: any) => {
       const c = (completions ?? []).find((x: any) => x.day_id === d.id);
-      return { day: d, week: w, block: b, completion: c };
+      const completion = c ? { ...c, has_feedback: feedbackSet.has(c.id) } : c;
+      return { day: d, week: w, block: b, completion };
     });
   });
   // Sort: block (created order) → week_index → day_index
