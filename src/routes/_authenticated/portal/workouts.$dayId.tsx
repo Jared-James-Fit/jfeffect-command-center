@@ -49,6 +49,9 @@ import { ActiveRestTimerProvider, useRestTimer } from "@/components/active-rest-
 import { ExerciseHistoryButton } from "@/components/exercise-history-sheet";
 import { convertWeight } from "@/lib/progress-metrics";
 import { WorkoutFeedbackSheet, WorkoutFeedbackReminder, WorkoutFeedbackEditButton } from "@/components/workout-feedback-sheet";
+import { WorkoutTimerSheet, QuickConfirmDuration, type TimerCompletionPayload } from "@/components/workout-timer-sheet";
+import { formatDuration } from "@/lib/duration";
+import { Timer } from "lucide-react";
 
 /* -------------------------------------------------------------------------- */
 /* Target-parsing helpers (Suggested → Draft → Confirmed fast-logging)         */
