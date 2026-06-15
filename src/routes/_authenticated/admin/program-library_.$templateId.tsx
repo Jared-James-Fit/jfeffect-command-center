@@ -1908,7 +1908,7 @@ function DayEditor({ day, setDay, exercises, compact, dayKey }: { day: any; setD
               )}
             >
               <RowEditor
-                row={r}
+                row={{ ...r, index_total: rows.length }}
                 setRow={(nr) => { const copy = [...rows]; copy[i] = nr; setDay({ ...day, rows: copy }); }}
                 onDelete={() => setDay({ ...day, rows: rows.filter((_: any, j: number) => j !== i) })}
                 canMoveUp={i > 0}
@@ -1927,6 +1927,7 @@ function DayEditor({ day, setDay, exercises, compact, dayKey }: { day: any; setD
                 compact={compact !== false}
                 purposeLabel={purposeLabels[i]}
                 dayKey={dayKey}
+                index={i}
               />
             </div>
             </Fragment>
@@ -2166,7 +2167,7 @@ function SwapExerciseButton({ row, setRow, exercises }: { row: any; setRow: (r: 
   );
 }
 
-function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMoveDown, canMoveUp, canMoveDown, onDragStartRow, onDragEndRow, isDragging, purposeLabel, dayKey }: { row: any; setRow: (r: any) => void; onDelete?: () => void; exercises: any[]; compact?: boolean; onMoveUp?: () => void; onMoveDown?: () => void; canMoveUp?: boolean; canMoveDown?: boolean; onDragStartRow?: (e: React.DragEvent) => void; onDragEndRow?: () => void; isDragging?: boolean; purposeLabel?: string; dayKey?: string }) {
+function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMoveDown, canMoveUp, canMoveDown, onDragStartRow, onDragEndRow, isDragging, purposeLabel, dayKey, index }: { row: any; setRow: (r: any) => void; onDelete?: () => void; exercises: any[]; compact?: boolean; onMoveUp?: () => void; onMoveDown?: () => void; canMoveUp?: boolean; canMoveDown?: boolean; onDragStartRow?: (e: React.DragEvent) => void; onDragEndRow?: () => void; isDragging?: boolean; purposeLabel?: string; dayKey?: string; index?: number }) {
   const Field = ({ label, className, children }: { label: string; className?: string; children: React.ReactNode }) => (
     <div className={cn("flex flex-col gap-0.5 min-w-0", className)}>
       <span className="px-0.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground leading-none">{label}</span>
@@ -2367,6 +2368,20 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
   if (row.tempo) summaryParts.push(`tempo ${row.tempo}`);
   const restSummary = `rest ${fmtRestSeconds(effectiveRest)}`;
 
+  // Small aesthetic row-number badge. Hidden when no index is provided
+  // (e.g. the standalone single-row card view). Uses muted styling so it
+  // reads as a positional indicator, not part of the prescription.
+  const RowIndexBadge = index == null ? null : (
+    <span
+      className="inline-flex shrink-0 select-none items-center justify-center rounded-full border border-border/60 bg-background/80 px-1.5 text-[10px] font-semibold tabular-nums leading-none text-muted-foreground shadow-sm backdrop-blur-sm"
+      style={{ minWidth: "1.5rem", height: "1.25rem" }}
+      aria-label={`Exercise ${index + 1} of ${row.index_total ?? ""}`}
+      title={`Exercise ${index + 1}`}
+    >
+      {index + 1}
+    </span>
+  );
+
   return (
     <div
       data-pb-row
@@ -2408,6 +2423,7 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
           >
             <GripVertical className="h-4 w-4" />
           </span>
+          {RowIndexBadge}
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5 min-w-0">
               {purposeLabel && (
@@ -2461,6 +2477,7 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
           >
             <GripVertical className="h-4 w-4" />
           </span>
+          {RowIndexBadge}
           <div className="min-w-0 flex-1">
         <Select value={row.exercise_id ?? "__custom"} onValueChange={(v) => setRow({ ...row, exercise_id: v === "__custom" ? null : v })}>
           <SelectTrigger className={cn("min-h-8 h-auto py-1 text-sm font-semibold [&>span]:line-clamp-2 [&>span]:whitespace-normal [&>span]:text-left [&>span]:leading-tight")}>
