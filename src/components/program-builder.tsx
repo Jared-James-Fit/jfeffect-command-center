@@ -518,6 +518,7 @@ export function ExerciseLibraryPanel({
   const [filter, setFilter] = useState<string | null>(null);
   const [favs, setFavs] = useState<Set<string>>(() => readFavs());
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const [quickAddOpen, setQuickAddOpen] = useState(false);
 
   // Global keyboard shortcuts:
   //   "/"   → focus the search input (and expand if collapsed)
