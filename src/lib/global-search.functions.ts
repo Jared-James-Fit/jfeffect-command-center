@@ -102,18 +102,18 @@ export const globalSearchFn = createServerFn({ method: "GET" })
         .limit(limit),
       supabase
         .from("exercises")
-        .select("id, name, category, primary_muscle")
-        .or([`name.ilike.${like}`, `category.ilike.${like}`, `primary_muscle.ilike.${like}`].join(","))
+        .select("id, name, category, muscle_group")
+        .or([`name.ilike.${like}`, `category.ilike.${like}`, `muscle_group.ilike.${like}`].join(","))
         .limit(limit),
       supabase
         .from("member_plans")
-        .select("id, name, summary, tags")
-        .or([`name.ilike.${like}`, `summary.ilike.${like}`].join(","))
+        .select("id, name, description, training_style, goal")
+        .or([`name.ilike.${like}`, `description.ilike.${like}`, `training_style.ilike.${like}`, `goal.ilike.${like}`].join(","))
         .limit(limit),
       supabase
         .from("recipes")
-        .select("id, name, summary")
-        .or([`name.ilike.${like}`, `summary.ilike.${like}`].join(","))
+        .select("id, title, category, body")
+        .or([`title.ilike.${like}`, `category.ilike.${like}`, `body.ilike.${like}`].join(","))
         .limit(limit),
       supabase
         .from("broadcasts")
@@ -122,11 +122,12 @@ export const globalSearchFn = createServerFn({ method: "GET" })
         .limit(limit),
       supabase
         .from("purchase_records")
-        .select("id, customer_email, customer_name, product_name, amount_total")
+        .select("id, terms_accepted_client_email, terms_accepted_client_name, product_name, offer_name")
         .or([
-          `customer_email.ilike.${like}`,
-          `customer_name.ilike.${like}`,
+          `terms_accepted_client_email.ilike.${like}`,
+          `terms_accepted_client_name.ilike.${like}`,
           `product_name.ilike.${like}`,
+          `offer_name.ilike.${like}`,
         ].join(","))
         .limit(limit),
     ]);
@@ -200,36 +201,36 @@ export const globalSearchFn = createServerFn({ method: "GET" })
     }
 
     for (const e of exRes.data ?? []) {
-      const m = pickMatch(q, { name: e.name, category: e.category, muscle: e.primary_muscle });
+      const m = pickMatch(q, { name: e.name, category: e.category, muscle: e.muscle_group });
       hits.push({
         kind: "exercise",
         id: e.id,
         label: e.name || "Exercise",
-        sub: m?.snippet ?? e.category ?? e.primary_muscle ?? null,
+        sub: m?.snippet ?? e.category ?? e.muscle_group ?? null,
         to: `/admin/exercises?focus=${e.id}`,
         matchedField: m?.field ?? null,
       });
     }
 
     for (const p of planRes.data ?? []) {
-      const m = pickMatch(q, { name: p.name, summary: p.summary });
+      const m = pickMatch(q, { name: p.name, description: p.description, style: p.training_style, goal: p.goal });
       hits.push({
         kind: "member_plan",
         id: p.id,
         label: p.name || "Member Plan",
-        sub: m?.snippet ?? p.summary ?? null,
+        sub: m?.snippet ?? p.description ?? p.training_style ?? null,
         to: `/admin/member-plans/${p.id}`,
         matchedField: m?.field ?? null,
       });
     }
 
     for (const r of recipeRes.data ?? []) {
-      const m = pickMatch(q, { name: r.name, summary: r.summary });
+      const m = pickMatch(q, { title: r.title, category: r.category });
       hits.push({
         kind: "recipe",
         id: r.id,
-        label: r.name || "Recipe",
-        sub: m?.snippet ?? r.summary ?? null,
+        label: r.title || "Recipe",
+        sub: m?.snippet ?? r.category ?? null,
         to: `/admin/recipes?focus=${r.id}`,
         matchedField: m?.field ?? null,
       });
@@ -249,17 +250,18 @@ export const globalSearchFn = createServerFn({ method: "GET" })
 
     for (const p of purchaseRes.data ?? []) {
       const m = pickMatch(q, {
-        email: p.customer_email,
-        name: p.customer_name,
+        email: p.terms_accepted_client_email,
+        name: p.terms_accepted_client_name,
         product: p.product_name,
+        offer: p.offer_name,
       });
-      const sub = [p.customer_name || p.customer_email, p.product_name]
+      const sub = [p.terms_accepted_client_name || p.terms_accepted_client_email, p.product_name || p.offer_name]
         .filter(Boolean)
         .join(" · ");
       hits.push({
         kind: "purchase",
         id: p.id,
-        label: p.product_name || p.customer_name || p.customer_email || "Purchase",
+        label: p.product_name || p.offer_name || p.terms_accepted_client_name || p.terms_accepted_client_email || "Purchase",
         sub: m?.snippet ?? sub ?? null,
         to: `/admin/purchases/${p.id}`,
         matchedField: m?.field ?? null,
