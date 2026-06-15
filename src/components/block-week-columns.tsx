@@ -15,7 +15,8 @@ import { startOfDay, format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { durationRange } from "@/lib/pl-programs";
 import { weekDisplayRange, formatWeekRange, isCurrentWeek } from "@/lib/block-dates";
-import { displayWeekStatus, weekStatusTone, isWeekLocked } from "@/lib/workout-today";
+import { displayWeekStatus, weekStatusTone, isWeekLocked, cleanDayTitle, dayScheduledDate } from "@/lib/workout-today";
+import { parseLocalDate } from "@/lib/today";
 
 type Mode = "admin" | "client";
 type WeekEntry = { week: any; entries: { day: any; week: any; block: any; completion: any }[] };
