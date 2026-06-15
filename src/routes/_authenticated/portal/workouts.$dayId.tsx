@@ -282,9 +282,6 @@ function WorkoutDay() {
   const readonly = false;
   const unlocked = true;
   const setUnlocked = (_: boolean) => {};
-  void setUnlocked;
-  void unlocked;
-  void autoReadonly;
 
   const { data: rows = [], isSuccess: rowsLoaded } = useQuery({
     queryKey: ["pl-day-rows", dayId],
