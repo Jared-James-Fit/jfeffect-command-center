@@ -420,14 +420,23 @@ function ClientDetail() {
         actions={
           <>
             <Link to="/admin/clients"><Button variant="ghost" size="sm"><ArrowLeft className="mr-2 h-4 w-4" />Back</Button></Link>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => navigate({ to: ".", params: { id }, search: { tab: "messages" }, replace: true })}
+            >
+              <MessageSquare className="mr-2 h-4 w-4" />Message
+            </Button>
             <Link to="/admin/client-programs/$clientId" params={{ clientId: id }}>
               <Button variant="outline" size="sm"><Dumbbell className="mr-2 h-4 w-4" />Training Program</Button>
             </Link>
-            {form.drive_folder_link && (
-              <a href={form.drive_folder_link} target="_blank" rel="noreferrer">
-                <Button variant="outline" size="sm"><FolderOpen className="mr-2 h-4 w-4" />Open Drive</Button>
-              </a>
-            )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => navigate({ to: ".", params: { id }, search: { tab: "nutrition" }, replace: true })}
+            >
+              <Apple className="mr-2 h-4 w-4" />Nutrition
+            </Button>
             {canPov && (
               <Button
                 size="sm"
@@ -447,20 +456,37 @@ function ClientDetail() {
                 <Eye className="mr-2 h-4 w-4" />Client POV
               </Button>
             )}
-            <Button variant="outline" size="sm" onClick={() => setPriceCardOpen(true)}><Tag className="mr-2 h-4 w-4" />Assign Offer / View Price Card</Button>
-            <Button variant="outline" size="sm" onClick={() => setBookingLinkOpen(true)}><Link2 className="mr-2 h-4 w-4" />Send Booking Link</Button>
-            <ActionButton variant="outline" size="sm" onAction={sendSetup} loadingLabel="Sending…" successLabel="Sent" successToast={false} errorToast={false} icon={<Mail className="h-4 w-4" />}>Send setup link</ActionButton>
-            {form.status === "Deactivated" ? (
-              <Button variant="outline" size="sm" onClick={() => setReactivateOpen(true)}>
-                <Eye className="mr-2 h-4 w-4" />Reactivate
-              </Button>
-            ) : (
-              <Button variant="outline" size="sm" onClick={() => setDeactivateOpen(true)}>
-                <Eye className="mr-2 h-4 w-4" />Deactivate
-              </Button>
-            )}
-            <Button variant="outline" size="sm" onClick={archive}><Archive className="mr-2 h-4 w-4" />{form.archived ? "Restore" : "Archive"}</Button>
-            <Button variant="outline" size="sm" className="text-destructive hover:text-destructive" onClick={() => setDeleteStep(1)}><Trash2 className="mr-2 h-4 w-4" />Delete</Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm"><MoreHorizontal className="mr-2 h-4 w-4" />More Actions</Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-64">
+                <DropdownMenuLabel>Setup & Access</DropdownMenuLabel>
+                <DropdownMenuItem onSelect={sendSetup}><Mail className="mr-2 h-4 w-4" />Send setup email</DropdownMenuItem>
+                <DropdownMenuItem onSelect={copySetupLink}><Copy className="mr-2 h-4 w-4" />Copy setup link</DropdownMenuItem>
+                <DropdownMenuItem onSelect={sendReset}><KeyRound className="mr-2 h-4 w-4" />Send password reset</DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel>Scheduling & Offers</DropdownMenuLabel>
+                <DropdownMenuItem onSelect={() => setBookingLinkOpen(true)}><Link2 className="mr-2 h-4 w-4" />Send booking link</DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => setPriceCardOpen(true)}><Tag className="mr-2 h-4 w-4" />Assign offer / price card</DropdownMenuItem>
+                {form.drive_folder_link && (
+                  <DropdownMenuItem onSelect={() => window.open(form.drive_folder_link, "_blank", "noreferrer")}>
+                    <FolderOpen className="mr-2 h-4 w-4" />Open Drive folder
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel>Lifecycle</DropdownMenuLabel>
+                {form.status === "Deactivated" ? (
+                  <DropdownMenuItem onSelect={() => setReactivateOpen(true)}><Eye className="mr-2 h-4 w-4" />Reactivate</DropdownMenuItem>
+                ) : (
+                  <DropdownMenuItem onSelect={() => setDeactivateOpen(true)}><Eye className="mr-2 h-4 w-4" />Deactivate</DropdownMenuItem>
+                )}
+                <DropdownMenuItem onSelect={archive}><Archive className="mr-2 h-4 w-4" />{form.archived ? "Restore" : "Archive"}</DropdownMenuItem>
+                <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => setDeleteStep(1)}>
+                  <Trash2 className="mr-2 h-4 w-4" />Delete client
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <Button size="sm" className="bg-gradient-primary uppercase font-bold" onClick={save}><Save className="mr-2 h-4 w-4" />Save</Button>
           </>
         }
