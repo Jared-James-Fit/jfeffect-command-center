@@ -642,6 +642,7 @@ function TemplateEditor() {
     <EditorChrome
       meta={meta} summary={summary} typeLabel={type.replace("_", " ")}
       autosave={autosave} save={save} dirty={dirty}
+      statusTemplate={{ ...tpl, payload }}
     >
       {conflictWatch.conflict && (
           <Card className="flex flex-wrap items-start gap-3 border-amber-500/60 bg-amber-500/5 p-3 text-sm">
