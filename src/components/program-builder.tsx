@@ -8,6 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Search, Star, GripVertical, Check, Loader2, AlertCircle, Circle, Plus, Link as LinkIcon, Unlink, CloudOff, AlertTriangle, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { QuickAddExerciseDialog } from "@/components/quick-add-exercise-dialog";
 
 // ---------------- Drag & drop payload helpers ----------------
 
