@@ -27,7 +27,7 @@ export function ClientBasicInfoGate({ children }: { children: ReactNode }) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("clients")
-        .select("id, user_id, full_name, first_name, last_name, preferred_name, email, phone, date_of_birth, height_cm, preferred_height_unit, address, city, province, postal_code, country, timezone, emergency_contact_name, emergency_contact_phone, basic_info_completed_at, intake_lifts_known, intake_lift_unit, intake_squat_1rm, intake_bench_1rm, intake_deadlift_1rm")
+        .select("id, user_id, full_name, first_name, last_name, preferred_name, email, phone, date_of_birth, height_cm, preferred_height_unit, address, city, province, postal_code, country, timezone, emergency_contact_name, emergency_contact_phone, basic_info_completed_at, intake_lifts_known, intake_lift_unit, intake_squat_1rm, intake_bench_1rm, intake_deadlift_1rm, intake_training_experience, intake_followed_program, intake_squat_5rm, intake_bench_5rm, intake_deadlift_5rm, intake_injuries")
         .eq("user_id", user!.id)
         .maybeSingle();
       if (error) throw error;
@@ -59,6 +59,12 @@ export function ClientBasicInfoGate({ children }: { children: ReactNode }) {
       intake_squat_1rm: client.intake_squat_1rm != null ? Number(client.intake_squat_1rm) : null,
       intake_bench_1rm: client.intake_bench_1rm != null ? Number(client.intake_bench_1rm) : null,
       intake_deadlift_1rm: client.intake_deadlift_1rm != null ? Number(client.intake_deadlift_1rm) : null,
+      intake_training_experience: (client as any).intake_training_experience ?? "",
+      intake_followed_program: (client as any).intake_followed_program ?? "",
+      intake_squat_5rm: (client as any).intake_squat_5rm != null ? Number((client as any).intake_squat_5rm) : null,
+      intake_bench_5rm: (client as any).intake_bench_5rm != null ? Number((client as any).intake_bench_5rm) : null,
+      intake_deadlift_5rm: (client as any).intake_deadlift_5rm != null ? Number((client as any).intake_deadlift_5rm) : null,
+      intake_injuries: (client as any).intake_injuries ?? "",
     });
   }, [client]);
 
@@ -99,10 +105,16 @@ export function ClientBasicInfoGate({ children }: { children: ReactNode }) {
       emergency_contact_phone: form.emergency_contact_phone || null,
       intake_lifts_known:
         form.intake_lifts_known === false ? false : true,
-      intake_lift_unit: form.intake_lifts_known === false ? null : (form.intake_lift_unit ?? "lb"),
+      intake_lift_unit: form.intake_lift_unit ?? "lb",
       intake_squat_1rm: form.intake_lifts_known === false ? null : form.intake_squat_1rm,
       intake_bench_1rm: form.intake_lifts_known === false ? null : form.intake_bench_1rm,
       intake_deadlift_1rm: form.intake_lifts_known === false ? null : form.intake_deadlift_1rm,
+      intake_training_experience: form.intake_lifts_known === false ? (form.intake_training_experience || null) : null,
+      intake_followed_program: form.intake_lifts_known === false ? (form.intake_followed_program || null) : null,
+      intake_squat_5rm: form.intake_lifts_known === false ? form.intake_squat_5rm : null,
+      intake_bench_5rm: form.intake_lifts_known === false ? form.intake_bench_5rm : null,
+      intake_deadlift_5rm: form.intake_lifts_known === false ? form.intake_deadlift_5rm : null,
+      intake_injuries: form.intake_lifts_known === false ? (form.intake_injuries || null) : null,
       intake_lifts_recorded_at: new Date().toISOString(),
       basic_info_completed_at: new Date().toISOString(),
       info_last_updated_at: new Date().toISOString(),

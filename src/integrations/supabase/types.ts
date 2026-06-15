@@ -2227,11 +2227,17 @@ export type Database = {
           injuries: string | null
           instagram: string | null
           intake_bench_1rm: number | null
+          intake_bench_5rm: number | null
           intake_deadlift_1rm: number | null
+          intake_deadlift_5rm: number | null
+          intake_followed_program: string | null
+          intake_injuries: string | null
           intake_lift_unit: string | null
           intake_lifts_known: boolean | null
           intake_lifts_recorded_at: string | null
           intake_squat_1rm: number | null
+          intake_squat_5rm: number | null
+          intake_training_experience: string | null
           invite_expires_at: string | null
           invite_last_resent_at: string | null
           invite_sent_at: string | null
@@ -2392,11 +2398,17 @@ export type Database = {
           injuries?: string | null
           instagram?: string | null
           intake_bench_1rm?: number | null
+          intake_bench_5rm?: number | null
           intake_deadlift_1rm?: number | null
+          intake_deadlift_5rm?: number | null
+          intake_followed_program?: string | null
+          intake_injuries?: string | null
           intake_lift_unit?: string | null
           intake_lifts_known?: boolean | null
           intake_lifts_recorded_at?: string | null
           intake_squat_1rm?: number | null
+          intake_squat_5rm?: number | null
+          intake_training_experience?: string | null
           invite_expires_at?: string | null
           invite_last_resent_at?: string | null
           invite_sent_at?: string | null
@@ -2557,11 +2569,17 @@ export type Database = {
           injuries?: string | null
           instagram?: string | null
           intake_bench_1rm?: number | null
+          intake_bench_5rm?: number | null
           intake_deadlift_1rm?: number | null
+          intake_deadlift_5rm?: number | null
+          intake_followed_program?: string | null
+          intake_injuries?: string | null
           intake_lift_unit?: string | null
           intake_lifts_known?: boolean | null
           intake_lifts_recorded_at?: string | null
           intake_squat_1rm?: number | null
+          intake_squat_5rm?: number | null
+          intake_training_experience?: string | null
           invite_expires_at?: string | null
           invite_last_resent_at?: string | null
           invite_sent_at?: string | null
