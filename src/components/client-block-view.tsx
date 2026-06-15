@@ -16,7 +16,7 @@ import {
   effectiveRestSeconds, resolveCategory, derivePurposeLabels, purposeLabelBadgeClass,
 } from "@/lib/exercise-metadata";
 import { weekDisplayRange, isCurrentWeek, formatWeekRange } from "@/lib/block-dates";
-import { isWeekLocked, dayScheduledDate } from "@/lib/workout-today";
+import { isWeekLocked, dayScheduledDate, cleanDayTitle } from "@/lib/workout-today";
 import { localStartOfToday, parseLocalDate } from "@/lib/today";
 
 /* ──────────────────────────────────────────────────────────────────────────
