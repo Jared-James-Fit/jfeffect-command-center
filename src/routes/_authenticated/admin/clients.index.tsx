@@ -29,6 +29,7 @@ import { ClientToolbar } from "@/components/clients/client-toolbar";
 import { ClientRow, ClientRowSkeleton } from "@/components/clients/client-row";
 import { Pager } from "@/components/clients/pager";
 import type { StatusKey } from "@/components/clients/clients-status";
+import { AddClientDialog } from "@/components/clients/add-client-dialog";
 
 const searchSchema = z.object({
   search:        fallback(z.string(),                                                       "").default(""),
@@ -54,6 +55,7 @@ function ClientsDirectoryPage() {
   const listFn = useServerFn(listClientsDirectoryFn);
   const archiveFn = useServerFn(archiveClient);
   const [archiveTarget, setArchiveTarget] = useState<DirectoryRow | null>(null);
+  const [addOpen, setAddOpen] = useState(false);
 
   const { data, isFetching, isError, refetch } = useQuery({
     queryKey: ["clients-directory", search],
@@ -98,11 +100,9 @@ function ClientsDirectoryPage() {
         }
         actions={
           isAdmin && (
-            <Button asChild className="h-10">
-              <Link to="/admin/clients/$id" params={{ id: "new" }}>
-                <UserPlus className="mr-2 h-4 w-4" />
-                Add Client
-              </Link>
+            <Button className="h-10" onClick={() => setAddOpen(true)}>
+              <UserPlus className="mr-2 h-4 w-4" />
+              Add Client
             </Button>
           )
         }
@@ -142,6 +142,12 @@ function ClientsDirectoryPage() {
 
         {total > 0 && <Pager page={search.page} size={search.size} total={total} />}
       </div>
+
+      <AddClientDialog
+        open={addOpen}
+        onOpenChange={setAddOpen}
+        onCreated={() => qc.invalidateQueries({ queryKey: ["clients-directory"] })}
+      />
 
       <AlertDialog open={!!archiveTarget} onOpenChange={(o) => !o && setArchiveTarget(null)}>
         <AlertDialogContent>
@@ -193,13 +199,7 @@ function EmptyState({ hasFilters, onClear }: { hasFilters: boolean; onClear: () 
       </div>
       {hasFilters ? (
         <Button variant="outline" size="sm" onClick={onClear}>Clear filters</Button>
-      ) : (
-        <Button asChild size="sm">
-          <Link to="/admin/clients/$id" params={{ id: "new" }}>
-            <UserPlus className="mr-2 h-4 w-4" /> Add Client
-          </Link>
-        </Button>
-      )}
+      ) : null}
     </Card>
   );
 }
