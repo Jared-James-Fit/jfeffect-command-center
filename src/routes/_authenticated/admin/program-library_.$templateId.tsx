@@ -1751,6 +1751,8 @@ function InlineAddExerciseButton({
 }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
+  const [dropActive, setDropActive] = useState(false);
+  const pbDragging = usePbDragging();
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   const filtered = useMemo(() => {
@@ -1787,20 +1789,51 @@ function InlineAddExerciseButton({
           type="button"
           title={label}
           aria-label={label}
+          onDragOver={(e) => {
+            if (Array.from(e.dataTransfer.types).includes(DND_EXERCISE)) {
+              e.preventDefault();
+              e.stopPropagation();
+              e.dataTransfer.dropEffect = "copy";
+              if (!dropActive) setDropActive(true);
+            }
+          }}
+          onDragLeave={() => setDropActive(false)}
+          onDrop={(e) => {
+            const drop = readDrop(e);
+            setDropActive(false);
+            if (drop?.kind === "exercise") {
+              e.preventDefault();
+              e.stopPropagation();
+              onPick(drop.exerciseId);
+            }
+          }}
           className={cn(
-            "group/insert relative -my-1.5 flex h-3 w-full items-center justify-center",
-            "opacity-40 transition-opacity hover:opacity-100 focus:opacity-100",
+            "group/insert relative -my-1.5 flex w-full items-center justify-center transition-all",
+            dropActive ? "h-10 opacity-100" : pbDragging === "exercise" ? "h-6 opacity-100" : "h-3 opacity-40 hover:opacity-100 focus:opacity-100",
           )}
         >
           <span
             aria-hidden
-            className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-border/60 group-hover/insert:bg-primary/50"
+            className={cn(
+              "absolute inset-x-0 top-1/2 -translate-y-1/2 transition-all",
+              dropActive ? "h-1 rounded-full bg-primary shadow-[0_0_8px_hsl(var(--primary))]"
+                : pbDragging === "exercise" ? "h-0.5 bg-primary/60 rounded-full"
+                : "h-px bg-border/60 group-hover/insert:bg-primary/50",
+            )}
           />
+          {dropActive && (
+            <span className="pointer-events-none absolute left-1/2 -top-5 -translate-x-1/2 whitespace-nowrap rounded bg-primary px-2 py-0.5 text-[10px] font-semibold text-primary-foreground shadow">
+              Drop here
+            </span>
+          )}
           <span
             className={cn(
-              "relative z-10 inline-flex h-5 w-5 items-center justify-center rounded-full",
-              "border border-border bg-background text-muted-foreground shadow-sm",
-              "group-hover/insert:border-primary group-hover/insert:bg-primary group-hover/insert:text-primary-foreground",
+              "relative z-10 inline-flex items-center justify-center rounded-full border shadow-sm transition-all",
+              dropActive
+                ? "h-6 w-6 border-primary bg-primary text-primary-foreground scale-110"
+                : pbDragging === "exercise"
+                  ? "h-5 w-5 border-primary bg-background text-primary"
+                  : "h-5 w-5 border-border bg-background text-muted-foreground group-hover/insert:border-primary group-hover/insert:bg-primary group-hover/insert:text-primary-foreground",
             )}
           >
             <Plus className="h-3 w-3" />
