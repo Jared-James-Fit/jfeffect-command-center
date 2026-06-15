@@ -75,7 +75,7 @@ function CoachingPage() {
         image={p?.hero_image_url ?? coachingHeroImg}
         primary={<HeroCta onClick={handleApply}>{p?.primary_cta_label ?? "Apply for Private Coaching"}</HeroCta>}
         secondary={
-          <Link to={(p?.secondary_cta_href ?? "/join") as any}>
+          <Link to={(p?.secondary_cta_href ?? "/membership") as any}>
             <HeroCtaGhost>{p?.secondary_cta_label ?? "Prefer self-guided? Explore Membership"}</HeroCtaGhost>
           </Link>
         }
@@ -129,7 +129,7 @@ function CoachingPage() {
         headline={s.final_cta?.headline ?? "If you already know you need coaching, stop waiting."}
         primary={<Button size="lg" onClick={handleApply} className="h-12 px-6 text-base font-bold">{s.final_cta?.primary_label ?? "Apply for Private Coaching"}</Button>}
         secondary={
-          <Link to={(s.final_cta?.secondary_href ?? "/join") as any}>
+          <Link to={(s.final_cta?.secondary_href ?? "/membership") as any}>
             <Button size="lg" variant="outline" className="h-12 px-6 text-base">{s.final_cta?.secondary_label ?? "Explore Membership Instead"}</Button>
           </Link>
         }

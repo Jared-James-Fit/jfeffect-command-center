@@ -10,7 +10,7 @@ export function SalesPageShell({ children, pageId }: { children: ReactNode; page
           <Link to="/" className="text-lg font-black tracking-tight">JF Effect</Link>
           <div className="flex items-center gap-2">
             <Link
-              to="/join"
+              to="/membership"
               className="hidden sm:inline-flex"
               activeProps={{ "data-active": "true" } as any}
             >

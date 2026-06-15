@@ -205,7 +205,7 @@ export function CoachingVsMembership({ onApply }: { onApply: () => void }) {
               </li>
             ))}
           </ul>
-          <a href="/join" className="mt-6 inline-flex h-11 w-full items-center justify-center rounded-md border border-border bg-background px-4 text-sm font-semibold hover:bg-muted">
+          <a href="/membership" className="mt-6 inline-flex h-11 w-full items-center justify-center rounded-md border border-border bg-background px-4 text-sm font-semibold hover:bg-muted">
             Explore Membership instead
           </a>
         </div>

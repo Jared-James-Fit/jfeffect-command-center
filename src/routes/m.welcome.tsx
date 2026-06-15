@@ -174,7 +174,7 @@ function Welcome() {
               </div>
               <div className="flex flex-wrap gap-2">
                 <Link to="/auth"><Button variant="outline">Log in</Button></Link>
-                <Link to="/join"><Button variant="ghost">Back to signup</Button></Link>
+                <Link to="/membership"><Button variant="ghost">Back to signup</Button></Link>
               </div>
             </div>
           )}
