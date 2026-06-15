@@ -2728,7 +2728,7 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
                     <>
                       <DurationInput
                         valueSeconds={(row as any).duration_seconds ?? null}
-                        onChange={(secs) => setRow({ ...row, duration_seconds: secs })}
+                        onChange={(secs: number | null) => setRow({ ...row, duration_seconds: secs })}
                         compact
                       />
                       <CountdownTimerButton seconds={(row as any).duration_seconds} compact />
