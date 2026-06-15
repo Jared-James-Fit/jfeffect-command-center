@@ -800,14 +800,14 @@ export function ExerciseLibraryPanel({
         {favList.length > 0 && !q && !filter && (
           <Section label="Favorites">
             {favList.map((e) => (
-              <ExerciseItem key={e.id} ex={e} fav onFav={toggleFav} onPick={onPick} />
+              <ExerciseItem key={e.id} ex={e} fav onFav={toggleFav} onPick={onPick} query="" />
             ))}
           </Section>
         )}
         {recent.length > 0 && !q && !filter && (
           <Section label="Recent">
             {recent.map((e) => (
-              <ExerciseItem key={e.id} ex={e} fav={favs.has(e.id)} onFav={toggleFav} onPick={onPick} />
+              <ExerciseItem key={e.id} ex={e} fav={favs.has(e.id)} onFav={toggleFav} onPick={onPick} query="" />
             ))}
           </Section>
         )}
@@ -828,7 +828,7 @@ export function ExerciseLibraryPanel({
             </div>
           ) : (
             filtered.map((e) => (
-              <ExerciseItem key={e.id} ex={e} fav={favs.has(e.id)} onFav={toggleFav} onPick={onPick} onQuickAdd={onQuickAdd} />
+              <ExerciseItem key={e.id} ex={e} fav={favs.has(e.id)} onFav={toggleFav} onPick={onPick} onQuickAdd={onQuickAdd} query={q} />
             ))
           )}
         </Section>
@@ -867,12 +867,14 @@ function ExerciseItem({
   onFav,
   onPick,
   onQuickAdd,
+  query = "",
 }: {
   ex: ExerciseRef;
   fav?: boolean;
   onFav: (id: string) => void;
   onPick?: (id: string) => void;
   onQuickAdd?: (id: string) => void;
+  query?: string;
 }) {
   const tagLine = [ex.muscle_group, ex.category].filter(Boolean).join(" · ");
   return (
@@ -885,8 +887,14 @@ function ExerciseItem({
     >
       <GripVertical className="h-3 w-3 shrink-0 text-muted-foreground/60" />
       <div className="min-w-0 flex-1">
-        <div className="truncate text-xs">{ex.name}</div>
-        {tagLine && <div className="truncate text-[10px] text-muted-foreground">{tagLine}</div>}
+        <div className="truncate text-xs">
+          <HighlightedText text={ex.name} query={query} />
+        </div>
+        {tagLine && (
+          <div className="truncate text-[10px] text-muted-foreground">
+            <HighlightedText text={tagLine} query={query} />
+          </div>
+        )}
       </div>
       {onQuickAdd && (
         <button
