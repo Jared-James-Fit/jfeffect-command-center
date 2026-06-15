@@ -743,7 +743,18 @@ function WorkoutDay() {
         {readonly && (
           <Card className="flex items-start gap-2 border-border bg-secondary/30 p-3 text-xs">
             <Lock className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-            <div>Viewing a past workout. Logs are read-only.</div>
+            <div>
+              Viewing a past workout. Logs are read-only.
+              {autoReadonly && !isImpersonating && (
+                <> Tap <strong>Edit previous workout</strong> above to update any set.</>
+              )}
+            </div>
+          </Card>
+        )}
+        {autoReadonly && unlocked && !isImpersonating && (
+          <Card className="flex items-start gap-2 border-amber-500/30 bg-amber-500/5 p-3 text-xs">
+            <Info className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+            <div>You're editing a previous workout. Changes save automatically.</div>
           </Card>
         )}
 
