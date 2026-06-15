@@ -819,6 +819,49 @@ function AssignDialog({ template, onClose }: { template: any; onClose: () => voi
   return (
     <Dialog open={!!template} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-lg">
+        {pendingIssues ? (
+          <>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-amber-600 dark:text-amber-300">
+                <AlertTriangle className="h-4 w-4" />
+                Missing requirements
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3 text-sm">
+              <p>
+                <span className="font-semibold">"{template.name}"</span> has{" "}
+                {pendingIssues.length} day{pendingIssues.length === 1 ? "" : "s"} with missing
+                requirements. The client will see incomplete workouts if you continue.
+              </p>
+              <div className="max-h-72 overflow-y-auto rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-xs">
+                <ul className="space-y-2">
+                  {pendingIssues.map((d, i) => (
+                    <li key={i}>
+                      <div className="font-semibold text-amber-700 dark:text-amber-200">{d.location}</div>
+                      <ul className="mt-0.5 list-disc pl-4 space-y-0.5 text-muted-foreground">
+                        {d.missing.map((m, j) => <li key={j}>{m}</li>)}
+                      </ul>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                You can go back and fix them, or assign anyway — for example if you'll edit the
+                client's copy directly after.
+              </p>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setPendingIssues(null)}>Go back &amp; fix</Button>
+              <Button
+                variant="destructive"
+                onClick={() => { setPendingIssues(null); runAssignment(); }}
+              >
+                Assign anyway
+              </Button>
+            </DialogFooter>
+          </>
+        ) : (
+        <>
         <DialogHeader>
           <DialogTitle>Assign "{template.name}"</DialogTitle>
         </DialogHeader>
@@ -980,6 +1023,8 @@ function AssignDialog({ template, onClose }: { template: any; onClose: () => voi
           <Button variant="outline" onClick={onClose}>Cancel</Button>
           <Button onClick={submit} disabled={!!conflict}>Assign to client</Button>
         </DialogFooter>
+        </>
+        )}
       </DialogContent>
     </Dialog>
   );
