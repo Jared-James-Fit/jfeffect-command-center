@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   ChevronLeft, ChevronRight, Clock, Play, RotateCcw, CheckCircle2,
-  Eye, Lock, Crosshair, Dumbbell, History, CalendarCog,
+  Eye, Lock, Crosshair, Dumbbell, History,
 } from "lucide-react";
 import { format, parseISO, startOfDay } from "date-fns";
 import { cn } from "@/lib/utils";
