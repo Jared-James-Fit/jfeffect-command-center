@@ -284,3 +284,24 @@ html[data-keyboard-open="true"] { --bottom-nav-clearance: 0px; }
   0%, 100% { transform: translateY(0); }
   50%      { transform: translateY(-8px); }
 }
+
+/* Global keyword highlight — driven by <GlobalHighlight /> + ?highlight= */
+mark.gh-mark {
+  background-color: oklch(0.92 0.18 95);
+  color: oklch(0.18 0.04 95);
+  padding: 0 2px;
+  border-radius: 3px;
+  box-shadow: 0 0 0 1px oklch(0.78 0.18 95);
+}
+@keyframes ghFlashPulse {
+  0%   { box-shadow: 0 0 0 0 oklch(0.85 0.18 95 / 0.85); }
+  60%  { box-shadow: 0 0 0 10px oklch(0.85 0.18 95 / 0); }
+  100% { box-shadow: 0 0 0 0 oklch(0.85 0.18 95 / 0); }
+}
+mark.gh-mark.gh-flash { animation: ghFlashPulse 1.4s ease-out 2; }
+.gh-flash-container {
+  outline: 2px solid oklch(0.78 0.18 95 / 0.7);
+  outline-offset: 4px;
+  border-radius: 8px;
+  transition: outline-color 1.2s ease-out;
+}

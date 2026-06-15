@@ -4,7 +4,7 @@ import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import {
   LogOut, ChevronLeft, ChevronRight, ChevronDown, Search, Settings as SettingsIcon, ArrowLeft, MoreHorizontal,
-  Star, Pin, ChevronsDownUp, ChevronsUpDown, BookOpen,
+  Star, Pin, ChevronsDownUp, ChevronsUpDown, BookOpen, Users, UserCog, IdCard,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { NotificationBell } from "@/components/notification-bell";
@@ -13,6 +13,8 @@ import { useKeyboardOpen } from "@/hooks/use-keyboard-open";
 import { UserAvatar } from "@/components/user-avatar";
 import { SettingsMenu } from "@/components/settings-menu";
 import { listTemplates } from "@/lib/pl-programs";
+import { globalSearchFn, type GlobalSearchHit } from "@/lib/global-search.functions";
+import { useServerFn } from "@tanstack/react-start";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { ClientPovQuickPicker } from "@/components/client-pov-quick-picker";
@@ -480,7 +482,7 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
                   <Search className="h-4 w-4" />
                 </button>
               </TooltipTrigger>
-              <TooltipContent side="right">Search workouts (⌘K)</TooltipContent>
+              <TooltipContent side="right">Search everything (⌘K)</TooltipContent>
             </Tooltip>
           ) : (
             <button
@@ -488,7 +490,7 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
               className="flex w-full items-center gap-2 rounded-md border border-primary/40 bg-primary/5 px-2.5 py-2 text-left text-xs font-semibold text-foreground shadow-sm hover:bg-primary/10"
             >
               <Search className="h-3.5 w-3.5 text-primary" />
-              <span className="flex-1 truncate">Search workouts…</span>
+              <span className="flex-1 truncate">Search everything…</span>
               <kbd className="rounded border border-primary/40 bg-card px-1 py-0.5 text-[9px] font-mono text-primary">⌘K</kbd>
             </button>
           )}
@@ -814,9 +816,20 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
           autoFocus
           value={paletteQuery}
           onValueChange={setPaletteQuery}
-          placeholder="Search workout library — name, focus, style, tag…"
+          placeholder="Search clients, coaches, accounts, programs…"
         />
         <CommandList>
+          <GlobalSearchResults
+            query={debouncedPaletteQuery}
+            onPick={(hit) => {
+              setPaletteOpen(false);
+              try { window.sessionStorage.setItem("gh:term", debouncedPaletteQuery); } catch {}
+              navigate({
+                to: hit.to,
+                search: { highlight: debouncedPaletteQuery } as any,
+              } as any);
+            }}
+          />
           <WorkoutLibraryResults
             query={debouncedPaletteQuery}
             onPick={(tpl) => {
@@ -953,6 +966,72 @@ function WorkoutLibraryResults({
           <BookOpen className="mr-2 h-4 w-4" /> Open full workout library
         </CommandItem>
       </CommandGroup>
+    </>
+  );
+}
+
+const KIND_META: Record<GlobalSearchHit["kind"], { heading: string; icon: any }> = {
+  client: { heading: "Clients", icon: Users },
+  coach: { heading: "Coaches", icon: UserCog },
+  account: { heading: "Accounts", icon: IdCard },
+  program: { heading: "Programs", icon: BookOpen },
+};
+
+function GlobalSearchResults({
+  query,
+  onPick,
+}: {
+  query: string;
+  onPick: (hit: GlobalSearchHit) => void;
+}) {
+  const runSearch = useServerFn(globalSearchFn);
+  const enabled = query.trim().length >= 2;
+  const { data: hits = [], isLoading } = useQuery({
+    queryKey: ["global-search", query],
+    queryFn: () => runSearch({ data: { q: query, limit: 8 } } as any) as Promise<GlobalSearchHit[]>,
+    enabled,
+    staleTime: 15_000,
+  });
+
+  if (!enabled) return null;
+  if (isLoading) return <CommandEmpty>Searching…</CommandEmpty>;
+  if (!hits.length) return null;
+
+  const byKind = new Map<GlobalSearchHit["kind"], GlobalSearchHit[]>();
+  for (const h of hits) {
+    const arr = byKind.get(h.kind) ?? [];
+    arr.push(h);
+    byKind.set(h.kind, arr);
+  }
+
+  return (
+    <>
+      {(Object.keys(KIND_META) as GlobalSearchHit["kind"][]).map((kind) => {
+        const rows = byKind.get(kind);
+        if (!rows?.length) return null;
+        const { heading, icon: Icon } = KIND_META[kind];
+        return (
+          <CommandGroup key={kind} heading={heading}>
+            {rows.map((hit) => (
+              <CommandItem
+                key={`${kind}-${hit.id}`}
+                value={`${heading} ${hit.label} ${hit.sub ?? ""} ${hit.id}`}
+                onSelect={() => onPick(hit)}
+              >
+                <Icon className="mr-2 h-4 w-4 shrink-0 text-primary" />
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-semibold">{hit.label}</div>
+                  {hit.sub && (
+                    <div className="truncate text-[11px] text-muted-foreground">
+                      {hit.matchedField ? `${hit.matchedField}: ` : ""}{hit.sub}
+                    </div>
+                  )}
+                </div>
+              </CommandItem>
+            ))}
+          </CommandGroup>
+        );
+      })}
     </>
   );
 }
