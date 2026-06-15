@@ -94,6 +94,41 @@ function AssignedCoachSelect({ value, onChange }: { value: string | null; onChan
 const TAB_VALUES = ["summary", "training", "nutrition", "cardio", "metrics", "messages", "lift-videos", "documents", "sessions", "purchases", "billing", "agreements", "notes", "info", "account"] as const;
 type TabValue = typeof TAB_VALUES[number];
 
+type SectionId = "overview" | "training" | "nutrition" | "communication" | "business" | "account";
+const SECTIONS: { id: SectionId; label: string; description: string; icon: ComponentType<any>; tabs: { value: TabValue; label: string }[] }[] = [
+  { id: "overview", label: "Overview", description: "Snapshot & profile", icon: UserIcon, tabs: [
+    { value: "summary", label: "Snapshot" },
+  ]},
+  { id: "training", label: "Training", description: "Program, metrics, sessions, videos", icon: Dumbbell, tabs: [
+    { value: "training", label: "Training Program" },
+    { value: "metrics", label: "Progress Metrics" },
+    { value: "lift-videos", label: "Lift Videos" },
+    { value: "sessions", label: "Sessions" },
+  ]},
+  { id: "nutrition", label: "Nutrition", description: "Targets & cardio", icon: Apple, tabs: [
+    { value: "nutrition", label: "Nutrition Targets" },
+    { value: "cardio", label: "Cardio Targets" },
+  ]},
+  { id: "communication", label: "Communication", description: "Messages, notes, documents", icon: MessageSquare, tabs: [
+    { value: "messages", label: "Messages" },
+    { value: "notes", label: "Notes" },
+    { value: "documents", label: "Documents & Forms" },
+  ]},
+  { id: "business", label: "Business", description: "Purchases, billing, agreements", icon: DollarSign, tabs: [
+    { value: "purchases", label: "Purchases" },
+    { value: "billing", label: "Billing" },
+    { value: "agreements", label: "Agreements" },
+  ]},
+  { id: "account", label: "Account", description: "Login, info & access", icon: KeyRound, tabs: [
+    { value: "info", label: "Account Info" },
+    { value: "account", label: "Login & Access" },
+  ]},
+];
+const TAB_TO_SECTION: Record<TabValue, SectionId> = SECTIONS.reduce((acc, s) => {
+  s.tabs.forEach((t) => { acc[t.value] = s.id; });
+  return acc;
+}, {} as Record<TabValue, SectionId>);
+
 export const Route = createFileRoute("/_authenticated/admin/clients/$id")({
   validateSearch: (s) => z.object({ tab: z.enum(TAB_VALUES).optional() }).parse(s),
   component: ClientDetail,
