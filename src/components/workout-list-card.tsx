@@ -5,11 +5,12 @@ import { Dumbbell, ChevronRight, Calendar as CalendarIcon, Pencil, MessageSquare
 import { format } from "date-fns";
 import { getWorkoutStatus } from "@/lib/workout-status";
 import { durationRange } from "@/lib/pl-programs";
+import { cleanDayTitle } from "@/lib/workout-today";
 
 export function WorkoutListCard({ item, readonly = false }: { item: any; readonly?: boolean }) {
   if (!item.day?.id) return null;
   const status = getWorkoutStatus(item);
-  const title = item.day.title || `Day ${item.day.day_index}`;
+  const title = cleanDayTitle(item.day.title, item.day.day_index);
   const dur = item.day.duration_override_min ?? item.day.duration_estimate_min ?? null;
   const weekLabel = item.week?.week_index ? `Week ${item.week.week_index}` : "";
   const isCompleted = !!item.completion?.completed_at;

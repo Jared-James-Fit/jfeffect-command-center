@@ -29,7 +29,7 @@ import { SaveStatus } from "@/components/save-status";
 import { ActionButton } from "@/components/action-button";
 import { TrainingHelpButton } from "@/components/training-help-sheet";
 import { WarmupButton } from "@/components/warmup-sheet";
-import { dayScheduledDate } from "@/lib/workout-today";
+import { dayScheduledDate, cleanDayTitle } from "@/lib/workout-today";
 import { format, startOfDay } from "date-fns";
 import { useServerFn } from "@tanstack/react-start";
 import { notifyCoachOfWorkoutFailure } from "@/lib/support-alerts.functions";
@@ -659,7 +659,7 @@ function WorkoutDay() {
           data-workout-focus
         >
           <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-background/95 px-4 py-3 backdrop-blur">
-            <div className="font-bold">{day.title || `Day ${day.day_index}`} · Full Screen</div>
+            <div className="font-bold">{cleanDayTitle(day.title, day.day_index)} · Full Screen</div>
             {/* Global KG/LB toggle removed — each exercise carries its own
                 authoritative unit control. */}
             <Button size="sm" variant="outline" onClick={() => setFocusMode(false)}>
@@ -691,7 +691,7 @@ function WorkoutDay() {
                   key={r.id}
                   row={r}
                   dayId={dayId}
-                  dayTitle={day.title || `Day ${day.day_index}`}
+                  dayTitle={cleanDayTitle(day.title, day.day_index)}
                   clientId={client?.id}
                   blockId={blockId}
                   existingResults={(results as any[]).filter((x) => x.row_id === r.id)}
@@ -714,7 +714,7 @@ function WorkoutDay() {
       <PageHeader
         backTo="/portal/workouts"
         backLabel="Back to Workouts"
-        title={day.title || `Day ${day.day_index}`}
+        title={cleanDayTitle(day.title, day.day_index)}
         subtitle={[
           block?.name,
           week?.week_index != null ? `Week ${week.week_index}` : null,
@@ -871,7 +871,7 @@ function WorkoutDay() {
                 key={r.id}
                 row={r}
                 dayId={dayId}
-                dayTitle={day.title || `Day ${day.day_index}`}
+                dayTitle={cleanDayTitle(day.title, day.day_index)}
                 clientId={client?.id}
                 blockId={blockId}
                 existingResults={(results as any[]).filter((x) => x.row_id === r.id)}
