@@ -166,9 +166,6 @@ export function CommandPalette({
 
   return (
     <CommandDialog open={open} onOpenChange={onOpenChange}>
-      {/* cmdk filters items by their `value`. We've already filtered, so
-          tell cmdk to keep everything we render via shouldFilter={false}. */}
-      <Command_NoFilter />
       <CommandInput
         autoFocus
         value={query}
