@@ -71,15 +71,17 @@ export function dayScheduledDate(item: WorkoutItem): Date | null {
 }
 
 function isRestDayToday(restDays: string[] | null | undefined): boolean {
-  if (!restDays || restDays.length === 0) return false;
+  const normalized = normalizeWeekdays(restDays);
+  if (normalized.length === 0) return false;
   const today = localStartOfToday();
-  return restDays.includes(DAY_NAMES[today.getDay()]);
+  return normalized.includes(DAY_NAMES[today.getDay()]);
 }
 
 function isTrainingDayToday(trainingDays: string[] | null | undefined): boolean {
-  if (!trainingDays || trainingDays.length === 0) return false;
+  const normalized = normalizeWeekdays(trainingDays);
+  if (normalized.length === 0) return false;
   const today = localStartOfToday();
-  return trainingDays.includes(DAY_NAMES[today.getDay()]);
+  return normalized.includes(DAY_NAMES[today.getDay()]);
 }
 
 export function computeTodayState(
