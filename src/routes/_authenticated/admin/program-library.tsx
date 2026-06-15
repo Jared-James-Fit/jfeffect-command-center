@@ -482,10 +482,9 @@ function NewTemplateDialog({ open, onOpenChange, onCreated }: { open: boolean; o
                       : "Single block. Increase to seed multiple blocks (auto-converts to a Full Prep)."}
                 </p>
               </div>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 gap-2">
                 <div><Label>{(form.template_type === "full_prep" || (form.blocks || 1) > 1) ? "Weeks/block" : "Weeks"}</Label><Input type="number" inputMode="numeric" value={form.weeks} onChange={(e) => setForm({ ...form, weeks: parseInt(e.target.value) || 0 })} /></div>
                 <div><Label>Days/week</Label><Input type="number" inputMode="numeric" value={form.days_per_week} onChange={(e) => setForm({ ...form, days_per_week: parseInt(e.target.value) || 0 })} /></div>
-                <div><Label>Est min</Label><Input type="number" inputMode="numeric" value={form.est_duration_min} onChange={(e) => setForm({ ...form, est_duration_min: parseInt(e.target.value) || 0 })} /></div>
               </div>
               {(form.template_type === "full_prep" || (form.blocks || 1) > 1) && (
                 <div className="space-y-1">
