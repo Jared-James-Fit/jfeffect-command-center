@@ -45,7 +45,19 @@ function MyPlans() {
     <div className="space-y-6">
       <PageHeader title="My Plans" subtitle="Your active and completed training plans." />
       <Section title="Active">
-        {active.length === 0 && <Empty msg="No active plan. Browse the library to start one." />}
+        {active.length === 0 && (
+          <Empty
+            msg="No active plan."
+            action={
+              <Link to="/m/plans">
+                <Button variant="outline" size="sm">
+                  <BookOpen className="mr-2 h-4 w-4" />
+                  Browse Program Library
+                </Button>
+              </Link>
+            }
+          />
+        )}
         {active.map((e) => <EnrollmentCard key={e.id} e={e} primary />)}
       </Section>
       <Section title="Completed">
