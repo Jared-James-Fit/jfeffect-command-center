@@ -60,7 +60,56 @@ export function MemberSetupWizard({
   const stepIdx = STEPS.indexOf(step);
   const progress = ((stepIdx + 1) / STEPS.length) * 100;
 
+  // ---------- Required-field validation per step ----------
+  // The user cannot advance until every required field on the current step
+  // is filled. SMS consent is strongly recommended but not strictly required.
+  const v = (k: string) => {
+    const raw = form[k] ?? m?.[k];
+    return typeof raw === "string" ? raw.trim() : raw;
+  };
+  const phoneDigits = String(v("phone") ?? "").replace(/\D/g, "");
+  const goalsTags: string[] = form.goals_tags ?? m?.goals_tags ?? [];
+  const goalsText = String(form.goals ?? m?.goals ?? "").trim();
+  const stepValidation: Record<Step, { ok: boolean; missing: string[] }> = {
+    photo: (() => {
+      const ok = !!v("avatar_url");
+      return { ok, missing: ok ? [] : ["profile picture"] };
+    })(),
+    contact: (() => {
+      const missing: string[] = [];
+      if (phoneDigits.length < 7) missing.push("mobile phone");
+      return { ok: missing.length === 0, missing };
+    })(),
+    basics: (() => {
+      const required: [string, string][] = [
+        ["date_of_birth", "date of birth"],
+        ["address_line1", "street address"],
+        ["address_city", "city"],
+        ["address_state", "state / region"],
+        ["address_zip", "ZIP / postal"],
+        ["address_country", "country"],
+        ["emergency_contact_name", "emergency contact name"],
+        ["emergency_contact_phone", "emergency contact phone"],
+      ];
+      const missing = required.filter(([k]) => !v(k)).map(([, l]) => l);
+      return { ok: missing.length === 0, missing };
+    })(),
+    goals: (() => {
+      const missing: string[] = [];
+      if (goalsTags.length === 0 && !goalsText) missing.push("a goal");
+      if (!v("experience_level")) missing.push("lifting experience");
+      if (!v("training_background")) missing.push("training background");
+      return { ok: missing.length === 0, missing };
+    })(),
+  };
+  const canAdvance = stepValidation[step].ok;
+  const missingLabel = stepValidation[step].missing.join(", ");
+
   const saveStep = async (next?: Step) => {
+    if (!stepValidation[step].ok) {
+      toast.error(`Please fill: ${stepValidation[step].missing.join(", ")}`);
+      return;
+    }
     setBusy(true);
     try {
       const patch: any = {};
