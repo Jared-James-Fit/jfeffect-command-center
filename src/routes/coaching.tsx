@@ -38,15 +38,15 @@ export const Route = createFileRoute("/coaching")({
   component: CoachingPage,
   head: () => ({
     meta: [
-      { title: "Online Fitness & Powerlifting Coaching | JF Effect" },
-      { name: "description", content: "Private online coaching with individualized training, nutrition guidance, weekly check-ins and direct coach support. By application only." },
-      { property: "og:title", content: "Online Fitness & Powerlifting Coaching | JF Effect" },
-      { property: "og:description", content: "Private online coaching: individualized training, nutrition guidance, weekly check-ins and direct coach support. By application." },
+      { title: "1:1 Coaching for High-Performing Men | JF Effect" },
+      { name: "description", content: "Private coaching for ambitious men who are done starting over. Built-for-you training, nutrition, weekly accountability and direct coach access. By application." },
+      { property: "og:title", content: "1:1 Coaching for High-Performing Men | JF Effect" },
+      { property: "og:description", content: "Private coaching for ambitious men who are done starting over. Built-for-you training, nutrition, weekly accountability and direct coach access. By application." },
       { property: "og:type", content: "website" },
       { property: "og:url", content: "https://jfeffect.com/coaching" },
       { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:title", content: "Online Fitness & Powerlifting Coaching | JF Effect" },
-      { name: "twitter:description", content: "Private online coaching: individualized training, nutrition guidance, weekly check-ins and direct coach support. By application." },
+      { name: "twitter:title", content: "1:1 Coaching for High-Performing Men | JF Effect" },
+      { name: "twitter:description", content: "Private coaching for ambitious men who are done starting over. Built-for-you training, nutrition, weekly accountability and direct coach access. By application." },
     ],
     links: [{ rel: "canonical", href: "https://jfeffect.com/coaching" }],
   }),
@@ -71,8 +71,8 @@ function CoachingPage() {
       ) : (
       <CoachingHero
         eyebrow="Private Online Coaching · By Application"
-        headline={"Stop guessing. Get a plan built around you."}
-        sub={"Private online coaching gives you individualized training, nutrition guidance, weekly accountability and direct support\u2014adjusted around your goals, schedule and progress."}
+        headline={"You already know what to do. You just stopped doing it."}
+        sub={"Private coaching for men who are successful everywhere except the mirror. Your plan, your accountability, your coach \u2014 built around the life you actually have, not the one a generic app assumes."}
         image={coachingHeroImg}
         primary={<HeroCta onClick={handleApply}>Apply for Private Coaching</HeroCta>}
         secondary={
@@ -80,7 +80,7 @@ function CoachingPage() {
             to="/membership"
             className="text-sm font-semibold text-white/70 underline-offset-4 hover:text-white hover:underline"
           >
-            Prefer to Train Independently? View JF Membership →
+            Not ready for 1:1 yet? Start with the Membership →
           </Link>
         }
       />
@@ -132,7 +132,7 @@ function CoachingPage() {
 
       <div id="cta" />
       <Reveal><FinalCta
-        headline={s.final_cta?.headline ?? "If you already know you need coaching, stop waiting."}
+        headline={s.final_cta?.headline ?? "If you already know you need this, what are you waiting for?"}
         primary={<Button size="lg" onClick={handleApply} className="h-12 px-6 text-base font-bold">{s.final_cta?.primary_label ?? "Apply for Private Coaching"}</Button>}
         secondary={
           <Link to={(s.final_cta?.secondary_href ?? "/membership") as any}>

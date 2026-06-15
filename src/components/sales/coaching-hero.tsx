@@ -55,10 +55,10 @@ export function CoachingHero({
 
           <ul className="mt-8 grid max-w-xl gap-4 sm:grid-cols-2">
             {[
-              { Icon: Target, title: "Individualized Programming", body: "Training built around your goals, experience, schedule, equipment and limitations." },
-              { Icon: ClipboardCheck, title: "Weekly Check-Ins & Adjustments", body: "Your progress is reviewed and your plan is adjusted when needed." },
-              { Icon: Utensils, title: "Nutrition Guidance", body: "Practical nutrition targets and strategies built around your lifestyle." },
-              { Icon: MessageCircle, title: "Direct Coach Support", body: "Ask questions, submit updates and get support inside the JF Effect coaching system." },
+              { Icon: Target, title: "Individualized Programming", body: "A plan built for your body, your schedule, your gym — not pulled from a library and slapped on you." },
+              { Icon: ClipboardCheck, title: "Weekly Check-Ins & Adjustments", body: "Every week I look at your numbers and adjust. You're never guessing whether it's working." },
+              { Icon: Utensils, title: "Nutrition Guidance", body: "Real targets that fit how you actually eat — no spreadsheets you'll abandon in a week." },
+              { Icon: MessageCircle, title: "Direct Coach Support", body: "Message me directly. You're not talking to a chatbot or a junior coach — you're talking to me." },
             ].map(({ Icon, title, body }) => (
               <li key={title} className="flex items-start gap-3">
                 <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-white/15 bg-white/5 text-primary">
@@ -119,18 +119,18 @@ export function CoachingHero({
 /** Application process timeline — unique to /coaching. Not used on /join. */
 export function CoachingProcess() {
   const steps = [
-    { n: "01", title: "Apply", body: "Tell us about your goals, history, and what's stopped you so far. About 3 minutes." },
-    { n: "02", title: "Application reviewed", body: "We read every application personally and check fit before responding." },
-    { n: "03", title: "Consultation", body: "If it looks like a fit, we set up a call to confirm the plan together." },
-    { n: "04", title: "Coaching begins", body: "Personalized programming, nutrition, check-ins, adjustments, and direct support inside the app." },
+    { n: "01", title: "Apply", body: "Tell me your goals, your history, and what's been stopping you. Takes about 3 minutes." },
+    { n: "02", title: "Application reviewed", body: "I read every application myself. No assistant, no auto-reply." },
+    { n: "03", title: "Consultation", body: "If it's a fit, we get on a call and map the plan together." },
+    { n: "04", title: "Coaching begins", body: "Your plan, your check-ins, your adjustments, and direct access to me — all in one place." },
   ];
   return (
     <section className="container mx-auto px-4 py-16 md:py-24">
       <div className="mx-auto mb-10 max-w-2xl text-center">
-        <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-primary">How coaching starts</div>
+        <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-primary">How this actually works</div>
         <h2 className="mt-2 text-3xl font-black tracking-tight md:text-4xl">A real process — not a checkout</h2>
         <p className="mt-3 text-sm text-muted-foreground md:text-base">
-          Coaching is application-based. We only take clients we believe we can help.
+          This is application-only. I don't take everyone, and I don't take men I can't actually help.
         </p>
       </div>
       <ol className="relative mx-auto grid max-w-5xl gap-4 md:grid-cols-4">
