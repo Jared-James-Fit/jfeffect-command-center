@@ -36,15 +36,7 @@ const EXPERIENCE_OPTIONS = [
 type Step = "photo" | "contact" | "basics" | "goals" | "schedule";
 const STEPS: Step[] = ["photo", "contact", "basics", "goals", "schedule"];
 
-const WEEKDAYS = [
-  { key: "monday", short: "Mon" },
-  { key: "tuesday", short: "Tue" },
-  { key: "wednesday", short: "Wed" },
-  { key: "thursday", short: "Thu" },
-  { key: "friday", short: "Fri" },
-  { key: "saturday", short: "Sat" },
-  { key: "sunday", short: "Sun" },
-] as const;
+import { WEEK_DAYS, SHORT_DAY } from "@/lib/training-schedule";
 
 export function MemberSetupWizard({
   open,
