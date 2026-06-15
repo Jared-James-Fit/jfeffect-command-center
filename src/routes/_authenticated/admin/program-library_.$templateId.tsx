@@ -910,7 +910,7 @@ function StructureEditor({ type, payload, setPayload, exercises, compact, templa
     return <MultiBlockStructureEditor type={type} payload={payload} setPayload={setPayload} exercises={exercises} compact={compact} templateId={templateId} />;
   }
   if (type === "week") return <WeekEditor week={payload} setWeek={setPayload} exercises={exercises} compact={compact} />;
-  if (type === "day") return <DayEditor day={payload} setDay={setPayload} exercises={exercises} compact={compact} />;
+  if (type === "day") return <DayEditor day={payload} setDay={setPayload} exercises={exercises} compact={compact} dayKey="single" />;
   return (
     <Card className="p-4 max-w-3xl">
       <RowEditor row={payload} setRow={setPayload} exercises={exercises} compact={compact} />
@@ -1384,6 +1384,7 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
               exercises={exercises}
               onCopyDayToFuture={(di) => copyDayToFuture(activeIdx, di)}
               compact={compact}
+              dayKeyPrefix={`wk${weeksData[activeIdx].week_index ?? activeIdx}`}
             />
           )}
         </>
@@ -1508,6 +1509,7 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
                         onCopyDayToFuture={(di) => copyDayToFuture(wi, di)}
                         compact={compact}
                         hideHeader
+                        dayKeyPrefix={`wk${w.week_index ?? wi}`}
                       />
                     </div>
                   </Card>
