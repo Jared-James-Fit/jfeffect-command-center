@@ -15,7 +15,7 @@ type Props = {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   clientId: string;
-  clientName?: string;
+  clientName?: string | null;
 };
 
 export function AssignProgramDialog({ open, onOpenChange, clientId, clientName }: Props) {
