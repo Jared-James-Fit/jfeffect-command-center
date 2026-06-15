@@ -1260,6 +1260,10 @@ async function insertRow(dayId: string, sortOrder: number, r: any) {
     rpe: r.rpe ?? null, rir: r.rir ?? null, percentage: r.percentage ?? null, percentage_basis: r.percentage_basis ?? null,
     load_kg: r.load_kg ?? null, load_lb: r.load_lb ?? null, rest_seconds: r.rest_seconds ?? null,
     tempo: r.tempo ?? null, time_profile: r.time_profile ?? "accessory_compound", notes: r.notes ?? null,
+    measurement_type: r.measurement_type ?? "reps",
+    duration_seconds: r.duration_seconds ?? null,
+    reps_text_backup: r.reps_text_backup ?? null,
+    duration_seconds_backup: r.duration_seconds_backup ?? null,
   });
 }
 
@@ -1307,6 +1311,10 @@ export async function saveBlockAsTemplate(blockId: string, name: string, style: 
         sets: r.sets, reps_text: r.reps_text, rpe: r.rpe, rir: r.rir, percentage: r.percentage,
         percentage_basis: r.percentage_basis, load_kg: r.load_kg, load_lb: r.load_lb,
         rest_seconds: r.rest_seconds, tempo: r.tempo, time_profile: r.time_profile, notes: r.notes,
+        measurement_type: r.measurement_type ?? "reps",
+        duration_seconds: r.duration_seconds ?? null,
+        reps_text_backup: r.reps_text_backup ?? null,
+        duration_seconds_backup: r.duration_seconds_backup ?? null,
       })),
     })),
   }));
