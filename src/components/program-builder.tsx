@@ -462,17 +462,91 @@ export function CellInput({
 
 // ---------------- Exercise library panel ----------------
 
-const FAV_KEY = "pb.favorites";
-function readFavs(): Set<string> {
-  if (typeof window === "undefined") return new Set();
+// Per-user favorites are synced to `pl_exercise_favorites`. A small
+// localStorage cache (scoped by user id) keeps the UI instant across reloads
+// while the DB fetch resolves.
+const FAV_KEY_PREFIX = "pb.favorites:";
+function favCacheKey(userId: string | null): string | null {
+  return userId ? `${FAV_KEY_PREFIX}${userId}` : null;
+}
+function readFavCache(userId: string | null): Set<string> {
+  const k = favCacheKey(userId);
+  if (!k || typeof window === "undefined") return new Set();
   try {
-    return new Set(JSON.parse(localStorage.getItem(FAV_KEY) || "[]"));
+    return new Set(JSON.parse(localStorage.getItem(k) || "[]"));
   } catch {
     return new Set();
   }
 }
-function writeFavs(s: Set<string>) {
-  try { localStorage.setItem(FAV_KEY, JSON.stringify([...s])); } catch {}
+function writeFavCache(userId: string | null, s: Set<string>) {
+  const k = favCacheKey(userId);
+  if (!k) return;
+  try { localStorage.setItem(k, JSON.stringify([...s])); } catch {}
+}
+
+function useFavoriteExercises() {
+  const qc = useQueryClient();
+  const [userId, setUserId] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    supabase.auth.getUser().then(({ data }) => {
+      if (!cancelled) setUserId(data.user?.id ?? null);
+    });
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
+      setUserId(session?.user?.id ?? null);
+    });
+    return () => { cancelled = true; sub.subscription.unsubscribe(); };
+  }, []);
+
+  const { data: favs = new Set<string>() } = useQuery({
+    queryKey: ["pl-exercise-favorites", userId],
+    enabled: !!userId,
+    initialData: () => readFavCache(userId),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("pl_exercise_favorites")
+        .select("exercise_id")
+        .eq("user_id", userId!);
+      if (error) throw error;
+      const set = new Set((data ?? []).map((r) => r.exercise_id as string));
+      writeFavCache(userId, set);
+      return set;
+    },
+  });
+
+  const toggle = async (exerciseId: string) => {
+    if (!userId) return;
+    const current = favs ?? new Set<string>();
+    const isFav = current.has(exerciseId);
+    const next = new Set(current);
+    if (isFav) next.delete(exerciseId);
+    else next.add(exerciseId);
+    // Optimistic update + cache
+    qc.setQueryData(["pl-exercise-favorites", userId], next);
+    writeFavCache(userId, next);
+    if (isFav) {
+      const { error } = await supabase
+        .from("pl_exercise_favorites")
+        .delete()
+        .eq("user_id", userId)
+        .eq("exercise_id", exerciseId);
+      if (error) {
+        qc.setQueryData(["pl-exercise-favorites", userId], current);
+        writeFavCache(userId, current);
+      }
+    } else {
+      const { error } = await supabase
+        .from("pl_exercise_favorites")
+        .insert({ user_id: userId, exercise_id: exerciseId });
+      if (error) {
+        qc.setQueryData(["pl-exercise-favorites", userId], current);
+        writeFavCache(userId, current);
+      }
+    }
+  };
+
+  return { favs, toggle };
 }
 
 export interface ExerciseRef {
