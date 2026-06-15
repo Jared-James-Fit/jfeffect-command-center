@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Camera, RefreshCw, Upload, X, AlertTriangle, Loader2, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 
 interface Props {
   userId: string;
