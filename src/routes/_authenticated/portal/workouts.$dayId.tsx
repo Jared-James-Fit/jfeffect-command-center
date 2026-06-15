@@ -1765,6 +1765,67 @@ function SetRow({
 
   const hasAnyTarget = suggestedWeight != null || repChipValues.length > 0 || rpeChipValues.length > 0 || rirChipValues.length > 0;
 
+  // ── Time-based completion (per-set countdown timer + quick-confirm) ────
+  const isTime = measurementType === "time";
+  const prescribedSec = prescribedDurationSeconds ?? null;
+  const completedSec = (existing as any)?.completed_duration_seconds as number | null | undefined;
+  const [timerOpen, setTimerOpen] = useState(false);
+  const [quickOpen, setQuickOpen] = useState(false);
+
+  const saveTimeCompletion = async (completedSeconds: number, opts: {
+    method: "countdown_timer" | "stopwatch" | "prescribed_quick_confirm" | "manual_entry";
+    startedAt?: string | null;
+    completedAt?: string;
+    finishedEarly?: boolean;
+  }) => {
+    if (readonly || !clientId || !prescribedSec) return;
+    const nowIso = opts.completedAt ?? new Date().toISOString();
+    const payload: Record<string, any> = {
+      row_id: rowId,
+      client_id: clientId,
+      set_index: setIndex,
+      completed_duration_seconds: completedSeconds,
+      timer_started_at: opts.startedAt ?? null,
+      timer_completed_at: nowIso,
+      completion_method: opts.method,
+      completed_at: nowIso,
+    };
+    try {
+      if (existing?.id) {
+        const { error } = await sb.from("pl_row_results").update(payload).eq("id", existing.id);
+        if (error) throw error;
+      } else {
+        const { error } = await sb.from("pl_row_results").insert(payload);
+        if (error) throw error;
+      }
+      onChange();
+      if (!existing?.completed_at) onSetCompleted?.(setIndex);
+      toast.success(
+        opts.finishedEarly
+          ? `Saved ${formatDuration(completedSeconds)} of ${formatDuration(prescribedSec)}`
+          : `Set ${setIndex} complete · ${formatDuration(completedSeconds)}`,
+      );
+    } catch (e: any) {
+      // Fall through to offline queue so the completion isn't lost.
+      enqueueOfflineWrite({
+        id: `portal_set_time:${rowId}:${clientId}:${setIndex}`,
+        label: `Saved set ${setIndex}`,
+        handlerKey: "portal_table_upsert",
+        payload: { table: "pl_row_results", id: existing?.id ?? null, payload },
+      });
+      toast.message(`Saved set ${setIndex} offline — will sync`);
+    }
+  };
+
+  const onTimerComplete = (p: TimerCompletionPayload) => {
+    void saveTimeCompletion(p.completedSeconds, {
+      method: p.method === "stopwatch" ? "stopwatch" : "countdown_timer",
+      startedAt: p.startedAt,
+      completedAt: p.completedAt,
+      finishedEarly: p.finishedEarly,
+    });
+  };
+
   return (
     <div className={cn(
       "border-t border-builder-card-border/70 transition-colors",
