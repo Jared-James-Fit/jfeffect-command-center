@@ -1530,6 +1530,7 @@ function SetRow({
   repTarget, rpeTarget, rirTarget,
   hasUncompletedAfter, onApplyToRemaining,
   readonly = false, unit = "kg", focusMode = false, onChange, onSetCompleted,
+  setCount, measurementType = "reps", prescribedDurationSeconds = null,
 }: {
   rowId: string;
   workoutId?: string | null;
@@ -1537,6 +1538,9 @@ function SetRow({
   exerciseName?: string | null;
   clientId: string | undefined;
   setIndex: number;
+  setCount?: number;
+  measurementType?: "reps" | "time";
+  prescribedDurationSeconds?: number | null;
   existing?: any;
   prevExisting?: any;
   targetReps?: string | null;
