@@ -621,7 +621,7 @@ function AdminDashboard() {
                         )}
                       </div>
                       <Link to={n.href as any} params={n.params as any} search={n.search} className="shrink-0">
-                        <Button variant="outline" size="sm" className="h-8 text-[11px] shrink-0">{n.action}</Button>
+                        <Button variant="default" size="sm" className="h-11 min-w-[88px] px-3 text-xs font-bold shrink-0">{n.action}</Button>
                       </Link>
                     </li>
                   ))}
