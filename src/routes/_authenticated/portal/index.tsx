@@ -24,6 +24,8 @@ import { useEffect, useRef, useState } from "react";
 import { listMyPortalAppointments } from "@/lib/appointments.functions";
 import { useServerFn } from "@tanstack/react-start";
 import { format, parseISO, isToday, isTomorrow } from "date-fns";
+import { forwardRef, useImperativeHandle } from "react";
+import { BodyweightSummaryCard } from "@/components/portal/bodyweight-summary-card";
 
 export const Route = createFileRoute("/_authenticated/portal/")({ component: PortalHome });
 
@@ -181,7 +183,10 @@ function PortalHome() {
   const fetchPortalAppointments = useServerFn(listMyPortalAppointments);
   const { data: appts = [] } = useQuery({
     queryKey: ["portal-next-appointment"],
-    queryFn: () => fetchPortalAppointments({ data: { limit: 1 } }),
+    queryFn: async () => {
+      const res: any = await fetchPortalAppointments();
+      return (res?.upcoming ?? []) as any[];
+    },
   });
   const nextAppointment: any = (appts as any[])[0] ?? null;
 
