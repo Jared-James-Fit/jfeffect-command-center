@@ -8,8 +8,10 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { PlayCircle, RotateCcw, BookOpen } from "lucide-react";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { PlayCircle, RotateCcw, BookOpen, Eye, Calendar, Clock } from "lucide-react";
 import { restartPlan } from "@/lib/member-plans.functions";
+import { listMembershipLibrary } from "@/lib/membership-library.functions";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/m/my-plans")({ component: MyPlans });
@@ -43,18 +45,25 @@ function MyPlans() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="My Plans" subtitle="Your active and completed training plans." />
-      <Section title="Active">
+      <PageHeader title="Training" subtitle="Your plans and the full Program Library." />
+      <Tabs defaultValue="my-plans" className="space-y-6">
+        <TabsList>
+          <TabsTrigger value="my-plans">My Plans</TabsTrigger>
+          <TabsTrigger value="library">
+            <BookOpen className="mr-1.5 h-3.5 w-3.5" />
+            Program Library
+          </TabsTrigger>
+        </TabsList>
+        <TabsContent value="my-plans" className="space-y-6">
+          <Section title="Active">
         {active.length === 0 && (
           <Empty
             msg="No active plan."
             action={
-              <Link to="/m/plans">
                 <Button variant="outline" size="sm">
                   <BookOpen className="mr-2 h-4 w-4" />
                   Browse Program Library
                 </Button>
-              </Link>
             }
           />
         )}
@@ -69,6 +78,68 @@ function MyPlans() {
           {abandoned.map((e) => <EnrollmentCard key={e.id} e={e} onRestart={() => onRestart(e.id)} />)}
         </Section>
       )}
+        </TabsContent>
+        <TabsContent value="library" className="space-y-3">
+          <LibraryTab />
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}
+
+function LibraryTab() {
+  const fetchLibrary = useServerFn(listMembershipLibrary);
+  const { data, isLoading } = useQuery({
+    queryKey: ["m-membership-library"],
+    queryFn: () => fetchLibrary(),
+  });
+  const plans = (data?.plans ?? []) as any[];
+  if (isLoading) {
+    return <div className="text-sm text-muted-foreground">Loading programs…</div>;
+  }
+  if (plans.length === 0) {
+    return (
+      <div className="text-sm text-muted-foreground">
+        No programs are available in your library yet. Check back soon.
+      </div>
+    );
+  }
+  return (
+    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      {plans.map((p) => (
+        <Card key={p.id} className="flex flex-col overflow-hidden p-5">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <div className="truncate font-semibold">{p.public_title || p.name}</div>
+              <div className="mt-0.5 text-xs uppercase tracking-wider text-muted-foreground">
+                {p.training_style ?? "custom"} · {p.difficulty ?? "All Levels"}
+              </div>
+            </div>
+            {p.featured && <Badge>Featured</Badge>}
+          </div>
+          <div className="mt-3 flex flex-wrap gap-3 text-xs text-muted-foreground">
+            <span className="inline-flex items-center gap-1">
+              <Calendar className="h-3.5 w-3.5" />
+              {p.weeks ?? "—"}w · {p.days_per_week ?? "—"}/wk
+            </span>
+            {p.est_minutes_per_workout && (
+              <span className="inline-flex items-center gap-1">
+                <Clock className="h-3.5 w-3.5" />{p.est_minutes_per_workout} min
+              </span>
+            )}
+          </div>
+          {p.description && (
+            <p className="mt-3 line-clamp-3 text-sm text-muted-foreground">{p.description}</p>
+          )}
+          <div className="mt-auto pt-4">
+            <Link to="/m/plans/$planId" params={{ planId: p.id }} className="block">
+              <Button variant="outline" size="sm" className="w-full">
+                <Eye className="mr-1 h-3.5 w-3.5" /> Preview
+              </Button>
+            </Link>
+          </div>
+        </Card>
+      ))}
     </div>
   );
 }
