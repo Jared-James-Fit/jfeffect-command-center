@@ -20,6 +20,8 @@ const SetupPatch = z.object({
   experience_level: z.enum(["new", "beginner", "intermediate", "advanced"]).optional(),
   training_background: z.string().max(2000).optional(),
   full_name: z.string().max(200).optional(),
+  committed_training_days: z.array(z.string().max(20)).max(7).optional(),
+  committed_training_frequency: z.number().int().min(1).max(7).optional().nullable(),
 });
 
 export const updateMyMemberProfile = createServerFn({ method: "POST" })
@@ -67,7 +69,7 @@ export const getMySetupStatus = createServerFn({ method: "GET" })
     const { supabase, userId } = context;
     const { data: m } = await supabase
       .from("app_members")
-      .select("id, account_type, avatar_url, phone, sms_opt_out, sms_consent_at, date_of_birth, address_line1, address_city, address_state, address_zip, address_country, emergency_contact_name, emergency_contact_phone, goals, goals_tags, experience_level, training_background, full_name, setup_completed_at, is_admin_sandbox")
+      .select("id, account_type, avatar_url, phone, sms_opt_out, sms_consent_at, date_of_birth, address_line1, address_city, address_state, address_zip, address_country, emergency_contact_name, emergency_contact_phone, goals, goals_tags, experience_level, training_background, full_name, setup_completed_at, is_admin_sandbox, committed_training_days, committed_training_frequency")
       .eq("user_id", userId)
       .maybeSingle();
     if (!m) return { member: null, complete: true, missing: [] as string[] };
@@ -84,6 +86,8 @@ export const getMySetupStatus = createServerFn({ method: "GET" })
     if (!hasGoals) missing.push("goals");
     const hasBackground = !!m.training_background || !!m.experience_level;
     if (!hasBackground) missing.push("training_background");
+    const days = (m as any).committed_training_days as string[] | null | undefined;
+    if (!days || days.length === 0) missing.push("committed_training_days");
     return { member: m, complete: missing.length === 0, missing };
   });
 

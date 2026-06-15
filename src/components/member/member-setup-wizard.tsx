@@ -33,8 +33,10 @@ const EXPERIENCE_OPTIONS = [
   { value: "advanced", label: "Advanced", hint: "5+ yrs" },
 ] as const;
 
-type Step = "photo" | "contact" | "basics" | "goals";
-const STEPS: Step[] = ["photo", "contact", "basics", "goals"];
+type Step = "photo" | "contact" | "basics" | "goals" | "schedule";
+const STEPS: Step[] = ["photo", "contact", "basics", "goals", "schedule"];
+
+import { WEEK_DAYS, SHORT_DAY } from "@/lib/training-schedule";
 
 export function MemberSetupWizard({
   open,
@@ -70,6 +72,7 @@ export function MemberSetupWizard({
   const phoneDigits = String(v("phone") ?? "").replace(/\D/g, "");
   const goalsTags: string[] = form.goals_tags ?? m?.goals_tags ?? [];
   const goalsText = String(form.goals ?? m?.goals ?? "").trim();
+  const trainingDays: string[] = form.committed_training_days ?? m?.committed_training_days ?? [];
   const stepValidation: Record<Step, { ok: boolean; missing: string[] }> = {
     photo: (() => {
       const ok = !!v("avatar_url");
@@ -101,6 +104,11 @@ export function MemberSetupWizard({
       if (!v("training_background")) missing.push("training background");
       return { ok: missing.length === 0, missing };
     })(),
+    schedule: (() => {
+      const missing: string[] = [];
+      if (trainingDays.length === 0) missing.push("at least one training day");
+      return { ok: missing.length === 0, missing };
+    })(),
   };
   const canAdvance = stepValidation[step].ok;
   const missingLabel = stepValidation[step].missing.join(", ");
@@ -128,6 +136,12 @@ export function MemberSetupWizard({
         if (form.goals !== undefined) patch.goals = form.goals;
         if (form.experience_level !== undefined) patch.experience_level = form.experience_level;
         if (form.training_background !== undefined) patch.training_background = form.training_background;
+      }
+      if (step === "schedule") {
+        if (form.committed_training_days !== undefined) {
+          patch.committed_training_days = form.committed_training_days;
+          patch.committed_training_frequency = form.committed_training_days.length;
+        }
       }
       if (Object.keys(patch).length) {
         const r = await update({ data: patch });
@@ -253,6 +267,46 @@ export function MemberSetupWizard({
 
         {step === "goals" && (
           <GoalsStep form={form} setForm={setForm} member={m} />
+        )}
+
+        {step === "schedule" && (
+          <div className="space-y-3">
+            <div>
+              <Label>
+                Which days will you train? <span className="text-destructive">*</span>
+              </Label>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Pick the days you commit to training each week. We use this to build your workout library and schedule. You can update it anytime in Account Settings.
+              </p>
+            </div>
+            <div className="grid grid-cols-4 gap-2 sm:grid-cols-7">
+              {WEEK_DAYS.map((d) => {
+                const on = trainingDays.includes(d);
+                return (
+                  <button
+                    key={d}
+                    type="button"
+                    onClick={() => {
+                      const cur = trainingDays;
+                      const next = on ? cur.filter((x) => x !== d) : [...cur, d];
+                      set("committed_training_days", next);
+                    }}
+                    className={cn(
+                      "rounded-md border px-3 py-2 text-sm font-medium transition",
+                      on
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "border-border bg-secondary/40 hover:bg-secondary",
+                    )}
+                  >
+                    {SHORT_DAY[d]}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Selected: <span className="font-semibold text-foreground">{trainingDays.length}</span> day{trainingDays.length === 1 ? "" : "s"} per week
+            </p>
+          </div>
         )}
 
         {!canAdvance && (
