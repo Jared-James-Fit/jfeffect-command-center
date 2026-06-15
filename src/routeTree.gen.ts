@@ -228,6 +228,7 @@ import { Route as AuthenticatedAdminAgreementsNativeNewRouteImport } from './rou
 import { Route as AuthenticatedAdminAgreementsNativePackageIdRouteImport } from './routes/_authenticated/admin/agreements-native.$packageId'
 import { Route as AuthenticatedAdminCrmContactsIndexRouteImport } from './routes/_authenticated/admin/crm.contacts.index'
 import { Route as ApiPublicGoogleOauthCallbackRouteImport } from './routes/api/public/google/oauth/callback'
+import { Route as AuthenticatedAdminNutritionDashboardReviewSubmissionIdRouteImport } from './routes/_authenticated/admin/nutrition-dashboard.review.$submissionId'
 import { Route as AuthenticatedAdminCrmContactsIdRouteImport } from './routes/_authenticated/admin/crm.contacts.$id'
 import { Route as AuthenticatedAdminClientProgramsClientIdHistoryRouteImport } from './routes/_authenticated/admin/client-programs.$clientId.history'
 import { Route as AuthenticatedAdminClientProgramsClientIdAnalyticsRouteImport } from './routes/_authenticated/admin/client-programs.$clientId.analytics'
@@ -1496,6 +1497,12 @@ const ApiPublicGoogleOauthCallbackRoute =
     path: '/api/public/google/oauth/callback',
     getParentRoute: () => rootRouteImport,
   } as any)
+const AuthenticatedAdminNutritionDashboardReviewSubmissionIdRoute =
+  AuthenticatedAdminNutritionDashboardReviewSubmissionIdRouteImport.update({
+    id: '/review/$submissionId',
+    path: '/review/$submissionId',
+    getParentRoute: () => AuthenticatedAdminNutritionDashboardRoute,
+  } as any)
 const AuthenticatedAdminCrmContactsIdRoute =
   AuthenticatedAdminCrmContactsIdRouteImport.update({
     id: '/crm/contacts/$id',
@@ -1582,7 +1589,7 @@ export interface FileRoutesByFullPath {
   '/admin/membership': typeof AuthenticatedAdminMembershipRouteWithChildren
   '/admin/messages': typeof AuthenticatedAdminMessagesRoute
   '/admin/native-forms': typeof AuthenticatedAdminNativeFormsRoute
-  '/admin/nutrition-dashboard': typeof AuthenticatedAdminNutritionDashboardRoute
+  '/admin/nutrition-dashboard': typeof AuthenticatedAdminNutritionDashboardRouteWithChildren
   '/admin/nutrition-targets': typeof AuthenticatedAdminNutritionTargetsRoute
   '/admin/offers': typeof AuthenticatedAdminOffersRoute
   '/admin/payment-links': typeof AuthenticatedAdminPaymentLinksRoute
@@ -1741,6 +1748,7 @@ export interface FileRoutesByFullPath {
   '/admin/client-programs/$clientId/analytics': typeof AuthenticatedAdminClientProgramsClientIdAnalyticsRoute
   '/admin/client-programs/$clientId/history': typeof AuthenticatedAdminClientProgramsClientIdHistoryRoute
   '/admin/crm/contacts/$id': typeof AuthenticatedAdminCrmContactsIdRoute
+  '/admin/nutrition-dashboard/review/$submissionId': typeof AuthenticatedAdminNutritionDashboardReviewSubmissionIdRoute
   '/api/public/google/oauth/callback': typeof ApiPublicGoogleOauthCallbackRoute
   '/admin/crm/contacts/': typeof AuthenticatedAdminCrmContactsIndexRoute
   '/m/workouts/$enrollmentId/$week/$day': typeof AuthenticatedMWorkoutsEnrollmentIdWeekDayRoute
@@ -1801,7 +1809,7 @@ export interface FileRoutesByTo {
   '/admin/media-review': typeof AuthenticatedAdminMediaReviewRoute
   '/admin/messages': typeof AuthenticatedAdminMessagesRoute
   '/admin/native-forms': typeof AuthenticatedAdminNativeFormsRoute
-  '/admin/nutrition-dashboard': typeof AuthenticatedAdminNutritionDashboardRoute
+  '/admin/nutrition-dashboard': typeof AuthenticatedAdminNutritionDashboardRouteWithChildren
   '/admin/nutrition-targets': typeof AuthenticatedAdminNutritionTargetsRoute
   '/admin/offers': typeof AuthenticatedAdminOffersRoute
   '/admin/payment-links': typeof AuthenticatedAdminPaymentLinksRoute
@@ -1960,6 +1968,7 @@ export interface FileRoutesByTo {
   '/admin/client-programs/$clientId/analytics': typeof AuthenticatedAdminClientProgramsClientIdAnalyticsRoute
   '/admin/client-programs/$clientId/history': typeof AuthenticatedAdminClientProgramsClientIdHistoryRoute
   '/admin/crm/contacts/$id': typeof AuthenticatedAdminCrmContactsIdRoute
+  '/admin/nutrition-dashboard/review/$submissionId': typeof AuthenticatedAdminNutritionDashboardReviewSubmissionIdRoute
   '/api/public/google/oauth/callback': typeof ApiPublicGoogleOauthCallbackRoute
   '/admin/crm/contacts': typeof AuthenticatedAdminCrmContactsIndexRoute
   '/m/workouts/$enrollmentId/$week/$day': typeof AuthenticatedMWorkoutsEnrollmentIdWeekDayRoute
@@ -2027,7 +2036,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/membership': typeof AuthenticatedAdminMembershipRouteWithChildren
   '/_authenticated/admin/messages': typeof AuthenticatedAdminMessagesRoute
   '/_authenticated/admin/native-forms': typeof AuthenticatedAdminNativeFormsRoute
-  '/_authenticated/admin/nutrition-dashboard': typeof AuthenticatedAdminNutritionDashboardRoute
+  '/_authenticated/admin/nutrition-dashboard': typeof AuthenticatedAdminNutritionDashboardRouteWithChildren
   '/_authenticated/admin/nutrition-targets': typeof AuthenticatedAdminNutritionTargetsRoute
   '/_authenticated/admin/offers': typeof AuthenticatedAdminOffersRoute
   '/_authenticated/admin/payment-links': typeof AuthenticatedAdminPaymentLinksRoute
@@ -2186,6 +2195,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/client-programs/$clientId/analytics': typeof AuthenticatedAdminClientProgramsClientIdAnalyticsRoute
   '/_authenticated/admin/client-programs/$clientId/history': typeof AuthenticatedAdminClientProgramsClientIdHistoryRoute
   '/_authenticated/admin/crm/contacts/$id': typeof AuthenticatedAdminCrmContactsIdRoute
+  '/_authenticated/admin/nutrition-dashboard/review/$submissionId': typeof AuthenticatedAdminNutritionDashboardReviewSubmissionIdRoute
   '/api/public/google/oauth/callback': typeof ApiPublicGoogleOauthCallbackRoute
   '/_authenticated/admin/crm/contacts/': typeof AuthenticatedAdminCrmContactsIndexRoute
   '/_authenticated/m/workouts/$enrollmentId/$week/$day': typeof AuthenticatedMWorkoutsEnrollmentIdWeekDayRoute
@@ -2412,6 +2422,7 @@ export interface FileRouteTypes {
     | '/admin/client-programs/$clientId/analytics'
     | '/admin/client-programs/$clientId/history'
     | '/admin/crm/contacts/$id'
+    | '/admin/nutrition-dashboard/review/$submissionId'
     | '/api/public/google/oauth/callback'
     | '/admin/crm/contacts/'
     | '/m/workouts/$enrollmentId/$week/$day'
@@ -2631,6 +2642,7 @@ export interface FileRouteTypes {
     | '/admin/client-programs/$clientId/analytics'
     | '/admin/client-programs/$clientId/history'
     | '/admin/crm/contacts/$id'
+    | '/admin/nutrition-dashboard/review/$submissionId'
     | '/api/public/google/oauth/callback'
     | '/admin/crm/contacts'
     | '/m/workouts/$enrollmentId/$week/$day'
@@ -2856,6 +2868,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/client-programs/$clientId/analytics'
     | '/_authenticated/admin/client-programs/$clientId/history'
     | '/_authenticated/admin/crm/contacts/$id'
+    | '/_authenticated/admin/nutrition-dashboard/review/$submissionId'
     | '/api/public/google/oauth/callback'
     | '/_authenticated/admin/crm/contacts/'
     | '/_authenticated/m/workouts/$enrollmentId/$week/$day'
@@ -4435,6 +4448,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicGoogleOauthCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authenticated/admin/nutrition-dashboard/review/$submissionId': {
+      id: '/_authenticated/admin/nutrition-dashboard/review/$submissionId'
+      path: '/review/$submissionId'
+      fullPath: '/admin/nutrition-dashboard/review/$submissionId'
+      preLoaderRoute: typeof AuthenticatedAdminNutritionDashboardReviewSubmissionIdRouteImport
+      parentRoute: typeof AuthenticatedAdminNutritionDashboardRoute
+    }
     '/_authenticated/admin/crm/contacts/$id': {
       id: '/_authenticated/admin/crm/contacts/$id'
       path: '/crm/contacts/$id'
@@ -4556,6 +4576,21 @@ const AuthenticatedAdminMembershipRouteWithChildren =
     AuthenticatedAdminMembershipRouteChildren,
   )
 
+interface AuthenticatedAdminNutritionDashboardRouteChildren {
+  AuthenticatedAdminNutritionDashboardReviewSubmissionIdRoute: typeof AuthenticatedAdminNutritionDashboardReviewSubmissionIdRoute
+}
+
+const AuthenticatedAdminNutritionDashboardRouteChildren: AuthenticatedAdminNutritionDashboardRouteChildren =
+  {
+    AuthenticatedAdminNutritionDashboardReviewSubmissionIdRoute:
+      AuthenticatedAdminNutritionDashboardReviewSubmissionIdRoute,
+  }
+
+const AuthenticatedAdminNutritionDashboardRouteWithChildren =
+  AuthenticatedAdminNutritionDashboardRoute._addFileChildren(
+    AuthenticatedAdminNutritionDashboardRouteChildren,
+  )
+
 interface AuthenticatedAdminProgramAssignRouteChildren {
   AuthenticatedAdminProgramAssignClientIdRoute: typeof AuthenticatedAdminProgramAssignClientIdRoute
 }
@@ -4621,7 +4656,7 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminMembershipRoute: typeof AuthenticatedAdminMembershipRouteWithChildren
   AuthenticatedAdminMessagesRoute: typeof AuthenticatedAdminMessagesRoute
   AuthenticatedAdminNativeFormsRoute: typeof AuthenticatedAdminNativeFormsRoute
-  AuthenticatedAdminNutritionDashboardRoute: typeof AuthenticatedAdminNutritionDashboardRoute
+  AuthenticatedAdminNutritionDashboardRoute: typeof AuthenticatedAdminNutritionDashboardRouteWithChildren
   AuthenticatedAdminNutritionTargetsRoute: typeof AuthenticatedAdminNutritionTargetsRoute
   AuthenticatedAdminOffersRoute: typeof AuthenticatedAdminOffersRoute
   AuthenticatedAdminPaymentLinksRoute: typeof AuthenticatedAdminPaymentLinksRoute
@@ -4730,7 +4765,7 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
     AuthenticatedAdminMessagesRoute: AuthenticatedAdminMessagesRoute,
     AuthenticatedAdminNativeFormsRoute: AuthenticatedAdminNativeFormsRoute,
     AuthenticatedAdminNutritionDashboardRoute:
-      AuthenticatedAdminNutritionDashboardRoute,
+      AuthenticatedAdminNutritionDashboardRouteWithChildren,
     AuthenticatedAdminNutritionTargetsRoute:
       AuthenticatedAdminNutritionTargetsRoute,
     AuthenticatedAdminOffersRoute: AuthenticatedAdminOffersRoute,
