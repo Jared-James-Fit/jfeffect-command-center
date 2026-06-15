@@ -1772,26 +1772,17 @@ function DayEditor({ day, setDay, exercises, compact, dayKey }: { day: any; setD
         </span>
         <div className="flex items-center gap-1">
           {dayKey && rows.length > 0 && (
-            <>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-7 px-2 text-[11px]"
-                onClick={expandAll}
-                title="Expand every card in this day (Alt+E)"
-              >
-                <ChevronDown className="mr-1 h-3 w-3" /> Expand all
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-7 px-2 text-[11px]"
-                onClick={collapseAll}
-                title="Collapse every card in this day (Alt+Shift+E)"
-              >
-                <ChevronUp className="mr-1 h-3 w-3" /> Collapse all
-              </Button>
-            </>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 px-2 text-[11px]"
+              onClick={toggleAll}
+              title={`${allExpanded ? "Collapse" : "Expand"} every card in this day (⌘/Ctrl+Shift+X)`}
+            >
+              {allExpanded
+                ? (<><ChevronUp className="mr-1 h-3 w-3" /> Collapse all</>)
+                : (<><ChevronDown className="mr-1 h-3 w-3" /> Expand all</>)}
+            </Button>
           )}
           {clip && clip.kind === "rows" && clip.rows.length > 0 && (
             <Button size="sm" variant="outline" className="h-7 text-[11px]" onClick={pasteFromClip} title={`Paste ${clip.rows.length} exercise${clip.rows.length === 1 ? "" : "s"}`}>
