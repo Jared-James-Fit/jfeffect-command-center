@@ -1055,13 +1055,29 @@ function WorkoutDay() {
       {client?.id && (
         <WorkoutSummaryDialog
           open={summaryOpen}
-          onOpenChange={setSummaryOpen}
+          onOpenChange={(v) => {
+            setSummaryOpen(v);
+            // When the celebratory summary closes after a fresh submit,
+            // chain into the optional lift-upload prompt seamlessly.
+            if (!v && justSubmittedFeedback && !isImpersonating) {
+              setLiftPromptOpen(true);
+            }
+          }}
           rows={rows as any[]}
           results={results as any[]}
           feedback={existingFeedback ?? (justSubmittedFeedback
             ? { overall_rating: justSubmittedFeedback.overall_rating, session_rpe: justSubmittedFeedback.session_rpe }
             : null)}
           durationMin={completion?.actual_duration_min ?? pendingFinalize?.durationMin ?? null}
+        />
+      )}
+      {client?.id && !isImpersonating && (
+        <PostWorkoutLiftPrompt
+          open={liftPromptOpen}
+          onOpenChange={setLiftPromptOpen}
+          clientId={client.id}
+          clientName={(client as any).full_name}
+          userId={portalUserId ?? null}
         />
       )}
       <MoveWorkoutSheet
