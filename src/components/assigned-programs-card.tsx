@@ -5,8 +5,8 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Dumbbell, Target, ChevronRight, Layers, ArrowRight, Trash2 } from "lucide-react";
-import { listClientPreps, listClientBlocks, countdownLabel, deletePrep, deleteBlock } from "@/lib/pl-programs";
+import { Dumbbell, Target, ChevronRight, Layers, ArrowRight, Trash2, Pencil } from "lucide-react";
+import { listClientPreps, listClientBlocks, countdownLabel, deletePrep, deleteBlock, updatePrep } from "@/lib/pl-programs";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -231,6 +231,29 @@ export function AssignedProgramsCard({ clientId, mode }: { clientId: string; mod
                           title="Remove prep (also detaches its blocks)"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
+                      {mode === "admin" && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6"
+                          onClick={async () => {
+                            const next = window.prompt("Rename program", p.title ?? "");
+                            if (next == null) return;
+                            const title = next.trim();
+                            if (!title || title === p.title) return;
+                            try {
+                              await updatePrep(p.id, { title });
+                              toast.success("Renamed");
+                              invalidate();
+                            } catch (e: any) {
+                              toast.error(e?.message ?? "Couldn't rename");
+                            }
+                          }}
+                          title="Rename program"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
                         </Button>
                       )}
                     </div>
