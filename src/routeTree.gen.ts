@@ -156,6 +156,7 @@ import { Route as AuthenticatedAdminMemberPlansIndexRouteImport } from './routes
 import { Route as AuthenticatedAdminEventsIndexRouteImport } from './routes/_authenticated/admin/events.index'
 import { Route as AuthenticatedAdminCrmIndexRouteImport } from './routes/_authenticated/admin/crm.index'
 import { Route as AuthenticatedAdminCoachesIndexRouteImport } from './routes/_authenticated/admin/coaches.index'
+import { Route as AuthenticatedAdminClientsIndexRouteImport } from './routes/_authenticated/admin/clients.index'
 import { Route as AuthenticatedAdminAgreementsIndexRouteImport } from './routes/_authenticated/admin/agreements.index'
 import { Route as AuthenticatedAdminAgreementsNativeIndexRouteImport } from './routes/_authenticated/admin/agreements-native.index'
 import { Route as LovableEmailQueueProcessRouteImport } from './routes/lovable/email/queue/process'
@@ -1068,6 +1069,12 @@ const AuthenticatedAdminCoachesIndexRoute =
     path: '/coaches/',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
+const AuthenticatedAdminClientsIndexRoute =
+  AuthenticatedAdminClientsIndexRouteImport.update({
+    id: '/clients/',
+    path: '/clients/',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
 const AuthenticatedAdminAgreementsIndexRoute =
   AuthenticatedAdminAgreementsIndexRouteImport.update({
     id: '/agreements/',
@@ -1735,6 +1742,7 @@ export interface FileRoutesByFullPath {
   '/lovable/email/queue/process': typeof LovableEmailQueueProcessRoute
   '/admin/agreements-native/': typeof AuthenticatedAdminAgreementsNativeIndexRoute
   '/admin/agreements/': typeof AuthenticatedAdminAgreementsIndexRoute
+  '/admin/clients/': typeof AuthenticatedAdminClientsIndexRoute
   '/admin/coaches/': typeof AuthenticatedAdminCoachesIndexRoute
   '/admin/crm/': typeof AuthenticatedAdminCrmIndexRoute
   '/admin/events/': typeof AuthenticatedAdminEventsIndexRoute
@@ -1955,6 +1963,7 @@ export interface FileRoutesByTo {
   '/lovable/email/queue/process': typeof LovableEmailQueueProcessRoute
   '/admin/agreements-native': typeof AuthenticatedAdminAgreementsNativeIndexRoute
   '/admin/agreements': typeof AuthenticatedAdminAgreementsIndexRoute
+  '/admin/clients': typeof AuthenticatedAdminClientsIndexRoute
   '/admin/coaches': typeof AuthenticatedAdminCoachesIndexRoute
   '/admin/crm': typeof AuthenticatedAdminCrmIndexRoute
   '/admin/events': typeof AuthenticatedAdminEventsIndexRoute
@@ -2182,6 +2191,7 @@ export interface FileRoutesById {
   '/lovable/email/queue/process': typeof LovableEmailQueueProcessRoute
   '/_authenticated/admin/agreements-native/': typeof AuthenticatedAdminAgreementsNativeIndexRoute
   '/_authenticated/admin/agreements/': typeof AuthenticatedAdminAgreementsIndexRoute
+  '/_authenticated/admin/clients/': typeof AuthenticatedAdminClientsIndexRoute
   '/_authenticated/admin/coaches/': typeof AuthenticatedAdminCoachesIndexRoute
   '/_authenticated/admin/crm/': typeof AuthenticatedAdminCrmIndexRoute
   '/_authenticated/admin/events/': typeof AuthenticatedAdminEventsIndexRoute
@@ -2409,6 +2419,7 @@ export interface FileRouteTypes {
     | '/lovable/email/queue/process'
     | '/admin/agreements-native/'
     | '/admin/agreements/'
+    | '/admin/clients/'
     | '/admin/coaches/'
     | '/admin/crm/'
     | '/admin/events/'
@@ -2629,6 +2640,7 @@ export interface FileRouteTypes {
     | '/lovable/email/queue/process'
     | '/admin/agreements-native'
     | '/admin/agreements'
+    | '/admin/clients'
     | '/admin/coaches'
     | '/admin/crm'
     | '/admin/events'
@@ -2855,6 +2867,7 @@ export interface FileRouteTypes {
     | '/lovable/email/queue/process'
     | '/_authenticated/admin/agreements-native/'
     | '/_authenticated/admin/agreements/'
+    | '/_authenticated/admin/clients/'
     | '/_authenticated/admin/coaches/'
     | '/_authenticated/admin/crm/'
     | '/_authenticated/admin/events/'
@@ -3944,6 +3957,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminCoachesIndexRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
+    '/_authenticated/admin/clients/': {
+      id: '/_authenticated/admin/clients/'
+      path: '/clients'
+      fullPath: '/admin/clients/'
+      preLoaderRoute: typeof AuthenticatedAdminClientsIndexRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
     '/_authenticated/admin/agreements/': {
       id: '/_authenticated/admin/agreements/'
       path: '/agreements'
@@ -4707,6 +4727,7 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminSettingsSmsRoute: typeof AuthenticatedAdminSettingsSmsRoute
   AuthenticatedAdminAgreementsNativeIndexRoute: typeof AuthenticatedAdminAgreementsNativeIndexRoute
   AuthenticatedAdminAgreementsIndexRoute: typeof AuthenticatedAdminAgreementsIndexRoute
+  AuthenticatedAdminClientsIndexRoute: typeof AuthenticatedAdminClientsIndexRoute
   AuthenticatedAdminCoachesIndexRoute: typeof AuthenticatedAdminCoachesIndexRoute
   AuthenticatedAdminCrmIndexRoute: typeof AuthenticatedAdminCrmIndexRoute
   AuthenticatedAdminEventsIndexRoute: typeof AuthenticatedAdminEventsIndexRoute
@@ -4840,6 +4861,7 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
       AuthenticatedAdminAgreementsNativeIndexRoute,
     AuthenticatedAdminAgreementsIndexRoute:
       AuthenticatedAdminAgreementsIndexRoute,
+    AuthenticatedAdminClientsIndexRoute: AuthenticatedAdminClientsIndexRoute,
     AuthenticatedAdminCoachesIndexRoute: AuthenticatedAdminCoachesIndexRoute,
     AuthenticatedAdminCrmIndexRoute: AuthenticatedAdminCrmIndexRoute,
     AuthenticatedAdminEventsIndexRoute: AuthenticatedAdminEventsIndexRoute,
