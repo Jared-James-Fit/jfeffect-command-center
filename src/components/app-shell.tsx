@@ -29,6 +29,8 @@ import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useSidebarPins, MAX_PINS, type PinScope } from "@/lib/sidebar-pins";
 import { toast } from "sonner";
+import { CommandPalette } from "@/components/command-palette";
+import type { AdminRole } from "@/lib/admin-route-registry";
 
 export interface NavItem {
   to: string;
@@ -810,47 +812,12 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
         </SheetContent>
       </Sheet>
 
-      {/* Command palette — Workout Library search (⌘K / Ctrl+K) */}
-      <CommandDialog open={paletteOpen} onOpenChange={setPaletteOpen}>
-        <CommandInput
-          autoFocus
-          value={paletteQuery}
-          onValueChange={setPaletteQuery}
-          placeholder="Search clients, coaches, accounts, programs…"
-        />
-        <CommandList>
-          <GlobalSearchResults
-            query={debouncedPaletteQuery}
-            onPick={(hit) => {
-              setPaletteOpen(false);
-              try { window.sessionStorage.setItem("gh:term", debouncedPaletteQuery); } catch {}
-              navigate({
-                to: hit.to,
-                search: { highlight: debouncedPaletteQuery } as any,
-              } as any);
-            }}
-          />
-          <WorkoutLibraryResults
-            query={debouncedPaletteQuery}
-            onPick={(tpl) => {
-              setPaletteOpen(false);
-              if (tpl.id === "__library__") {
-                navigate({ to: "/admin/program-library" });
-              } else {
-                navigate({ to: "/admin/program-library/$templateId", params: { templateId: tpl.id } });
-              }
-            }}
-          />
-          <CommandGroup heading="Actions">
-            <CommandItem onSelect={() => { setPaletteOpen(false); handleSignOut(); }}>
-              <LogOut className="mr-2 h-4 w-4" /> Sign out
-            </CommandItem>
-            <CommandItem onSelect={() => { setPaletteOpen(false); cycleMode(); }}>
-              <SettingsIcon className="mr-2 h-4 w-4" /> Toggle sidebar density
-            </CommandItem>
-          </CommandGroup>
-        </CommandList>
-      </CommandDialog>
+      {/* Global Command Palette — ⌘K / Ctrl+K (mobile: full-screen sheet) */}
+      <CommandPalette
+        open={paletteOpen}
+        onOpenChange={setPaletteOpen}
+        role={(useAuth().role as AdminRole | null) ?? null}
+      />
       <ClientPovQuickPicker />
     </div>
     </TooltipProvider>
