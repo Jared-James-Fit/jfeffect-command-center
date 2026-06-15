@@ -18,7 +18,7 @@ import { detectConflicts, type ExistingScheduledDay, type ExistingBlockWindow } 
 import { computeCoverage } from "./coverage";
 import { materializeSelectedDays, summarize } from "./selection";
 import type {
-  AssignmentMethod, PlannerInput, PlannerPreview, Weekday,
+  AssignmentMethod, ConflictDecision, PlannerInput, PlannerPlacement, PlannerPreview, PublishStatus, Weekday,
 } from "./types";
 
 const ALLOWED_METHODS: AssignmentMethod[] = [
@@ -170,3 +170,304 @@ export const planAssignmentFn = createServerFn({ method: "POST" })
  * is wired. Phase 1 keeps the surface area minimal so we don't accidentally
  * touch existing client programming before the planner UI exists.
  */
+
+// ----- Commit -----
+
+interface CommitInput extends PlannerInput {
+  conflictDecisions: Record<string, ConflictDecision>;
+  publishStatus: PublishStatus;
+  publishAt: string | null;
+  idempotencyKey: string;
+}
+
+function validateCommitInput(d: any): CommitInput {
+  const base = validatePlannerInput(d);
+  const decisions = d?.conflictDecisions && typeof d.conflictDecisions === "object" ? d.conflictDecisions : {};
+  const publishStatus: PublishStatus =
+    d?.publishStatus === "draft" || d?.publishStatus === "scheduled" ? d.publishStatus : "published";
+  return {
+    ...base,
+    conflictDecisions: decisions,
+    publishStatus,
+    publishAt: typeof d?.publishAt === "string" ? d.publishAt : null,
+    idempotencyKey: typeof d?.idempotencyKey === "string" && d.idempotencyKey ? d.idempotencyKey : newIdempotencyKey(),
+  };
+}
+
+function applyDecisionsToPlacements(
+  placements: PlannerPlacement[],
+  decisions: Record<string, ConflictDecision>,
+): PlannerPlacement[] {
+  return placements
+    .map((p): PlannerPlacement | null => {
+      const dec = decisions[p.dayKey];
+      if (!dec) return p;
+      if (dec.action === "skip_incoming") return null;
+      if (dec.action === "move_incoming" && dec.newDate) return { ...p, date: dec.newDate };
+      return p;
+    })
+    .filter((p): p is PlannerPlacement => p !== null);
+}
+
+export const commitAssignmentFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(validateCommitInput)
+  .handler(async ({ data, context }) => {
+    const ctx = { supabase: context.supabase, userId: context.userId };
+    await authorizeClient(ctx, data.clientId);
+
+    // Idempotency short-circuit.
+    const { data: existingOp } = await ctx.supabase
+      .from("pl_assignment_operations")
+      .select("id, created_block_ids, status, workouts_added")
+      .eq("client_id", data.clientId)
+      .eq("template_id", data.templateId)
+      .eq("idempotency_key", data.idempotencyKey)
+      .maybeSingle();
+    if (existingOp) {
+      return {
+        batchId: existingOp.id,
+        createdBlockIds: existingOp.created_block_ids ?? [],
+        idempotent: true,
+        counts: { added: existingOp.workouts_added ?? 0, replaced: 0, merged: 0, skipped: 0, moved: 0 },
+      };
+    }
+
+    // Re-run plan server-side as the source of truth.
+    const { data: tpl, error: tplErr } = await ctx.supabase
+      .from("pl_templates")
+      .select("id, name, template_type, payload")
+      .eq("id", data.templateId)
+      .maybeSingle();
+    if (tplErr) throw new Error(tplErr.message);
+    if (!tpl) throw new Error("Template not found");
+    const payload = normalizeTemplatePayload(tpl.payload, { templateType: tpl.template_type, templateId: tpl.id });
+    const days = materializeSelectedDays(payload, data.selection);
+    if (days.length === 0) throw new Error("Nothing selected to assign");
+    const summary = summarize(payload, data.selection);
+
+    const { data: existingDayRows = [] } = await ctx.supabase
+      .from("pl_days")
+      .select("id, scheduled_date, archived, pl_weeks!inner(block_id, pl_blocks!inner(client_id))")
+      .eq("pl_weeks.pl_blocks.client_id", data.clientId)
+      .eq("archived", false)
+      .not("scheduled_date", "is", null);
+    const occupiedDates = new Set<string>((existingDayRows as any[]).map((r) => r.scheduled_date));
+
+    const rawPlacements = computePlacements({
+      method: data.method,
+      startDate: data.startDate,
+      trainingDays: data.trainingDays,
+      manualDateMap: data.manualDateMap,
+      occupiedDates,
+      days,
+    });
+    const finalPlacements = applyDecisionsToPlacements(rawPlacements, data.conflictDecisions);
+
+    // Apply "replace_existing" decisions FIRST so the dates open up.
+    let replacedCount = 0;
+    for (const dec of Object.values(data.conflictDecisions)) {
+      if (dec.action === "replace_existing" && (dec as any).dayId) {
+        await ctx.supabase
+          .from("pl_days")
+          .update({ archived: true, archived_at: new Date().toISOString(), archived_by: ctx.userId })
+          .eq("id", (dec as any).dayId);
+        replacedCount++;
+      }
+    }
+
+    // Resolve unique block keys to commit.
+    const blockKeys = Array.from(new Set(finalPlacements.map((p) => p.blockKey)));
+    const visible = data.publishStatus === "published";
+    const startDate = finalPlacements.reduce<string | null>(
+      (min, p) => (p.date && (!min || p.date < min) ? p.date : min),
+      null,
+    );
+    const endDate = lastPlacedDate(finalPlacements);
+    const placement = tpl.template_type === "full_prep"
+      ? { mode: "new_prep" as const, prep: {} }
+      : { mode: "standalone_block" as const };
+
+    const beforeStamp = new Date(Date.now() - 1000).toISOString();
+    const { error: rpcErr } = await ctx.supabase.rpc("pl_assign_template_to_client", {
+      p_template_id: data.templateId,
+      p_client_id: data.clientId,
+      p_placement: placement as any,
+      p_name: null,
+      p_client_visible: visible,
+      p_start_date: startDate,
+      p_end_date: endDate,
+      p_selected_block_ids: blockKeys.length > 0 ? blockKeys : null,
+      p_start_from_block_id: null,
+    } as any);
+    if (rpcErr) throw new Error(rpcErr.message);
+
+    // Fetch newly created blocks + their weeks/days so we can apply scheduled_date per placement.
+    const { data: newBlocks } = await ctx.supabase
+      .from("pl_blocks")
+      .select("id, name, created_at, pl_weeks(id, week_index, pl_days(id, day_index))")
+      .eq("client_id", data.clientId)
+      .eq("source_template_id", data.templateId)
+      .gte("created_at", beforeStamp)
+      .order("created_at", { ascending: true });
+
+    const orderedBlocks = (newBlocks ?? []) as any[];
+    const blockIdByKey = new Map<string, string>();
+    blockKeys.forEach((key, i) => {
+      if (orderedBlocks[i]) blockIdByKey.set(key, orderedBlocks[i].id);
+    });
+
+    // Apply scheduled_date for each placement; null-date placements stay unscheduled.
+    for (const p of finalPlacements) {
+      const block = orderedBlocks.find((b) => b.id === blockIdByKey.get(p.blockKey));
+      if (!block) continue;
+      const weeks = (block.pl_weeks || []).slice().sort((a: any, b: any) => a.week_index - b.week_index);
+      const targetWeek = weeks[p.weekIndex];
+      if (!targetWeek) continue;
+      const dayList = (targetWeek.pl_days || []).slice().sort((a: any, b: any) => a.day_index - b.day_index);
+      const targetDay = dayList[p.dayIndex];
+      if (!targetDay || !p.date) continue;
+      await ctx.supabase
+        .from("pl_days")
+        .update({ scheduled_date: p.date, schedule_source: "planner" })
+        .eq("id", targetDay.id);
+    }
+
+    // Counts
+    let skippedCount = rawPlacements.length - finalPlacements.length;
+    let movedCount = 0, mergedCount = 0;
+    for (const dec of Object.values(data.conflictDecisions)) {
+      if (dec.action === "move_existing" || dec.action === "move_incoming") movedCount++;
+      else if (dec.action === "merge") mergedCount++;
+    }
+
+    const createdBlockIds = orderedBlocks.map((b) => b.id);
+    const { data: opRow, error: opErr } = await ctx.supabase
+      .from("pl_assignment_operations")
+      .insert({
+        client_id: data.clientId,
+        template_id: data.templateId,
+        actor_user_id: ctx.userId,
+        idempotency_key: data.idempotencyKey,
+        mode: `planner_${data.method}`,
+        selected_block_keys: blockKeys,
+        selected_week_keys: [],
+        selected_day_keys: finalPlacements.map((p) => p.dayKey),
+        selected_exercise_keys: data.selection.exerciseKeys,
+        assignment_method: data.method,
+        training_weekdays: data.trainingDays,
+        conflict_decisions: data.conflictDecisions as any,
+        publish_status: data.publishStatus,
+        publish_at: data.publishAt,
+        published_at: data.publishStatus === "published" ? new Date().toISOString() : null,
+        workouts_added: finalPlacements.filter((p) => p.date).length,
+        workouts_merged: mergedCount,
+        workouts_replaced: replacedCount,
+        workouts_skipped: skippedCount,
+        workouts_moved: movedCount,
+        created_block_ids: createdBlockIds,
+        template_schema_version: 2,
+        planner_payload: { summary, placements: finalPlacements, endDate },
+        status: "completed",
+      })
+      .select("id")
+      .single();
+    if (opErr) throw new Error(opErr.message);
+
+    await ctx.supabase.from("pl_bulk_operations").insert({
+      operation_id: opRow.id,
+      action: "planner_assign",
+      scope: "client_blocks",
+      source_ids: [],
+      destination_ids: [data.clientId],
+      created_ids: createdBlockIds,
+      meta: { templateId: data.templateId, placements: finalPlacements.length },
+      actor_user_id: ctx.userId,
+    });
+
+    return {
+      batchId: opRow.id,
+      createdBlockIds,
+      idempotent: false,
+      counts: {
+        added: finalPlacements.filter((p) => p.date).length,
+        replaced: replacedCount,
+        merged: mergedCount,
+        skipped: skippedCount,
+        moved: movedCount,
+      },
+    };
+  });
+
+// ----- Undo -----
+
+export const undoAssignmentBatchFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: any) => ({
+    batchId: String(d?.batchId ?? ""),
+    force: Boolean(d?.force),
+  }))
+  .handler(async ({ data, context }) => {
+    if (!data.batchId) throw new Error("batchId required");
+    const ctx = { supabase: context.supabase, userId: context.userId };
+    const { data: op } = await ctx.supabase
+      .from("pl_assignment_operations")
+      .select("id, client_id, created_block_ids, undone_at")
+      .eq("id", data.batchId)
+      .maybeSingle();
+    if (!op) throw new Error("Assignment batch not found");
+    if (op.undone_at) return { alreadyUndone: true, archived: 0 };
+    await authorizeClient(ctx, op.client_id);
+
+    const blockIds = (op.created_block_ids ?? []) as string[];
+    if (!data.force && blockIds.length > 0) {
+      const { data: weekRows } = await ctx.supabase
+        .from("pl_weeks").select("id").in("block_id", blockIds);
+      const weekIds = (weekRows ?? []).map((w: any) => w.id);
+      if (weekIds.length) {
+        const { data: dayRows } = await ctx.supabase
+          .from("pl_days").select("id").in("week_id", weekIds);
+        const dayIds = (dayRows ?? []).map((d: any) => d.id);
+        if (dayIds.length) {
+          const { count } = await ctx.supabase
+            .from("pl_row_results")
+            .select("id", { count: "exact", head: true })
+            .in("day_id", dayIds);
+          if ((count ?? 0) > 0) {
+            throw new Error("Client has logged results from this assignment. Re-run with force to undo anyway.");
+          }
+        }
+      }
+    }
+
+    if (blockIds.length) {
+      await ctx.supabase
+        .from("pl_blocks")
+        .update({ archived: true, archived_at: new Date().toISOString(), archived_by: ctx.userId, client_visible: false })
+        .in("id", blockIds);
+    }
+    await ctx.supabase
+      .from("pl_assignment_operations")
+      .update({ undone_at: new Date().toISOString(), undone_by: ctx.userId })
+      .eq("id", op.id);
+
+    return { ok: true, archived: blockIds.length };
+  });
+
+// ----- History list -----
+
+export const listAssignmentBatchesFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: any) => ({ clientId: String(d?.clientId ?? "") }))
+  .handler(async ({ data, context }) => {
+    if (!data.clientId) throw new Error("clientId required");
+    const ctx = { supabase: context.supabase, userId: context.userId };
+    await authorizeClient(ctx, data.clientId);
+    const { data: rows = [] } = await ctx.supabase
+      .from("pl_assignment_operations")
+      .select("id, template_id, mode, assignment_method, publish_status, created_at, workouts_added, workouts_replaced, workouts_skipped, workouts_moved, undone_at, created_block_ids, pl_templates(name)")
+      .eq("client_id", data.clientId)
+      .order("created_at", { ascending: false })
+      .limit(50);
+    return rows;
+  });
