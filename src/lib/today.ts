@@ -25,3 +25,25 @@ export function todayLocalISO(): string {
 export function toLocalISO(d: Date): string {
   return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 }
+
+/** Parse a database DATE / local ISO string as local midnight, never UTC. */
+export function parseLocalDate(value: string | Date | null | undefined): Date | null {
+  if (!value) return null;
+  if (value instanceof Date) {
+    if (isNaN(value.getTime())) return null;
+    return new Date(value.getFullYear(), value.getMonth(), value.getDate());
+  }
+  const match = String(value).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) {
+    const fallback = new Date(value);
+    if (isNaN(fallback.getTime())) return null;
+    return new Date(fallback.getFullYear(), fallback.getMonth(), fallback.getDate());
+  }
+  const [, y, m, d] = match;
+  return new Date(Number(y), Number(m) - 1, Number(d));
+}
+
+/** Today at local midnight. */
+export function localStartOfToday(): Date {
+  return parseLocalDate(new Date())!;
+}

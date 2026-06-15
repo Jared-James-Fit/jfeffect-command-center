@@ -1,5 +1,6 @@
-import { addDays, format, isWithinInterval, parseISO } from "date-fns";
+import { addDays, format, isWithinInterval } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
+import { localStartOfToday, parseLocalDate } from "@/lib/today";
 
 const sb = supabase as any;
 
@@ -10,7 +11,7 @@ export function computeWeekRange(
   weekDurationDays = 7,
 ): { start: Date; end: Date } | null {
   if (!blockStart) return null;
-  const base = typeof blockStart === "string" ? parseISO(blockStart) : (blockStart as Date);
+  const base = parseLocalDate(blockStart as any);
   if (!base || isNaN(base.getTime())) return null;
   const start = addDays(base, (weekIndex - 1) * weekDurationDays);
   const end = addDays(start, weekDurationDays - 1);
@@ -24,7 +25,7 @@ export function computeBlockEnd(
   weekDurationDays = 7,
 ): Date | null {
   if (!blockStart || !weeks) return null;
-  const base = typeof blockStart === "string" ? parseISO(blockStart) : (blockStart as Date);
+  const base = parseLocalDate(blockStart as any);
   if (!base || isNaN(base.getTime())) return null;
   return addDays(base, weeks * weekDurationDays - 1);
 }
@@ -44,8 +45,8 @@ export function weekDisplayRange(
 ): { start: Date; end: Date; source: "auto" | "manual" } | null {
   if (week.start_date && week.end_date) {
     return {
-      start: parseISO(week.start_date),
-      end: parseISO(week.end_date),
+      start: parseLocalDate(week.start_date)!,
+      end: parseLocalDate(week.end_date)!,
       source: (week.date_source as any) === "manual" ? "manual" : "auto",
     };
   }
@@ -56,8 +57,7 @@ export function weekDisplayRange(
 
 export function isCurrentWeek(range: { start: Date; end: Date } | null): boolean {
   if (!range) return false;
-  const now = new Date();
-  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const startOfDay = localStartOfToday();
   return isWithinInterval(startOfDay, { start: range.start, end: addDays(range.end, 1) });
 }
 

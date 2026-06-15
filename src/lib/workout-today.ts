@@ -1,5 +1,6 @@
-import { addDays, format, parseISO, startOfDay } from "date-fns";
+import { addDays, format } from "date-fns";
 import { weekDisplayRange } from "@/lib/block-dates";
+import { localStartOfToday, parseLocalDate } from "@/lib/today";
 
 export type WorkoutItem = { day: any; week: any; block: any; completion: any };
 
@@ -14,6 +15,31 @@ export type TodayState =
 
 const DAY_NAMES = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
 
+const WEEKDAY_ALIASES: Record<string, string> = {
+  sun: "Sunday", sunday: "Sunday",
+  mon: "Monday", monday: "Monday",
+  tue: "Tuesday", tues: "Tuesday", tuesday: "Tuesday",
+  wed: "Wednesday", weds: "Wednesday", wednesday: "Wednesday",
+  thu: "Thursday", thur: "Thursday", thurs: "Thursday", thursday: "Thursday",
+  fri: "Friday", friday: "Friday",
+  sat: "Saturday", saturday: "Saturday",
+};
+
+function normalizeWeekday(raw: unknown): string | null {
+  const key = String(raw ?? "").trim().toLowerCase();
+  return WEEKDAY_ALIASES[key] ?? null;
+}
+
+function normalizeWeekdays(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  const out: string[] = [];
+  for (const value of raw) {
+    const day = normalizeWeekday(value);
+    if (day && !out.includes(day)) out.push(day);
+  }
+  return out;
+}
+
 function isSameDay(a: Date, b: Date) {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 }
@@ -21,13 +47,13 @@ function isSameDay(a: Date, b: Date) {
 export function dayScheduledDate(item: WorkoutItem): Date | null {
   // 1) explicit scheduled_date on the day
   if (item.day?.scheduled_date) {
-    const d = parseISO(item.day.scheduled_date);
-    if (!isNaN(d.getTime())) return startOfDay(d);
+    const d = parseLocalDate(item.day.scheduled_date);
+    if (d) return d;
   }
   // 2) derive from week range + day_index, restricted to week.training_days if present
   const range = item.block && item.week ? weekDisplayRange(item.block, item.week) : null;
   if (!range) return null;
-  const trainingDays: string[] = item.week?.training_days ?? [];
+  const trainingDays: string[] = normalizeWeekdays(item.week?.training_days);
   if (trainingDays.length > 0) {
     // Find the Nth training-day within the week range that matches day_index ordering.
     const days: Date[] = [];
@@ -37,23 +63,25 @@ export function dayScheduledDate(item: WorkoutItem): Date | null {
       if (trainingDays.includes(DAY_NAMES[d.getDay()])) days.push(d);
     }
     const idx = Math.max(1, item.day?.day_index ?? 1) - 1;
-    if (days[idx]) return startOfDay(days[idx]);
+    if (days[idx]) return parseLocalDate(days[idx]);
   }
   // 3) fallback: linear distribution across the week
   const idx = Math.max(1, item.day?.day_index ?? 1) - 1;
-  return startOfDay(addDays(range.start, Math.min(6, idx)));
+  return parseLocalDate(addDays(range.start, Math.min(6, idx)));
 }
 
 function isRestDayToday(restDays: string[] | null | undefined): boolean {
-  if (!restDays || restDays.length === 0) return false;
-  const today = new Date();
-  return restDays.includes(DAY_NAMES[today.getDay()]);
+  const normalized = normalizeWeekdays(restDays);
+  if (normalized.length === 0) return false;
+  const today = localStartOfToday();
+  return normalized.includes(DAY_NAMES[today.getDay()]);
 }
 
 function isTrainingDayToday(trainingDays: string[] | null | undefined): boolean {
-  if (!trainingDays || trainingDays.length === 0) return false;
-  const today = new Date();
-  return trainingDays.includes(DAY_NAMES[today.getDay()]);
+  const normalized = normalizeWeekdays(trainingDays);
+  if (normalized.length === 0) return false;
+  const today = localStartOfToday();
+  return normalized.includes(DAY_NAMES[today.getDay()]);
 }
 
 export function computeTodayState(
@@ -61,7 +89,7 @@ export function computeTodayState(
   client: { preferred_rest_days?: string[] | null; preferred_training_days?: string[] | null } | null | undefined,
 ): TodayState {
   if (!items || items.length === 0) return { kind: "no_program" };
-  const today = startOfDay(new Date());
+  const today = localStartOfToday();
 
   const undone = items.filter((it) => !it.completion?.completed_at);
   if (undone.length === 0) {
