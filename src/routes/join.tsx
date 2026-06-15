@@ -383,16 +383,19 @@ function SignupJf() {
               )}
             </p>
 
-            {/* Desktop-only inline CTA. On mobile the sticky bar is the only CTA. */}
+            {/* Inline CTA — always rendered (mobile + desktop) so the
+                button is anchored in the form and can never float away or
+                disappear while the user is filling it out. The sticky
+                mobile bar is a secondary, scroll-revealed shortcut. */}
             <Button
               type="submit"
               size="lg"
               disabled={busy || !formValid}
-              className="mt-2 hidden h-12 text-base font-bold md:inline-flex"
+              className="mt-2 inline-flex w-full h-12 text-base font-bold md:w-auto"
             >
               {busy ? "Starting checkout…" : checkoutBlocked ? pausedLabel : ctaLabel}
             </Button>
-            <p className="hidden text-[11px] text-center text-muted-foreground md:block">
+            <p className="text-[11px] text-center text-muted-foreground">
               You'll be redirected to Stripe to enter card details. You won't be charged until the trial ends.
             </p>
             </fieldset>
