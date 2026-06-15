@@ -65,6 +65,7 @@ const AgreementsPanel = lazyDefault(() => import("@/components/agreements-panel"
 const AssignedProgramsCard = lazyDefault(() => import("@/components/assigned-programs-card"), "AssignedProgramsCard");
 const ClientWarmupCard = lazyDefault(() => import("@/components/client-warmup-card"), "ClientWarmupCard");
 const ClientBillingPanel = lazyDefault(() => import("@/components/admin/client-billing-panel"), "ClientBillingPanel");
+const GoalsSetupPanel = lazyDefault(() => import("@/components/clients/goals-setup-panel"), "GoalsSetupPanel");
 
 function TabFallback() {
   return <div className="md:col-span-3 p-6 text-sm text-muted-foreground">Loading…</div>;
@@ -150,13 +151,14 @@ function AssignedCoachSelect({ value, onChange }: { value: string | null; onChan
   );
 }
 
-const TAB_VALUES = ["summary", "training", "nutrition", "cardio", "metrics", "messages", "lift-videos", "documents", "sessions", "purchases", "billing", "agreements", "notes", "info", "account"] as const;
+const TAB_VALUES = ["summary", "goals-setup", "training", "nutrition", "cardio", "metrics", "messages", "lift-videos", "documents", "sessions", "purchases", "billing", "agreements", "notes", "info", "account"] as const;
 type TabValue = typeof TAB_VALUES[number];
 
 type SectionId = "overview" | "training" | "nutrition" | "communication" | "business" | "account";
 const SECTIONS: { id: SectionId; label: string; description: string; icon: ComponentType<any>; tabs: { value: TabValue; label: string }[] }[] = [
   { id: "overview", label: "Overview", description: "Snapshot & profile", icon: UserIcon, tabs: [
     { value: "summary", label: "Snapshot" },
+    { value: "goals-setup", label: "Goals & Setup" },
   ]},
   { id: "training", label: "Training", description: "Program, metrics, sessions, videos", icon: Dumbbell, tabs: [
     { value: "training", label: "Training Program" },
@@ -794,6 +796,12 @@ function ClientDetail() {
           <ClientDriveFolderPanel clientId={id} />
         </div>
         </div>
+        </TabsContent>
+
+        <TabsContent value="goals-setup" className="grid gap-6">
+          <Suspense fallback={<TabFallback />}>
+            <GoalsSetupPanel clientId={id} />
+          </Suspense>
         </TabsContent>
 
         <TabsContent value="training" className="grid gap-6 md:grid-cols-3">

@@ -1,64 +1,123 @@
-## Goal
-Rebuild `/portal` as a mobile-first, scannable home: one clear "what to do next" above the fold, large quick actions, compact action centre, slimmer training block + bodyweight, and move low-priority info to `More`. No backend, schema, route or permission changes — only presentation and IA.
+## Goals & Setup — Client Profile Section
 
-## Scope of changes (files)
+A new mobile-first questionnaire surfaced on every client profile, plus a coach-facing summary panel, private notes, and change notifications. Existing programs, workouts, and nutrition targets stay untouched.
 
-1. **`src/routes/_authenticated/portal/index.tsx`** — full UI rewrite of `PortalHome`. Reuse existing queries (client, forms, agreements, purchases, phases, coachUpdates, appointments) untouched. Replace layout with the new hierarchy below. Keep `ManualCheckInReviewModal`, `ClientActionRequestModal`, `UpcomingEventsPanel`, `HomeScreenSetupCard` rendering (they're gates/popups, not visible cards). Drop large inline `LogBodyweightCard`, "Your Coaching", "Billing & Subscription", oversized "Today/This Week" horizontal scroller, and the dashed appointment empty-state from the dashboard.
+---
 
-2. **`src/components/client-pov-banner.tsx`** — compact 56px sticky banner: eye icon + "Viewing as {name}" + small "Client POV" chip + Exit button. Single row, no truncation of name, no oversized secondary row.
+### 1. Data model (one migration)
 
-3. **`src/lib/admin-nav.ts`** — add `clientBottomNav` (Home, Workouts, Messages, Nutrition, More) that the portal shell uses as `bottomItems`. Keep `clientNav` intact for the side drawer (so nothing is removed). Rename the first item label to `Home`.
+New tables, all RLS-enabled with GRANTs:
 
-4. **`src/routes/_authenticated/portal/route.tsx`** — pass the new `clientBottomNav` into `AppShell` via the existing `bottomItems` prop.
+- `client_goals_setup` — one row per client, stores all answers as structured columns + JSONB for multi-select lists.
+  - `client_id` (FK clients, unique)
+  - `main_goal` (enum-ish text), `main_goal_other` (text)
+  - `goal_target` (text)
+  - `training_days_per_week` (int 2–6)
+  - `available_weekdays` (text[]) — mon..sun
+  - `workout_length_minutes` (int)
+  - `training_experience` (text)
+  - `training_styles` (text[])
+  - `training_location` (text)
+  - `equipment` (text[]) — flat for single location
+  - `equipment_by_location` (jsonb) — `{ locationLabel: string[] }` when multi-location
+  - `nutrition_goal` (text)
+  - `nutrition_preference` (text)
+  - `food_restrictions_has` (bool), `food_restrictions_details` (text)
+  - `nutrition_challenges` (text[]) — max 3 enforced in app + trigger
+  - `injuries_has` (bool), `injuries_details` (text)
+  - `final_notes` (text)
+  - `completed_at`, `updated_at`, `last_reviewed_at`, `last_reviewed_by`
+  - `update_requested_at`, `update_requested_by`
 
-5. **`src/routes/_authenticated/portal/account.tsx`** (light touch) — add a small "Account & Coaching" section header with rows linking to Coaching details, Billing/Purchases, Agreements, Notifications, Help. Only if the current account page lacks them; otherwise skip.
+- `client_goals_setup_notes` — private coach notes (never visible to client).
+  - `id`, `client_id`, `author_id`, `body`, `created_at`
 
-6. **New: `src/components/portal/bodyweight-summary-card.tsx`** — compact summary (latest, 7d avg, weekly change, goal, sparkline) + "Log Weight" button that opens a bottom-sheet (Sheet from shadcn) wrapping the existing log form logic. Reuses `progress_metrics` query and `useBodyweightGoal`. Empty state = single "Log first weight" button, no big chart.
+- `client_goals_setup_audit` — change history (which fields changed, when, by whom). Powers coach notifications.
 
-7. **New: `src/components/portal/primary-action-card.tsx`** — derives today's #1 action from existing data (next workout via existing workout-today helpers, then overdue/due check-in, then unread coach message, then appointment today, else rest day). Large tappable card.
+- Trigger: after update of notify-worthy columns (main_goal, training availability, equipment/location, injuries, nutrition_goal, food_restrictions, goal_target [for competition date]) → insert a row in existing `tasks` (or `coach_followups`) for the assigned coach.
 
-8. **New: `src/components/portal/quick-actions-grid.tsx`** — 2-col grid: Workouts, Message Coach, Submit Check-In, Log Bodyweight (opens sheet), Upload Lift Video, Nutrition. Tap targets ≥56px.
+RLS:
+- `client_goals_setup`: client can SELECT/INSERT/UPDATE their own row; assigned coach + admin via existing `has_role` / coach-of-client check.
+- `client_goals_setup_notes`: coach + admin only — no client policy.
+- `client_goals_setup_audit`: coach + admin SELECT only.
 
-9. **New: `src/components/portal/action-centre.tsx`** — refactor of the existing `updates[]` array into a vertical list (no horizontal scroller). Rows with icon + title + due chip + chevron, sorted overdue→urgent→info. "All caught up" compact row when empty.
+### 2. Server functions (`src/lib/client-goals/goals.functions.ts`)
 
-10. **New: `src/components/portal/training-block-card.tsx`** — compact version of the existing active-phase card (chip + week X of Y + % + days remaining + progress bar + "View Program" button). Full card tappable.
+- `getClientGoalsSetup({ clientId })` — coach/admin or self.
+- `upsertClientGoalsSetup({ clientId, patch })` — partial save (Save & continue later). Validates with zod. Writes audit rows for changed fields. Triggers notifications via DB trigger.
+- `markGoalsReviewed({ clientId })` — coach/admin only.
+- `requestGoalsUpdate({ clientId, message? })` — coach/admin only; sets `update_requested_at`, creates a client action request.
+- `listGoalsNotes({ clientId })` / `addGoalsNote({ clientId, body })` — coach/admin only.
 
-## New dashboard order (mobile)
+All use `requireSupabaseAuth`; role checks via `has_role` and the existing coach-of-client helper.
 
-```
-[compact POV banner — admin impersonation only]
-[Greeting row: avatar · "Good morning, {first}" + bell badge]
-[Today's Primary Action card]
-[Quick Actions 2x3 grid]
-[Action Centre list — only if items, else compact "all caught up"]
-[Training Block card — only if activePhase]
-[Bodyweight Summary card]
-[Upcoming Appointment compact row — only if appointment exists]
-[Small secondary links: Purchases · Agreements · Account]
-```
+### 3. UI — client side (mobile-first)
 
-Bottom safe-area padding ≥ 96px so content never sits under the fixed bar.
+Route: `src/routes/_authenticated/portal/goals-setup.tsx`
 
-## Data preservation
+- Stepped flow (7 steps matching the spec): Goals → Training Availability → Experience → Gym/Equipment → Nutrition → Injuries → Final notes.
+- Big tap targets, single-select chip grids, multi-select chip grids, weekday pills, length slider-as-chips.
+- Sticky bottom bar: **Back / Save & continue later / Next**. Each step autosaves on Next.
+- "Other" reveals a small text input inline.
+- Multi-location: if `training_location = "Multiple locations"`, show "Add location" rows, each with its own equipment chip grid → saved to `equipment_by_location`.
+- Entry point on portal dashboard:
+  - If incomplete → prominent **Goals & Setup incomplete** card linking to the flow.
+  - If complete → "Update Goals & Setup" link in `/portal/account`.
 
-- All `useQuery` calls keep their existing keys, filters and shapes.
-- No mutations changed. Bodyweight insert path reuses the same `progress_metrics` insert as today's `LogBodyweightCard`.
-- Existing routes (`/portal/workouts`, `/portal/check-ins`, `/portal/messages`, etc.) untouched.
-- "Your Coaching" + "Billing & Subscription" + full Bodyweight history are still reachable: bodyweight via "View History" (`/portal/progress-metrics`), coaching/billing via `/portal/account` and `/portal/purchases`.
+### 4. UI — coach side
 
-## Out of scope (explicit)
+New tab on the client profile: **Goals & Setup**
+File: `src/components/clients/goals-setup-panel.tsx`, mounted from the existing client profile route.
 
-- No schema migrations.
-- No edits to lift-review, check-in submission, workout entry, or auth flows.
-- Desktop layout: the new components are responsive (sm: grid spans, md: side-by-side for training+bodyweight); admin-only screens unchanged.
-- The full feature parity of the old inline `LogBodyweightCard` (range tabs, large chart, goal editor) stays available on `/portal/progress-metrics`; the dashboard only shows summary + log sheet.
+Top: **Client Profile Summary** card (read-only chips/rows) showing every field listed in the spec + last updated date.
 
-## Verification
+Buttons:
+- **Edit** → opens the same stepped flow in a sheet, prefilled (coach can edit on client's behalf).
+- **Request client update** → opens dialog with optional message; calls `requestGoalsUpdate`.
+- **Mark reviewed** → calls `markGoalsReviewed`; shows reviewer + timestamp.
+- **Add private coach note** → inline composer, list of past notes below.
 
-- `bunx tsc --noEmit` clean.
-- Manual smoke via Playwright at 375px width: greeting → primary action → quick actions visible without scroll; bottom sheet opens for Log Weight; POV banner ≤64px; no bottom-nav overlap.
+Injuries are rendered with a `warning` badge when `injuries_has = true`.
 
-## Risks / things to confirm
+### 5. Onboarding integration
 
-- The "primary action — workout today" derivation: I'll reuse `src/lib/workout-today.ts` if it exposes the next scheduled day; otherwise fall back to "View this week's program" from the active phase. No new queries against workout tables beyond what's already cached.
-- Side drawer `clientNav` stays 18 items — only the **bottom** nav is reduced to 5. This satisfies "max 5 bottom items" without hiding any existing page.
+- Add a "Goals & Setup" step to the existing client onboarding flow (non-blocking — they can skip and finish later).
+- For existing clients (no row in `client_goals_setup`): no forced redirect; profile summary shows **"Goals & Setup incomplete"** with a CTA.
+
+### 6. Equipment-aware warnings (hook only, no behavior change to existing data)
+
+- Export a helper `useClientEquipmentSet(clientId)` returning the union of equipment across locations.
+- Wire a non-blocking warning chip in the program planner's exercise picker when an exercise has a required-equipment tag missing from the client's set. Existing programs/workouts/targets remain untouched.
+
+### 7. Files (new / edited)
+
+**New**
+- `supabase/migrations/<ts>_client_goals_setup.sql`
+- `src/lib/client-goals/goals.functions.ts`
+- `src/lib/client-goals/schema.ts` (zod + option constants)
+- `src/components/client-goals/GoalsSetupFlow.tsx` (stepped flow, shared client + coach edit)
+- `src/components/client-goals/steps/*.tsx` (one per step)
+- `src/components/client-goals/GoalsSummaryCard.tsx`
+- `src/components/clients/goals-setup-panel.tsx` (coach tab content)
+- `src/routes/_authenticated/portal/goals-setup.tsx`
+
+**Edited**
+- Client profile route → add "Goals & Setup" tab.
+- Portal dashboard → add incomplete CTA card.
+- `src/routes/_authenticated/portal/account.tsx` → "Update Goals & Setup" link.
+- Onboarding flow → add optional Goals & Setup step.
+
+### 8. Out of scope (confirming)
+
+- No changes to existing assigned programs, scheduled workouts, completed workouts, or nutrition targets.
+- No automatic regeneration of plans from these answers — coach-facing summaries, filters, and warnings only.
+
+---
+
+### Questions before I build
+
+1. **Coach notifications**: do you want change-notifications to land in the existing **Tasks** queue, in **Coach followups**, or as a chat DM to the assigned coach? (Default plan: a Task assigned to the coach.)
+2. **"Request client update"**: should this also trigger an email/SMS to the client, or only show as an in-app banner in their portal? (Default plan: in-app banner + existing notification system, no email.)
+3. **Multi-location equipment**: ok to ask for short location labels ("Home", "Hotel gym", etc.) per location, or do you want a fixed list?
+
+I'll proceed once you confirm or pick options.

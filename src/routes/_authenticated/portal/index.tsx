@@ -4,7 +4,8 @@ import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
 import { usePortalUserId } from "@/lib/client-impersonation";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Bell, ClipboardCheck, ShieldAlert, MessageCircle, Mail, CheckCheck, AlertTriangle, Dumbbell, Settings, Receipt, FileSignature, Calendar as CalendarIcon } from "lucide-react";
+import { Bell, ClipboardCheck, ShieldAlert, MessageCircle, Mail, CheckCheck, AlertTriangle, Dumbbell, Settings, Receipt, FileSignature, Calendar as CalendarIcon, Target } from "lucide-react";
+import { isGoalsSetupComplete, type ClientGoalsSetupRow } from "@/lib/client-goals/schema";
 import type { TrainingPhase } from "@/lib/training-phases";
 import { derivePhase } from "@/lib/training-phases";
 import { toast } from "sonner";
@@ -89,6 +90,19 @@ function PortalHome() {
         .from("training_phases").select("*").eq("client_id", client!.id)
         .order("start_date", { ascending: false });
       return (data ?? []) as TrainingPhase[];
+    },
+  });
+
+  const { data: goalsSetup } = useQuery({
+    queryKey: ["client-goals-setup", client?.id],
+    enabled: !!client?.id,
+    queryFn: async () => {
+      const { data } = await (supabase as any)
+        .from("client_goals_setup")
+        .select("*")
+        .eq("client_id", client!.id)
+        .maybeSingle();
+      return data as ClientGoalsSetupRow | null;
     },
   });
 
@@ -209,6 +223,27 @@ function PortalHome() {
 
   // Build Action Centre items from existing data only.
   const actions: ActionItem[] = [];
+  if (goalsSetup?.update_requested_at) {
+    actions.push({
+      key: "goals-update-requested",
+      icon: Target,
+      tone: "primary",
+      title: "Update your Goals & Setup",
+      message: goalsSetup.update_request_message || "Your coach asked you to review your answers.",
+      to: "/portal/goals-setup",
+      chip: "Action",
+    });
+  } else if (!isGoalsSetupComplete(goalsSetup ?? null)) {
+    actions.push({
+      key: "goals-incomplete",
+      icon: Target,
+      tone: "warning",
+      title: "Goals & Setup incomplete",
+      message: "Spend ~2 minutes so your coach can build the right plan for you.",
+      to: "/portal/goals-setup",
+      chip: "Setup",
+    });
+  }
   if (billingNeedsAction) {
     actions.push({
       key: `billing-${primaryPurchase.id}`,

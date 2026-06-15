@@ -53,6 +53,7 @@ import { Route as AuthenticatedPortalNutritionTargetsRouteImport } from './route
 import { Route as AuthenticatedPortalMessagesRouteImport } from './routes/_authenticated/portal/messages'
 import { Route as AuthenticatedPortalMediaRouteImport } from './routes/_authenticated/portal/media'
 import { Route as AuthenticatedPortalLiftVideosRouteImport } from './routes/_authenticated/portal/lift-videos'
+import { Route as AuthenticatedPortalGoalsSetupRouteImport } from './routes/_authenticated/portal/goals-setup'
 import { Route as AuthenticatedPortalExercisesRouteImport } from './routes/_authenticated/portal/exercises'
 import { Route as AuthenticatedPortalEventsRouteImport } from './routes/_authenticated/portal/events'
 import { Route as AuthenticatedPortalDocumentsRouteImport } from './routes/_authenticated/portal/documents'
@@ -469,6 +470,12 @@ const AuthenticatedPortalLiftVideosRoute =
   AuthenticatedPortalLiftVideosRouteImport.update({
     id: '/lift-videos',
     path: '/lift-videos',
+    getParentRoute: () => AuthenticatedPortalRouteRoute,
+  } as any)
+const AuthenticatedPortalGoalsSetupRoute =
+  AuthenticatedPortalGoalsSetupRouteImport.update({
+    id: '/goals-setup',
+    path: '/goals-setup',
     getParentRoute: () => AuthenticatedPortalRouteRoute,
   } as any)
 const AuthenticatedPortalExercisesRoute =
@@ -1698,6 +1705,7 @@ export interface FileRoutesByFullPath {
   '/portal/documents': typeof AuthenticatedPortalDocumentsRoute
   '/portal/events': typeof AuthenticatedPortalEventsRouteWithChildren
   '/portal/exercises': typeof AuthenticatedPortalExercisesRoute
+  '/portal/goals-setup': typeof AuthenticatedPortalGoalsSetupRoute
   '/portal/lift-videos': typeof AuthenticatedPortalLiftVideosRoute
   '/portal/media': typeof AuthenticatedPortalMediaRoute
   '/portal/messages': typeof AuthenticatedPortalMessagesRoute
@@ -1925,6 +1933,7 @@ export interface FileRoutesByTo {
   '/portal/documents': typeof AuthenticatedPortalDocumentsRoute
   '/portal/events': typeof AuthenticatedPortalEventsRouteWithChildren
   '/portal/exercises': typeof AuthenticatedPortalExercisesRoute
+  '/portal/goals-setup': typeof AuthenticatedPortalGoalsSetupRoute
   '/portal/lift-videos': typeof AuthenticatedPortalLiftVideosRoute
   '/portal/media': typeof AuthenticatedPortalMediaRoute
   '/portal/messages': typeof AuthenticatedPortalMessagesRoute
@@ -2159,6 +2168,7 @@ export interface FileRoutesById {
   '/_authenticated/portal/documents': typeof AuthenticatedPortalDocumentsRoute
   '/_authenticated/portal/events': typeof AuthenticatedPortalEventsRouteWithChildren
   '/_authenticated/portal/exercises': typeof AuthenticatedPortalExercisesRoute
+  '/_authenticated/portal/goals-setup': typeof AuthenticatedPortalGoalsSetupRoute
   '/_authenticated/portal/lift-videos': typeof AuthenticatedPortalLiftVideosRoute
   '/_authenticated/portal/media': typeof AuthenticatedPortalMediaRoute
   '/_authenticated/portal/messages': typeof AuthenticatedPortalMessagesRoute
@@ -2393,6 +2403,7 @@ export interface FileRouteTypes {
     | '/portal/documents'
     | '/portal/events'
     | '/portal/exercises'
+    | '/portal/goals-setup'
     | '/portal/lift-videos'
     | '/portal/media'
     | '/portal/messages'
@@ -2620,6 +2631,7 @@ export interface FileRouteTypes {
     | '/portal/documents'
     | '/portal/events'
     | '/portal/exercises'
+    | '/portal/goals-setup'
     | '/portal/lift-videos'
     | '/portal/media'
     | '/portal/messages'
@@ -2853,6 +2865,7 @@ export interface FileRouteTypes {
     | '/_authenticated/portal/documents'
     | '/_authenticated/portal/events'
     | '/_authenticated/portal/exercises'
+    | '/_authenticated/portal/goals-setup'
     | '/_authenticated/portal/lift-videos'
     | '/_authenticated/portal/media'
     | '/_authenticated/portal/messages'
@@ -3314,6 +3327,13 @@ declare module '@tanstack/react-router' {
       path: '/lift-videos'
       fullPath: '/portal/lift-videos'
       preLoaderRoute: typeof AuthenticatedPortalLiftVideosRouteImport
+      parentRoute: typeof AuthenticatedPortalRouteRoute
+    }
+    '/_authenticated/portal/goals-setup': {
+      id: '/_authenticated/portal/goals-setup'
+      path: '/goals-setup'
+      fullPath: '/portal/goals-setup'
+      preLoaderRoute: typeof AuthenticatedPortalGoalsSetupRouteImport
       parentRoute: typeof AuthenticatedPortalRouteRoute
     }
     '/_authenticated/portal/exercises': {
@@ -5214,6 +5234,7 @@ interface AuthenticatedPortalRouteRouteChildren {
   AuthenticatedPortalDocumentsRoute: typeof AuthenticatedPortalDocumentsRoute
   AuthenticatedPortalEventsRoute: typeof AuthenticatedPortalEventsRouteWithChildren
   AuthenticatedPortalExercisesRoute: typeof AuthenticatedPortalExercisesRoute
+  AuthenticatedPortalGoalsSetupRoute: typeof AuthenticatedPortalGoalsSetupRoute
   AuthenticatedPortalLiftVideosRoute: typeof AuthenticatedPortalLiftVideosRoute
   AuthenticatedPortalMediaRoute: typeof AuthenticatedPortalMediaRoute
   AuthenticatedPortalMessagesRoute: typeof AuthenticatedPortalMessagesRoute
@@ -5242,6 +5263,7 @@ const AuthenticatedPortalRouteRouteChildren: AuthenticatedPortalRouteRouteChildr
     AuthenticatedPortalDocumentsRoute: AuthenticatedPortalDocumentsRoute,
     AuthenticatedPortalEventsRoute: AuthenticatedPortalEventsRouteWithChildren,
     AuthenticatedPortalExercisesRoute: AuthenticatedPortalExercisesRoute,
+    AuthenticatedPortalGoalsSetupRoute: AuthenticatedPortalGoalsSetupRoute,
     AuthenticatedPortalLiftVideosRoute: AuthenticatedPortalLiftVideosRoute,
     AuthenticatedPortalMediaRoute: AuthenticatedPortalMediaRoute,
     AuthenticatedPortalMessagesRoute: AuthenticatedPortalMessagesRoute,
