@@ -34,7 +34,6 @@ function blockProgress(start: string | null, end: string | null) {
 
 export function ClientRow({ r, onArchive }: { r: DirectoryRow; onArchive?: (r: DirectoryRow) => void }) {
   const badges = rowBadges(r);
-  const ActionIcon = ACTION_ICON(r.next_action.kind);
   const urgent = r.priority <= 3;
   const prog = blockProgress(r.block_start, r.block_end);
   const range = fmtRange(r.block_start, r.block_end);
