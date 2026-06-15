@@ -60,6 +60,51 @@ import {
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { ArchiveRestore, Archive as ArchiveIcon, Pencil } from "lucide-react";
 
+// ---------------- Day focus + expand/collapse bus ----------------
+// Module-level event bus that lets the program builder know which day
+// the coach is currently working on, broadcast "expand all" /
+// "collapse all" pulses to every row in that day, and auto-collapse
+// the previously-active day when focus moves to a new one.
+type DayBusEvent = "expand" | "collapse";
+const dayBus = (() => {
+  const listeners: Record<string, Set<(ev: DayBusEvent) => void>> = {};
+  const activeSubs = new Set<(k: string | null) => void>();
+  let active: string | null = null;
+  return {
+    on(key: string, cb: (ev: DayBusEvent) => void) {
+      const set = (listeners[key] ||= new Set());
+      set.add(cb);
+      return () => { set.delete(cb); };
+    },
+    emit(key: string, ev: DayBusEvent) {
+      listeners[key]?.forEach((fn) => fn(ev));
+    },
+    getActive() { return active; },
+    setActive(key: string | null) {
+      if (active === key) return;
+      const prev = active;
+      active = key;
+      // Auto-collapse all rows in the day we just left.
+      if (prev) listeners[prev]?.forEach((fn) => fn("collapse"));
+      activeSubs.forEach((fn) => fn(active));
+    },
+    subscribeActive(cb: (k: string | null) => void) {
+      activeSubs.add(cb);
+      return () => { activeSubs.delete(cb); };
+    },
+  };
+})();
+
+function useDayActive(dayKey: string | undefined): boolean {
+  const [isActive, setIsActive] = useState(() => !!dayKey && dayBus.getActive() === dayKey);
+  useEffect(() => {
+    if (!dayKey) return;
+    setIsActive(dayBus.getActive() === dayKey);
+    return dayBus.subscribeActive((k) => setIsActive(k === dayKey));
+  }, [dayKey]);
+  return isActive;
+}
+
 // ---------------- Fast local-state cell (instant typing, debounced commit) ---
 // Keeps keystrokes local so parent rows/days/blocks don't re-render per digit.
 // Commits to parent on blur, Enter, or after a short pause.
