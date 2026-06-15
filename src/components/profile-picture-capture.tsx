@@ -179,13 +179,30 @@ export function ProfilePictureCapture({
       {/* Small status avatar (only when NOT actively capturing) */}
       {!hidePreviewThumbnail && !streaming && !preview && (
         <div className="flex justify-center">
-          <div className="h-20 w-20 overflow-hidden rounded-full border border-border bg-secondary/40">
-            {signedUrl ? (
-              <img src={signedUrl} alt="Current" className="h-full w-full object-cover" />
-            ) : (
-              <div className="grid h-full w-full place-items-center text-xs text-muted-foreground">No photo</div>
-            )}
-          </div>
+          {signedUrl ? (
+            <Dialog>
+              <DialogTrigger asChild>
+                <button
+                  type="button"
+                  className="h-20 w-20 overflow-hidden rounded-full border border-border bg-secondary/40 cursor-zoom-in transition-opacity hover:opacity-90"
+                  aria-label="View profile picture"
+                >
+                  <img src={signedUrl} alt="Current" className="h-full w-full object-cover" />
+                </button>
+              </DialogTrigger>
+              <DialogContent className="max-w-2xl p-2 border-none bg-transparent shadow-none">
+                <img
+                  src={signedUrl}
+                  alt="Profile picture"
+                  className="w-full rounded-xl object-contain shadow-2xl"
+                />
+              </DialogContent>
+            </Dialog>
+          ) : (
+            <div className="h-20 w-20 overflow-hidden rounded-full border border-border bg-secondary/40 grid place-items-center text-xs text-muted-foreground">
+              No photo
+            </div>
+          )}
         </div>
       )}
 
