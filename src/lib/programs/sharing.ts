@@ -11,6 +11,7 @@ export type ShareDestination =
   | "coach"
   | "team_submission"
   | "membership_submission"
+  | "membership"
   | "public_submission";
 
 export type ShareStatus =
@@ -308,6 +309,7 @@ export function destinationLabel(d: ShareDestination): string {
     case "coach": return "Coach";
     case "team_submission": return "Team Library";
     case "membership_submission": return "Membership";
+    case "membership": return "Membership Library";
     case "public_submission": return "Public";
   }
 }
