@@ -2725,21 +2725,10 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
                 <div className="flex items-stretch gap-1">
                   {(row as any).measurement_type === "time" ? (
                     <>
-                      <RowCell
-                        dataField="reps"
-                        className={cn("flex-1 text-sm font-semibold tabular-nums text-center", h, inputCls)}
-                        placeholder="45 sec, 1:30, 2 min"
-                        value={(row as any).duration_seconds != null ? formatDuration(Number((row as any).duration_seconds)) : ""}
-                        onCommit={(v) => {
-                          const raw = (v ?? "").trim();
-                          if (!raw) { setRow({ ...row, duration_seconds: null }); return; }
-                          const secs = parseDurationInput(raw);
-                          if (secs == null) {
-                            toast.error("Enter a valid duration (e.g. 30, 1:30, 2 min)");
-                            return;
-                          }
-                          setRow({ ...row, duration_seconds: secs });
-                        }}
+                      <DurationInput
+                        valueSeconds={(row as any).duration_seconds ?? null}
+                        onChange={(secs) => setRow({ ...row, duration_seconds: secs })}
+                        compact
                       />
                       <CountdownTimerButton seconds={(row as any).duration_seconds} compact />
                     </>
