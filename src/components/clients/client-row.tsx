@@ -320,6 +320,24 @@ function AssignmentStatusStrip({
           {prog && <Progress value={prog.pct} className="h-1.5" />}
         </>
       )}
+      {r.next_block_id && (
+        <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+          <ArrowRight className="h-3 w-3 shrink-0" aria-hidden />
+          <span className="truncate">
+            Up next: <span className="text-foreground font-medium">{r.next_block_name ?? "Next block"}</span>
+            {r.next_block_start && (
+              <span className="ml-1 text-muted-foreground">
+                · {(() => {
+                  try {
+                    const days = differenceInDays(parseISO(r.next_block_start), new Date());
+                    return days <= 0 ? "starts today" : `in ${days}d`;
+                  } catch { return ""; }
+                })()}
+              </span>
+            )}
+          </span>
+        </div>
+      )}
       <ClientQuickSheet
         kind={sheet}
         clientId={r.id}
