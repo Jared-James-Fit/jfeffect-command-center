@@ -35,7 +35,7 @@ export function AssignmentHistoryPanel({ clientId }: { clientId: string }) {
     }
   };
 
-  if (!rows.length) {
+  if (!rows || !(rows as any[]).length) {
     return <Card className="p-4 text-sm text-muted-foreground">No planner assignments yet.</Card>;
   }
 
