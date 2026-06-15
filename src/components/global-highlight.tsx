@@ -13,7 +13,15 @@ export function GlobalHighlight() {
     select: (s) => s.location.search as Record<string, unknown> | undefined,
   });
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const raw = typeof search?.highlight === "string" ? (search.highlight as string).trim() : "";
+  const urlTerm = typeof search?.highlight === "string" ? (search.highlight as string).trim() : "";
+  let storageTerm = "";
+  if (typeof window !== "undefined" && !urlTerm) {
+    try {
+      const v = window.sessionStorage.getItem("gh:term");
+      if (v) storageTerm = v;
+    } catch {}
+  }
+  const raw = urlTerm || storageTerm;
 
   useEffect(() => {
     if (!raw) return;
@@ -84,6 +92,7 @@ export function GlobalHighlight() {
     return () => {
       cancelled = true;
       window.clearTimeout(t);
+      try { window.sessionStorage.removeItem("gh:term"); } catch {}
       document.querySelectorAll("mark[data-gh-mark]").forEach((el) => {
         const parent = el.parentNode;
         if (!parent) return;
