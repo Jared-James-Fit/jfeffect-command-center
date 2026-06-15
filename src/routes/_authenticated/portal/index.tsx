@@ -15,8 +15,6 @@ import { listFormsForClient, pickWeeklyCheckInForm } from "@/lib/native-forms";
 import { ManualCheckInReviewModal } from "@/components/manual-check-in-review-modal";
 import { ClientActionRequestModal } from "@/components/client-action-request-modal";
 import { UpcomingEventsPanel } from "@/components/events/upcoming-events-panel";
-import { SmartTodayCard } from "@/components/smart-today-card";
-import { getClientWorkouts } from "@/lib/pl-programs";
 import { QuickActionsGrid } from "@/components/portal/quick-actions-grid";
 import { ActionCentre, type ActionItem } from "@/components/portal/action-centre";
 import { TrainingBlockCard } from "@/components/portal/training-block-card";
@@ -181,16 +179,6 @@ function PortalHome() {
   }) ?? phases.find((p) => derivePhase(p).state === "upcoming") ?? null;
 
   const qc = useQueryClient();
-
-  // Workout items power the "Today's primary action" card via SmartTodayCard.
-  const { data: workoutItems = [] } = useQuery({
-    queryKey: ["my-workouts", client?.id],
-    enabled: !!client?.id,
-    queryFn: async () => {
-      const items = await getClientWorkouts(client!.id);
-      return (items as any[]).filter((it) => it.day?.id);
-    },
-  });
 
   // Compact upcoming appointment (single, only if within ~14 days).
   const fetchPortalAppointments = useServerFn(listMyPortalAppointments);
@@ -383,14 +371,9 @@ function PortalHome() {
           unreadCount={unreadMsgs.length}
         />
 
-        {/* 2 — Today's primary action */}
-        {client && workoutItems.length > 0 ? (
-          <div className="animate-fade-in">
-            <SmartTodayCard items={workoutItems as any[]} clientId={client.id} />
-          </div>
-        ) : clientSettled && !client ? (
-          <NoProfileCard />
-        ) : null}
+        {/* 2 — Profile-missing fallback (workouts moved off the dashboard
+            for perf — clients reach training via Quick Actions / nav). */}
+        {clientSettled && !client ? <NoProfileCard /> : null}
 
         {/* 3 — Quick Actions */}
         {client && (
