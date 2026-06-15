@@ -582,6 +582,15 @@ function WorkoutDay() {
 
   // Post-workout feedback sheet state.
   const [feedbackOpen, setFeedbackOpen] = useState(false);
+  // When the client clicks "Finish", we stage the completion payload and
+  // open the feedback sheet. The workout is NOT marked complete until the
+  // feedback is actually submitted — feedback is now a hard gate.
+  const [pendingFinalize, setPendingFinalize] = useState<null | {
+    completionId?: string;
+    startedAt: string;
+    durationMin: number;
+    notes: string | null;
+  }>(null);
   const { data: existingFeedback } = useQuery({
     queryKey: ["pl-workout-feedback", completion?.id],
     enabled: !!completion?.id,
