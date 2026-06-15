@@ -1,4 +1,5 @@
 import { Link } from "@tanstack/react-router";
+import { useState } from "react";
 import {
   Dumbbell, Plus, BookOpen, CalendarDays, Apple, HeartPulse,
   MessageSquare, ClipboardCheck, CreditCard, User, Zap, Eye,
@@ -10,11 +11,14 @@ import {
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { DirectoryRow } from "@/lib/clients-directory.functions";
+import { AssignProgramDialog } from "./assign-program-dialog";
 
 /** Compact "Quick Actions" launcher for a client row. */
 export function QuickActionsMenu({ r }: { r: DirectoryRow }) {
   const hasProgram = !!r.block_id;
+  const [assignOpen, setAssignOpen] = useState(false);
   return (
+    <>
     <DropdownMenu>
       <Tooltip>
         <TooltipTrigger asChild>
@@ -54,10 +58,8 @@ export function QuickActionsMenu({ r }: { r: DirectoryRow }) {
             </DropdownMenuItem>
           </>
         ) : (
-          <DropdownMenuItem asChild>
-            <Link to="/admin/program-assign/$clientId" params={{ clientId: r.id }} className="flex items-center gap-2">
-              <Dumbbell className="h-4 w-4" /> Assign Program
-            </Link>
+          <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setAssignOpen(true); }}>
+            <Dumbbell className="mr-2 h-4 w-4" /> Assign Program
           </DropdownMenuItem>
         )}
         <DropdownMenuItem asChild>
@@ -110,6 +112,13 @@ export function QuickActionsMenu({ r }: { r: DirectoryRow }) {
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
+    <AssignProgramDialog
+      open={assignOpen}
+      onOpenChange={setAssignOpen}
+      clientId={r.id}
+      clientName={r.full_name}
+    />
+    </>
   );
 }
 
@@ -123,7 +132,9 @@ export function ClientMoreMenu({
   trigger: React.ReactNode;
   onArchive?: (r: DirectoryRow) => void;
 }) {
+  const [assignOpen, setAssignOpen] = useState(false);
   return (
+    <>
     <DropdownMenu>
       <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-64">
@@ -141,17 +152,17 @@ export function ClientMoreMenu({
 
         <DropdownMenuSeparator />
         <DropdownMenuLabel className="text-xs">Training</DropdownMenuLabel>
-        <DropdownMenuItem asChild>
-          {r.block_id ? (
+        {r.block_id ? (
+          <DropdownMenuItem asChild>
             <Link to="/admin/client-programs/$clientId" params={{ clientId: r.id }} className="flex items-center gap-2">
               <Dumbbell className="h-4 w-4" /> Open Program
             </Link>
-          ) : (
-            <Link to="/admin/program-assign/$clientId" params={{ clientId: r.id }} className="flex items-center gap-2">
-              <Dumbbell className="h-4 w-4" /> Assign Program
-            </Link>
-          )}
-        </DropdownMenuItem>
+          </DropdownMenuItem>
+        ) : (
+          <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setAssignOpen(true); }}>
+            <Dumbbell className="mr-2 h-4 w-4" /> Assign Program
+          </DropdownMenuItem>
+        )}
         {r.block_id && (
           <DropdownMenuItem asChild>
             <Link to="/admin/blocks/$blockId" params={{ blockId: r.block_id }} className="flex items-center gap-2">
@@ -232,5 +243,12 @@ export function ClientMoreMenu({
         )}
       </DropdownMenuContent>
     </DropdownMenu>
+    <AssignProgramDialog
+      open={assignOpen}
+      onOpenChange={setAssignOpen}
+      clientId={r.id}
+      clientName={r.full_name}
+    />
+    </>
   );
 }
