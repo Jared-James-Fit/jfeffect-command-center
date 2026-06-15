@@ -2048,6 +2048,30 @@ function SetRow({
         </Button>
       </div>
     )}
+
+    {isTime && prescribedSec && (
+      <>
+        <WorkoutTimerSheet
+          open={timerOpen}
+          onOpenChange={setTimerOpen}
+          exerciseName={exerciseName ?? "Exercise"}
+          setIndex={setIndex}
+          setCount={setCount ?? 1}
+          prescribedSeconds={prescribedSec}
+          resumeKey={`${rowId}:${setIndex}:${clientId ?? "anon"}`}
+          onComplete={onTimerComplete}
+        />
+        <QuickConfirmDuration
+          open={quickOpen}
+          onOpenChange={setQuickOpen}
+          prescribedSeconds={prescribedSec}
+          onConfirm={(secs, method) => {
+            setQuickOpen(false);
+            void saveTimeCompletion(secs, { method });
+          }}
+        />
+      </>
+    )}
     </div>
   );
 }
