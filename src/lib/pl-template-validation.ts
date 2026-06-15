@@ -14,12 +14,14 @@ export type DayIssue = {
 export type RowProblem =
   | "exercise"   // no exercise picked and no custom name
   | "sets"       // sets blank
-  | "reps";      // reps blank
+  | "reps"       // reps blank
+  | "intensity"; // none of RPE / RIR / suggested load set
 
 const ROW_LABEL: Record<RowProblem, string> = {
   exercise: "exercise name",
   sets: "sets",
   reps: "reps",
+  intensity: "RPE, RIR, or suggested load",
 };
 
 function rowProblems(row: any): RowProblem[] {
@@ -30,6 +32,13 @@ function rowProblems(row: any): RowProblem[] {
   if (!hasExercise) issues.push("exercise");
   if (row?.sets == null || row.sets === "") issues.push("sets");
   if (typeof row?.reps_text !== "string" || row.reps_text.trim().length === 0) issues.push("reps");
+  const hasRpe = row?.rpe != null && row.rpe !== "";
+  const hasRir = row?.rir != null && row.rir !== "";
+  const hasPct = row?.percentage != null && row.percentage !== "" &&
+    row?.percentage_basis && row.percentage_basis !== "none";
+  const hasManualLoad = (row?.load_kg != null && row.load_kg !== "") ||
+    (row?.load_lb != null && row.load_lb !== "");
+  if (!hasRpe && !hasRir && !hasPct && !hasManualLoad) issues.push("intensity");
   return issues;
 }
 
