@@ -148,11 +148,11 @@ export const publishLibraryListing = createServerFn({ method: "POST" })
       event_type: data.isUpdate ? "update_publish" : "publish",
     } as any);
 
-    // Admin-owned programs publish immediately — there's no separate review
-    // step. Upsert the matching pl_template_shares row to status="approved"
-    // (not "pending") so destination badges show "Approved" instead of the
-    // misleading "Pending Approval — Membership" pill. Also auto-resolve any
-    // legacy pending/changes_requested row for this template.
+    // Admin-owned programs go straight to the Membership Library — no review
+    // queue. Record this as a `membership` share with status="shared" so
+    // destination badges show "Shared" instead of the misleading
+    // "Pending Approval — Membership" pill. Also auto-resolve any legacy
+    // `membership_submission` row so it no longer lingers in the inbox.
     if ((plan as any).source_template_id) {
       const templateId = (plan as any).source_template_id as string;
       const nowIso = new Date().toISOString();
@@ -161,18 +161,30 @@ export const publishLibraryListing = createServerFn({ method: "POST" })
         .upsert(
           {
             template_id: templateId,
-            destination: "membership_submission",
+            destination: "membership",
             target_coach_id: null,
             permission: "read",
-            status: "approved",
+            status: "shared",
             shared_version: templateRevision,
             reviewed_by: context.userId,
             reviewed_at: nowIso,
             removed_at: null,
-            review_notes: "Auto-approved: admin-owned program",
+            review_notes: "Admin-owned program — published directly",
           } as any,
           { onConflict: "template_id,destination,target_coach_id" } as any,
         );
+      // Auto-resolve any lingering legacy submission row for the same template.
+      await supabaseAdmin
+        .from("pl_template_shares")
+        .update({
+          status: "approved",
+          reviewed_by: context.userId,
+          reviewed_at: nowIso,
+          review_notes: "Auto-approved: admin-owned program",
+        })
+        .eq("template_id", templateId)
+        .eq("destination", "membership_submission")
+        .in("status", ["pending", "changes_requested"]);
     }
 
     return { ok: true, version: nextVersion };
@@ -209,7 +221,7 @@ export const unpublishLibraryListing = createServerFn({ method: "POST" })
         .from("pl_template_shares")
         .update({ status: "removed", removed_at: new Date().toISOString() })
         .eq("template_id", (plan as any).source_template_id)
-        .eq("destination", "membership_submission")
+        .in("destination", ["membership", "membership_submission"])
         .not("status", "in", "(removed,rejected)");
     }
 
