@@ -5,8 +5,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
-import {
 import { todayLocalISO } from "@/lib/today";
+import {
   computeCountdown, formatEventWhen, importanceBadgeClass, REMINDER_OFFSETS,
   type EventRow, type ReminderOffsetKey,
 } from "@/lib/events";
