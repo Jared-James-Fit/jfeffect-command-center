@@ -676,7 +676,12 @@ function WorkoutDay() {
                   clientName={(client as any)?.full_name ?? null}
                   workoutId={dayId}
                   route={`/portal/workouts/${dayId}`}
-                  onRetry={() => qc.invalidateQueries({ queryKey: ["pl-day-rows", dayId] })}
+                  onRetry={() => Promise.all([
+                    qc.refetchQueries({ queryKey: ["pl-day-rows", dayId] }),
+                    qc.refetchQueries({ queryKey: ["pl-day", dayId] }),
+                    qc.refetchQueries({ queryKey: ["pl-day-results", dayId] }),
+                    qc.refetchQueries({ queryKey: ["pl-day-completion", dayId] }),
+                  ])}
                 />
               ) : null}
               {(rows as any[]).map((r) => (
@@ -810,7 +815,12 @@ function WorkoutDay() {
                 clientName={(client as any)?.full_name ?? null}
                 workoutId={dayId}
                 route={`/portal/workouts/${dayId}`}
-                onRetry={() => qc.invalidateQueries({ queryKey: ["pl-day-rows", dayId] })}
+                onRetry={() => Promise.all([
+                  qc.refetchQueries({ queryKey: ["pl-day-rows", dayId] }),
+                  qc.refetchQueries({ queryKey: ["pl-day", dayId] }),
+                  qc.refetchQueries({ queryKey: ["pl-day-results", dayId] }),
+                  qc.refetchQueries({ queryKey: ["pl-day-completion", dayId] }),
+                ])}
               />
             ) : null}
             {(rows as any[]).map((r) => (
