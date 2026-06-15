@@ -16,7 +16,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { ChevronRight, ChevronLeft, Loader2, AlertTriangle, CheckCircle2, XCircle } from "lucide-react";
+import { ChevronRight, ChevronLeft, Loader2, AlertTriangle, CheckCircle2, XCircle, Settings2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { normalizeTemplatePayload, getActiveTemplateBlocks } from "@/lib/pl-template-blocks";
@@ -53,7 +53,10 @@ export function ProgramAssignmentPlanner({ clientId, templateId, onDone }: Props
   });
   const { data: client } = useQuery({
     queryKey: ["planner-client", clientId],
-    queryFn: async () => (await supabase.from("clients").select("id, full_name").eq("id", clientId).maybeSingle()).data,
+    queryFn: async () => (await supabase
+      .from("clients")
+      .select("id, full_name, committed_training_days, available_training_days, preferred_training_days, unavailable_training_days, timezone")
+      .eq("id", clientId).maybeSingle()).data,
   });
 
   const payload = useMemo(() => {
@@ -70,7 +73,7 @@ export function ProgramAssignmentPlanner({ clientId, templateId, onDone }: Props
     return {
       step: 0,
       selection: { exerciseKeys: [] },
-      method: "entire_sequence",
+      method: "client_days",
       trainingDays: ["mon","wed","fri"],
       startDate: today,
       manualDateMap: {},
@@ -86,6 +89,35 @@ export function ProgramAssignmentPlanner({ clientId, templateId, onDone }: Props
   const [selection, setSelection] = useState<PlannerSelection>(initial.selection);
   const [method, setMethod] = useState<AssignmentMethod>(initial.method);
   const [trainingDays, setTrainingDays] = useState<Weekday[]>(initial.trainingDays);
+  // Resolve the client's saved training days (committed → available →
+  // preferred, minus unavailable). The source label is shown in the UI so
+  // the admin always knows where the defaults came from.
+  const clientTrainingDays = useMemo<{ days: Weekday[]; source: "committed"|"available"|"preferred"|"none" }>(() => {
+    const norm = (xs: any): Weekday[] => {
+      if (!Array.isArray(xs)) return [];
+      const map: Record<string, Weekday> = {
+        mon:"mon",tue:"tue",wed:"wed",thu:"thu",fri:"fri",sat:"sat",sun:"sun",
+        monday:"mon",tuesday:"tue",wednesday:"wed",thursday:"thu",friday:"fri",saturday:"sat",sunday:"sun",
+      };
+      const out: Weekday[] = [];
+      for (const x of xs) {
+        const k = String(x ?? "").trim().toLowerCase();
+        const v = map[k];
+        if (v && !out.includes(v)) out.push(v);
+      }
+      return out;
+    };
+    const unavailable = new Set(norm((client as any)?.unavailable_training_days));
+    const filter = (xs: Weekday[]) => xs.filter((d) => !unavailable.has(d));
+    const committed = filter(norm((client as any)?.committed_training_days));
+    if (committed.length) return { days: committed, source: "committed" };
+    const available = filter(norm((client as any)?.available_training_days));
+    if (available.length) return { days: available, source: "available" };
+    const preferred = filter(norm((client as any)?.preferred_training_days));
+    if (preferred.length) return { days: preferred, source: "preferred" };
+    return { days: [], source: "none" };
+  }, [client]);
+
   const [startDate, setStartDate] = useState<string | null>(initial.startDate);
   const [conflictDecisions, setConflictDecisions] = useState<Record<string, ConflictDecision>>(initial.conflictDecisions);
   const [publishStatus, setPublishStatus] = useState<PublishStatus>(initial.publishStatus);
@@ -120,6 +152,20 @@ export function ProgramAssignmentPlanner({ clientId, templateId, onDone }: Props
     queryFn: () => planFn({ data: { clientId, templateId, selection, method, startDate, trainingDays } }),
     staleTime: 5_000,
   });
+
+  // Workouts per week (max across all selected weeks) — used to flag
+  // mismatches between the program's training frequency and the client's
+  // saved availability.
+  const workoutsPerWeek = useMemo(() => {
+    const perWeek = new Map<string, number>();
+    for (const md of (preview?.placements ?? []) as any[]) {
+      const k = `${md.blockKey}::${md.weekIndex}`;
+      perWeek.set(k, (perWeek.get(k) ?? 0) + 1);
+    }
+    let max = 0;
+    for (const n of perWeek.values()) if (n > max) max = n;
+    return max;
+  }, [preview?.placements]);
 
   // Existing scheduled days for the calendar
   const { data: existingCal = [] as CalendarExistingDay[] } = useQuery({
@@ -239,6 +285,11 @@ export function ProgramAssignmentPlanner({ clientId, templateId, onDone }: Props
           method={method} setMethod={setMethod}
           trainingDays={trainingDays} setTrainingDays={setTrainingDays}
           startDate={startDate} setStartDate={setStartDate}
+          clientTrainingDays={clientTrainingDays}
+          clientName={client?.full_name ?? null}
+          clientTimezone={(client as any)?.timezone ?? null}
+          workoutsPerWeek={workoutsPerWeek}
+          resolvedTrainingDays={(preview as any)?.resolvedTrainingDays as Weekday[] | undefined}
         />
       )}
       {step === 2 && (
@@ -388,39 +439,211 @@ function ContentStep({ payload, blocks, selection, setSelection }: {
   );
 }
 
-function MethodStep({ method, setMethod, trainingDays, setTrainingDays, startDate, setStartDate }: {
+function MethodStep({
+  method, setMethod, trainingDays, setTrainingDays, startDate, setStartDate,
+  clientTrainingDays, clientName, clientTimezone, workoutsPerWeek, resolvedTrainingDays,
+}: {
   method: AssignmentMethod; setMethod: (m: AssignmentMethod) => void;
   trainingDays: Weekday[]; setTrainingDays: (d: Weekday[]) => void;
   startDate: string | null; setStartDate: (d: string | null) => void;
+  clientTrainingDays: { days: Weekday[]; source: "committed"|"available"|"preferred"|"none" };
+  clientName: string | null;
+  clientTimezone: string | null;
+  workoutsPerWeek: number;
+  resolvedTrainingDays?: Weekday[];
 }) {
-  const options: Array<{ id: AssignmentMethod; label: string; desc: string }> = [
-    { id: "entire_sequence", label: "Entire sequence", desc: "Place workouts on consecutive days starting from the start date." },
-    { id: "weekday_map", label: "Weekday map", desc: "Place workouts on the chosen weekdays only." },
-    { id: "fill_empty", label: "Fill empty days", desc: "Skip dates that already have a workout." },
-    { id: "insert", label: "Insert (push existing)", desc: "Insert into chosen weekdays; later dates remain in order." },
-    { id: "replace_range", label: "Replace range", desc: "Overwrite a date range with the selected workouts." },
-    { id: "manual_dates", label: "Manual dates", desc: "Pick each workout's date individually on the calendar step." },
+  const primary: Array<{ id: AssignmentMethod; label: string; desc: string; badge?: string }> = [
+    {
+      id: "client_days",
+      label: "Use Client's Training Days",
+      desc: "Automatically schedule workouts on the training days selected by this client.",
+      badge: "Recommended",
+    },
+    {
+      id: "weekday_map",
+      label: "Choose Weekdays",
+      desc: "Select a custom recurring weekly schedule for this assignment.",
+    },
+    {
+      id: "manual_dates",
+      label: "Choose Every Date Manually",
+      desc: "Select the date for each workout individually.",
+    },
   ];
+  const advanced: Array<{ id: AssignmentMethod; label: string; desc: string }> = [
+    { id: "fill_empty",      label: "Fill Empty Days",       desc: "Skip dates that already have a workout." },
+    { id: "insert",          label: "Insert and Push Existing", desc: "Insert into chosen weekdays; later dates remain in order." },
+    { id: "replace_range",   label: "Replace Date Range",    desc: "Overwrite a date range with the selected workouts." },
+    { id: "entire_sequence", label: "Entire Sequence",       desc: "Place workouts on consecutive days starting from the start date. Ignores the client's training days." },
+  ];
+
+  const sourceLabel: Record<typeof clientTrainingDays.source, string> = {
+    committed: "Committed training days",
+    available: "Selected availability",
+    preferred: "Client onboarding",
+    none: "No saved days",
+  };
+  const noClientDays = clientTrainingDays.days.length === 0;
+  const effective: Weekday[] = method === "client_days"
+    ? (resolvedTrainingDays?.length ? resolvedTrainingDays : clientTrainingDays.days)
+    : trainingDays;
+  const frequencyMatches = workoutsPerWeek === 0 || effective.length === 0
+    ? null
+    : workoutsPerWeek === effective.length
+    ? "match"
+    : workoutsPerWeek > effective.length
+    ? "more-workouts"
+    : "more-days";
+
+  const startDateOnNonTrainingDay = (() => {
+    if (!startDate || !effective.length) return null;
+    const dt = new Date(startDate + "T00:00:00Z");
+    const dow = dt.getUTCDay();
+    const idx: Record<Weekday, number> = { sun:0,mon:1,tue:2,wed:3,thu:4,fri:5,sat:6 };
+    return effective.some((d) => idx[d] === dow) ? null : true;
+  })();
+
   return (
     <Card className="p-3 space-y-3">
+      {/* Start date */}
       <div>
-        <Label className="text-xs">Start date</Label>
+        <Label className="text-xs">Program start date</Label>
         <Input type="date" value={startDate ?? ""} onChange={(e) => setStartDate(e.target.value || null)} />
+        <p className="mt-1 text-[11px] text-muted-foreground">
+          Workouts will begin on the first selected training day on or after this date.
+        </p>
+        {startDateOnNonTrainingDay && (
+          <p className="mt-1 inline-flex items-center gap-1 text-[11px] text-amber-600">
+            <AlertTriangle className="h-3 w-3" />
+            This date isn't a training day — the first workout will move to the next available day.
+          </p>
+        )}
       </div>
+
+      {/* Default / recommended methods */}
       <div className="space-y-1">
-        {options.map((o) => (
-          <label key={o.id} className="flex cursor-pointer items-start gap-2 rounded border border-border bg-secondary/20 p-2">
-            <input type="radio" name="method" checked={method === o.id} onChange={() => setMethod(o.id)} className="mt-1" />
-            <div>
-              <div className="text-sm font-semibold">{o.label}</div>
-              <div className="text-xs text-muted-foreground">{o.desc}</div>
-            </div>
-          </label>
-        ))}
+        {primary.map((o) => {
+          const isSel = method === o.id;
+          const disabled = o.id === "client_days" && noClientDays;
+          return (
+            <label
+              key={o.id}
+              className={
+                "flex cursor-pointer items-start gap-2 rounded border p-2 transition-colors " +
+                (isSel ? "border-primary bg-primary/5" : "border-border bg-secondary/20 hover:bg-secondary/40") +
+                (disabled ? " opacity-60" : "")
+              }
+            >
+              <input
+                type="radio"
+                name="method"
+                checked={isSel}
+                onChange={() => !disabled && setMethod(o.id)}
+                className="mt-1"
+              />
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="text-sm font-semibold">{o.label}</span>
+                  {o.badge && (
+                    <Badge className="h-4 bg-primary/15 px-1 text-[9px] font-bold text-primary hover:bg-primary/20">
+                      {o.badge}
+                    </Badge>
+                  )}
+                </div>
+                <div className="text-xs text-muted-foreground">{o.desc}</div>
+
+                {/* "Use Client's Training Days" inline detail */}
+                {o.id === "client_days" && (
+                  <div className="mt-2 space-y-1">
+                    {noClientDays ? (
+                      <div className="rounded border border-amber-500/40 bg-amber-500/5 p-2 text-[11px]">
+                        <div className="font-semibold text-amber-700 dark:text-amber-400">
+                          No training days have been selected for this client.
+                        </div>
+                        <p className="mt-0.5 text-muted-foreground">
+                          Set the client's training days, or pick a method below.
+                        </p>
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          <Button size="sm" variant="outline" className="h-6 px-2 text-[10px]"
+                            onClick={(e) => { e.preventDefault(); setMethod("weekday_map"); }}>
+                            Choose Weekdays
+                          </Button>
+                          <Button size="sm" variant="outline" className="h-6 px-2 text-[10px]"
+                            onClick={(e) => { e.preventDefault(); setMethod("manual_dates"); }}>
+                            Choose Manual Dates
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="text-[11px] text-muted-foreground">
+                          <span className="font-semibold text-foreground/80">Using training days from:</span>{" "}
+                          {sourceLabel[clientTrainingDays.source]}
+                          {clientTimezone ? ` · ${clientTimezone}` : ""}
+                        </div>
+                        <div className="flex flex-wrap gap-1">
+                          {effective.map((d) => (
+                            <Badge key={d} variant="outline" className="border-primary/40 bg-primary/10 px-1.5 text-[10px] text-primary">
+                              {WEEKDAY_LABEL[d]}
+                            </Badge>
+                          ))}
+                        </div>
+                        {workoutsPerWeek > 0 && (
+                          <div className="text-[11px] text-muted-foreground">
+                            {workoutsPerWeek} workout{workoutsPerWeek === 1 ? "" : "s"} per week ·{" "}
+                            {frequencyMatches === "match" && <span className="text-emerald-600">Matches client's {effective.length} day{effective.length === 1 ? "" : "s"}</span>}
+                            {frequencyMatches === "more-workouts" && (
+                              <span className="text-amber-600">
+                                Program needs {workoutsPerWeek} days but client selected {effective.length}.
+                              </span>
+                            )}
+                            {frequencyMatches === "more-days" && (
+                              <span className="text-muted-foreground">
+                                Client has {effective.length} days available — program uses {workoutsPerWeek}.
+                              </span>
+                            )}
+                          </div>
+                        )}
+                        <div className="flex flex-wrap gap-1 pt-1">
+                          <Button
+                            size="sm" variant="outline" className="h-6 px-2 text-[10px]"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              // "Change Days" → switch to weekday_map seeded with the resolved days.
+                              setTrainingDays(effective);
+                              setMethod("weekday_map");
+                            }}
+                          >
+                            <Settings2 className="mr-1 h-3 w-3" /> Change Days
+                          </Button>
+                          {frequencyMatches === "more-workouts" && (
+                            <Button
+                              size="sm" variant="outline" className="h-6 px-2 text-[10px]"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                setTrainingDays(effective);
+                                setMethod("weekday_map");
+                              }}
+                            >
+                              Add Another Training Day
+                            </Button>
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+            </label>
+          );
+        })}
       </div>
+
+      {/* Weekday picker — for client_days (read-only effective list shown
+          above), weekday_map / fill_empty / insert (editable). */}
       {(method === "weekday_map" || method === "fill_empty" || method === "insert") && (
-        <div>
-          <Label className="text-xs">Training days</Label>
+        <div className="rounded border border-border bg-secondary/10 p-2">
+          <Label className="text-xs">Training days for this assignment</Label>
           <div className="mt-1 flex flex-wrap gap-1">
             {WEEKDAYS.map((d) => (
               <button
@@ -428,14 +651,62 @@ function MethodStep({ method, setMethod, trainingDays, setTrainingDays, startDat
                 type="button"
                 onClick={() => setTrainingDays(trainingDays.includes(d) ? trainingDays.filter((x) => x !== d) : [...trainingDays, d])}
                 className={
-                  "rounded px-2 py-1 text-xs " +
+                  "rounded px-2 py-1 text-xs min-w-[44px] " +
                   (trainingDays.includes(d) ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground")
                 }
+                aria-pressed={trainingDays.includes(d)}
               >
                 {WEEKDAY_LABEL[d]}
               </button>
             ))}
           </div>
+          {clientTrainingDays.days.length > 0 && (
+            <button
+              type="button"
+              className="mt-1 text-[11px] text-primary underline-offset-2 hover:underline"
+              onClick={() => setMethod("client_days")}
+            >
+              ← Return to client's saved days ({clientTrainingDays.days.map((d) => WEEKDAY_LABEL[d]).join(" · ")})
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Advanced scheduling options — collapsed by default. */}
+      <details className="rounded border border-border/60 bg-card">
+        <summary className="cursor-pointer px-3 py-2 text-xs font-semibold">
+          Advanced Scheduling Options
+        </summary>
+        <div className="space-y-1 p-2">
+          {advanced.map((o) => (
+            <label
+              key={o.id}
+              className={
+                "flex cursor-pointer items-start gap-2 rounded border p-2 " +
+                (method === o.id ? "border-primary bg-primary/5" : "border-border bg-secondary/20")
+              }
+            >
+              <input type="radio" name="method" checked={method === o.id} onChange={() => setMethod(o.id)} className="mt-1" />
+              <div>
+                <div className="text-sm font-semibold">{o.label}</div>
+                <div className="text-xs text-muted-foreground">{o.desc}</div>
+              </div>
+            </label>
+          ))}
+        </div>
+      </details>
+
+      {/* Frequency mismatch banner — applies whichever method ends up
+          producing a weekday list. */}
+      {method === "client_days" && frequencyMatches === "more-workouts" && (
+        <div className="rounded border border-amber-500/40 bg-amber-500/5 p-2 text-[11px]">
+          <div className="inline-flex items-center gap-1 font-semibold text-amber-700 dark:text-amber-400">
+            <AlertTriangle className="h-3 w-3" />
+            This program contains {workoutsPerWeek} workouts per week, but the client selected {effective.length} training day{effective.length === 1 ? "" : "s"}.
+          </div>
+          <p className="mt-0.5 text-muted-foreground">
+            Pick "Change Days" above to add another training day. Doubling up two workouts on one day is never automatic — use "Choose Every Date Manually" if you want to do that deliberately.
+          </p>
         </div>
       )}
     </Card>

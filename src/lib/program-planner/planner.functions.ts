@@ -22,9 +22,49 @@ import type {
 } from "./types";
 
 const ALLOWED_METHODS: AssignmentMethod[] = [
-  "entire_sequence", "weekday_map", "manual_dates", "fill_empty", "insert", "replace_range",
+  "client_days", "entire_sequence", "weekday_map", "manual_dates", "fill_empty", "insert", "replace_range",
 ];
 const ALLOWED_WEEKDAYS: Weekday[] = ["mon","tue","wed","thu","fri","sat","sun"];
+
+const WEEKDAY_NORMALIZE: Record<string, Weekday> = {
+  mon: "mon", tue: "tue", wed: "wed", thu: "thu", fri: "fri", sat: "sat", sun: "sun",
+  monday: "mon", tuesday: "tue", wednesday: "wed", thursday: "thu", friday: "fri", saturday: "sat", sunday: "sun",
+};
+function normalizeWeekdayList(input: unknown): Weekday[] {
+  if (!Array.isArray(input)) return [];
+  const out: Weekday[] = [];
+  for (const raw of input) {
+    const key = String(raw ?? "").trim().toLowerCase();
+    const norm = WEEKDAY_NORMALIZE[key];
+    if (norm && !out.includes(norm)) out.push(norm);
+  }
+  return out;
+}
+
+/**
+ * Resolve a client's saved training days using the canonical priority:
+ * committed → available → preferred (minus unavailable). Mirrors
+ * `src/lib/auto-scheduler.ts` so the planner and the auto-scheduler agree.
+ */
+export async function resolveClientTrainingDays(
+  supabase: any,
+  clientId: string,
+): Promise<{ days: Weekday[]; source: "committed" | "available" | "preferred" | "none"; timezone: string | null }> {
+  const { data: c } = await supabase
+    .from("clients")
+    .select("committed_training_days, available_training_days, preferred_training_days, unavailable_training_days, timezone")
+    .eq("id", clientId)
+    .maybeSingle();
+  const committed = normalizeWeekdayList(c?.committed_training_days);
+  const available = normalizeWeekdayList(c?.available_training_days);
+  const preferred = normalizeWeekdayList(c?.preferred_training_days);
+  const unavailable = new Set(normalizeWeekdayList(c?.unavailable_training_days));
+  const filter = (list: Weekday[]) => list.filter((d) => !unavailable.has(d));
+  if (committed.length) return { days: filter(committed), source: "committed", timezone: c?.timezone ?? null };
+  if (available.length) return { days: filter(available), source: "available", timezone: c?.timezone ?? null };
+  if (preferred.length) return { days: filter(preferred), source: "preferred", timezone: c?.timezone ?? null };
+  return { days: [], source: "none", timezone: c?.timezone ?? null };
+}
 
 function validatePlannerInput(d: any): PlannerInput {
   if (!d || typeof d !== "object") throw new Error("Invalid input");
@@ -85,6 +125,17 @@ export const planAssignmentFn = createServerFn({ method: "POST" })
     const days = materializeSelectedDays(payload, data.selection);
     const summary = summarize(payload, data.selection);
 
+    // 2b. For method="client_days", resolve the weekday list from the
+    // client's saved availability (committed > available > preferred).
+    let effectiveTrainingDays: Weekday[] = data.trainingDays;
+    let trainingDaysSource: PlannerPreview["trainingDaysSource"] =
+      data.method === "client_days" ? "none" : "manual";
+    if (data.method === "client_days") {
+      const resolved = await resolveClientTrainingDays(ctx.supabase, data.clientId);
+      effectiveTrainingDays = resolved.days;
+      trainingDaysSource = resolved.source;
+    }
+
     // 3. Existing schedule + completions for this client.
     const [{ data: existingBlocks = [], error: bErr },
            { data: existingDayRows = [], error: dErr }] = await Promise.all([
@@ -138,7 +189,7 @@ export const planAssignmentFn = createServerFn({ method: "POST" })
     const placements = computePlacements({
       method: data.method,
       startDate: data.startDate,
-      trainingDays: data.trainingDays,
+      trainingDays: effectiveTrainingDays,
       manualDateMap: data.manualDateMap,
       occupiedDates,
       days,
@@ -162,6 +213,8 @@ export const planAssignmentFn = createServerFn({ method: "POST" })
       summary,
       endDate: lastPlacedDate(placements),
       idempotencyKey: newIdempotencyKey(),
+      resolvedTrainingDays: effectiveTrainingDays,
+      trainingDaysSource,
     };
   });
 
@@ -254,10 +307,23 @@ export const commitAssignmentFn = createServerFn({ method: "POST" })
       .not("scheduled_date", "is", null);
     const occupiedDates = new Set<string>((existingDayRows as any[]).map((r) => r.scheduled_date));
 
+    // Resolve client_days at commit time too so the snapshot stored in
+    // pl_assignment_operations.training_weekdays reflects the *actual* days
+    // used. Later changes to the client's availability never silently
+    // rewrite this assignment.
+    let effectiveTrainingDays: Weekday[] = data.trainingDays;
+    if (data.method === "client_days") {
+      const resolved = await resolveClientTrainingDays(ctx.supabase, data.clientId);
+      effectiveTrainingDays = resolved.days;
+      if (!effectiveTrainingDays.length) {
+        throw new Error("This client has no saved training days. Choose Weekdays manually or set the client's training days first.");
+      }
+    }
+
     const rawPlacements = computePlacements({
       method: data.method,
       startDate: data.startDate,
-      trainingDays: data.trainingDays,
+      trainingDays: effectiveTrainingDays,
       manualDateMap: data.manualDateMap,
       occupiedDates,
       days,
@@ -355,7 +421,7 @@ export const commitAssignmentFn = createServerFn({ method: "POST" })
         selected_day_keys: finalPlacements.map((p) => p.dayKey),
         selected_exercise_keys: data.selection.exerciseKeys,
         assignment_method: data.method,
-        training_weekdays: data.trainingDays,
+        training_weekdays: effectiveTrainingDays,
         conflict_decisions: data.conflictDecisions as any,
         publish_status: data.publishStatus,
         publish_at: data.publishAt,

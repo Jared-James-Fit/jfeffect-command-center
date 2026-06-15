@@ -14,6 +14,7 @@
  */
 
 export type AssignmentMethod =
+  | "client_days"
   | "entire_sequence"
   | "weekday_map"
   | "manual_dates"
@@ -121,6 +122,17 @@ export interface PlannerPreview {
   endDate: string | null;
   /** Stable identifier; the client sends it back on commit for idempotency. */
   idempotencyKey: string;
+  /**
+   * For method="client_days": the weekday list actually used and where it
+   * came from (committed > available > preferred > none). Empty when N/A.
+   */
+  resolvedTrainingDays?: Weekday[];
+  trainingDaysSource?:
+    | "committed"
+    | "available"
+    | "preferred"
+    | "manual"
+    | "none";
 }
 
 export interface PlannerBatch {
