@@ -36,7 +36,7 @@ export const adminNav: NavItem[] = [
   { to: "/admin/chat-sounds", label: "Chat Sound Library", icon: Sparkles, group: "Communication" },
   // MEMBERSHIP
   { to: "/admin/members", label: "App Members", icon: UserPlus, group: "Membership" },
-  { to: "/admin/member-plans", label: "Plan Library", icon: Library, group: "Membership" },
+  { to: "/admin/member-plans", label: "Membership Workout Library", icon: Library, group: "Membership", keywords: ["membership library","workout library","plan library","publish program"] },
   { to: "/admin/member-resources", label: "Resources & Tools", icon: FolderOpen, group: "Membership" },
   // PROGRAMMING
   { to: "/admin/program-library", label: "Program Library", icon: BookOpen, group: "Programming" },
@@ -199,7 +199,7 @@ export const clientBottomNav: NavItem[] = [
 export const memberNav: NavItem[] = [
   { to: "/m", label: "Dashboard", icon: LayoutDashboard },
   { to: "/m/my-plans", label: "My Plans", icon: ClipboardCheck },
-  { to: "/m/plans", label: "Program Library", icon: BookOpen },
+  { to: "/m/plans", label: "Workout Library", icon: BookOpen },
   { to: "/m/resources", label: "Resources", icon: FolderOpen },
   { to: "/m/tools", label: "Tools", icon: Wrench },
   { to: "/m/announcements", label: "Announcements", icon: Megaphone },
