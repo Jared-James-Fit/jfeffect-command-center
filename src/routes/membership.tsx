@@ -43,16 +43,17 @@ export const Route = createFileRoute("/membership")({
   component: SignupJf,
   head: () => ({
     meta: [
-      { title: "Join JF Membership — Workouts, Recipes & Tracking" },
-      { name: "description", content: "Get instant access to self-guided programs, tracking, recipes, and resources. $29/month with a 3-day free trial." },
-      { property: "og:title", content: "JF Membership — $29/mo, 3-day free trial" },
-      { property: "og:description", content: "Self-guided workouts, recipes, tracking, resources, and community." },
+      { title: "JF Effect Membership | Self-Guided Training App" },
+      { name: "description", content: "Access structured workout programs, training analytics, progress tracking, and fitness resources through the JF Effect Membership." },
+      { property: "og:title", content: "JF Effect Membership | Self-Guided Training App" },
+      { property: "og:description", content: "Access structured workout programs, training analytics, progress tracking, and fitness resources through the JF Effect Membership." },
       { property: "og:type", content: "website" },
-      { property: "og:url", content: "https://jfeffect.com/join" },
+      { property: "og:url", content: "https://jfeffect.com/membership" },
       { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:title", content: "JF Membership — $29/mo, 3-day free trial" },
-      { name: "twitter:description", content: "Self-guided workouts, recipes, tracking, resources, and community." },
+      { name: "twitter:title", content: "JF Effect Membership | Self-Guided Training App" },
+      { name: "twitter:description", content: "Access structured workout programs, training analytics, progress tracking, and fitness resources through the JF Effect Membership." },
     ],
+    links: [{ rel: "canonical", href: "https://jfeffect.com/membership" }],
   }),
 });
 
@@ -153,7 +154,7 @@ function SignupJf() {
 
   const s = p?.sections ?? {};
   const trialDays = settings?.trial_days ?? 3;
-  const ctaLabel = p?.primary_cta_label ?? `Start ${trialDays}-Day Free Trial`;
+  const ctaLabel = p?.primary_cta_label ?? "Start My Membership";
   const pausedLabel = "Signups Temporarily Paused";
 
   useEffect(() => {
@@ -182,13 +183,13 @@ function SignupJf() {
       ) : (
       <MembershipHero
         priceChip={settings?.monthly_price_display ?? "$29/month USD"}
-        headline={p?.hero_headline ?? "Train with the JF Effect system. On your own time, inside the app."}
-        sub={p?.hero_subheadline ?? "Self-guided programs, workout tracking, analytics, recipes and education — all in one place. No application required. Cancel anytime."}
+        headline={p?.hero_headline ?? "JF Effect Membership"}
+        sub={p?.hero_subheadline ?? "Structured training, progress tracking, and fitness resources without the cost of private coaching. No application. No 1:1 coaching. Start immediately."}
         heroImage={p?.hero_image_url ?? null}
-        primary={<MemberHeroCta onClick={scrollToForm}>{ctaLabel}</MemberHeroCta>}
+        primary={<MemberHeroCta onClick={scrollToForm}>{p?.primary_cta_label ?? "Start My Membership"}</MemberHeroCta>}
         secondary={
           <Link to="/coaching">
-            <MemberHeroGhost>{p?.secondary_cta_label ?? "Need more support? Apply for Coaching"}</MemberHeroGhost>
+            <MemberHeroGhost>{p?.secondary_cta_label ?? "Looking for Private Coaching?"}</MemberHeroGhost>
           </Link>
         }
         trialNote={`${trialDays}-day free trial · ${settings?.monthly_price_display ?? "$29/month USD"} after · cancel anytime`}
