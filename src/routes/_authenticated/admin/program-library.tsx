@@ -538,7 +538,7 @@ function NewTemplateDialog({ open, onOpenChange, onCreated }: { open: boolean; o
                   training_style: form.training_style,
                   training_focus: form.training_focus || undefined,
                   weeks: form.weeks || undefined, days_per_week: form.days_per_week || undefined,
-                  est_duration_min: form.est_duration_min || undefined, tags, notes: form.notes || undefined,
+                  tags, notes: form.notes || undefined,
                   payload: seedPayload(),
                 });
                 toast.success("Template created — opening editor");
