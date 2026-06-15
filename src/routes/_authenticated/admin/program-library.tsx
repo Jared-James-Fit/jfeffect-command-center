@@ -369,6 +369,11 @@ function TemplateCard({ tpl, onPreview, onAssign, onShare, onChanged }: { tpl: a
         <Button size="sm" className="flex-1" onClick={onAssign}>
           <UserPlus className="mr-1 h-3 w-3" /> Assign
         </Button>
+        <Button size="sm" variant="secondary" className="flex-1" asChild>
+          <Link to="/admin/program-assign" search={{ templateId: tpl.id }}>
+            Plan
+          </Link>
+        </Button>
       </div>
     </Card>
   );

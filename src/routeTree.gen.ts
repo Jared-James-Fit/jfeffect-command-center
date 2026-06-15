@@ -104,6 +104,7 @@ import { Route as AuthenticatedAdminProgramsRouteImport } from './routes/_authen
 import { Route as AuthenticatedAdminProgrammingRouteImport } from './routes/_authenticated/admin/programming'
 import { Route as AuthenticatedAdminProgramSubmissionsRouteImport } from './routes/_authenticated/admin/program-submissions'
 import { Route as AuthenticatedAdminProgramLibraryRouteImport } from './routes/_authenticated/admin/program-library'
+import { Route as AuthenticatedAdminProgramAssignRouteImport } from './routes/_authenticated/admin/program-assign'
 import { Route as AuthenticatedAdminPopupsRouteImport } from './routes/_authenticated/admin/popups'
 import { Route as AuthenticatedAdminPaymentsRouteImport } from './routes/_authenticated/admin/payments'
 import { Route as AuthenticatedAdminPaymentLinksRouteImport } from './routes/_authenticated/admin/payment-links'
@@ -186,6 +187,7 @@ import { Route as AuthenticatedAdminSalesCoachingApplicationsRouteImport } from 
 import { Route as AuthenticatedAdminSalesCoachingRouteImport } from './routes/_authenticated/admin/sales.coaching'
 import { Route as AuthenticatedAdminPurchasesIdRouteImport } from './routes/_authenticated/admin/purchases.$id'
 import { Route as AuthenticatedAdminProgramLibraryTemplateIdRouteImport } from './routes/_authenticated/admin/program-library_.$templateId'
+import { Route as AuthenticatedAdminProgramAssignClientIdRouteImport } from './routes/_authenticated/admin/program-assign.$clientId'
 import { Route as AuthenticatedAdminMembershipWelcomeMessagesRouteImport } from './routes/_authenticated/admin/membership.welcome-messages'
 import { Route as AuthenticatedAdminMembershipSupportRouteImport } from './routes/_authenticated/admin/membership.support'
 import { Route as AuthenticatedAdminMembershipStripeSyncRouteImport } from './routes/_authenticated/admin/membership.stripe-sync'
@@ -755,6 +757,12 @@ const AuthenticatedAdminProgramLibraryRoute =
     path: '/program-library',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
+const AuthenticatedAdminProgramAssignRoute =
+  AuthenticatedAdminProgramAssignRouteImport.update({
+    id: '/program-assign',
+    path: '/program-assign',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
 const AuthenticatedAdminPopupsRoute =
   AuthenticatedAdminPopupsRouteImport.update({
     id: '/popups',
@@ -1240,6 +1248,12 @@ const AuthenticatedAdminProgramLibraryTemplateIdRoute =
     path: '/program-library/$templateId',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
+const AuthenticatedAdminProgramAssignClientIdRoute =
+  AuthenticatedAdminProgramAssignClientIdRouteImport.update({
+    id: '/$clientId',
+    path: '/$clientId',
+    getParentRoute: () => AuthenticatedAdminProgramAssignRoute,
+  } as any)
 const AuthenticatedAdminMembershipWelcomeMessagesRoute =
   AuthenticatedAdminMembershipWelcomeMessagesRouteImport.update({
     id: '/welcome-messages',
@@ -1559,6 +1573,7 @@ export interface FileRoutesByFullPath {
   '/admin/payment-links': typeof AuthenticatedAdminPaymentLinksRoute
   '/admin/payments': typeof AuthenticatedAdminPaymentsRoute
   '/admin/popups': typeof AuthenticatedAdminPopupsRoute
+  '/admin/program-assign': typeof AuthenticatedAdminProgramAssignRouteWithChildren
   '/admin/program-library': typeof AuthenticatedAdminProgramLibraryRoute
   '/admin/program-submissions': typeof AuthenticatedAdminProgramSubmissionsRoute
   '/admin/programming': typeof AuthenticatedAdminProgrammingRoute
@@ -1664,6 +1679,7 @@ export interface FileRoutesByFullPath {
   '/admin/membership/stripe-sync': typeof AuthenticatedAdminMembershipStripeSyncRoute
   '/admin/membership/support': typeof AuthenticatedAdminMembershipSupportRoute
   '/admin/membership/welcome-messages': typeof AuthenticatedAdminMembershipWelcomeMessagesRoute
+  '/admin/program-assign/$clientId': typeof AuthenticatedAdminProgramAssignClientIdRoute
   '/admin/program-library/$templateId': typeof AuthenticatedAdminProgramLibraryTemplateIdRoute
   '/admin/purchases/$id': typeof AuthenticatedAdminPurchasesIdRoute
   '/admin/sales/coaching': typeof AuthenticatedAdminSalesCoachingRoute
@@ -1774,6 +1790,7 @@ export interface FileRoutesByTo {
   '/admin/payment-links': typeof AuthenticatedAdminPaymentLinksRoute
   '/admin/payments': typeof AuthenticatedAdminPaymentsRoute
   '/admin/popups': typeof AuthenticatedAdminPopupsRoute
+  '/admin/program-assign': typeof AuthenticatedAdminProgramAssignRouteWithChildren
   '/admin/program-library': typeof AuthenticatedAdminProgramLibraryRoute
   '/admin/program-submissions': typeof AuthenticatedAdminProgramSubmissionsRoute
   '/admin/programming': typeof AuthenticatedAdminProgrammingRoute
@@ -1879,6 +1896,7 @@ export interface FileRoutesByTo {
   '/admin/membership/stripe-sync': typeof AuthenticatedAdminMembershipStripeSyncRoute
   '/admin/membership/support': typeof AuthenticatedAdminMembershipSupportRoute
   '/admin/membership/welcome-messages': typeof AuthenticatedAdminMembershipWelcomeMessagesRoute
+  '/admin/program-assign/$clientId': typeof AuthenticatedAdminProgramAssignClientIdRoute
   '/admin/program-library/$templateId': typeof AuthenticatedAdminProgramLibraryTemplateIdRoute
   '/admin/purchases/$id': typeof AuthenticatedAdminPurchasesIdRoute
   '/admin/sales/coaching': typeof AuthenticatedAdminSalesCoachingRoute
@@ -1996,6 +2014,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/payment-links': typeof AuthenticatedAdminPaymentLinksRoute
   '/_authenticated/admin/payments': typeof AuthenticatedAdminPaymentsRoute
   '/_authenticated/admin/popups': typeof AuthenticatedAdminPopupsRoute
+  '/_authenticated/admin/program-assign': typeof AuthenticatedAdminProgramAssignRouteWithChildren
   '/_authenticated/admin/program-library': typeof AuthenticatedAdminProgramLibraryRoute
   '/_authenticated/admin/program-submissions': typeof AuthenticatedAdminProgramSubmissionsRoute
   '/_authenticated/admin/programming': typeof AuthenticatedAdminProgrammingRoute
@@ -2101,6 +2120,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/membership/stripe-sync': typeof AuthenticatedAdminMembershipStripeSyncRoute
   '/_authenticated/admin/membership/support': typeof AuthenticatedAdminMembershipSupportRoute
   '/_authenticated/admin/membership/welcome-messages': typeof AuthenticatedAdminMembershipWelcomeMessagesRoute
+  '/_authenticated/admin/program-assign/$clientId': typeof AuthenticatedAdminProgramAssignClientIdRoute
   '/_authenticated/admin/program-library_/$templateId': typeof AuthenticatedAdminProgramLibraryTemplateIdRoute
   '/_authenticated/admin/purchases/$id': typeof AuthenticatedAdminPurchasesIdRoute
   '/_authenticated/admin/sales/coaching': typeof AuthenticatedAdminSalesCoachingRoute
@@ -2218,6 +2238,7 @@ export interface FileRouteTypes {
     | '/admin/payment-links'
     | '/admin/payments'
     | '/admin/popups'
+    | '/admin/program-assign'
     | '/admin/program-library'
     | '/admin/program-submissions'
     | '/admin/programming'
@@ -2323,6 +2344,7 @@ export interface FileRouteTypes {
     | '/admin/membership/stripe-sync'
     | '/admin/membership/support'
     | '/admin/membership/welcome-messages'
+    | '/admin/program-assign/$clientId'
     | '/admin/program-library/$templateId'
     | '/admin/purchases/$id'
     | '/admin/sales/coaching'
@@ -2433,6 +2455,7 @@ export interface FileRouteTypes {
     | '/admin/payment-links'
     | '/admin/payments'
     | '/admin/popups'
+    | '/admin/program-assign'
     | '/admin/program-library'
     | '/admin/program-submissions'
     | '/admin/programming'
@@ -2538,6 +2561,7 @@ export interface FileRouteTypes {
     | '/admin/membership/stripe-sync'
     | '/admin/membership/support'
     | '/admin/membership/welcome-messages'
+    | '/admin/program-assign/$clientId'
     | '/admin/program-library/$templateId'
     | '/admin/purchases/$id'
     | '/admin/sales/coaching'
@@ -2654,6 +2678,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/payment-links'
     | '/_authenticated/admin/payments'
     | '/_authenticated/admin/popups'
+    | '/_authenticated/admin/program-assign'
     | '/_authenticated/admin/program-library'
     | '/_authenticated/admin/program-submissions'
     | '/_authenticated/admin/programming'
@@ -2759,6 +2784,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/membership/stripe-sync'
     | '/_authenticated/admin/membership/support'
     | '/_authenticated/admin/membership/welcome-messages'
+    | '/_authenticated/admin/program-assign/$clientId'
     | '/_authenticated/admin/program-library_/$templateId'
     | '/_authenticated/admin/purchases/$id'
     | '/_authenticated/admin/sales/coaching'
@@ -3514,6 +3540,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminProgramLibraryRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
+    '/_authenticated/admin/program-assign': {
+      id: '/_authenticated/admin/program-assign'
+      path: '/program-assign'
+      fullPath: '/admin/program-assign'
+      preLoaderRoute: typeof AuthenticatedAdminProgramAssignRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
     '/_authenticated/admin/popups': {
       id: '/_authenticated/admin/popups'
       path: '/popups'
@@ -4088,6 +4121,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminProgramLibraryTemplateIdRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
+    '/_authenticated/admin/program-assign/$clientId': {
+      id: '/_authenticated/admin/program-assign/$clientId'
+      path: '/$clientId'
+      fullPath: '/admin/program-assign/$clientId'
+      preLoaderRoute: typeof AuthenticatedAdminProgramAssignClientIdRouteImport
+      parentRoute: typeof AuthenticatedAdminProgramAssignRoute
+    }
     '/_authenticated/admin/membership/welcome-messages': {
       id: '/_authenticated/admin/membership/welcome-messages'
       path: '/welcome-messages'
@@ -4475,6 +4515,21 @@ const AuthenticatedAdminMembershipRouteWithChildren =
     AuthenticatedAdminMembershipRouteChildren,
   )
 
+interface AuthenticatedAdminProgramAssignRouteChildren {
+  AuthenticatedAdminProgramAssignClientIdRoute: typeof AuthenticatedAdminProgramAssignClientIdRoute
+}
+
+const AuthenticatedAdminProgramAssignRouteChildren: AuthenticatedAdminProgramAssignRouteChildren =
+  {
+    AuthenticatedAdminProgramAssignClientIdRoute:
+      AuthenticatedAdminProgramAssignClientIdRoute,
+  }
+
+const AuthenticatedAdminProgramAssignRouteWithChildren =
+  AuthenticatedAdminProgramAssignRoute._addFileChildren(
+    AuthenticatedAdminProgramAssignRouteChildren,
+  )
+
 interface AuthenticatedAdminPurchasesRouteChildren {
   AuthenticatedAdminPurchasesIdRoute: typeof AuthenticatedAdminPurchasesIdRoute
 }
@@ -4530,6 +4585,7 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminPaymentLinksRoute: typeof AuthenticatedAdminPaymentLinksRoute
   AuthenticatedAdminPaymentsRoute: typeof AuthenticatedAdminPaymentsRoute
   AuthenticatedAdminPopupsRoute: typeof AuthenticatedAdminPopupsRoute
+  AuthenticatedAdminProgramAssignRoute: typeof AuthenticatedAdminProgramAssignRouteWithChildren
   AuthenticatedAdminProgramLibraryRoute: typeof AuthenticatedAdminProgramLibraryRoute
   AuthenticatedAdminProgramSubmissionsRoute: typeof AuthenticatedAdminProgramSubmissionsRoute
   AuthenticatedAdminProgrammingRoute: typeof AuthenticatedAdminProgrammingRoute
@@ -4637,6 +4693,8 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
     AuthenticatedAdminPaymentLinksRoute: AuthenticatedAdminPaymentLinksRoute,
     AuthenticatedAdminPaymentsRoute: AuthenticatedAdminPaymentsRoute,
     AuthenticatedAdminPopupsRoute: AuthenticatedAdminPopupsRoute,
+    AuthenticatedAdminProgramAssignRoute:
+      AuthenticatedAdminProgramAssignRouteWithChildren,
     AuthenticatedAdminProgramLibraryRoute:
       AuthenticatedAdminProgramLibraryRoute,
     AuthenticatedAdminProgramSubmissionsRoute:
