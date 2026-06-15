@@ -271,15 +271,7 @@ function PortalAnalytics() {
             Loading your training data…
           </Card>
         ) : (results as any[]).length === 0 ? (
-          <Card className="p-10 text-center">
-            <Dumbbell className="mx-auto h-10 w-10 text-muted-foreground" />
-            <p className="mt-3 text-base font-semibold text-foreground">
-              No workouts logged yet
-            </p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Log your first working set to start tracking estimated strength.
-            </p>
-          </Card>
+          <AnalyticsEmptyPreview />
         ) : (
           <>
             {/* SUMMARY STATS */}
