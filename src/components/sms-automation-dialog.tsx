@@ -34,6 +34,7 @@ export type AutomationRow = {
 const TRIGGERS = [
   ["account_created", "New account created"],
   ["subscription_purchased", "Subscription purchased (Stripe)"],
+  ["email_change_requested", "Account email change requested"],
   ["unread_message", "Unread app message"],
   ["missed_check_in", "Missed check-in"],
   ["missed_workout", "Missed workout"],
@@ -63,7 +64,7 @@ const AUDIENCES = [
   ["selected", "Specific selected clients"],
 ] as const;
 
-const CATEGORIES = ["Check-In Reminder","Missed Check-In","Workout Reminder","Missed Workout","Unread Message","Payment Reminder","Renewal Reminder","Birthday","Onboarding","Motivation","Accountability","Custom"];
+const CATEGORIES = ["Check-In Reminder","Missed Check-In","Workout Reminder","Missed Workout","Unread Message","Payment Reminder","Renewal Reminder","Birthday","Onboarding","Motivation","Accountability","Account","Custom"];
 
 const empty: AutomationRow = {
   name: "", category: "Custom", trigger_type: "unread_message", trigger_config: {},
