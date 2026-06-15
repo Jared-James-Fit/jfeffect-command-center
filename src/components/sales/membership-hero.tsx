@@ -5,18 +5,6 @@ import {
 } from "lucide-react";
 import type { ReactNode } from "react";
 
-/**
- * MembershipHero — product-led counterpart to CoachingHero.
- *
- * Visual rhythm:
- *   - LEFT  : price chip, headline, value bullets, primary trial CTA
- *   - RIGHT : stylized phone frame with a synthetic-but-realistic app preview,
- *             plus two floating feature cards (analytics + program).
- *
- * Cool blue/red product glow (vs. coaching's warm orange).
- * No real client data is rendered — labels are generic ("Today's session",
- * "Weekly volume", "Program · Push / Pull / Legs").
- */
 export function MembershipHero({
   priceChip,
   headline,
@@ -40,14 +28,12 @@ export function MembershipHero({
 }) {
   return (
     <section className="relative isolate overflow-hidden border-b border-white/[0.08] bg-[#090A0C] text-[#F5F5F7]">
-      {/* Layered depth: graphite gradient + controlled red radial + subtle grain */}
       <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_85%_-10%,_color-mix(in_oklab,var(--primary)_18%,transparent),transparent_55%)]" />
       <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_10%_110%,#1A1E27_0%,transparent_55%)]" />
       <div className="pointer-events-none absolute inset-0 -z-10 bg-[linear-gradient(180deg,#090A0C_0%,#0B0D12_60%,#090A0C_100%)]" />
       <div className="pointer-events-none absolute inset-0 -z-10 opacity-[0.035] mix-blend-overlay [background-image:radial-gradient(circle_at_1px_1px,#fff_1px,transparent_0)] [background-size:3px_3px]" />
 
       <div className="container mx-auto grid gap-12 px-4 py-14 md:py-20 lg:grid-cols-[1.05fr_1fr] lg:items-center">
-        {/* LEFT — copy + offer */}
         <div className="min-w-0">
           <div className="inline-flex items-center gap-2 rounded-full border border-primary/40 bg-primary/15 px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.18em] text-primary">
             <Smartphone className="h-3 w-3" />
@@ -62,18 +48,18 @@ export function MembershipHero({
             {[
               {
                 Icon: ListChecks,
-                title: "Follow a Proven System",
-                body: "Choose a training plan and know exactly what to do each time you train.",
+                title: "Walk In Knowing the Plan",
+                body: "Pick a plan and walk into every session knowing exactly what to do. No more standing around deciding.",
               },
               {
                 Icon: LineChart,
-                title: "Track Your Progress",
-                body: "Log workouts, monitor personal records and understand your training analytics.",
+                title: "See the Work Pay Off",
+                body: "Log every set, watch your PRs climb, and actually see whether what you're doing is working.",
               },
               {
                 Icon: Sparkles,
-                title: "Get More Than Workouts",
-                body: "Access exercise demonstrations, recipes, nutrition education and member resources.",
+                title: "Everything in One Place",
+                body: "Demos, recipes, nutrition, education \u2014 everything you need so the plan actually sticks.",
               },
             ].map(({ Icon, title, body }) => (
               <li key={title} className="flex items-start gap-3">
@@ -101,14 +87,12 @@ export function MembershipHero({
           {trialNote && (
             <p className="mt-3 text-xs text-[#7E848F]">{trialNote}</p>
           )}
-          {detailsLink && <div className="mt-2">{detailsLink}</div>}
+          {detailsLink && <div className="mt-4">{detailsLink}</div>}
         </div>
 
-        {/* RIGHT — BLACK phone frame + floating cards. Synthetic preview, never real data. */}
         <div className="relative mx-auto w-full max-w-[460px] lg:max-w-none">
           <PhoneFrame heroImage={heroImage ?? null} />
 
-          {/* Floating analytics card — top right */}
           <div className="pointer-events-none absolute -right-2 top-6 hidden w-[200px] animate-[heroFloat_6s_ease-in-out_infinite] rounded-2xl border border-white/[0.14] bg-[#151821] p-3 shadow-[0_20px_50px_-10px_rgba(0,0,0,0.6)] backdrop-blur md:block">
             <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-[#7E848F]">
               <TrendingUp className="h-3 w-3 text-primary" /> Weekly volume
@@ -125,7 +109,6 @@ export function MembershipHero({
             </div>
           </div>
 
-          {/* Floating program card — bottom left */}
           <div className="pointer-events-none absolute -left-2 bottom-8 hidden w-[210px] animate-[heroFloat_7s_ease-in-out_infinite_reverse] rounded-2xl border border-white/[0.14] bg-[#151821] p-3 shadow-[0_20px_50px_-10px_rgba(0,0,0,0.6)] backdrop-blur md:block" style={{ animationDelay: "-2s" }}>
             <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-[#7E848F]">
               <Dumbbell className="h-3 w-3 text-primary" /> Today's session
@@ -144,18 +127,11 @@ export function MembershipHero({
   );
 }
 
-/**
- * BLACK phone frame containing a dark-mode JF app preview.
- * Uses generic, branded labels — no real client names, no fake testimonials.
- */
 function PhoneFrame({ heroImage }: { heroImage: string | null }) {
   return (
     <div className="relative mx-auto aspect-[9/19] w-[280px] rounded-[2.4rem] border border-white/[0.08] bg-gradient-to-b from-[#1A1E27] via-[#0d0f13] to-[#000] p-[6px] shadow-[0_40px_90px_-20px_rgba(0,0,0,0.85),0_0_0_1px_rgba(255,255,255,0.04)_inset] md:w-[320px]">
-      {/* bezel inner ring */}
       <div className="absolute inset-[6px] rounded-[2.05rem] ring-1 ring-white/[0.04]" />
-      {/* notch */}
       <div className="absolute left-1/2 top-[10px] z-10 h-5 w-24 -translate-x-1/2 rounded-b-2xl bg-black" />
-      {/* screen */}
       <div className="relative h-full w-full overflow-hidden rounded-[2rem] bg-[#0A0B0E]">
         {heroImage ? (
           <img
@@ -175,14 +151,12 @@ function PhoneFrame({ heroImage }: { heroImage: string | null }) {
 function SyntheticAppPreview() {
   return (
     <div className="flex h-full w-full flex-col bg-gradient-to-b from-[#0A0B0E] via-[#0B0D12] to-[#111318] text-white">
-      {/* header */}
       <div className="px-4 pb-2 pt-8">
         <div className="text-[10px] font-bold uppercase tracking-widest text-[#7E848F]">JF Effect</div>
         <div className="mt-1 text-lg font-black leading-tight">Welcome back</div>
         <div className="text-[11px] text-[#B0B4BE]">Week 3 · Push / Pull / Legs</div>
       </div>
 
-      {/* hero card */}
       <div className="mx-3 mt-1 rounded-2xl border border-primary/40 bg-gradient-to-br from-primary/25 to-primary/5 p-3">
         <div className="flex items-center justify-between">
           <div>
@@ -198,7 +172,6 @@ function SyntheticAppPreview() {
         </div>
       </div>
 
-      {/* feature row */}
       <div className="mx-3 mt-3 grid grid-cols-3 gap-2">
         {[
           { Icon: Dumbbell, label: "Training" },
@@ -212,7 +185,6 @@ function SyntheticAppPreview() {
         ))}
       </div>
 
-      {/* progress */}
       <div className="mx-3 mt-3 rounded-2xl border border-white/[0.08] bg-[#151821]/80 p-3">
         <div className="flex items-center justify-between text-[10px]">
           <span className="font-bold uppercase tracking-widest text-[#7E848F]">Weekly progress</span>
@@ -232,7 +204,6 @@ function SyntheticAppPreview() {
         </div>
       </div>
 
-      {/* upcoming */}
       <div className="mx-3 mt-3 space-y-1.5">
         {["Tue · Pull · 38 min", "Wed · Legs · 45 min", "Thu · Rest day"].map((row) => (
           <div
@@ -247,7 +218,6 @@ function SyntheticAppPreview() {
 
       <div className="flex-1" />
 
-      {/* bottom nav stub */}
       <div className="mx-3 mb-3 mt-2 flex items-center justify-around rounded-2xl border border-white/[0.08] bg-[#151821]/80 py-2 text-[9px] font-semibold text-[#7E848F]">
         <span className="text-primary">Home</span>
         <span>Train</span>
@@ -279,10 +249,6 @@ export function MemberHeroGhost({ children, ...props }: React.ComponentProps<typ
   );
 }
 
-/**
- * Compact in-hero decision area. Two stacked choices that frame the
- * Membership-vs-Coaching pick before the CTAs.
- */
 export function HeroDecisionArea({ onCoachingClick }: { onCoachingClick?: () => void }) {
   return (
     <div>
@@ -295,7 +261,7 @@ export function HeroDecisionArea({ onCoachingClick }: { onCoachingClick?: () => 
             <User className="h-3.5 w-3.5 text-primary" /> Train Independently
           </div>
           <div className="mt-1 text-[11px] leading-snug text-[#B0B4BE]">
-            Start JF Membership and follow the system on your own schedule.
+            Get the app and run the system on your own. You set the pace.
           </div>
         </div>
         <button
@@ -304,10 +270,10 @@ export function HeroDecisionArea({ onCoachingClick }: { onCoachingClick?: () => 
           className="text-left rounded-xl border border-white/10 bg-[#0F1116] p-3 hover:border-primary/40 hover:bg-[#13161D] transition-colors"
         >
           <div className="flex items-center gap-2 text-xs font-bold text-white">
-            <Users className="h-3.5 w-3.5 text-primary" /> Work Directly With a Coach
+            <Users className="h-3.5 w-3.5 text-primary" /> Work Directly With Me
           </div>
           <div className="mt-1 text-[11px] leading-snug text-[#B0B4BE]">
-            Apply for personalized programming, accountability and ongoing adjustments.
+            Apply to work with me directly — your plan, your accountability, dialed in over time.
           </div>
         </button>
       </div>
