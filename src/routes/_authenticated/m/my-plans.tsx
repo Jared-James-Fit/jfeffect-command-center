@@ -9,9 +9,9 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { PlayCircle, RotateCcw, BookOpen, Eye, Calendar, Clock } from "lucide-react";
+import { PlayCircle, RotateCcw, BookOpen, Eye, Plus, Calendar, Clock } from "lucide-react";
 import { restartPlan } from "@/lib/member-plans.functions";
-import { listMembershipLibrary } from "@/lib/membership-library.functions";
+import { listMembershipLibrary, enrollLibraryPlan } from "@/lib/membership-library.functions";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/m/my-plans")({ component: MyPlans });
