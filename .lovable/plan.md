@@ -1,100 +1,98 @@
 
-# Admin Home → Command Center Rebuild
+## Goal
 
-Based on your answers:
-- **New client** = created within last **30 days**
-- **Payment Issues card** = **hidden when zero** issues
-- **Bottom nav** = **Home / Clients / Messages / Reviews / More** (Tasks moves into More)
-- **Personalization** = new **`admin_dashboard_prefs`** table (syncs per user)
+Rebuild `src/routes/_authenticated/admin/index.tsx` (800 lines today) into a compact command center. No new data sources, no duplicate dashboards — every section reuses an existing query / component / route. The page should reach its end within ~2–3 mobile screens.
 
----
+## Audit (what's there today)
 
-## 1. Unified Attention Engine (single source of truth)
+Existing sections rendered on admin home:
+1. `PageHeader` + role/area switchers
+2. "Today's Command Center" big card + separate "Needs Attention" card
+3. 8-button Quick Actions grid (truncated labels: "Review Check-I…")
+4. 4× `StatCard` (Active Clients, New Clients, Needs Attention, Reviews Waiting)
+5. `TrainingIntelDashboardCard` (`getCoachIntel`)
+6. Training Deadlines (overlaps with #5)
+7. Reviews queues: check-ins, lift videos, nutrition
+8. Payments: overdue + full list of "clients without active product"
+9. `UpcomingAppointmentsCard`
+10. `UpcomingBirthdaysWidget`
+11. `UpcomingEventsPanel`
+12. Recent Clients (5)
+13. Quick Tools / External Links (Stripe, Drive, Sheets, Calendar, Fillout, SignNow)
+14. "Customize Floating Bar" card
+15. "Enter Client POV" big card
 
-Create `src/lib/attention.functions.ts` with `getAttentionFeed` (server fn, `requireSupabaseAuth`, admin role check). It returns one ranked list pulled from:
+Data hooks already in place: `getCoachIntel`, `listLiftVideos`, supabase queries for clients/payments/appointments/messages. **All reused as-is.**
 
-- Pending check-in / nutrition / cardio reviews
-- Expired or expiring-in-≤3-days programs / nutrition / cardio targets
-- Overdue tasks & event deadlines assigned to admin
-- Payment issues (failed charges, past-due invoices)
-- Onboarding gaps (no program / nutrition / cardio assigned, missing intake)
-- New clients (created ≤30 days, prioritized if onboarding incomplete)
-
-Each item: `{ id, kind, severity (critical|warn|info), clientId?, title, subtitle, actionLabel, actionHref, createdAt }`. Sorted by severity → recency. Capped to top 50; top 5 shown on Home, rest paginated in `/admin/attention`.
-
-This kills the contradictory status signals: every card on Home reads from the same feed, so "Needs Setup" vs "Active" never disagree.
-
-## 2. New Dashboard Hierarchy (`src/routes/_authenticated/admin/index.tsx`)
+## New page structure (mobile-first)
 
 ```text
-[Greeting + date + 1-line status summary]
-[Priority Feed]            top 5 attention items, big tap targets (≥56px)
-[Quick Actions grid]       2 cols × icon tiles, ≥72px tall
-  - Add Client
-  - Assign Program
-  - Assign Nutrition
-  - Assign Cardio
-  - New Message
-  - Schedule Event
-[Metrics strip]            horizontal scroll: Active clients · New (30d) · Reviews pending · Revenue MTD
-[Clients Needing Action]   swipe carousel of client cards w/ inline actions
-[Today's Schedule]         collapsed by default if empty
-[Payment Issues]           rendered ONLY when count > 0
-[More →]                   integrations, full payments, Client POV, etc.
+┌────────────────────────────────────────┐
+│ Compact header                         │
+│  JF · [Coaching · Admin ▼] 🔍 🔔  👤  │
+├────────────────────────────────────────┤
+│ Today  ─ 3 priority items max          │
+│   • Nicole — program due in 4d [Update]│
+│   • Liam   — check-in waiting [Review] │
+│   • Maya   — payment overdue  [Send]   │
+│   View all priorities (6)              │
+├────────────────────────────────────────┤
+│ Quick Actions (5 tiles)                │
+│  [+Client] [Message] [Check-Ins]       │
+│  [Program] [More…]                     │
+├────────────────────────────────────────┤
+│ Numbers (2×2 grid, each tappable)      │
+│  Active 15 │ Needs Attn 4              │
+│  Reviews 3 │ Overdue 2                 │
+├────────────────────────────────────────┤
+│ Work Queues  [Reviews|Training|Pay|Onb]│
+│  3 items in active tab • View all      │
+├────────────────────────────────────────┤
+│ Upcoming  (next 3 appts)               │
+├────────────────────────────────────────┤
+│ More ▾  (collapsed by default)         │
+│  Birthdays · Recent Clients · Events   │
+│  Stripe · Drive · Sheets · Calendar    │
+│  Fillout · SignNow · Customize Nav     │
+│  View as Client                        │
+└────────────────────────────────────────┘
 ```
 
-All buttons: `min-h-12 min-w-12`, full labels (no truncation), `text-base`. Skeleton loaders while feed loads.
+## Implementation
 
-## 3. Bottom Nav Restructure
+### Files
 
-Update `src/components/app-shell.tsx` floating bar:
-- Tabs: **Home · Clients · Messages · Reviews · More**
-- Tasks moves into `/admin/more` (alongside Integrations, Settings, Library, etc.)
-- Fix safe-area: add `pb-[calc(env(safe-area-inset-bottom)+88px)]` to main scroll container so content never hides under the bar.
+- **Rewrite** `src/routes/_authenticated/admin/index.tsx` — composes the new sections; keeps the existing route ID and all current queries (moved into sub-components, not duplicated).
+- **New** `src/components/admin-home/today-card.tsx` — merges the old "Today's Command Center" + "Needs Attention" + dedupes Training Intelligence flags. Pulls from existing `getCoachIntel`, check-in queue, lift-video queue, overdue payments. Max 3 items, then "View all priorities (N)".
+- **New** `src/components/admin-home/quick-actions.tsx` — 5 primary tiles + "More Actions" bottom sheet (reuses Sheet primitive) containing the rest of the existing actions. Full short labels: "Check-Ins", "Lift Reviews", "Payment Link", "Broadcast", "Recipe".
+- **New** `src/components/admin-home/numbers-grid.tsx` — 4 compact `StatCard`s, each wrapped in `<Link>` to filtered routes (active clients, priority queue, reviews, overdue payments).
+- **New** `src/components/admin-home/work-queues.tsx` — Tabs: Reviews · Training · Payments · Onboarding. Each tab caps 3 rows + "View all". Payments tab shows "13 clients without active product" summary row, not the full list. Consolidates the previously separate Training Intelligence + Training Deadlines into one Training tab.
+- **New** `src/components/admin-home/upcoming-strip.tsx` — wraps existing `UpcomingAppointmentsCard` with a compact 3-item shell and "View Calendar" link; one-line empty state.
+- **New** `src/components/admin-home/more-drawer.tsx` — collapsible section containing existing `UpcomingBirthdaysWidget`, recent clients (max 3), `UpcomingEventsPanel`, external-tool rows, "Customize Navigation" link, "View as Client" button.
+- **New** `src/components/admin-home/area-role-switcher.tsx` — single compact `[Coaching · Admin ▾]` selector opening a sheet with Business area + View as. Replaces the persistent row of large pills. Uses the existing role/area state and routing — no permission changes.
 
-## 4. Personalization
+### Behaviour & rules
 
-New migration: `admin_dashboard_prefs` table
-- `user_id` (PK, FK auth.users)
-- `section_order` (jsonb array of section keys)
-- `hidden_sections` (jsonb array)
-- `created_at`, `updated_at`
-- RLS: user can read/write own row; service_role full
-- GRANTs to `authenticated` + `service_role`
+- Empty states collapse to one-line rows with a check icon (no large dashed boxes).
+- Every section is wrapped in its own `<Suspense>` + lightweight `ErrorBoundary` so one failure doesn't blank the page.
+- Section caps enforced in code: priorities 3, reviews 3, training 3, appointments 3, recent clients 3, birthdays 2, payment issues 3.
+- Bottom padding: `pb-[max(env(safe-area-inset-bottom),5rem)]` so the bottom nav never overlaps the last card.
+- Desktop (`md:`) uses a 2-column layout: priorities + work queues left, numbers + upcoming + more right.
+- The "Customize Floating Bar" card moves into More → "Customize Navigation" (keeps the route).
+- "Enter Client POV" becomes a compact button in More (label: "View as Client"); shortcut also stays in the header sheet.
 
-Settings drawer on Home (gear icon) lets admin reorder/hide sections. Saved via `saveDashboardPrefs` server fn.
+### What is NOT changing
 
-## 5. Logic Fixes
+- No new database tables, RLS, or migrations.
+- No new server functions or queries — every section reuses the hooks already in `admin/index.tsx`.
+- All existing routes, permissions, role switching, business-area switching, notification counts, and bottom nav remain intact.
+- The analytics e1RM work from the previous turn is untouched.
 
-- **New-client classifier**: `created_at >= now() - interval '30 days'`. Today every client is "New" because the old check uses account age incorrectly — fixed in attention engine.
-- **Needs-Setup classifier**: only flagged when *all three* (program, nutrition, cardio) are unassigned OR intake is incomplete. Today every client is flagged because the check returns true on any missing field.
-- **Payment products**: filter ledger by `status in ('failed','past_due')` instead of any non-paid status.
+### Acceptance smoke tests
 
-## 6. Files to Add / Edit
+- Screenshot at 375 px wide: page ends within ~3 viewports.
+- Each StatCard tap navigates to the filtered list.
+- "More Actions" sheet exposes every action currently on the home grid.
+- With zero priorities/reviews/appointments, page is still short (no giant empty cards).
+- Bottom nav doesn't cover the last row.
 
-- ADD `src/lib/attention.functions.ts` — `getAttentionFeed`, `saveDashboardPrefs`, `getDashboardPrefs`
-- ADD `src/components/admin/command-center/priority-feed.tsx`
-- ADD `src/components/admin/command-center/quick-actions-grid.tsx`
-- ADD `src/components/admin/command-center/metrics-strip.tsx`
-- ADD `src/components/admin/command-center/clients-needing-action.tsx`
-- ADD `src/components/admin/command-center/section-settings-drawer.tsx`
-- ADD `src/routes/_authenticated/admin/attention.tsx` (full paginated list)
-- ADD `src/routes/_authenticated/admin/more.tsx` (Tasks, Integrations, etc.)
-- ADD migration `admin_dashboard_prefs` table
-- EDIT `src/routes/_authenticated/admin/index.tsx` — full rewrite to new hierarchy
-- EDIT `src/components/app-shell.tsx` — new 5-tab bottom nav + safe-area padding
-- EDIT `src/components/clients/clients-status.ts` — fix Needs-Setup + New-client logic (reuse in attention engine)
-
-## 7. Verification Plan
-
-After build, drive Playwright headless against `/admin` at 390×844 viewport:
-- Screenshot Home top, mid, bottom — confirm no overlap with floating bar
-- Tap each Quick Action tile — confirm navigation
-- Confirm Payment Issues card hidden when count is 0
-- Confirm at least one client shows correct mixed status (e.g. Program green, Nutrition red)
-
----
-
-**Estimated diff**: 1 migration, ~12 files, ~1,200 lines net.
-
-Reply **go** to start. I'll begin with the migration (requires your approval), then ship the server fn + UI in one pass.
