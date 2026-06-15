@@ -32,6 +32,13 @@ const ROW_FIELDS = [
   "percentage","percentage_basis","load_kg","load_lb","rest_seconds",
   "tempo","time_profile","notes",
   "manual_override","override_of_pct","load_unit","card_color",
+  // Time-vs-reps prescription. Without these, toggling the Reps/Time
+  // pill in the builder updates local state but the next save drops
+  // measurement_type and duration_seconds, so the toggle silently reverts
+  // back to reps on reload. The *_backup columns preserve the last value
+  // entered in the inactive mode so flipping back restores it.
+  "measurement_type","duration_seconds",
+  "reps_text_backup","duration_seconds_backup",
 ] as const;
 
 function treeToPayload(tree: any) {
