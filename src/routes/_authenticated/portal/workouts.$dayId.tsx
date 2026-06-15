@@ -1837,6 +1837,43 @@ function SetRow({
       focusMode ? "grid-cols-[36px_1.1fr_1.1fr_1fr_52px]" : "grid-cols-[28px_1.1fr_1.1fr_1fr_44px]",
     )}>
       <span className={cn("font-mono text-muted-foreground", focusMode ? "text-sm" : "text-xs")}>{setIndex}</span>
+      {isTime ? (
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            disabled={readonly || !prescribedSec}
+            onClick={() => setTimerOpen(true)}
+            aria-label={`Start countdown for set ${setIndex}${prescribedSec ? ` (${formatDuration(prescribedSec)})` : ""}`}
+            className={cn(
+              "inline-flex flex-1 items-center justify-center gap-1 rounded-md border px-2 font-bold tabular-nums transition-colors",
+              focusMode ? "h-9 text-sm" : "h-8 text-xs",
+              isConfirmed
+                ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-600"
+                : "border-primary/40 bg-primary/10 text-primary hover:bg-primary/20",
+              (!prescribedSec || readonly) && "cursor-not-allowed opacity-60",
+            )}
+          >
+            <Timer className="h-3.5 w-3.5" />
+            {isConfirmed && completedSec != null
+              ? formatDuration(completedSec)
+              : (prescribedSec ? formatDuration(prescribedSec) : "—")}
+          </button>
+          {!readonly && !isConfirmed && prescribedSec ? (
+            <button
+              type="button"
+              onClick={() => setQuickOpen(true)}
+              aria-label="Mark complete without timer"
+              className={cn(
+                "inline-flex shrink-0 items-center justify-center rounded-md border border-border bg-background text-muted-foreground hover:bg-secondary",
+                focusMode ? "h-9 w-9" : "h-8 w-8",
+              )}
+              title="Mark complete without timer"
+            >
+              <CheckCircle2 className="h-3.5 w-3.5" />
+            </button>
+          ) : null}
+        </div>
+      ) : (
       <Input
         className={cn(focusMode ? "h-9 text-base px-2" : "h-8 text-sm px-2", "bg-white text-black placeholder:text-gray-500")}
         inputMode="numeric"
@@ -1851,6 +1888,7 @@ function SetRow({
         readOnly={readonly}
         disabled={readonly}
       />
+      )}
       <Input
         className={cn(focusMode ? "h-9 text-base px-2" : "h-8 text-sm px-2", "bg-white text-black placeholder:text-gray-500")}
         inputMode="decimal"
