@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
+import { Link } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,12 +14,34 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Clock, AlertTriangle, CheckCircle2, Inbox, Sparkles, Upload, X } from "lucide-react";
 import { toast } from "sonner";
 import { getMyNutritionStatusFn, submitNutritionUpdateFn } from "@/lib/nutrition-updates.functions";
+import { listFormsForClient, pickNutritionUpdateForm } from "@/lib/native-forms";
+import { usePortalUserId } from "@/lib/client-impersonation";
 
 export function NutritionUpdatePanel() {
   const qc = useQueryClient();
   const getStatus = useServerFn(getMyNutritionStatusFn);
   const submit = useServerFn(submitNutritionUpdateFn);
   const { data, isLoading } = useQuery({ queryKey: ["my-nutrition-status"], queryFn: () => getStatus() });
+
+  // Look up the client's "Nutrition Update Request" Fillout form so the
+  // CTA can deep-link straight into the in-app embedded form view at
+  // /portal/check-ins/$formId — same surface used for weekly check-ins.
+  const portalUserId = usePortalUserId();
+  const { data: meClient } = useQuery({
+    queryKey: ["my-client-id", portalUserId],
+    enabled: !!portalUserId,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("clients").select("id").eq("user_id", portalUserId!).maybeSingle();
+      return data;
+    },
+  });
+  const { data: myForms = [] } = useQuery({
+    queryKey: ["nf-forms-for-client", meClient?.id],
+    enabled: !!meClient?.id,
+    queryFn: () => listFormsForClient(meClient!.id),
+  });
+  const nutritionForm = pickNutritionUpdateForm(myForms as any);
 
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<any>({
@@ -118,13 +141,29 @@ export function NutritionUpdatePanel() {
             </div>
             {s.sub ? <p className="text-sm mt-1 opacity-80">{s.sub}</p> : null}
           </div>
-          <Button size="lg" className="font-black bg-gradient-primary hidden sm:inline-flex" disabled={isSubmitted} onClick={() => setOpen(true)}>
-            {isSubmitted ? "Waiting…" : "Submit Update"}
-          </Button>
+          {nutritionForm ? (
+            <Button asChild size="lg" className="font-black bg-gradient-primary hidden sm:inline-flex" disabled={isSubmitted}>
+              <Link to="/portal/check-ins/$formId" params={{ formId: nutritionForm.id }}>
+                {isSubmitted ? "Waiting…" : "Submit Update"}
+              </Link>
+            </Button>
+          ) : (
+            <Button size="lg" className="font-black bg-gradient-primary hidden sm:inline-flex" disabled={isSubmitted} onClick={() => setOpen(true)}>
+              {isSubmitted ? "Waiting…" : "Submit Update"}
+            </Button>
+          )}
         </div>
-        <Button size="lg" className="font-black bg-gradient-primary w-full mt-3 sm:hidden" disabled={isSubmitted} onClick={() => setOpen(true)}>
-          {isSubmitted ? "Waiting on coach…" : "Submit Nutrition Update"}
-        </Button>
+        {nutritionForm ? (
+          <Button asChild size="lg" className="font-black bg-gradient-primary w-full mt-3 sm:hidden" disabled={isSubmitted}>
+            <Link to="/portal/check-ins/$formId" params={{ formId: nutritionForm.id }}>
+              {isSubmitted ? "Waiting on coach…" : "Submit Nutrition Update"}
+            </Link>
+          </Button>
+        ) : (
+          <Button size="lg" className="font-black bg-gradient-primary w-full mt-3 sm:hidden" disabled={isSubmitted} onClick={() => setOpen(true)}>
+            {isSubmitted ? "Waiting on coach…" : "Submit Nutrition Update"}
+          </Button>
+        )}
         {ts === "published" && lastPub?.coach_note ? (
           <div className="mt-3 rounded border border-violet-500/30 bg-violet-500/5 p-3 text-sm">
             <div className="text-[10px] uppercase opacity-70 mb-1">Coach note</div>

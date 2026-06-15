@@ -11,7 +11,7 @@ import { derivePhase } from "@/lib/training-phases";
 import { toast } from "sonner";
 import type { WeightUnit } from "@/lib/progress-metrics";
 import { HomeScreenSetupCard } from "@/components/home-screen-setup-card";
-import { listFormsForClient } from "@/lib/native-forms";
+import { listFormsForClient, pickWeeklyCheckInForm } from "@/lib/native-forms";
 import { ManualCheckInReviewModal } from "@/components/manual-check-in-review-modal";
 import { ClientActionRequestModal } from "@/components/client-action-request-modal";
 import { UpcomingEventsPanel } from "@/components/events/upcoming-events-panel";
@@ -398,6 +398,7 @@ function PortalHome() {
             messageBadge={unreadMsgs.length}
             checkInBadge={(assignedForms as any[])?.length || undefined}
             onLogWeight={() => bodyweightRef.current?.open()}
+            weeklyCheckInFormId={pickWeeklyCheckInForm(assignedForms as any)?.id}
           />
         )}
 

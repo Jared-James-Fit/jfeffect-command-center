@@ -15,15 +15,25 @@ export function QuickActionsGrid({
   onLogWeight,
   messageBadge,
   checkInBadge,
+  weeklyCheckInFormId,
 }: {
   onLogWeight?: () => void;
   messageBadge?: number;
   checkInBadge?: number;
+  /**
+   * When set, the "Submit Check-In" tile deep-links straight into the
+   * embedded weekly check-in form instead of the forms list — so the
+   * client never feels like they leave the app to fill it out.
+   */
+  weeklyCheckInFormId?: string;
 }) {
+  const checkInTo = weeklyCheckInFormId
+    ? `/portal/check-ins/${weeklyCheckInFormId}`
+    : "/portal/check-ins";
   const tiles: Tile[] = [
     { to: "/portal/workouts", label: "Workouts", icon: Activity, emphasis: true },
     { to: "/portal/messages", label: "Message Coach", icon: MessageCircle, badge: messageBadge },
-    { to: "/portal/check-ins", label: "Submit Check-In", icon: ClipboardCheck, badge: checkInBadge },
+    { to: checkInTo, label: "Submit Check-In", icon: ClipboardCheck, badge: checkInBadge },
     { to: "#", label: "Log Bodyweight", icon: Scale, onClick: onLogWeight },
     { to: "/portal/lift-videos", label: "Upload Lift", icon: Video },
     { to: "/portal/nutrition-targets", label: "Nutrition", icon: Apple },
