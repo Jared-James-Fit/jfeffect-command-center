@@ -14,7 +14,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { validateTemplatePayload, type DayIssue } from "@/lib/pl-template-validation";
 import {
   Plus, BookOpen, UserPlus, Eye, Pencil, Copy, Archive as ArchiveIcon,
-  ArchiveRestore, Trash2, Clock, Calendar, Layers, MoreVertical, Search, Users, AlertTriangle, Share2, Inbox,
+  ArchiveRestore, Trash2, Clock, Calendar, Layers, MoreVertical, Search, Users, AlertTriangle, Share2, Inbox, Settings2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { runJob } from "@/lib/progress-jobs";
@@ -319,15 +319,20 @@ function Stat({ label, value, icon }: { label: string; value: any; icon?: any })
 }
 
 function RowMenu({ tpl, onChanged }: { tpl: any; onChanged: () => void }) {
+  const [editOpen, setEditOpen] = useState(false);
   const run = async (fn: () => Promise<any>, ok: string) => {
     try { await fn(); toast.success(ok); onChanged(); } catch (e: any) { toast.error(e.message); }
   };
   return (
+    <>
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button size="icon" variant="ghost" className="h-7 w-7"><MoreVertical className="h-4 w-4" /></Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-40">
+      <DropdownMenuContent align="end" className="w-44">
+        <DropdownMenuItem onClick={() => setEditOpen(true)}>
+          <Settings2 className="mr-2 h-3.5 w-3.5" /> Edit details
+        </DropdownMenuItem>
         <DropdownMenuItem
           onClick={() => {
             const next = window.prompt("Rename template", tpl.name ?? "");
@@ -363,6 +368,13 @@ function RowMenu({ tpl, onChanged }: { tpl: any; onChanged: () => void }) {
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
+    <EditTemplateDetailsDialog
+      templateId={tpl.id}
+      open={editOpen}
+      onOpenChange={setEditOpen}
+      onSaved={onChanged}
+    />
+    </>
   );
 }
 
