@@ -415,6 +415,7 @@ function AdminDashboard() {
   ];
   const moreActions = [
     { label: "Lift Reviews",   to: "/admin/lift-videos",      icon: Video },
+    { label: "Tasks",          to: "/admin/content",          icon: ClipboardList, search: { tab: "tasks" } as any },
     { label: "Payment Link",   to: "/admin/payment-links",    icon: DollarSign },
     { label: "Appointment",    to: "/admin/calendar",         icon: Calendar },
     { label: "Broadcast",      to: "/admin/broadcasts",       icon: Megaphone },
