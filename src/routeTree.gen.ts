@@ -206,6 +206,7 @@ import { Route as AuthenticatedAdminMembershipSalesPageRouteImport } from './rou
 import { Route as AuthenticatedAdminMembershipResetLinksRouteImport } from './routes/_authenticated/admin/membership.reset-links'
 import { Route as AuthenticatedAdminMembershipRefundPolicyRouteImport } from './routes/_authenticated/admin/membership.refund-policy'
 import { Route as AuthenticatedAdminMembershipPromoToolsRouteImport } from './routes/_authenticated/admin/membership.promo-tools'
+import { Route as AuthenticatedAdminMembershipOnboardingEmailRouteImport } from './routes/_authenticated/admin/membership.onboarding-email'
 import { Route as AuthenticatedAdminMembershipNotificationsRouteImport } from './routes/_authenticated/admin/membership.notifications'
 import { Route as AuthenticatedAdminMembershipLaunchReadinessRouteImport } from './routes/_authenticated/admin/membership.launch-readiness'
 import { Route as AuthenticatedAdminMembershipCheckoutSettingsRouteImport } from './routes/_authenticated/admin/membership.checkout-settings'
@@ -1368,6 +1369,12 @@ const AuthenticatedAdminMembershipPromoToolsRoute =
     path: '/promo-tools',
     getParentRoute: () => AuthenticatedAdminMembershipRoute,
   } as any)
+const AuthenticatedAdminMembershipOnboardingEmailRoute =
+  AuthenticatedAdminMembershipOnboardingEmailRouteImport.update({
+    id: '/onboarding-email',
+    path: '/onboarding-email',
+    getParentRoute: () => AuthenticatedAdminMembershipRoute,
+  } as any)
 const AuthenticatedAdminMembershipNotificationsRoute =
   AuthenticatedAdminMembershipNotificationsRouteImport.update({
     id: '/notifications',
@@ -1725,6 +1732,7 @@ export interface FileRoutesByFullPath {
   '/admin/membership/checkout-settings': typeof AuthenticatedAdminMembershipCheckoutSettingsRoute
   '/admin/membership/launch-readiness': typeof AuthenticatedAdminMembershipLaunchReadinessRoute
   '/admin/membership/notifications': typeof AuthenticatedAdminMembershipNotificationsRoute
+  '/admin/membership/onboarding-email': typeof AuthenticatedAdminMembershipOnboardingEmailRoute
   '/admin/membership/promo-tools': typeof AuthenticatedAdminMembershipPromoToolsRoute
   '/admin/membership/refund-policy': typeof AuthenticatedAdminMembershipRefundPolicyRoute
   '/admin/membership/reset-links': typeof AuthenticatedAdminMembershipResetLinksRoute
@@ -1950,6 +1958,7 @@ export interface FileRoutesByTo {
   '/admin/membership/checkout-settings': typeof AuthenticatedAdminMembershipCheckoutSettingsRoute
   '/admin/membership/launch-readiness': typeof AuthenticatedAdminMembershipLaunchReadinessRoute
   '/admin/membership/notifications': typeof AuthenticatedAdminMembershipNotificationsRoute
+  '/admin/membership/onboarding-email': typeof AuthenticatedAdminMembershipOnboardingEmailRoute
   '/admin/membership/promo-tools': typeof AuthenticatedAdminMembershipPromoToolsRoute
   '/admin/membership/refund-policy': typeof AuthenticatedAdminMembershipRefundPolicyRoute
   '/admin/membership/reset-links': typeof AuthenticatedAdminMembershipResetLinksRoute
@@ -2182,6 +2191,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/membership/checkout-settings': typeof AuthenticatedAdminMembershipCheckoutSettingsRoute
   '/_authenticated/admin/membership/launch-readiness': typeof AuthenticatedAdminMembershipLaunchReadinessRoute
   '/_authenticated/admin/membership/notifications': typeof AuthenticatedAdminMembershipNotificationsRoute
+  '/_authenticated/admin/membership/onboarding-email': typeof AuthenticatedAdminMembershipOnboardingEmailRoute
   '/_authenticated/admin/membership/promo-tools': typeof AuthenticatedAdminMembershipPromoToolsRoute
   '/_authenticated/admin/membership/refund-policy': typeof AuthenticatedAdminMembershipRefundPolicyRoute
   '/_authenticated/admin/membership/reset-links': typeof AuthenticatedAdminMembershipResetLinksRoute
@@ -2414,6 +2424,7 @@ export interface FileRouteTypes {
     | '/admin/membership/checkout-settings'
     | '/admin/membership/launch-readiness'
     | '/admin/membership/notifications'
+    | '/admin/membership/onboarding-email'
     | '/admin/membership/promo-tools'
     | '/admin/membership/refund-policy'
     | '/admin/membership/reset-links'
@@ -2639,6 +2650,7 @@ export interface FileRouteTypes {
     | '/admin/membership/checkout-settings'
     | '/admin/membership/launch-readiness'
     | '/admin/membership/notifications'
+    | '/admin/membership/onboarding-email'
     | '/admin/membership/promo-tools'
     | '/admin/membership/refund-policy'
     | '/admin/membership/reset-links'
@@ -2870,6 +2882,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/membership/checkout-settings'
     | '/_authenticated/admin/membership/launch-readiness'
     | '/_authenticated/admin/membership/notifications'
+    | '/_authenticated/admin/membership/onboarding-email'
     | '/_authenticated/admin/membership/promo-tools'
     | '/_authenticated/admin/membership/refund-policy'
     | '/_authenticated/admin/membership/reset-links'
@@ -4361,6 +4374,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminMembershipPromoToolsRouteImport
       parentRoute: typeof AuthenticatedAdminMembershipRoute
     }
+    '/_authenticated/admin/membership/onboarding-email': {
+      id: '/_authenticated/admin/membership/onboarding-email'
+      path: '/onboarding-email'
+      fullPath: '/admin/membership/onboarding-email'
+      preLoaderRoute: typeof AuthenticatedAdminMembershipOnboardingEmailRouteImport
+      parentRoute: typeof AuthenticatedAdminMembershipRoute
+    }
     '/_authenticated/admin/membership/notifications': {
       id: '/_authenticated/admin/membership/notifications'
       path: '/notifications'
@@ -4613,6 +4633,7 @@ interface AuthenticatedAdminMembershipRouteChildren {
   AuthenticatedAdminMembershipCheckoutSettingsRoute: typeof AuthenticatedAdminMembershipCheckoutSettingsRoute
   AuthenticatedAdminMembershipLaunchReadinessRoute: typeof AuthenticatedAdminMembershipLaunchReadinessRoute
   AuthenticatedAdminMembershipNotificationsRoute: typeof AuthenticatedAdminMembershipNotificationsRoute
+  AuthenticatedAdminMembershipOnboardingEmailRoute: typeof AuthenticatedAdminMembershipOnboardingEmailRoute
   AuthenticatedAdminMembershipPromoToolsRoute: typeof AuthenticatedAdminMembershipPromoToolsRoute
   AuthenticatedAdminMembershipRefundPolicyRoute: typeof AuthenticatedAdminMembershipRefundPolicyRoute
   AuthenticatedAdminMembershipResetLinksRoute: typeof AuthenticatedAdminMembershipResetLinksRoute
@@ -4647,6 +4668,8 @@ const AuthenticatedAdminMembershipRouteChildren: AuthenticatedAdminMembershipRou
       AuthenticatedAdminMembershipLaunchReadinessRoute,
     AuthenticatedAdminMembershipNotificationsRoute:
       AuthenticatedAdminMembershipNotificationsRoute,
+    AuthenticatedAdminMembershipOnboardingEmailRoute:
+      AuthenticatedAdminMembershipOnboardingEmailRoute,
     AuthenticatedAdminMembershipPromoToolsRoute:
       AuthenticatedAdminMembershipPromoToolsRoute,
     AuthenticatedAdminMembershipRefundPolicyRoute:
