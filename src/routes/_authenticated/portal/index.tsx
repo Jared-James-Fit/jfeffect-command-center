@@ -4,7 +4,8 @@ import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
 import { usePortalUserId } from "@/lib/client-impersonation";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Bell, ClipboardCheck, ShieldAlert, MessageCircle, Mail, CheckCheck, AlertTriangle, Dumbbell, Settings, Receipt, FileSignature, Calendar as CalendarIcon } from "lucide-react";
+import { Bell, ClipboardCheck, ShieldAlert, MessageCircle, Mail, CheckCheck, AlertTriangle, Dumbbell, Settings, Receipt, FileSignature, Calendar as CalendarIcon, Target } from "lucide-react";
+import { isGoalsSetupComplete, type ClientGoalsSetupRow } from "@/lib/client-goals/schema";
 import type { TrainingPhase } from "@/lib/training-phases";
 import { derivePhase } from "@/lib/training-phases";
 import { toast } from "sonner";
@@ -88,6 +89,22 @@ function PortalHome() {
       const { data } = await supabase
         .from("training_phases").select("*").eq("client_id", client!.id)
         .order("start_date", { ascending: false });
+      return (data ?? []) as any[];
+    },
+  });
+
+  const { data: goalsSetup } = useQuery({
+    queryKey: ["client-goals-setup", client?.id],
+    enabled: !!client?.id,
+    queryFn: async () => {
+      const { data } = await (supabase as any)
+        .from("client_goals_setup")
+        .select("*")
+        .eq("client_id", client!.id)
+        .maybeSingle();
+      return data as ClientGoalsSetupRow | null;
+    },
+  });
       return (data ?? []) as TrainingPhase[];
     },
   });
