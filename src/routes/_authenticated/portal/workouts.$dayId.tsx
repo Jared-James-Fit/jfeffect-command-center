@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Clock, CheckCircle2, Play, StickyNote, NotebookPen, Info, Lock, LockOpen, Maximize2, Minimize2, AlertTriangle, RefreshCw, Send, MessageCircle, ChevronDown, ChevronUp } from "lucide-react";
+import { ArrowLeft, Clock, CheckCircle2, Play, StickyNote, NotebookPen, Info, Maximize2, Minimize2, AlertTriangle, RefreshCw, Send, MessageCircle, ChevronDown, ChevronUp } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { getExerciseVideoSource } from "@/lib/exercise-video";
@@ -272,18 +272,13 @@ function WorkoutDay() {
   const today = startOfDay(new Date());
   const isOutsideScheduledDay = !!scheduledDate && scheduledDate.getTime() !== today.getTime();
 
-  const blockEnded = block?.end_date ? new Date(block.end_date) < today : false;
-  const blockCompleted = block?.status === "Completed" || block?.status === "Archived";
   const { isImpersonating } = useClientImpersonation();
-  // "Auto" readonly = past/closed workouts the client would otherwise be locked
-  // out of. The client can opt-in to editing a past workout via the Edit button
-  // below (`unlocked` flips this off). Impersonation always stays read-only so
-  // coaches don't edit while viewing as the client.
-  const [unlocked, setUnlocked] = useState<boolean>(search.edit === 1);
-  const autoReadonly = search.readonly === 1 || blockEnded || blockCompleted;
-  const readonly = (autoReadonly && !unlocked) || isImpersonating;
-  // Reset the unlock when navigating to a different workout.
-  useEffect(() => { setUnlocked(search.edit === 1); }, [dayId, search.edit]);
+  // Workouts are ALWAYS editable — past, today, future, completed. There is no
+  // automatic lock based on date, block status, program status, or completion.
+  // The only way a workout becomes read-only is an explicit manual lock
+  // (currently none exist). Admin/coach POV mode also stays fully editable so
+  // they can fix client logs in place.
+  const readonly = false;
 
   const { data: rows = [], isSuccess: rowsLoaded } = useQuery({
     queryKey: ["pl-day-rows", dayId],
@@ -745,12 +740,6 @@ function WorkoutDay() {
           {completion && !completion.completed_at && (completion.in_progress_at || completion.started_at) && (
             <Badge variant="outline" className="border-amber-500/30 bg-amber-500/10 text-amber-500">In progress</Badge>
           )}
-          {readonly && <Badge variant="outline" className="border-muted-foreground/30 bg-muted/30 text-muted-foreground"><Lock className="mr-1 h-3 w-3" /> Read-only</Badge>}
-          {autoReadonly && !isImpersonating && unlocked && (
-            <Button size="sm" variant="ghost" onClick={() => setUnlocked(false)}>
-              <Lock className="mr-1 h-3 w-3" /> Lock again
-            </Button>
-          )}
           <div className="ml-auto flex items-center gap-2">
             {/* Global KG/LB toggle removed — per-exercise unit controls remain
                 the single source of truth for unit selection. */}
@@ -855,48 +844,7 @@ function WorkoutDay() {
           </Card>
         )}
 
-        {readonly && autoReadonly && !isImpersonating && (
-          <Card className="border-primary/40 bg-gradient-to-br from-primary/10 via-primary/5 to-transparent p-4">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-              <div className="flex items-start gap-3 sm:flex-1">
-                <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-primary/15 text-primary">
-                  <Lock className="h-5 w-5" />
-                </div>
-                <div className="min-w-0">
-                  <div className="text-sm font-bold text-foreground">
-                    This workout is locked
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    It's from a past block or session. Unlock to fix sets, add reps,
-                    or fill in anything you missed — your changes save automatically.
-                  </div>
-                </div>
-              </div>
-              <Button
-                size="lg"
-                onClick={() => {
-                  setUnlocked(true);
-                  toast.success("Editing unlocked — your changes will save");
-                }}
-                className="h-12 w-full gap-2 bg-primary px-5 text-base font-bold text-primary-foreground shadow-md shadow-primary/20 hover:bg-primary/90 sm:w-auto"
-              >
-                <LockOpen className="h-5 w-5" /> Unlock to edit
-              </Button>
-            </div>
-          </Card>
-        )}
-        {readonly && !autoReadonly && (
-          <Card className="flex items-start gap-2 border-border bg-secondary/30 p-3 text-xs">
-            <Lock className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-            <div>Viewing a past workout. Logs are read-only.</div>
-          </Card>
-        )}
-        {autoReadonly && unlocked && !isImpersonating && (
-          <Card className="flex items-start gap-2 border-amber-500/30 bg-amber-500/5 p-3 text-xs">
-            <Info className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
-            <div>You're editing a previous workout. Changes save automatically.</div>
-          </Card>
-        )}
+        {/* Workouts are always editable — no date/block/program lock banners. */}
 
         {!focusMode && (
         <WorkoutLoadBoundary clientId={client?.id ?? null} clientName={(client as any)?.full_name ?? null} dayId={dayId} route={`/portal/workouts/${dayId}`}>
