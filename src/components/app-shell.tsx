@@ -586,27 +586,38 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
                         const active = item.to === activeTo;
                         const Icon = item.icon;
                         const pinned = isPinned(item.to);
+                        // NOTE: keep the pin <button> as a SIBLING of the <Link>, not
+                        // a descendant. <a><button/></a> is invalid HTML and browsers
+                        // reflow the DOM, which can swallow clicks on the link so it
+                        // never navigates (regression seen on Membership Admin sidebar).
                         const link = (
-                          <Link
-                            to={item.to}
+                          <div
                             className={cn(
                               "group/row flex items-center rounded-md transition-colors",
-                              rowPadding,
-                              rowText,
                               active
                                 ? "bg-primary/15 text-primary font-semibold border-l-2 border-primary"
                                 : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground border-l-2 border-transparent",
                             )}
                           >
-                            <div className="relative"><Icon className="h-4 w-4 shrink-0" /><SidebarBadge badge={navBadges[item.to]} isCollapsed={isCollapsed} /></div>
-                            {!isCollapsed && <span className="truncate flex-1">{item.label}</span>}
-                            {!isCollapsed && <SidebarBadge badge={navBadges[item.to]} isCollapsed={false} />}
+                            <Link
+                              to={item.to}
+                              className={cn(
+                                "flex flex-1 items-center min-w-0",
+                                rowPadding,
+                                rowText,
+                                active ? "text-primary" : "text-sidebar-foreground",
+                              )}
+                            >
+                              <div className="relative"><Icon className="h-4 w-4 shrink-0" /><SidebarBadge badge={navBadges[item.to]} isCollapsed={isCollapsed} /></div>
+                              {!isCollapsed && <span className="truncate flex-1">{item.label}</span>}
+                              {!isCollapsed && <SidebarBadge badge={navBadges[item.to]} isCollapsed={false} />}
+                            </Link>
                             {!isCollapsed && (
                               <button
                                 type="button"
                                 onClick={(e) => { e.preventDefault(); e.stopPropagation(); onTogglePin(item); }}
                                 className={cn(
-                                  "ml-1 grid h-5 w-5 place-items-center rounded transition",
+                                  "mr-2 grid h-5 w-5 shrink-0 place-items-center rounded transition",
                                   pinned
                                     ? "text-amber-300 opacity-100"
                                     : "text-muted-foreground opacity-0 group-hover/row:opacity-100 hover:text-amber-300",
@@ -618,7 +629,7 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
                                 <Star className={cn("h-3 w-3", pinned && "fill-current")} />
                               </button>
                             )}
-                          </Link>
+                          </div>
                         );
                         return (
                           <li key={item.to}>
