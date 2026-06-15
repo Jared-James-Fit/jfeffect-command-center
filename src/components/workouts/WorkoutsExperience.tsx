@@ -530,15 +530,16 @@ function DayPreviewSheet({
     queryKey: ["day-preview-exercises", item.day?.id, open],
     enabled: open && !!item.day?.id,
     queryFn: async () => {
-      // pl_exercise_blocks holds the exercise rows for a day. Fall back to
-      // pl_exercise_rows if the relation is missing.
       const { data } = await supabase
         .from("pl_exercise_rows")
-        .select("id, exercise_name, order_index")
+        .select("id, exercise_name_override, sort_order, exercises(name)")
         .eq("day_id", item.day.id)
-        .order("order_index", { ascending: true })
+        .order("sort_order", { ascending: true })
         .limit(8);
-      return data ?? [];
+      return (data ?? []).map((r: any) => ({
+        id: r.id,
+        name: r.exercise_name_override || r.exercises?.name || "Exercise",
+      }));
     },
   });
 
@@ -564,7 +565,7 @@ function DayPreviewSheet({
             <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Main exercises</div>
             <ul className="mt-2 space-y-1 text-sm">
               {exercises.map((e: any) => (
-                <li key={e.id} className="truncate">{e.exercise_name ?? "Exercise"}</li>
+                <li key={e.id} className="truncate">{e.name}</li>
               ))}
             </ul>
           </div>
