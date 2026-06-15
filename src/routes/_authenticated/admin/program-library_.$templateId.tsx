@@ -1681,10 +1681,14 @@ function DayEditor({ day, setDay, exercises, compact, dayKey }: { day: any; setD
 
   return (
     <div
+      ref={containerRef}
+      onMouseDownCapture={activateDay}
+      onFocusCapture={activateDay}
       className={cn(
         "relative space-y-3 rounded-lg bg-builder-canvas p-3 sm:p-4 ring-1 ring-builder-card-border/40 transition-all",
         pbDragging === "exercise" && !dragOver && "ring-2 ring-dashed ring-primary/40",
         dragOver && "ring-4 ring-primary ring-offset-2 ring-offset-background bg-primary/10 shadow-[0_0_0_4px_hsl(var(--primary)/0.15)]",
+        isActive && "ring-2 ring-primary/60 shadow-[0_0_0_3px_hsl(var(--primary)/0.12)]",
       )}
       onDragOver={(e) => {
         if (Array.from(e.dataTransfer.types).includes(DND_EXERCISE)) {
@@ -1711,8 +1715,37 @@ function DayEditor({ day, setDay, exercises, compact, dayKey }: { day: any; setD
         </div>
       )}
       <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-        <span className="inline-flex items-center gap-1"><Clock className="h-3 w-3" /> Est {durationRange(dayMin)}</span>
+        <span className="inline-flex items-center gap-2">
+          <span className="inline-flex items-center gap-1"><Clock className="h-3 w-3" /> Est {durationRange(dayMin)}</span>
+          {isActive && (
+            <span className="inline-flex items-center rounded bg-primary px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-primary-foreground">
+              Editing{day?.title ? ` · ${day.title}` : ""}
+            </span>
+          )}
+        </span>
         <div className="flex items-center gap-1">
+          {dayKey && rows.length > 0 && (
+            <>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 px-2 text-[11px]"
+                onClick={expandAll}
+                title="Expand every card in this day (Alt+E)"
+              >
+                <ChevronDown className="mr-1 h-3 w-3" /> Expand all
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 px-2 text-[11px]"
+                onClick={collapseAll}
+                title="Collapse every card in this day (Alt+Shift+E)"
+              >
+                <ChevronUp className="mr-1 h-3 w-3" /> Collapse all
+              </Button>
+            </>
+          )}
           {clip && clip.kind === "rows" && clip.rows.length > 0 && (
             <Button size="sm" variant="outline" className="h-7 text-[11px]" onClick={pasteFromClip} title={`Paste ${clip.rows.length} exercise${clip.rows.length === 1 ? "" : "s"}`}>
               <ClipboardPaste className="mr-1 h-3 w-3" /> Paste ({clip.rows.length})
@@ -1795,6 +1828,7 @@ function DayEditor({ day, setDay, exercises, compact, dayKey }: { day: any; setD
                 exercises={exercises}
                 compact={compact !== false}
                 purposeLabel={purposeLabels[i]}
+                dayKey={dayKey}
               />
             </div>
             </Fragment>
