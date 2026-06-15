@@ -1033,6 +1033,11 @@ function WorkoutDay() {
         {!readonly && completion?.completed_at && hasFeedback && (
           <WorkoutFeedbackEditButton locked={feedbackLocked} onOpen={() => setFeedbackOpen(true)} />
         )}
+        {/* Read-only viewer for past/locked workouts — clients can always
+            review what they submitted; editing still requires Unlock. */}
+        {readonly && completion?.completed_at && hasFeedback && !isImpersonating && (
+          <WorkoutFeedbackEditButton locked onOpen={() => setFeedbackOpen(true)} />
+        )}
       </div>
 
       {/* Sticky general-notes shortcut */}
@@ -1045,7 +1050,7 @@ function WorkoutDay() {
       )}
 
       {/* Post-workout feedback sheet. Client POV (readonly) never opens it. */}
-      {!readonly && client?.id && (
+      {client?.id && !isImpersonating && (
         <WorkoutFeedbackSheet
           open={feedbackOpen && !!completion?.id}
           onOpenChange={setFeedbackOpen}
@@ -1054,6 +1059,7 @@ function WorkoutDay() {
           dayId={dayId}
           existing={existingFeedback ?? null}
           onSubmitted={async () => {
+            const wasFirstSubmit = !hasFeedback;
             qc.invalidateQueries({ queryKey: ["pl-workout-feedback", completion?.id] });
             // Feedback is the gate — flip completed_at on once it lands.
             const targetId = pendingFinalize?.completionId ?? completion?.id ?? null;
@@ -1074,7 +1080,19 @@ function WorkoutDay() {
               refresh();
               toast.success("Workout marked complete");
             }
+            if (wasFirstSubmit) setSummaryOpen(true);
           }}
+        />
+      )}
+
+      {client?.id && (
+        <WorkoutSummaryDialog
+          open={summaryOpen}
+          onOpenChange={setSummaryOpen}
+          rows={rows as any[]}
+          results={results as any[]}
+          feedback={existingFeedback ?? null}
+          durationMin={completion?.actual_duration_min ?? pendingFinalize?.durationMin ?? null}
         />
       )}
     </>
