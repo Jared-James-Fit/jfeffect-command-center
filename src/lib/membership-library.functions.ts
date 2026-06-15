@@ -315,10 +315,13 @@ export const enrollLibraryPlan = createServerFn({ method: "POST" })
       plan_id: plan.id, member_id: member.id, event_type: "import",
       metadata: { import_mode: data.importMode, version: plan.published_version ?? null },
     });
-    // bump counter (best-effort, via admin to bypass RLS)
+    // bump imports_count (best-effort, via admin to bypass RLS)
     try {
       const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-      await supabaseAdmin.rpc("increment_member_plan_counter", { p_plan_id: plan.id, p_field: "imports_count" } as any);
+      await supabaseAdmin
+        .from("member_plans")
+        .update({ imports_count: (plan.imports_count ?? 0) + 1 } as any)
+        .eq("id", plan.id);
     } catch { /* counter increment is best-effort */ }
     return { conflict: false, enrollmentId: row.id };
   });
