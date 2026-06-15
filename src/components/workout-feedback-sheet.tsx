@@ -56,6 +56,7 @@ type Props = {
   clientId: string;
   dayId: string;
   existing?: ExistingFeedback;
+  workoutDate?: string | null;
   onSubmitted?: (submitted?: {
     overall_rating: number;
     session_rpe: number;
@@ -67,7 +68,7 @@ type Props = {
   }) => void;
 };
 
-export function WorkoutFeedbackSheet({ open, onOpenChange, completionId, clientId, dayId, existing, onSubmitted }: Props) {
+export function WorkoutFeedbackSheet({ open, onOpenChange, completionId, clientId, dayId, existing, workoutDate, onSubmitted }: Props) {
   const [rating, setRating] = useState<number | null>(null);
   const [rpe, setRpe] = useState<number | null>(null);
   const [pain, setPain] = useState<boolean | null>(null);
