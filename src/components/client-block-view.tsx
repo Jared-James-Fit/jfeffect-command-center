@@ -498,6 +498,16 @@ export function ClientBlockView({
               <Lock className="mr-1 h-2.5 w-2.5" /> Locked
             </Badge>
           )}
+          <div className="ml-auto flex items-center gap-1">
+            <Button
+              size="sm" variant="outline"
+              className="h-6 px-2 text-[11px]"
+              onClick={() => setHistoryOpen(true)}
+              aria-label="Schedule history"
+            >
+              <History className="mr-1 h-3 w-3" /> History
+            </Button>
+          </div>
         </div>
 
         {/* Mobile day chips — horizontal snap row, bleeds past parent
