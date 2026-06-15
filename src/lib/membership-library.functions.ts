@@ -261,6 +261,54 @@ export const getListingAnalytics = createServerFn({ method: "POST" })
 
 /* ---------- Member: preview, save, pdf, import-with-schedule ---------- */
 
+/**
+ * List programs in the Membership Library that the current member can see.
+ * Driven by pl_template_shares rows where destination='membership' and
+ * status='shared', joined to the live member_plans listing and filtered by
+ * the member's active access levels (or audience_mode='all_active').
+ */
+export const listMembershipLibrary = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { supabase, userId } = context;
+    await assertMemberCanReadProtected(supabase, userId);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: member } = await supabaseAdmin
+      .from("app_members").select("id").eq("user_id", userId).maybeSingle();
+    if (!member) return { plans: [] };
+    const [{ data: shares }, { data: access }] = await Promise.all([
+      supabaseAdmin
+        .from("pl_template_shares")
+        .select("template_id, shared_version, updated_at")
+        .eq("destination", "membership")
+        .eq("status", "shared"),
+      supabaseAdmin
+        .from("member_access")
+        .select("access_level_key")
+        .eq("member_id", (member as any).id)
+        .eq("active", true),
+    ]);
+    const templateIds = Array.from(new Set((shares ?? []).map((s: any) => s.template_id)));
+    if (templateIds.length === 0) return { plans: [] };
+    const keys = new Set((access ?? []).map((a: any) => a.access_level_key));
+    const { data: plans } = await supabaseAdmin
+      .from("member_plans")
+      .select(
+        "id, name, public_title, description, cover_image_url, training_style, difficulty, goal, weeks, days_per_week, workouts_total, est_minutes_per_workout, equipment_needed, required_access_level, audience_mode, allow_full_program, allow_pdf_download, featured, status, membership_status",
+      )
+      .in("source_template_id", templateIds)
+      .eq("status", "Published")
+      .eq("membership_status", "live");
+    const visible = (plans ?? []).filter((p: any) =>
+      p.audience_mode === "all_active" || keys.has(p.required_access_level),
+    );
+    visible.sort((a: any, b: any) =>
+      (b.featured ? 1 : 0) - (a.featured ? 1 : 0)
+      || String(a.name).localeCompare(String(b.name)),
+    );
+    return { plans: visible };
+  });
+
 async function memberAccessGate(supabase: any, userId: string, planId: string) {
   const [{ data: member }, { data: plan }] = await Promise.all([
     supabase.from("app_members").select("id").eq("user_id", userId).maybeSingle(),
