@@ -166,7 +166,7 @@ export function MemberSetupWizard({
 
         {step === "photo" && (
           <div className="space-y-3">
-            <Label>Profile picture</Label>
+            <Label>Profile picture <span className="text-destructive">*</span></Label>
             {user?.id && (
               <ProfilePictureCapture
                 userId={user.id}
@@ -176,63 +176,76 @@ export function MemberSetupWizard({
                 onUploaded={(url) => set("avatar_url", url)}
               />
             )}
-            <p className="text-xs text-muted-foreground">Helps our team recognize you when you message support.</p>
+            <p className="text-xs text-muted-foreground">Required. Helps our team recognize you when you message support.</p>
           </div>
         )}
 
         {step === "contact" && (
           <div className="space-y-3">
             <div>
-              <Label>Mobile phone</Label>
+              <Label>Mobile phone <span className="text-destructive">*</span></Label>
               <Input
                 inputMode="tel"
                 placeholder="+1 555 123 4567"
                 value={value("phone")}
                 onChange={(e) => set("phone", e.target.value)}
+                required
               />
+              <p className="mt-1 text-[11px] text-muted-foreground">Required — used for billing alerts and account recovery.</p>
             </div>
-            <label className="flex items-start gap-2 text-sm">
-              <Checkbox
-                checked={form.sms_consent ?? (m?.sms_consent_at ? true : !m?.sms_opt_out)}
-                onCheckedChange={(v) => set("sms_consent", !!v)}
-              />
-              <span>I consent to receive SMS notifications about my membership, billing, and important updates. Reply STOP to opt out.</span>
-            </label>
+            <div className="rounded-md border border-primary/30 bg-primary/5 p-3">
+              <label className="flex items-start gap-2 text-sm">
+                <Checkbox
+                  className="mt-0.5"
+                  checked={form.sms_consent ?? (m?.sms_consent_at ? true : !m?.sms_opt_out)}
+                  onCheckedChange={(v) => set("sms_consent", !!v)}
+                />
+                <span>
+                  <span className="font-semibold">Yes, send me important SMS updates</span> about my
+                  membership, billing, and account security.{" "}
+                  <span className="font-semibold text-primary">Strongly recommended.</span>
+                </span>
+              </label>
+              <p className="mt-2 pl-6 text-[11px] leading-relaxed text-muted-foreground">
+                No spam. No marketing junk. We only text for things that actually matter — failed
+                payments, schedule changes, and security alerts. Reply <span className="font-mono">STOP</span> anytime to opt out.
+              </p>
+            </div>
           </div>
         )}
 
         {step === "basics" && (
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="sm:col-span-2">
-              <Label>Date of birth</Label>
+              <Label>Date of birth <span className="text-destructive">*</span></Label>
               <Input type="date" value={value("date_of_birth") || ""} onChange={(e) => set("date_of_birth", e.target.value || null)} />
             </div>
             <div className="sm:col-span-2">
-              <Label>Street address</Label>
+              <Label>Street address <span className="text-destructive">*</span></Label>
               <Input value={value("address_line1")} onChange={(e) => set("address_line1", e.target.value)} />
             </div>
             <div>
-              <Label>City</Label>
+              <Label>City <span className="text-destructive">*</span></Label>
               <Input value={value("address_city")} onChange={(e) => set("address_city", e.target.value)} />
             </div>
             <div>
-              <Label>State / Region</Label>
+              <Label>State / Region <span className="text-destructive">*</span></Label>
               <Input value={value("address_state")} onChange={(e) => set("address_state", e.target.value)} />
             </div>
             <div>
-              <Label>ZIP / Postal</Label>
+              <Label>ZIP / Postal <span className="text-destructive">*</span></Label>
               <Input value={value("address_zip")} onChange={(e) => set("address_zip", e.target.value)} />
             </div>
             <div>
-              <Label>Country</Label>
+              <Label>Country <span className="text-destructive">*</span></Label>
               <Input value={value("address_country")} onChange={(e) => set("address_country", e.target.value)} />
             </div>
             <div>
-              <Label>Emergency contact name</Label>
+              <Label>Emergency contact name <span className="text-destructive">*</span></Label>
               <Input value={value("emergency_contact_name")} onChange={(e) => set("emergency_contact_name", e.target.value)} />
             </div>
             <div>
-              <Label>Emergency contact phone</Label>
+              <Label>Emergency contact phone <span className="text-destructive">*</span></Label>
               <Input inputMode="tel" value={value("emergency_contact_phone")} onChange={(e) => set("emergency_contact_phone", e.target.value)} />
             </div>
           </div>
@@ -240,6 +253,12 @@ export function MemberSetupWizard({
 
         {step === "goals" && (
           <GoalsStep form={form} setForm={setForm} member={m} />
+        )}
+
+        {!canAdvance && (
+          <p className="text-[11px] font-medium text-destructive">
+            Required to continue: {missingLabel}
+          </p>
         )}
 
         <DialogFooter className="mt-2 flex-row justify-between gap-2 sm:justify-between">
@@ -253,11 +272,11 @@ export function MemberSetupWizard({
           </Button>
           <div className="flex gap-2">
             {stepIdx < STEPS.length - 1 ? (
-              <Button disabled={busy} onClick={() => saveStep(STEPS[stepIdx + 1])}>
+              <Button disabled={busy || !canAdvance} onClick={() => saveStep(STEPS[stepIdx + 1])}>
                 Save & continue
               </Button>
             ) : (
-              <Button disabled={busy} onClick={() => saveStep()}>
+              <Button disabled={busy || !canAdvance} onClick={() => saveStep()}>
                 <CheckCircle2 className="mr-2 h-4 w-4" /> Finish setup
               </Button>
             )}
