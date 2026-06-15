@@ -602,6 +602,8 @@ function WorkoutDay() {
 
   // Post-workout feedback sheet state.
   const [feedbackOpen, setFeedbackOpen] = useState(false);
+  // Celebratory summary dialog shown right after first feedback submit.
+  const [summaryOpen, setSummaryOpen] = useState(false);
   // When the client clicks "Finish", we stage the completion payload and
   // open the feedback sheet. The workout is NOT marked complete until the
   // feedback is actually submitted — feedback is now a hard gate.
