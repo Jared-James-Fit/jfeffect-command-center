@@ -6,7 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Checkbox } from "@/components/ui/checkbox";
 import { COMMON_TIMEZONES } from "@/lib/pt-sessions";
-import { calcAge, cmToFtIn, ftInToCm, SBD_GUIDANCE_KG } from "@/lib/basic-info";
+import { calcAge, cmToFtIn, ftInToCm } from "@/lib/basic-info";
 
 const COUNTRIES = ["Canada", "United States", "United Kingdom", "Australia", "New Zealand", "Other"];
 
@@ -32,6 +32,12 @@ export type BasicInfoValues = {
   intake_squat_1rm?: number | null;
   intake_bench_1rm?: number | null;
   intake_deadlift_1rm?: number | null;
+  intake_training_experience?: string | null;
+  intake_followed_program?: string | null;
+  intake_squat_5rm?: number | null;
+  intake_bench_5rm?: number | null;
+  intake_deadlift_5rm?: number | null;
+  intake_injuries?: string | null;
 };
 
 export function BasicInfoForm({
