@@ -2476,6 +2476,7 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
           >
             <GripVertical className="h-4 w-4" />
           </span>
+          {RowIndexBadge}
           <div className="min-w-0 flex-1">
         <Select value={row.exercise_id ?? "__custom"} onValueChange={(v) => setRow({ ...row, exercise_id: v === "__custom" ? null : v })}>
           <SelectTrigger className={cn("min-h-8 h-auto py-1 text-sm font-semibold [&>span]:line-clamp-2 [&>span]:whitespace-normal [&>span]:text-left [&>span]:leading-tight")}>
