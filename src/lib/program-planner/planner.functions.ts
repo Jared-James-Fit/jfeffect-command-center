@@ -367,7 +367,7 @@ export const commitAssignmentFn = createServerFn({ method: "POST" })
         workouts_moved: movedCount,
         created_block_ids: createdBlockIds,
         template_schema_version: 2,
-        planner_payload: { summary, placements: finalPlacements, endDate },
+        planner_payload: { summary, placements: finalPlacements, endDate } as any,
         status: "completed",
       })
       .select("id")
