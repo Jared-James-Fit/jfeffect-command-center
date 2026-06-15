@@ -694,6 +694,16 @@ function WorkoutDay() {
           <Badge variant="outline"><Clock className="mr-1 h-3 w-3" /> {durationRange(day.duration_override_min ?? day.duration_estimate_min ?? 60)}</Badge>
           {completion && <Badge variant="outline" className="text-green-500 border-green-500/30 bg-green-500/10"><CheckCircle2 className="mr-1 h-3 w-3" /> Completed</Badge>}
           {readonly && <Badge variant="outline" className="border-muted-foreground/30 bg-muted/30 text-muted-foreground"><Lock className="mr-1 h-3 w-3" /> Read-only</Badge>}
+          {autoReadonly && !isImpersonating && !unlocked && (
+            <Button size="sm" variant="outline" onClick={() => { setUnlocked(true); toast.success("Editing enabled — your changes will save"); }}>
+              Edit previous workout
+            </Button>
+          )}
+          {autoReadonly && !isImpersonating && unlocked && (
+            <Button size="sm" variant="ghost" onClick={() => setUnlocked(false)}>
+              <Lock className="mr-1 h-3 w-3" /> Lock again
+            </Button>
+          )}
           <div className="ml-auto flex items-center gap-2">
             {/* Global KG/LB toggle removed — per-exercise unit controls remain
                 the single source of truth for unit selection. */}
