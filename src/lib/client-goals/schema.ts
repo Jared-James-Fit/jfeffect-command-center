@@ -61,7 +61,6 @@ export const EQUIPMENT_OPTIONS = [
   "Cable station",
   "Smith machine",
   "Leg press",
-  "Hack squat",
   "Leg extension",
   "Leg curl",
   "Lat pulldown",
@@ -73,6 +72,7 @@ export const EQUIPMENT_OPTIONS = [
   "Bodyweight only",
   "No equipment",
   "Not sure",
+  "Other",
 ] as const;
 
 export const NUTRITION_GOALS = [
