@@ -63,6 +63,7 @@ import {
 } from "@/lib/pl-template-blocks";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { ArchiveRestore, Archive as ArchiveIcon, Pencil } from "lucide-react";
+import { ProgramStatusBadge } from "@/components/programs/program-status-badge";
 
 // ---------------- Day focus + expand/collapse bus ----------------
 // Module-level event bus that lets the program builder know which day
@@ -642,6 +643,7 @@ function TemplateEditor() {
     <EditorChrome
       meta={meta} summary={summary} typeLabel={type.replace("_", " ")}
       autosave={autosave} save={save} dirty={dirty}
+      statusTemplate={{ ...tpl, payload }}
     >
       {conflictWatch.conflict && (
           <Card className="flex flex-wrap items-start gap-3 border-amber-500/60 bg-amber-500/5 p-3 text-sm">
@@ -735,9 +737,10 @@ function TemplateEditor() {
   );
 }
 
-function EditorChrome({ meta, summary, typeLabel, autosave, save, dirty, children }: {
+function EditorChrome({ meta, summary, typeLabel, autosave, save, dirty, statusTemplate, children }: {
   meta: any; summary: any; typeLabel: string;
   autosave: any; save: () => Promise<void>; dirty: boolean;
+  statusTemplate?: any;
   children: React.ReactNode;
 }) {
   return (
@@ -754,6 +757,7 @@ function EditorChrome({ meta, summary, typeLabel, autosave, save, dirty, childre
           </span>
         </div>
         <div className="ml-auto flex items-center gap-2">
+          {statusTemplate && <ProgramStatusBadge template={statusTemplate} />}
           <SaveStatus state={autosave.state} savedAt={autosave.savedAt} />
           <ActionButton
             onAction={save}
