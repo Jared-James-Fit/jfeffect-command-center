@@ -827,8 +827,8 @@ function WorkoutDay() {
             />
             <ActionButton
               loadingLabel="Saving…"
-              successLabel="Complete"
-              successToast="Workout marked complete"
+              successLabel="Submit Feedback"
+              successToast="Submit feedback to mark complete"
               icon={<CheckCircle2 className="h-4 w-4" />}
               onAction={async () => {
                 if (!client?.id) return;
@@ -838,27 +838,40 @@ function WorkoutDay() {
                 const durationMin = actualMin
                   ? parseInt(actualMin)
                   : completion?.actual_duration_min ?? Math.max(1, Math.round((new Date(completedAt).getTime() - new Date(startedAt).getTime()) / 60000));
+                // Stage the completion as in-progress (NOT completed_at yet).
+                // The workout is finalized only after feedback is submitted.
+                const noteValue = notes.length > 0 ? notes : (completion?.client_notes ?? null);
                 const payload = {
                   day_id: dayId,
                   client_id: client.id,
-                  client_notes: notes.length > 0 ? notes : (completion?.client_notes ?? null),
+                  client_notes: noteValue,
                   actual_duration_min: durationMin,
                   started_at: startedAt,
-                  completed_at: completedAt,
-                  completion_method: "manual",
+                  in_progress_at: completion?.in_progress_at ?? startedAt,
+                  completed_at: null,
                 };
-                if (completion) await sb.from("pl_day_completions").update(payload).eq("id", completion.id);
-                else await sb.from("pl_day_completions").insert(payload);
+                let cid = completion?.id ?? null;
+                if (completion) {
+                  await sb.from("pl_day_completions").update(payload).eq("id", completion.id);
+                } else {
+                  const { data: inserted } = await sb.from("pl_day_completions").insert(payload).select("id").maybeSingle();
+                  cid = inserted?.id ?? null;
+                }
                 if (draftKey) clearLocalDraft(draftKey);
-                setNotes("");
-                setActualMin("");
                 refresh();
-                // Open the post-workout feedback sheet. Workout completion has
-                // already saved above — feedback is a best-effort follow-up.
+                // Stash everything the feedback-submit handler needs to flip
+                // completed_at on, then open the sheet.
+                setPendingFinalize({
+                  completionId: cid ?? undefined,
+                  startedAt,
+                  durationMin,
+                  notes: noteValue,
+                });
                 setFeedbackOpen(true);
+                toast.info("One more step — submit your feedback to mark this workout complete.");
               }}
             >
-              Mark Workout Complete
+              Finish & Submit Feedback
             </ActionButton>
           </div>
         </Card>
