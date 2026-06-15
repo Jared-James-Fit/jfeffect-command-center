@@ -1060,6 +1060,11 @@ function WorkoutDay() {
           durationMin={completion?.actual_duration_min ?? pendingFinalize?.durationMin ?? null}
         />
       )}
+      <MoveWorkoutSheet
+        dayId={dayId}
+        open={moveOpen}
+        onOpenChange={setMoveOpen}
+      />
     </>
   );
 }
