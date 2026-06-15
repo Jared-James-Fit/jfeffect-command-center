@@ -70,6 +70,65 @@ function TabFallback() {
   return <div className="md:col-span-3 p-6 text-sm text-muted-foreground">Loading…</div>;
 }
 
+function SectionNav({ activeTab, onChange }: { activeTab: TabValue; onChange: (v: TabValue) => void }) {
+  const activeSection = TAB_TO_SECTION[activeTab] ?? "overview";
+  const current = SECTIONS.find((s) => s.id === activeSection)!;
+  return (
+    <div className="mb-6 space-y-4">
+      <div className="grid grid-cols-2 gap-2 sm:gap-3 md:grid-cols-3 lg:grid-cols-6">
+        {SECTIONS.map((s) => {
+          const Icon = s.icon;
+          const isActive = s.id === activeSection;
+          return (
+            <button
+              key={s.id}
+              type="button"
+              onClick={() => onChange(s.tabs[0].value)}
+              className={[
+                "group flex flex-col items-start gap-1.5 rounded-xl border p-3 text-left transition-all",
+                isActive
+                  ? "border-primary bg-primary/10 shadow-sm"
+                  : "border-border bg-card hover:border-primary/40 hover:bg-secondary/40",
+              ].join(" ")}
+            >
+              <div className={[
+                "grid h-9 w-9 shrink-0 place-items-center rounded-lg",
+                isActive ? "bg-primary text-primary-foreground" : "bg-secondary text-foreground/80 group-hover:bg-primary/15 group-hover:text-primary",
+              ].join(" ")}>
+                <Icon className="h-4 w-4" />
+              </div>
+              <div className="min-w-0">
+                <div className={["text-sm font-semibold leading-tight", isActive ? "text-primary" : "text-foreground"].join(" ")}>{s.label}</div>
+                <div className="text-[11px] leading-tight text-muted-foreground line-clamp-2">{s.description}</div>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+      {current.tabs.length > 1 && (
+        <div className="flex flex-wrap gap-1.5 rounded-lg border border-border bg-secondary/30 p-1.5">
+          {current.tabs.map((t) => {
+            const isActive = t.value === activeTab;
+            return (
+              <button
+                key={t.value}
+                type="button"
+                onClick={() => onChange(t.value)}
+                className={[
+                  "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
+                  isActive ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+                ].join(" ")}
+              >
+                {t.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AssignedCoachSelect({ value, onChange }: { value: string | null; onChange: (v: string | null) => void }) {
   const { data: coaches = [] } = useQuery({
     queryKey: ["coaches-select"],
