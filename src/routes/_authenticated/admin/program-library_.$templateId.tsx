@@ -521,6 +521,7 @@ function TemplateEditor() {
     if (tpl && !meta) {
       setMeta({
         name: tpl.name, training_style: tpl.training_style, training_focus: tpl.training_focus ?? "",
+        description: (tpl as any).description ?? "",
         notes: tpl.notes ?? "", weeks: tpl.weeks ?? 0, days_per_week: tpl.days_per_week ?? 0,
         est_duration_min: tpl.est_duration_min ?? 0, tags: (tpl.tags ?? []).join(", "), status: tpl.status,
       });
@@ -566,6 +567,7 @@ function TemplateEditor() {
       weeks: m.weeks || null, days_per_week: m.days_per_week || null,
       est_duration_min: m.est_duration_min || null,
       training_focus: m.training_focus || null, notes: m.notes || null,
+      description: (m.description ?? "").trim() || null,
       payload: p,
     });
     qc.invalidateQueries({ queryKey: ["pl-template", templateId] });
@@ -603,6 +605,7 @@ function TemplateEditor() {
   // Cross-coach conflict watcher for the template meta fields.
   const remoteMeta = useMemo(() => tpl ? {
     name: tpl.name, training_style: tpl.training_style, training_focus: tpl.training_focus ?? "",
+    description: (tpl as any).description ?? "",
     notes: tpl.notes ?? "", weeks: tpl.weeks ?? 0, days_per_week: tpl.days_per_week ?? 0,
     est_duration_min: tpl.est_duration_min ?? 0, tags: (tpl.tags ?? []).join(", "), status: tpl.status,
   } : undefined, [tpl]);
