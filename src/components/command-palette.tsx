@@ -355,24 +355,6 @@ export function CommandPalette({
   );
 }
 
-/** Hack — disables cmdk's built-in filtering by setting shouldFilter on the
- *  outer Command via a side-effect. We don't render anything. */
-function Command_NoFilter() {
-  useEffect(() => {
-    // Find the cmdk root the CommandDialog mounted and disable filtering.
-    // cmdk re-evaluates `data-cmdk-*` on mount; setting shouldFilter is the
-    // recommended way, but our shadcn wrapper doesn't pass it. We instead
-    // mark every CommandItem with a unique `value`; cmdk's default filter
-    // matches the typed query against the value. Setting all values to
-    // strings that include the typed query keeps everything visible.
-    //
-    // To keep this simple and avoid forking the UI primitive, we set the
-    // hidden attribute removal observer here.
-    return;
-  }, []);
-  return null;
-}
-
 function RecentItem({ r, onPick }: { r: RecentPick; onPick: (r: RecentPick) => void }) {
   return (
     <CommandItem
