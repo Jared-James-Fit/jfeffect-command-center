@@ -31,31 +31,41 @@ function FloatingBarPage() {
   const scope = isCoach ? "coach" : "admin";
 
   const defaults: NavItem[] = (() => {
-    const pick = (to: string) => nav.find((i) => i.to === to)!;
+    const pick = (to: string) => nav.find((i) => i.to === to);
+    const safe = (items: (NavItem | undefined | null)[]) =>
+      items.filter((i): i is NavItem => Boolean(i && i.to));
     if (isCoach) {
-      return [
+      const clients = pick("/admin/clients");
+      const lifts = pick("/admin/lift-videos");
+      const tasks = pick("/admin/tasks");
+      return safe([
         pick("/admin"),
-        { ...pick("/admin/clients"), label: "Clients" },
+        clients ? { ...clients, label: "Clients" } : undefined,
         pick("/admin/messages"),
-        { ...pick("/admin/lift-videos"), label: "Lifts" },
-        { ...pick("/admin/tasks"), label: "Tasks" },
-      ].filter(Boolean) as NavItem[];
+        lifts ? { ...lifts, label: "Lifts" } : undefined,
+        tasks ? { ...tasks, label: "Tasks" } : undefined,
+      ]);
     }
-    return [
+    const clients = pick("/admin/clients");
+    const tasks = pick("/admin/tasks");
+    const reviews = pick("/admin/check-in-reviews");
+    const lifts = pick("/admin/lift-videos");
+    const reviewChildren = safe([
+      reviews ? { ...reviews, label: "Check-Ins" } : undefined,
+      lifts ? { ...lifts, label: "Lifts" } : undefined,
+    ]);
+    return safe([
       pick("/admin"),
-      { ...pick("/admin/clients"), label: "Clients" },
+      clients ? { ...clients, label: "Clients" } : undefined,
       pick("/admin/messages"),
       {
         to: "/admin/check-in-reviews",
         label: "Reviews",
         icon: ClipboardList,
-        children: [
-          { ...pick("/admin/check-in-reviews"), label: "Check-Ins" },
-          { ...pick("/admin/lift-videos"), label: "Lifts" },
-        ],
+        children: reviewChildren.length ? reviewChildren : undefined,
       },
-      { ...pick("/admin/tasks"), label: "Tasks" },
-    ];
+      tasks ? { ...tasks, label: "Tasks" } : undefined,
+    ]);
   })();
 
   return (
