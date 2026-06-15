@@ -168,13 +168,17 @@ export function BlockWeekColumns({
                   const done = !!it.completion?.completed_at;
                   const started = !!it.completion && !done;
                   let dayDate: Date | null = null;
-                  if (it.day?.scheduled_date) {
-                    dayDate = startOfDay(new Date(it.day.scheduled_date + "T00:00:00"));
-                  } else if (sel.range) {
-                    const idx = Math.max(0, (it.day?.day_index ?? 1) - 1);
-                    const d = new Date(sel.range.start);
-                    d.setDate(d.getDate() + Math.min(6, idx));
-                    dayDate = startOfDay(d);
+                  // Canonical per-day scheduled date — same pipeline used by
+                  // SmartTodayCard, the workout-logger header, and
+                  // client-block-view. Honors explicit day.scheduled_date,
+                  // then week.training_days, then a linear fallback.
+                  const resolved = dayScheduledDate({
+                    day: it.day, week: it.week ?? sel.week, block: it.block ?? block, completion: null,
+                  });
+                  if (resolved) dayDate = startOfDay(resolved);
+                  else if (it.day?.scheduled_date) {
+                    const p = parseLocalDate(it.day.scheduled_date);
+                    if (p) dayDate = startOfDay(p);
                   }
                   const isToday = !!dayDate && dayDate.getTime() === today.getTime();
                   const isPast = !!dayDate && dayDate < today;
