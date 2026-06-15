@@ -303,10 +303,20 @@ export function CommandPalette({
           <CommandGroup key={`reg-${category}`} heading={category}>
             {rows.map((e) => {
               const Icon = e.icon;
+              // Pack every searchable token into the cmdk `value` so the
+              // built-in cmdk filter keeps our fuzzy hits visible (matches
+              // via keywords/synonyms even when the label doesn't contain
+              // the typed substring).
+              const value = [
+                e.id, e.label, e.parent ?? "", e.category, e.description ?? "",
+                ...(e.keywords ?? []),
+                // Force-match the current query so cmdk never hides us.
+                debounced,
+              ].join(" ");
               return (
                 <CommandItem
                   key={`reg-${e.id}`}
-                  value={`${e.id}-${e.label}`}
+                  value={value}
                   onSelect={() => pickRoute(e)}
                 >
                   <Icon className={cn(
