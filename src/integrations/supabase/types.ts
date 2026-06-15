@@ -8824,6 +8824,162 @@ export type Database = {
           },
         ]
       }
+      nutrition_automation_settings: {
+        Row: {
+          cadence_interval_days: number | null
+          client_reminders_enabled: boolean
+          coach_reminders_enabled: boolean
+          coach_review_sla_hours: number
+          created_at: string
+          default_cadence: string
+          email_enabled: boolean
+          id: string
+          overdue_reminder_days: number
+          push_enabled: boolean
+          reminder_lead_days: number
+          singleton: boolean
+          sms_enabled: boolean
+          updated_at: string
+        }
+        Insert: {
+          cadence_interval_days?: number | null
+          client_reminders_enabled?: boolean
+          coach_reminders_enabled?: boolean
+          coach_review_sla_hours?: number
+          created_at?: string
+          default_cadence?: string
+          email_enabled?: boolean
+          id?: string
+          overdue_reminder_days?: number
+          push_enabled?: boolean
+          reminder_lead_days?: number
+          singleton?: boolean
+          sms_enabled?: boolean
+          updated_at?: string
+        }
+        Update: {
+          cadence_interval_days?: number | null
+          client_reminders_enabled?: boolean
+          coach_reminders_enabled?: boolean
+          coach_review_sla_hours?: number
+          created_at?: string
+          default_cadence?: string
+          email_enabled?: boolean
+          id?: string
+          overdue_reminder_days?: number
+          push_enabled?: boolean
+          reminder_lead_days?: number
+          singleton?: boolean
+          sms_enabled?: boolean
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      nutrition_notification_log: {
+        Row: {
+          channel: string
+          client_id: string | null
+          error: string | null
+          id: string
+          kind: string
+          recipient_user_id: string | null
+          sent_at: string
+          status: string
+          submission_id: string | null
+        }
+        Insert: {
+          channel: string
+          client_id?: string | null
+          error?: string | null
+          id?: string
+          kind: string
+          recipient_user_id?: string | null
+          sent_at?: string
+          status?: string
+          submission_id?: string | null
+        }
+        Update: {
+          channel?: string
+          client_id?: string | null
+          error?: string | null
+          id?: string
+          kind?: string
+          recipient_user_id?: string | null
+          sent_at?: string
+          status?: string
+          submission_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nutrition_notification_log_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nutrition_notification_log_submission_id_fkey"
+            columns: ["submission_id"]
+            isOneToOne: false
+            referencedRelation: "nutrition_update_submissions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      nutrition_review_tasks: {
+        Row: {
+          assigned_coach_id: string | null
+          client_id: string
+          completed_at: string | null
+          created_at: string
+          due_at: string | null
+          id: string
+          sla_breached_at: string | null
+          status: string
+          submission_id: string
+          updated_at: string
+        }
+        Insert: {
+          assigned_coach_id?: string | null
+          client_id: string
+          completed_at?: string | null
+          created_at?: string
+          due_at?: string | null
+          id?: string
+          sla_breached_at?: string | null
+          status?: string
+          submission_id: string
+          updated_at?: string
+        }
+        Update: {
+          assigned_coach_id?: string | null
+          client_id?: string
+          completed_at?: string | null
+          created_at?: string
+          due_at?: string | null
+          id?: string
+          sla_breached_at?: string | null
+          status?: string
+          submission_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nutrition_review_tasks_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nutrition_review_tasks_submission_id_fkey"
+            columns: ["submission_id"]
+            isOneToOne: false
+            referencedRelation: "nutrition_update_submissions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       nutrition_target_days: {
         Row: {
           calories: number | null
@@ -8877,6 +9033,8 @@ export type Database = {
       nutrition_targets: {
         Row: {
           admin_notes: string | null
+          assigned_coach_id: string | null
+          cadence_interval_days: number | null
           client_id: string
           client_notes: string | null
           created_at: string
@@ -8885,20 +9043,29 @@ export type Database = {
           end_date: string | null
           ending_soon_days: number
           goal: string
+          goal_direction: string | null
           id: string
           last_updated_at: string
+          last_updated_date: string | null
+          next_due_date: string | null
+          paused_at: string | null
+          paused_reason: string | null
           pdf_name: string | null
           pdf_url: string | null
           phase: string
           start_date: string
           status: string
           structure: string
+          tracking_status: string
+          update_cadence: string
           updated_at: string
           visible_to_client: boolean
           water: string | null
         }
         Insert: {
           admin_notes?: string | null
+          assigned_coach_id?: string | null
+          cadence_interval_days?: number | null
           client_id: string
           client_notes?: string | null
           created_at?: string
@@ -8907,20 +9074,29 @@ export type Database = {
           end_date?: string | null
           ending_soon_days?: number
           goal?: string
+          goal_direction?: string | null
           id?: string
           last_updated_at?: string
+          last_updated_date?: string | null
+          next_due_date?: string | null
+          paused_at?: string | null
+          paused_reason?: string | null
           pdf_name?: string | null
           pdf_url?: string | null
           phase?: string
           start_date: string
           status?: string
           structure?: string
+          tracking_status?: string
+          update_cadence?: string
           updated_at?: string
           visible_to_client?: boolean
           water?: string | null
         }
         Update: {
           admin_notes?: string | null
+          assigned_coach_id?: string | null
+          cadence_interval_days?: number | null
           client_id?: string
           client_notes?: string | null
           created_at?: string
@@ -8929,14 +9105,21 @@ export type Database = {
           end_date?: string | null
           ending_soon_days?: number
           goal?: string
+          goal_direction?: string | null
           id?: string
           last_updated_at?: string
+          last_updated_date?: string | null
+          next_due_date?: string | null
+          paused_at?: string | null
+          paused_reason?: string | null
           pdf_name?: string | null
           pdf_url?: string | null
           phase?: string
           start_date?: string
           status?: string
           structure?: string
+          tracking_status?: string
+          update_cadence?: string
           updated_at?: string
           visible_to_client?: boolean
           water?: string | null
@@ -8947,6 +9130,117 @@ export type Database = {
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      nutrition_update_submissions: {
+        Row: {
+          allow_resubmit: boolean
+          avg_bodyweight: number | null
+          bodyweight_unit: string
+          cardio_completed: string | null
+          client_id: string
+          coach_note: string | null
+          compliance_pct: number | null
+          created_at: string
+          current_bodyweight: number | null
+          digestion_rating: number | null
+          energy_rating: number | null
+          goal_direction: string | null
+          hunger_rating: number | null
+          id: string
+          missed_meals: string | null
+          notes: string | null
+          previous_targets_json: Json | null
+          progress_photo_urls: string[]
+          published_at: string | null
+          published_targets_json: Json | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          sleep_rating: number | null
+          status: string
+          steps_completed: number | null
+          submitted_at: string
+          target_id: string | null
+          training_performance_rating: number | null
+          updated_at: string
+        }
+        Insert: {
+          allow_resubmit?: boolean
+          avg_bodyweight?: number | null
+          bodyweight_unit?: string
+          cardio_completed?: string | null
+          client_id: string
+          coach_note?: string | null
+          compliance_pct?: number | null
+          created_at?: string
+          current_bodyweight?: number | null
+          digestion_rating?: number | null
+          energy_rating?: number | null
+          goal_direction?: string | null
+          hunger_rating?: number | null
+          id?: string
+          missed_meals?: string | null
+          notes?: string | null
+          previous_targets_json?: Json | null
+          progress_photo_urls?: string[]
+          published_at?: string | null
+          published_targets_json?: Json | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          sleep_rating?: number | null
+          status?: string
+          steps_completed?: number | null
+          submitted_at?: string
+          target_id?: string | null
+          training_performance_rating?: number | null
+          updated_at?: string
+        }
+        Update: {
+          allow_resubmit?: boolean
+          avg_bodyweight?: number | null
+          bodyweight_unit?: string
+          cardio_completed?: string | null
+          client_id?: string
+          coach_note?: string | null
+          compliance_pct?: number | null
+          created_at?: string
+          current_bodyweight?: number | null
+          digestion_rating?: number | null
+          energy_rating?: number | null
+          goal_direction?: string | null
+          hunger_rating?: number | null
+          id?: string
+          missed_meals?: string | null
+          notes?: string | null
+          previous_targets_json?: Json | null
+          progress_photo_urls?: string[]
+          published_at?: string | null
+          published_targets_json?: Json | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          sleep_rating?: number | null
+          status?: string
+          steps_completed?: number | null
+          submitted_at?: string
+          target_id?: string | null
+          training_performance_rating?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nutrition_update_submissions_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nutrition_update_submissions_target_id_fkey"
+            columns: ["target_id"]
+            isOneToOne: false
+            referencedRelation: "nutrition_targets"
             referencedColumns: ["id"]
           },
         ]
@@ -13604,6 +13898,14 @@ export type Database = {
       finalize_schedule_send: {
         Args: { _error?: string; _schedule_id: string; _status: string }
         Returns: undefined
+      }
+      fn_apply_nutrition_cadence: {
+        Args: { _target_id: string }
+        Returns: string
+      }
+      fn_recompute_nutrition_status: {
+        Args: { _target_id: string }
+        Returns: string
       }
       get_group_member_profiles: {
         Args: { _group_id: string }
