@@ -602,6 +602,8 @@ function WorkoutDay() {
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   // Celebratory summary dialog shown right after first feedback submit.
   const [summaryOpen, setSummaryOpen] = useState(false);
+  // After first feedback submit, gently offer a lift upload. Fully optional.
+  const [liftPromptOpen, setLiftPromptOpen] = useState(false);
   const [justSubmittedFeedback, setJustSubmittedFeedback] = useState<{ overall_rating: number; session_rpe: number } | null>(null);
   // When the client clicks "Finish", we stage the completion payload and
   // open the feedback sheet. The workout is NOT marked complete until the
