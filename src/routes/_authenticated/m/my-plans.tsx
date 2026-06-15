@@ -69,8 +69,13 @@ function Section({ title, children }: { title: string; children: React.ReactNode
     </div>
   );
 }
-function Empty({ msg }: { msg: string }) {
-  return <div className="text-sm text-muted-foreground sm:col-span-2">{msg}</div>;
+function Empty({ msg, action }: { msg: string; action?: React.ReactNode }) {
+  return (
+    <div className="text-sm text-muted-foreground sm:col-span-2 space-y-2">
+      <div>{msg}</div>
+      {action}
+    </div>
+  );
 }
 function EnrollmentCard({ e, primary, onRestart }: { e: any; primary?: boolean; onRestart?: () => void }) {
   const pct = Math.round(((e.workouts_completed ?? 0) / Math.max(e.workouts_total ?? 1, 1)) * 100);
