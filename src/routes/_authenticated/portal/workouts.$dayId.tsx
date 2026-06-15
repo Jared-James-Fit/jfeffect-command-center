@@ -874,6 +874,9 @@ function WorkoutDay() {
               Finish & Submit Feedback
             </ActionButton>
           </div>
+          <p className="text-[11px] text-muted-foreground">
+            Submitting your feedback marks the workout as complete. If you skip it, we'll remind you in your notification bell.
+          </p>
         </Card>
         )}
 
