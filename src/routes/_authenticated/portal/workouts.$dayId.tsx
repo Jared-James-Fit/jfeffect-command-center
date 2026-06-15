@@ -745,6 +745,17 @@ function WorkoutDay() {
                 the single source of truth for unit selection. */}
             {!readonly && (
               <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setMoveOpen(true)}
+                className="h-9 gap-1"
+                aria-label="Move workout to another date"
+              >
+                <Move className="h-4 w-4" /> Move
+              </Button>
+            )}
+            {!readonly && (
+              <Button
                 size="lg"
                 onClick={() => setFocusMode(true)}
                 className="h-11 gap-2 bg-gradient-to-r from-primary to-primary/80 px-5 text-base font-bold text-primary-foreground shadow-lg shadow-primary/30 hover:from-primary/90 hover:to-primary/70 hover:shadow-primary/40"
