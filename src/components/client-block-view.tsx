@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   ChevronLeft, ChevronRight, Clock, Play, RotateCcw, CheckCircle2,
-  Eye, Lock, Crosshair, Dumbbell,
+  Eye, Lock, Crosshair, Dumbbell, History, CalendarCog,
 } from "lucide-react";
 import { format, parseISO, startOfDay } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -18,6 +18,7 @@ import {
 import { weekDisplayRange, isCurrentWeek, formatWeekRange } from "@/lib/block-dates";
 import { isWeekLocked, dayScheduledDate, cleanDayTitle } from "@/lib/workout-today";
 import { localStartOfToday, parseLocalDate } from "@/lib/today";
+import { ScheduleHistoryDrawer } from "@/components/schedule/ScheduleHistoryDrawer";
 
 /* ──────────────────────────────────────────────────────────────────────────
    ClientBlockView
@@ -293,6 +294,8 @@ export function ClientBlockView({
     }
     return m;
   }, [weeks, tree?.days, completionByDay]);
+
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   if (!blockId) {
     return (
