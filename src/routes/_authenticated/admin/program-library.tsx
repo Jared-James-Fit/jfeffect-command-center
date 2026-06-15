@@ -738,7 +738,18 @@ function PreviewDialog({ templateId, onClose, onAssign }: { templateId: string |
     <Dialog open={!!templateId} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
         <DialogHeader><DialogTitle>{tpl?.name ?? "Template"}</DialogTitle></DialogHeader>
-        {!tpl ? <p className="text-sm text-muted-foreground">Loading…</p> : <TemplateTreeView tpl={tpl} />}
+        {!tpl ? (
+          <p className="text-sm text-muted-foreground">Loading…</p>
+        ) : (
+          <>
+            {tpl.description && String(tpl.description).trim().length > 0 && (
+              <div className="rounded-md border border-border bg-muted/30 p-3 text-xs text-foreground whitespace-pre-wrap">
+                {tpl.description}
+              </div>
+            )}
+            <TemplateTreeView tpl={tpl} />
+          </>
+        )}
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Close</Button>
           {tpl && (
