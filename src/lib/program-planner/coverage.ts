@@ -78,7 +78,11 @@ export function computeCoverage(input: {
       } else {
         if (gapStart) {
           const end = addDaysISO(iso, -1);
-          gaps.push({ start: gapStart, end, days: diffDays(gapStart, end) + 1 });
+          const days = diffDays(gapStart, end) + 1;
+          // Ignore short gaps — rest days within a normal weekly training
+          // pattern (e.g. Wed/Sat/Sun off on a Mon/Tue/Thu/Fri split) are
+          // intentional, not programming gaps. Only flag a full missed week.
+          if (days >= 7) gaps.push({ start: gapStart, end, days });
           gapStart = null;
         }
         prevScheduled = true;
