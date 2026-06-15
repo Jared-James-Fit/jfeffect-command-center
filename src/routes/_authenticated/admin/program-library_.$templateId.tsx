@@ -2123,6 +2123,24 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
     "dark:bg-white dark:text-slate-900 dark:border-slate-300 dark:placeholder:text-slate-400";
   const exMeta = (exercises as any[]).find((e) => e.id === row.exercise_id) ?? null;
   const exName = exMeta?.name ?? row.exercise_name_override ?? "";
+  const rowHasVideo = hasExerciseVideo(exMeta);
+  const videoUrl: string | null = exMeta
+    ? (exMeta.video_url || exMeta.youtube_url || exMeta.vimeo_url || null)
+    : null;
+  const VideoBadge = (
+    <span
+      className={cn(
+        "inline-flex shrink-0 items-center gap-0.5 rounded-full border px-1 py-0 text-[9px] font-bold uppercase tracking-wide",
+        rowHasVideo
+          ? "border-emerald-400/40 bg-emerald-500/10 text-emerald-300"
+          : "border-amber-400/50 bg-amber-500/10 text-amber-300",
+      )}
+      title={rowHasVideo ? "Demo video linked" : "No demo video on this exercise"}
+    >
+      {rowHasVideo ? <Video className="h-2.5 w-2.5" /> : <VideoOff className="h-2.5 w-2.5" />}
+      {rowHasVideo ? "Video" : "No video"}
+    </span>
+  );
   const accent = exerciseAccent(exMeta, row.card_color);
   const restCat = resolveCategory(exMeta);
   const restDefault = defaultRestSeconds(exMeta);
