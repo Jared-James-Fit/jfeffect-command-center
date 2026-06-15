@@ -1,21 +1,15 @@
 import { Link } from "@tanstack/react-router";
 import { UserAvatar } from "@/components/user-avatar";
 import { Button } from "@/components/ui/button";
-import { ChevronRight, MoreHorizontal, MessageSquare, Eye, Archive, Pencil } from "lucide-react";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { ChevronRight, MoreHorizontal, CalendarDays, Dumbbell } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 import { BADGE_TONE, ACTION_ICON, actionStyle, rowBadges } from "./clients-status";
 import type { DirectoryRow } from "@/lib/clients-directory.functions";
+import type { DirectoryNextAction } from "@/lib/clients-directory.functions";
 import { format, parseISO, differenceInDays } from "date-fns";
+import { QuickActionsMenu, ClientMoreMenu } from "./quick-actions";
 
 function fmtRange(start: string | null, end: string | null) {
   if (!start && !end) return null;
@@ -40,10 +34,10 @@ function blockProgress(start: string | null, end: string | null) {
 
 export function ClientRow({ r, onArchive }: { r: DirectoryRow; onArchive?: (r: DirectoryRow) => void }) {
   const badges = rowBadges(r);
-  const ActionIcon = ACTION_ICON(r.next_action.kind);
   const urgent = r.priority <= 3;
   const prog = blockProgress(r.block_start, r.block_end);
   const range = fmtRange(r.block_start, r.block_end);
+  const actionTarget = primaryActionTarget(r.next_action, r.id);
 
   return (
     <TooltipProvider delayDuration={300}>
@@ -112,18 +106,48 @@ export function ClientRow({ r, onArchive }: { r: DirectoryRow; onArchive?: (r: D
           {r.block_name ? (
             <>
               <div className="flex items-center justify-between gap-2">
-                <div className="truncate text-sm font-medium">{r.block_name}</div>
-                {prog && (
-                  <div className="shrink-0 text-[11px] text-muted-foreground">
-                    {prog.left}d left · {prog.pct}%
-                  </div>
-                )}
+                <Link
+                  to="/admin/client-programs/$clientId"
+                  params={{ clientId: r.id }}
+                  className="truncate text-sm font-medium hover:underline"
+                  title="Open program"
+                >
+                  {r.block_name}
+                </Link>
+                <div className="flex items-center gap-1">
+                  {prog && (
+                    <div className="shrink-0 text-[11px] text-muted-foreground">
+                      {prog.left}d left · {prog.pct}%
+                    </div>
+                  )}
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Link
+                        to="/admin/clients/$id"
+                        params={{ id: r.id }}
+                        search={{ tab: "training" } as any}
+                        aria-label="View training schedule"
+                        className="inline-flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
+                      >
+                        <CalendarDays className="h-4 w-4" />
+                      </Link>
+                    </TooltipTrigger>
+                    <TooltipContent side="top">View schedule</TooltipContent>
+                  </Tooltip>
+                </div>
               </div>
               {range && <div className="text-[11px] text-muted-foreground">{range}</div>}
               {prog && <Progress value={prog.pct} className="h-1.5" />}
             </>
           ) : (
-            <div className="text-xs italic text-muted-foreground">No active program</div>
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-xs italic text-muted-foreground">No active program</div>
+              <Button asChild variant="outline" size="sm" className="h-7 px-2 text-xs">
+                <Link to="/admin/program-assign/$clientId" params={{ clientId: r.id }}>
+                  <Dumbbell className="mr-1 h-3.5 w-3.5" /> Assign
+                </Link>
+              </Button>
+            </div>
           )}
         </div>
 
@@ -132,61 +156,23 @@ export function ClientRow({ r, onArchive }: { r: DirectoryRow; onArchive?: (r: D
           <Tooltip>
             <TooltipTrigger asChild>
               <Button asChild size="sm" className={cn("h-9 min-w-[8rem]", actionStyle(r.next_action, urgent))}>
-                <Link to="/admin/clients/$id" params={{ id: r.id }}>
-                  <ActionIcon className="mr-1.5 h-4 w-4" aria-hidden />
-                  {r.next_action.label}
-                </Link>
+                {actionTarget}
               </Button>
             </TooltipTrigger>
-            <TooltipContent side="top">Open this client to {r.next_action.label.toLowerCase()}</TooltipContent>
+            <TooltipContent side="top">{r.next_action.label}</TooltipContent>
           </Tooltip>
 
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
+          <QuickActionsMenu r={r} />
+
+          <ClientMoreMenu
+            r={r}
+            onArchive={onArchive}
+            trigger={
               <Button variant="ghost" size="icon" className="h-9 w-9" aria-label="More client actions">
                 <MoreHorizontal className="h-4 w-4" />
               </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-52">
-              <DropdownMenuLabel className="text-xs">{r.full_name}</DropdownMenuLabel>
-              <DropdownMenuItem asChild>
-                <Link to="/admin/clients/$id" params={{ id: r.id }} className="flex items-center gap-2">
-                  <Eye className="h-4 w-4" /> Open client
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link
-                  to="/admin/clients/$id"
-                  params={{ id: r.id }}
-                  search={{ tab: "messages" } as any}
-                  className="flex items-center gap-2"
-                >
-                  <MessageSquare className="h-4 w-4" /> Send message
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link
-                  to="/admin/clients/$id"
-                  params={{ id: r.id }}
-                  search={{ tab: "basic" } as any}
-                  className="flex items-center gap-2"
-                >
-                  <Pencil className="h-4 w-4" /> Edit client
-                </Link>
-              </DropdownMenuItem>
-              {onArchive && (
-                <>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    onClick={() => onArchive(r)}
-                    className="text-destructive focus:text-destructive"
-                  >
-                    <Archive className="mr-2 h-4 w-4" /> Archive client
-                  </DropdownMenuItem>
-                </>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
+            }
+          />
 
           <Link
             to="/admin/clients/$id"
@@ -200,6 +186,49 @@ export function ClientRow({ r, onArchive }: { r: DirectoryRow; onArchive?: (r: D
       </li>
     </TooltipProvider>
   );
+}
+
+/** Map next_action kind to the most useful in-app destination. */
+function primaryActionTarget(action: DirectoryNextAction, clientId: string) {
+  const IconBase = ACTION_ICON(action.kind);
+  const label = (
+    <>
+      <IconBase className="mr-1.5 h-4 w-4" aria-hidden />
+      {action.label}
+    </>
+  );
+  switch (action.kind) {
+    case "assign":
+    case "next_phase":
+      return (
+        <Link to="/admin/program-assign/$clientId" params={{ clientId }}>{label}</Link>
+      );
+    case "nutrition":
+      return (
+        <Link to="/admin/clients/$id" params={{ id: clientId }} search={{ tab: "nutrition" } as any}>{label}</Link>
+      );
+    case "cardio":
+      return (
+        <Link to="/admin/clients/$id" params={{ id: clientId }} search={{ tab: "cardio" } as any}>{label}</Link>
+      );
+    case "review":
+      return (
+        <Link to="/admin/check-in-reviews">{label}</Link>
+      );
+    case "payment":
+      return (
+        <Link to="/admin/clients/$id" params={{ id: clientId }} search={{ tab: "billing" } as any}>{label}</Link>
+      );
+    case "setup":
+      return (
+        <Link to="/admin/clients/$id" params={{ id: clientId }} search={{ tab: "account" } as any}>{label}</Link>
+      );
+    case "open":
+    default:
+      return (
+        <Link to="/admin/clients/$id" params={{ id: clientId }}>{label}</Link>
+      );
+  }
 }
 
 export function ClientRowSkeleton() {
