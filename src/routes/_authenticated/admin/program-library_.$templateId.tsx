@@ -286,7 +286,12 @@ export function handleRowFieldNav(
     const next = fields[idx + delta];
     if (next) {
       e.preventDefault();
-      focusField(next);
+      // Commit pending edit (via blur) FIRST, then move focus on the next
+      // frame so React has time to flush the re-render. Without this the
+      // destination input would flicker / lose focus when the parent
+      // re-rendered mid-keystroke — the "glitch" with arrow left/right.
+      target.blur();
+      requestAnimationFrame(() => focusField(next));
       return true;
     }
     // wrap to adjacent row, same column
@@ -298,7 +303,12 @@ export function handleRowFieldNav(
       if (nextRow) {
         const cols = fieldsInRow(nextRow);
         const col = cols[delta > 0 ? 0 : cols.length - 1];
-        if (col) { e.preventDefault(); focusField(col); return true; }
+        if (col) {
+          e.preventDefault();
+          target.blur();
+          requestAnimationFrame(() => focusField(col));
+          return true;
+        }
       }
     }
     return false;
@@ -317,7 +327,15 @@ export function handleRowFieldNav(
       ?? fieldsInRow(nextRow)[Math.min(idx, Math.max(fieldsInRow(nextRow).length - 1, 0))]
       ?? null;
     const peer = findPeer();
-    if (peer) { e.preventDefault(); focusField(peer); return true; }
+    if (peer) {
+      e.preventDefault();
+      target.blur();
+      requestAnimationFrame(() => {
+        const fresh = findPeer();
+        if (fresh) focusField(fresh);
+      });
+      return true;
+    }
     // Target row is collapsed → expand it by simulating a click, then focus
     // the same column on the next frame once inputs have mounted. This is
     // what made arrow-key nav feel "glitchy" — collapsed cards swallowed the
