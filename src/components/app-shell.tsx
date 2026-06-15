@@ -514,33 +514,42 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
                   {pinnedItems.map((item) => {
                     const active = item.to === activeTo;
                     const Icon = item.icon;
+                    // Pin <button> must be a sibling of <Link>, not a descendant.
+                    // See note in the grouped-items renderer below.
                     const link = (
-                      <Link
-                        to={item.to}
+                      <div
                         className={cn(
                           "group/pin flex items-center rounded-md transition-colors",
-                          rowPadding,
-                          rowText,
                           active
                             ? "bg-primary/15 text-primary font-semibold border-l-2 border-primary"
                             : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground border-l-2 border-amber-400/40",
                         )}
                       >
-                        <div className="relative"><Icon className="h-4 w-4 shrink-0" /><SidebarBadge badge={navBadges[item.to]} isCollapsed={isCollapsed} /></div>
-                        {!isCollapsed && <span className="truncate flex-1">{item.label}</span>}
-                        {!isCollapsed && <SidebarBadge badge={navBadges[item.to]} isCollapsed={false} />}
+                        <Link
+                          to={item.to}
+                          className={cn(
+                            "flex flex-1 items-center min-w-0",
+                            rowPadding,
+                            rowText,
+                            active ? "text-primary" : "text-sidebar-foreground",
+                          )}
+                        >
+                          <div className="relative"><Icon className="h-4 w-4 shrink-0" /><SidebarBadge badge={navBadges[item.to]} isCollapsed={isCollapsed} /></div>
+                          {!isCollapsed && <span className="truncate flex-1">{item.label}</span>}
+                          {!isCollapsed && <SidebarBadge badge={navBadges[item.to]} isCollapsed={false} />}
+                        </Link>
                         {!isCollapsed && (
                           <button
                             type="button"
                             onClick={(e) => { e.preventDefault(); e.stopPropagation(); onTogglePin(item); }}
-                            className="ml-1 grid h-5 w-5 place-items-center rounded text-amber-300 opacity-0 transition group-hover/pin:opacity-100 hover:bg-amber-400/10"
+                            className="mr-2 grid h-5 w-5 shrink-0 place-items-center rounded text-amber-300 opacity-0 transition group-hover/pin:opacity-100 hover:bg-amber-400/10"
                             aria-label={`Unpin ${item.label}`}
                             title="Unpin"
                           >
                             <Pin className="h-3 w-3 fill-current" />
                           </button>
                         )}
-                      </Link>
+                      </div>
                     );
                     return (
                       <li key={`pin-${item.to}`}>
