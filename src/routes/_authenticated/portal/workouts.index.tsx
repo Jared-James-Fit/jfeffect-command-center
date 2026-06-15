@@ -241,6 +241,11 @@ function WorkoutsPage() {
           </div>
           {client?.id && (
             <div className="ml-3 inline-flex items-center gap-1">
+              <Button asChild size="sm" variant="default" className="h-7 gap-1 text-xs">
+                <Link to="/portal/schedule">
+                  <CalendarIcon className="h-3.5 w-3.5" /> Manage schedule
+                </Link>
+              </Button>
               <Button
                 size="sm"
                 variant="outline"

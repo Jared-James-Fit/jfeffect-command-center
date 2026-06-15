@@ -734,6 +734,13 @@ function ClientDetail() {
           homeScreenStatus={form.home_screen_setup_status}
         />
         <TrainingScheduleCard client={form} />
+        <div className="flex justify-end">
+          <Button asChild size="sm" variant="outline">
+            <Link to="/admin/clients/$id/schedule" params={{ id }}>
+              Open schedule manager
+            </Link>
+          </Button>
+        </div>
         <ClientQuickLinksCard
           clientId={id}
           driveFolderLink={form.drive_folder_link}
