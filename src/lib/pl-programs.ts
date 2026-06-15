@@ -286,7 +286,7 @@ export async function duplicateDay(dayId: string) {
   const { data: newDay, error } = await sb.from("pl_days").insert({
     week_id: src.week_id, day_index: nextIdx,
     title: (src.title ?? `Day ${src.day_index}`) + " (copy)",
-    focus: src.focus, notes: src.notes,
+    focus: src.focus, notes: src.notes, notes_client_visible: src.notes_client_visible,
     duration_estimate_min: src.duration_estimate_min,
   }).select("*").single();
   if (error) throw error;
@@ -312,7 +312,7 @@ export async function duplicateWeek(weekId: string) {
   const { data: days } = await sb.from("pl_days").select("*").eq("week_id", weekId).order("day_index");
   for (const d of days ?? []) {
     const { data: newDay } = await sb.from("pl_days").insert({
-      week_id: newWeek.id, day_index: d.day_index, title: d.title, focus: d.focus, notes: d.notes,
+      week_id: newWeek.id, day_index: d.day_index, title: d.title, focus: d.focus, notes: d.notes, notes_client_visible: d.notes_client_visible,
       duration_estimate_min: d.duration_estimate_min,
     }).select("*").single();
     const { data: rows } = await sb.from("pl_exercise_rows").select("*").eq("day_id", d.id).order("sort_order");
