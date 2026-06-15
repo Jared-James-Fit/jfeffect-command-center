@@ -441,6 +441,13 @@ function WorkoutsPage() {
 
         {client?.id && <WorkoutArchiveSection clientId={client.id} mode="client" />}
       </div>
+      {client?.id && (
+        <ScheduleHistoryDrawer
+          clientId={client.id}
+          open={historyOpen}
+          onOpenChange={setHistoryOpen}
+        />
+      )}
     </>
   );
 }
