@@ -154,7 +154,7 @@ function useCollapsedSections() {
 
 export function AppShell({ items, bottomItems: customBottomItems, title, children }: { items: NavItem[]; bottomItems?: NavItem[]; title: string; children: ReactNode }) {
   useKeyboardOpen();
-  const { signOut, user } = useAuth();
+  const { signOut, user, role } = useAuth();
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (r) => r.location.pathname });
   const navBadges = useClientNavBadges();
@@ -816,7 +816,7 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
       <CommandPalette
         open={paletteOpen}
         onOpenChange={setPaletteOpen}
-        role={(useAuth().role as AdminRole | null) ?? null}
+        role={(role as AdminRole | null) ?? null}
       />
       <ClientPovQuickPicker />
     </div>
