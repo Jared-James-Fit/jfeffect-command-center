@@ -231,6 +231,7 @@ interface CommitInput extends PlannerInput {
   publishStatus: PublishStatus;
   publishAt: string | null;
   idempotencyKey: string;
+  programName?: string | null;
 }
 
 function validateCommitInput(d: any): CommitInput {
