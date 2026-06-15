@@ -6,7 +6,7 @@ export const Route = createFileRoute("/_authenticated/admin/membership/checkout-
   component: () => (
     <MembershipLeaf
       title="Checkout Settings"
-      subtitle="Master kill switch for /join plus Stripe pricing, mode, and trial configuration."
+      subtitle="Master kill switch for /membership plus Stripe pricing, mode, and trial configuration."
     >
       <div className="grid gap-4 md:grid-cols-2">
         <JfMembershipSettingsCard />
