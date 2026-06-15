@@ -1,104 +1,98 @@
-# Clients Section Redesign — Phase 1 + 2
+# Admin Home → Command Center Redesign
 
-Rebuild `/admin/clients` and ship a new `/admin/clients/$clientId` workspace shell with an Overview tab. Coach mirror at `/coach/clients/*` reuses the same components with the existing `is_assigned_coach` gate. Workspace tabs 2–8 link out to existing pages until rebuilt in later phases.
+A full redesign of the Admin Home dashboard. The current page mixes contradictory status signals ("Inbox zero" alongside overdue reviews), buries urgent work under integrations and sales lists, truncates button labels, and overflows under the bottom nav. This rebuilds it around one shared attention engine and a clear mobile hierarchy, while preserving every existing route, action, and permission.
 
-## Scope (this pass)
+## Goals
 
-In:
-- New directory page with summary cards, URL-driven search/filters/sort/page, paginated rows, status layer, next-best-action, three-dot menu.
-- New workspace shell route `/admin/clients/$clientId` + `/coach/clients/$clientId` with sticky header and tab bar.
-- New Overview tab built from modular cards.
-- Old `/admin/client-programs/$clientId` route kept and redirected to the new workspace; deep links preserved.
-- One Postgres RPC powering directory rows + summary counts.
+- Answer in one screen: *What needs me today? Which clients? What can I do fast? What's next?*
+- One source of truth for "Needs Attention" — no contradictions.
+- Mobile-first: 48×48 minimum touch targets, no truncated labels, safe-area aware.
+- Progressive disclosure: previews on Home, full lists on dedicated pages.
+- Preserve all existing functionality — relocate, never remove.
 
-Out (later phases): Training, Nutrition & Cardio, Check-Ins, Payments, Communication, Documents, Account tabs (links to existing routes for now), bulk actions, row checkboxes.
+## Phase 1 — Shared Attention Engine
 
-## Data layer
+Create `src/lib/attention.functions.ts` with a single server fn `getAttentionFeed` that returns a typed, ranked list of actionable items + counts by category. Inputs: `coachId?`, `limit?`. Sources (all already in DB):
 
-Single migration adds:
+- Submission reviews awaiting review (`submission_reviews`, `manual_check_in_reviews`)
+- Lift videos awaiting review (`lift_videos` status)
+- Programs expired / ending within warning window (`pl_blocks` end_date + `client_compliance_settings`)
+- Programming deadlines overdue (existing deadline calc)
+- Payment overdue/failed (`payment_ledger`, `purchase_records` past_due)
+- Onboarding incomplete (invite/agreement/training days)
+- Nutrition update due (`nutrition_review_tasks`)
+- Client action requests pending (`client_action_requests`)
+- Agreement requiring action (`agreements` pending)
+- Scheduling conflicts (existing conflict watcher)
 
-1. `public.admin_clients_directory(p_actor uuid, p_search text, p_status text, p_coaching_type text, p_coach_id uuid, p_program_status text, p_payment_status text, p_sort text, p_limit int, p_offset int)` — security-definer RPC returning:
-   - `rows jsonb[]` — `{ id, name, email, avatar_url, coaching_type, coach_id, coach_name, current_block:{name,start,end,pct,days_left}, next_phase, status_flags:[…], next_best_action:{label,kind,href}, last_activity_at }`
-   - `total_count int`, `summary_counts jsonb` with keys `all, needs_setup, needs_review, program_ending, payment_issues, new_clients`.
-   - Scoping: if caller has `admin`, no filter; else filter by `is_assigned_coach(c.id)`. Granted to `authenticated`.
-2. `public.admin_client_overview(p_client_id uuid)` — single fetch for Overview cards: attention list, current/next training, latest check-in, nutrition/cardio status, payment summary, upcoming sessions, recent messages, onboarding %.
-3. Indexes (only if missing): `clients(active, full_name)`, `clients(updated_at desc)`, `pl_blocks(client_id, archived, end_date)`, partial `clients(coach_id) where archived=false`.
-
-Status priority lives in the RPC (one source of truth):
-`payment_blocking > onboarding_incomplete > overdue_review > program_ended > program_ending_soon > missing_program > missing_nutrition_or_cardio > active`.
-
-## Files changed / created
-
-Routes
-- `src/routes/_authenticated/admin/clients.index.tsx` — rewrite as directory.
-- `src/routes/_authenticated/admin/clients.$id.tsx` — rewrite as workspace shell (header + tab bar + Outlet).
-- `src/routes/_authenticated/admin/clients.$id.index.tsx` — Overview tab (new).
-- `src/routes/_authenticated/admin/client-programs.$clientId_.tsx` — keep as tombstone, redirect to new workspace `?tab=training`.
-- `src/routes/_authenticated/coach/clients.index.tsx` — thin wrapper around the same directory component (scope handled in RPC).
-- `src/routes/_authenticated/coach/clients.$id.tsx` + `clients.$id.index.tsx` — coach mirror.
-
-Components (new)
-- `src/components/clients/ClientsDirectory.tsx` — page body (header, summary cards, toolbar, list, pagination).
-- `src/components/clients/SummaryCards.tsx`
-- `src/components/clients/ClientToolbar.tsx` (search + filters, debounced, URL-synced)
-- `src/components/clients/ClientRow.tsx` (desktop list-card hybrid) + `ClientRowMobile.tsx` (card layout)
-- `src/components/clients/ClientRowSkeleton.tsx`
-- `src/components/clients/NextBestActionButton.tsx`
-- `src/components/clients/ClientRowMenu.tsx` (DropdownMenu wrapper, permission-gated)
-- `src/components/clients/StatusBadges.tsx` (≤3 badges, color rules)
-- `src/components/clients/Pager.tsx`
-- `src/components/clients/workspace/WorkspaceHeader.tsx`
-- `src/components/clients/workspace/WorkspaceTabs.tsx` (horizontal, mobile-scrollable)
-- `src/components/clients/workspace/overview/*` — `AttentionCard`, `CurrentTrainingCard`, `NextPhaseCard`, `LatestCheckInCard`, `NutritionCard`, `CardioCard`, `PaymentCard`, `UpcomingSessionsCard`, `RecentMessagesCard`, `OnboardingCard`.
-
-Server functions (new file: `src/lib/clients-directory.functions.ts`)
-- `listClientsDirectoryFn` → wraps `admin_clients_directory` RPC, validates with Zod, returns DTO.
-- `getClientOverviewFn` → wraps `admin_client_overview`.
-
-Shared
-- `src/lib/clients-status.ts` — TS mirror of status flags + color tokens + icon map (display only; logic stays in RPC).
-- `src/lib/admin-nav.ts` — point Clients item to new workspace URL.
-
-## URL contract
-
-`/admin/clients?search=&status=&type=&coach=&program=&payment=&sort=&page=&size=`
-
-Validated with `zodValidator` + `fallback()`. `loaderDeps` includes only these; loader calls `ensureQueryData(listClientsDirectoryFn(deps))`. Component uses `useSuspenseQuery`. Search input debounced 250 ms before pushing to URL. Scroll position restored by TanStack router (already enabled).
-
-## Workspace shell
-
-```
-/admin/clients/$clientId            → Overview (index)
-/admin/clients/$clientId?tab=training → redirects to existing /admin/client-programs/$clientId
-…same for nutrition/cardio/checkins/payments/messages/documents/account
+Output shape:
+```ts
+type AttentionItem = {
+  id: string; kind: AttentionKind; clientId?: string; clientName?: string;
+  title: string; subtitle: string; urgency: 'overdue'|'due'|'soon';
+  ageDays?: number; href: string; primaryAction: { label: string; href: string };
+};
+type AttentionFeed = { items: AttentionItem[]; counts: Record<AttentionKind, number>; total: number };
 ```
 
-The shell always renders WorkspaceHeader + WorkspaceTabs; clicking a non-Overview tab navigates to the existing page (which keeps its current route, so nothing else breaks).
+Replace independent counts in: Command Center, Needs Attention metric, Training Intelligence, Training Deadlines, Reviews, Tasks, header notification badge, and Clients directory status priority. Each consumer calls the same fn or reads from a shared `useQuery` cache key `['attention-feed', coachId]`.
 
-## Visual rules
+## Phase 2 — New Dashboard Layout
 
-- Red only for `payment_blocking` / `overdue_review` / destructive menu items.
-- Amber for upcoming deadlines (`program_ending_soon`, `due_soon`).
-- Green for active/completed, blue for informational, muted for inactive.
-- One filled primary button per row (the next-best-action). Everything else lives in the kebab menu or the workspace.
-- 44×44 tap targets on mobile; icons always paired with `aria-label`/visible text.
+Replace `src/routes/_authenticated/admin/index.tsx` (and split into small components under `src/components/admin/home/`).
 
-## Permissions
+Mobile order:
 
-- RPC is `security definer` and reads `has_role` / `is_assigned_coach` against `auth.uid()`; coaches automatically get scoped rows + scoped summary counts.
-- Workspace shell calls existing `getClientById` (already RLS-guarded). 403 → friendly empty state with "Back to Clients".
+1. **Compact header** — Reuse `admin-top-bar` but slim: logo + "Admin", single search icon (opens global search), notification bell with `total` from attention feed, avatar. Remove the large "Workouts" search button.
+2. **Mode switcher** — Existing `DashboardModeSwitcher` (Coaching/Membership/Media) as a compact segmented control. Admin↔Member POV moves to profile menu.
+3. **Greeting** — "Good afternoon, {first name}" + secondary line + date.
+4. **Today's Priorities** — Top 5 from attention feed. Each row: icon, client/task, reason, age/deadline chip (`overdue` red, `due` amber, `soon` muted), primary action button (≥52px, never truncated), chevron to detail. Empty: compact "You're caught up." line — no big card.
+5. **Quick Actions** — 2-col grid, each tile ≥64px, large icon + short label (Add Client, Assign Program, Message, Check-Ins, Lift Reviews, Create Program, Add Payment, Calendar). Section header has small pencil icon → existing floating-bar customizer. Defaults stored per-admin in existing `floating-bar` prefs.
+6. **Metrics strip** — Horizontal scroll of compact pills: Active Clients, Needs Attention, Reviews Waiting, Programs Ending, Payment Issues. Each links to filtered page. "New" metric uses 7-day window with subtitle "Last 7 days".
+7. **Clients Needing Action** — Horizontal swipe carousel, up to 5, derived from attention feed grouped by client. Each card: avatar, name, reason, urgency, one action button + "View all" → `/admin/clients?status=needs_review` (or appropriate filter).
+8. **Upcoming** — Single card with segmented tabs: Appointments | Deadlines | Birthdays. Max 3 items each. Default Appointments. Footer "View calendar".
+9. **Recent Clients** — Compact 3-row preview using corrected new-client rule (account created ≤7d AND onboarding active). No "New Client" badge on established clients.
+10. **More** drawer / link section — Integrations (Stripe, Drive, Sheets, Calendar, Fillout, SignNow), Client POV, Sales → Products & Payments, Broadcasts, Recipes.
 
-## Acceptance checks before sign-off
+Desktop (≥lg): two columns. Left: Today's Priorities, Clients Needing Action, Upcoming. Right: Quick Actions, Metrics, Payment Issues, Recent Activity.
 
-- Directory: no full-record fetch (only RPC); pagination/search/sort/filters work via URL; refresh preserves state; return-to-list keeps scroll.
-- Coach login sees only assigned clients in rows AND in summary counts.
-- Old `/admin/client-programs/$clientId` URLs redirect to new workspace.
-- Mobile: no horizontal scroll on directory; cards stack.
-- TS build + lint pass; vitest green.
+## Phase 3 — Fixes & Relocations
 
-## Out of scope / explicit deferrals
+- **Payments**: remove product-sales list from Home. Move to existing `/admin/payments` (or create section under Sales). Home shows only `Payment Issues` count + list when issues exist.
+- **Integrations grid**: move from Home to `/admin/integrations` (or More menu entries). Optional pin into Quick Actions.
+- **Enter Client POV**: remove from primary area; add to profile dropdown + client workspace header. Keep route intact.
+- **Bottom nav**: add `pb-[calc(env(safe-area-inset-bottom)+5rem)]` to `AppShell` main scroll container; verify modal sheets render above nav.
+- **Buttons**: audit Home — all primary actions get `h-12` (48px) min, full label, no `truncate` on action text. Replace tiny text links with `Button variant="ghost"` rows.
+- **New-client rule**: shared util `isGenuinelyNew(client)` reused across Recent Clients, directory "New" filter, metrics.
 
-- Tabs 2–8 rebuild, bulk selection, exports, archive-from-list, account/settings tab — Phase 3+.
-- No data migrations on `clients` itself; redesign is read-side only.
+## Phase 4 — Personalization & Performance
 
-After approval I'll start with the migration (RPC + indexes), then the directory rewrite, then the workspace shell + Overview.
+- `admin_dashboard_prefs` (per-user JSON in existing `profiles` or new lightweight table): section order, hidden optional sections, pinned quick actions (max 8), metric selection. "Reset to default" button. Required sections (Today's Priorities, Payment Issues, Nav) cannot be hidden.
+- Loaders: above-the-fold (header, attention feed top 5, metrics) loads first via `ensureQueryData`; lower sections (`Upcoming`, `Recent`, `Payment Issues`) use independent `useQuery` so one failure doesn't block the page. Each card has skeleton + retry.
+- Add DB indexes (migration) where attention queries need them: `submission_reviews(status, created_at)`, `lift_videos(status, created_at)`, `pl_blocks(client_id, end_date)`, `payment_ledger(status, due_at)`.
+
+## Phase 5 — Acceptance & QA
+
+Run through the 26-point acceptance list. Mobile QA via Playwright at 390×844 + 1280×1800. Verify contradictions resolved by seeding/checking known cases (Nicolas Galli review surfaces in count and list).
+
+## Technical Notes
+
+- New files: `src/lib/attention.functions.ts`, `src/components/admin/home/*` (header, priorities, quick-actions, metrics-strip, clients-needing-action, upcoming, recent-clients), `src/lib/dashboard-prefs.ts`.
+- Edits: `src/routes/_authenticated/admin/index.tsx` (full rewrite), `src/components/admin-top-bar.tsx` (slim), `src/components/app-shell.tsx` (safe-area bottom padding), `src/lib/clients-directory.functions.ts` (use shared attention priority), `src/lib/floating-bar.ts` (reuse for pinned quick actions).
+- Migration: indexes + optional `admin_dashboard_prefs` table with RLS (user reads/writes own row, service_role all).
+- Preserved: every route + action listed in section 20. None deleted, only relocated.
+
+## Out of Scope
+
+- Coach/Media/Client dashboards (Coaching admin only).
+- Backend business-logic changes beyond aggregation (existing review/deadline/payment rules unchanged).
+- Visual rebrand — keeps existing dark JF theme + red primary.
+
+## Open Questions
+
+Before I start I want to confirm a couple of choices so I don't ship the wrong default. Answer in the next message and I'll implement straight through.
+
+1. **"New client" window** — go with **7 days + onboarding active**, or do you want 14 days?
+2. **Payment Issues on Home** — show only when count > 0 (hide the card entirely when clean), or always show a 0-state pill?
+3. **Bottom nav tabs** — keep current 5, or switch to **Home / Clients / Messages / Reviews / More** as the spec suggests (moves Tasks into More)?
+4. **Personalization storage** — OK to add a small `admin_dashboard_prefs` table, or store prefs in `localStorage` only for v1?
