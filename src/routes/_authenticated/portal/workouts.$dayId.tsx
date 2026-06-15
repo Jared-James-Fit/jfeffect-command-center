@@ -147,8 +147,20 @@ function formatPrescription(p: {
   manualOverride: boolean | null | undefined;
   rpe: string | number | null | undefined;
   rir: string | number | null | undefined;
+  measurementType?: "reps" | "time";
+  durationSeconds?: number | null | undefined;
 }): string {
   const sets = p.sets ?? 1;
+  if (p.measurementType === "time") {
+    // Time-based prescription: "3 × 45 sec @ 20 lb | RPE 7"
+    const dur = p.durationSeconds && p.durationSeconds > 0 ? formatDuration(p.durationSeconds) : "—";
+    let load = "";
+    if (p.suggestedWeight != null) load = `@ ${fmtNum(p.suggestedWeight)} ${p.unit}`;
+    let effort = "";
+    if (p.rpe != null && String(p.rpe).trim() !== "") effort = `| RPE ${p.rpe}`;
+    else if (p.rir != null && String(p.rir).trim() !== "") effort = `| ${p.rir} RIR`;
+    return [`${sets} × ${dur}`, load, effort].filter(Boolean).join(" ");
+  }
   // Normalize "8-12" → "8–12" for readability; leave AMRAP / Max / other text untouched.
   const repsRaw = (p.repsText ?? "").toString().trim();
   const reps = repsRaw ? repsRaw.replace(/\s*-\s*/g, "–") : "?";
