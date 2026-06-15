@@ -229,6 +229,7 @@ export function ClientBlockView({
   // Scroll the active day into view on mount / when activeDayIdx changes (mobile).
   const carouselRef = useRef<HTMLDivElement | null>(null);
   const weekStripRef = useRef<HTMLDivElement | null>(null);
+  const dayChipsRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     const root = weekStripRef.current;
     if (!root || !resolvedWeek?.id) return;
@@ -243,8 +244,15 @@ export function ClientBlockView({
     if (el && carouselRef.current && window.innerWidth < 768) {
       el.scrollIntoView({ behavior: "auto", inline: "start", block: "nearest" });
     }
+    // Keep the selected day chip fully visible — never let it sit clipped
+    // under the screen edge on small phones.
+    const chipRoot = dayChipsRef.current;
+    if (chipRoot) {
+      const chip = chipRoot.querySelector<HTMLElement>(`[data-day-chip-id="${d.id}"]`);
+      chip?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [resolvedWeek?.id]);
+  }, [resolvedWeek?.id, activeDayIdx, days]);
 
   // Observe which day is most-visible in the mobile carousel and sync the URL.
   useEffect(() => {
@@ -494,6 +502,7 @@ export function ClientBlockView({
             (full title + date appear in the workout card below). */}
         {days.length > 0 && (
           <div
+            ref={dayChipsRef}
             className="-mx-3 mt-2 flex snap-x snap-mandatory gap-1.5 overflow-x-auto px-3 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:hidden"
             aria-label="Days in this week"
             style={{ scrollPaddingLeft: 12, scrollPaddingRight: 12 }}
