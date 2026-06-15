@@ -1591,7 +1591,7 @@ function WeekEditor({ week, setWeek, exercises, onCopyDayToFuture, hideHeader, c
   );
 }
 
-function DayEditor({ day, setDay, exercises, compact }: { day: any; setDay: (d: any) => void; exercises: any[]; compact?: boolean }) {
+function DayEditor({ day, setDay, exercises, compact, dayKey }: { day: any; setDay: (d: any) => void; exercises: any[]; compact?: boolean; dayKey?: string }) {
   const rows = day.rows || [];
   // Derive ordered purpose labels (Primary / Secondary / Tertiary / Quaternary
   // for competition + variation rows; Assistance for everything else). Manual
@@ -1638,6 +1638,37 @@ function DayEditor({ day, setDay, exercises, compact }: { day: any; setDay: (d: 
     setDay({ ...day, rows: next.map((r: any, i: number) => ({ ...r, sort_order: i })) });
   };
   const dayMin = useMemo(() => estimateDayMinutes(rows), [rows]);
+
+  // Day focus: track which day the coach is editing. Becomes active on any
+  // click / focus inside the card. Switching to a different day automatically
+  // collapses every row in the previous day (handled by dayBus.setActive).
+  const isActive = useDayActive(dayKey);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const activateDay = () => { if (dayKey) dayBus.setActive(dayKey); };
+  const expandAll = () => { if (dayKey) { dayBus.setActive(dayKey); dayBus.emit(dayKey, "expand"); } };
+  const collapseAll = () => {
+    if (!dayKey) return;
+    dayBus.emit(dayKey, "collapse");
+    // Drop focus so cards don't auto-reopen via onFocusCapture.
+    if (containerRef.current?.contains(document.activeElement)) {
+      (document.activeElement as HTMLElement | null)?.blur?.();
+    }
+  };
+  // Keyboard shortcuts (only while this day is the active one):
+  //   Alt+E         → expand every row in this day
+  //   Alt+Shift+E   → collapse every row in this day
+  useEffect(() => {
+    if (!isActive || !dayKey) return;
+    const handler = (e: KeyboardEvent) => {
+      if (!e.altKey) return;
+      if (e.key === "e" || e.key === "E") {
+        e.preventDefault();
+        if (e.shiftKey) collapseAll(); else expandAll();
+      }
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [isActive, dayKey]);
 
   const moveRow = (from: number, to: number) => {
     if (from === to || from < 0 || to < 0 || from >= rows.length) return;
