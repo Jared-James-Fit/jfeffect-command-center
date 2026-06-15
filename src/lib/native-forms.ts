@@ -319,6 +319,34 @@ export async function listFormsForClient(clientId: string) {
   return Array.from(map.values()).sort((a, b) => a.title.localeCompare(b.title));
 }
 
+/**
+ * Pick the form that represents the client's weekly check-in. Heuristic:
+ * the first form with `recurrence === "weekly"`; otherwise the first form
+ * whose title contains "weekly" + "check"; otherwise the first form whose
+ * title contains "check-in".
+ */
+export function pickWeeklyCheckInForm(forms: NfForm[]): NfForm | undefined {
+  const weekly = forms.find((f) => f.recurrence === "weekly");
+  if (weekly) return weekly;
+  const t = (f: NfForm) => (f.title ?? "").toLowerCase();
+  return (
+    forms.find((f) => t(f).includes("weekly") && t(f).includes("check")) ??
+    forms.find((f) => t(f).includes("check-in") || t(f).includes("check in"))
+  );
+}
+
+/**
+ * Pick the form that represents the client's nutrition update request.
+ * Heuristic: title contains "nutrition" + "update".
+ */
+export function pickNutritionUpdateForm(forms: NfForm[]): NfForm | undefined {
+  const t = (f: NfForm) => (f.title ?? "").toLowerCase();
+  return (
+    forms.find((f) => t(f).includes("nutrition") && t(f).includes("update")) ??
+    forms.find((f) => t(f).includes("nutrition"))
+  );
+}
+
 /* -------------------------- Bulk assignment helpers -------------------------- */
 
 export async function listActiveCoachingClientIds(): Promise<string[]> {
