@@ -12,7 +12,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  Users, Sparkles, AlertCircle, CreditCard, Camera, Phone, MessageCircle,
+  Users, Sparkles, AlertCircle, CreditCard, Camera, Phone, MessageCircle, Mail,
   Pause, ListChecks, XCircle, TrendingUp, Clock,
   Eye,
 } from "lucide-react";
