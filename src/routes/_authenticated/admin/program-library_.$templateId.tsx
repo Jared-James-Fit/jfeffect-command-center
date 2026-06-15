@@ -672,6 +672,18 @@ function TemplateEditor() {
         <TabsContent value="meta" className="mt-2">
           <Card className="p-4 space-y-3 max-w-2xl">
               <div><Label>Name</Label><Input value={meta.name} onChange={(e) => setM({ name: e.target.value })} /></div>
+              <div>
+                <Label>Description <span className="font-normal text-muted-foreground">(optional)</span></Label>
+                <Textarea
+                  value={meta.description ?? ""}
+                  onChange={(e) => setM({ description: e.target.value })}
+                  rows={3}
+                  placeholder="Briefly explain what this program is designed for and who it is best suited to."
+                />
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  Shown to coaches in the library and assignment preview. Separate from internal Notes. Clear the field to remove it.
+                </p>
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label>Style</Label>
