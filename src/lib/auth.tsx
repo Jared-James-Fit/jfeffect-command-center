@@ -90,7 +90,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           : roles.includes("media_manager") ? "media_manager"
           : memberRow ? "member"
           : roles.includes("client") || clientRow ? "client"
-          : null,
+          : "client",
         );
       } finally {
         if (!cancelled) setLoading(false);
