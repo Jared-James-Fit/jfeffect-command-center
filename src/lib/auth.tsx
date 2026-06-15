@@ -36,7 +36,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data: sub } = supabase.auth.onAuthStateChange((event, sess) => {
       setSession(sess);
       setUser(sess?.user ?? null);
-      if (!sess) setRole(null);
+      if (sess) setLoading(true);
+      else {
+        setRole(null);
+        setLoading(false);
+      }
       // Fire-and-forget — RPC self-scopes to auth.uid() and ignores non-client users.
       if (sess && (event === "SIGNED_IN" || event === "TOKEN_REFRESHED" || event === "INITIAL_SESSION")) {
         void markClientSignedIn();
@@ -58,32 +62,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(data.session);
       setUser(data.session?.user ?? null);
       lastUserIdRef.current = data.session?.user?.id ?? null;
-      setLoading(false);
+      if (!data.session) setLoading(false);
       if (data.session) void markClientSignedIn();
     });
     return () => sub.subscription.unsubscribe();
   }, [router, queryClient]);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user) {
+      setLoading(false);
+      return;
+    }
     let cancelled = false;
     (async () => {
-      const [{ data: roleRows }, { data: memberRow }] = await Promise.all([
-        supabase.from("user_roles").select("role").eq("user_id", user.id),
-        supabase.from("app_members").select("id").eq("user_id", user.id).maybeSingle(),
-      ]);
-      if (cancelled) return;
-      const roles = (roleRows ?? []).map((r: any) => r.role as AppRole);
-      // Admin/coach take priority. Otherwise: if the user has an app_members
-      // row, they're a member; else fall back to client.
-      setRole(
-        roles.includes("admin") ? "admin"
-        : roles.includes("coach") ? "coach"
-        : roles.includes("media_manager") ? "media_manager"
-        : memberRow ? "member"
-        : roles.includes("client") ? "client"
-        : null,
-      );
+      try {
+        const [{ data: roleRows }, { data: memberRow }, { data: clientRow }] = await Promise.all([
+          supabase.from("user_roles").select("role").eq("user_id", user.id),
+          supabase.from("app_members").select("id").eq("user_id", user.id).maybeSingle(),
+          supabase.from("clients").select("id").eq("user_id", user.id).maybeSingle(),
+        ]);
+        if (cancelled) return;
+        const roles = (roleRows ?? []).map((r: any) => r.role as AppRole);
+        // Admin/coach take priority. Otherwise: membership row, then client row.
+        setRole(
+          roles.includes("admin") ? "admin"
+          : roles.includes("coach") ? "coach"
+          : roles.includes("media_manager") ? "media_manager"
+          : memberRow ? "member"
+          : roles.includes("client") || clientRow ? "client"
+          : "client",
+        );
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
     })();
     return () => {
       cancelled = true;
