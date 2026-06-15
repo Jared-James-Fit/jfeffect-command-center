@@ -255,7 +255,15 @@ function WorkoutDay() {
   const blockEnded = block?.end_date ? new Date(block.end_date) < today : false;
   const blockCompleted = block?.status === "Completed" || block?.status === "Archived";
   const { isImpersonating } = useClientImpersonation();
-  const readonly = search.readonly === 1 || blockEnded || blockCompleted || isImpersonating;
+  // "Auto" readonly = past/closed workouts the client would otherwise be locked
+  // out of. The client can opt-in to editing a past workout via the Edit button
+  // below (`unlocked` flips this off). Impersonation always stays read-only so
+  // coaches don't edit while viewing as the client.
+  const [unlocked, setUnlocked] = useState(false);
+  const autoReadonly = search.readonly === 1 || blockEnded || blockCompleted;
+  const readonly = (autoReadonly && !unlocked) || isImpersonating;
+  // Reset the unlock when navigating to a different workout.
+  useEffect(() => { setUnlocked(false); }, [dayId]);
 
   const { data: rows = [], isSuccess: rowsLoaded } = useQuery({
     queryKey: ["pl-day-rows", dayId],
