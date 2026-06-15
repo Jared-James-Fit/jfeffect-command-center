@@ -2642,8 +2642,74 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
         <Field className="col-span-2" label="Sets">
           <RowCell dataField="sets" className={cn("text-sm font-semibold tabular-nums text-center", h, inputCls)} inputMode="numeric" placeholder="3" value={row.sets} onCommit={(v) => setRow({ ...row, sets: parseIntOrNull(v) })} />
         </Field>
-        <Field className="col-span-3" label="Reps">
-          <RowCell dataField="reps" className={cn("text-sm font-semibold tabular-nums text-center", h, inputCls)} placeholder="8-12" value={row.reps_text} onCommit={(v) => setRow({ ...row, reps_text: v ?? "" })} />
+        <Field className="col-span-3" label={(row as any).measurement_type === "time" ? "Duration" : "Reps"}>
+          <div className="flex items-stretch gap-1">
+            {(() => {
+              const isTime = (row as any).measurement_type === "time";
+              const toggle = (next: "reps" | "time") => {
+                if (next === ((row as any).measurement_type ?? "reps")) return;
+                if (next === "time") {
+                  // reps -> time: snapshot reps, restore prior duration if any
+                  const restored = (row as any).duration_seconds_backup ?? null;
+                  setRow({
+                    ...row,
+                    measurement_type: "time",
+                    reps_text_backup: row.reps_text || (row as any).reps_text_backup || null,
+                    reps_text: "",
+                    duration_seconds: restored,
+                  });
+                } else {
+                  // time -> reps: snapshot duration, restore prior reps if any
+                  const restored = (row as any).reps_text_backup ?? "";
+                  setRow({
+                    ...row,
+                    measurement_type: "reps",
+                    duration_seconds_backup: (row as any).duration_seconds ?? (row as any).duration_seconds_backup ?? null,
+                    duration_seconds: null,
+                    reps_text: restored,
+                  });
+                }
+              };
+              return (
+                <div className={cn("inline-flex shrink-0 overflow-hidden rounded-md border", h)} role="group" aria-label="Measurement type">
+                  <button
+                    type="button"
+                    onClick={() => toggle("reps")}
+                    className={cn("px-1.5 text-[10px] font-semibold uppercase tracking-wide transition", !isTime ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:text-foreground")}
+                    title="Programmed in reps"
+                    aria-pressed={!isTime}
+                  >Reps</button>
+                  <button
+                    type="button"
+                    onClick={() => toggle("time")}
+                    className={cn("px-1.5 text-[10px] font-semibold uppercase tracking-wide transition border-l", isTime ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:text-foreground")}
+                    title="Programmed in time"
+                    aria-pressed={isTime}
+                  >Time</button>
+                </div>
+              );
+            })()}
+            {(row as any).measurement_type === "time" ? (
+              <RowCell
+                dataField="reps"
+                className={cn("flex-1 text-sm font-semibold tabular-nums text-center", h, inputCls)}
+                placeholder="45 sec, 1:30, 2 min"
+                value={(row as any).duration_seconds != null ? formatDuration(Number((row as any).duration_seconds)) : ""}
+                onCommit={(v) => {
+                  const raw = (v ?? "").trim();
+                  if (!raw) { setRow({ ...row, duration_seconds: null }); return; }
+                  const secs = parseDurationInput(raw);
+                  if (secs == null) {
+                    toast.error("Enter a valid duration (e.g. 30, 1:30, 2 min)");
+                    return;
+                  }
+                  setRow({ ...row, duration_seconds: secs });
+                }}
+              />
+            ) : (
+              <RowCell dataField="reps" className={cn("flex-1 text-sm font-semibold tabular-nums text-center", h, inputCls)} placeholder="8-12" value={row.reps_text} onCommit={(v) => setRow({ ...row, reps_text: v ?? "" })} />
+            )}
+          </div>
         </Field>
         <Field className="col-span-2" label="RPE">
           <RowCell dataField="rpe" className={cn("text-sm font-semibold tabular-nums text-center", h, inputCls)} inputMode="decimal" placeholder="—" value={row.rpe} onCommit={(v) => setRow({ ...row, rpe: v ?? "" })} />
