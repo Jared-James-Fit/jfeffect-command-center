@@ -81,6 +81,7 @@ function MembershipDashboard() {
               <Eye className="mr-2 h-4 w-4" /> Enter Membership POV
             </Button>
             <Link to="/admin/membership/action-needed"><Button variant="outline"><AlertCircle className="mr-2 h-4 w-4" />Action Needed</Button></Link>
+            <Link to="/admin/membership/onboarding-email"><Button variant="outline"><Mail className="mr-2 h-4 w-4" />Onboarding Email</Button></Link>
           </div>
         }
       />
