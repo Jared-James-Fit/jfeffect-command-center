@@ -2,7 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import {
   Dumbbell, Plus, BookOpen, CalendarDays, Apple, HeartPulse,
-  MessageSquare, ClipboardCheck, CreditCard, User, Zap, Eye,
+  MessageSquare, ClipboardCheck, CreditCard, User, Zap, Eye, Archive,
 } from "lucide-react";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
@@ -12,11 +12,13 @@ import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { DirectoryRow } from "@/lib/clients-directory.functions";
 import { AssignProgramDialog } from "./assign-program-dialog";
+import { WorkoutArchiveDialog } from "./workout-archive-dialog";
 
 /** Compact "Quick Actions" launcher for a client row. */
 export function QuickActionsMenu({ r }: { r: DirectoryRow }) {
   const hasProgram = !!r.block_id;
   const [assignOpen, setAssignOpen] = useState(false);
+  const [archiveOpen, setArchiveOpen] = useState(false);
   return (
     <>
     <DropdownMenu>
@@ -66,6 +68,9 @@ export function QuickActionsMenu({ r }: { r: DirectoryRow }) {
           <Link to="/admin/clients/$id" params={{ id: r.id }} search={{ tab: "training" } as any} className="flex items-center gap-2">
             <CalendarDays className="h-4 w-4" /> View Schedule
           </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setArchiveOpen(true); }}>
+          <Archive className="mr-2 h-4 w-4" /> Workout Archive
         </DropdownMenuItem>
 
         <DropdownMenuSeparator />
@@ -118,6 +123,12 @@ export function QuickActionsMenu({ r }: { r: DirectoryRow }) {
       clientId={r.id}
       clientName={r.full_name}
     />
+    <WorkoutArchiveDialog
+      open={archiveOpen}
+      onOpenChange={setArchiveOpen}
+      clientId={r.id}
+      clientName={r.full_name}
+    />
     </>
   );
 }
@@ -133,6 +144,7 @@ export function ClientMoreMenu({
   onArchive?: (r: DirectoryRow) => void;
 }) {
   const [assignOpen, setAssignOpen] = useState(false);
+  const [archiveOpen, setArchiveOpen] = useState(false);
   return (
     <>
     <DropdownMenu>
@@ -174,6 +186,9 @@ export function ClientMoreMenu({
           <Link to="/admin/client-programs/$clientId/history" params={{ clientId: r.id }} className="flex items-center gap-2">
             <BookOpen className="h-4 w-4" /> Program History
           </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setArchiveOpen(true); }}>
+          <Archive className="mr-2 h-4 w-4" /> Workout Archive
         </DropdownMenuItem>
 
         <DropdownMenuSeparator />
@@ -246,6 +261,12 @@ export function ClientMoreMenu({
     <AssignProgramDialog
       open={assignOpen}
       onOpenChange={setAssignOpen}
+      clientId={r.id}
+      clientName={r.full_name}
+    />
+    <WorkoutArchiveDialog
+      open={archiveOpen}
+      onOpenChange={setArchiveOpen}
       clientId={r.id}
       clientName={r.full_name}
     />
