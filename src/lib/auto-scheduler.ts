@@ -139,7 +139,11 @@ export async function buildSchedulePreview(blockId: string): Promise<SchedulePre
   const startDate = startISO ? parseISO(startISO) : null;
 
   for (const w of weekRows) {
-    const weekStart = startDate ? addDays(startDate, w.week_index * weekDurationDays) : null;
+    // week_index is 1-based across the codebase (see block-dates.computeWeekRange),
+    // so Week 1 starts at the block start date itself, not a week later.
+    const weekStart = startDate
+      ? addDays(startDate, Math.max(0, (w.week_index ?? 1) - 1) * weekDurationDays)
+      : null;
     const weekDays = (daysByWeek.get(w.id) ?? []).sort((a, b) => a.day_index - b.day_index);
 
     // Determine which weekdays are taken by locked days (preserve them)
