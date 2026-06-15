@@ -38,15 +38,15 @@ export const Route = createFileRoute("/coaching")({
   component: CoachingPage,
   head: () => ({
     meta: [
-      { title: "Apply for Private Coaching — JF Effect" },
-      { name: "description", content: "Application-only 1:1 coaching with custom training, nutrition, weekly check-ins, plan adjustments, and direct coach feedback inside the JF Effect app." },
-      { property: "og:title", content: "JF Effect — Private Coaching" },
-      { property: "og:description", content: "Application-based 1:1 coaching. Personalized plan, weekly check-ins, direct support." },
+      { title: "Online Fitness & Powerlifting Coaching | JF Effect" },
+      { name: "description", content: "Private online coaching with individualized training, nutrition guidance, weekly check-ins and direct coach support. By application only." },
+      { property: "og:title", content: "Online Fitness & Powerlifting Coaching | JF Effect" },
+      { property: "og:description", content: "Private online coaching: individualized training, nutrition guidance, weekly check-ins and direct coach support. By application." },
       { property: "og:type", content: "website" },
       { property: "og:url", content: "https://jfeffect.com/coaching" },
       { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:title", content: "JF Effect — Private Coaching" },
-      { name: "twitter:description", content: "Application-based 1:1 coaching. Personalized plan, weekly check-ins, direct support." },
+      { name: "twitter:title", content: "Online Fitness & Powerlifting Coaching | JF Effect" },
+      { name: "twitter:description", content: "Private online coaching: individualized training, nutrition guidance, weekly check-ins and direct coach support. By application." },
     ],
     links: [{ rel: "canonical", href: "https://jfeffect.com/coaching" }],
   }),
@@ -70,9 +70,9 @@ function CoachingPage() {
         <HeroSkeleton />
       ) : (
       <CoachingHero
-        eyebrow="Private Coaching · By application"
+        eyebrow="Private Online Coaching · By Application"
         headline={"Stop guessing. Get a plan built around you."}
-        sub={"Private coaching gives you individualized training, nutrition guidance, weekly accountability and direct support\u2014adjusted around your goals, schedule and progress."}
+        sub={"Private online coaching gives you individualized training, nutrition guidance, weekly accountability and direct support\u2014adjusted around your goals, schedule and progress."}
         image={coachingHeroImg}
         primary={<HeroCta onClick={handleApply}>Apply for Private Coaching</HeroCta>}
         secondary={
@@ -80,7 +80,7 @@ function CoachingPage() {
             to="/membership"
             className="text-sm font-semibold text-white/70 underline-offset-4 hover:text-white hover:underline"
           >
-            Not ready for coaching? Explore Membership →
+            Prefer to Train Independently? View JF Membership →
           </Link>
         }
       />
@@ -136,7 +136,7 @@ function CoachingPage() {
         primary={<Button size="lg" onClick={handleApply} className="h-12 px-6 text-base font-bold">{s.final_cta?.primary_label ?? "Apply for Private Coaching"}</Button>}
         secondary={
           <Link to={(s.final_cta?.secondary_href ?? "/membership") as any}>
-            <Button size="lg" variant="outline" className="h-12 px-6 text-base">{s.final_cta?.secondary_label ?? "Explore Membership Instead"}</Button>
+            <Button size="lg" variant="outline" className="h-12 px-6 text-base">{s.final_cta?.secondary_label ?? "View JF Membership"}</Button>
           </Link>
         }
       /></Reveal>
