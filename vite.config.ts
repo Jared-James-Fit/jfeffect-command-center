@@ -24,6 +24,19 @@ export default defineConfig({
     server: { entry: "server" },
   },
   vite: {
+    build: {
+      sourcemap: false,
+      rollupOptions: {
+        onwarn(warning, warn) {
+          if (warning.code === "MODULE_LEVEL_DIRECTIVE") return;
+          warn(warning);
+        },
+        onLog(level, log, handler) {
+          if (log.code === "MODULE_LEVEL_DIRECTIVE") return;
+          handler(level, log);
+        },
+      },
+    },
     resolve: {
       alias: {
         // React Email pulls in htmlparser2 → entities. Force the hoisted v4.5.0
