@@ -518,23 +518,10 @@ function ClientDetail() {
         value={tab ?? "summary"}
         onValueChange={(v) => navigate({ to: ".", params: { id }, search: { tab: v as TabValue }, replace: true })}
       >
-        <TabsList className="mb-6 flex flex-wrap h-auto">
-          <TabsTrigger value="summary">Summary</TabsTrigger>
-          <TabsTrigger value="training">Training</TabsTrigger>
-          <TabsTrigger value="nutrition">Nutrition Targets</TabsTrigger>
-          <TabsTrigger value="cardio">Cardio Targets</TabsTrigger>
-         <TabsTrigger value="metrics">Progress Metrics</TabsTrigger>
-          <TabsTrigger value="messages">Messages</TabsTrigger>
-          <TabsTrigger value="lift-videos">Lift Videos</TabsTrigger>
-          <TabsTrigger value="documents">Documents</TabsTrigger>
-          <TabsTrigger value="sessions">Sessions</TabsTrigger>
-          <TabsTrigger value="purchases">Purchases</TabsTrigger>
-          <TabsTrigger value="billing">Billing</TabsTrigger>
-          <TabsTrigger value="agreements">Agreements</TabsTrigger>
-          <TabsTrigger value="notes">Notes</TabsTrigger>
-          <TabsTrigger value="info">Account Info</TabsTrigger>
-          <TabsTrigger value="account">Account & Access</TabsTrigger>
-        </TabsList>
+        <SectionNav
+          activeTab={(tab ?? "summary") as TabValue}
+          onChange={(v) => navigate({ to: ".", params: { id }, search: { tab: v }, replace: true })}
+        />
 
         <TabsContent value="summary" className="grid gap-6 md:grid-cols-3">
         <Card className="border-border bg-card p-6 md:col-span-2 space-y-4">
