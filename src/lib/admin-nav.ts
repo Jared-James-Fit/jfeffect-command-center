@@ -199,7 +199,7 @@ export const clientBottomNav: NavItem[] = [
 export const memberNav: NavItem[] = [
   { to: "/m", label: "Dashboard", icon: LayoutDashboard },
   { to: "/m/my-plans", label: "My Plans", icon: ClipboardCheck },
-  { to: "/m/plans", label: "Workout Library", icon: BookOpen },
+  { to: "/m/plans", label: "Program Library", icon: BookOpen },
   { to: "/m/resources", label: "Resources", icon: FolderOpen },
   { to: "/m/tools", label: "Tools", icon: Wrench },
   { to: "/m/announcements", label: "Announcements", icon: Megaphone },
