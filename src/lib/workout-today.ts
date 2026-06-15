@@ -160,8 +160,14 @@ export function dayDisplayTitle(item: WorkoutItem | undefined | null): string {
  * we only ever surface the meaningful part of the title; the real scheduled
  * date is rendered separately by the cards/lists.
  */
+// Match either a full "— Weekday, Month Day[, Year]" suffix OR a bare
+// "— Weekday" suffix. Day titles are sometimes saved with a baked-in
+// weekday name (e.g. "Day 1 — Monday") that goes stale as soon as the
+// client commits to a different training schedule (Tue/Fri/Sun, etc.).
+// We always strip the weekday so the only source of truth for the day's
+// actual date is `scheduled_date`, which the cards render separately.
 const STALE_DATE_RE =
-  /\s*[—–-]\s*(?:Sun|Mon|Tue(?:s)?|Wed(?:nes)?|Thu(?:rs?)?|Fri|Sat(?:ur)?)(?:day)?[.,]?\s+(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\.?\s+\d{1,2}(?:st|nd|rd|th)?(?:,\s*\d{2,4})?/gi;
+  /\s*[—–-]\s*(?:Sun|Mon|Tue(?:s)?|Wed(?:nes)?|Thu(?:rs?)?|Fri|Sat(?:ur)?)(?:day)?(?:[.,]?\s+(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\.?\s+\d{1,2}(?:st|nd|rd|th)?(?:,\s*\d{2,4})?)?(?=\s*(?:[—–-]|$))/gi;
 
 export function cleanDayTitle(
   raw: string | null | undefined,
