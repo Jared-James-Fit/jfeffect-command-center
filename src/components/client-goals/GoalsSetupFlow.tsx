@@ -168,8 +168,20 @@ export function GoalsSetupFlow({ clientId, onComplete, compact }: Props) {
 
 /* ---------- shared helpers ---------- */
 
-function Q({ children }: { children: React.ReactNode }) {
-  return <h3 className="text-base font-semibold sm:text-lg">{children}</h3>;
+function Q({ children, required }: { children: React.ReactNode; required?: boolean }) {
+  return (
+    <h3 className="flex flex-wrap items-center gap-2 text-base font-semibold sm:text-lg">
+      <span>
+        {children}
+        {required && <span className="ml-1 text-destructive" aria-hidden>*</span>}
+      </span>
+      {required && (
+        <span className="rounded-full border border-destructive/40 bg-destructive/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-destructive">
+          Required
+        </span>
+      )}
+    </h3>
+  );
 }
 function Sub({ children }: { children: React.ReactNode }) {
   return <p className="mt-0.5 text-xs text-muted-foreground sm:text-sm">{children}</p>;
@@ -185,7 +197,7 @@ function GoalsStep({ value, setField }: StepProps) {
   return (
     <div className="space-y-6">
       <div className="space-y-3">
-        <Q>What is your main goal?</Q>
+        <Q required>What is your main goal?</Q>
         <ChipGrid
           options={MAIN_GOALS}
           value={value.main_goal ?? null}
@@ -220,7 +232,7 @@ function AvailabilityStep({ value, setField }: StepProps) {
   return (
     <div className="space-y-6">
       <div className="space-y-3">
-        <Q>How many days per week can you realistically train?</Q>
+        <Q required>How many days per week can you realistically train?</Q>
         <ChipGrid
           options={TRAINING_DAYS}
           value={value.training_days_per_week ?? null}
@@ -245,7 +257,7 @@ function AvailabilityStep({ value, setField }: StepProps) {
         />
       </div>
       <div className="space-y-3">
-        <Q>How long can each workout be?</Q>
+        <Q required>How long can each workout be?</Q>
         <ChipGrid
           options={WORKOUT_LENGTHS}
           value={value.workout_length_minutes ?? null}
@@ -262,7 +274,7 @@ function ExperienceStep({ value, setField }: StepProps) {
   return (
     <div className="space-y-6">
       <div className="space-y-3">
-        <Q>What is your training experience?</Q>
+        <Q required>What is your training experience?</Q>
         <ChipGrid
           options={EXPERIENCE_LEVELS}
           value={value.training_experience ?? null}
@@ -313,7 +325,7 @@ function EquipmentStep({ value, setField }: StepProps) {
   return (
     <div className="space-y-6">
       <div className="space-y-3">
-        <Q>Where will you train?</Q>
+        <Q required>Where will you train?</Q>
         <ChipGrid
           options={TRAINING_LOCATIONS}
           value={value.training_location ?? null}
@@ -379,7 +391,7 @@ function NutritionStep({ value, setField }: StepProps) {
   return (
     <div className="space-y-6">
       <div className="space-y-3">
-        <Q>What is your nutrition goal?</Q>
+        <Q required>What is your nutrition goal?</Q>
         <ChipGrid
           options={NUTRITION_GOALS}
           value={value.nutrition_goal ?? null}
@@ -395,7 +407,7 @@ function NutritionStep({ value, setField }: StepProps) {
         />
       </div>
       <div className="space-y-3">
-        <Q>Do you have any food allergies, intolerances, or foods you must avoid?</Q>
+        <Q required>Do you have any food allergies, intolerances, or foods you must avoid?</Q>
         <ChipGrid
           options={["No", "Yes"]}
           value={value.food_restrictions_has ? "Yes" : value.food_restrictions_has === false ? "No" : null}
@@ -434,7 +446,7 @@ function NutritionStep({ value, setField }: StepProps) {
 function InjuriesStep({ value, setField }: StepProps) {
   return (
     <div className="space-y-4">
-      <Q>Do you have any injuries, pain, medical restrictions, or movement limitations that could affect training?</Q>
+      <Q required>Do you have any injuries, pain, medical restrictions, or movement limitations that could affect training?</Q>
       <ChipGrid
         options={["No", "Yes"]}
         value={value.injuries_has ? "Yes" : value.injuries_has === false ? "No" : null}
