@@ -157,7 +157,7 @@ type Priority = {
   avatarUrl?: string | null;
 };
 
-function ActionsSheet({ actions, trigger }: { actions: { label: string; to: string; icon: any }[]; trigger: React.ReactNode }) {
+function ActionsSheet({ actions, trigger }: { actions: { label: string; to: string; icon: any; search?: any }[]; trigger: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   return (
     <Sheet open={open} onOpenChange={setOpen}>
@@ -168,7 +168,7 @@ function ActionsSheet({ actions, trigger }: { actions: { label: string; to: stri
         </SheetHeader>
         <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-4">
           {actions.map((a) => (
-            <Link key={a.label} to={a.to as any} onClick={() => setOpen(false)} className="block">
+            <Link key={a.label} to={a.to as any} search={a.search} onClick={() => setOpen(false)} className="block">
               <div className="flex h-full min-h-[80px] flex-col items-center justify-center gap-1.5 rounded-xl border border-border bg-secondary/40 p-2 text-center transition active:scale-[0.97] hover:border-primary/50">
                 <div className="grid h-9 w-9 place-items-center rounded-md bg-primary/15 text-primary">
                   <a.icon className="h-4 w-4" />
@@ -415,6 +415,7 @@ function AdminDashboard() {
   ];
   const moreActions = [
     { label: "Lift Reviews",   to: "/admin/lift-videos",      icon: Video },
+    { label: "Tasks",          to: "/admin/content",          icon: ClipboardList, search: { tab: "tasks" } as any },
     { label: "Payment Link",   to: "/admin/payment-links",    icon: DollarSign },
     { label: "Appointment",    to: "/admin/calendar",         icon: Calendar },
     { label: "Broadcast",      to: "/admin/broadcasts",       icon: Megaphone },
