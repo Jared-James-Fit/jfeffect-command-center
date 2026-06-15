@@ -1768,7 +1768,7 @@ function SwapExerciseButton({ row, setRow, exercises }: { row: any; setRow: (r: 
                   onClick={() => pick(ex)}
                   className="rounded px-2 py-1 text-left text-xs hover:bg-muted"
                 >
-                  {ex.name}
+                  <HighlightedText text={ex.name} query={q} />
                 </button>
               ))}
             </div>
