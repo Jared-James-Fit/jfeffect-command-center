@@ -50,6 +50,7 @@ import { ActiveRestTimerProvider, useRestTimer } from "@/components/active-rest-
 import { ExerciseHistoryButton } from "@/components/exercise-history-sheet";
 import { convertWeight } from "@/lib/progress-metrics";
 import { WorkoutFeedbackSheet, WorkoutFeedbackReminder, WorkoutFeedbackEditButton } from "@/components/workout-feedback-sheet";
+import { PostWorkoutLiftPrompt } from "@/components/post-workout-lift-prompt";
 import { WorkoutSummaryDialog } from "@/components/workout-summary-dialog";
 import { WorkoutTimerSheet, QuickConfirmDuration, type TimerCompletionPayload } from "@/components/workout-timer-sheet";
 import { formatDuration } from "@/lib/duration";
@@ -601,6 +602,8 @@ function WorkoutDay() {
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   // Celebratory summary dialog shown right after first feedback submit.
   const [summaryOpen, setSummaryOpen] = useState(false);
+  // After first feedback submit, gently offer a lift upload. Fully optional.
+  const [liftPromptOpen, setLiftPromptOpen] = useState(false);
   const [justSubmittedFeedback, setJustSubmittedFeedback] = useState<{ overall_rating: number; session_rpe: number } | null>(null);
   // When the client clicks "Finish", we stage the completion payload and
   // open the feedback sheet. The workout is NOT marked complete until the
@@ -1052,13 +1055,29 @@ function WorkoutDay() {
       {client?.id && (
         <WorkoutSummaryDialog
           open={summaryOpen}
-          onOpenChange={setSummaryOpen}
+          onOpenChange={(v) => {
+            setSummaryOpen(v);
+            // When the celebratory summary closes after a fresh submit,
+            // chain into the optional lift-upload prompt seamlessly.
+            if (!v && justSubmittedFeedback && !isImpersonating) {
+              setLiftPromptOpen(true);
+            }
+          }}
           rows={rows as any[]}
           results={results as any[]}
           feedback={existingFeedback ?? (justSubmittedFeedback
             ? { overall_rating: justSubmittedFeedback.overall_rating, session_rpe: justSubmittedFeedback.session_rpe }
             : null)}
           durationMin={completion?.actual_duration_min ?? pendingFinalize?.durationMin ?? null}
+        />
+      )}
+      {client?.id && !isImpersonating && (
+        <PostWorkoutLiftPrompt
+          open={liftPromptOpen}
+          onOpenChange={setLiftPromptOpen}
+          clientId={client.id}
+          clientName={(client as any).full_name}
+          userId={portalUserId ?? null}
         />
       )}
       <MoveWorkoutSheet
