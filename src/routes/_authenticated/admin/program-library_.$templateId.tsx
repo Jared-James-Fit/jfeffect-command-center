@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
@@ -15,7 +15,7 @@ import {
   getTemplate, updateTemplate, summarizeTemplatePayload, TIME_PROFILES,
   estimateDayMinutes, durationRange, PERCENTAGE_BASES, type TrainingStyle,
 } from "@/lib/pl-programs";
-import { ExerciseLibraryPanel, type ExerciseRef, DND_EXERCISE, readDrop, exerciseAccent, EXERCISE_CARD_COLORS } from "@/components/program-builder";
+import { ExerciseLibraryPanel, type ExerciseRef, DND_EXERCISE, readDrop, exerciseAccent, EXERCISE_CARD_COLORS, HighlightedText } from "@/components/program-builder";
 import { derivePurposeLabels, defaultRestSeconds, effectiveRestSeconds, PURPOSE_LABEL_OPTIONS, resolveCategory, purposeLabelBadgeClass } from "@/lib/exercise-metadata";
 import { ProgramBuilderShortcutsButton } from "@/components/program-builder-shortcuts";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -1644,8 +1644,13 @@ function DayEditor({ day, setDay, exercises, compact }: { day: any; setDay: (d: 
       ) : (
         <div className="space-y-3" data-pb-day>
           {rows.map((r: any, i: number) => (
+            <Fragment key={i}>
+              <InlineAddExerciseButton
+                exercises={exercises}
+                onPick={(exId: string) => insertExercise(exId, i)}
+                label={i === 0 ? "Add exercise at the start" : "Insert exercise here"}
+              />
             <div
-              key={i}
               draggable
               onDragStart={(e) => {
                 // Don't start a row-drag when the user is interacting with
@@ -1704,11 +1709,140 @@ function DayEditor({ day, setDay, exercises, compact }: { day: any; setDay: (d: 
                 purposeLabel={purposeLabels[i]}
               />
             </div>
+            </Fragment>
           ))}
+          <InlineAddExerciseButton
+            exercises={exercises}
+            onPick={(exId: string) => insertExercise(exId, rows.length)}
+            label="Add exercise at the end"
+          />
         </div>
       )}
       <Textarea className={cn("mt-2", compact && "text-xs")} placeholder="Day notes" value={day.notes ?? ""} onChange={(e) => setDay({ ...day, notes: e.target.value })} rows={compact ? 1 : 2} />
     </div>
+  );
+}
+
+/**
+ * Slim "+" rendered between exercise rows in DayEditor. Click opens a
+ * popover with a search box; choosing a result inserts a new row at that
+ * position. The trigger stays low-profile (hairline divider + faded button)
+ * until the user hovers the slot, so it doesn't clutter the day.
+ */
+function InlineAddExerciseButton({
+  exercises,
+  onPick,
+  label,
+}: {
+  exercises: any[];
+  onPick: (exerciseId: string) => void;
+  label: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  const filtered = useMemo(() => {
+    const term = q.trim().toLowerCase();
+    const list = exercises as any[];
+    if (!term) return list.slice(0, 100);
+    return list
+      .filter((e) => {
+        const hay = [e.name, e.muscle_group, e.category, ...(e.tags ?? [])]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+        return hay.includes(term);
+      })
+      .slice(0, 200);
+  }, [exercises, q]);
+
+  const pick = (exId: string) => {
+    onPick(exId);
+    setOpen(false);
+    setQ("");
+  };
+
+  return (
+    <Popover
+      open={open}
+      onOpenChange={(v) => {
+        setOpen(v);
+        if (!v) setQ("");
+      }}
+    >
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          title={label}
+          aria-label={label}
+          className={cn(
+            "group/insert relative -my-1.5 flex h-3 w-full items-center justify-center",
+            "opacity-40 transition-opacity hover:opacity-100 focus:opacity-100",
+          )}
+        >
+          <span
+            aria-hidden
+            className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-border/60 group-hover/insert:bg-primary/50"
+          />
+          <span
+            className={cn(
+              "relative z-10 inline-flex h-5 w-5 items-center justify-center rounded-full",
+              "border border-border bg-background text-muted-foreground shadow-sm",
+              "group-hover/insert:border-primary group-hover/insert:bg-primary group-hover/insert:text-primary-foreground",
+            )}
+          >
+            <Plus className="h-3 w-3" />
+          </span>
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        className="w-72 p-2"
+        align="center"
+        onOpenAutoFocus={() => setTimeout(() => inputRef.current?.focus(), 0)}
+      >
+        <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+          {label}
+        </div>
+        <Input
+          ref={inputRef}
+          placeholder="Search exercises…"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          className="mb-2 h-8 text-xs"
+        />
+        <div className="max-h-64 overflow-y-auto">
+          {filtered.length === 0 ? (
+            <div className="px-2 py-3 text-center text-xs text-muted-foreground">
+              No matches
+            </div>
+          ) : (
+            <div className="flex flex-col gap-0.5">
+              {filtered.map((ex) => {
+                const tagLine = [ex.muscle_group, ex.category].filter(Boolean).join(" · ");
+                return (
+                  <button
+                    key={ex.id}
+                    type="button"
+                    onClick={() => pick(ex.id)}
+                    className="rounded px-2 py-1 text-left hover:bg-muted"
+                  >
+                    <div className="text-xs">
+                      <HighlightedText text={ex.name} query={q} />
+                    </div>
+                    {tagLine && (
+                      <div className="text-[10px] text-muted-foreground">
+                        <HighlightedText text={tagLine} query={q} />
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -1719,7 +1853,15 @@ function SwapExerciseButton({ row, setRow, exercises }: { row: any; setRow: (r: 
     const term = q.trim().toLowerCase();
     const list = (exercises as any[]).filter((e) => e.id !== row.exercise_id);
     if (!term) return list.slice(0, 100);
-    return list.filter((e) => (e.name ?? "").toLowerCase().includes(term)).slice(0, 100);
+    return list
+      .filter((e) => {
+        const hay = [e.name, e.muscle_group, e.category, ...(e.tags ?? [])]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+        return hay.includes(term);
+      })
+      .slice(0, 200);
   }, [exercises, q, row.exercise_id]);
   const pick = (ex: any) => {
     // Preserve every existing input (sets/reps/rpe/rir/load/rest/tempo/notes…)
@@ -1757,7 +1899,7 @@ function SwapExerciseButton({ row, setRow, exercises }: { row: any; setRow: (r: 
                   onClick={() => pick(ex)}
                   className="rounded px-2 py-1 text-left text-xs hover:bg-muted"
                 >
-                  {ex.name}
+                  <HighlightedText text={ex.name} query={q} />
                 </button>
               ))}
             </div>
