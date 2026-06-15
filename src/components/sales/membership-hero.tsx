@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import {
   Smartphone, TrendingUp, Dumbbell, Apple, BookOpen,
-  ListChecks, LineChart, Sparkles,
+  ListChecks, LineChart, Sparkles, ChevronDown, User, Users,
 } from "lucide-react";
 import type { ReactNode } from "react";
 
@@ -25,6 +25,8 @@ export function MembershipHero({
   secondary,
   trialNote,
   heroImage,
+  decisionArea,
+  detailsLink,
 }: {
   priceChip: string;
   headline: string;
@@ -33,79 +35,90 @@ export function MembershipHero({
   secondary?: ReactNode;
   trialNote?: string;
   heroImage?: string | null;
+  decisionArea?: ReactNode;
+  detailsLink?: ReactNode;
 }) {
   return (
-    <section className="relative overflow-hidden border-b border-border">
-      {/* Soft product wash — light, airy, with a single brand-red glow. */}
-      <div className="absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_90%_-10%,_color-mix(in_oklab,var(--primary)_14%,transparent),transparent_55%)]" />
-      <div className="absolute inset-0 -z-10 bg-[linear-gradient(to_bottom,transparent,var(--background))]" />
+    <section className="relative isolate overflow-hidden border-b border-white/[0.08] bg-[#090A0C] text-[#F5F5F7]">
+      {/* Layered depth: graphite gradient + controlled red radial + subtle grain */}
+      <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_85%_-10%,_color-mix(in_oklab,var(--primary)_18%,transparent),transparent_55%)]" />
+      <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_10%_110%,#1A1E27_0%,transparent_55%)]" />
+      <div className="pointer-events-none absolute inset-0 -z-10 bg-[linear-gradient(180deg,#090A0C_0%,#0B0D12_60%,#090A0C_100%)]" />
+      <div className="pointer-events-none absolute inset-0 -z-10 opacity-[0.035] mix-blend-overlay [background-image:radial-gradient(circle_at_1px_1px,#fff_1px,transparent_0)] [background-size:3px_3px]" />
 
       <div className="container mx-auto grid gap-12 px-4 py-14 md:py-20 lg:grid-cols-[1.05fr_1fr] lg:items-center">
         {/* LEFT — copy + offer */}
         <div className="min-w-0">
-          <div className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/8 px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.18em] text-primary">
+          <div className="inline-flex items-center gap-2 rounded-full border border-primary/40 bg-primary/15 px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.18em] text-primary">
             <Smartphone className="h-3 w-3" />
             JF Membership · {priceChip}
           </div>
-          <h1 className="mt-5 max-w-[18ch] text-4xl font-black leading-[1.05] tracking-tight text-foreground md:text-5xl lg:text-[3.4rem]">
+          <h1 className="mt-5 max-w-[18ch] text-4xl font-black leading-[1.02] tracking-tight text-white md:text-5xl lg:text-[3.6rem]">
             {headline}
           </h1>
-          <p className="mt-5 max-w-xl text-base text-muted-foreground md:text-lg">{sub}</p>
+          <p className="mt-5 max-w-xl text-base text-[#B0B4BE] md:text-lg">{sub}</p>
 
           <ul className="mt-7 grid gap-4">
             {[
               {
                 Icon: ListChecks,
-                title: "Follow a proven system",
+                title: "Follow a Proven System",
                 body: "Choose a training plan and know exactly what to do each time you train.",
               },
               {
                 Icon: LineChart,
-                title: "Track your progress",
-                body: "Log workouts, monitor personal records and see your training analytics inside the app.",
+                title: "Track Your Progress",
+                body: "Log workouts, monitor personal records and understand your training analytics.",
               },
               {
                 Icon: Sparkles,
-                title: "Get more than workouts",
-                body: "Access exercise demonstrations, recipes, nutrition education, resources and member-only updates.",
+                title: "Get More Than Workouts",
+                body: "Access exercise demonstrations, recipes, nutrition education and member resources.",
               },
             ].map(({ Icon, title, body }) => (
               <li key={title} className="flex items-start gap-3">
-                <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-primary/25 bg-primary/10 text-primary">
+                <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-primary/35 bg-primary/12 text-primary">
                   <Icon className="h-4 w-4" />
                 </div>
                 <div>
-                  <div className="text-sm font-bold text-foreground">{title}</div>
-                  <div className="text-sm text-muted-foreground">{body}</div>
+                  <div className="text-sm font-bold text-white">{title}</div>
+                  <div className="text-sm text-[#B0B4BE]">{body}</div>
                 </div>
               </li>
             ))}
           </ul>
 
-          <div className="mt-8 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+          {decisionArea && (
+            <div className="mt-8 rounded-2xl border border-white/10 bg-[#111318]/80 p-4 backdrop-blur">
+              {decisionArea}
+            </div>
+          )}
+
+          <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
             {primary}
             {secondary}
           </div>
           {trialNote && (
-            <p className="mt-3 text-xs text-muted-foreground">{trialNote}</p>
+            <p className="mt-3 text-xs text-[#7E848F]">{trialNote}</p>
           )}
+          {detailsLink && <div className="mt-2">{detailsLink}</div>}
         </div>
 
-        {/* RIGHT — phone frame + floating cards. Synthetic preview, never real data. */}
+        {/* RIGHT — BLACK phone frame + floating cards. Synthetic preview, never real data. */}
         <div className="relative mx-auto w-full max-w-[460px] lg:max-w-none">
           <PhoneFrame heroImage={heroImage ?? null} />
 
           {/* Floating analytics card — top right */}
-          <div className="pointer-events-none absolute -right-2 top-6 hidden w-[200px] animate-[heroFloat_6s_ease-in-out_infinite] rounded-2xl border border-border bg-card p-3 shadow-2xl shadow-foreground/5 backdrop-blur md:block">
-            <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+          <div className="pointer-events-none absolute -right-2 top-6 hidden w-[200px] animate-[heroFloat_6s_ease-in-out_infinite] rounded-2xl border border-white/[0.14] bg-[#151821] p-3 shadow-[0_20px_50px_-10px_rgba(0,0,0,0.6)] backdrop-blur md:block">
+            <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-[#7E848F]">
               <TrendingUp className="h-3 w-3 text-primary" /> Weekly volume
             </div>
-            <div className="mt-2 text-2xl font-black">+12.4%</div>
+            <div className="mt-2 text-2xl font-black text-white">+12.4%</div>
             <div className="mt-2 flex h-10 items-end gap-1">
               {[40, 55, 48, 62, 70, 65, 78].map((h, i) => (
                 <div
                   key={i}
-                  className="flex-1 rounded-sm bg-gradient-to-t from-primary/30 to-primary"
+                  className="flex-1 rounded-sm bg-gradient-to-t from-primary/40 to-primary"
                   style={{ height: `${h}%` }}
                 />
               ))}
@@ -113,16 +126,16 @@ export function MembershipHero({
           </div>
 
           {/* Floating program card — bottom left */}
-          <div className="pointer-events-none absolute -left-2 bottom-8 hidden w-[210px] animate-[heroFloat_7s_ease-in-out_infinite_reverse] rounded-2xl border border-border bg-card p-3 shadow-2xl shadow-foreground/5 backdrop-blur md:block" style={{ animationDelay: "-2s" }}>
-            <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+          <div className="pointer-events-none absolute -left-2 bottom-8 hidden w-[210px] animate-[heroFloat_7s_ease-in-out_infinite_reverse] rounded-2xl border border-white/[0.14] bg-[#151821] p-3 shadow-[0_20px_50px_-10px_rgba(0,0,0,0.6)] backdrop-blur md:block" style={{ animationDelay: "-2s" }}>
+            <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-[#7E848F]">
               <Dumbbell className="h-3 w-3 text-primary" /> Today's session
             </div>
-            <div className="mt-2 text-sm font-bold">Push · Week 3, Day 1</div>
-            <div className="mt-1 text-[11px] text-muted-foreground">5 lifts · 42 min · RPE 7</div>
+            <div className="mt-2 text-sm font-bold text-white">Push · Week 3, Day 1</div>
+            <div className="mt-1 text-[11px] text-[#B0B4BE]">5 lifts · 42 min · RPE 7</div>
             <div className="mt-2 flex gap-1">
-              <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-semibold text-primary">Bench</span>
-              <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold">OHP</span>
-              <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold">Dips</span>
+              <span className="rounded-full bg-primary/20 px-2 py-0.5 text-[10px] font-semibold text-primary">Bench</span>
+              <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-semibold text-white/85">OHP</span>
+              <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-semibold text-white/85">Dips</span>
             </div>
           </div>
         </div>
@@ -132,16 +145,18 @@ export function MembershipHero({
 }
 
 /**
- * Phone frame containing a synthetic JF app preview.
+ * BLACK phone frame containing a dark-mode JF app preview.
  * Uses generic, branded labels — no real client names, no fake testimonials.
  */
 function PhoneFrame({ heroImage }: { heroImage: string | null }) {
   return (
-    <div className="relative mx-auto aspect-[9/19] w-[280px] rounded-[2.4rem] border border-border bg-card p-2 shadow-[0_30px_80px_-20px_color-mix(in_oklab,var(--foreground)_25%,transparent)] md:w-[320px]">
+    <div className="relative mx-auto aspect-[9/19] w-[280px] rounded-[2.4rem] border border-white/[0.08] bg-gradient-to-b from-[#1A1E27] via-[#0d0f13] to-[#000] p-[6px] shadow-[0_40px_90px_-20px_rgba(0,0,0,0.85),0_0_0_1px_rgba(255,255,255,0.04)_inset] md:w-[320px]">
+      {/* bezel inner ring */}
+      <div className="absolute inset-[6px] rounded-[2.05rem] ring-1 ring-white/[0.04]" />
       {/* notch */}
-      <div className="absolute left-1/2 top-2 z-10 h-5 w-24 -translate-x-1/2 rounded-b-2xl bg-foreground/90" />
+      <div className="absolute left-1/2 top-[10px] z-10 h-5 w-24 -translate-x-1/2 rounded-b-2xl bg-black" />
       {/* screen */}
-      <div className="relative h-full w-full overflow-hidden rounded-[2rem] bg-background">
+      <div className="relative h-full w-full overflow-hidden rounded-[2rem] bg-[#0A0B0E]">
         {heroImage ? (
           <img
             src={heroImage}
@@ -159,26 +174,26 @@ function PhoneFrame({ heroImage }: { heroImage: string | null }) {
 
 function SyntheticAppPreview() {
   return (
-    <div className="flex h-full w-full flex-col bg-gradient-to-b from-background via-background to-muted/50">
+    <div className="flex h-full w-full flex-col bg-gradient-to-b from-[#0A0B0E] via-[#0B0D12] to-[#111318] text-white">
       {/* header */}
       <div className="px-4 pb-2 pt-8">
-        <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">JF Effect</div>
+        <div className="text-[10px] font-bold uppercase tracking-widest text-[#7E848F]">JF Effect</div>
         <div className="mt-1 text-lg font-black leading-tight">Welcome back</div>
-        <div className="text-[11px] text-muted-foreground">Week 3 · Push / Pull / Legs</div>
+        <div className="text-[11px] text-[#B0B4BE]">Week 3 · Push / Pull / Legs</div>
       </div>
 
       {/* hero card */}
-      <div className="mx-3 mt-1 rounded-2xl border border-primary/30 bg-gradient-to-br from-primary/15 to-primary/5 p-3">
+      <div className="mx-3 mt-1 rounded-2xl border border-primary/40 bg-gradient-to-br from-primary/25 to-primary/5 p-3">
         <div className="flex items-center justify-between">
           <div>
             <div className="text-[10px] font-bold uppercase tracking-widest text-primary">Today</div>
             <div className="text-sm font-bold">Upper Body · Push</div>
           </div>
           <div className="rounded-full bg-primary px-3 py-1 text-[10px] font-bold uppercase text-primary-foreground">
-            Start
+            Start Workout
           </div>
         </div>
-        <div className="mt-2 flex items-center gap-3 text-[10px] text-muted-foreground">
+        <div className="mt-2 flex items-center gap-3 text-[10px] text-[#B0B4BE]">
           <span>5 lifts</span><span>·</span><span>42 min</span><span>·</span><span>RPE 7</span>
         </div>
       </div>
@@ -190,27 +205,27 @@ function SyntheticAppPreview() {
           { Icon: Apple, label: "Nutrition" },
           { Icon: BookOpen, label: "Resources" },
         ].map(({ Icon, label }) => (
-          <div key={label} className="rounded-xl border border-border bg-card/60 p-2 text-center">
+          <div key={label} className="rounded-xl border border-white/[0.08] bg-[#151821]/80 p-2 text-center">
             <Icon className="mx-auto h-4 w-4 text-primary" />
-            <div className="mt-1 text-[9px] font-semibold">{label}</div>
+            <div className="mt-1 text-[9px] font-semibold text-white/90">{label}</div>
           </div>
         ))}
       </div>
 
       {/* progress */}
-      <div className="mx-3 mt-3 rounded-2xl border border-border bg-card/50 p-3">
+      <div className="mx-3 mt-3 rounded-2xl border border-white/[0.08] bg-[#151821]/80 p-3">
         <div className="flex items-center justify-between text-[10px]">
-          <span className="font-bold uppercase tracking-widest text-muted-foreground">Weekly progress</span>
+          <span className="font-bold uppercase tracking-widest text-[#7E848F]">Weekly progress</span>
           <span className="font-bold text-primary">4 / 5</span>
         </div>
-        <div className="mt-2 flex h-2 overflow-hidden rounded-full bg-muted">
+        <div className="mt-2 flex h-2 overflow-hidden rounded-full bg-white/10">
           <div className="h-full w-4/5 bg-primary" />
         </div>
         <div className="mt-3 flex items-end gap-1">
           {[55, 68, 72, 65, 78, 82, 88].map((h, i) => (
             <div
               key={i}
-              className="flex-1 rounded-sm bg-gradient-to-t from-primary/25 to-primary/80"
+              className="flex-1 rounded-sm bg-gradient-to-t from-primary/30 to-primary"
               style={{ height: `${Math.max(8, h * 0.35)}px` }}
             />
           ))}
@@ -222,10 +237,10 @@ function SyntheticAppPreview() {
         {["Tue · Pull · 38 min", "Wed · Legs · 45 min", "Thu · Rest day"].map((row) => (
           <div
             key={row}
-            className="flex items-center justify-between rounded-lg border border-border/60 bg-card/40 px-2.5 py-1.5 text-[10px] text-foreground/90"
+            className="flex items-center justify-between rounded-lg border border-white/[0.06] bg-[#111318]/70 px-2.5 py-1.5 text-[10px] text-white/85"
           >
             <span>{row}</span>
-            <span className="text-muted-foreground">›</span>
+            <span className="text-[#7E848F]">›</span>
           </div>
         ))}
       </div>
@@ -233,7 +248,7 @@ function SyntheticAppPreview() {
       <div className="flex-1" />
 
       {/* bottom nav stub */}
-      <div className="mx-3 mb-3 mt-2 flex items-center justify-around rounded-2xl border border-border/60 bg-card/70 py-2 text-[9px] font-semibold text-muted-foreground">
+      <div className="mx-3 mb-3 mt-2 flex items-center justify-around rounded-2xl border border-white/[0.08] bg-[#151821]/80 py-2 text-[9px] font-semibold text-[#7E848F]">
         <span className="text-primary">Home</span>
         <span>Train</span>
         <span>Log</span>
@@ -245,7 +260,7 @@ function SyntheticAppPreview() {
 
 export function MemberHeroCta({ children, ...props }: React.ComponentProps<typeof Button>) {
   return (
-    <Button size="lg" className="h-12 px-6 text-base font-bold shadow-lg shadow-primary/20" {...props}>
+    <Button size="lg" className="h-12 px-6 text-base font-bold shadow-[0_10px_30px_-10px_rgba(220,38,38,0.55)]" {...props}>
       {children}
     </Button>
   );
@@ -253,8 +268,61 @@ export function MemberHeroCta({ children, ...props }: React.ComponentProps<typeo
 
 export function MemberHeroGhost({ children, ...props }: React.ComponentProps<typeof Button>) {
   return (
-    <Button size="lg" variant="outline" className="h-12 px-6 text-base" {...props}>
+    <Button
+      size="lg"
+      variant="outline"
+      className="h-12 px-6 text-base bg-[#1A1E27] border-white/15 text-white hover:bg-[#222632] hover:text-white"
+      {...props}
+    >
       {children}
     </Button>
+  );
+}
+
+/**
+ * Compact in-hero decision area. Two stacked choices that frame the
+ * Membership-vs-Coaching pick before the CTAs.
+ */
+export function HeroDecisionArea({ onCoachingClick }: { onCoachingClick?: () => void }) {
+  return (
+    <div>
+      <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#B0B4BE]">
+        Choose how much support you want.
+      </div>
+      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+        <div className="rounded-xl border border-primary/35 bg-[#0F1116] p-3">
+          <div className="flex items-center gap-2 text-xs font-bold text-white">
+            <User className="h-3.5 w-3.5 text-primary" /> Train Independently
+          </div>
+          <div className="mt-1 text-[11px] leading-snug text-[#B0B4BE]">
+            Start JF Membership and follow the system on your own schedule.
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={onCoachingClick}
+          className="text-left rounded-xl border border-white/10 bg-[#0F1116] p-3 hover:border-primary/40 hover:bg-[#13161D] transition-colors"
+        >
+          <div className="flex items-center gap-2 text-xs font-bold text-white">
+            <Users className="h-3.5 w-3.5 text-primary" /> Work Directly With a Coach
+          </div>
+          <div className="mt-1 text-[11px] leading-snug text-[#B0B4BE]">
+            Apply for personalized programming, accountability and ongoing adjustments.
+          </div>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+export function MemberDetailsLink({ onClick }: { onClick?: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="inline-flex items-center gap-1 text-xs font-semibold text-[#B0B4BE] underline-offset-4 hover:text-white hover:underline"
+    >
+      See everything included in Membership <ChevronDown className="h-3 w-3" />
+    </button>
   );
 }

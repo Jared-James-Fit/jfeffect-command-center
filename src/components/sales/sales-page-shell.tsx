@@ -18,38 +18,38 @@ export function SalesPageShell({
       data-page-id={pageId}
       data-theme={theme}
     >
-      <header className="sticky top-0 z-40 border-b border-border bg-background/85 backdrop-blur">
-        <div className="container mx-auto flex items-center justify-between px-4 py-3">
-          <Link to="/" className="text-lg font-black tracking-tight">JF Effect</Link>
-          <div className="flex items-center gap-2">
+      <header className="sticky top-0 z-40 border-b border-border bg-background/90 backdrop-blur">
+        <div className="container mx-auto flex items-center justify-between gap-2 px-4 py-3">
+          <Link to="/" className="text-base sm:text-lg font-black tracking-tight">JF Effect</Link>
+          <nav className="flex items-center gap-1 sm:gap-2">
             <Link
               to="/membership"
-              className="hidden sm:inline-flex"
               activeProps={{ "data-active": "true" } as any}
             >
               <Button
                 size="sm"
                 variant="ghost"
-                className="data-[active=true]:bg-primary/10 data-[active=true]:text-primary data-[active=true]:font-bold"
+                className="px-2 sm:px-3 text-xs sm:text-sm data-[active=true]:bg-primary/15 data-[active=true]:text-primary data-[active=true]:font-bold"
               >
-                Membership
+                <span className="sm:hidden">Membership</span>
+                <span className="hidden sm:inline">Self-Guided Membership</span>
               </Button>
             </Link>
             <Link
               to="/coaching"
-              className="hidden sm:inline-flex"
               activeProps={{ "data-active": "true" } as any}
             >
               <Button
                 size="sm"
                 variant="ghost"
-                className="data-[active=true]:bg-primary/10 data-[active=true]:text-primary data-[active=true]:font-bold"
+                className="px-2 sm:px-3 text-xs sm:text-sm data-[active=true]:bg-primary/15 data-[active=true]:text-primary data-[active=true]:font-bold"
               >
-                Private Coaching
+                <span className="sm:hidden">Coaching</span>
+                <span className="hidden sm:inline">Private Coaching</span>
               </Button>
             </Link>
-            <Link to="/auth"><Button size="sm" variant="outline">Sign in</Button></Link>
-          </div>
+            <Link to="/auth"><Button size="sm" variant="outline" className="px-2 sm:px-3 text-xs sm:text-sm">Sign In</Button></Link>
+          </nav>
         </div>
       </header>
       <main>{children}</main>
