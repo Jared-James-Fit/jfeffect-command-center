@@ -156,37 +156,34 @@ function StatusPill({
   icon: Icon,
   label,
   detail,
-  assignTo,
-  assignParams,
-  assignSearch,
   assignLabel,
+  onClick,
 }: {
   ok: boolean;
   icon: React.ComponentType<{ className?: string }>;
   label: string;
   detail?: string | null;
-  assignTo: string;
-  assignParams?: Record<string, string>;
-  assignSearch?: Record<string, string>;
   assignLabel: string;
+  onClick: () => void;
 }) {
   if (ok) {
     return (
-      <span
-        className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-[11px] font-medium text-emerald-400"
+      <button
+        type="button"
+        onClick={onClick}
+        className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-[11px] font-medium text-emerald-400 transition hover:bg-emerald-500/20"
         title={`${label}${detail ? ` · ${detail}` : ""}`}
       >
         <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
         <Icon className="h-3 w-3 shrink-0 opacity-80" />
         <span className="truncate">{detail ?? label}</span>
-      </span>
+      </button>
     );
   }
   return (
-    <Link
-      to={assignTo as any}
-      params={assignParams as any}
-      search={assignSearch as any}
+    <button
+      type="button"
+      onClick={onClick}
       className="inline-flex items-center gap-1.5 rounded-full border border-destructive/40 bg-destructive/10 px-2 py-1 text-[11px] font-semibold text-destructive transition hover:bg-destructive/20"
       title={`No ${label.toLowerCase()} assigned — click to assign`}
     >
@@ -194,7 +191,7 @@ function StatusPill({
       <Icon className="h-3 w-3 shrink-0" />
       <span className="truncate">{assignLabel}</span>
       <Plus className="h-3 w-3 shrink-0" />
-    </Link>
+    </button>
   );
 }
 
@@ -210,6 +207,8 @@ function AssignmentStatusStrip({
   const hasProgram = !!r.block_id;
   const hasNutrition = !!r.nut_end && !r.f_missing_nutrition;
   const hasCardio = !!r.card_end && !r.f_missing_cardio;
+  const [sheet, setSheet] = useState<QuickPanelKind | null>(null);
+  const [assignProgramOpen, setAssignProgramOpen] = useState(false);
 
   return (
     <div className="space-y-1.5">
@@ -219,42 +218,36 @@ function AssignmentStatusStrip({
           icon={Dumbbell}
           label="Program"
           detail={r.block_name}
-          assignTo="/admin/program-assign/$clientId"
-          assignParams={{ clientId: r.id }}
           assignLabel="Assign Program"
+          onClick={() => (hasProgram ? setSheet("program-view") : setAssignProgramOpen(true))}
         />
         <StatusPill
           ok={hasNutrition}
           icon={Apple}
           label="Nutrition"
           detail={hasNutrition ? "Nutrition" : null}
-          assignTo="/admin/clients/$id"
-          assignParams={{ id: r.id }}
-          assignSearch={{ tab: "nutrition" }}
           assignLabel="Assign Nutrition"
+          onClick={() => setSheet("nutrition")}
         />
         <StatusPill
           ok={hasCardio}
           icon={HeartPulse}
           label="Cardio"
           detail={hasCardio ? "Cardio" : null}
-          assignTo="/admin/clients/$id"
-          assignParams={{ id: r.id }}
-          assignSearch={{ tab: "cardio" }}
           assignLabel="Assign Cardio"
+          onClick={() => setSheet("cardio")}
         />
         {hasProgram && (
           <Tooltip>
             <TooltipTrigger asChild>
-              <Link
-                to="/admin/clients/$id"
-                params={{ id: r.id }}
-                search={{ tab: "training" } as any}
+              <button
+                type="button"
+                onClick={() => setSheet("program-view")}
                 aria-label="View training schedule"
                 className="ml-auto inline-flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
               >
                 <CalendarDays className="h-4 w-4" />
-              </Link>
+              </button>
             </TooltipTrigger>
             <TooltipContent side="top">View schedule</TooltipContent>
           </Tooltip>
@@ -275,6 +268,18 @@ function AssignmentStatusStrip({
           {prog && <Progress value={prog.pct} className="h-1.5" />}
         </>
       )}
+      <ClientQuickSheet
+        kind={sheet}
+        clientId={r.id}
+        clientName={r.full_name}
+        onClose={() => setSheet(null)}
+      />
+      <AssignProgramDialog
+        open={assignProgramOpen}
+        onOpenChange={setAssignProgramOpen}
+        clientId={r.id}
+        clientName={r.full_name}
+      />
     </div>
   );
 }
