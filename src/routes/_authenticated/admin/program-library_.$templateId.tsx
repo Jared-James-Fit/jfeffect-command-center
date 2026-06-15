@@ -2422,6 +2422,7 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
           >
             <GripVertical className="h-4 w-4" />
           </span>
+          {RowIndexBadge}
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5 min-w-0">
               {purposeLabel && (
