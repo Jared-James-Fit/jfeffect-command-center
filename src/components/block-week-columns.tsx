@@ -118,9 +118,9 @@ export function BlockWeekColumns({
         </div>
       </div>
 
-      {/* Full block: every week + its days */}
-      <div className="min-w-0 md:-mx-3 md:overflow-x-auto md:px-3 md:pb-3">
-        <div className="flex min-w-0 flex-col gap-3 md:w-max md:flex-row md:items-start">
+      {/* Full block: every week + its days — horizontal swipe carousel on every viewport */}
+      <div className="-mx-3 snap-x snap-mandatory overflow-x-auto px-3 pb-3">
+        <div className="flex w-max min-w-0 flex-row items-start gap-3">
           {computed.map((sel) => (
             <div
               key={sel.week?.id ?? Math.random()}
@@ -128,7 +128,7 @@ export function BlockWeekColumns({
                 if (sel.week?.id) weekRefs.current[sel.week.id] = el;
               }}
               className={cn(
-                "w-full min-w-0 scroll-mt-24 space-y-2 rounded-md border p-3 md:w-[360px] md:max-w-[400px] md:shrink-0 lg:w-[390px]",
+                "w-[88vw] max-w-[400px] shrink-0 snap-start scroll-mt-24 space-y-2 rounded-md border p-3 md:w-[360px] lg:w-[390px]",
                 sel.now ? "border-primary/50 bg-primary/5" : "border-border bg-card/40",
                 sel.status === "Locked" && "opacity-80",
               )}
