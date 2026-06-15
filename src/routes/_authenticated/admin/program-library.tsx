@@ -968,6 +968,11 @@ function AssignDialog({ template, onClose }: { template: any; onClose: () => voi
   // The dialog then switches to a confirm view that lists every issue and
   // requires a second explicit "Assign anyway" click before running.
   const [pendingIssues, setPendingIssues] = useState<DayIssue[] | null>(null);
+  // Missing-maxes gate state. When the chosen client has no active 1RM/TM
+  // records, the dialog switches to a blocking view that requires the coach
+  // to either add one or explicitly notify the admin before continuing.
+  const [showMaxesGate, setShowMaxesGate] = useState(false);
+  const [notifying, setNotifying] = useState(false);
   const templateWeeks = template ? getTemplateWeeks(template) : 0;
 
   useEffect(() => {
@@ -996,6 +1001,14 @@ function AssignDialog({ template, onClose }: { template: any; onClose: () => voi
     queryKey: ["pl-days-week", weekId], enabled: !!weekId,
     queryFn: async () => (await (supabase as any).from("pl_days").select("*").eq("week_id", weekId).order("day_index")).data ?? [],
   });
+  const { data: clientMaxes = [], refetch: refetchMaxes } = useQuery({
+    queryKey: ["pl-client-maxes", clientId],
+    enabled: !!clientId,
+    queryFn: () => listClientMaxes(clientId),
+  });
+  const hasAnyMax = (clientMaxes as ClientMaxRow[]).some(
+    (m) => m.active && (m.one_rm != null || m.training_max != null),
+  );
   // Always re-fetch the template (with its full payload) so requirement
   // checks see fresh data — list rows may not have `payload` selected.
   const { data: fullTpl } = useQuery({
@@ -1041,6 +1054,11 @@ function AssignDialog({ template, onClose }: { template: any; onClose: () => voi
       return toast.error(
         `Overlaps with "${conflict.name ?? "another block"}" (${conflict.start_date ?? "?"} – ${conflict.end_date ?? "?"}). Use the suggested start date.`,
       );
+    }
+    // Maxes gate — block assignment when client has no active 1RM/TM.
+    if (!hasAnyMax) {
+      setShowMaxesGate(true);
+      return;
     }
     // Requirement check: every day needs an exercise + sets + reps. If any
     // gaps exist, switch to a confirm view that lists each missing item.
