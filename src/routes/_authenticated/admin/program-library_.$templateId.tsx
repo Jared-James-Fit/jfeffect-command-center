@@ -2231,7 +2231,10 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
   const meetsMinimum = (() => {
     const hasEx = !!((row as any).exercise_id || (row as any).exercise_name_override);
     const hasSets = row.sets != null && row.sets !== "";
-    const hasReps = !!row.reps_text;
+    const isTime = (row as any).measurement_type === "time";
+    const hasReps = isTime
+      ? ((row as any).duration_seconds != null && Number((row as any).duration_seconds) > 0)
+      : !!row.reps_text;
     const hasRpe = (row as any).rpe != null && (row as any).rpe !== "";
     const hasRir = (row as any).rir != null && (row as any).rir !== "";
     const hasPct = (row as any).percentage != null && (row as any).percentage !== "" &&
