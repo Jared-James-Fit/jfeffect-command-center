@@ -126,15 +126,34 @@ export const createAppMember = createServerFn({ method: "POST" })
       await supabaseAdmin.rpc("apply_default_member_access", { _member_id: row.id });
     }
     // Fire SMS automations registered for the "account_created" trigger.
+    // Skip if subscription_purchased already claimed this member's
+    // onboarding SMS (membership_onboarding:<member_id>:sms).
     try {
       const { fireAutomationTrigger } = await import("@/lib/sms-trigger.server");
       const origin = getOrigin();
       const link = `${origin}/member-setup?token=${setup_token}`;
-      await fireAutomationTrigger(supabaseAdmin, {
-        trigger: "account_created",
-        memberId: row.id,
-        vars: { setup_link: link },
-      });
+      const dedupeKey = `membership_onboarding:${row.id}:sms`;
+      const { data: alreadySent } = await supabaseAdmin
+        .from("notification_dedupe")
+        .select("key")
+        .eq("key", dedupeKey).eq("channel", "sms").maybeSingle();
+      if (!alreadySent) {
+        await fireAutomationTrigger(supabaseAdmin, {
+          trigger: "account_created",
+          memberId: row.id,
+          vars: { setup_link: link },
+        });
+        // Claim the onboarding SMS slot so subscription_purchased can't double-send.
+        await supabaseAdmin
+          .from("notification_dedupe")
+          .insert({
+            key: dedupeKey,
+            channel: "sms",
+            member_id: row.id,
+            metadata: { trigger: "account_created" },
+          })
+          .then(() => {}, () => {});
+      }
     } catch (e) {
       console.error("[createAppMember] automation trigger failed", e);
     }
