@@ -70,15 +70,13 @@ export const globalSearchFn = createServerFn({ method: "GET" })
         .limit(limit),
       supabase
         .from("app_members")
-        .select("id, full_name, first_name, last_name, email, phone, notes")
+        .select("id, full_name, email, phone, admin_notes")
         .or(
           [
             `full_name.ilike.${like}`,
-            `first_name.ilike.${like}`,
-            `last_name.ilike.${like}`,
             `email.ilike.${like}`,
             `phone.ilike.${like}`,
-            `notes.ilike.${like}`,
+            `admin_notes.ilike.${like}`,
           ].join(","),
         )
         .limit(limit),
@@ -135,12 +133,12 @@ export const globalSearchFn = createServerFn({ method: "GET" })
         name: a.full_name,
         email: a.email,
         phone: a.phone,
-        notes: a.notes,
+        notes: a.admin_notes,
       });
       hits.push({
         kind: "account",
         id: a.id,
-        label: a.full_name || `${a.first_name ?? ""} ${a.last_name ?? ""}`.trim() || a.email || "Account",
+        label: a.full_name || a.email || "Account",
         sub: m?.snippet ?? a.email ?? null,
         to: `/admin/members/${a.id}`,
         matchedField: m?.field ?? null,
