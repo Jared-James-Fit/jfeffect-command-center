@@ -2105,6 +2105,14 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
     if (collapseTimer.current) { clearTimeout(collapseTimer.current); collapseTimer.current = null; }
   };
   useEffect(() => () => { if (collapseTimer.current) clearTimeout(collapseTimer.current); }, []);
+  // Listen for day-wide expand/collapse pulses from the parent DayEditor.
+  useEffect(() => {
+    if (!dayKey) return;
+    return dayBus.on(dayKey, (ev) => {
+      if (ev === "expand") { cancelCollapse(); setCollapsed(false); }
+      else { cancelCollapse(); setCollapsed(true); }
+    });
+  }, [dayKey]);
   const h = compact ? "h-7" : "h-8";
   const { clientId, blockId, index: maxesIndex, maxes, refresh } = useClientMaxesCtx();
   const [maxEditor, setMaxEditor] = useState<any>(null);
