@@ -60,6 +60,51 @@ import {
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { ArchiveRestore, Archive as ArchiveIcon, Pencil } from "lucide-react";
 
+// ---------------- Day focus + expand/collapse bus ----------------
+// Module-level event bus that lets the program builder know which day
+// the coach is currently working on, broadcast "expand all" /
+// "collapse all" pulses to every row in that day, and auto-collapse
+// the previously-active day when focus moves to a new one.
+type DayBusEvent = "expand" | "collapse";
+const dayBus = (() => {
+  const listeners: Record<string, Set<(ev: DayBusEvent) => void>> = {};
+  const activeSubs = new Set<(k: string | null) => void>();
+  let active: string | null = null;
+  return {
+    on(key: string, cb: (ev: DayBusEvent) => void) {
+      const set = (listeners[key] ||= new Set());
+      set.add(cb);
+      return () => { set.delete(cb); };
+    },
+    emit(key: string, ev: DayBusEvent) {
+      listeners[key]?.forEach((fn) => fn(ev));
+    },
+    getActive() { return active; },
+    setActive(key: string | null) {
+      if (active === key) return;
+      const prev = active;
+      active = key;
+      // Auto-collapse all rows in the day we just left.
+      if (prev) listeners[prev]?.forEach((fn) => fn("collapse"));
+      activeSubs.forEach((fn) => fn(active));
+    },
+    subscribeActive(cb: (k: string | null) => void) {
+      activeSubs.add(cb);
+      return () => { activeSubs.delete(cb); };
+    },
+  };
+})();
+
+function useDayActive(dayKey: string | undefined): boolean {
+  const [isActive, setIsActive] = useState(() => !!dayKey && dayBus.getActive() === dayKey);
+  useEffect(() => {
+    if (!dayKey) return;
+    setIsActive(dayBus.getActive() === dayKey);
+    return dayBus.subscribeActive((k) => setIsActive(k === dayKey));
+  }, [dayKey]);
+  return isActive;
+}
+
 // ---------------- Fast local-state cell (instant typing, debounced commit) ---
 // Keeps keystrokes local so parent rows/days/blocks don't re-render per digit.
 // Commits to parent on blur, Enter, or after a short pause.
@@ -865,7 +910,7 @@ function StructureEditor({ type, payload, setPayload, exercises, compact, templa
     return <MultiBlockStructureEditor type={type} payload={payload} setPayload={setPayload} exercises={exercises} compact={compact} templateId={templateId} />;
   }
   if (type === "week") return <WeekEditor week={payload} setWeek={setPayload} exercises={exercises} compact={compact} />;
-  if (type === "day") return <DayEditor day={payload} setDay={setPayload} exercises={exercises} compact={compact} />;
+  if (type === "day") return <DayEditor day={payload} setDay={setPayload} exercises={exercises} compact={compact} dayKey="single" />;
   return (
     <Card className="p-4 max-w-3xl">
       <RowEditor row={payload} setRow={setPayload} exercises={exercises} compact={compact} />
@@ -1339,6 +1384,7 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
               exercises={exercises}
               onCopyDayToFuture={(di) => copyDayToFuture(activeIdx, di)}
               compact={compact}
+              dayKeyPrefix={`wk${weeksData[activeIdx].week_index ?? activeIdx}`}
             />
           )}
         </>
@@ -1463,6 +1509,7 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
                         onCopyDayToFuture={(di) => copyDayToFuture(wi, di)}
                         compact={compact}
                         hideHeader
+                        dayKeyPrefix={`wk${w.week_index ?? wi}`}
                       />
                     </div>
                   </Card>
@@ -1490,7 +1537,7 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
   );
 }
 
-function WeekEditor({ week, setWeek, exercises, onCopyDayToFuture, hideHeader, compact }: { week: any; setWeek: (w: any) => void; exercises: any[]; onCopyDayToFuture?: (dayIdx: number) => void; hideHeader?: boolean; compact?: boolean }) {
+function WeekEditor({ week, setWeek, exercises, onCopyDayToFuture, hideHeader, compact, dayKeyPrefix }: { week: any; setWeek: (w: any) => void; exercises: any[]; onCopyDayToFuture?: (dayIdx: number) => void; hideHeader?: boolean; compact?: boolean; dayKeyPrefix?: string }) {
   const days = week.days || [];
   const addDay = () => {
     const nextIdx = (days[days.length - 1]?.day_index ?? 0) + 1;
@@ -1517,6 +1564,7 @@ function WeekEditor({ week, setWeek, exercises, onCopyDayToFuture, hideHeader, c
       <WeeklyVolumeSummary week={week} exercises={exercises as any} weekIndex={week?.week_index} />
       {days.map((d: any, i: number) => {
         const dayMinutes = estimateDayMinutes(d.rows || []);
+        const dKey = `${dayKeyPrefix ?? `wk${week.week_index ?? 0}`}:d${d.day_index ?? i}`;
         return (
         <Card key={i} className={cn("border-l-[3px] border-l-primary/40", compact ? "p-2" : "p-3")}>
           <div className={cn("flex items-center gap-2", compact ? "mb-1" : "mb-2")}>
@@ -1535,7 +1583,7 @@ function WeekEditor({ week, setWeek, exercises, onCopyDayToFuture, hideHeader, c
               <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => delDay(i)}><Trash2 className="h-3.5 w-3.5" /></Button>
             </div>
           </div>
-          <DayEditor day={d} setDay={(nd) => { const copy = [...days]; copy[i] = nd; setWeek({ ...week, days: copy }); }} exercises={exercises} compact={compact} />
+          <DayEditor day={d} setDay={(nd) => { const copy = [...days]; copy[i] = nd; setWeek({ ...week, days: copy }); }} exercises={exercises} compact={compact} dayKey={dKey} />
         </Card>
       )})}
       {hideHeader && days.length > 0 && (
@@ -1545,7 +1593,7 @@ function WeekEditor({ week, setWeek, exercises, onCopyDayToFuture, hideHeader, c
   );
 }
 
-function DayEditor({ day, setDay, exercises, compact }: { day: any; setDay: (d: any) => void; exercises: any[]; compact?: boolean }) {
+function DayEditor({ day, setDay, exercises, compact, dayKey }: { day: any; setDay: (d: any) => void; exercises: any[]; compact?: boolean; dayKey?: string }) {
   const rows = day.rows || [];
   // Derive ordered purpose labels (Primary / Secondary / Tertiary / Quaternary
   // for competition + variation rows; Assistance for everything else). Manual
@@ -1593,6 +1641,37 @@ function DayEditor({ day, setDay, exercises, compact }: { day: any; setDay: (d: 
   };
   const dayMin = useMemo(() => estimateDayMinutes(rows), [rows]);
 
+  // Day focus: track which day the coach is editing. Becomes active on any
+  // click / focus inside the card. Switching to a different day automatically
+  // collapses every row in the previous day (handled by dayBus.setActive).
+  const isActive = useDayActive(dayKey);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const activateDay = () => { if (dayKey) dayBus.setActive(dayKey); };
+  const expandAll = () => { if (dayKey) { dayBus.setActive(dayKey); dayBus.emit(dayKey, "expand"); } };
+  const collapseAll = () => {
+    if (!dayKey) return;
+    dayBus.emit(dayKey, "collapse");
+    // Drop focus so cards don't auto-reopen via onFocusCapture.
+    if (containerRef.current?.contains(document.activeElement)) {
+      (document.activeElement as HTMLElement | null)?.blur?.();
+    }
+  };
+  // Keyboard shortcuts (only while this day is the active one):
+  //   Alt+E         → expand every row in this day
+  //   Alt+Shift+E   → collapse every row in this day
+  useEffect(() => {
+    if (!isActive || !dayKey) return;
+    const handler = (e: KeyboardEvent) => {
+      if (!e.altKey) return;
+      if (e.key === "e" || e.key === "E") {
+        e.preventDefault();
+        if (e.shiftKey) collapseAll(); else expandAll();
+      }
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [isActive, dayKey]);
+
   const moveRow = (from: number, to: number) => {
     if (from === to || from < 0 || to < 0 || from >= rows.length) return;
     const next = [...rows];
@@ -1604,10 +1683,14 @@ function DayEditor({ day, setDay, exercises, compact }: { day: any; setDay: (d: 
 
   return (
     <div
+      ref={containerRef}
+      onMouseDownCapture={activateDay}
+      onFocusCapture={activateDay}
       className={cn(
         "relative space-y-3 rounded-lg bg-builder-canvas p-3 sm:p-4 ring-1 ring-builder-card-border/40 transition-all",
         pbDragging === "exercise" && !dragOver && "ring-2 ring-dashed ring-primary/40",
         dragOver && "ring-4 ring-primary ring-offset-2 ring-offset-background bg-primary/10 shadow-[0_0_0_4px_hsl(var(--primary)/0.15)]",
+        isActive && "ring-2 ring-primary/60 shadow-[0_0_0_3px_hsl(var(--primary)/0.12)]",
       )}
       onDragOver={(e) => {
         if (Array.from(e.dataTransfer.types).includes(DND_EXERCISE)) {
@@ -1634,8 +1717,37 @@ function DayEditor({ day, setDay, exercises, compact }: { day: any; setDay: (d: 
         </div>
       )}
       <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-        <span className="inline-flex items-center gap-1"><Clock className="h-3 w-3" /> Est {durationRange(dayMin)}</span>
+        <span className="inline-flex items-center gap-2">
+          <span className="inline-flex items-center gap-1"><Clock className="h-3 w-3" /> Est {durationRange(dayMin)}</span>
+          {isActive && (
+            <span className="inline-flex items-center rounded bg-primary px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-primary-foreground">
+              Editing{day?.title ? ` · ${day.title}` : ""}
+            </span>
+          )}
+        </span>
         <div className="flex items-center gap-1">
+          {dayKey && rows.length > 0 && (
+            <>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 px-2 text-[11px]"
+                onClick={expandAll}
+                title="Expand every card in this day (Alt+E)"
+              >
+                <ChevronDown className="mr-1 h-3 w-3" /> Expand all
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 px-2 text-[11px]"
+                onClick={collapseAll}
+                title="Collapse every card in this day (Alt+Shift+E)"
+              >
+                <ChevronUp className="mr-1 h-3 w-3" /> Collapse all
+              </Button>
+            </>
+          )}
           {clip && clip.kind === "rows" && clip.rows.length > 0 && (
             <Button size="sm" variant="outline" className="h-7 text-[11px]" onClick={pasteFromClip} title={`Paste ${clip.rows.length} exercise${clip.rows.length === 1 ? "" : "s"}`}>
               <ClipboardPaste className="mr-1 h-3 w-3" /> Paste ({clip.rows.length})
@@ -1718,6 +1830,7 @@ function DayEditor({ day, setDay, exercises, compact }: { day: any; setDay: (d: 
                 exercises={exercises}
                 compact={compact !== false}
                 purposeLabel={purposeLabels[i]}
+                dayKey={dayKey}
               />
             </div>
             </Fragment>
@@ -1957,7 +2070,7 @@ function SwapExerciseButton({ row, setRow, exercises }: { row: any; setRow: (r: 
   );
 }
 
-function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMoveDown, canMoveUp, canMoveDown, onDragStartRow, onDragEndRow, isDragging, purposeLabel }: { row: any; setRow: (r: any) => void; onDelete?: () => void; exercises: any[]; compact?: boolean; onMoveUp?: () => void; onMoveDown?: () => void; canMoveUp?: boolean; canMoveDown?: boolean; onDragStartRow?: (e: React.DragEvent) => void; onDragEndRow?: () => void; isDragging?: boolean; purposeLabel?: string }) {
+function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMoveDown, canMoveUp, canMoveDown, onDragStartRow, onDragEndRow, isDragging, purposeLabel, dayKey }: { row: any; setRow: (r: any) => void; onDelete?: () => void; exercises: any[]; compact?: boolean; onMoveUp?: () => void; onMoveDown?: () => void; canMoveUp?: boolean; canMoveDown?: boolean; onDragStartRow?: (e: React.DragEvent) => void; onDragEndRow?: () => void; isDragging?: boolean; purposeLabel?: string; dayKey?: string }) {
   const Field = ({ label, className, children }: { label: string; className?: string; children: React.ReactNode }) => (
     <div className={cn("flex flex-col gap-0.5 min-w-0", className)}>
       <span className="px-0.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground leading-none">{label}</span>
@@ -1994,6 +2107,14 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
     if (collapseTimer.current) { clearTimeout(collapseTimer.current); collapseTimer.current = null; }
   };
   useEffect(() => () => { if (collapseTimer.current) clearTimeout(collapseTimer.current); }, []);
+  // Listen for day-wide expand/collapse pulses from the parent DayEditor.
+  useEffect(() => {
+    if (!dayKey) return;
+    return dayBus.on(dayKey, (ev) => {
+      if (ev === "expand") { cancelCollapse(); setCollapsed(false); }
+      else { cancelCollapse(); setCollapsed(true); }
+    });
+  }, [dayKey]);
   const h = compact ? "h-7" : "h-8";
   const { clientId, blockId, index: maxesIndex, maxes, refresh } = useClientMaxesCtx();
   const [maxEditor, setMaxEditor] = useState<any>(null);
