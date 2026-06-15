@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle2, Save } from "lucide-react";
+import { CheckCircle2, Save, StickyNote, ChevronDown, ChevronUp } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { ActionButton } from "@/components/action-button";
@@ -36,6 +36,45 @@ export const Route = createFileRoute("/_authenticated/m/workouts/$enrollmentId/$
 });
 
 type SetLog = { reps?: number | null; load_lb?: number | null; rpe?: number | null; rir?: number | null; notes?: string | null };
+
+function WorkoutOverviewCard({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+  const trimmed = text.trim();
+  if (!trimmed) return null;
+  const isShort = trimmed.length <= 140 && !trimmed.includes("\n");
+  return (
+    <Card className="border-border/60 bg-muted/30 p-3">
+      <div className="flex items-start gap-2">
+        <StickyNote className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+        <div className="min-w-0 flex-1">
+          <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Workout Overview
+          </div>
+          <div
+            className={`mt-0.5 text-sm text-foreground whitespace-pre-wrap${
+              !open && !isShort ? " line-clamp-2" : ""
+            }`}
+          >
+            {trimmed}
+          </div>
+          {!isShort && (
+            <button
+              type="button"
+              onClick={() => setOpen((o) => !o)}
+              className="mt-1 inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline"
+            >
+              {open ? (
+                <>Show less <ChevronUp className="h-3 w-3" /></>
+              ) : (
+                <>Read more <ChevronDown className="h-3 w-3" /></>
+              )}
+            </button>
+          )}
+        </div>
+      </div>
+    </Card>
+  );
+}
 
 function WorkoutTracker() {
   const { enrollmentId, week, day } = Route.useParams();
@@ -284,6 +323,9 @@ function WorkoutTracker() {
         workoutId={null}
         pageRoute={route}
       />
+      {dayObj?.notes && dayObj?.notes_client_visible && (
+        <WorkoutOverviewCard text={dayObj.notes} />
+      )}
       {rows.length === 0 && (
         <WorkoutEmptyCard
           clientId={null}

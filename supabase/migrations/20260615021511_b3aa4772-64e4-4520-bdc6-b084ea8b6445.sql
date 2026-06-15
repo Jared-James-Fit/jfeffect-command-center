@@ -1,0 +1,2 @@
+ALTER TABLE public.pl_days ADD COLUMN IF NOT EXISTS notes_client_visible boolean NOT NULL DEFAULT false;
+COMMENT ON COLUMN public.pl_days.notes_client_visible IS 'When true, the notes field is treated as the client/member-facing Workout Description and displayed in the workout logger. Defaults to false so legacy/internal notes are not automatically exposed.';

@@ -9837,6 +9837,7 @@ export type Database = {
           id: string
           is_custom: boolean
           notes: string | null
+          notes_client_visible: boolean
           schedule_locked: boolean
           schedule_source: string | null
           scheduled_date: string | null
@@ -9862,6 +9863,7 @@ export type Database = {
           id?: string
           is_custom?: boolean
           notes?: string | null
+          notes_client_visible?: boolean
           schedule_locked?: boolean
           schedule_source?: string | null
           scheduled_date?: string | null
@@ -9887,6 +9889,7 @@ export type Database = {
           id?: string
           is_custom?: boolean
           notes?: string | null
+          notes_client_visible?: boolean
           schedule_locked?: boolean
           schedule_source?: string | null
           scheduled_date?: string | null
