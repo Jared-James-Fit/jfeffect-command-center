@@ -31,6 +31,7 @@ import { useScrollRestoration } from "@/lib/scroll-restore";
 import { TemplateBuilderIdentityBadge } from "@/components/builder-identity-header";
 import { ActionButton } from "@/components/action-button";
 import { copyRows, useClip } from "@/lib/program-builder-clipboard";
+import { parseDurationInput, formatDuration } from "@/lib/duration";
 import { ExerciseBlocksEditor } from "@/components/exercise-blocks-editor";
 import { useMultiBlockBuilderFlag } from "@/lib/admin-flags";
 import { Layers } from "lucide-react";
