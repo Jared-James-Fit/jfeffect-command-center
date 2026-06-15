@@ -706,11 +706,9 @@ function AdminDashboard() {
             <UpcomingEventsPanel audience="admin" />
 
             {/* PAYMENTS / PRODUCTS */}
+            {clientsWithoutProduct.length === 0 ? null : (
             <Card className="border-border bg-card p-4 md:p-5">
               <SectionHeader title="Payments & Products" icon={ShoppingCart} viewAll={{ to: "/admin/payment-links", label: "Sell product" }} />
-              {clientsWithoutProduct.length === 0 ? (
-                <EmptyMini>Every active client has a product. Nice.</EmptyMini>
-              ) : (
                 <>
                   <div className="mb-2 text-xs text-muted-foreground">
                     Clients without active product: <span className="font-bold text-foreground">{clientsWithoutProduct.length}</span>
@@ -731,8 +729,8 @@ function AdminDashboard() {
                     </Link>
                   )}
                 </>
-              )}
             </Card>
+            )}
 
             {/* RECENT CLIENTS */}
             <Card className="border-border bg-card p-4 md:p-5">
