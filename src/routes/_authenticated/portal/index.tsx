@@ -89,7 +89,7 @@ function PortalHome() {
       const { data } = await supabase
         .from("training_phases").select("*").eq("client_id", client!.id)
         .order("start_date", { ascending: false });
-      return (data ?? []) as any[];
+      return (data ?? []) as TrainingPhase[];
     },
   });
 
