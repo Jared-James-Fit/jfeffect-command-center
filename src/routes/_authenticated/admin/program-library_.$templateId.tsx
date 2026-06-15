@@ -2127,15 +2127,28 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
   const videoUrl: string | null = exMeta
     ? (exMeta.video_url || exMeta.youtube_url || exMeta.vimeo_url || null)
     : null;
-  const VideoBadge = (
+  const videoBadgeCls = cn(
+    "inline-flex shrink-0 items-center gap-0.5 rounded-full border px-1 py-0 text-[9px] font-bold uppercase tracking-wide",
+    rowHasVideo
+      ? "border-emerald-400/40 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20"
+      : "border-amber-400/50 bg-amber-500/10 text-amber-300",
+  );
+  const VideoBadge = rowHasVideo && videoUrl ? (
+    <a
+      href={videoUrl}
+      target="_blank"
+      rel="noreferrer"
+      onClick={(e) => e.stopPropagation()}
+      className={videoBadgeCls}
+      title="Open demo video in a new tab"
+    >
+      <Video className="h-2.5 w-2.5" />
+      Video
+    </a>
+  ) : (
     <span
-      className={cn(
-        "inline-flex shrink-0 items-center gap-0.5 rounded-full border px-1 py-0 text-[9px] font-bold uppercase tracking-wide",
-        rowHasVideo
-          ? "border-emerald-400/40 bg-emerald-500/10 text-emerald-300"
-          : "border-amber-400/50 bg-amber-500/10 text-amber-300",
-      )}
-      title={rowHasVideo ? "Demo video linked" : "No demo video on this exercise"}
+      className={videoBadgeCls}
+      title={rowHasVideo ? "Demo video linked" : "No demo video on this exercise — add one in the library"}
     >
       {rowHasVideo ? <Video className="h-2.5 w-2.5" /> : <VideoOff className="h-2.5 w-2.5" />}
       {rowHasVideo ? "Video" : "No video"}
