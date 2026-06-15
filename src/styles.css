@@ -118,7 +118,7 @@
 
   /* Workout builder surface stack — page → canvas → card → inset.
      Tuned for strong dark-on-dark separation without leaving the dark theme. */
-  --builder-canvas: oklch(0.235 0.005 280);        /* charcoal grey  ~#202126 */
+  --builder-canvas: oklch(0.40 0.005 280);        /* light grey day surface ~#5E616B (stands out on the dark page bg) */
   --builder-card: oklch(0.17 0.006 280);           /* deeper near-black ~#121318 */
   --builder-card-border: oklch(0.32 0.008 280);    /* neutral grey 1px border ~#34363D */
   --builder-card-border-strong: oklch(0.42 0.01 280); /* hover/focus border */
