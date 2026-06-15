@@ -108,10 +108,10 @@ export function MoveWorkoutSheet({
   // Suggested chips: client's training-day weekdays in the next 14 days.
   const suggestions = useMemo(() => {
     if (!ctx) return [] as Date[];
-    const wantedInts = new Set(
+    const wantedInts = new Set<number>(
       (ctx.week?.training_days ?? [])
         .map((w: string) => WEEKDAY_TO_INT[w.toLowerCase().slice(0, 3)])
-        .filter((n) => typeof n === "number"),
+        .filter((n: number | undefined): n is number => typeof n === "number"),
     );
     if (!wantedInts.size) return [];
     const out: Date[] = [];
@@ -326,7 +326,7 @@ export function MoveWorkoutSheet({
                         size="sm"
                         variant="outline"
                         className="mt-2 h-7"
-                        onClick={() => swapMutation.mutate(c.payload!.otherDayId as string)}
+                        onClick={() => swapMutation.mutate(String(c.payload!.otherDayId))}
                         disabled={swapMutation.isPending}
                       >
                         <Replace className="mr-1 h-3.5 w-3.5" /> Swap workouts
