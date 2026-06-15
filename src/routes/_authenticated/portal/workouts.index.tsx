@@ -310,16 +310,18 @@ function WorkoutsPage() {
                   <Button size="sm" variant="outline" onClick={() => setViewMode("block")}>Open Block View</Button>
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2">
-                  <Link to="/portal/workouts/analytics" className="w-full sm:w-auto">
-                    <Button size="lg" className="w-full bg-gradient-analytics-blue font-bold uppercase shadow-analytics-blue btn-glow-blue ring-2 ring-analytics-blue/20 sm:w-auto">
-                      <Activity className="mr-2 h-5 w-5" /> Training Analytics
-                    </Button>
-                  </Link>
                   <Link to="/portal/lift-videos"><Button variant="outline" size="sm"><Video className="mr-1 h-4 w-4" /> Upload Lift Video</Button></Link>
                   <Link to="/portal/exercises"><Button variant="outline" size="sm"><Dumbbell className="mr-1 h-4 w-4" /> Exercise Library</Button></Link>
                 </div>
               </Card>
             ) : null}
+
+            {client?.id && (
+              <TrainingAnalyticsPreviewCard
+                clientId={client.id}
+                unit={(client as any)?.preferred_weight_unit === "kg" ? "kg" : "lb"}
+              />
+            )}
 
             {blockGroups.size === 0 ? (
               <Card className="p-10 text-center">
