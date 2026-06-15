@@ -2344,7 +2344,12 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
   // Build a short human summary of the prescription for the collapsed view.
   const summaryParts: string[] = [];
   if (row.sets != null && row.sets !== "") summaryParts.push(`${row.sets} set${row.sets === 1 ? "" : "s"}`);
-  if (row.reps_text) summaryParts.push(`${row.reps_text} reps`);
+  if ((row as any).measurement_type === "time") {
+    const d = (row as any).duration_seconds;
+    if (d != null && Number(d) > 0) summaryParts.push(formatDuration(Number(d)));
+  } else if (row.reps_text) {
+    summaryParts.push(`${row.reps_text} reps`);
+  }
   if (row.rpe !== "" && row.rpe != null) summaryParts.push(`RPE ${row.rpe}`);
   if (row.rir !== "" && row.rir != null) summaryParts.push(`RIR ${row.rir}`);
   const loadSummary = (() => {
