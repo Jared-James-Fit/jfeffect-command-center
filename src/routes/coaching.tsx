@@ -71,16 +71,16 @@ function CoachingPage() {
       ) : (
       <CoachingHero
         eyebrow="Private Coaching · By application"
-        headline={p?.hero_headline ?? "Stop guessing. Get a plan built around you."}
-        sub={p?.hero_subheadline ?? "Private coaching gives you individualized training, nutrition guidance, weekly accountability and direct support\u2014adjusted around your goals, schedule and progress."}
-        image={p?.hero_image_url ?? coachingHeroImg}
-        primary={<HeroCta onClick={handleApply}>{p?.primary_cta_label ?? "Apply for Private Coaching"}</HeroCta>}
+        headline={"Stop guessing. Get a plan built around you."}
+        sub={"Private coaching gives you individualized training, nutrition guidance, weekly accountability and direct support\u2014adjusted around your goals, schedule and progress."}
+        image={coachingHeroImg}
+        primary={<HeroCta onClick={handleApply}>Apply for Private Coaching</HeroCta>}
         secondary={
           <Link
-            to={(p?.secondary_cta_href ?? "/membership") as any}
+            to="/membership"
             className="text-sm font-semibold text-white/70 underline-offset-4 hover:text-white hover:underline"
           >
-            {p?.secondary_cta_label ?? "Not ready for coaching? Explore Membership →"}
+            Not ready for coaching? Explore Membership →
           </Link>
         }
       />
