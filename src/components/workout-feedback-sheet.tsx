@@ -56,7 +56,15 @@ type Props = {
   clientId: string;
   dayId: string;
   existing?: ExistingFeedback;
-  onSubmitted?: () => void;
+  onSubmitted?: (submitted?: {
+    overall_rating: number;
+    session_rpe: number;
+    pain: boolean;
+    pain_level: number | null;
+    pain_area: string | null;
+    pain_note: string | null;
+    client_note: string | null;
+  }) => void;
 };
 
 export function WorkoutFeedbackSheet({ open, onOpenChange, completionId, clientId, dayId, existing, onSubmitted }: Props) {
@@ -142,7 +150,7 @@ export function WorkoutFeedbackSheet({ open, onOpenChange, completionId, clientI
       return;
     }
     toast.success(isEdit ? "Feedback updated." : "Workout logged. Feedback sent to your coach.");
-    onSubmitted?.();
+    onSubmitted?.(fields);
     onOpenChange(false);
   };
 

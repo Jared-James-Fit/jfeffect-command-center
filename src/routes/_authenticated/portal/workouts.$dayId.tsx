@@ -604,6 +604,7 @@ function WorkoutDay() {
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   // Celebratory summary dialog shown right after first feedback submit.
   const [summaryOpen, setSummaryOpen] = useState(false);
+  const [justSubmittedFeedback, setJustSubmittedFeedback] = useState<{ overall_rating: number; session_rpe: number } | null>(null);
   // When the client clicks "Finish", we stage the completion payload and
   // open the feedback sheet. The workout is NOT marked complete until the
   // feedback is actually submitted — feedback is now a hard gate.
@@ -1058,8 +1059,9 @@ function WorkoutDay() {
           clientId={client.id}
           dayId={dayId}
           existing={existingFeedback ?? null}
-          onSubmitted={async () => {
+          onSubmitted={async (submitted) => {
             const wasFirstSubmit = !hasFeedback;
+            if (submitted) setJustSubmittedFeedback(submitted);
             qc.invalidateQueries({ queryKey: ["pl-workout-feedback", completion?.id] });
             // Feedback is the gate — flip completed_at on once it lands.
             const targetId = pendingFinalize?.completionId ?? completion?.id ?? null;
@@ -1091,7 +1093,9 @@ function WorkoutDay() {
           onOpenChange={setSummaryOpen}
           rows={rows as any[]}
           results={results as any[]}
-          feedback={existingFeedback ?? null}
+          feedback={existingFeedback ?? (justSubmittedFeedback
+            ? { overall_rating: justSubmittedFeedback.overall_rating, session_rpe: justSubmittedFeedback.session_rpe }
+            : null)}
           durationMin={completion?.actual_duration_min ?? pendingFinalize?.durationMin ?? null}
         />
       )}
