@@ -183,6 +183,7 @@ import { Route as AuthenticatedMResourcesSlugRouteImport } from './routes/_authe
 import { Route as AuthenticatedMPlansPlanIdRouteImport } from './routes/_authenticated/m/plans.$planId'
 import { Route as AuthenticatedMMyPlansEnrollmentIdRouteImport } from './routes/_authenticated/m/my-plans.$enrollmentId'
 import { Route as AuthenticatedAdminSettingsSmsRouteImport } from './routes/_authenticated/admin/settings_.sms'
+import { Route as AuthenticatedAdminSettingsNutritionAutomationRouteImport } from './routes/_authenticated/admin/settings_.nutrition-automation'
 import { Route as AuthenticatedAdminSettingsChatRouteImport } from './routes/_authenticated/admin/settings_.chat'
 import { Route as AuthenticatedAdminSalesMembershipRouteImport } from './routes/_authenticated/admin/sales.membership'
 import { Route as AuthenticatedAdminSalesCoachingApplicationsRouteImport } from './routes/_authenticated/admin/sales.coaching-applications'
@@ -1227,6 +1228,12 @@ const AuthenticatedAdminSettingsSmsRoute =
     path: '/settings/sms',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
+const AuthenticatedAdminSettingsNutritionAutomationRoute =
+  AuthenticatedAdminSettingsNutritionAutomationRouteImport.update({
+    id: '/settings_/nutrition-automation',
+    path: '/settings/nutrition-automation',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
 const AuthenticatedAdminSettingsChatRoute =
   AuthenticatedAdminSettingsChatRouteImport.update({
     id: '/settings_/chat',
@@ -1708,6 +1715,7 @@ export interface FileRoutesByFullPath {
   '/admin/sales/coaching-applications': typeof AuthenticatedAdminSalesCoachingApplicationsRoute
   '/admin/sales/membership': typeof AuthenticatedAdminSalesMembershipRoute
   '/admin/settings/chat': typeof AuthenticatedAdminSettingsChatRoute
+  '/admin/settings/nutrition-automation': typeof AuthenticatedAdminSettingsNutritionAutomationRoute
   '/admin/settings/sms': typeof AuthenticatedAdminSettingsSmsRoute
   '/m/my-plans/$enrollmentId': typeof AuthenticatedMMyPlansEnrollmentIdRoute
   '/m/plans/$planId': typeof AuthenticatedMPlansPlanIdRoute
@@ -1928,6 +1936,7 @@ export interface FileRoutesByTo {
   '/admin/sales/coaching-applications': typeof AuthenticatedAdminSalesCoachingApplicationsRoute
   '/admin/sales/membership': typeof AuthenticatedAdminSalesMembershipRoute
   '/admin/settings/chat': typeof AuthenticatedAdminSettingsChatRoute
+  '/admin/settings/nutrition-automation': typeof AuthenticatedAdminSettingsNutritionAutomationRoute
   '/admin/settings/sms': typeof AuthenticatedAdminSettingsSmsRoute
   '/m/my-plans/$enrollmentId': typeof AuthenticatedMMyPlansEnrollmentIdRoute
   '/m/plans/$planId': typeof AuthenticatedMPlansPlanIdRoute
@@ -2155,6 +2164,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/sales/coaching-applications': typeof AuthenticatedAdminSalesCoachingApplicationsRoute
   '/_authenticated/admin/sales/membership': typeof AuthenticatedAdminSalesMembershipRoute
   '/_authenticated/admin/settings_/chat': typeof AuthenticatedAdminSettingsChatRoute
+  '/_authenticated/admin/settings_/nutrition-automation': typeof AuthenticatedAdminSettingsNutritionAutomationRoute
   '/_authenticated/admin/settings_/sms': typeof AuthenticatedAdminSettingsSmsRoute
   '/_authenticated/m/my-plans/$enrollmentId': typeof AuthenticatedMMyPlansEnrollmentIdRoute
   '/_authenticated/m/plans/$planId': typeof AuthenticatedMPlansPlanIdRoute
@@ -2382,6 +2392,7 @@ export interface FileRouteTypes {
     | '/admin/sales/coaching-applications'
     | '/admin/sales/membership'
     | '/admin/settings/chat'
+    | '/admin/settings/nutrition-automation'
     | '/admin/settings/sms'
     | '/m/my-plans/$enrollmentId'
     | '/m/plans/$planId'
@@ -2602,6 +2613,7 @@ export interface FileRouteTypes {
     | '/admin/sales/coaching-applications'
     | '/admin/sales/membership'
     | '/admin/settings/chat'
+    | '/admin/settings/nutrition-automation'
     | '/admin/settings/sms'
     | '/m/my-plans/$enrollmentId'
     | '/m/plans/$planId'
@@ -2828,6 +2840,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/sales/coaching-applications'
     | '/_authenticated/admin/sales/membership'
     | '/_authenticated/admin/settings_/chat'
+    | '/_authenticated/admin/settings_/nutrition-automation'
     | '/_authenticated/admin/settings_/sms'
     | '/_authenticated/m/my-plans/$enrollmentId'
     | '/_authenticated/m/plans/$planId'
@@ -4133,6 +4146,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminSettingsSmsRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
+    '/_authenticated/admin/settings_/nutrition-automation': {
+      id: '/_authenticated/admin/settings_/nutrition-automation'
+      path: '/settings/nutrition-automation'
+      fullPath: '/admin/settings/nutrition-automation'
+      preLoaderRoute: typeof AuthenticatedAdminSettingsNutritionAutomationRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
     '/_authenticated/admin/settings_/chat': {
       id: '/_authenticated/admin/settings_/chat'
       path: '/settings/chat'
@@ -4703,6 +4723,7 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminSalesCoachingApplicationsRoute: typeof AuthenticatedAdminSalesCoachingApplicationsRoute
   AuthenticatedAdminSalesMembershipRoute: typeof AuthenticatedAdminSalesMembershipRoute
   AuthenticatedAdminSettingsChatRoute: typeof AuthenticatedAdminSettingsChatRoute
+  AuthenticatedAdminSettingsNutritionAutomationRoute: typeof AuthenticatedAdminSettingsNutritionAutomationRoute
   AuthenticatedAdminSettingsSmsRoute: typeof AuthenticatedAdminSettingsSmsRoute
   AuthenticatedAdminAgreementsNativeIndexRoute: typeof AuthenticatedAdminAgreementsNativeIndexRoute
   AuthenticatedAdminAgreementsIndexRoute: typeof AuthenticatedAdminAgreementsIndexRoute
@@ -4833,6 +4854,8 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
     AuthenticatedAdminSalesMembershipRoute:
       AuthenticatedAdminSalesMembershipRoute,
     AuthenticatedAdminSettingsChatRoute: AuthenticatedAdminSettingsChatRoute,
+    AuthenticatedAdminSettingsNutritionAutomationRoute:
+      AuthenticatedAdminSettingsNutritionAutomationRoute,
     AuthenticatedAdminSettingsSmsRoute: AuthenticatedAdminSettingsSmsRoute,
     AuthenticatedAdminAgreementsNativeIndexRoute:
       AuthenticatedAdminAgreementsNativeIndexRoute,
