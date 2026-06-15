@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -14,8 +15,9 @@ import {
   MAIN_GOALS, TRAINING_DAYS, WEEKDAYS, WEEKDAY_LABELS, WORKOUT_LENGTHS,
   EXPERIENCE_LEVELS, TRAINING_STYLES, TRAINING_LOCATIONS, EQUIPMENT_OPTIONS,
   NUTRITION_GOALS, NUTRITION_PREFS, NUTRITION_CHALLENGES, NUTRITION_CHALLENGES_MAX,
-  clientGoalsSetupSchema, type ClientGoalsSetupRow,
+  type ClientGoalsSetupRow,
 } from "@/lib/client-goals/schema";
+import { saveGoalsSetupFn } from "@/lib/client-goals/goals.functions";
 
 type Props = {
   clientId: string;
@@ -38,6 +40,7 @@ const STEPS = [
 export function GoalsSetupFlow({ clientId, onComplete, compact }: Props) {
   const qc = useQueryClient();
   const [step, setStep] = useState(0);
+  const saveGoalsSetup = useServerFn(saveGoalsSetupFn);
 
   const { data: row, isLoading } = useQuery({
     queryKey: ["client-goals-setup", clientId],
@@ -70,13 +73,7 @@ export function GoalsSetupFlow({ clientId, onComplete, compact }: Props) {
 
   const upsert = useMutation({
     mutationFn: async (patch: Partial<ClientGoalsSetupRow> & { completed?: boolean }) => {
-      const parsed = clientGoalsSetupSchema.partial().parse(patch);
-      const body: any = { client_id: clientId, ...parsed };
-      if ((patch as any).completed) body.completed_at = new Date().toISOString();
-      const { error } = await (supabase as any)
-        .from("client_goals_setup")
-        .upsert(body, { onConflict: "client_id" });
-      if (error) throw error;
+      await saveGoalsSetup({ data: { clientId, patch } });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["client-goals-setup", clientId] });
