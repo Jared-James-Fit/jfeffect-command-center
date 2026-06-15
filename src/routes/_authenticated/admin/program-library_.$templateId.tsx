@@ -1664,8 +1664,16 @@ function DayEditor({ day, setDay, exercises, compact, dayKey }: { day: any; setD
   // collapses every row in the previous day (handled by dayBus.setActive).
   const isActive = useDayActive(dayKey);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  // Tracks whether this day is currently in "expand all" mode so a single
+  // shortcut / button can toggle between expand-all and collapse-all.
+  const [allExpanded, setAllExpanded] = useState(false);
   const activateDay = () => { if (dayKey) dayBus.setActive(dayKey); };
-  const expandAll = () => { if (dayKey) { dayBus.setActive(dayKey); dayBus.emit(dayKey, "expand"); } };
+  const expandAll = () => {
+    if (!dayKey) return;
+    dayBus.setActive(dayKey);
+    dayBus.emit(dayKey, "expand");
+    setAllExpanded(true);
+  };
   const collapseAll = () => {
     if (!dayKey) return;
     dayBus.emit(dayKey, "collapse");
@@ -1673,22 +1681,23 @@ function DayEditor({ day, setDay, exercises, compact, dayKey }: { day: any; setD
     if (containerRef.current?.contains(document.activeElement)) {
       (document.activeElement as HTMLElement | null)?.blur?.();
     }
+    setAllExpanded(false);
   };
-  // Keyboard shortcuts (only while this day is the active one):
-  //   Alt+E         → expand every row in this day
-  //   Alt+Shift+E   → collapse every row in this day
+  const toggleAll = () => { if (allExpanded) collapseAll(); else expandAll(); };
+  // Single keyboard shortcut (only while this day is the active one):
+  //   Cmd/Ctrl+Shift+X → toggle expand / collapse every row in this day
   useEffect(() => {
     if (!isActive || !dayKey) return;
     const handler = (e: KeyboardEvent) => {
-      if (!e.altKey) return;
-      if (e.key === "e" || e.key === "E") {
+      if (!(e.metaKey || e.ctrlKey) || !e.shiftKey) return;
+      if (e.key === "x" || e.key === "X") {
         e.preventDefault();
-        if (e.shiftKey) collapseAll(); else expandAll();
+        toggleAll();
       }
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
-  }, [isActive, dayKey]);
+  }, [isActive, dayKey, allExpanded]);
 
   const moveRow = (from: number, to: number) => {
     if (from === to || from < 0 || to < 0 || from >= rows.length) return;
