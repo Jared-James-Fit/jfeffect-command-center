@@ -2181,17 +2181,17 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
       onClick={(e) => e.stopPropagation()}
       className={videoBadgeCls}
       title="Open demo video in a new tab"
+      aria-label="Open demo video"
     >
       <Video className="h-2.5 w-2.5" />
-      Video
     </a>
   ) : (
     <span
       className={videoBadgeCls}
       title={rowHasVideo ? "Demo video linked" : "No demo video on this exercise — add one in the library"}
+      aria-label={rowHasVideo ? "Has demo video" : "Missing demo video"}
     >
       {rowHasVideo ? <Video className="h-2.5 w-2.5" /> : <VideoOff className="h-2.5 w-2.5" />}
-      {rowHasVideo ? "Video" : "No video"}
     </span>
   );
   const accent = exerciseAccent(exMeta, row.card_color);
