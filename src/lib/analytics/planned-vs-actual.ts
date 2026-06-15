@@ -14,19 +14,29 @@ import { estimate1RM, isWorkingSet, type E1RMFormula } from "./e1rm";
 export interface PlannedVsActualRow {
   rowId: string;
   exerciseName: string;
+  /** "reps" (load × reps) or "time" (held/performed duration). */
+  measurementType: "reps" | "time";
   plannedSets: number | null;
   plannedRepsText: string | null;
   plannedRepsMin: number | null;
   plannedRepsMax: number | null;
   plannedLoad: number | null;
+  /** Programmed duration per set, seconds (time-mode only). */
+  plannedDurationSeconds: number | null;
   actualSets: number;
   actualRepsTotal: number;
   actualVolume: number;
   bestE1RM: number;
+  /** Total logged duration across sets, seconds (time-mode only). */
+  actualDurationTotalSeconds: number;
+  /** Longest single logged set, seconds (time-mode only). */
+  bestDurationSeconds: number;
   /** Percentage of planned sets actually logged (capped at 100). */
   setsPct: number | null;
   /** Percentage of logged sets that hit the planned rep target. */
   repsHitPct: number | null;
+  /** Percentage of logged sets that hit the planned duration target (time-mode only). */
+  durationHitPct: number | null;
 }
 
 export interface PlannedVsActualDay {
@@ -88,7 +98,7 @@ export async function getRecentPlannedVsActual(
 
   const { data: rows, error: rErr } = await supabase
     .from("pl_exercise_rows")
-    .select("id, day_id, sort_order, sets, reps_text, load_kg, load_lb, exercise_name_override, exercises(name)")
+    .select("id, day_id, sort_order, sets, reps_text, load_kg, load_lb, measurement_type, duration_seconds, exercise_name_override, exercises(name)")
     .in("day_id", dayIds);
   if (rErr) throw rErr;
 
@@ -97,7 +107,7 @@ export async function getRecentPlannedVsActual(
 
   const { data: results, error: resErr } = await supabase
     .from("pl_row_results")
-    .select("row_id, set_index, actual_load, actual_reps, actual_rpe, actual_rpe_num, is_working_set, completed_at")
+    .select("row_id, set_index, actual_load, actual_reps, actual_rpe, actual_rpe_num, is_working_set, completed_at, completed_duration_seconds")
     .eq("client_id", clientId)
     .in("row_id", rowIds);
   if (resErr) throw resErr;
@@ -121,61 +131,101 @@ export async function getRecentPlannedVsActual(
 
     const comparisonRows: PlannedVsActualRow[] = dayRows.map((row: any) => {
       const sets: any[] = resultsByRow.get(row.id) ?? [];
-      const working = sets.filter((s) =>
-        s.is_working_set === true
-          ? true
-          : s.is_working_set === false
-            ? false
-            : isWorkingSet({
-                load: s.actual_load,
-                reps: s.actual_reps,
-                rpe: s.actual_rpe_num ?? s.actual_rpe,
-              }) && (s.actual_rpe_num == null || Number(s.actual_rpe_num) >= rpeMin),
-      );
+      const isTime = row.measurement_type === "time";
+      // For time-based rows the working-set heuristic (load × reps) doesn't
+      // apply: any set with a logged duration counts as completed work.
+      const working = isTime
+        ? sets.filter((s) => Number(s.completed_duration_seconds) > 0)
+        : sets.filter((s) =>
+            s.is_working_set === true
+              ? true
+              : s.is_working_set === false
+                ? false
+                : isWorkingSet({
+                    load: s.actual_load,
+                    reps: s.actual_reps,
+                    rpe: s.actual_rpe_num ?? s.actual_rpe,
+                  }) && (s.actual_rpe_num == null || Number(s.actual_rpe_num) >= rpeMin),
+          );
 
       const { min, max } = parseRepsText(row.reps_text);
       const plannedSets = row.sets != null ? Number(row.sets) : null;
       const plannedLoad = row.load_lb ?? row.load_kg ?? null;
+      const plannedDurationSeconds =
+        row.duration_seconds != null ? Number(row.duration_seconds) : null;
 
       const actualSets = working.length;
-      const actualRepsTotal = working.reduce((s, r) => s + (Number(r.actual_reps) || 0), 0);
-      const actualVolume = working.reduce(
+      const actualRepsTotal = isTime
+        ? 0
+        : working.reduce((s, r) => s + (Number(r.actual_reps) || 0), 0);
+      const actualVolume = isTime
+        ? 0
+        : working.reduce(
         (s, r) => s + (Number(r.actual_load) || 0) * (Number(r.actual_reps) || 0),
         0,
       );
-      const bestE1RM = working.reduce((best, r) => {
+      const bestE1RM = isTime
+        ? 0
+        : working.reduce((best, r) => {
         const e = estimate1RM(Number(r.actual_load) || 0, Number(r.actual_reps) || 0, formula);
         return e > best ? e : best;
       }, 0);
+      const actualDurationTotalSeconds = isTime
+        ? working.reduce((s, r) => s + (Number(r.completed_duration_seconds) || 0), 0)
+        : 0;
+      const bestDurationSeconds = isTime
+        ? working.reduce(
+            (best, r) => Math.max(best, Number(r.completed_duration_seconds) || 0),
+            0,
+          )
+        : 0;
 
       const setsPct =
         plannedSets && plannedSets > 0
           ? Math.min(100, Math.round((actualSets / plannedSets) * 100))
           : null;
 
-      const targeted = working.filter((r) => r.actual_reps != null);
+      // Reps target only applies to rep-based rows; time rows track duration instead.
+      const targeted = isTime ? [] : working.filter((r) => r.actual_reps != null);
       const repsHit = targeted.filter((r) =>
         rowHitRepTarget(Number(r.actual_reps) || 0, min, max),
       ).length;
       const repsHitPct =
-        (min != null || max != null) && targeted.length > 0
+        !isTime && (min != null || max != null) && targeted.length > 0
           ? Math.round((repsHit / targeted.length) * 100)
+          : null;
+
+      // Duration hit %: a set "hit" when it reached >=90% of the prescribed duration.
+      const durationHitPct =
+        isTime && plannedDurationSeconds && plannedDurationSeconds > 0 && working.length > 0
+          ? Math.round(
+              (working.filter(
+                (r) => (Number(r.completed_duration_seconds) || 0) >= plannedDurationSeconds * 0.9,
+              ).length /
+                working.length) *
+                100,
+            )
           : null;
 
       return {
         rowId: row.id,
         exerciseName: row.exercises?.name ?? row.exercise_name_override ?? "Exercise",
+        measurementType: isTime ? "time" : "reps",
         plannedSets,
         plannedRepsText: row.reps_text ?? null,
         plannedRepsMin: min,
         plannedRepsMax: max,
         plannedLoad: plannedLoad != null ? Number(plannedLoad) : null,
+        plannedDurationSeconds,
         actualSets,
         actualRepsTotal,
         actualVolume,
         bestE1RM,
+        actualDurationTotalSeconds,
+        bestDurationSeconds,
         setsPct,
         repsHitPct,
+        durationHitPct,
       };
     });
 
