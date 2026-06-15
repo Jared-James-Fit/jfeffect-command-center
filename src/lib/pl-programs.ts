@@ -768,11 +768,10 @@ export async function applyProgression(blockId: string, rule: ProgressionRule): 
 }
 
 // ---------- Analytics / PRs ----------
-export function epley1RM(load: number, reps: number): number {
-  if (!load || !reps || reps < 1) return 0;
-  if (reps === 1) return load;
-  return Math.round(load * (1 + reps / 30) * 10) / 10;
-}
+// e1RM math lives in the unified analytics module; re-exported here for
+// backward compatibility with existing callers.
+import { epley1RM } from "@/lib/analytics/e1rm";
+export { epley1RM };
 
 export interface LiftResultPoint {
   date: string;
