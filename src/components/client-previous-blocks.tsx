@@ -87,7 +87,7 @@ export function ClientPreviousBlocks({
               </div>
             </AccordionTrigger>
             <AccordionContent className="px-4 pb-4">
-              <BlockHistoryDetail blockId={b.id} clientId={clientId} readonly={mode === "client"} />
+              <BlockHistoryDetail blockId={b.id} clientId={clientId} readonly={false} />
             </AccordionContent>
           </AccordionItem>
         ))}
