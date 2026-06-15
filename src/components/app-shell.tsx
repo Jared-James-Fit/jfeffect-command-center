@@ -823,6 +823,7 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
             query={debouncedPaletteQuery}
             onPick={(hit) => {
               setPaletteOpen(false);
+              try { window.sessionStorage.setItem("gh:term", debouncedPaletteQuery); } catch {}
               navigate({
                 to: hit.to,
                 search: { highlight: debouncedPaletteQuery } as any,
