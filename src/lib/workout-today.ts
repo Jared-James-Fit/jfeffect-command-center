@@ -150,7 +150,33 @@ export function computeTodayState(
 export function dayDisplayTitle(item: WorkoutItem | undefined | null): string {
   if (!item) return "Workout";
   const d = item.day;
-  return d?.title ? d.title : `Day ${d?.day_index ?? ""}`.trim();
+  return cleanDayTitle(d?.title, d?.day_index);
+}
+
+/**
+ * Some day rows have a literal date baked into `title` (e.g. "Day 1 — Monday,
+ * June 16"). When the block is rescheduled the baked-in date goes stale and
+ * the UI shows the wrong weekday. Strip any "— Weekday, Month Day" suffix so
+ * we only ever surface the meaningful part of the title; the real scheduled
+ * date is rendered separately by the cards/lists.
+ */
+const STALE_DATE_RE =
+  /\s*[—–-]\s*(?:Sun|Mon|Tue(?:s)?|Wed(?:nes)?|Thu(?:rs?)?|Fri|Sat(?:ur)?)(?:day)?[.,]?\s+(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\.?\s+\d{1,2}(?:st|nd|rd|th)?(?:,\s*\d{2,4})?/gi;
+
+export function cleanDayTitle(
+  raw: string | null | undefined,
+  dayIndex?: number | null,
+): string {
+  const fallback = dayIndex != null ? `Day ${dayIndex}` : "Workout";
+  const s = (raw ?? "").trim();
+  if (!s) return fallback;
+  const cleaned = s
+    .replace(STALE_DATE_RE, "")
+    .replace(/\s*[—–-]\s*[—–-]\s*/g, " — ")
+    .replace(/\s*[—–-]\s*$/, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+  return cleaned || fallback;
 }
 
 export function dayDurationLabel(item: WorkoutItem | undefined | null): string | null {
