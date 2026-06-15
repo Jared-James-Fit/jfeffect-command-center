@@ -63,7 +63,13 @@ export function computePlacements(input: PlacementInput): PlannerPlacement[] {
     return days.map((md, i) => base(md, toISO(addDays(start, i))));
   }
 
-  if (method === "weekday_map" || method === "fill_empty" || method === "insert" || method === "replace_range") {
+  if (
+    method === "weekday_map" ||
+    method === "client_days" ||
+    method === "fill_empty" ||
+    method === "insert" ||
+    method === "replace_range"
+  ) {
     // Find the next matching weekday >= start, then advance through the
     // selected weekdays in order, wrapping into following weeks.
     if (!trainingDays.length) return days.map((md) => base(md, null));
