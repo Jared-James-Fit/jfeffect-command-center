@@ -75,13 +75,21 @@ function AnalyticsPage() {
           <ArrowLeft className="mr-1 h-4 w-4" /> Back to programs
         </Link>
 
-        {isLoading ? <p className="text-sm text-muted-foreground">Loading…</p> : (results as any[]).length === 0 ? (
-          <Card className="p-10 text-center">
-            <Dumbbell className="mx-auto h-10 w-10 text-muted-foreground" />
-            <p className="mt-3 text-sm text-muted-foreground">No logged sets yet. Analytics appear once the client starts logging workouts.</p>
-          </Card>
-        ) : (
+        {isLoading ? <p className="text-sm text-muted-foreground">Loading…</p> : (
           <>
+            {(results as any[]).length === 0 && (
+              <Card className="border-dashed border-border/70 bg-card/60 p-8 text-center">
+                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-primary">
+                  <Dumbbell className="h-7 w-7" />
+                </div>
+                <h2 className="mt-4 text-xl font-black tracking-tight text-foreground">
+                  No logged sets yet
+                </h2>
+                <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
+                  Once this client logs a working set, their PRs, strength trends, and weekly volume will fill in automatically. The sections below are ready and waiting.
+                </p>
+              </Card>
+            )}
             <section>
               <h2 className="mb-3 flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-muted-foreground">
                 <Trophy className="h-4 w-4" /> Recent PRs (last 30 days)
@@ -125,7 +133,7 @@ function AnalyticsPage() {
                   />
                 </div>
               </div>
-              {activeSeries && (
+              {activeSeries ? (
                 <Card className="p-4">
                   <div className="flex items-center justify-between text-xs text-muted-foreground mb-2">
                     <span>PR: <span className="font-bold text-foreground">{fmtNum(activeSeries.pr?.est_1rm)}</span> on {activeSeries.pr?.date && format(new Date(activeSeries.pr.date), "MMM d")}</span>
@@ -155,6 +163,10 @@ function AnalyticsPage() {
                       </LineChart>
                     </ResponsiveContainer>
                   </div>
+                </Card>
+              ) : (
+                <Card className="p-6 text-sm text-muted-foreground">
+                  Select an exercise once the client has logged sets to see their estimated 1RM trend.
                 </Card>
               )}
             </section>
