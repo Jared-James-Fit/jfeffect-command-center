@@ -630,7 +630,7 @@ function BlockViewTab({
       selectedDayId={null}
       onWeekChange={() => {}}
       onDayChange={() => {}}
-      mode={mode === "coach" ? "coach" : "client"}
+      mode={mode === "coach" ? "admin" : "client"}
     />
   );
 }
