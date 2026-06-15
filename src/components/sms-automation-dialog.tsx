@@ -34,6 +34,7 @@ export type AutomationRow = {
 const TRIGGERS = [
   ["account_created", "New account created"],
   ["subscription_purchased", "Subscription purchased (Stripe)"],
+  ["email_change_requested", "Account email change requested"],
   ["unread_message", "Unread app message"],
   ["missed_check_in", "Missed check-in"],
   ["missed_workout", "Missed workout"],
@@ -63,7 +64,7 @@ const AUDIENCES = [
   ["selected", "Specific selected clients"],
 ] as const;
 
-const CATEGORIES = ["Check-In Reminder","Missed Check-In","Workout Reminder","Missed Workout","Unread Message","Payment Reminder","Renewal Reminder","Birthday","Onboarding","Motivation","Accountability","Custom"];
+const CATEGORIES = ["Check-In Reminder","Missed Check-In","Workout Reminder","Missed Workout","Unread Message","Payment Reminder","Renewal Reminder","Birthday","Onboarding","Motivation","Accountability","Account","Custom"];
 
 const empty: AutomationRow = {
   name: "", category: "Custom", trigger_type: "unread_message", trigger_config: {},
@@ -149,6 +150,19 @@ export function SmsAutomationDialog({
               <div className="text-muted-foreground">
                 This trigger fires automatically when a {f.trigger_type === "account_created" ? "new app member account is created" : "JF Membership subscription is purchased through Stripe"}.
                 Include the <code className="px-1 rounded bg-background">{"{setup_link}"}</code> tag in your message — it inserts a one-time link the recipient taps to finish setting up their app account.
+              </div>
+            </div>
+          )}
+          {f.trigger_type === "email_change_requested" && (
+            <div className="rounded-md border border-primary/30 bg-primary/5 p-3 text-xs">
+              <div className="font-semibold mb-1">Account-email change alert</div>
+              <div className="text-muted-foreground">
+                Fires when a client, member, or coach requests an email change from their gear-menu Settings.
+                Available tags: <code className="px-1 rounded bg-background">{"{first_name}"}</code>,{" "}
+                <code className="px-1 rounded bg-background">{"{brand}"}</code>,{" "}
+                <code className="px-1 rounded bg-background">{"{old_email}"}</code>,{" "}
+                <code className="px-1 rounded bg-background">{"{new_email}"}</code>.
+                Toggle this automation off below to stop the SMS — the email confirmation still sends either way.
               </div>
             </div>
           )}
