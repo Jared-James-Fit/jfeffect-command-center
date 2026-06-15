@@ -277,7 +277,7 @@ export function CommandPalette({
               {rows.map((hit) => (
                 <CommandItem
                   key={`srv-${kind}-${hit.id}`}
-                  value={`${kind}-${hit.id}-${hit.label}`}
+                  value={`${kind}-${hit.id}-${hit.label}-${hit.sub ?? ""}-${debounced}`}
                   onSelect={() => pickServer(hit)}
                 >
                   <Icon className="mr-2 h-4 w-4 shrink-0 text-primary" />
