@@ -647,6 +647,7 @@ async function copyDayContent(srcDayId: string, targetWeekId: string, dayIndex: 
       title: src.title,
       focus: src.focus,
       notes: opts.notes ? src.notes : null,
+      notes_client_visible: opts.notes ? src.notes_client_visible : false,
       duration_source: src.duration_source,
       duration_override_min: src.duration_override_min,
       source_day_id: src.id,
