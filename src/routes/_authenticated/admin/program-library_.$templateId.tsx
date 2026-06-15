@@ -397,7 +397,6 @@ export function appendRowToFirstDay(payload: any, type: string, row: any) {
   // New rows default to NO suggested load (percentage_basis="none").
   // Coaches must opt in via the "Include Suggested Load" toggle.
   const stamp = { sort_order: 0, sets: 3, reps_text: "8-12", time_profile: "accessory_compound", percentage_basis: "none", ...row };
-  // — left intentionally unchanged —
   const pushIntoDay = (d: any) => {
     d.rows = d.rows || [];
     d.rows.push({ ...stamp, sort_order: d.rows.length });
