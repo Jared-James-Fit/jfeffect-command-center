@@ -17,6 +17,7 @@ import {
 } from "@/lib/pl-programs";
 import { ExerciseLibraryPanel, type ExerciseRef, DND_EXERCISE, readDrop, exerciseAccent, EXERCISE_CARD_COLORS, HighlightedText, usePbDragging, beginPbDrag, endPbDrag } from "@/components/program-builder";
 import { derivePurposeLabels, defaultRestSeconds, effectiveRestSeconds, PURPOSE_LABEL_OPTIONS, resolveCategory, purposeLabelBadgeClass } from "@/lib/exercise-metadata";
+import { validateDay } from "@/lib/pl-template-validation";
 import { ProgramBuilderShortcutsButton } from "@/components/program-builder-shortcuts";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Palette } from "lucide-react";
@@ -1635,6 +1636,9 @@ function DayEditor({ day, setDay, exercises, compact, dayKey }: { day: any; setD
     }
     return { withV, total: rows.length, missing: rows.length - withV };
   }, [rows, exercises]);
+  // Hard requirements for assignment — surface live so the coach sees gaps
+  // as they build (and we can also block assignment without confirmation).
+  const dayIssues = useMemo(() => validateDay(day), [day]);
   const [dragOver, setDragOver] = useState(false);
   const [dragRowIdx, setDragRowIdx] = useState<number | null>(null);
   const [dropTargetIdx, setDropTargetIdx] = useState<number | null>(null);
@@ -1807,6 +1811,27 @@ function DayEditor({ day, setDay, exercises, compact, dayKey }: { day: any; setD
           <Button size="sm" variant="outline" className="h-7 text-[11px]" onClick={addRow}><Plus className="mr-1 h-3 w-3" /> Row</Button>
         </div>
       </div>
+      {dayIssues.length > 0 && rows.length > 0 && (
+        <div
+          className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-700 dark:text-amber-200"
+          role="status"
+        >
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <div className="font-semibold">
+                Missing requirement{dayIssues.length === 1 ? "" : "s"} on this day
+              </div>
+              <ul className="mt-0.5 list-disc pl-4 space-y-0.5">
+                {dayIssues.map((m, idx) => <li key={idx}>{m}</li>)}
+              </ul>
+              <div className="mt-1 text-[10px] opacity-80">
+                Every row needs an exercise, sets, and reps before this template can be assigned without a warning.
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       {rows.length === 0 ? (
         <p className="rounded-md border border-dashed border-builder-card-border p-4 text-center text-xs text-muted-foreground">
           {dragOver ? "Release to drop here" : pbDragging === "exercise" ? "Drop the exercise anywhere in this card" : "Drag exercises from the library, or click + Row"}

@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { validateTemplatePayload, type DayIssue } from "@/lib/pl-template-validation";
 import {
   Plus, BookOpen, UserPlus, Eye, Pencil, Copy, Archive as ArchiveIcon,
   ArchiveRestore, Trash2, Clock, Calendar, Layers, MoreVertical, Search, Users, AlertTriangle, Share2, Inbox,
@@ -670,6 +671,10 @@ function AssignDialog({ template, onClose }: { template: any; onClose: () => voi
   const [newPrep, setNewPrep] = useState({ title: "", event_name: "", event_date: "" });
   const [startDate, setStartDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
   const [endDate, setEndDate] = useState<string>("");
+  // Validation gate state — set when submit detects missing requirements.
+  // The dialog then switches to a confirm view that lists every issue and
+  // requires a second explicit "Assign anyway" click before running.
+  const [pendingIssues, setPendingIssues] = useState<DayIssue[] | null>(null);
   const templateWeeks = template ? getTemplateWeeks(template) : 0;
 
   useEffect(() => {
@@ -697,6 +702,14 @@ function AssignDialog({ template, onClose }: { template: any; onClose: () => voi
   const { data: days = [] } = useQuery({
     queryKey: ["pl-days-week", weekId], enabled: !!weekId,
     queryFn: async () => (await (supabase as any).from("pl_days").select("*").eq("week_id", weekId).order("day_index")).data ?? [],
+  });
+  // Always re-fetch the template (with its full payload) so requirement
+  // checks see fresh data — list rows may not have `payload` selected.
+  const { data: fullTpl } = useQuery({
+    queryKey: ["pl-template-assign", template?.id],
+    enabled: !!template?.id,
+    queryFn: async () =>
+      (await (supabase as any).from("pl_templates").select("*").eq("id", template.id).maybeSingle()).data,
   });
 
   if (!template) return null;
@@ -736,6 +749,19 @@ function AssignDialog({ template, onClose }: { template: any; onClose: () => voi
         `Overlaps with "${conflict.name ?? "another block"}" (${conflict.start_date ?? "?"} – ${conflict.end_date ?? "?"}). Use the suggested start date.`,
       );
     }
+    // Requirement check: every day needs an exercise + sets + reps. If any
+    // gaps exist, switch to a confirm view that lists each missing item.
+    const tplForCheck = fullTpl ?? template;
+    const issues = validateTemplatePayload(tplForCheck);
+    if (issues.length > 0) {
+      setPendingIssues(issues);
+      return;
+    }
+    await runAssignment();
+  };
+
+  const runAssignment = async () => {
+    if (!clientId) return toast.error("Pick a client");
     let placement: TemplatePlacement;
     try {
       switch (effectiveMode) {
@@ -778,6 +804,7 @@ function AssignDialog({ template, onClose }: { template: any; onClose: () => voi
           qc.invalidateQueries({ queryKey: ["assigned-blocks", clientId] });
           qc.invalidateQueries({ queryKey: ["my-workouts"] });
           job.completeStep(3);
+          setPendingIssues(null);
           onClose();
           navigate({ to: "/admin/client-programs/$clientId", params: { clientId } });
           job.completeStep(4);
@@ -792,6 +819,49 @@ function AssignDialog({ template, onClose }: { template: any; onClose: () => voi
   return (
     <Dialog open={!!template} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-lg">
+        {pendingIssues ? (
+          <>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-amber-600 dark:text-amber-300">
+                <AlertTriangle className="h-4 w-4" />
+                Missing requirements
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3 text-sm">
+              <p>
+                <span className="font-semibold">"{template.name}"</span> has{" "}
+                {pendingIssues.length} day{pendingIssues.length === 1 ? "" : "s"} with missing
+                requirements. The client will see incomplete workouts if you continue.
+              </p>
+              <div className="max-h-72 overflow-y-auto rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-xs">
+                <ul className="space-y-2">
+                  {pendingIssues.map((d, i) => (
+                    <li key={i}>
+                      <div className="font-semibold text-amber-700 dark:text-amber-200">{d.location}</div>
+                      <ul className="mt-0.5 list-disc pl-4 space-y-0.5 text-muted-foreground">
+                        {d.missing.map((m, j) => <li key={j}>{m}</li>)}
+                      </ul>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                You can go back and fix them, or assign anyway — for example if you'll edit the
+                client's copy directly after.
+              </p>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setPendingIssues(null)}>Go back &amp; fix</Button>
+              <Button
+                variant="destructive"
+                onClick={() => { setPendingIssues(null); runAssignment(); }}
+              >
+                Assign anyway
+              </Button>
+            </DialogFooter>
+          </>
+        ) : (
+        <>
         <DialogHeader>
           <DialogTitle>Assign "{template.name}"</DialogTitle>
         </DialogHeader>
@@ -953,6 +1023,8 @@ function AssignDialog({ template, onClose }: { template: any; onClose: () => voi
           <Button variant="outline" onClick={onClose}>Cancel</Button>
           <Button onClick={submit} disabled={!!conflict}>Assign to client</Button>
         </DialogFooter>
+        </>
+        )}
       </DialogContent>
     </Dialog>
   );
