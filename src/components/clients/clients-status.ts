@@ -31,7 +31,7 @@ export const STATUS_META: Record<
   needs_review:   { label: "Needs Review",    icon: ClipboardCheck,  tone: "warn",   hint: "Check-in awaiting review" },
   program_ending: { label: "Program Ending",  icon: CalendarClock,   tone: "warn",   hint: "Current block ends within 14d" },
   payment_issues: { label: "Payment Issues",  icon: CreditCard,      tone: "danger", hint: "Failed or overdue payment" },
-  new_clients:    { label: "New Clients",     icon: UserPlus,        tone: "ok",     hint: "Joined in last 7 days & not yet active" },
+  new_clients:    { label: "New Clients",     icon: UserPlus,        tone: "ok",     hint: "Joined in the last 30 days" },
 };
 
 export const TONE_CLASSES: Record<string, { bg: string; text: string; ring: string; iconBg: string }> = {
