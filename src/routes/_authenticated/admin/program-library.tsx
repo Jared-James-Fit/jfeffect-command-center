@@ -671,6 +671,10 @@ function AssignDialog({ template, onClose }: { template: any; onClose: () => voi
   const [newPrep, setNewPrep] = useState({ title: "", event_name: "", event_date: "" });
   const [startDate, setStartDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
   const [endDate, setEndDate] = useState<string>("");
+  // Validation gate state — set when submit detects missing requirements.
+  // The dialog then switches to a confirm view that lists every issue and
+  // requires a second explicit "Assign anyway" click before running.
+  const [pendingIssues, setPendingIssues] = useState<DayIssue[] | null>(null);
   const templateWeeks = template ? getTemplateWeeks(template) : 0;
 
   useEffect(() => {
@@ -698,6 +702,14 @@ function AssignDialog({ template, onClose }: { template: any; onClose: () => voi
   const { data: days = [] } = useQuery({
     queryKey: ["pl-days-week", weekId], enabled: !!weekId,
     queryFn: async () => (await (supabase as any).from("pl_days").select("*").eq("week_id", weekId).order("day_index")).data ?? [],
+  });
+  // Always re-fetch the template (with its full payload) so requirement
+  // checks see fresh data — list rows may not have `payload` selected.
+  const { data: fullTpl } = useQuery({
+    queryKey: ["pl-template-assign", template?.id],
+    enabled: !!template?.id,
+    queryFn: async () =>
+      (await (supabase as any).from("pl_templates").select("*").eq("id", template.id).maybeSingle()).data,
   });
 
   if (!template) return null;
