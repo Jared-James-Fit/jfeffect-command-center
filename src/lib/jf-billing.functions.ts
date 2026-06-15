@@ -198,17 +198,14 @@ const SignupInput = z.object({
   user_agent: z.string().trim().max(500).optional().or(z.literal("")),
 });
 
+import { normalizePhoneToE164 } from "@/lib/phone-e164";
+
 /**
- * Best-effort E.164 normalization. Strips formatting, keeps a leading '+'
- * when present, requires at least 7 digits. Returns null when invalid.
+ * Strict E.164 normalization. 10 digits → +1XXXXXXXXXX, '+' prefix preserved,
+ * other ambiguous inputs return null. Single source of truth: phone-e164.ts.
  */
 function normalizePhoneE164(raw: string): string | null {
-  const trimmed = raw.trim();
-  if (!trimmed) return null;
-  const hasPlus = trimmed.startsWith("+");
-  const digits = trimmed.replace(/\D+/g, "");
-  if (digits.length < 7 || digits.length > 15) return null;
-  return hasPlus ? `+${digits}` : digits;
+  return normalizePhoneToE164(raw);
 }
 
 export const createJfSignupCheckout = createServerFn({ method: "POST" })
