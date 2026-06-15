@@ -480,9 +480,6 @@ function SecondaryLinks({ handleAgreementComplete: _ }: { handleAgreementComplet
 
 // Imperative-handle wrapper for the bodyweight bottom sheet (so the quick
 // action tile can open it).
-import { forwardRef, useImperativeHandle } from "react";
-import { BodyweightSummaryCard } from "@/components/portal/bodyweight-summary-card";
-
 const BodyweightSummaryCardWithRef = forwardRef<
   { open: () => void },
   { clientId: string; defaultUnit?: WeightUnit }
