@@ -6,7 +6,7 @@ import {
 } from "date-fns";
 import {
   Calendar as CalendarIcon, ChevronLeft, ChevronRight, ClipboardList,
-  History, Loader2, Move, MoreVertical, Play, Pencil, Sun, RotateCcw, Activity,
+  History, Loader2, Move, MoreVertical, Play, Pencil, Sun, Activity,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
@@ -655,5 +655,3 @@ function EmptyState() {
 
 /* Re-export for callers that want individual pieces. */
 export { ResumeBanner };
-/* eslint-disable @typescript-eslint/no-unused-vars */
-const _unused = { RotateCcw };
