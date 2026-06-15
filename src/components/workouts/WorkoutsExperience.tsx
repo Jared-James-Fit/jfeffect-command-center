@@ -3,6 +3,7 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import {
   addDays, addWeeks, format, isSameDay, isSameMonth, startOfWeek,
+  addMonths, startOfMonth, endOfMonth, endOfWeek, eachDayOfInterval,
 } from "date-fns";
 import {
   Calendar as CalendarIcon, ChevronLeft, ChevronRight, ClipboardList,
@@ -97,6 +98,7 @@ export function WorkoutsExperience({
   // --- Selected date drives the calendar tab. Defaults to today. ----------
   const [selectedDate, setSelectedDate] = useState<Date>(today);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [calView, setCalView] = useState<"week" | "month">("week");
   const navigate = useNavigate();
 
   return (
@@ -190,11 +192,45 @@ export function WorkoutsExperience({
               <EmptyState />
             ) : (
               <>
-                <WeekStrip
-                  selectedDate={selectedDate}
-                  onSelectDate={setSelectedDate}
-                  byDate={byDate}
-                />
+                <div className="flex items-center justify-end">
+                  <div className="inline-flex rounded-md border bg-card p-0.5 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => setCalView("week")}
+                      className={cn(
+                        "rounded px-2.5 py-1 font-bold uppercase tracking-wider",
+                        calView === "week" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-secondary",
+                      )}
+                      aria-pressed={calView === "week"}
+                    >
+                      Week
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCalView("month")}
+                      className={cn(
+                        "rounded px-2.5 py-1 font-bold uppercase tracking-wider",
+                        calView === "month" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-secondary",
+                      )}
+                      aria-pressed={calView === "month"}
+                    >
+                      Month
+                    </button>
+                  </div>
+                </div>
+                {calView === "week" ? (
+                  <WeekStrip
+                    selectedDate={selectedDate}
+                    onSelectDate={setSelectedDate}
+                    byDate={byDate}
+                  />
+                ) : (
+                  <MonthGrid
+                    selectedDate={selectedDate}
+                    onSelectDate={setSelectedDate}
+                    byDate={byDate}
+                  />
+                )}
                 <SelectedDayCard
                   item={byDate.get(toLocalISO(selectedDate)) ?? null}
                   date={selectedDate}
@@ -351,6 +387,101 @@ function WeekStrip({
 
 /* ---------------------------------------------------------------------- */
 /* Selected day card — single primary CTA                                 */
+/* ---------------------------------------------------------------------- */
+
+function MonthGrid({
+  selectedDate, onSelectDate, byDate,
+}: {
+  selectedDate: Date;
+  onSelectDate: (d: Date) => void;
+  byDate: Map<string, WorkoutItem>;
+}) {
+  const monthStart = startOfMonth(selectedDate);
+  const monthEnd = endOfMonth(selectedDate);
+  const gridStart = startOfWeek(monthStart, { weekStartsOn: 1 });
+  const gridEnd = endOfWeek(monthEnd, { weekStartsOn: 1 });
+  const days = eachDayOfInterval({ start: gridStart, end: gridEnd });
+  const today = localStartOfToday();
+  const weekdayLabels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  return (
+    <Card className="p-3">
+      <div className="mb-2 flex items-center justify-between px-1">
+        <button
+          type="button"
+          onClick={() => onSelectDate(addMonths(selectedDate, -1))}
+          aria-label="Previous month"
+          className="rounded p-1 hover:bg-secondary"
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </button>
+        <div className="text-sm font-bold">
+          {format(monthStart, "MMMM yyyy")}
+        </div>
+        <button
+          type="button"
+          onClick={() => onSelectDate(addMonths(selectedDate, 1))}
+          aria-label="Next month"
+          className="rounded p-1 hover:bg-secondary"
+        >
+          <ChevronRight className="h-4 w-4" />
+        </button>
+      </div>
+      <div className="grid grid-cols-7 gap-1 px-1 pb-1 text-center text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+        {weekdayLabels.map((d) => (<div key={d}>{d}</div>))}
+      </div>
+      <div className="grid grid-cols-7 gap-1">
+        {days.map((d) => {
+          const iso = toLocalISO(d);
+          const item = byDate.get(iso);
+          const status: WorkoutStatus | "none" = item
+            ? getWorkoutStatus(item).status
+            : "none";
+          const inMonth = isSameMonth(d, monthStart);
+          const isToday = isSameDay(d, today);
+          const isSelected = isSameDay(d, selectedDate);
+          const title = item ? cleanDayTitle(item.day?.title, item.day?.day_index) : null;
+          return (
+            <button
+              key={iso}
+              type="button"
+              onClick={() => onSelectDate(d)}
+              className={cn(
+                "flex min-h-[64px] flex-col items-stretch rounded-lg border p-1 text-left transition",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                isSelected
+                  ? "border-primary bg-primary/15"
+                  : isToday
+                    ? "border-primary/60 bg-primary/5"
+                    : "border-transparent hover:bg-secondary",
+                !inMonth && "opacity-40",
+              )}
+              aria-pressed={isSelected}
+              aria-label={`${format(d, "EEEE MMMM d")}${item ? `, ${getWorkoutStatus(item).label}` : ", rest day"}`}
+            >
+              <div className="flex items-center justify-between">
+                <span className={cn(
+                  "text-xs font-black",
+                  isToday && !isSelected ? "text-primary" : "",
+                )}>
+                  {format(d, "d")}
+                </span>
+                <span className={cn("h-1.5 w-1.5 rounded-full", statusDotClass(status))} />
+              </div>
+              {title && (
+                <span className="mt-1 line-clamp-2 text-[10px] leading-tight text-muted-foreground">
+                  {title}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </Card>
+  );
+}
+
+/* ---------------------------------------------------------------------- */
+/* Selected day card                                                      */
 /* ---------------------------------------------------------------------- */
 
 function SelectedDayCard({
