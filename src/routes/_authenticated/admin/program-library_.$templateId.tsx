@@ -521,6 +521,7 @@ function TemplateEditor() {
     if (tpl && !meta) {
       setMeta({
         name: tpl.name, training_style: tpl.training_style, training_focus: tpl.training_focus ?? "",
+        description: (tpl as any).description ?? "",
         notes: tpl.notes ?? "", weeks: tpl.weeks ?? 0, days_per_week: tpl.days_per_week ?? 0,
         est_duration_min: tpl.est_duration_min ?? 0, tags: (tpl.tags ?? []).join(", "), status: tpl.status,
       });
@@ -566,6 +567,7 @@ function TemplateEditor() {
       weeks: m.weeks || null, days_per_week: m.days_per_week || null,
       est_duration_min: m.est_duration_min || null,
       training_focus: m.training_focus || null, notes: m.notes || null,
+      description: (m.description ?? "").trim() || null,
       payload: p,
     });
     qc.invalidateQueries({ queryKey: ["pl-template", templateId] });
@@ -603,6 +605,7 @@ function TemplateEditor() {
   // Cross-coach conflict watcher for the template meta fields.
   const remoteMeta = useMemo(() => tpl ? {
     name: tpl.name, training_style: tpl.training_style, training_focus: tpl.training_focus ?? "",
+    description: (tpl as any).description ?? "",
     notes: tpl.notes ?? "", weeks: tpl.weeks ?? 0, days_per_week: tpl.days_per_week ?? 0,
     est_duration_min: tpl.est_duration_min ?? 0, tags: (tpl.tags ?? []).join(", "), status: tpl.status,
   } : undefined, [tpl]);
@@ -669,6 +672,18 @@ function TemplateEditor() {
         <TabsContent value="meta" className="mt-2">
           <Card className="p-4 space-y-3 max-w-2xl">
               <div><Label>Name</Label><Input value={meta.name} onChange={(e) => setM({ name: e.target.value })} /></div>
+              <div>
+                <Label>Description <span className="font-normal text-muted-foreground">(optional)</span></Label>
+                <Textarea
+                  value={meta.description ?? ""}
+                  onChange={(e) => setM({ description: e.target.value })}
+                  rows={3}
+                  placeholder="Briefly explain what this program is designed for and who it is best suited to."
+                />
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  Shown to coaches in the library and assignment preview. Separate from internal Notes. Clear the field to remove it.
+                </p>
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label>Style</Label>
