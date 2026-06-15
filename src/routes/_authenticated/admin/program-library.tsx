@@ -371,7 +371,7 @@ function NewTemplateDialog({ open, onOpenChange, onCreated }: { open: boolean; o
   const navigate = useNavigate();
   const [form, setForm] = useState({
     name: "", template_type: "block" as TemplateType, training_style: "powerlifting" as TrainingStyle,
-    training_focus: "", weeks: 4, days_per_week: 4, notes: "", tags: "",
+    training_focus: "", weeks: 4, days_per_week: 4, description: "", notes: "", tags: "",
     blocks: 1,
     blockFocuses: [""] as string[],
   });
@@ -443,6 +443,18 @@ function NewTemplateDialog({ open, onOpenChange, onCreated }: { open: boolean; o
           <div>
             <Label>Name</Label>
             <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. 4 Week Volume Block" />
+          </div>
+          <div>
+            <Label>Description <span className="font-normal text-muted-foreground">(optional)</span></Label>
+            <Textarea
+              value={form.description}
+              onChange={(e) => setForm({ ...form, description: e.target.value })}
+              rows={3}
+              placeholder="Briefly explain what this program is designed for and who it is best suited to."
+            />
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Saved on the template so coaches see what this {form.template_type === "exercise_row" ? "exercise row" : form.template_type === "full_prep" ? "full prep" : form.template_type} is for. Separate from internal Notes.
+            </p>
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div>
@@ -540,6 +552,7 @@ function NewTemplateDialog({ open, onOpenChange, onCreated }: { open: boolean; o
                   training_focus: form.training_focus || undefined,
                   weeks: form.weeks || undefined, days_per_week: form.days_per_week || undefined,
                   tags, notes: form.notes || undefined,
+                  description: form.description.trim() || undefined,
                   payload: seedPayload(),
                 });
                 toast.success("Template created — opening editor");

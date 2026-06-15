@@ -782,8 +782,6 @@ function WorkoutDay() {
           </Card>
         )}
 
-        {day.notes && day.notes_client_visible && <CoachDescriptionCard text={day.notes} />}
-
         <WorkoutLoadBoundary clientId={client?.id ?? null} clientName={(client as any)?.full_name ?? null} dayId={dayId} route={`/portal/workouts/${dayId}`}>
           <div className="space-y-4 rounded-lg bg-builder-canvas p-3 sm:p-4 ring-1 ring-builder-card-border/40">
             {rowsLoaded && (rows as any[]).length === 0 ? (
@@ -1045,57 +1043,6 @@ function UnsupportedExerciseCard({ row }: { row: any }) {
           >
             <MessageCircle className="h-3 w-3" /> Message Coach
           </Link>
-        </div>
-      </div>
-    </Card>
-  );
-}
-
-/**
- * Compact, collapsible card that surfaces the coach's optional day description
- * above the workout. Defaults collapsed to a single preview line so it never
- * dominates the screen; tap to expand the full text.
- */
-function CoachDescriptionCard({ text }: { text: string }) {
-  const [open, setOpen] = useState(false);
-  const trimmed = text.trim();
-  if (!trimmed) return null;
-  // "Short" = fits comfortably on two lines and has no manual line breaks; show full.
-  // Longer text gets a two-line preview with Read more / Show less.
-  const isShort = trimmed.length <= 140 && !trimmed.includes("\n");
-  return (
-    <Card className="border-border/60 bg-muted/30 p-3">
-      <div className="flex items-start gap-2">
-        <StickyNote className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-        <div className="min-w-0 flex-1">
-          <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-            Workout Overview
-          </div>
-          <div
-            className={cn(
-              "mt-0.5 text-sm text-foreground whitespace-pre-wrap",
-              !open && !isShort && "line-clamp-2",
-            )}
-          >
-            {trimmed}
-          </div>
-          {!isShort && (
-            <button
-              type="button"
-              onClick={() => setOpen((o) => !o)}
-              className="mt-1 inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline"
-            >
-              {open ? (
-                <>
-                  Show less <ChevronUp className="h-3 w-3" />
-                </>
-              ) : (
-                <>
-                  Read more <ChevronDown className="h-3 w-3" />
-                </>
-              )}
-            </button>
-          )}
         </div>
       </div>
     </Card>

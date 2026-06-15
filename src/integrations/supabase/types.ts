@@ -10619,6 +10619,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           days_per_week: number | null
+          description: string | null
           est_duration_min: number | null
           goal: string | null
           id: string
@@ -10644,6 +10645,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           days_per_week?: number | null
+          description?: string | null
           est_duration_min?: number | null
           goal?: string | null
           id?: string
@@ -10669,6 +10671,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           days_per_week?: number | null
+          description?: string | null
           est_duration_min?: number | null
           goal?: string | null
           id?: string

@@ -1089,7 +1089,7 @@ export async function listTemplates(opts: {
   return data ?? [];
 }
 
-export async function createTemplate(input: { name: string; template_type: TemplateType; training_style: TrainingStyle; training_focus?: string; goal?: string; notes?: string; weeks?: number; days_per_week?: number; est_duration_min?: number; tags?: string[]; payload?: any }) {
+export async function createTemplate(input: { name: string; template_type: TemplateType; training_style: TrainingStyle; training_focus?: string; goal?: string; description?: string; notes?: string; weeks?: number; days_per_week?: number; est_duration_min?: number; tags?: string[]; payload?: any }) {
   // Stamp ownership so the new template lands in the creator's My Library.
   const { data: au } = await sb.auth.getUser();
   const owner_user_id = au.user?.id ?? null;
