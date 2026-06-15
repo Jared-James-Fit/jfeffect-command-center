@@ -60,7 +60,9 @@ export function ClientRow({ r, onArchive }: { r: DirectoryRow; onArchive?: (r: D
           <UserAvatar
             src={r.profile_picture_url}
             name={r.full_name ?? "Client"}
-            className="h-11 w-11 shrink-0"
+            size={44}
+            expandable={false}
+            className="shrink-0"
           />
           <div className="min-w-0">
             <Link
