@@ -2222,9 +2222,23 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
   // "Collapsed" = the whole card is in summary/read-only mode (no input boxes).
   // It expands automatically when the user clicks or tabs into it, and snaps
   // back to summary when focus leaves the card.
-  const [collapsed, setCollapsed] = useState(true);
+  // Minimum requirements to be "fillable" enough to allow auto-collapse:
+  // an exercise selected/named, sets, and reps. Until those are present we
+  // keep the card expanded so coaches see the empty inputs they still owe.
+  const meetsMinimum = (() => {
+    const hasEx = !!((row as any).exercise_id || (row as any).exercise_name_override);
+    const hasSets = row.sets != null && row.sets !== "";
+    const hasReps = !!row.reps_text;
+    return hasEx && hasSets && hasReps;
+  })();
+  const meetsMinRef = useRef(meetsMinimum);
+  useEffect(() => { meetsMinRef.current = meetsMinimum; }, [meetsMinimum]);
+  const [collapsed, setCollapsed] = useState(meetsMinimum);
   const collapseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scheduleCollapse = () => {
+    // Don't auto-collapse incomplete cards — keep them expanded so the
+    // missing fields stay visible.
+    if (!meetsMinRef.current) return;
     if (collapseTimer.current) clearTimeout(collapseTimer.current);
     collapseTimer.current = setTimeout(() => setCollapsed(true), 120);
   };
