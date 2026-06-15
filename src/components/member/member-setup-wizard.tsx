@@ -116,7 +116,7 @@ export function MemberSetupWizard({
       if (step === "photo" && form.avatar_url) patch.avatar_url = form.avatar_url;
       if (step === "contact") {
         if (form.phone !== undefined) patch.phone = form.phone;
-        patch.sms_consent = !!form.sms_consent;
+        patch.sms_consent = form.sms_consent !== false;
       }
       if (step === "basics") {
         for (const k of ["date_of_birth", "address_line1", "address_city", "address_state", "address_zip", "address_country", "emergency_contact_name", "emergency_contact_phone"]) {
@@ -197,7 +197,7 @@ export function MemberSetupWizard({
               <label className="flex items-start gap-2 text-sm">
                 <Checkbox
                   className="mt-0.5"
-                  checked={form.sms_consent ?? (m?.sms_consent_at ? true : !m?.sms_opt_out)}
+                  checked={form.sms_consent ?? true}
                   onCheckedChange={(v) => set("sms_consent", !!v)}
                 />
                 <span>
