@@ -247,7 +247,10 @@ function TemplateCard({ tpl, onPreview, onAssign, onShare, onChanged }: { tpl: a
         <Stat label="Rows" value={summary.rows} icon={<BookOpen className="h-3 w-3" />} />
       </div>
 
-      {tpl.notes && <p className="line-clamp-2 text-xs text-muted-foreground">{tpl.notes}</p>}
+      {tpl.description && (
+        <p className="line-clamp-2 text-xs text-foreground/80">{tpl.description}</p>
+      )}
+      {tpl.notes && <p className="line-clamp-2 text-xs text-muted-foreground italic">{tpl.notes}</p>}
 
       <AssignedToPanel templateId={tpl.id} clients={uniqueClients} />
 
