@@ -2,14 +2,6 @@ import { Link } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import { Check } from "lucide-react";
 
-/**
- * Shared "Which option is right for you?" comparison block.
- *
- * Rendered near the bottom of /membership and /coaching. Frames the two
- * products as solving different levels of need — neither is the "bad"
- * option. The `accent` prop controls which card is emphasized so the
- * comparison feels native to whichever page it appears on.
- */
 export function OfferComparison({ accent = "membership" }: { accent?: "membership" | "coaching" }) {
   const memberHighlighted = accent === "membership";
   return (
@@ -22,7 +14,7 @@ export function OfferComparison({ accent = "membership" }: { accent?: "membershi
           Which option is right for you?
         </h2>
         <p className="mt-3 text-sm text-muted-foreground md:text-base">
-          They solve different levels of need. Pick the one that fits where you are right now.
+          Same system, two levels of support. Pick the one that fits where you're at right now.
         </p>
       </div>
 
@@ -32,9 +24,9 @@ export function OfferComparison({ accent = "membership" }: { accent?: "membershi
           title="Choose Membership if:"
           bullets={[
             "You want structured workouts without direct coaching",
-            "You are comfortable training independently",
+            "You're comfortable training on your own",
             "You want app access, resources and tracking",
-            "You want the lowest-cost way to use the JF Effect system",
+            "You want in without the bigger investment yet",
           ]}
           ctaLabel="Start Membership"
           ctaHref="/membership"
@@ -47,8 +39,8 @@ export function OfferComparison({ accent = "membership" }: { accent?: "membershi
             "You want a plan built specifically for you",
             "You need accountability and regular adjustments",
             "You want nutrition guidance",
-            "You want direct access to a coach",
-            "You are prepared to invest more for personalized support",
+            "You want direct access to me",
+            "You're ready to invest in getting it right the first time",
           ]}
           ctaLabel="Apply for Coaching"
           ctaHref="/coaching/apply"
