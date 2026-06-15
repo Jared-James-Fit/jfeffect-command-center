@@ -915,7 +915,28 @@ function WorkoutDay() {
           clientId={client.id}
           dayId={dayId}
           existing={existingFeedback ?? null}
-          onSubmitted={() => qc.invalidateQueries({ queryKey: ["pl-workout-feedback", completion?.id] })}
+          onSubmitted={async () => {
+            qc.invalidateQueries({ queryKey: ["pl-workout-feedback", completion?.id] });
+            // Feedback is the gate — flip completed_at on once it lands.
+            const targetId = pendingFinalize?.completionId ?? completion?.id ?? null;
+            if (targetId && !completion?.completed_at) {
+              const completedAt = new Date().toISOString();
+              await sb.from("pl_day_completions").update({
+                completed_at: completedAt,
+                completion_method: "manual",
+                ...(pendingFinalize ? {
+                  actual_duration_min: pendingFinalize.durationMin,
+                  client_notes: pendingFinalize.notes,
+                  started_at: pendingFinalize.startedAt,
+                } : {}),
+              }).eq("id", targetId);
+              setPendingFinalize(null);
+              setNotes("");
+              setActualMin("");
+              refresh();
+              toast.success("Workout marked complete");
+            }
+          }}
         />
       )}
     </>
