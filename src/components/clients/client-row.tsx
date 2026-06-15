@@ -1,7 +1,10 @@
 import { Link } from "@tanstack/react-router";
 import { UserAvatar } from "@/components/user-avatar";
 import { Button } from "@/components/ui/button";
-import { ChevronRight, MoreHorizontal, CalendarDays, Dumbbell } from "lucide-react";
+import {
+  ChevronRight, MoreHorizontal, CalendarDays, Dumbbell,
+  Apple, HeartPulse, CheckCircle2, AlertCircle, Plus,
+} from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
@@ -103,52 +106,7 @@ export function ClientRow({ r, onArchive }: { r: DirectoryRow; onArchive?: (r: D
 
         {/* Program summary */}
         <div className="min-w-0 space-y-1.5">
-          {r.block_name ? (
-            <>
-              <div className="flex items-center justify-between gap-2">
-                <Link
-                  to="/admin/client-programs/$clientId"
-                  params={{ clientId: r.id }}
-                  className="truncate text-sm font-medium hover:underline"
-                  title="Open program"
-                >
-                  {r.block_name}
-                </Link>
-                <div className="flex items-center gap-1">
-                  {prog && (
-                    <div className="shrink-0 text-[11px] text-muted-foreground">
-                      {prog.left}d left · {prog.pct}%
-                    </div>
-                  )}
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Link
-                        to="/admin/clients/$id"
-                        params={{ id: r.id }}
-                        search={{ tab: "training" } as any}
-                        aria-label="View training schedule"
-                        className="inline-flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
-                      >
-                        <CalendarDays className="h-4 w-4" />
-                      </Link>
-                    </TooltipTrigger>
-                    <TooltipContent side="top">View schedule</TooltipContent>
-                  </Tooltip>
-                </div>
-              </div>
-              {range && <div className="text-[11px] text-muted-foreground">{range}</div>}
-              {prog && <Progress value={prog.pct} className="h-1.5" />}
-            </>
-          ) : (
-            <div className="flex items-center justify-between gap-2">
-              <div className="text-xs italic text-muted-foreground">No active program</div>
-              <Button asChild variant="outline" size="sm" className="h-7 px-2 text-xs">
-                <Link to="/admin/program-assign/$clientId" params={{ clientId: r.id }}>
-                  <Dumbbell className="mr-1 h-3.5 w-3.5" /> Assign
-                </Link>
-              </Button>
-            </div>
-          )}
+          <AssignmentStatusStrip r={r} prog={prog} range={range} />
         </div>
 
         {/* Next best action */}
@@ -185,6 +143,136 @@ export function ClientRow({ r, onArchive }: { r: DirectoryRow; onArchive?: (r: D
         </div>
       </li>
     </TooltipProvider>
+  );
+}
+
+/* ---------- Assignment Status Strip ---------- */
+
+function StatusPill({
+  ok,
+  icon: Icon,
+  label,
+  detail,
+  assignTo,
+  assignParams,
+  assignSearch,
+  assignLabel,
+}: {
+  ok: boolean;
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  detail?: string | null;
+  assignTo: string;
+  assignParams?: Record<string, string>;
+  assignSearch?: Record<string, string>;
+  assignLabel: string;
+}) {
+  if (ok) {
+    return (
+      <span
+        className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-[11px] font-medium text-emerald-400"
+        title={`${label}${detail ? ` · ${detail}` : ""}`}
+      >
+        <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+        <Icon className="h-3 w-3 shrink-0 opacity-80" />
+        <span className="truncate">{detail ?? label}</span>
+      </span>
+    );
+  }
+  return (
+    <Link
+      to={assignTo as any}
+      params={assignParams as any}
+      search={assignSearch as any}
+      className="inline-flex items-center gap-1.5 rounded-full border border-destructive/40 bg-destructive/10 px-2 py-1 text-[11px] font-semibold text-destructive transition hover:bg-destructive/20"
+      title={`No ${label.toLowerCase()} assigned — click to assign`}
+    >
+      <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+      <Icon className="h-3 w-3 shrink-0" />
+      <span className="truncate">{assignLabel}</span>
+      <Plus className="h-3 w-3 shrink-0" />
+    </Link>
+  );
+}
+
+function AssignmentStatusStrip({
+  r,
+  prog,
+  range,
+}: {
+  r: DirectoryRow;
+  prog: { pct: number; left: number } | null;
+  range: string | null;
+}) {
+  const hasProgram = !!r.block_id;
+  const hasNutrition = !!r.nut_end && !r.f_missing_nutrition;
+  const hasCardio = !!r.card_end && !r.f_missing_cardio;
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex flex-wrap items-center gap-1.5">
+        <StatusPill
+          ok={hasProgram}
+          icon={Dumbbell}
+          label="Program"
+          detail={r.block_name}
+          assignTo="/admin/program-assign/$clientId"
+          assignParams={{ clientId: r.id }}
+          assignLabel="Assign Program"
+        />
+        <StatusPill
+          ok={hasNutrition}
+          icon={Apple}
+          label="Nutrition"
+          detail={hasNutrition ? "Nutrition" : null}
+          assignTo="/admin/clients/$id"
+          assignParams={{ id: r.id }}
+          assignSearch={{ tab: "nutrition" }}
+          assignLabel="Assign Nutrition"
+        />
+        <StatusPill
+          ok={hasCardio}
+          icon={HeartPulse}
+          label="Cardio"
+          detail={hasCardio ? "Cardio" : null}
+          assignTo="/admin/clients/$id"
+          assignParams={{ id: r.id }}
+          assignSearch={{ tab: "cardio" }}
+          assignLabel="Assign Cardio"
+        />
+        {hasProgram && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Link
+                to="/admin/clients/$id"
+                params={{ id: r.id }}
+                search={{ tab: "training" } as any}
+                aria-label="View training schedule"
+                className="ml-auto inline-flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
+              >
+                <CalendarDays className="h-4 w-4" />
+              </Link>
+            </TooltipTrigger>
+            <TooltipContent side="top">View schedule</TooltipContent>
+          </Tooltip>
+        )}
+      </div>
+      {hasProgram && (
+        <>
+          {(range || prog) && (
+            <div className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
+              {range && <span className="truncate">{range}</span>}
+              {prog && (
+                <span className="shrink-0">
+                  {prog.left}d left · {prog.pct}%
+                </span>
+              )}
+            </div>
+          )}
+          {prog && <Progress value={prog.pct} className="h-1.5" />}
+        </>
+      )}
+    </div>
   );
 }
 
