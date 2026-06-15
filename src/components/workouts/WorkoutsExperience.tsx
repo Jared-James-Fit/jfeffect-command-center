@@ -98,6 +98,7 @@ export function WorkoutsExperience({
   // --- Selected date drives the calendar tab. Defaults to today. ----------
   const [selectedDate, setSelectedDate] = useState<Date>(today);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [calView, setCalView] = useState<"week" | "month">("week");
   const navigate = useNavigate();
 
   return (
@@ -191,11 +192,45 @@ export function WorkoutsExperience({
               <EmptyState />
             ) : (
               <>
-                <WeekStrip
-                  selectedDate={selectedDate}
-                  onSelectDate={setSelectedDate}
-                  byDate={byDate}
-                />
+                <div className="flex items-center justify-end">
+                  <div className="inline-flex rounded-md border bg-card p-0.5 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => setCalView("week")}
+                      className={cn(
+                        "rounded px-2.5 py-1 font-bold uppercase tracking-wider",
+                        calView === "week" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-secondary",
+                      )}
+                      aria-pressed={calView === "week"}
+                    >
+                      Week
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCalView("month")}
+                      className={cn(
+                        "rounded px-2.5 py-1 font-bold uppercase tracking-wider",
+                        calView === "month" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-secondary",
+                      )}
+                      aria-pressed={calView === "month"}
+                    >
+                      Month
+                    </button>
+                  </div>
+                </div>
+                {calView === "week" ? (
+                  <WeekStrip
+                    selectedDate={selectedDate}
+                    onSelectDate={setSelectedDate}
+                    byDate={byDate}
+                  />
+                ) : (
+                  <MonthGrid
+                    selectedDate={selectedDate}
+                    onSelectDate={setSelectedDate}
+                    byDate={byDate}
+                  />
+                )}
                 <SelectedDayCard
                   item={byDate.get(toLocalISO(selectedDate)) ?? null}
                   date={selectedDate}
