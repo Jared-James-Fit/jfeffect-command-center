@@ -51,6 +51,7 @@ export const TRAINING_LOCATIONS = [
 ] as const;
 
 export const EQUIPMENT_OPTIONS = [
+  "All of it",
   "Barbell",
   "Squat rack",
   "Bench",
