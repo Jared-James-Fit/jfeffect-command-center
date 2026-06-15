@@ -17,7 +17,7 @@ import {
   Link as LinkIcon, Trophy, Tag, ShieldCheck, Home as HomeIcon, ListChecks,
   Star, FileText, ExternalLink, Image as ImageIcon, PowerOff, Bell, Image,
   Mail, Smartphone, ListTodo, Database, GitBranch, Globe, Package,
-  Wrench, Plus, Send, Mic, Music, type LucideIcon,
+  Wrench, Plus, Send, Mic, Music, Eye, type LucideIcon,
 } from "lucide-react";
 
 export type AdminRole = "admin" | "coach" | "media_manager";
@@ -111,7 +111,7 @@ export const ADMIN_ROUTE_REGISTRY: AdminRouteEntry[] = [
     parent: "Admin → Members", roles: ADMIN, icon: Users,
     keywords: ["membership members", "self guided members"] },
   { id: "client-pov", label: "Client POV", to: "/admin/client-pov", category: "Clients",
-    parent: "Admin → Clients", roles: ADMIN_COACH, icon: ArrowEye(), hidden: true,
+    parent: "Admin → Clients", roles: ADMIN_COACH, icon: Eye, hidden: true,
     keywords: ["view as client", "impersonate client", "point of view"] },
   { id: "client-requests", label: "Client Action Requests", to: "/admin/client-action-requests",
     category: "Clients", parent: "Admin → Clients", roles: ADMIN_COACH, icon: ListTodo, hidden: true,
@@ -359,12 +359,6 @@ export const ADMIN_ROUTE_REGISTRY: AdminRouteEntry[] = [
     category: "Legal & Compliance", parent: "Admin → Legal", roles: ADMIN, icon: FileSignature,
     keywords: ["terms", "privacy", "policy", "tos", "legal"] },
 ];
-
-// Lucide ships an Eye icon for client-pov style routes
-function ArrowEye() {
-  // Lazy import to avoid an extra named import line
-  return require("lucide-react").Eye as LucideIcon;
-}
 
 /** Return the entries visible to the given role. */
 export function getRegistryForRole(role: AdminRole | null | undefined): AdminRouteEntry[] {
