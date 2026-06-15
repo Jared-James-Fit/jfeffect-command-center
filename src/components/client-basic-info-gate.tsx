@@ -105,7 +105,7 @@ export function ClientBasicInfoGate({ children }: { children: ReactNode }) {
       emergency_contact_phone: form.emergency_contact_phone || null,
       intake_lifts_known:
         form.intake_lifts_known === false ? false : true,
-      intake_lift_unit: form.intake_lifts_known === false ? null : (form.intake_lift_unit ?? "lb"),
+      intake_lift_unit: form.intake_lift_unit ?? "lb",
       intake_squat_1rm: form.intake_lifts_known === false ? null : form.intake_squat_1rm,
       intake_bench_1rm: form.intake_lifts_known === false ? null : form.intake_bench_1rm,
       intake_deadlift_1rm: form.intake_lifts_known === false ? null : form.intake_deadlift_1rm,
