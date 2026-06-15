@@ -16,7 +16,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { ChevronRight, ChevronLeft, Loader2, AlertTriangle, CheckCircle2, XCircle } from "lucide-react";
+import { ChevronRight, ChevronLeft, Loader2, AlertTriangle, CheckCircle2, XCircle, Calendar, Settings2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { normalizeTemplatePayload, getActiveTemplateBlocks } from "@/lib/pl-template-blocks";
@@ -53,7 +53,10 @@ export function ProgramAssignmentPlanner({ clientId, templateId, onDone }: Props
   });
   const { data: client } = useQuery({
     queryKey: ["planner-client", clientId],
-    queryFn: async () => (await supabase.from("clients").select("id, full_name").eq("id", clientId).maybeSingle()).data,
+    queryFn: async () => (await supabase
+      .from("clients")
+      .select("id, full_name, committed_training_days, available_training_days, preferred_training_days, unavailable_training_days, timezone")
+      .eq("id", clientId).maybeSingle()).data,
   });
 
   const payload = useMemo(() => {
@@ -70,7 +73,7 @@ export function ProgramAssignmentPlanner({ clientId, templateId, onDone }: Props
     return {
       step: 0,
       selection: { exerciseKeys: [] },
-      method: "entire_sequence",
+      method: "client_days",
       trainingDays: ["mon","wed","fri"],
       startDate: today,
       manualDateMap: {},
@@ -86,6 +89,48 @@ export function ProgramAssignmentPlanner({ clientId, templateId, onDone }: Props
   const [selection, setSelection] = useState<PlannerSelection>(initial.selection);
   const [method, setMethod] = useState<AssignmentMethod>(initial.method);
   const [trainingDays, setTrainingDays] = useState<Weekday[]>(initial.trainingDays);
+  // Resolve the client's saved training days (committed → available →
+  // preferred, minus unavailable). The source label is shown in the UI so
+  // the admin always knows where the defaults came from.
+  const clientTrainingDays = useMemo<{ days: Weekday[]; source: "committed"|"available"|"preferred"|"none" }>(() => {
+    const norm = (xs: any): Weekday[] => {
+      if (!Array.isArray(xs)) return [];
+      const map: Record<string, Weekday> = {
+        mon:"mon",tue:"tue",wed:"wed",thu:"thu",fri:"fri",sat:"sat",sun:"sun",
+        monday:"mon",tuesday:"tue",wednesday:"wed",thursday:"thu",friday:"fri",saturday:"sat",sunday:"sun",
+      };
+      const out: Weekday[] = [];
+      for (const x of xs) {
+        const k = String(x ?? "").trim().toLowerCase();
+        const v = map[k];
+        if (v && !out.includes(v)) out.push(v);
+      }
+      return out;
+    };
+    const unavailable = new Set(norm((client as any)?.unavailable_training_days));
+    const filter = (xs: Weekday[]) => xs.filter((d) => !unavailable.has(d));
+    const committed = filter(norm((client as any)?.committed_training_days));
+    if (committed.length) return { days: committed, source: "committed" };
+    const available = filter(norm((client as any)?.available_training_days));
+    if (available.length) return { days: available, source: "available" };
+    const preferred = filter(norm((client as any)?.preferred_training_days));
+    if (preferred.length) return { days: preferred, source: "preferred" };
+    return { days: [], source: "none" };
+  }, [client]);
+
+  // Workouts per week from the current selection — used to flag mismatches.
+  const workoutsPerWeek = useMemo(() => {
+    if (!payload) return 0;
+    const perWeek = new Map<string, number>();
+    for (const md of (preview?.placements ?? [])) {
+      const k = `${md.blockKey}::${md.weekIndex}`;
+      perWeek.set(k, (perWeek.get(k) ?? 0) + 1);
+    }
+    let max = 0;
+    for (const n of perWeek.values()) if (n > max) max = n;
+    return max || summary.days || 0;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [preview?.placements, summary.days, payload]);
   const [startDate, setStartDate] = useState<string | null>(initial.startDate);
   const [conflictDecisions, setConflictDecisions] = useState<Record<string, ConflictDecision>>(initial.conflictDecisions);
   const [publishStatus, setPublishStatus] = useState<PublishStatus>(initial.publishStatus);
@@ -239,6 +284,11 @@ export function ProgramAssignmentPlanner({ clientId, templateId, onDone }: Props
           method={method} setMethod={setMethod}
           trainingDays={trainingDays} setTrainingDays={setTrainingDays}
           startDate={startDate} setStartDate={setStartDate}
+          clientTrainingDays={clientTrainingDays}
+          clientName={client?.full_name ?? null}
+          clientTimezone={(client as any)?.timezone ?? null}
+          workoutsPerWeek={workoutsPerWeek}
+          resolvedTrainingDays={(preview as any)?.resolvedTrainingDays as Weekday[] | undefined}
         />
       )}
       {step === 2 && (
