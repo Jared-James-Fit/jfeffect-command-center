@@ -7,16 +7,19 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   Users, UserPlus, AlertTriangle, Calendar, DollarSign, Plus, ExternalLink,
   Activity, Eye, ClipboardCheck, MessageCircle, Video, Timer, ShoppingCart,
   HardDrive, Mail, Apple, ChefHat, FileText, Megaphone, Zap, ClipboardList,
-  ArrowRight, ChevronUp, ChevronDown, LayoutGrid,
+  ArrowRight, ChevronDown, LayoutGrid, MoreHorizontal, CheckCircle2, Cake, Settings as SettingsIcon,
 } from "lucide-react";
 import { derivePhase, displayTitle, toneClasses, type TrainingPhase } from "@/lib/training-phases";
 import type { ConversationState, Message } from "@/lib/messages";
 import { listLiftVideos } from "@/lib/lift-videos";
-import { formatDistanceToNow, parseISO, format, startOfWeek, endOfWeek, isToday } from "date-fns";
+import { formatDistanceToNow, parseISO, endOfWeek } from "date-fns";
 import { UpcomingBirthdaysWidget } from "@/components/upcoming-birthdays-widget";
 import { UpcomingEventsPanel } from "@/components/events/upcoming-events-panel";
 import { UpcomingAppointmentsCard } from "@/components/appointments/upcoming-appointments-card";
@@ -30,22 +33,25 @@ export const Route = createFileRoute("/_authenticated/admin/")({
   component: AdminDashboard,
 });
 
-function StatCard({ label, value, icon: Icon, tone = "default" }: { label: string; value: string | number; icon: React.ComponentType<{ className?: string }>; tone?: "default" | "warn" | "primary" }) {
+function StatTile({ label, value, icon: Icon, tone = "default", to, search }: { label: string; value: string | number; icon: React.ComponentType<{ className?: string }>; tone?: "default" | "warn" | "primary"; to: string; search?: any }) {
+  const isZero = Number(value) === 0;
   return (
-    <Card className="border-border bg-card p-4">
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <div className="text-[10px] uppercase tracking-widest text-muted-foreground">{label}</div>
-          <div className="mt-1 text-xl font-black tracking-tight sm:text-2xl md:text-3xl">{value}</div>
+    <Link to={to as any} search={search} className="block">
+      <Card className="border-border bg-card p-3 transition active:scale-[0.98] hover:border-primary/50">
+        <div className="flex items-center justify-between gap-2">
+          <div className={`grid h-8 w-8 shrink-0 place-items-center rounded-md ${
+            isZero ? "bg-secondary text-muted-foreground" :
+            tone === "primary" ? "bg-primary/15 text-primary" :
+            tone === "warn" ? "bg-warning/15 text-warning" :
+            "bg-secondary text-foreground"
+          }`}>
+            <Icon className="h-4 w-4" />
+          </div>
+          <div className="text-2xl font-black tracking-tight">{value}</div>
         </div>
-        <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-md ${
-          tone === "primary" ? "bg-gradient-primary text-primary-foreground" :
-          tone === "warn" ? "bg-warning/15 text-warning" : "bg-secondary text-foreground"
-        }`}>
-          <Icon className="h-4 w-4" />
-        </div>
-      </div>
-    </Card>
+        <div className="mt-1.5 text-[11px] font-semibold text-muted-foreground">{label}</div>
+      </Card>
+    </Link>
   );
 }
 
@@ -76,9 +82,9 @@ function DriveSetupBanner() {
 
 function SectionHeader({ title, icon: Icon, viewAll }: { title: string; icon?: any; viewAll?: { to: string; label?: string; search?: any; params?: any } }) {
   return (
-    <div className="mb-3 flex items-center justify-between gap-2 flex-wrap">
-      <h2 className="flex min-w-0 items-center gap-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">
-        {Icon && <Icon className="h-3.5 w-3.5" />}{title}
+    <div className="mb-2.5 flex items-center justify-between gap-2">
+      <h2 className="flex min-w-0 items-center gap-2 text-[13px] font-bold tracking-tight">
+        {Icon && <Icon className="h-4 w-4 text-muted-foreground" />}{title}
       </h2>
       {viewAll && (
         <Link to={viewAll.to as any} search={viewAll.search} params={viewAll.params} className="shrink-0 text-[11px] font-semibold text-primary hover:underline">
@@ -89,10 +95,11 @@ function SectionHeader({ title, icon: Icon, viewAll }: { title: string; icon?: a
   );
 }
 
-function EmptyMini({ children }: { children: React.ReactNode }) {
+function EmptyRow({ children }: { children: React.ReactNode }) {
   return (
-    <div className="rounded-md border border-dashed border-border px-3 py-4 text-center text-xs text-muted-foreground">
-      {children}
+    <div className="flex items-center gap-2 px-1 py-1.5 text-xs text-muted-foreground">
+      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+      <span className="truncate">{children}</span>
     </div>
   );
 }
