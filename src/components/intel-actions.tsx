@@ -11,8 +11,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { MessageSquare, MoreVertical, UserCircle, Dumbbell, CheckCircle2, AlertTriangle, ClipboardCheck, PlayCircle } from "lucide-react";
 import { toast } from "sonner";
-import {
 import { todayLocalISO } from "@/lib/today";
+import {
   markAlertReviewed, markAllReviewed, setPainFlagStatus, createFollowup, setFollowupStatus,
   PAIN_STATUSES, PAIN_REGEX, type ClientIntel, type PainFlag, type Followup,
 } from "@/lib/coach-intel";
