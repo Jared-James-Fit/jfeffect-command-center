@@ -1051,6 +1051,49 @@ function UnsupportedExerciseCard({ row }: { row: any }) {
   );
 }
 
+/**
+ * Compact, collapsible card that surfaces the coach's optional day description
+ * above the workout. Defaults collapsed to a single preview line so it never
+ * dominates the screen; tap to expand the full text.
+ */
+function CoachDescriptionCard({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+  const trimmed = text.trim();
+  if (!trimmed) return null;
+  const isShort = trimmed.length <= 90 && !trimmed.includes("\n");
+  return (
+    <Card className="border-primary/20 bg-primary/5 p-3">
+      <button
+        type="button"
+        onClick={() => !isShort && setOpen((o) => !o)}
+        className="flex w-full items-start gap-2 text-left"
+      >
+        <StickyNote className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+        <div className="min-w-0 flex-1">
+          <div className="text-[10px] font-semibold uppercase tracking-wide text-primary/80">
+            From your coach
+          </div>
+          <div
+            className={cn(
+              "mt-0.5 text-sm text-foreground whitespace-pre-wrap",
+              !open && !isShort && "line-clamp-1",
+            )}
+          >
+            {trimmed}
+          </div>
+        </div>
+        {!isShort && (
+          open ? (
+            <ChevronUp className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+          ) : (
+            <ChevronDown className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+          )
+        )}
+      </button>
+    </Card>
+  );
+}
+
 function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResults, existingNote, readonly = false, unit = "kg", onUnitChange, focusMode = false, onChange, onNoteChange, purposeLabel = null }: { row: any; dayId: string; dayTitle: string; clientId: string | undefined; blockId?: string | null; existingResults: any[]; existingNote?: any; readonly?: boolean; unit?: "kg" | "lb"; onUnitChange?: (u: "kg" | "lb") => void; focusMode?: boolean; onChange: () => void; onNoteChange: () => void; purposeLabel?: string | null }) {
   const name = row.exercises?.name ?? row.exercise_name_override ?? "Exercise";
   const exercise = row.exercises ?? null;
