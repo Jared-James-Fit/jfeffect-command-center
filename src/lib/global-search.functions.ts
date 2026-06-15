@@ -3,7 +3,16 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 export type GlobalSearchHit = {
-  kind: "client" | "coach" | "account" | "program";
+  kind:
+    | "client"
+    | "coach"
+    | "account"
+    | "program"
+    | "exercise"
+    | "member_plan"
+    | "recipe"
+    | "broadcast"
+    | "purchase";
   id: string;
   label: string;
   sub?: string | null;
@@ -41,7 +50,7 @@ export const globalSearchFn = createServerFn({ method: "GET" })
     const limit = data.limit ?? 8;
     const like = `%${escape(q)}%`;
 
-    const [clientsRes, coachesRes, membersRes, tplRes] = await Promise.all([
+    const [clientsRes, coachesRes, membersRes, tplRes, exRes, planRes, recipeRes, bcastRes, purchaseRes] = await Promise.all([
       supabase
         .from("clients")
         .select(
@@ -90,6 +99,36 @@ export const globalSearchFn = createServerFn({ method: "GET" })
             `training_focus.ilike.${like}`,
           ].join(","),
         )
+        .limit(limit),
+      supabase
+        .from("exercises")
+        .select("id, name, category, muscle_group")
+        .or([`name.ilike.${like}`, `category.ilike.${like}`, `muscle_group.ilike.${like}`].join(","))
+        .limit(limit),
+      supabase
+        .from("member_plans")
+        .select("id, name, description, training_style, goal")
+        .or([`name.ilike.${like}`, `description.ilike.${like}`, `training_style.ilike.${like}`, `goal.ilike.${like}`].join(","))
+        .limit(limit),
+      supabase
+        .from("recipes")
+        .select("id, title, category, body")
+        .or([`title.ilike.${like}`, `category.ilike.${like}`, `body.ilike.${like}`].join(","))
+        .limit(limit),
+      supabase
+        .from("broadcasts")
+        .select("id, title, body")
+        .or([`title.ilike.${like}`, `body.ilike.${like}`].join(","))
+        .limit(limit),
+      supabase
+        .from("purchase_records")
+        .select("id, terms_accepted_client_email, terms_accepted_client_name, offer_name, short_description")
+        .or([
+          `terms_accepted_client_email.ilike.${like}`,
+          `terms_accepted_client_name.ilike.${like}`,
+          `offer_name.ilike.${like}`,
+          `short_description.ilike.${like}`,
+        ].join(","))
         .limit(limit),
     ]);
 
@@ -157,6 +196,74 @@ export const globalSearchFn = createServerFn({ method: "GET" })
         label: t.name || "Program",
         sub: m?.snippet ?? t.training_focus ?? null,
         to: `/admin/program-library/${t.id}`,
+        matchedField: m?.field ?? null,
+      });
+    }
+
+    for (const e of exRes.data ?? []) {
+      const m = pickMatch(q, { name: e.name, category: e.category, muscle: e.muscle_group });
+      hits.push({
+        kind: "exercise",
+        id: e.id,
+        label: e.name || "Exercise",
+        sub: m?.snippet ?? e.category ?? e.muscle_group ?? null,
+        to: `/admin/exercises?focus=${e.id}`,
+        matchedField: m?.field ?? null,
+      });
+    }
+
+    for (const p of planRes.data ?? []) {
+      const m = pickMatch(q, { name: p.name, description: p.description, style: p.training_style, goal: p.goal });
+      hits.push({
+        kind: "member_plan",
+        id: p.id,
+        label: p.name || "Member Plan",
+        sub: m?.snippet ?? p.description ?? p.training_style ?? null,
+        to: `/admin/member-plans/${p.id}`,
+        matchedField: m?.field ?? null,
+      });
+    }
+
+    for (const r of recipeRes.data ?? []) {
+      const m = pickMatch(q, { title: r.title, category: r.category });
+      hits.push({
+        kind: "recipe",
+        id: r.id,
+        label: r.title || "Recipe",
+        sub: m?.snippet ?? r.category ?? null,
+        to: `/admin/recipes?focus=${r.id}`,
+        matchedField: m?.field ?? null,
+      });
+    }
+
+    for (const b of bcastRes.data ?? []) {
+      const m = pickMatch(q, { title: b.title, body: b.body });
+      hits.push({
+        kind: "broadcast",
+        id: b.id,
+        label: b.title || "Broadcast",
+        sub: m?.snippet ?? null,
+        to: `/admin/broadcasts/${b.id}`,
+        matchedField: m?.field ?? null,
+      });
+    }
+
+    for (const p of purchaseRes.data ?? []) {
+      const m = pickMatch(q, {
+        email: p.terms_accepted_client_email,
+        name: p.terms_accepted_client_name,
+        offer: p.offer_name,
+        description: p.short_description,
+      });
+      const sub = [p.terms_accepted_client_name || p.terms_accepted_client_email, p.offer_name]
+        .filter(Boolean)
+        .join(" · ");
+      hits.push({
+        kind: "purchase",
+        id: p.id,
+        label: p.offer_name || p.terms_accepted_client_name || p.terms_accepted_client_email || "Purchase",
+        sub: m?.snippet ?? sub ?? null,
+        to: `/admin/purchases/${p.id}`,
         matchedField: m?.field ?? null,
       });
     }

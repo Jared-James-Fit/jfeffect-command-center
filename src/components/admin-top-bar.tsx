@@ -112,6 +112,14 @@ export function AdminTopBar({ showDashboardMode = true }: { showDashboardMode?: 
           <span>Search…</span>
           <kbd className="rounded border border-border bg-background px-1 py-0.5 font-mono text-[9px] text-muted-foreground">⌘K</kbd>
         </button>
+        <button
+          type="button"
+          onClick={() => window.dispatchEvent(new CustomEvent("open-command-palette"))}
+          className="md:hidden inline-flex h-8 w-8 items-center justify-center rounded-md border border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground"
+          aria-label="Open global search"
+        >
+          <Search className="h-4 w-4" />
+        </button>
         <div className="hidden items-center gap-1.5 text-xs font-medium text-muted-foreground sm:flex">
           <ArrowRightLeft className={cn("h-3.5 w-3.5", isMemberView ? "text-emerald-600" : "text-primary")} />
           <span className={isMemberView ? "text-emerald-900 dark:text-emerald-100" : "text-foreground"}>

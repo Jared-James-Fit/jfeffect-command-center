@@ -13,7 +13,6 @@ import { useKeyboardOpen } from "@/hooks/use-keyboard-open";
 import { UserAvatar } from "@/components/user-avatar";
 import { SettingsMenu } from "@/components/settings-menu";
 import { listTemplates } from "@/lib/pl-programs";
-import { globalSearchFn, type GlobalSearchHit } from "@/lib/global-search.functions";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -22,13 +21,15 @@ import {
   Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
 } from "@/components/ui/tooltip";
 import {
-  CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList,
+  CommandEmpty, CommandGroup, CommandItem,
 } from "@/components/ui/command";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useSidebarPins, MAX_PINS, type PinScope } from "@/lib/sidebar-pins";
 import { toast } from "sonner";
+import { CommandPalette } from "@/components/command-palette";
+import type { AdminRole } from "@/lib/admin-route-registry";
 
 export interface NavItem {
   to: string;
@@ -152,7 +153,7 @@ function useCollapsedSections() {
 
 export function AppShell({ items, bottomItems: customBottomItems, title, children }: { items: NavItem[]; bottomItems?: NavItem[]; title: string; children: ReactNode }) {
   useKeyboardOpen();
-  const { signOut, user } = useAuth();
+  const { signOut, user, role } = useAuth();
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (r) => r.location.pathname });
   const navBadges = useClientNavBadges();
@@ -810,47 +811,12 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
         </SheetContent>
       </Sheet>
 
-      {/* Command palette — Workout Library search (⌘K / Ctrl+K) */}
-      <CommandDialog open={paletteOpen} onOpenChange={setPaletteOpen}>
-        <CommandInput
-          autoFocus
-          value={paletteQuery}
-          onValueChange={setPaletteQuery}
-          placeholder="Search clients, coaches, accounts, programs…"
-        />
-        <CommandList>
-          <GlobalSearchResults
-            query={debouncedPaletteQuery}
-            onPick={(hit) => {
-              setPaletteOpen(false);
-              try { window.sessionStorage.setItem("gh:term", debouncedPaletteQuery); } catch {}
-              navigate({
-                to: hit.to,
-                search: { highlight: debouncedPaletteQuery } as any,
-              } as any);
-            }}
-          />
-          <WorkoutLibraryResults
-            query={debouncedPaletteQuery}
-            onPick={(tpl) => {
-              setPaletteOpen(false);
-              if (tpl.id === "__library__") {
-                navigate({ to: "/admin/program-library" });
-              } else {
-                navigate({ to: "/admin/program-library/$templateId", params: { templateId: tpl.id } });
-              }
-            }}
-          />
-          <CommandGroup heading="Actions">
-            <CommandItem onSelect={() => { setPaletteOpen(false); handleSignOut(); }}>
-              <LogOut className="mr-2 h-4 w-4" /> Sign out
-            </CommandItem>
-            <CommandItem onSelect={() => { setPaletteOpen(false); cycleMode(); }}>
-              <SettingsIcon className="mr-2 h-4 w-4" /> Toggle sidebar density
-            </CommandItem>
-          </CommandGroup>
-        </CommandList>
-      </CommandDialog>
+      {/* Global Command Palette — ⌘K / Ctrl+K (mobile: full-screen sheet) */}
+      <CommandPalette
+        open={paletteOpen}
+        onOpenChange={setPaletteOpen}
+        role={(role as AdminRole | null) ?? null}
+      />
       <ClientPovQuickPicker />
     </div>
     </TooltipProvider>
@@ -966,72 +932,6 @@ function WorkoutLibraryResults({
           <BookOpen className="mr-2 h-4 w-4" /> Open full workout library
         </CommandItem>
       </CommandGroup>
-    </>
-  );
-}
-
-const KIND_META: Record<GlobalSearchHit["kind"], { heading: string; icon: any }> = {
-  client: { heading: "Clients", icon: Users },
-  coach: { heading: "Coaches", icon: UserCog },
-  account: { heading: "Accounts", icon: IdCard },
-  program: { heading: "Programs", icon: BookOpen },
-};
-
-function GlobalSearchResults({
-  query,
-  onPick,
-}: {
-  query: string;
-  onPick: (hit: GlobalSearchHit) => void;
-}) {
-  const runSearch = useServerFn(globalSearchFn);
-  const enabled = query.trim().length >= 2;
-  const { data: hits = [], isLoading } = useQuery({
-    queryKey: ["global-search", query],
-    queryFn: () => runSearch({ data: { q: query, limit: 8 } } as any) as Promise<GlobalSearchHit[]>,
-    enabled,
-    staleTime: 15_000,
-  });
-
-  if (!enabled) return null;
-  if (isLoading) return <CommandEmpty>Searching…</CommandEmpty>;
-  if (!hits.length) return null;
-
-  const byKind = new Map<GlobalSearchHit["kind"], GlobalSearchHit[]>();
-  for (const h of hits) {
-    const arr = byKind.get(h.kind) ?? [];
-    arr.push(h);
-    byKind.set(h.kind, arr);
-  }
-
-  return (
-    <>
-      {(Object.keys(KIND_META) as GlobalSearchHit["kind"][]).map((kind) => {
-        const rows = byKind.get(kind);
-        if (!rows?.length) return null;
-        const { heading, icon: Icon } = KIND_META[kind];
-        return (
-          <CommandGroup key={kind} heading={heading}>
-            {rows.map((hit) => (
-              <CommandItem
-                key={`${kind}-${hit.id}`}
-                value={`${heading} ${hit.label} ${hit.sub ?? ""} ${hit.id}`}
-                onSelect={() => onPick(hit)}
-              >
-                <Icon className="mr-2 h-4 w-4 shrink-0 text-primary" />
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-semibold">{hit.label}</div>
-                  {hit.sub && (
-                    <div className="truncate text-[11px] text-muted-foreground">
-                      {hit.matchedField ? `${hit.matchedField}: ` : ""}{hit.sub}
-                    </div>
-                  )}
-                </div>
-              </CommandItem>
-            ))}
-          </CommandGroup>
-        );
-      })}
     </>
   );
 }
