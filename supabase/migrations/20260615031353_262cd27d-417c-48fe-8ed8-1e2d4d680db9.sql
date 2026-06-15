@@ -1,0 +1,1 @@
+ALTER TABLE public.pl_templates ADD COLUMN IF NOT EXISTS description text;
