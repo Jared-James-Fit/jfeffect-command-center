@@ -15,7 +15,7 @@ import {
   getTemplate, updateTemplate, summarizeTemplatePayload, TIME_PROFILES,
   estimateDayMinutes, durationRange, PERCENTAGE_BASES, type TrainingStyle,
 } from "@/lib/pl-programs";
-import { ExerciseLibraryPanel, type ExerciseRef, DND_EXERCISE, readDrop, exerciseAccent, EXERCISE_CARD_COLORS, HighlightedText } from "@/components/program-builder";
+import { ExerciseLibraryPanel, type ExerciseRef, DND_EXERCISE, readDrop, exerciseAccent, EXERCISE_CARD_COLORS, HighlightedText, usePbDragging, beginPbDrag, endPbDrag } from "@/components/program-builder";
 import { derivePurposeLabels, defaultRestSeconds, effectiveRestSeconds, PURPOSE_LABEL_OPTIONS, resolveCategory, purposeLabelBadgeClass } from "@/lib/exercise-metadata";
 import { ProgramBuilderShortcutsButton } from "@/components/program-builder-shortcuts";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -1557,6 +1557,7 @@ function DayEditor({ day, setDay, exercises, compact }: { day: any; setDay: (d: 
   const [dragOver, setDragOver] = useState(false);
   const [dragRowIdx, setDragRowIdx] = useState<number | null>(null);
   const [dropTargetIdx, setDropTargetIdx] = useState<number | null>(null);
+  const pbDragging = usePbDragging();
   const clip = useClip();
   const addRow = () => setDay({
     ...day,
@@ -1604,8 +1605,9 @@ function DayEditor({ day, setDay, exercises, compact }: { day: any; setDay: (d: 
   return (
     <div
       className={cn(
-        "space-y-3 rounded-lg bg-builder-canvas p-3 sm:p-4 ring-1 ring-builder-card-border/40 transition-colors",
-        dragOver && "ring-2 ring-primary ring-offset-1 ring-offset-background bg-primary/5",
+        "relative space-y-3 rounded-lg bg-builder-canvas p-3 sm:p-4 ring-1 ring-builder-card-border/40 transition-all",
+        pbDragging === "exercise" && !dragOver && "ring-2 ring-dashed ring-primary/40",
+        dragOver && "ring-4 ring-primary ring-offset-2 ring-offset-background bg-primary/10 shadow-[0_0_0_4px_hsl(var(--primary)/0.15)]",
       )}
       onDragOver={(e) => {
         if (Array.from(e.dataTransfer.types).includes(DND_EXERCISE)) {
@@ -1626,6 +1628,11 @@ function DayEditor({ day, setDay, exercises, compact }: { day: any; setDay: (d: 
         }
       }}
     >
+      {dragOver && (
+        <div className="pointer-events-none absolute -top-3 left-1/2 z-20 -translate-x-1/2 rounded-full bg-primary px-3 py-1 text-[11px] font-semibold text-primary-foreground shadow-lg">
+          Drop to add to this day
+        </div>
+      )}
       <div className="flex items-center justify-between text-[11px] text-muted-foreground">
         <span className="inline-flex items-center gap-1"><Clock className="h-3 w-3" /> Est {durationRange(dayMin)}</span>
         <div className="flex items-center gap-1">
@@ -1639,7 +1646,7 @@ function DayEditor({ day, setDay, exercises, compact }: { day: any; setDay: (d: 
       </div>
       {rows.length === 0 ? (
         <p className="rounded-md border border-dashed border-builder-card-border p-4 text-center text-xs text-muted-foreground">
-          {dragOver ? "Drop exercise here" : "Drag exercises from the library, or click + Row"}
+          {dragOver ? "Release to drop here" : pbDragging === "exercise" ? "Drop the exercise anywhere in this card" : "Drag exercises from the library, or click + Row"}
         </p>
       ) : (
         <div className="space-y-3" data-pb-day>
@@ -1663,8 +1670,9 @@ function DayEditor({ day, setDay, exercises, compact }: { day: any; setDay: (d: 
                 e.dataTransfer.setData("application/x-pb-row-reorder", String(i));
                 e.dataTransfer.effectAllowed = "move";
                 setDragRowIdx(i);
+                beginPbDrag("row");
               }}
-              onDragEnd={() => { setDragRowIdx(null); setDropTargetIdx(null); }}
+              onDragEnd={() => { setDragRowIdx(null); setDropTargetIdx(null); endPbDrag(); }}
               onDragOver={(e) => {
                 if (dragRowIdx == null) return;
                 e.preventDefault();
@@ -1682,11 +1690,13 @@ function DayEditor({ day, setDay, exercises, compact }: { day: any; setDay: (d: 
                 moveRow(dragRowIdx, target);
                 setDragRowIdx(null);
                 setDropTargetIdx(null);
+                endPbDrag();
               }}
               className={cn(
-                "cursor-grab active:cursor-grabbing",
-                dropTargetIdx === i && "border-t-2 border-t-primary",
-                dropTargetIdx === i + 1 && "border-b-2 border-b-primary",
+                "cursor-grab active:cursor-grabbing rounded-md transition-all",
+                dragRowIdx === i && "opacity-40 scale-[0.99]",
+                dropTargetIdx === i && "shadow-[0_-3px_0_0_hsl(var(--primary))]",
+                dropTargetIdx === i + 1 && "shadow-[0_3px_0_0_hsl(var(--primary))]",
               )}
             >
               <RowEditor
@@ -1701,8 +1711,9 @@ function DayEditor({ day, setDay, exercises, compact }: { day: any; setDay: (d: 
                   e.dataTransfer.setData("application/x-pb-row-reorder", String(i));
                   e.dataTransfer.effectAllowed = "move";
                   setDragRowIdx(i);
+                  beginPbDrag("row");
                 }}
-                onDragEndRow={() => { setDragRowIdx(null); setDropTargetIdx(null); }}
+                onDragEndRow={() => { setDragRowIdx(null); setDropTargetIdx(null); endPbDrag(); }}
                 isDragging={dragRowIdx === i}
                 exercises={exercises}
                 compact={compact !== false}
@@ -1740,6 +1751,8 @@ function InlineAddExerciseButton({
 }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
+  const [dropActive, setDropActive] = useState(false);
+  const pbDragging = usePbDragging();
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   const filtered = useMemo(() => {
@@ -1776,20 +1789,51 @@ function InlineAddExerciseButton({
           type="button"
           title={label}
           aria-label={label}
+          onDragOver={(e) => {
+            if (Array.from(e.dataTransfer.types).includes(DND_EXERCISE)) {
+              e.preventDefault();
+              e.stopPropagation();
+              e.dataTransfer.dropEffect = "copy";
+              if (!dropActive) setDropActive(true);
+            }
+          }}
+          onDragLeave={() => setDropActive(false)}
+          onDrop={(e) => {
+            const drop = readDrop(e);
+            setDropActive(false);
+            if (drop?.kind === "exercise") {
+              e.preventDefault();
+              e.stopPropagation();
+              onPick(drop.exerciseId);
+            }
+          }}
           className={cn(
-            "group/insert relative -my-1.5 flex h-3 w-full items-center justify-center",
-            "opacity-40 transition-opacity hover:opacity-100 focus:opacity-100",
+            "group/insert relative -my-1.5 flex w-full items-center justify-center transition-all",
+            dropActive ? "h-10 opacity-100" : pbDragging === "exercise" ? "h-6 opacity-100" : "h-3 opacity-40 hover:opacity-100 focus:opacity-100",
           )}
         >
           <span
             aria-hidden
-            className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-border/60 group-hover/insert:bg-primary/50"
+            className={cn(
+              "absolute inset-x-0 top-1/2 -translate-y-1/2 transition-all",
+              dropActive ? "h-1 rounded-full bg-primary shadow-[0_0_8px_hsl(var(--primary))]"
+                : pbDragging === "exercise" ? "h-0.5 bg-primary/60 rounded-full"
+                : "h-px bg-border/60 group-hover/insert:bg-primary/50",
+            )}
           />
+          {dropActive && (
+            <span className="pointer-events-none absolute left-1/2 -top-5 -translate-x-1/2 whitespace-nowrap rounded bg-primary px-2 py-0.5 text-[10px] font-semibold text-primary-foreground shadow">
+              Drop here
+            </span>
+          )}
           <span
             className={cn(
-              "relative z-10 inline-flex h-5 w-5 items-center justify-center rounded-full",
-              "border border-border bg-background text-muted-foreground shadow-sm",
-              "group-hover/insert:border-primary group-hover/insert:bg-primary group-hover/insert:text-primary-foreground",
+              "relative z-10 inline-flex items-center justify-center rounded-full border shadow-sm transition-all",
+              dropActive
+                ? "h-6 w-6 border-primary bg-primary text-primary-foreground scale-110"
+                : pbDragging === "exercise"
+                  ? "h-5 w-5 border-primary bg-background text-primary"
+                  : "h-5 w-5 border-border bg-background text-muted-foreground group-hover/insert:border-primary group-hover/insert:bg-primary group-hover/insert:text-primary-foreground",
             )}
           >
             <Plus className="h-3 w-3" />

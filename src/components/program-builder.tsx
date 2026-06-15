@@ -21,6 +21,41 @@ export function setDragExercise(e: React.DragEvent, exerciseId: string) {
   e.dataTransfer.setData(DND_EXERCISE, exerciseId);
   e.dataTransfer.effectAllowed = "copy";
 }
+
+// ---------------- Global drag state ----------------
+// While an exercise is being dragged from the library we mark <body> so any
+// component anywhere in the tree can light up as a drop target. Components
+// can also subscribe via `usePbDragging()` to re-render on start/end.
+
+const PB_DRAG_ATTR = "data-pb-dragging";
+const PB_DRAG_EVT = "pb:dragging-change";
+
+export function beginPbDrag(kind: "exercise" | "row") {
+  if (typeof document === "undefined") return;
+  document.body.setAttribute(PB_DRAG_ATTR, kind);
+  window.dispatchEvent(new CustomEvent(PB_DRAG_EVT, { detail: kind }));
+}
+export function endPbDrag() {
+  if (typeof document === "undefined") return;
+  document.body.removeAttribute(PB_DRAG_ATTR);
+  window.dispatchEvent(new CustomEvent(PB_DRAG_EVT, { detail: null }));
+}
+export function usePbDragging(): "exercise" | "row" | null {
+  const [v, setV] = useState<"exercise" | "row" | null>(() => {
+    if (typeof document === "undefined") return null;
+    return (document.body.getAttribute(PB_DRAG_ATTR) as any) || null;
+  });
+  useEffect(() => {
+    const onChange = (e: Event) => {
+      const detail = (e as CustomEvent).detail as "exercise" | "row" | null;
+      setV(detail ?? null);
+    };
+    window.addEventListener(PB_DRAG_EVT, onChange);
+    return () => window.removeEventListener(PB_DRAG_EVT, onChange);
+  }, []);
+  return v;
+}
+
 export function setDragRow(e: React.DragEvent, rowId: string, fromDayId: string) {
   e.dataTransfer.setData(DND_ROW, JSON.stringify({ rowId, fromDayId }));
   e.dataTransfer.effectAllowed = "move";
@@ -899,13 +934,25 @@ function ExerciseItem({
   query?: string;
 }) {
   const tagLine = [ex.muscle_group, ex.category].filter(Boolean).join(" · ");
+  const [dragging, setDragging] = useState(false);
   return (
     <div
       draggable
-      onDragStart={(e) => setDragExercise(e, ex.id)}
+      onDragStart={(e) => {
+        setDragExercise(e, ex.id);
+        setDragging(true);
+        beginPbDrag("exercise");
+      }}
+      onDragEnd={() => {
+        setDragging(false);
+        endPbDrag();
+      }}
       onDoubleClick={() => onPick?.(ex.id)}
       title="Drag into a day, click + to add to selected day, or double-click to add to first day"
-      className="group flex cursor-grab items-center gap-1 border-b border-border/50 px-2 py-1 hover:bg-secondary/50 active:cursor-grabbing"
+      className={cn(
+        "group flex cursor-grab items-center gap-1 border-b border-border/50 px-2 py-1 hover:bg-secondary/50 active:cursor-grabbing",
+        dragging && "opacity-40 ring-1 ring-primary/60 rounded",
+      )}
     >
       <GripVertical className="h-3 w-3 shrink-0 text-muted-foreground/60" />
       <div className="min-w-0 flex-1">
