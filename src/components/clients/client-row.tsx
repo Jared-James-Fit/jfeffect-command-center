@@ -4,7 +4,7 @@ import { UserAvatar } from "@/components/user-avatar";
 import { Button } from "@/components/ui/button";
 import {
   ChevronRight, MoreHorizontal, CalendarDays, Dumbbell,
-  Apple, HeartPulse, CheckCircle2, AlertCircle, Plus, Eye,
+  Apple, HeartPulse, CheckCircle2, AlertCircle, Plus, Eye, ArrowRight,
 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Progress } from "@/components/ui/progress";
