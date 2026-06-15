@@ -80,7 +80,7 @@ function MyPlans() {
       )}
         </TabsContent>
         <TabsContent value="library" className="space-y-3">
-          <LibraryTab />
+          <LibraryTab onEnrolled={refetch} />
         </TabsContent>
       </Tabs>
     </div>
