@@ -193,8 +193,8 @@ export function ProgramBuilderShortcutsButton({ className }: { className?: strin
         return;
       }
 
-      // Cmd/Ctrl + Delete/Backspace — clear search
-      if (mod && !isAlt && (e.key === "Backspace" || e.key === "Delete")) {
+      // Cmd/Ctrl + Shift + Z — clear / reset search
+      if (mod && !isAlt && e.shiftKey && (e.key === "z" || e.key === "Z")) {
         e.preventDefault();
         window.dispatchEvent(new CustomEvent("pb:clear-search"));
         return;
