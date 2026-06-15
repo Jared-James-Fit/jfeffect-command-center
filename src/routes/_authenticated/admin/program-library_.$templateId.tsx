@@ -1908,7 +1908,7 @@ function DayEditor({ day, setDay, exercises, compact, dayKey }: { day: any; setD
               )}
             >
               <RowEditor
-                row={r}
+                row={{ ...r, index_total: rows.length }}
                 setRow={(nr) => { const copy = [...rows]; copy[i] = nr; setDay({ ...day, rows: copy }); }}
                 onDelete={() => setDay({ ...day, rows: rows.filter((_: any, j: number) => j !== i) })}
                 canMoveUp={i > 0}
@@ -1927,6 +1927,7 @@ function DayEditor({ day, setDay, exercises, compact, dayKey }: { day: any; setD
                 compact={compact !== false}
                 purposeLabel={purposeLabels[i]}
                 dayKey={dayKey}
+                index={i}
               />
             </div>
             </Fragment>
