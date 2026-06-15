@@ -934,13 +934,25 @@ function ExerciseItem({
   query?: string;
 }) {
   const tagLine = [ex.muscle_group, ex.category].filter(Boolean).join(" · ");
+  const [dragging, setDragging] = useState(false);
   return (
     <div
       draggable
-      onDragStart={(e) => setDragExercise(e, ex.id)}
+      onDragStart={(e) => {
+        setDragExercise(e, ex.id);
+        setDragging(true);
+        beginPbDrag("exercise");
+      }}
+      onDragEnd={() => {
+        setDragging(false);
+        endPbDrag();
+      }}
       onDoubleClick={() => onPick?.(ex.id)}
       title="Drag into a day, click + to add to selected day, or double-click to add to first day"
-      className="group flex cursor-grab items-center gap-1 border-b border-border/50 px-2 py-1 hover:bg-secondary/50 active:cursor-grabbing"
+      className={cn(
+        "group flex cursor-grab items-center gap-1 border-b border-border/50 px-2 py-1 hover:bg-secondary/50 active:cursor-grabbing",
+        dragging && "opacity-40 ring-1 ring-primary/60 rounded",
+      )}
     >
       <GripVertical className="h-3 w-3 shrink-0 text-muted-foreground/60" />
       <div className="min-w-0 flex-1">
