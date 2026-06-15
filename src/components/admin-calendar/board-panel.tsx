@@ -34,10 +34,11 @@ export function AdminCalendarBoardPanel() {
     });
   }
 
-  const filters = useMemo(
-    () => ({ clientId, kinds, includeGoogle: includeGoogle && googleConnected }),
-    [clientId, kinds, includeGoogle, googleConnected],
-  );
+  const filters = useMemo(() => {
+    const k = new Set(kinds);
+    if (includeGoogle && googleConnected) k.add("google_event");
+    return { clientId, kinds: k, includeGoogle: includeGoogle && googleConnected };
+  }, [clientId, kinds, includeGoogle, googleConnected]);
   const { items, clients, isLoading } = useAdminCalendarSources(filters);
 
   function toggleKind(k: CalendarKind) {
