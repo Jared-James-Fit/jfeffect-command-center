@@ -223,6 +223,27 @@ function PortalHome() {
 
   // Build Action Centre items from existing data only.
   const actions: ActionItem[] = [];
+  if (goalsSetup?.update_requested_at) {
+    actions.push({
+      key: "goals-update-requested",
+      icon: Target,
+      tone: "primary",
+      title: "Update your Goals & Setup",
+      message: goalsSetup.update_request_message || "Your coach asked you to review your answers.",
+      to: "/portal/goals-setup",
+      chip: "Action",
+    });
+  } else if (!isGoalsSetupComplete(goalsSetup ?? null)) {
+    actions.push({
+      key: "goals-incomplete",
+      icon: Target,
+      tone: "warning",
+      title: "Goals & Setup incomplete",
+      message: "Spend ~2 minutes so your coach can build the right plan for you.",
+      to: "/portal/goals-setup",
+      chip: "Setup",
+    });
+  }
   if (billingNeedsAction) {
     actions.push({
       key: `billing-${primaryPurchase.id}`,
