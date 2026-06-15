@@ -58,7 +58,15 @@ export function loadBarLayout(scope: BarScope): BarLayout | null {
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     if (!parsed || !Array.isArray(parsed.slots)) return null;
-    return parsed as BarLayout;
+    const slots = (parsed.slots as unknown[])
+      .filter((s): s is BarSlot => !!s && typeof (s as BarSlot).to === "string")
+      .map((s) => ({
+        ...s,
+        children: Array.isArray(s.children)
+          ? s.children.filter((c): c is string => typeof c === "string")
+          : undefined,
+      }));
+    return { slots };
   } catch {
     return null;
   }
