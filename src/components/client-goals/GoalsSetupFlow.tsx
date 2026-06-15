@@ -293,15 +293,44 @@ function ExperienceStep({ value, setField }: StepProps) {
 }
 
 const ALL_OF_IT = "All of it";
-const REAL_EQUIPMENT = EQUIPMENT_OPTIONS.filter((o) => o !== ALL_OF_IT);
+const OTHER = "Other";
+const OTHER_PREFIX = "Other: ";
+// "Real" equipment excludes the meta chips ("All of it" and "Other"),
+// so selecting "All of it" doesn't toggle the custom-text Other chip.
+const REAL_EQUIPMENT = EQUIPMENT_OPTIONS.filter(
+  (o) => o !== ALL_OF_IT && o !== OTHER,
+);
+
+function getOtherText(equipment: string[] | undefined): string {
+  const entry = (equipment ?? []).find((x) => x.startsWith(OTHER_PREFIX));
+  return entry ? entry.slice(OTHER_PREFIX.length) : "";
+}
+
+function hasOther(equipment: string[] | undefined): boolean {
+  return (equipment ?? []).some((x) => x === OTHER || x.startsWith(OTHER_PREFIX));
+}
+
+function setOtherText(equipment: string[] | undefined, text: string): string[] {
+  const base = (equipment ?? []).filter((x) => x !== OTHER && !x.startsWith(OTHER_PREFIX));
+  const trimmed = text.trim();
+  base.push(trimmed ? `${OTHER_PREFIX}${trimmed}` : OTHER);
+  return base;
+}
 
 function equipmentDisplayValue(equipment: string[] | undefined): string[] {
   const eq = equipment ?? [];
-  const hasAllReal = REAL_EQUIPMENT.every((o) => eq.includes(o));
-  if (hasAllReal && eq.length === REAL_EQUIPMENT.length) {
-    return [...eq, ALL_OF_IT];
+  const displayed: string[] = eq.filter(
+    (x) => x !== OTHER && !x.startsWith(OTHER_PREFIX),
+  );
+  if (hasOther(eq)) displayed.push(OTHER);
+  const realSelected = displayed.filter((x) => x !== OTHER);
+  const hasAllReal =
+    REAL_EQUIPMENT.every((o) => realSelected.includes(o)) &&
+    realSelected.length === REAL_EQUIPMENT.length;
+  if (hasAllReal) {
+    return [...displayed, ALL_OF_IT];
   }
-  return eq;
+  return displayed;
 }
 
 function handleEquipmentChange(
@@ -309,18 +338,35 @@ function handleEquipmentChange(
   next: string[],
   onChange: (v: string[]) => void,
 ) {
-  const hadAll = (prev ?? []).includes(ALL_OF_IT);
+  const prevArr = prev ?? [];
+  const prevDisplay = equipmentDisplayValue(prevArr);
+  const hadAll = prevDisplay.includes(ALL_OF_IT);
   const hasAll = next.includes(ALL_OF_IT);
+  const hadOther = hasOther(prevArr);
+  const wantsOther = next.includes(OTHER);
+  const existingOtherText = getOtherText(prevArr);
 
   if (hasAll && !hadAll) {
-    // Selected "All of it" → select every real option
-    onChange([...REAL_EQUIPMENT]);
+    // Selected "All of it" → select every real option (preserve Other if set)
+    const base = [...REAL_EQUIPMENT];
+    if (hadOther) {
+      base.push(existingOtherText ? `${OTHER_PREFIX}${existingOtherText}` : OTHER);
+    }
+    onChange(base);
   } else if (!hasAll && hadAll) {
-    // Deselected "All of it" → clear everything
-    onChange([]);
+    // Deselected "All of it" → clear everything (preserve Other if set)
+    const base: string[] = [];
+    if (hadOther) {
+      base.push(existingOtherText ? `${OTHER_PREFIX}${existingOtherText}` : OTHER);
+    }
+    onChange(base);
   } else {
-    // Normal toggle — strip "All of it" if it was manually present
-    onChange(next.filter((x) => x !== ALL_OF_IT));
+    // Normal toggle — strip meta chips and re-apply Other state
+    const cleaned = next.filter((x) => x !== ALL_OF_IT && x !== OTHER);
+    if (wantsOther) {
+      cleaned.push(existingOtherText ? `${OTHER_PREFIX}${existingOtherText}` : OTHER);
+    }
+    onChange(cleaned);
   }
 }
 
