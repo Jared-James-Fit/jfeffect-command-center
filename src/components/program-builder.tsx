@@ -592,7 +592,7 @@ export function ExerciseLibraryPanel({
 }) {
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<string | null>(null);
-  const [favs, setFavs] = useState<Set<string>>(() => readFavs());
+  const { favs, toggle: toggleFav } = useFavoriteExercises();
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [quickAddOpen, setQuickAddOpen] = useState(false);
 
@@ -643,14 +643,6 @@ export function ExerciseLibraryPanel({
       window.removeEventListener("pb:close-search", close);
     };
   }, [collapsed, onToggleCollapse]);
-
-  const toggleFav = (id: string) => {
-    const next = new Set(favs);
-    if (next.has(id)) next.delete(id);
-    else next.add(id);
-    setFavs(next);
-    writeFavs(next);
-  };
 
   const filtered = useMemo(() => {
     let list = exercises;
