@@ -153,6 +153,20 @@ export function ProgramAssignmentPlanner({ clientId, templateId, onDone }: Props
     staleTime: 5_000,
   });
 
+  // Workouts per week (max across all selected weeks) — used to flag
+  // mismatches between the program's training frequency and the client's
+  // saved availability.
+  const workoutsPerWeek = useMemo(() => {
+    const perWeek = new Map<string, number>();
+    for (const md of (preview?.placements ?? []) as any[]) {
+      const k = `${md.blockKey}::${md.weekIndex}`;
+      perWeek.set(k, (perWeek.get(k) ?? 0) + 1);
+    }
+    let max = 0;
+    for (const n of perWeek.values()) if (n > max) max = n;
+    return max;
+  }, [preview?.placements]);
+
   // Existing scheduled days for the calendar
   const { data: existingCal = [] as CalendarExistingDay[] } = useQuery({
     queryKey: ["planner-existing-cal", clientId],
