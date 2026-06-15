@@ -752,6 +752,11 @@ export function ClientBlockView({
           })}
         </div>
       )}
+      <ScheduleHistoryDrawer
+        clientId={block?.client_id ?? null}
+        open={historyOpen}
+        onOpenChange={setHistoryOpen}
+      />
     </section>
   );
 }
