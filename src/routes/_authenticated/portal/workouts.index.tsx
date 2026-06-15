@@ -1,48 +1,44 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { usePortalUserId } from "@/lib/client-impersonation";
-import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Activity, FileText, Dumbbell, Loader2, ExternalLink, Video, Calendar as CalendarIcon, History, ListChecks, Sun, Maximize2, Minimize2 } from "lucide-react";
-import { ScheduleHistoryDrawer } from "@/components/schedule/ScheduleHistoryDrawer";
-import { cn } from "@/lib/utils";
-import { getClientWorkouts } from "@/lib/pl-programs";
-import { derivePhase, type TrainingPhase } from "@/lib/training-phases";
+import { WorkoutsExperience } from "@/components/workouts/WorkoutsExperience";
 import { WorkoutArchiveSection } from "@/components/workout-archive-section";
-import { format, parseISO } from "date-fns";
-import { TrainingScheduleCard } from "@/components/training-schedule-card";
-import { BlockSummaryCard } from "@/components/block-summary-card";
-import { BlockWeekColumns } from "@/components/block-week-columns";
-import { ClientBlockView } from "@/components/client-block-view";
-import { SmartTodayCard } from "@/components/smart-today-card";
-import { FaqWidget } from "@/components/faq-widget";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { WorkoutListCard } from "@/components/workout-list-card";
-import { ClientPreviousBlocks } from "@/components/client-previous-blocks";
-import { WeekScheduleView } from "@/components/week-schedule-view";
-import { ProgressComparison } from "@/components/progress-comparison";
-import { TrainingAnalyticsPreviewCard } from "@/components/training-analytics-preview-card";
 
 export const Route = createFileRoute("/_authenticated/portal/workouts/")({
-  validateSearch: (s: Record<string, unknown>) => ({
-    // Canonical values: "block" | "overview". Legacy "day" maps to "overview".
-    view:
-      s.view === "block"
-        ? ("block" as const)
-        : s.view === "overview" || s.view === "day"
-        ? ("overview" as const)
-        : undefined,
-    week: typeof s.week === "string" ? parseInt(s.week, 10) || undefined
-      : typeof s.week === "number" ? s.week : undefined,
-    day: typeof s.day === "string" && s.day ? s.day : undefined,
-    block: typeof s.block === "string" && s.block ? s.block : undefined,
-  }),
   component: WorkoutsPage,
 });
+
+function WorkoutsPage() {
+  const portalUserId = usePortalUserId();
+  const { data: client, isLoading } = useQuery({
+    queryKey: ["my-client", portalUserId],
+    enabled: !!portalUserId,
+    queryFn: async () =>
+      (await supabase.from("clients").select("id, full_name").eq("user_id", portalUserId!).maybeSingle()).data,
+  });
+
+  if (isLoading || !client) {
+    return (
+      <div className="p-6">
+        <Card className="flex items-center gap-2 p-6 text-sm text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" /> Loading workouts…
+        </Card>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <WorkoutsExperience clientId={client.id} mode="self" />
+      <div className="px-4 pb-24 md:px-6">
+        <WorkoutArchiveSection clientId={client.id} mode="client" />
+      </div>
+    </>
+  );
+}
 
 function WorkoutsPage() {
   const search = Route.useSearch();
