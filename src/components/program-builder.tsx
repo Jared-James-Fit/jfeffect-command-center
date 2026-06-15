@@ -21,6 +21,41 @@ export function setDragExercise(e: React.DragEvent, exerciseId: string) {
   e.dataTransfer.setData(DND_EXERCISE, exerciseId);
   e.dataTransfer.effectAllowed = "copy";
 }
+
+// ---------------- Global drag state ----------------
+// While an exercise is being dragged from the library we mark <body> so any
+// component anywhere in the tree can light up as a drop target. Components
+// can also subscribe via `usePbDragging()` to re-render on start/end.
+
+const PB_DRAG_ATTR = "data-pb-dragging";
+const PB_DRAG_EVT = "pb:dragging-change";
+
+export function beginPbDrag(kind: "exercise" | "row") {
+  if (typeof document === "undefined") return;
+  document.body.setAttribute(PB_DRAG_ATTR, kind);
+  window.dispatchEvent(new CustomEvent(PB_DRAG_EVT, { detail: kind }));
+}
+export function endPbDrag() {
+  if (typeof document === "undefined") return;
+  document.body.removeAttribute(PB_DRAG_ATTR);
+  window.dispatchEvent(new CustomEvent(PB_DRAG_EVT, { detail: null }));
+}
+export function usePbDragging(): "exercise" | "row" | null {
+  const [v, setV] = useState<"exercise" | "row" | null>(() => {
+    if (typeof document === "undefined") return null;
+    return (document.body.getAttribute(PB_DRAG_ATTR) as any) || null;
+  });
+  useEffect(() => {
+    const onChange = (e: Event) => {
+      const detail = (e as CustomEvent).detail as "exercise" | "row" | null;
+      setV(detail ?? null);
+    };
+    window.addEventListener(PB_DRAG_EVT, onChange);
+    return () => window.removeEventListener(PB_DRAG_EVT, onChange);
+  }, []);
+  return v;
+}
+
 export function setDragRow(e: React.DragEvent, rowId: string, fromDayId: string) {
   e.dataTransfer.setData(DND_ROW, JSON.stringify({ rowId, fromDayId }));
   e.dataTransfer.effectAllowed = "move";
