@@ -61,9 +61,12 @@ export function TrainingScheduleCard({ client, editable = true, compact = false,
     }
     setSaving(true);
     const { data: auth } = await supabase.auth.getUser();
+    const sortedDays = [...committedDays].sort(
+      (a, b) => WEEK_DAYS.indexOf(a as WeekDay) - WEEK_DAYS.indexOf(b as WeekDay),
+    );
     const patch: any = {
       committed_training_frequency: Number(committedFreq),
-      committed_training_days: committedDays,
+      committed_training_days: sortedDays,
       training_schedule_completed: true,
       training_schedule_last_updated: new Date().toISOString(),
       training_schedule_updated_by: auth.user?.id ?? null,
@@ -78,7 +81,7 @@ export function TrainingScheduleCard({ client, editable = true, compact = false,
         action: "training_schedule_updated",
         details: {
           committed_training_frequency: Number(committedFreq),
-          committed_training_days: committedDays,
+          committed_training_days: sortedDays,
         },
       });
     }
