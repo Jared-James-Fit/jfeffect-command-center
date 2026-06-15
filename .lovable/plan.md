@@ -1,98 +1,64 @@
-
 ## Goal
+Rebuild `/portal` as a mobile-first, scannable home: one clear "what to do next" above the fold, large quick actions, compact action centre, slimmer training block + bodyweight, and move low-priority info to `More`. No backend, schema, route or permission changes — only presentation and IA.
 
-Rebuild `src/routes/_authenticated/admin/index.tsx` (800 lines today) into a compact command center. No new data sources, no duplicate dashboards — every section reuses an existing query / component / route. The page should reach its end within ~2–3 mobile screens.
+## Scope of changes (files)
 
-## Audit (what's there today)
+1. **`src/routes/_authenticated/portal/index.tsx`** — full UI rewrite of `PortalHome`. Reuse existing queries (client, forms, agreements, purchases, phases, coachUpdates, appointments) untouched. Replace layout with the new hierarchy below. Keep `ManualCheckInReviewModal`, `ClientActionRequestModal`, `UpcomingEventsPanel`, `HomeScreenSetupCard` rendering (they're gates/popups, not visible cards). Drop large inline `LogBodyweightCard`, "Your Coaching", "Billing & Subscription", oversized "Today/This Week" horizontal scroller, and the dashed appointment empty-state from the dashboard.
 
-Existing sections rendered on admin home:
-1. `PageHeader` + role/area switchers
-2. "Today's Command Center" big card + separate "Needs Attention" card
-3. 8-button Quick Actions grid (truncated labels: "Review Check-I…")
-4. 4× `StatCard` (Active Clients, New Clients, Needs Attention, Reviews Waiting)
-5. `TrainingIntelDashboardCard` (`getCoachIntel`)
-6. Training Deadlines (overlaps with #5)
-7. Reviews queues: check-ins, lift videos, nutrition
-8. Payments: overdue + full list of "clients without active product"
-9. `UpcomingAppointmentsCard`
-10. `UpcomingBirthdaysWidget`
-11. `UpcomingEventsPanel`
-12. Recent Clients (5)
-13. Quick Tools / External Links (Stripe, Drive, Sheets, Calendar, Fillout, SignNow)
-14. "Customize Floating Bar" card
-15. "Enter Client POV" big card
+2. **`src/components/client-pov-banner.tsx`** — compact 56px sticky banner: eye icon + "Viewing as {name}" + small "Client POV" chip + Exit button. Single row, no truncation of name, no oversized secondary row.
 
-Data hooks already in place: `getCoachIntel`, `listLiftVideos`, supabase queries for clients/payments/appointments/messages. **All reused as-is.**
+3. **`src/lib/admin-nav.ts`** — add `clientBottomNav` (Home, Workouts, Messages, Nutrition, More) that the portal shell uses as `bottomItems`. Keep `clientNav` intact for the side drawer (so nothing is removed). Rename the first item label to `Home`.
 
-## New page structure (mobile-first)
+4. **`src/routes/_authenticated/portal/route.tsx`** — pass the new `clientBottomNav` into `AppShell` via the existing `bottomItems` prop.
 
-```text
-┌────────────────────────────────────────┐
-│ Compact header                         │
-│  JF · [Coaching · Admin ▼] 🔍 🔔  👤  │
-├────────────────────────────────────────┤
-│ Today  ─ 3 priority items max          │
-│   • Nicole — program due in 4d [Update]│
-│   • Liam   — check-in waiting [Review] │
-│   • Maya   — payment overdue  [Send]   │
-│   View all priorities (6)              │
-├────────────────────────────────────────┤
-│ Quick Actions (5 tiles)                │
-│  [+Client] [Message] [Check-Ins]       │
-│  [Program] [More…]                     │
-├────────────────────────────────────────┤
-│ Numbers (2×2 grid, each tappable)      │
-│  Active 15 │ Needs Attn 4              │
-│  Reviews 3 │ Overdue 2                 │
-├────────────────────────────────────────┤
-│ Work Queues  [Reviews|Training|Pay|Onb]│
-│  3 items in active tab • View all      │
-├────────────────────────────────────────┤
-│ Upcoming  (next 3 appts)               │
-├────────────────────────────────────────┤
-│ More ▾  (collapsed by default)         │
-│  Birthdays · Recent Clients · Events   │
-│  Stripe · Drive · Sheets · Calendar    │
-│  Fillout · SignNow · Customize Nav     │
-│  View as Client                        │
-└────────────────────────────────────────┘
+5. **`src/routes/_authenticated/portal/account.tsx`** (light touch) — add a small "Account & Coaching" section header with rows linking to Coaching details, Billing/Purchases, Agreements, Notifications, Help. Only if the current account page lacks them; otherwise skip.
+
+6. **New: `src/components/portal/bodyweight-summary-card.tsx`** — compact summary (latest, 7d avg, weekly change, goal, sparkline) + "Log Weight" button that opens a bottom-sheet (Sheet from shadcn) wrapping the existing log form logic. Reuses `progress_metrics` query and `useBodyweightGoal`. Empty state = single "Log first weight" button, no big chart.
+
+7. **New: `src/components/portal/primary-action-card.tsx`** — derives today's #1 action from existing data (next workout via existing workout-today helpers, then overdue/due check-in, then unread coach message, then appointment today, else rest day). Large tappable card.
+
+8. **New: `src/components/portal/quick-actions-grid.tsx`** — 2-col grid: Workouts, Message Coach, Submit Check-In, Log Bodyweight (opens sheet), Upload Lift Video, Nutrition. Tap targets ≥56px.
+
+9. **New: `src/components/portal/action-centre.tsx`** — refactor of the existing `updates[]` array into a vertical list (no horizontal scroller). Rows with icon + title + due chip + chevron, sorted overdue→urgent→info. "All caught up" compact row when empty.
+
+10. **New: `src/components/portal/training-block-card.tsx`** — compact version of the existing active-phase card (chip + week X of Y + % + days remaining + progress bar + "View Program" button). Full card tappable.
+
+## New dashboard order (mobile)
+
+```
+[compact POV banner — admin impersonation only]
+[Greeting row: avatar · "Good morning, {first}" + bell badge]
+[Today's Primary Action card]
+[Quick Actions 2x3 grid]
+[Action Centre list — only if items, else compact "all caught up"]
+[Training Block card — only if activePhase]
+[Bodyweight Summary card]
+[Upcoming Appointment compact row — only if appointment exists]
+[Small secondary links: Purchases · Agreements · Account]
 ```
 
-## Implementation
+Bottom safe-area padding ≥ 96px so content never sits under the fixed bar.
 
-### Files
+## Data preservation
 
-- **Rewrite** `src/routes/_authenticated/admin/index.tsx` — composes the new sections; keeps the existing route ID and all current queries (moved into sub-components, not duplicated).
-- **New** `src/components/admin-home/today-card.tsx` — merges the old "Today's Command Center" + "Needs Attention" + dedupes Training Intelligence flags. Pulls from existing `getCoachIntel`, check-in queue, lift-video queue, overdue payments. Max 3 items, then "View all priorities (N)".
-- **New** `src/components/admin-home/quick-actions.tsx` — 5 primary tiles + "More Actions" bottom sheet (reuses Sheet primitive) containing the rest of the existing actions. Full short labels: "Check-Ins", "Lift Reviews", "Payment Link", "Broadcast", "Recipe".
-- **New** `src/components/admin-home/numbers-grid.tsx` — 4 compact `StatCard`s, each wrapped in `<Link>` to filtered routes (active clients, priority queue, reviews, overdue payments).
-- **New** `src/components/admin-home/work-queues.tsx` — Tabs: Reviews · Training · Payments · Onboarding. Each tab caps 3 rows + "View all". Payments tab shows "13 clients without active product" summary row, not the full list. Consolidates the previously separate Training Intelligence + Training Deadlines into one Training tab.
-- **New** `src/components/admin-home/upcoming-strip.tsx` — wraps existing `UpcomingAppointmentsCard` with a compact 3-item shell and "View Calendar" link; one-line empty state.
-- **New** `src/components/admin-home/more-drawer.tsx` — collapsible section containing existing `UpcomingBirthdaysWidget`, recent clients (max 3), `UpcomingEventsPanel`, external-tool rows, "Customize Navigation" link, "View as Client" button.
-- **New** `src/components/admin-home/area-role-switcher.tsx` — single compact `[Coaching · Admin ▾]` selector opening a sheet with Business area + View as. Replaces the persistent row of large pills. Uses the existing role/area state and routing — no permission changes.
+- All `useQuery` calls keep their existing keys, filters and shapes.
+- No mutations changed. Bodyweight insert path reuses the same `progress_metrics` insert as today's `LogBodyweightCard`.
+- Existing routes (`/portal/workouts`, `/portal/check-ins`, `/portal/messages`, etc.) untouched.
+- "Your Coaching" + "Billing & Subscription" + full Bodyweight history are still reachable: bodyweight via "View History" (`/portal/progress-metrics`), coaching/billing via `/portal/account` and `/portal/purchases`.
 
-### Behaviour & rules
+## Out of scope (explicit)
 
-- Empty states collapse to one-line rows with a check icon (no large dashed boxes).
-- Every section is wrapped in its own `<Suspense>` + lightweight `ErrorBoundary` so one failure doesn't blank the page.
-- Section caps enforced in code: priorities 3, reviews 3, training 3, appointments 3, recent clients 3, birthdays 2, payment issues 3.
-- Bottom padding: `pb-[max(env(safe-area-inset-bottom),5rem)]` so the bottom nav never overlaps the last card.
-- Desktop (`md:`) uses a 2-column layout: priorities + work queues left, numbers + upcoming + more right.
-- The "Customize Floating Bar" card moves into More → "Customize Navigation" (keeps the route).
-- "Enter Client POV" becomes a compact button in More (label: "View as Client"); shortcut also stays in the header sheet.
+- No schema migrations.
+- No edits to lift-review, check-in submission, workout entry, or auth flows.
+- Desktop layout: the new components are responsive (sm: grid spans, md: side-by-side for training+bodyweight); admin-only screens unchanged.
+- The full feature parity of the old inline `LogBodyweightCard` (range tabs, large chart, goal editor) stays available on `/portal/progress-metrics`; the dashboard only shows summary + log sheet.
 
-### What is NOT changing
+## Verification
 
-- No new database tables, RLS, or migrations.
-- No new server functions or queries — every section reuses the hooks already in `admin/index.tsx`.
-- All existing routes, permissions, role switching, business-area switching, notification counts, and bottom nav remain intact.
-- The analytics e1RM work from the previous turn is untouched.
+- `bunx tsc --noEmit` clean.
+- Manual smoke via Playwright at 375px width: greeting → primary action → quick actions visible without scroll; bottom sheet opens for Log Weight; POV banner ≤64px; no bottom-nav overlap.
 
-### Acceptance smoke tests
+## Risks / things to confirm
 
-- Screenshot at 375 px wide: page ends within ~3 viewports.
-- Each StatCard tap navigates to the filtered list.
-- "More Actions" sheet exposes every action currently on the home grid.
-- With zero priorities/reviews/appointments, page is still short (no giant empty cards).
-- Bottom nav doesn't cover the last row.
-
+- The "primary action — workout today" derivation: I'll reuse `src/lib/workout-today.ts` if it exposes the next scheduled day; otherwise fall back to "View this week's program" from the active phase. No new queries against workout tables beyond what's already cached.
+- Side drawer `clientNav` stays 18 items — only the **bottom** nav is reduced to 5. This satisfies "max 5 bottom items" without hiding any existing page.

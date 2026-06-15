@@ -1,33 +1,39 @@
-import React from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
 import { usePortalUserId } from "@/lib/client-impersonation";
-import { PageHeader } from "@/components/app-shell";
-import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { ClipboardCheck, CheckCircle2, ShieldAlert, MessageCircle, Mail, CheckCheck, CreditCard, AlertTriangle, Receipt, Dumbbell, Settings, ChevronRight } from "lucide-react";
-import { createCustomerPortalSession } from "@/lib/stripe-checkout.functions";
-import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
-import { derivePhase, displayTitle, toneClasses as phaseToneClasses, type TrainingPhase } from "@/lib/training-phases";
-import { format, parseISO } from "date-fns";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Bell, ClipboardCheck, ShieldAlert, MessageCircle, Mail, CheckCheck, AlertTriangle, Dumbbell, Settings, Receipt, FileSignature, Calendar as CalendarIcon } from "lucide-react";
+import type { TrainingPhase } from "@/lib/training-phases";
+import { derivePhase } from "@/lib/training-phases";
 import { toast } from "sonner";
-import { PowerlifterBadge } from "@/components/powerlifter-badge";
-import { ExternalLink } from "lucide-react";
-import { SocialIcons } from "@/components/social-icons";
-import { LogBodyweightCard } from "@/components/log-bodyweight-card";
 import type { WeightUnit } from "@/lib/progress-metrics";
 import { HomeScreenSetupCard } from "@/components/home-screen-setup-card";
 import { listFormsForClient } from "@/lib/native-forms";
 import { ManualCheckInReviewModal } from "@/components/manual-check-in-review-modal";
 import { ClientActionRequestModal } from "@/components/client-action-request-modal";
 import { UpcomingEventsPanel } from "@/components/events/upcoming-events-panel";
-import { UpcomingAppointmentsCard } from "@/components/appointments/upcoming-appointments-card";
+import { SmartTodayCard } from "@/components/smart-today-card";
+import { getClientWorkouts } from "@/lib/pl-programs";
+import { QuickActionsGrid } from "@/components/portal/quick-actions-grid";
+import { ActionCentre, type ActionItem } from "@/components/portal/action-centre";
+import { TrainingBlockCard } from "@/components/portal/training-block-card";
+import { BodyweightSummaryCard } from "@/components/portal/bodyweight-summary-card";
+import { useEffect, useRef, useState } from "react";
+import { listMyPortalAppointments } from "@/lib/appointments.functions";
+import { useServerFn } from "@tanstack/react-start";
+import { format, parseISO, isToday, isTomorrow } from "date-fns";
+import { forwardRef, useImperativeHandle } from "react";
 
 export const Route = createFileRoute("/_authenticated/portal/")({ component: PortalHome });
+
+function greeting() {
+  const h = new Date().getHours();
+  if (h < 12) return "Good morning";
+  if (h < 18) return "Good afternoon";
+  return "Good evening";
+}
 
 function PortalHome() {
   const { user } = useAuth();
@@ -162,6 +168,27 @@ function PortalHome() {
 
   const qc = useQueryClient();
 
+  // Workout items power the "Today's primary action" card via SmartTodayCard.
+  const { data: workoutItems = [] } = useQuery({
+    queryKey: ["my-workouts", client?.id],
+    enabled: !!client?.id,
+    queryFn: async () => {
+      const items = await getClientWorkouts(client!.id);
+      return (items as any[]).filter((it) => it.day?.id);
+    },
+  });
+
+  // Compact upcoming appointment (single, only if within ~14 days).
+  const fetchPortalAppointments = useServerFn(listMyPortalAppointments);
+  const { data: appts = [] } = useQuery({
+    queryKey: ["portal-next-appointment"],
+    queryFn: async () => {
+      const res: any = await fetchPortalAppointments();
+      return (res?.upcoming ?? []) as any[];
+    },
+  });
+  const nextAppointment: any = (appts as any[])[0] ?? null;
+
   const markAgreementComplete = async (id: string) => {
     const { error } = await supabase
       .from("agreements")
@@ -174,444 +201,301 @@ function PortalHome() {
 
   const firstName = (client?.full_name ?? user?.email?.split("@")[0] ?? "").split(" ")[0];
 
-  // Primary billing record — most recent non-cancelled
   const primaryPurchase = (purchases as any[]).find(
     (p) => !["Cancelled", "Expired", "Refunded"].includes(p.payment_status),
   ) ?? (purchases as any[])[0];
 
   const billingNeedsAction = !!primaryPurchase && ["Pending Payment", "Pending", "Overdue", "Failed", "Manual Payment Needed"].includes(primaryPurchase.payment_status);
-  const billingCancelled = !!primaryPurchase && ["Cancelled", "Expired"].includes(primaryPurchase.payment_status);
 
-  type UpdateCard = {
-    key: string;
-    icon: any;
-    tone: "warning" | "primary" | "success";
-    title: string;
-    message: string;
-    primary?: { label: string; onClick?: () => void; to?: string };
-    secondary?: { label: string; to: string };
-    status?: string;
-  };
-  const toneClasses: Record<UpdateCard["tone"], string> = {
-    warning: "border-warning/40 bg-warning/5",
-    primary: "border-primary/30 bg-primary/5",
-    success: "border-emerald-500/30 bg-emerald-500/5",
-  };
-  const iconToneClasses: Record<UpdateCard["tone"], string> = {
-    warning: "text-warning",
-    primary: "text-primary",
-    success: "text-emerald-500",
-  };
-
-  const updates: UpdateCard[] = [];
+  // Build Action Centre items from existing data only.
+  const actions: ActionItem[] = [];
   if (billingNeedsAction) {
-    updates.push({
+    actions.push({
       key: `billing-${primaryPurchase.id}`,
       icon: AlertTriangle,
       tone: "warning",
       title: "Payment needed",
-      message: "Payment needed to keep your coaching active.",
-      primary: primaryPurchase.stripe_payment_link
-        ? { label: "Complete Payment", onClick: () => window.open(primaryPurchase.stripe_payment_link, "_blank", "noopener,noreferrer") }
-        : { label: "Message Coach", to: "/portal/messages" },
-      secondary: primaryPurchase.stripe_payment_link ? { label: "Message Coach", to: "/portal/messages" } : undefined,
+      message: "Keep your coaching active.",
+      chip: "Action",
+      ...(primaryPurchase.stripe_payment_link
+        ? { href: primaryPurchase.stripe_payment_link }
+        : { to: "/portal/messages" }),
     });
   }
   if (client?.info_update_requested) {
-    updates.push({
+    actions.push({
       key: "info-update",
       icon: ShieldAlert,
       tone: "warning",
-      title: "Update Account Info",
+      title: "Update your account info",
       message: "Confirm your contact details are current.",
-      primary: { label: "Update", to: "/portal/account" },
+      to: "/portal/account",
+      chip: "Action",
     });
   }
   for (const a of outstandingAgreements as any[]) {
     if (a.client_marked_complete_at) {
-      updates.push({
+      actions.push({
         key: `agreement-${a.id}`,
         icon: CheckCheck,
         tone: "success",
         title: "Agreement marked complete",
         message: "Coach Jared will verify it.",
-        secondary: { label: "View", to: "/portal/agreements" },
-        status: "Awaiting verification",
+        to: "/portal/agreements",
+        chip: "Pending",
       });
     } else {
-      const hasLink = !!a.signnow_signing_link;
-      updates.push({
+      actions.push({
         key: `agreement-${a.id}`,
         icon: Mail,
         tone: "warning",
-        title: "Agreement needs signature",
-        message: hasLink
-          ? "Check your Gmail for a SignNow document from Coach Jared / JF Effect."
-          : "Please check your Gmail for the SignNow agreement or message Coach Jared if you cannot find it.",
-        primary: hasLink
-          ? { label: "Open Agreement", onClick: () => window.open(a.signnow_signing_link, "_blank", "noopener,noreferrer") }
-          : { label: "I completed it", onClick: () => markAgreementComplete(a.id) },
-        secondary: { label: "Open Agreements", to: "/portal/agreements" },
+        title: a.template_name ? `Sign: ${a.template_name}` : "Agreement needs signature",
+        message: a.signnow_signing_link
+          ? "Check your Gmail for the SignNow document."
+          : "Open Agreements to view or mark complete.",
+        chip: "Sign",
+        ...(a.signnow_signing_link ? { href: a.signnow_signing_link } : { to: "/portal/agreements" }),
       });
     }
   }
-
-  // Coach response cards — surface so it's obvious when coach has replied.
   const unreadMsgs = coachUpdates?.unreadMessages ?? [];
   if (unreadMsgs.length > 0) {
-    const latest = unreadMsgs[0];
-    const atts = (latest?.attachments ?? []) as any[];
-    const hasVoice = atts.some((a) => a?.type === "audio");
-    const hasMedia = atts.some((a) => a?.type === "image" || a?.type === "video");
-    const preview = hasVoice ? "🎙️ Voice message"
-      : hasMedia ? "📎 Photo / video"
-      : atts.length ? "📎 Attachment"
-      : (latest?.body || "New message");
-    updates.push({
+    actions.push({
       key: "coach-messages",
       icon: MessageCircle,
       tone: "primary",
-      title: unreadMsgs.length > 1 ? `${unreadMsgs.length} new from Coach Jared` : "New from Coach Jared",
-      message: preview,
-      primary: { label: "Open Chat", to: "/portal/messages" },
+      title: unreadMsgs.length > 1 ? `${unreadMsgs.length} new from Coach Jared` : "New message from Coach Jared",
+      message: (unreadMsgs[0]?.body || "Open your messages").toString().slice(0, 120),
+      to: "/portal/messages",
+      chip: "New",
     });
   }
   for (const p of (coachUpdates?.liftPings ?? []).slice(0, 5)) {
-    updates.push({
+    actions.push({
       key: `lift-${p.videoId}`,
       icon: Dumbbell,
       tone: "primary",
       title: `Coach feedback on ${p.exercise}`,
       message: p.preview,
-      primary: { label: "Open Lift Review", to: "/portal/lift-videos" },
+      to: "/portal/lift-videos",
+      chip: "New",
     });
   }
   for (const r of coachUpdates?.checkInReviews ?? []) {
-    updates.push({
+    actions.push({
       key: `review-${r.id}`,
       icon: ClipboardCheck,
       tone: "primary",
-      title: r.title || "New Check-In Review",
+      title: r.title || "New Check-In review",
       message: r.message || "Open to read your coach's review.",
-      primary: {
-        label: "Open Review",
-        onClick: async () => {
-          await (supabase.from("manual_check_in_reviews") as any)
-            .update({ read_at: new Date().toISOString() })
-            .eq("id", r.id);
-          qc.invalidateQueries({ queryKey: ["portal-coach-updates", client?.id] });
-          qc.invalidateQueries({ queryKey: ["unread-counts"] });
-        },
+      chip: "New",
+      onClick: async () => {
+        await (supabase.from("manual_check_in_reviews") as any)
+          .update({ read_at: new Date().toISOString() })
+          .eq("id", r.id);
+        qc.invalidateQueries({ queryKey: ["portal-coach-updates", client?.id] });
+        qc.invalidateQueries({ queryKey: ["unread-counts"] });
       },
     });
   }
+  // Surface the nearest due check-in form into Action Centre.
+  const dueForm = (assignedForms ?? [])[0];
+  if (dueForm) {
+    actions.push({
+      key: `form-${dueForm.id}`,
+      icon: ClipboardCheck,
+      tone: "primary",
+      title: dueForm.title,
+      message: dueForm.kind === "external" ? "External check-in form" : "Tap to fill in",
+      to: "/portal/check-ins/$formId",
+      chip: "Due",
+    } as any);
+  }
+
+  // Bottom-sheet trigger for Log Bodyweight from the quick-actions grid.
+  const bodyweightRef = useRef<{ open: () => void }>(null);
 
   return (
     <>
-      <PageHeader
-        title={
-          <>
-            <span>{`Welcome${firstName ? `, ${firstName}` : ""}`}</span>
-            {client?.is_powerlifter && client?.powerlifting_visible_to_client && (
-              <PowerlifterBadge label={client.powerlifter_badge_label} size="sm" />
-            )}
-            <SocialIcons client={client} size="sm" />
-          </>
-        }
-        subtitle="Your private coaching dashboard."
-      />
-      <div className="space-y-6 p-6 md:p-8">
-        {client?.id && <ManualCheckInReviewModal clientId={client.id} />}
-        {client?.id && <ClientActionRequestModal clientId={client.id} />}
-        <UpcomingEventsPanel audience="client" />
-        <UpcomingAppointmentsCard mode="portal" />
-        {client?.id && (
-          <HomeScreenSetupCard
-            clientId={client.id}
-            status={(client as any).home_screen_setup_status}
-            remindAfter={(client as any).home_screen_setup_remind_after}
+      {/* Background gates / popups — keep wired exactly as before. */}
+      {client?.id && <ManualCheckInReviewModal clientId={client.id} />}
+      {client?.id && <ClientActionRequestModal clientId={client.id} />}
+      {client?.id && (
+        <HomeScreenSetupCard
+          clientId={client.id}
+          status={(client as any).home_screen_setup_status}
+          remindAfter={(client as any).home_screen_setup_remind_after}
+        />
+      )}
+
+      <div className="mx-auto w-full max-w-2xl space-y-5 px-4 pb-24 pt-4 md:max-w-5xl md:px-8 md:pt-6">
+        {/* 1 — Compact greeting header */}
+        <GreetingHeader
+          firstName={firstName}
+          avatarUrl={(client as any)?.profile_picture_url ?? null}
+          unreadCount={unreadMsgs.length}
+        />
+
+        {/* 2 — Today's primary action */}
+        {client && workoutItems.length > 0 ? (
+          <SmartTodayCard items={workoutItems as any[]} clientId={client.id} />
+        ) : !client ? (
+          <NoProfileCard />
+        ) : null}
+
+        {/* 3 — Quick Actions */}
+        {client && (
+          <QuickActionsGrid
+            messageBadge={unreadMsgs.length}
+            checkInBadge={(assignedForms as any[])?.length || undefined}
+            onLogWeight={() => bodyweightRef.current?.open()}
           />
         )}
-        {/* Today / This Week — alerts and action items */}
-        <section aria-label="Today / This Week">
-          <div className="mb-2 flex items-center justify-between px-1">
-            <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Today / This Week</h3>
-            <span className="text-[10px] text-muted-foreground">{updates.length}</span>
-          </div>
-          {updates.length > 0 ? (
-            <div className="-mx-6 md:-mx-8 px-6 md:px-8 overflow-x-auto snap-x snap-mandatory scrollbar-none">
-              <div className="flex gap-3 pb-2">
-                {updates.map((u) => (
-                  <Card
-                    key={u.key}
-                    className={`w-[260px] shrink-0 snap-start p-4 ${toneClasses[u.tone]}`}
-                  >
-                    <div className="flex items-start gap-2">
-                      <u.icon className={`h-5 w-5 mt-0.5 ${iconToneClasses[u.tone]}`} />
-                      <div className="min-w-0 flex-1">
-                        <div className="text-sm font-bold truncate">{u.title}</div>
-                        <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{u.message}</p>
-                      </div>
-                    </div>
-                    <div className="mt-3 flex items-center gap-2">
-                      {u.primary && (
-                        u.primary.to ? (
-                          <Link to={u.primary.to} className="flex-1">
-                            <Button size="sm" className="w-full bg-gradient-primary uppercase font-bold text-xs">{u.primary.label}</Button>
-                          </Link>
-                        ) : (
-                          <Button size="sm" onClick={u.primary.onClick} className="flex-1 bg-gradient-primary uppercase font-bold text-xs">{u.primary.label}</Button>
-                        )
-                      )}
-                      {u.secondary && (
-                        <Link to={u.secondary.to} className={u.primary ? "" : "flex-1"}>
-                          <Button size="sm" variant="outline" className={`text-xs ${u.primary ? "" : "w-full"}`}>{u.secondary.label}</Button>
-                        </Link>
-                      )}
-                    </div>
-                    {u.status && (
-                      <div className="mt-2 text-[10px] uppercase tracking-wider text-muted-foreground">{u.status}</div>
-                    )}
-                  </Card>
-                ))}
-              </div>
-            </div>
-          ) : (
-            <Card className="border-border/60 bg-card/60 p-5">
-              <div className="flex items-start gap-3">
-                <CheckCircle2 className="h-5 w-5 mt-0.5 text-muted-foreground" />
-                <div>
-                  <div className="text-sm font-semibold text-foreground">No updates right now</div>
-                  <p className="text-xs text-muted-foreground mt-0.5">You're all caught up.</p>
-                  <p className="text-[11px] text-muted-foreground/70 mt-1.5">New check-ins, agreements, coach feedback, billing reminders, and updates will show here.</p>
-                </div>
-              </div>
-            </Card>
-          )}
-        </section>
 
-        {activePhase && (() => {
-          const d = derivePhase(activePhase);
-          return (
-            <Card className="border-border bg-card p-6">
-              <h2 className="mb-4 flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-muted-foreground">
-                <Dumbbell className="h-4 w-4" /> Current Training Phase
-              </h2>
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-lg font-bold">{displayTitle(activePhase)}</span>
-                <Badge variant="outline" className={phaseToneClasses(d.tone)}>{d.label}</Badge>
-                <Badge variant="outline" className="text-[10px]">{activePhase.phase_type}</Badge>
-              </div>
-              <div className="mt-1 text-xs text-muted-foreground">
-                {format(parseISO(activePhase.start_date), "MMM d, yyyy")} → {format(parseISO(activePhase.end_date), "MMM d, yyyy")}
-              </div>
-              <div className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-4">
-                <PhaseItem label="Week" value={`${d.currentWeek} / ${d.totalWeeks}`} />
-                <PhaseItem label="Days remaining" value={d.daysRemaining < 0 ? `${Math.abs(d.daysRemaining)}d over` : `${d.daysRemaining}d`} />
-                <PhaseItem label="Weeks left" value={String(d.weeksRemaining)} />
-                <PhaseItem label="Progress" value={`${d.percentComplete}%`} />
-              </div>
-              <Progress value={d.percentComplete} className="mt-3 h-2" />
-              {activePhase.training_goal && (
-                <p className="mt-4 text-sm"><span className="text-muted-foreground">Goal: </span>{activePhase.training_goal}</p>
-              )}
-              {activePhase.notes && (
-                <div className="mt-3 rounded-md border border-border bg-secondary/30 p-3 text-sm whitespace-pre-wrap">{activePhase.notes}</div>
-              )}
-            </Card>
-          );
-        })()}
+        {/* 4 — Action Centre */}
+        <ActionCentre items={actions} />
 
-        {client?.powerlifting_visible_to_client && (client.is_powerlifter || client.openpowerlifting_url) && (
-          <Card className="border-border bg-card p-6 space-y-3">
-            <div className="flex items-center justify-between gap-3">
-              <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Powerlifting Athlete</h3>
-              {client.is_powerlifter && <PowerlifterBadge label={client.powerlifter_badge_label} size="xs" />}
-            </div>
-            {client.openpowerlifting_url ? (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => window.open(client.openpowerlifting_url ?? "", "_blank", "noopener,noreferrer")}
-              >
-                <ExternalLink className="mr-1.5 h-3.5 w-3.5" /> Open my OpenPowerlifting profile
-              </Button>
-            ) : (
-              <p className="text-xs text-muted-foreground">No OpenPowerlifting link yet. Message Coach Jared to add one.</p>
-            )}
-          </Card>
-        )}
+        {/* 5 — Current Training Block */}
+        {activePhase && <TrainingBlockCard phase={activePhase} />}
 
-        {!client && (
-          <Card className="border-primary/30 bg-primary/5 p-6">
-            <p className="text-sm">Your coach hasn't set up your client profile yet. Once they do, you'll see your program, check-in form and resources here.</p>
-          </Card>
-        )}
-
+        {/* 6 — Bodyweight summary */}
         {client && (
-          <div className="grid gap-4 md:grid-cols-2">
-            <Card className="border-primary/30 bg-primary/5 p-6 space-y-4 md:col-span-2">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <ClipboardCheck className="h-5 w-5 text-primary" />
-                  <h2 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">Check-Ins & Forms</h2>
-                </div>
-                <Link to="/portal/check-ins">
-                  <Button size="sm" variant="outline">View All</Button>
-                </Link>
-              </div>
-              {assignedForms.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No check-ins assigned yet.</p>
-              ) : (
-                <div className="grid gap-2 md:grid-cols-2">
-                  {assignedForms.slice(0, 4).map((form) => (
-                    <Link key={form.id} to="/portal/check-ins/$formId" params={{ formId: form.id }}>
-                      <div className="flex min-h-[54px] items-center justify-between gap-3 rounded-md border border-border bg-card px-3 py-2 transition hover:border-primary">
-                        <div className="min-w-0">
-                          <div className="truncate text-sm font-bold">{form.title}</div>
-                          <div className="text-[11px] text-muted-foreground">{form.kind === "external" ? "External form" : "Native form"}</div>
-                        </div>
-                        <ChevronRight className="h-4 w-4 shrink-0 text-primary" />
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-              )}
-            </Card>
+          <BodyweightSummaryCardWithRef
+            ref={bodyweightRef}
+            clientId={client.id}
+            defaultUnit={(client.preferred_weight_unit as WeightUnit) ?? "lb"}
+          />
+        )}
 
-            {/* Bodyweight quick entry */}
-            <LogBodyweightCard clientId={client.id} defaultUnit={(client.preferred_weight_unit as WeightUnit) ?? "lb"} />
+        {/* 7 — Upcoming appointment (compact, only if exists) */}
+        {nextAppointment && <UpcomingAppointmentRow appt={nextAppointment} />}
 
-            {/* Your Coaching */}
-            <Card className="border-border bg-card p-6 space-y-2">
-              <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Your Coaching</h3>
-              <CoachingRow label="Type" value={client.coaching_type} />
-              <CoachingRow label="Package" value={client.coaching_package} />
-              <CoachingRow label="Phase" value={client.program_phase} />
-              <CoachingRow label="Renewal" value={client.renewal_date} />
-              {!client.program_sheet_link && (
-                <div className="text-[11px] text-muted-foreground/80 pt-1">Program not added yet.</div>
-              )}
-              {assignedForms.length === 0 && (
-                <div className="text-[11px] text-muted-foreground/80">No check-ins assigned yet.</div>
-              )}
-            </Card>
+        {/* 8 — Events panel (only renders when there's something) */}
+        <UpcomingEventsPanel audience="client" />
 
-            {/* Billing & Subscription */}
-            <BillingCard purchase={primaryPurchase} cancelled={billingCancelled} needsAction={billingNeedsAction} />
-          </div>
+        {/* 9 — Secondary links */}
+        {client && (
+          <SecondaryLinks
+            handleAgreementComplete={markAgreementComplete}
+          />
         )}
       </div>
     </>
   );
 }
 
-function CoachingRow({ label, value }: { label: string; value: any }) {
+function GreetingHeader({
+  firstName, avatarUrl, unreadCount,
+}: { firstName: string; avatarUrl: string | null; unreadCount: number }) {
+  const [now, setNow] = useState(new Date());
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 60_000);
+    return () => clearInterval(t);
+  }, []);
+  void now;
   return (
-    <div className="text-sm flex justify-between gap-3">
-      <span className="text-muted-foreground">{label}</span>
-      <span className="text-right">{value ?? "—"}</span>
+    <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3">
+      <Avatar className="h-11 w-11 shrink-0 border border-border">
+        {avatarUrl && <AvatarImage src={avatarUrl} alt={firstName} />}
+        <AvatarFallback className="text-sm font-bold">
+          {(firstName?.[0] ?? "?").toUpperCase()}
+        </AvatarFallback>
+      </Avatar>
+      <div className="min-w-0">
+        <h1 className="truncate text-xl font-black tracking-tight md:text-2xl">
+          {greeting()}{firstName ? `, ${firstName}` : ""}
+        </h1>
+        <p className="truncate text-xs text-muted-foreground">Here's what to focus on today.</p>
+      </div>
+      <Link
+        to="/portal/announcements"
+        aria-label="Notifications"
+        className="relative grid h-11 w-11 shrink-0 place-items-center rounded-full border border-border bg-card transition hover:border-primary/40"
+      >
+        <Bell className="h-5 w-5" />
+        {unreadCount > 0 && (
+          <span className="absolute -right-0.5 -top-0.5 grid h-4 min-w-[16px] place-items-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground">
+            {unreadCount > 9 ? "9+" : unreadCount}
+          </span>
+        )}
+      </Link>
     </div>
   );
 }
 
-function PhaseItem({ label, value }: { label: string; value: string }) {
+function NoProfileCard() {
   return (
-    <div>
-      <div className="text-[10px] uppercase tracking-widest text-muted-foreground">{label}</div>
-      <div className="font-semibold">{value}</div>
+    <div className="rounded-2xl border border-primary/30 bg-primary/5 p-5">
+      <p className="text-sm">
+        Your coach hasn't set up your client profile yet. Once they do, you'll see your program, check-ins, and resources here.
+      </p>
     </div>
   );
 }
 
-
-function BillingCard({ purchase, cancelled, needsAction }: { purchase: any; cancelled: boolean; needsAction: boolean }) {
-  const portalFn = useServerFn(createCustomerPortalSession);
-  const [portalLoading, setPortalLoading] = React.useState(false);
-  const openPortal = async () => {
-    setPortalLoading(true);
-    try {
-      const { url } = await portalFn({ data: { origin: window.location.origin } });
-      window.open(url, "_blank", "noopener,noreferrer");
-    } catch (e: any) {
-      toast.error(e?.message ?? "Could not open billing portal");
-    } finally {
-      setPortalLoading(false);
-    }
-  };
-  if (!purchase) {
-    return (
-      <Card className="border-border bg-card p-6 space-y-3">
-        <div className="flex items-center gap-2">
-          <CreditCard className="h-4 w-4 text-primary" />
-          <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Billing & Subscription</h3>
-        </div>
-        <p className="text-sm text-muted-foreground">Billing details have not been added yet.</p>
-        <p className="text-xs text-muted-foreground/80">Need to adjust your billing or package? Message Coach Jared.</p>
-        <Link to="/portal/messages">
-          <Button size="sm" variant="outline" className="w-full"><MessageCircle className="h-4 w-4" /> Message Coach</Button>
-        </Link>
-      </Card>
-    );
-  }
-
-  const fmtDate = (d: any) => d ? new Date(d).toLocaleDateString() : "—";
-  const amount = purchase.installment_amount ?? purchase.full_payable_amount ?? purchase.amount_due_today;
-  const cur = purchase.currency ?? "USD";
-  const tone = needsAction ? "border-warning/40 bg-warning/5" : cancelled ? "border-destructive/40 bg-destructive/5" : "border-border bg-card";
-
+function UpcomingAppointmentRow({ appt }: { appt: any }) {
+  const start: Date | null = appt?.starts_at ? new Date(appt.starts_at) : null;
+  if (!start) return null;
+  const when = isToday(start) ? `Today · ${format(start, "h:mma")}`
+    : isTomorrow(start) ? `Tomorrow · ${format(start, "h:mma")}`
+    : format(start, "EEE, MMM d · h:mma");
   return (
-    <Card className={`${tone} p-6 space-y-3`}>
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <CreditCard className="h-4 w-4 text-primary" />
-          <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Billing & Subscription</h3>
+    <Link to="/portal/appointments" className="block">
+      <div className="flex min-h-[64px] items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3 transition active:bg-secondary/30">
+        <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-border bg-secondary/40">
+          <CalendarIcon className="h-5 w-5 text-primary" />
         </div>
-        <span className="text-[10px] uppercase tracking-wider rounded-full border border-border px-2 py-0.5">
-          {purchase.payment_status}
-        </span>
-      </div>
-      <div className="text-sm font-bold">{purchase.offer_name}</div>
-      <div className="space-y-1 text-sm">
-        {purchase.payment_structure && <CoachingRow label="Billing" value={purchase.payment_frequency ?? purchase.payment_structure} />}
-        {amount != null && <CoachingRow label="Amount" value={`${amount} ${cur}`} />}
-        {purchase.is_recurring && <CoachingRow label="Next billing" value={fmtDate(purchase.term_end_date)} />}
-        <CoachingRow label="Service start" value={fmtDate(purchase.term_start_date)} />
-        {purchase.term_end_date && <CoachingRow label="Service end" value={fmtDate(purchase.term_end_date)} />}
-      </div>
-
-      {needsAction && (
-        <div className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-foreground">
-          {purchase.payment_status === "Failed" || purchase.payment_status === "Overdue"
-            ? "Payment issue. Message Coach Jared or update payment if a link is available."
-            : "Payment needed to keep your coaching active."}
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-sm font-bold">{appt.title || appt.appointment_type || "Upcoming appointment"}</div>
+          <div className="truncate text-xs text-muted-foreground">{when}</div>
         </div>
-      )}
-      {cancelled && (
-        <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs">
-          Your service is {purchase.payment_status.toLowerCase()}. Message Coach Jared to reactivate.
-        </div>
-      )}
-
-      <p className="text-xs text-muted-foreground/80">Need to adjust your billing or package? Use Manage Billing or message Coach Jared.</p>
-      <div className="flex flex-wrap gap-2">
-        {needsAction && purchase.stripe_payment_link && (
-          <Button size="sm" className="bg-gradient-primary uppercase font-bold text-xs" onClick={() => window.open(purchase.stripe_payment_link, "_blank", "noopener,noreferrer")}>
-            Complete Payment
-          </Button>
-        )}
-        {purchase.stripe_customer_id && (
-          <Button size="sm" variant="outline" className="text-xs" onClick={openPortal} disabled={portalLoading}>
-            <Settings className="h-3.5 w-3.5 mr-1" />{portalLoading ? "Opening..." : "Manage Billing"}
-          </Button>
-        )}
-        <Link to="/portal/messages" className="flex-1 min-w-[140px]">
-          <Button size="sm" variant="outline" className="w-full text-xs"><MessageCircle className="h-4 w-4" /> Message Coach</Button>
-        </Link>
-        <Link to="/portal/purchases" className="flex-1 min-w-[140px]">
-          <Button size="sm" variant="outline" className="w-full text-xs"><Receipt className="h-4 w-4" /> Purchase History</Button>
-        </Link>
       </div>
-    </Card>
+    </Link>
   );
 }
+
+function SecondaryLinks({ handleAgreementComplete: _ }: { handleAgreementComplete: (id: string) => void }) {
+  const items = [
+    { to: "/portal/purchases", label: "Purchases", icon: Receipt },
+    { to: "/portal/agreements", label: "Agreements", icon: FileSignature },
+    { to: "/portal/account", label: "Account & Coaching", icon: Settings },
+  ];
+  return (
+    <ul className="overflow-hidden rounded-2xl border border-border bg-card">
+      {items.map((it, i) => {
+        const Icon = it.icon;
+        return (
+          <li key={it.to} className={i > 0 ? "border-t border-border/70" : ""}>
+            <Link to={it.to} className="flex min-h-[56px] items-center gap-3 px-4 py-3 transition active:bg-secondary/30">
+              <Icon className="h-5 w-5 text-muted-foreground" />
+              <span className="flex-1 text-sm font-semibold">{it.label}</span>
+            </Link>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+// Imperative-handle wrapper for the bodyweight bottom sheet (so the quick
+// action tile can open it).
+const BodyweightSummaryCardWithRef = forwardRef<
+  { open: () => void },
+  { clientId: string; defaultUnit?: WeightUnit }
+>(function BodyweightSummaryCardWithRef({ clientId, defaultUnit }, ref) {
+  // Trigger the visible "Log Weight" button programmatically by clicking it.
+  const containerRef = useRef<HTMLDivElement>(null);
+  useImperativeHandle(ref, () => ({
+    open: () => {
+      const btn = containerRef.current?.querySelector<HTMLButtonElement>(
+        "button[data-log-bw-trigger]",
+      ) ?? containerRef.current?.querySelector<HTMLButtonElement>("button");
+      btn?.click();
+    },
+  }));
+  return (
+    <div ref={containerRef}>
+      <BodyweightSummaryCard clientId={clientId} defaultUnit={defaultUnit} />
+    </div>
+  );
+});

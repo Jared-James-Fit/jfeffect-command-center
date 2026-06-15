@@ -164,7 +164,7 @@ export const coachNav: NavItem[] = [
 ];
 
 export const clientNav: NavItem[] = [
-  { to: "/portal", label: "Dashboard", icon: LayoutDashboard },
+  { to: "/portal", label: "Home", icon: LayoutDashboard },
   { to: "/portal/messages", label: "Messages", icon: MessageCircle },
   { to: "/portal/workouts", label: "Workouts", icon: Activity },
   { to: "/portal/lift-videos", label: "Lift Review Upload", icon: Video },
@@ -182,6 +182,16 @@ export const clientNav: NavItem[] = [
   { to: "/portal/events", label: "Events", icon: Calendar },
   { to: "/portal/documents", label: "Documents", icon: FileText },
   { to: "/portal/account", label: "Account Settings", icon: Settings },
+];
+
+// Mobile bottom-tab nav for the client portal. Max 5 single-word labels so
+// nothing wraps and tap targets stay large. Everything else lives in the
+// side drawer (clientNav) via the "More" trigger in AppShell.
+export const clientBottomNav: NavItem[] = [
+  { to: "/portal", label: "Home", icon: LayoutDashboard },
+  { to: "/portal/workouts", label: "Workouts", icon: Activity },
+  { to: "/portal/messages", label: "Messages", icon: MessageCircle },
+  { to: "/portal/nutrition-targets", label: "Nutrition", icon: Apple },
 ];
 
 // App Member portal navigation
