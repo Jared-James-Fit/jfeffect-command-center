@@ -263,7 +263,7 @@ function SbdIntakeSection({
                   value={display}
                   disabled={dontKnow}
                   onChange={(e) => setNum(field, e.target.value)}
-                  placeholder={lift === "deadlift" ? (unit === "kg" ? "120" : "275") : lift === "squat" ? (unit === "kg" ? "100" : "225") : (unit === "kg" ? "75" : "165")}
+                  placeholder=""
                 />
                 <span className="text-xs text-muted-foreground">{unit}</span>
               </div>
@@ -316,7 +316,7 @@ function SbdIntakeSection({
                       step={unit === "kg" ? 2.5 : 5}
                       value={stored == null ? "" : String(stored)}
                       onChange={(e) => setNum(field, e.target.value)}
-                      placeholder="0"
+                      placeholder=""
                     />
                     <span className="text-xs text-muted-foreground">{unit}</span>
                   </div>
