@@ -245,6 +245,7 @@ function validateCommitInput(d: any): CommitInput {
     publishStatus,
     publishAt: typeof d?.publishAt === "string" ? d.publishAt : null,
     idempotencyKey: typeof d?.idempotencyKey === "string" && d.idempotencyKey ? d.idempotencyKey : newIdempotencyKey(),
+    programName: typeof d?.programName === "string" && d.programName ? d.programName : null,
   };
 }
 
