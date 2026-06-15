@@ -22,6 +22,7 @@ import { ProofWall } from "@/components/sales/proof-wall";
 import { FaqAccordion } from "@/components/sales/faq-accordion";
 import { StickyMobileCta } from "@/components/sales/sticky-mobile-cta";
 import { Reveal } from "@/components/sales/reveal";
+import { normalizePhoneToE164 } from "@/lib/phone-e164";
 
 function HeroSkeleton() {
   return (
@@ -96,8 +97,8 @@ function SignupJf() {
   // Validation helpers
   const nameValid = (v: string) => v.trim().length >= 1 && v.trim().length <= 80;
   const emailValid = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
-  const phoneDigits = form.phone.replace(/\D+/g, "");
-  const phoneValid = phoneDigits.length >= 7 && phoneDigits.length <= 15;
+  const phoneE164 = normalizePhoneToE164(form.phone);
+  const phoneValid = phoneE164 !== null;
   const pwValid = form.password.length >= 8;
   const pwMatch = form.password.length > 0 && form.password === form.confirm;
 
@@ -122,7 +123,7 @@ function SignupJf() {
     if (!bundledAccepted) return toast.error("Please review and accept the membership terms before continuing.");
     if (!nameValid(form.first_name) || !nameValid(form.last_name)) return toast.error("First and last name are required.");
     if (!emailValid(form.email)) return toast.error("Please enter a valid email address.");
-    if (!phoneValid) return toast.error("Please enter a valid phone number (include country code for international).");
+    if (!phoneValid) return toast.error("Please enter a valid phone number. Use 10 digits for US/Canada, or include the country code for international.");
     if (!pwValid) return toast.error("Password must be at least 8 characters.");
     if (!pwMatch) return toast.error("Passwords don't match.");
     if (!allDocsReady) return toast.error("Membership agreements aren't loaded yet. Please refresh and try again.");
@@ -132,7 +133,7 @@ function SignupJf() {
         first_name: form.first_name.trim(),
         last_name: form.last_name.trim(),
         email: form.email.trim(),
-        phone: form.phone.trim(),
+        phone: phoneE164 ?? form.phone.trim(),
         password: form.password,
         sms_consent: false,
         origin: window.location.origin,
@@ -271,8 +272,13 @@ function SignupJf() {
                 value={form.phone}
                 onChange={(e) => setForm({ ...form, phone: e.target.value })}
                 onBlur={() => setTouched((t) => ({ ...t, phone: true }))} />
-              <p className="mt-1 text-[11px] text-muted-foreground">Include country code for international numbers. Used for account, security and billing messages.</p>
-              {touched.phone && !phoneValid && <FieldError>Please enter a valid phone number (7–15 digits).</FieldError>}
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                10 digits for US/Canada (we'll add +1). For international, include the country code starting with +.
+                {phoneE164 && form.phone.trim() !== phoneE164 && (
+                  <> Saved as <span className="font-mono font-semibold">{phoneE164}</span>.</>
+                )}
+              </p>
+              {touched.phone && !phoneValid && <FieldError>Enter a valid phone number — 10 digits for US/Canada, or include the country code with a + prefix.</FieldError>}
             </div>
             <div>
               <Label htmlFor="password">Password</Label>

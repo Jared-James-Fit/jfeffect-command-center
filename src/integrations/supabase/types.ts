@@ -7399,6 +7399,51 @@ export type Database = {
           },
         ]
       }
+      membership_onboarding_email_settings: {
+        Row: {
+          cancel_instructions: string
+          enabled: boolean
+          id: boolean
+          monthly_price_display: string
+          next_step: string
+          preheader: string
+          product_name: string
+          subject: string
+          support_email: string
+          trial_timezone: string
+          updated_at: string
+          welcome_message: string
+        }
+        Insert: {
+          cancel_instructions?: string
+          enabled?: boolean
+          id?: boolean
+          monthly_price_display?: string
+          next_step?: string
+          preheader?: string
+          product_name?: string
+          subject?: string
+          support_email?: string
+          trial_timezone?: string
+          updated_at?: string
+          welcome_message?: string
+        }
+        Update: {
+          cancel_instructions?: string
+          enabled?: boolean
+          id?: boolean
+          monthly_price_display?: string
+          next_step?: string
+          preheader?: string
+          product_name?: string
+          subject?: string
+          support_email?: string
+          trial_timezone?: string
+          updated_at?: string
+          welcome_message?: string
+        }
+        Relationships: []
+      }
       message_reactions: {
         Row: {
           created_at: string
@@ -8844,6 +8889,38 @@ export type Database = {
             columns: ["form_version_id"]
             isOneToOne: false
             referencedRelation: "nf_form_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notification_dedupe: {
+        Row: {
+          channel: string
+          created_at: string
+          key: string
+          member_id: string | null
+          metadata: Json
+        }
+        Insert: {
+          channel: string
+          created_at?: string
+          key: string
+          member_id?: string | null
+          metadata?: Json
+        }
+        Update: {
+          channel?: string
+          created_at?: string
+          key?: string
+          member_id?: string | null
+          metadata?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notification_dedupe_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "app_members"
             referencedColumns: ["id"]
           },
         ]

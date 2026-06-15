@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as UnsubscribeRouteImport } from './routes/unsubscribe'
 import { Route as TermsRouteImport } from './routes/terms'
 import { Route as StaffSetupRouteImport } from './routes/staff-setup'
 import { Route as SitemapRouteImport } from './routes/sitemap'
@@ -27,6 +28,7 @@ import { Route as SignupJfRouteImport } from './routes/signup.jf'
 import { Route as SignTokenRouteImport } from './routes/sign.$token'
 import { Route as MWelcomeRouteImport } from './routes/m.welcome'
 import { Route as LegalSlugRouteImport } from './routes/legal.$slug'
+import { Route as EmailUnsubscribeRouteImport } from './routes/email/unsubscribe'
 import { Route as CoachingApplyRouteImport } from './routes/coaching.apply'
 import { Route as BookSlugRouteImport } from './routes/book.$slug'
 import { Route as ApiDriveUploadRouteImport } from './routes/api/drive-upload'
@@ -39,6 +41,7 @@ import { Route as AuthenticatedPortalIndexRouteImport } from './routes/_authenti
 import { Route as AuthenticatedMediaIndexRouteImport } from './routes/_authenticated/media/index'
 import { Route as AuthenticatedMIndexRouteImport } from './routes/_authenticated/m/index'
 import { Route as AuthenticatedAdminIndexRouteImport } from './routes/_authenticated/admin/index'
+import { Route as LovableEmailSuppressionRouteImport } from './routes/lovable/email/suppression'
 import { Route as ApiPublicStripeWebhookRouteImport } from './routes/api/public/stripe-webhook'
 import { Route as ApiPublicSignnowWebhookRouteImport } from './routes/api/public/signnow-webhook'
 import { Route as ApiPublic_replay73ae9c8e4bcdc04ea9fd65f84f0752daRouteImport } from './routes/api/public/__replay-73ae9c8e4bcdc04ea9fd65f84f0752da'
@@ -159,6 +162,8 @@ import { Route as AuthenticatedAdminCoachesIndexRouteImport } from './routes/_au
 import { Route as AuthenticatedAdminClientsIndexRouteImport } from './routes/_authenticated/admin/clients.index'
 import { Route as AuthenticatedAdminAgreementsIndexRouteImport } from './routes/_authenticated/admin/agreements.index'
 import { Route as AuthenticatedAdminAgreementsNativeIndexRouteImport } from './routes/_authenticated/admin/agreements-native.index'
+import { Route as LovableEmailTransactionalSendRouteImport } from './routes/lovable/email/transactional/send'
+import { Route as LovableEmailTransactionalPreviewRouteImport } from './routes/lovable/email/transactional/preview'
 import { Route as LovableEmailQueueProcessRouteImport } from './routes/lovable/email/queue/process'
 import { Route as LovableEmailAuthWebhookRouteImport } from './routes/lovable/email/auth/webhook'
 import { Route as LovableEmailAuthPreviewRouteImport } from './routes/lovable/email/auth/preview'
@@ -202,6 +207,7 @@ import { Route as AuthenticatedAdminMembershipSalesPageRouteImport } from './rou
 import { Route as AuthenticatedAdminMembershipResetLinksRouteImport } from './routes/_authenticated/admin/membership.reset-links'
 import { Route as AuthenticatedAdminMembershipRefundPolicyRouteImport } from './routes/_authenticated/admin/membership.refund-policy'
 import { Route as AuthenticatedAdminMembershipPromoToolsRouteImport } from './routes/_authenticated/admin/membership.promo-tools'
+import { Route as AuthenticatedAdminMembershipOnboardingEmailRouteImport } from './routes/_authenticated/admin/membership.onboarding-email'
 import { Route as AuthenticatedAdminMembershipNotificationsRouteImport } from './routes/_authenticated/admin/membership.notifications'
 import { Route as AuthenticatedAdminMembershipLaunchReadinessRouteImport } from './routes/_authenticated/admin/membership.launch-readiness'
 import { Route as AuthenticatedAdminMembershipCheckoutSettingsRouteImport } from './routes/_authenticated/admin/membership.checkout-settings'
@@ -235,6 +241,11 @@ import { Route as AuthenticatedAdminClientProgramsClientIdHistoryRouteImport } f
 import { Route as AuthenticatedAdminClientProgramsClientIdAnalyticsRouteImport } from './routes/_authenticated/admin/client-programs.$clientId.analytics'
 import { Route as AuthenticatedMWorkoutsEnrollmentIdWeekDayRouteImport } from './routes/_authenticated/m/workouts.$enrollmentId.$week.$day'
 
+const UnsubscribeRoute = UnsubscribeRouteImport.update({
+  id: '/unsubscribe',
+  path: '/unsubscribe',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const TermsRoute = TermsRouteImport.update({
   id: '/terms',
   path: '/terms',
@@ -324,6 +335,11 @@ const LegalSlugRoute = LegalSlugRouteImport.update({
   path: '/legal/$slug',
   getParentRoute: () => rootRouteImport,
 } as any)
+const EmailUnsubscribeRoute = EmailUnsubscribeRouteImport.update({
+  id: '/email/unsubscribe',
+  path: '/email/unsubscribe',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const CoachingApplyRoute = CoachingApplyRouteImport.update({
   id: '/apply',
   path: '/apply',
@@ -385,6 +401,11 @@ const AuthenticatedAdminIndexRoute = AuthenticatedAdminIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => AuthenticatedAdminRouteRoute,
+} as any)
+const LovableEmailSuppressionRoute = LovableEmailSuppressionRouteImport.update({
+  id: '/lovable/email/suppression',
+  path: '/lovable/email/suppression',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const ApiPublicStripeWebhookRoute = ApiPublicStripeWebhookRouteImport.update({
   id: '/api/public/stripe-webhook',
@@ -1087,6 +1108,18 @@ const AuthenticatedAdminAgreementsNativeIndexRoute =
     path: '/agreements-native/',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
+const LovableEmailTransactionalSendRoute =
+  LovableEmailTransactionalSendRouteImport.update({
+    id: '/lovable/email/transactional/send',
+    path: '/lovable/email/transactional/send',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const LovableEmailTransactionalPreviewRoute =
+  LovableEmailTransactionalPreviewRouteImport.update({
+    id: '/lovable/email/transactional/preview',
+    path: '/lovable/email/transactional/preview',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const LovableEmailQueueProcessRoute =
   LovableEmailQueueProcessRouteImport.update({
     id: '/lovable/email/queue/process',
@@ -1342,6 +1375,12 @@ const AuthenticatedAdminMembershipPromoToolsRoute =
     path: '/promo-tools',
     getParentRoute: () => AuthenticatedAdminMembershipRoute,
   } as any)
+const AuthenticatedAdminMembershipOnboardingEmailRoute =
+  AuthenticatedAdminMembershipOnboardingEmailRouteImport.update({
+    id: '/onboarding-email',
+    path: '/onboarding-email',
+    getParentRoute: () => AuthenticatedAdminMembershipRoute,
+  } as any)
 const AuthenticatedAdminMembershipNotificationsRoute =
   AuthenticatedAdminMembershipNotificationsRouteImport.update({
     id: '/notifications',
@@ -1549,6 +1588,7 @@ export interface FileRoutesByFullPath {
   '/sitemap': typeof SitemapRoute
   '/staff-setup': typeof StaffSetupRoute
   '/terms': typeof TermsRoute
+  '/unsubscribe': typeof UnsubscribeRoute
   '/admin': typeof AuthenticatedAdminRouteRouteWithChildren
   '/coach': typeof AuthenticatedCoachRouteRouteWithChildren
   '/m': typeof AuthenticatedMRouteRouteWithChildren
@@ -1557,6 +1597,7 @@ export interface FileRoutesByFullPath {
   '/api/drive-upload': typeof ApiDriveUploadRoute
   '/book/$slug': typeof BookSlugRoute
   '/coaching/apply': typeof CoachingApplyRoute
+  '/email/unsubscribe': typeof EmailUnsubscribeRoute
   '/legal/$slug': typeof LegalSlugRoute
   '/m/welcome': typeof MWelcomeRoute
   '/sign/$token': typeof SignTokenRoute
@@ -1668,6 +1709,7 @@ export interface FileRoutesByFullPath {
   '/api/public': typeof ApiPublic_replay73ae9c8e4bcdc04ea9fd65f84f0752daRoute
   '/api/public/signnow-webhook': typeof ApiPublicSignnowWebhookRoute
   '/api/public/stripe-webhook': typeof ApiPublicStripeWebhookRoute
+  '/lovable/email/suppression': typeof LovableEmailSuppressionRoute
   '/admin/': typeof AuthenticatedAdminIndexRoute
   '/m/': typeof AuthenticatedMIndexRoute
   '/media/': typeof AuthenticatedMediaIndexRoute
@@ -1697,6 +1739,7 @@ export interface FileRoutesByFullPath {
   '/admin/membership/checkout-settings': typeof AuthenticatedAdminMembershipCheckoutSettingsRoute
   '/admin/membership/launch-readiness': typeof AuthenticatedAdminMembershipLaunchReadinessRoute
   '/admin/membership/notifications': typeof AuthenticatedAdminMembershipNotificationsRoute
+  '/admin/membership/onboarding-email': typeof AuthenticatedAdminMembershipOnboardingEmailRoute
   '/admin/membership/promo-tools': typeof AuthenticatedAdminMembershipPromoToolsRoute
   '/admin/membership/refund-policy': typeof AuthenticatedAdminMembershipRefundPolicyRoute
   '/admin/membership/reset-links': typeof AuthenticatedAdminMembershipResetLinksRoute
@@ -1740,6 +1783,8 @@ export interface FileRoutesByFullPath {
   '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
   '/lovable/email/auth/webhook': typeof LovableEmailAuthWebhookRoute
   '/lovable/email/queue/process': typeof LovableEmailQueueProcessRoute
+  '/lovable/email/transactional/preview': typeof LovableEmailTransactionalPreviewRoute
+  '/lovable/email/transactional/send': typeof LovableEmailTransactionalSendRoute
   '/admin/agreements-native/': typeof AuthenticatedAdminAgreementsNativeIndexRoute
   '/admin/agreements/': typeof AuthenticatedAdminAgreementsIndexRoute
   '/admin/clients/': typeof AuthenticatedAdminClientsIndexRoute
@@ -1775,10 +1820,12 @@ export interface FileRoutesByTo {
   '/sitemap': typeof SitemapRoute
   '/staff-setup': typeof StaffSetupRoute
   '/terms': typeof TermsRoute
+  '/unsubscribe': typeof UnsubscribeRoute
   '/coach': typeof AuthenticatedCoachRouteRouteWithChildren
   '/api/drive-upload': typeof ApiDriveUploadRoute
   '/book/$slug': typeof BookSlugRoute
   '/coaching/apply': typeof CoachingApplyRoute
+  '/email/unsubscribe': typeof EmailUnsubscribeRoute
   '/legal/$slug': typeof LegalSlugRoute
   '/m/welcome': typeof MWelcomeRoute
   '/sign/$token': typeof SignTokenRoute
@@ -1889,6 +1936,7 @@ export interface FileRoutesByTo {
   '/api/public': typeof ApiPublic_replay73ae9c8e4bcdc04ea9fd65f84f0752daRoute
   '/api/public/signnow-webhook': typeof ApiPublicSignnowWebhookRoute
   '/api/public/stripe-webhook': typeof ApiPublicStripeWebhookRoute
+  '/lovable/email/suppression': typeof LovableEmailSuppressionRoute
   '/admin': typeof AuthenticatedAdminIndexRoute
   '/m': typeof AuthenticatedMIndexRoute
   '/media': typeof AuthenticatedMediaIndexRoute
@@ -1918,6 +1966,7 @@ export interface FileRoutesByTo {
   '/admin/membership/checkout-settings': typeof AuthenticatedAdminMembershipCheckoutSettingsRoute
   '/admin/membership/launch-readiness': typeof AuthenticatedAdminMembershipLaunchReadinessRoute
   '/admin/membership/notifications': typeof AuthenticatedAdminMembershipNotificationsRoute
+  '/admin/membership/onboarding-email': typeof AuthenticatedAdminMembershipOnboardingEmailRoute
   '/admin/membership/promo-tools': typeof AuthenticatedAdminMembershipPromoToolsRoute
   '/admin/membership/refund-policy': typeof AuthenticatedAdminMembershipRefundPolicyRoute
   '/admin/membership/reset-links': typeof AuthenticatedAdminMembershipResetLinksRoute
@@ -1961,6 +2010,8 @@ export interface FileRoutesByTo {
   '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
   '/lovable/email/auth/webhook': typeof LovableEmailAuthWebhookRoute
   '/lovable/email/queue/process': typeof LovableEmailQueueProcessRoute
+  '/lovable/email/transactional/preview': typeof LovableEmailTransactionalPreviewRoute
+  '/lovable/email/transactional/send': typeof LovableEmailTransactionalSendRoute
   '/admin/agreements-native': typeof AuthenticatedAdminAgreementsNativeIndexRoute
   '/admin/agreements': typeof AuthenticatedAdminAgreementsIndexRoute
   '/admin/clients': typeof AuthenticatedAdminClientsIndexRoute
@@ -1998,6 +2049,7 @@ export interface FileRoutesById {
   '/sitemap': typeof SitemapRoute
   '/staff-setup': typeof StaffSetupRoute
   '/terms': typeof TermsRoute
+  '/unsubscribe': typeof UnsubscribeRoute
   '/_authenticated/admin': typeof AuthenticatedAdminRouteRouteWithChildren
   '/_authenticated/coach': typeof AuthenticatedCoachRouteRouteWithChildren
   '/_authenticated/m': typeof AuthenticatedMRouteRouteWithChildren
@@ -2006,6 +2058,7 @@ export interface FileRoutesById {
   '/api/drive-upload': typeof ApiDriveUploadRoute
   '/book/$slug': typeof BookSlugRoute
   '/coaching/apply': typeof CoachingApplyRoute
+  '/email/unsubscribe': typeof EmailUnsubscribeRoute
   '/legal/$slug': typeof LegalSlugRoute
   '/m/welcome': typeof MWelcomeRoute
   '/sign/$token': typeof SignTokenRoute
@@ -2117,6 +2170,7 @@ export interface FileRoutesById {
   '/api/public/__replay-73ae9c8e4bcdc04ea9fd65f84f0752da': typeof ApiPublic_replay73ae9c8e4bcdc04ea9fd65f84f0752daRoute
   '/api/public/signnow-webhook': typeof ApiPublicSignnowWebhookRoute
   '/api/public/stripe-webhook': typeof ApiPublicStripeWebhookRoute
+  '/lovable/email/suppression': typeof LovableEmailSuppressionRoute
   '/_authenticated/admin/': typeof AuthenticatedAdminIndexRoute
   '/_authenticated/m/': typeof AuthenticatedMIndexRoute
   '/_authenticated/media/': typeof AuthenticatedMediaIndexRoute
@@ -2146,6 +2200,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/membership/checkout-settings': typeof AuthenticatedAdminMembershipCheckoutSettingsRoute
   '/_authenticated/admin/membership/launch-readiness': typeof AuthenticatedAdminMembershipLaunchReadinessRoute
   '/_authenticated/admin/membership/notifications': typeof AuthenticatedAdminMembershipNotificationsRoute
+  '/_authenticated/admin/membership/onboarding-email': typeof AuthenticatedAdminMembershipOnboardingEmailRoute
   '/_authenticated/admin/membership/promo-tools': typeof AuthenticatedAdminMembershipPromoToolsRoute
   '/_authenticated/admin/membership/refund-policy': typeof AuthenticatedAdminMembershipRefundPolicyRoute
   '/_authenticated/admin/membership/reset-links': typeof AuthenticatedAdminMembershipResetLinksRoute
@@ -2189,6 +2244,8 @@ export interface FileRoutesById {
   '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
   '/lovable/email/auth/webhook': typeof LovableEmailAuthWebhookRoute
   '/lovable/email/queue/process': typeof LovableEmailQueueProcessRoute
+  '/lovable/email/transactional/preview': typeof LovableEmailTransactionalPreviewRoute
+  '/lovable/email/transactional/send': typeof LovableEmailTransactionalSendRoute
   '/_authenticated/admin/agreements-native/': typeof AuthenticatedAdminAgreementsNativeIndexRoute
   '/_authenticated/admin/agreements/': typeof AuthenticatedAdminAgreementsIndexRoute
   '/_authenticated/admin/clients/': typeof AuthenticatedAdminClientsIndexRoute
@@ -2226,6 +2283,7 @@ export interface FileRouteTypes {
     | '/sitemap'
     | '/staff-setup'
     | '/terms'
+    | '/unsubscribe'
     | '/admin'
     | '/coach'
     | '/m'
@@ -2234,6 +2292,7 @@ export interface FileRouteTypes {
     | '/api/drive-upload'
     | '/book/$slug'
     | '/coaching/apply'
+    | '/email/unsubscribe'
     | '/legal/$slug'
     | '/m/welcome'
     | '/sign/$token'
@@ -2345,6 +2404,7 @@ export interface FileRouteTypes {
     | '/api/public'
     | '/api/public/signnow-webhook'
     | '/api/public/stripe-webhook'
+    | '/lovable/email/suppression'
     | '/admin/'
     | '/m/'
     | '/media/'
@@ -2374,6 +2434,7 @@ export interface FileRouteTypes {
     | '/admin/membership/checkout-settings'
     | '/admin/membership/launch-readiness'
     | '/admin/membership/notifications'
+    | '/admin/membership/onboarding-email'
     | '/admin/membership/promo-tools'
     | '/admin/membership/refund-policy'
     | '/admin/membership/reset-links'
@@ -2417,6 +2478,8 @@ export interface FileRouteTypes {
     | '/lovable/email/auth/preview'
     | '/lovable/email/auth/webhook'
     | '/lovable/email/queue/process'
+    | '/lovable/email/transactional/preview'
+    | '/lovable/email/transactional/send'
     | '/admin/agreements-native/'
     | '/admin/agreements/'
     | '/admin/clients/'
@@ -2452,10 +2515,12 @@ export interface FileRouteTypes {
     | '/sitemap'
     | '/staff-setup'
     | '/terms'
+    | '/unsubscribe'
     | '/coach'
     | '/api/drive-upload'
     | '/book/$slug'
     | '/coaching/apply'
+    | '/email/unsubscribe'
     | '/legal/$slug'
     | '/m/welcome'
     | '/sign/$token'
@@ -2566,6 +2631,7 @@ export interface FileRouteTypes {
     | '/api/public'
     | '/api/public/signnow-webhook'
     | '/api/public/stripe-webhook'
+    | '/lovable/email/suppression'
     | '/admin'
     | '/m'
     | '/media'
@@ -2595,6 +2661,7 @@ export interface FileRouteTypes {
     | '/admin/membership/checkout-settings'
     | '/admin/membership/launch-readiness'
     | '/admin/membership/notifications'
+    | '/admin/membership/onboarding-email'
     | '/admin/membership/promo-tools'
     | '/admin/membership/refund-policy'
     | '/admin/membership/reset-links'
@@ -2638,6 +2705,8 @@ export interface FileRouteTypes {
     | '/lovable/email/auth/preview'
     | '/lovable/email/auth/webhook'
     | '/lovable/email/queue/process'
+    | '/lovable/email/transactional/preview'
+    | '/lovable/email/transactional/send'
     | '/admin/agreements-native'
     | '/admin/agreements'
     | '/admin/clients'
@@ -2674,6 +2743,7 @@ export interface FileRouteTypes {
     | '/sitemap'
     | '/staff-setup'
     | '/terms'
+    | '/unsubscribe'
     | '/_authenticated/admin'
     | '/_authenticated/coach'
     | '/_authenticated/m'
@@ -2682,6 +2752,7 @@ export interface FileRouteTypes {
     | '/api/drive-upload'
     | '/book/$slug'
     | '/coaching/apply'
+    | '/email/unsubscribe'
     | '/legal/$slug'
     | '/m/welcome'
     | '/sign/$token'
@@ -2793,6 +2864,7 @@ export interface FileRouteTypes {
     | '/api/public/__replay-73ae9c8e4bcdc04ea9fd65f84f0752da'
     | '/api/public/signnow-webhook'
     | '/api/public/stripe-webhook'
+    | '/lovable/email/suppression'
     | '/_authenticated/admin/'
     | '/_authenticated/m/'
     | '/_authenticated/media/'
@@ -2822,6 +2894,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/membership/checkout-settings'
     | '/_authenticated/admin/membership/launch-readiness'
     | '/_authenticated/admin/membership/notifications'
+    | '/_authenticated/admin/membership/onboarding-email'
     | '/_authenticated/admin/membership/promo-tools'
     | '/_authenticated/admin/membership/refund-policy'
     | '/_authenticated/admin/membership/reset-links'
@@ -2865,6 +2938,8 @@ export interface FileRouteTypes {
     | '/lovable/email/auth/preview'
     | '/lovable/email/auth/webhook'
     | '/lovable/email/queue/process'
+    | '/lovable/email/transactional/preview'
+    | '/lovable/email/transactional/send'
     | '/_authenticated/admin/agreements-native/'
     | '/_authenticated/admin/agreements/'
     | '/_authenticated/admin/clients/'
@@ -2902,8 +2977,10 @@ export interface RootRouteChildren {
   SitemapRoute: typeof SitemapRoute
   StaffSetupRoute: typeof StaffSetupRoute
   TermsRoute: typeof TermsRoute
+  UnsubscribeRoute: typeof UnsubscribeRoute
   ApiDriveUploadRoute: typeof ApiDriveUploadRoute
   BookSlugRoute: typeof BookSlugRoute
+  EmailUnsubscribeRoute: typeof EmailUnsubscribeRoute
   LegalSlugRoute: typeof LegalSlugRoute
   MWelcomeRoute: typeof MWelcomeRoute
   SignTokenRoute: typeof SignTokenRoute
@@ -2911,6 +2988,7 @@ export interface RootRouteChildren {
   ApiPublic_replay73ae9c8e4bcdc04ea9fd65f84f0752daRoute: typeof ApiPublic_replay73ae9c8e4bcdc04ea9fd65f84f0752daRoute
   ApiPublicSignnowWebhookRoute: typeof ApiPublicSignnowWebhookRoute
   ApiPublicStripeWebhookRoute: typeof ApiPublicStripeWebhookRoute
+  LovableEmailSuppressionRoute: typeof LovableEmailSuppressionRoute
   ApiPublicHooksAppointmentRemindersRoute: typeof ApiPublicHooksAppointmentRemindersRoute
   ApiPublicHooksCleanupPendingSignupsRoute: typeof ApiPublicHooksCleanupPendingSignupsRoute
   ApiPublicHooksFilloutRoute: typeof ApiPublicHooksFilloutRoute
@@ -2923,11 +3001,20 @@ export interface RootRouteChildren {
   LovableEmailAuthPreviewRoute: typeof LovableEmailAuthPreviewRoute
   LovableEmailAuthWebhookRoute: typeof LovableEmailAuthWebhookRoute
   LovableEmailQueueProcessRoute: typeof LovableEmailQueueProcessRoute
+  LovableEmailTransactionalPreviewRoute: typeof LovableEmailTransactionalPreviewRoute
+  LovableEmailTransactionalSendRoute: typeof LovableEmailTransactionalSendRoute
   ApiPublicGoogleOauthCallbackRoute: typeof ApiPublicGoogleOauthCallbackRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/unsubscribe': {
+      id: '/unsubscribe'
+      path: '/unsubscribe'
+      fullPath: '/unsubscribe'
+      preLoaderRoute: typeof UnsubscribeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/terms': {
       id: '/terms'
       path: '/terms'
@@ -3054,6 +3141,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LegalSlugRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/email/unsubscribe': {
+      id: '/email/unsubscribe'
+      path: '/email/unsubscribe'
+      fullPath: '/email/unsubscribe'
+      preLoaderRoute: typeof EmailUnsubscribeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/coaching/apply': {
       id: '/coaching/apply'
       path: '/apply'
@@ -3137,6 +3231,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/admin/'
       preLoaderRoute: typeof AuthenticatedAdminIndexRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
+    '/lovable/email/suppression': {
+      id: '/lovable/email/suppression'
+      path: '/lovable/email/suppression'
+      fullPath: '/lovable/email/suppression'
+      preLoaderRoute: typeof LovableEmailSuppressionRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/api/public/stripe-webhook': {
       id: '/api/public/stripe-webhook'
@@ -3978,6 +4079,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminAgreementsNativeIndexRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
+    '/lovable/email/transactional/send': {
+      id: '/lovable/email/transactional/send'
+      path: '/lovable/email/transactional/send'
+      fullPath: '/lovable/email/transactional/send'
+      preLoaderRoute: typeof LovableEmailTransactionalSendRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/lovable/email/transactional/preview': {
+      id: '/lovable/email/transactional/preview'
+      path: '/lovable/email/transactional/preview'
+      fullPath: '/lovable/email/transactional/preview'
+      preLoaderRoute: typeof LovableEmailTransactionalPreviewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/lovable/email/queue/process': {
       id: '/lovable/email/queue/process'
       path: '/lovable/email/queue/process'
@@ -4279,6 +4394,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminMembershipPromoToolsRouteImport
       parentRoute: typeof AuthenticatedAdminMembershipRoute
     }
+    '/_authenticated/admin/membership/onboarding-email': {
+      id: '/_authenticated/admin/membership/onboarding-email'
+      path: '/onboarding-email'
+      fullPath: '/admin/membership/onboarding-email'
+      preLoaderRoute: typeof AuthenticatedAdminMembershipOnboardingEmailRouteImport
+      parentRoute: typeof AuthenticatedAdminMembershipRoute
+    }
     '/_authenticated/admin/membership/notifications': {
       id: '/_authenticated/admin/membership/notifications'
       path: '/notifications'
@@ -4531,6 +4653,7 @@ interface AuthenticatedAdminMembershipRouteChildren {
   AuthenticatedAdminMembershipCheckoutSettingsRoute: typeof AuthenticatedAdminMembershipCheckoutSettingsRoute
   AuthenticatedAdminMembershipLaunchReadinessRoute: typeof AuthenticatedAdminMembershipLaunchReadinessRoute
   AuthenticatedAdminMembershipNotificationsRoute: typeof AuthenticatedAdminMembershipNotificationsRoute
+  AuthenticatedAdminMembershipOnboardingEmailRoute: typeof AuthenticatedAdminMembershipOnboardingEmailRoute
   AuthenticatedAdminMembershipPromoToolsRoute: typeof AuthenticatedAdminMembershipPromoToolsRoute
   AuthenticatedAdminMembershipRefundPolicyRoute: typeof AuthenticatedAdminMembershipRefundPolicyRoute
   AuthenticatedAdminMembershipResetLinksRoute: typeof AuthenticatedAdminMembershipResetLinksRoute
@@ -4565,6 +4688,8 @@ const AuthenticatedAdminMembershipRouteChildren: AuthenticatedAdminMembershipRou
       AuthenticatedAdminMembershipLaunchReadinessRoute,
     AuthenticatedAdminMembershipNotificationsRoute:
       AuthenticatedAdminMembershipNotificationsRoute,
+    AuthenticatedAdminMembershipOnboardingEmailRoute:
+      AuthenticatedAdminMembershipOnboardingEmailRoute,
     AuthenticatedAdminMembershipPromoToolsRoute:
       AuthenticatedAdminMembershipPromoToolsRoute,
     AuthenticatedAdminMembershipRefundPolicyRoute:
@@ -5191,8 +5316,10 @@ const rootRouteChildren: RootRouteChildren = {
   SitemapRoute: SitemapRoute,
   StaffSetupRoute: StaffSetupRoute,
   TermsRoute: TermsRoute,
+  UnsubscribeRoute: UnsubscribeRoute,
   ApiDriveUploadRoute: ApiDriveUploadRoute,
   BookSlugRoute: BookSlugRoute,
+  EmailUnsubscribeRoute: EmailUnsubscribeRoute,
   LegalSlugRoute: LegalSlugRoute,
   MWelcomeRoute: MWelcomeRoute,
   SignTokenRoute: SignTokenRoute,
@@ -5201,6 +5328,7 @@ const rootRouteChildren: RootRouteChildren = {
     ApiPublic_replay73ae9c8e4bcdc04ea9fd65f84f0752daRoute,
   ApiPublicSignnowWebhookRoute: ApiPublicSignnowWebhookRoute,
   ApiPublicStripeWebhookRoute: ApiPublicStripeWebhookRoute,
+  LovableEmailSuppressionRoute: LovableEmailSuppressionRoute,
   ApiPublicHooksAppointmentRemindersRoute:
     ApiPublicHooksAppointmentRemindersRoute,
   ApiPublicHooksCleanupPendingSignupsRoute:
@@ -5217,6 +5345,8 @@ const rootRouteChildren: RootRouteChildren = {
   LovableEmailAuthPreviewRoute: LovableEmailAuthPreviewRoute,
   LovableEmailAuthWebhookRoute: LovableEmailAuthWebhookRoute,
   LovableEmailQueueProcessRoute: LovableEmailQueueProcessRoute,
+  LovableEmailTransactionalPreviewRoute: LovableEmailTransactionalPreviewRoute,
+  LovableEmailTransactionalSendRoute: LovableEmailTransactionalSendRoute,
   ApiPublicGoogleOauthCallbackRoute: ApiPublicGoogleOauthCallbackRoute,
 }
 export const routeTree = rootRouteImport

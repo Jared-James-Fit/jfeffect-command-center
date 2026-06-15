@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { normalizePhoneToE164 } from "@/lib/phone-e164";
 
 function genToken(len = 32) {
   const arr = new Uint8Array(len);
@@ -125,15 +126,34 @@ export const createAppMember = createServerFn({ method: "POST" })
       await supabaseAdmin.rpc("apply_default_member_access", { _member_id: row.id });
     }
     // Fire SMS automations registered for the "account_created" trigger.
+    // Skip if subscription_purchased already claimed this member's
+    // onboarding SMS (membership_onboarding:<member_id>:sms).
     try {
       const { fireAutomationTrigger } = await import("@/lib/sms-trigger.server");
       const origin = getOrigin();
       const link = `${origin}/member-setup?token=${setup_token}`;
-      await fireAutomationTrigger(supabaseAdmin, {
-        trigger: "account_created",
-        memberId: row.id,
-        vars: { setup_link: link },
-      });
+      const dedupeKey = `membership_onboarding:${row.id}:sms`;
+      const { data: alreadySent } = await supabaseAdmin
+        .from("notification_dedupe")
+        .select("key")
+        .eq("key", dedupeKey).eq("channel", "sms").maybeSingle();
+      if (!alreadySent) {
+        await fireAutomationTrigger(supabaseAdmin, {
+          trigger: "account_created",
+          memberId: row.id,
+          vars: { setup_link: link },
+        });
+        // Claim the onboarding SMS slot so subscription_purchased can't double-send.
+        await supabaseAdmin
+          .from("notification_dedupe")
+          .insert({
+            key: dedupeKey,
+            channel: "sms",
+            member_id: row.id,
+            metadata: { trigger: "account_created" },
+          })
+          .then(() => {}, () => {});
+      }
     } catch (e) {
       console.error("[createAppMember] automation trigger failed", e);
     }
@@ -158,6 +178,13 @@ export const updateAppMember = createServerFn({ method: "POST" })
     await assertAdmin(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { memberId, ...patch } = data;
+    if (patch.phone !== undefined && patch.phone !== null && patch.phone !== "") {
+      const normalized = normalizePhoneToE164(patch.phone);
+      if (!normalized) {
+        throw new Error("Invalid phone number. Use 10 digits for US/Canada, or include the country code with a + prefix.");
+      }
+      patch.phone = normalized;
+    }
     const { data: prev } = await supabaseAdmin.from("app_members").select("account_type").eq("id", memberId).maybeSingle();
     const { error } = await supabaseAdmin.from("app_members").update(patch).eq("id", memberId);
     if (error) throw new Error(error.message);

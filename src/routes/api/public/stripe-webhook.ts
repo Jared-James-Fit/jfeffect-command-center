@@ -489,11 +489,36 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
                     const setupLink = member.setup_token && !member.user_id
                       ? `${origin}/member-setup?token=${member.setup_token}`
                       : `${origin}/auth`;
-                    await fireAutomationTrigger(supabase, {
-                      trigger: "subscription_purchased",
-                      memberId: member.id,
-                      vars: { setup_link: setupLink },
-                    });
+                    // SMS — dedupe on membership_onboarding:<member_id>:sms.
+                    const smsKey = `membership_onboarding:${member.id}:sms`;
+                    const { data: smsDupe } = await supabase
+                      .from("notification_dedupe")
+                      .select("key").eq("key", smsKey).eq("channel", "sms").maybeSingle();
+                    if (!smsDupe) {
+                      await fireAutomationTrigger(supabase, {
+                        trigger: "subscription_purchased",
+                        memberId: member.id,
+                        vars: { setup_link: setupLink },
+                      });
+                      await supabase.from("notification_dedupe").insert({
+                        key: smsKey,
+                        channel: "sms",
+                        member_id: member.id,
+                        metadata: { trigger: "subscription_purchased" },
+                      }).then(() => {}, () => {});
+                    }
+                    // Email — onboarding email (handles its own dedupe internally).
+                    try {
+                      const { sendMembershipOnboardingEmail } = await import("@/lib/membership-onboarding-email.server");
+                      // Reload to capture trial_end_at / current_period_end stamped by applyJfSubToMember.
+                      const { data: fresh } = await supabase
+                        .from("app_members")
+                        .select("id,email,full_name,setup_token,user_id,trial_end_at,current_period_end")
+                        .eq("id", member.id).maybeSingle();
+                      await sendMembershipOnboardingEmail(supabase, fresh ?? member, origin);
+                    } catch (e) {
+                      console.error("[stripe-webhook] onboarding email failed", e);
+                    }
                   } catch (e) { console.error("[stripe-webhook] sms trigger failed", e); }
                 }
                 break;
