@@ -4,7 +4,7 @@ import { UserAvatar } from "@/components/user-avatar";
 import { Button } from "@/components/ui/button";
 import {
   ChevronRight, MoreHorizontal, CalendarDays, Dumbbell,
-  Apple, HeartPulse, CheckCircle2, AlertCircle, Plus,
+  Apple, HeartPulse, CheckCircle2, AlertCircle, Plus, Eye,
 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Progress } from "@/components/ui/progress";
@@ -16,6 +16,11 @@ import { format, parseISO, differenceInDays } from "date-fns";
 import { QuickActionsMenu, ClientMoreMenu } from "./quick-actions";
 import { ClientQuickSheet, type QuickPanelKind } from "./client-quick-sheet";
 import { AssignProgramDialog } from "./assign-program-dialog";
+import { useNavigate } from "@tanstack/react-router";
+import { useAuth } from "@/lib/auth";
+import { useClientImpersonation } from "@/lib/client-impersonation";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 function fmtRange(start: string | null, end: string | null) {
   if (!start && !end) return null;
@@ -44,6 +49,37 @@ export function ClientRow({ r, onArchive }: { r: DirectoryRow; onArchive?: (r: D
   const prog = blockProgress(r.block_start, r.block_end);
   const range = fmtRange(r.block_start, r.block_end);
   const actionTarget = primaryActionTarget(r.next_action, r.id);
+  const { role } = useAuth();
+  const navigate = useNavigate();
+  const impersonation = useClientImpersonation();
+  const canPov = role === "admin" || role === "coach";
+  const [povBusy, setPovBusy] = useState(false);
+
+  const enterPov = async () => {
+    if (povBusy) return;
+    setPovBusy(true);
+    try {
+      const { data, error } = await supabase
+        .from("clients")
+        .select("user_id, full_name")
+        .eq("id", r.id)
+        .single();
+      if (error) throw error;
+      if (!data?.user_id) {
+        toast.error("This client has no account yet — send a setup link first.");
+        return;
+      }
+      impersonation.start(
+        { id: r.id, user_id: data.user_id, full_name: data.full_name ?? r.full_name },
+        typeof window !== "undefined" ? window.location.pathname + window.location.search : "/admin/clients",
+      );
+      navigate({ to: "/portal" });
+    } catch (e: any) {
+      toast.error(e?.message ?? "Could not enter POV");
+    } finally {
+      setPovBusy(false);
+    }
+  };
 
   return (
     <TooltipProvider delayDuration={300}>
@@ -114,6 +150,22 @@ export function ClientRow({ r, onArchive }: { r: DirectoryRow; onArchive?: (r: D
 
         {/* Next best action */}
         <div className="flex items-center justify-end gap-1.5">
+          {canPov && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  size="icon"
+                  onClick={enterPov}
+                  disabled={povBusy}
+                  aria-label={`Enter ${r.full_name ?? "client"} POV`}
+                  className="h-11 w-11 border border-warning/50 bg-warning/15 text-warning shadow-sm hover:bg-warning/25 md:h-10 md:w-10"
+                >
+                  <Eye className="h-5 w-5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top">Enter Client POV</TooltipContent>
+            </Tooltip>
+          )}
           <Tooltip>
             <TooltipTrigger asChild>
               <Button asChild size="sm" className={cn("h-9 min-w-[8rem]", actionStyle(r.next_action, urgent))}>
