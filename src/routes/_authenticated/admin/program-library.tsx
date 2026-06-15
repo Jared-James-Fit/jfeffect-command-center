@@ -645,6 +645,10 @@ function NewTemplateDialog({ open, onOpenChange, onCreated }: { open: boolean; o
             <Label>Tags (comma-separated)</Label>
             <Input value={form.tags} onChange={(e) => setForm({ ...form, tags: e.target.value })} placeholder="meet-prep, taper, accessories" />
           </div>
+          <WeightClassPicker
+            value={form.tags}
+            onChange={(next) => setForm({ ...form, tags: next })}
+          />
           <div>
             <Label>Notes</Label>
             <Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={2} />
