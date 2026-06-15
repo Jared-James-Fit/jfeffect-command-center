@@ -17,6 +17,7 @@ import {
 } from "@/lib/exercise-metadata";
 import { weekDisplayRange, isCurrentWeek, formatWeekRange } from "@/lib/block-dates";
 import { isWeekLocked, dayScheduledDate } from "@/lib/workout-today";
+import { localStartOfToday, parseLocalDate } from "@/lib/today";
 
 /* ──────────────────────────────────────────────────────────────────────────
    ClientBlockView
@@ -42,9 +43,7 @@ type Mode = "client" | "admin";
 type BlockStatus = "completed" | "current" | "upcoming" | "not-started";
 
 function parseBlockDate(s: string | null | undefined): Date | null {
-  if (!s) return null;
-  const d = parseISO(s);
-  return isNaN(d.getTime()) ? null : startOfDay(d);
+  return parseLocalDate(s);
 }
 
 export function blockLifecycleStatus(block: any, today: Date = startOfDay(new Date())): BlockStatus {
@@ -99,7 +98,7 @@ export function ClientBlockView({
   const blockId: string | null = block?.id ?? null;
 
   // Today, computed once per render.
-  const today = startOfDay(new Date());
+  const today = localStartOfToday();
 
   // ── Block list (sorted by start_date asc, with un-dated at the end) ───────
   const orderedBlocks = useMemo(() => {
