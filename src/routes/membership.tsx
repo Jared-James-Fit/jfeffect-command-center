@@ -39,7 +39,7 @@ function HeroSkeleton() {
   );
 }
 
-export const Route = createFileRoute("/join")({
+export const Route = createFileRoute("/membership")({
   component: SignupJf,
   head: () => ({
     meta: [
