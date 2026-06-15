@@ -86,6 +86,42 @@ function WeightClassPicker({
   );
 }
 
+function WeightClassFilter({
+  value, onChange,
+}: { value: string | null; onChange: (next: string | null) => void }) {
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      <span className="text-[11px] uppercase tracking-wider text-muted-foreground">Weight class:</span>
+      <button
+        onClick={() => onChange(null)}
+        className={`rounded-full border px-2.5 py-1 text-[11px] transition-colors ${
+          value === null
+            ? "border-primary bg-primary/10 text-primary"
+            : "border-border text-muted-foreground hover:text-foreground"
+        }`}
+      >
+        All
+      </button>
+      {WEIGHT_CLASS_TAGS.map((t) => {
+        const on = value === t;
+        return (
+          <button
+            key={t}
+            onClick={() => onChange(on ? null : t)}
+            className={`rounded-full border px-2.5 py-1 text-[11px] transition-colors ${
+              on
+                ? "border-primary bg-primary/10 text-primary"
+                : "border-border text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {t}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 export const Route = createFileRoute("/_authenticated/admin/program-library")({ component: ProgramLibraryRedirect });
 
 function ProgramLibraryRedirect() {
