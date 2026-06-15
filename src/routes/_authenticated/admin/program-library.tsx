@@ -35,6 +35,92 @@ import {
 import { ShareProgramSheet } from "@/components/programs/share-program-sheet";
 import { DestinationBadges } from "@/components/programs/destination-badges";
 import { listShares, summarizeShares, type TemplateShare } from "@/lib/programs/sharing";
+import { listClientMaxes, upsertClientMax, type ClientMaxRow } from "@/lib/pl-maxes";
+import { notifyMissingMaxesFn } from "@/lib/missing-maxes.functions";
+
+// Quick-pick weight class tags (admin-only). Free-form tags still supported in the input.
+const WEIGHT_CLASS_TAGS: string[] = [
+  "47kg", "52kg", "57kg", "59kg", "63kg", "66kg", "69kg", "74kg",
+  "76kg", "83kg", "84kg", "84kg+", "93kg", "105kg", "120kg", "120kg+",
+];
+
+function tagListFromString(s: string): string[] {
+  return s.split(",").map((x) => x.trim()).filter(Boolean);
+}
+function tagsStringWithToggle(s: string, tag: string): string {
+  const list = tagListFromString(s);
+  const i = list.findIndex((t) => t.toLowerCase() === tag.toLowerCase());
+  if (i >= 0) list.splice(i, 1); else list.push(tag);
+  return list.join(", ");
+}
+
+function WeightClassPicker({
+  value, onChange,
+}: { value: string; onChange: (next: string) => void }) {
+  const active = new Set(tagListFromString(value).map((t) => t.toLowerCase()));
+  return (
+    <div className="space-y-1">
+      <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">
+        Weight class quick-pick
+      </Label>
+      <div className="flex flex-wrap gap-1">
+        {WEIGHT_CLASS_TAGS.map((t) => {
+          const on = active.has(t.toLowerCase());
+          return (
+            <button
+              key={t}
+              type="button"
+              onClick={() => onChange(tagsStringWithToggle(value, t))}
+              className={`rounded-full border px-2.5 py-1 text-[11px] transition-colors ${
+                on
+                  ? "border-primary bg-primary/10 text-primary"
+                  : "border-border text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {t}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function WeightClassFilter({
+  value, onChange,
+}: { value: string | null; onChange: (next: string | null) => void }) {
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      <span className="text-[11px] uppercase tracking-wider text-muted-foreground">Weight class:</span>
+      <button
+        onClick={() => onChange(null)}
+        className={`rounded-full border px-2.5 py-1 text-[11px] transition-colors ${
+          value === null
+            ? "border-primary bg-primary/10 text-primary"
+            : "border-border text-muted-foreground hover:text-foreground"
+        }`}
+      >
+        All
+      </button>
+      {WEIGHT_CLASS_TAGS.map((t) => {
+        const on = value === t;
+        return (
+          <button
+            key={t}
+            onClick={() => onChange(on ? null : t)}
+            className={`rounded-full border px-2.5 py-1 text-[11px] transition-colors ${
+              on
+                ? "border-primary bg-primary/10 text-primary"
+                : "border-border text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {t}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
 export const Route = createFileRoute("/_authenticated/admin/program-library")({ component: ProgramLibraryRedirect });
 
@@ -77,6 +163,7 @@ export function ProgramLibrary({ embedded = false }: { embedded?: boolean } = {}
   const qc = useQueryClient();
   const [q, setQ] = useState("");
   const [chip, setChip] = useState<FilterChip>({ kind: "all" });
+  const [weightClass, setWeightClass] = useState<string | null>(null);
   const [openNew, setOpenNew] = useState(false);
   const [previewId, setPreviewId] = useState<string | null>(null);
   const [assignTpl, setAssignTpl] = useState<any | null>(null);
@@ -96,6 +183,14 @@ export function ProgramLibrary({ embedded = false }: { embedded?: boolean } = {}
         ...(showArchived ? { includeArchived: true, onlyArchived: true } : {}),
       } as any),
   });
+
+  const filteredTemplates = useMemo(() => {
+    if (!weightClass) return templates as any[];
+    const wc = weightClass.toLowerCase();
+    return (templates as any[]).filter((t) =>
+      (t.tags ?? []).some((tag: string) => String(tag).toLowerCase() === wc),
+    );
+  }, [templates, weightClass]);
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ["pl-templates"] });
 
@@ -129,19 +224,24 @@ export function ProgramLibrary({ embedded = false }: { embedded?: boolean } = {}
 
         {/* Filter chips */}
         <FilterChips chip={chip} setChip={setChip} />
+        <WeightClassFilter value={weightClass} onChange={setWeightClass} />
 
         {isLoading ? (
           <p className="text-sm text-muted-foreground">Loading…</p>
-        ) : templates.length === 0 ? (
+        ) : filteredTemplates.length === 0 ? (
           <Card className="p-12 text-center">
             <BookOpen className="mx-auto h-10 w-10 text-muted-foreground" />
             <p className="mt-3 text-sm text-muted-foreground">
-              {showArchived ? "No archived templates." : "No templates yet. Create your first reusable program."}
+              {weightClass
+                ? `No templates tagged ${weightClass}.`
+                : showArchived
+                  ? "No archived templates."
+                  : "No templates yet. Create your first reusable program."}
             </p>
           </Card>
         ) : (
           <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-            {templates.map((t: any) => (
+            {filteredTemplates.map((t: any) => (
               <TemplateCard
                 key={t.id}
                 tpl={t}
@@ -545,6 +645,10 @@ function NewTemplateDialog({ open, onOpenChange, onCreated }: { open: boolean; o
             <Label>Tags (comma-separated)</Label>
             <Input value={form.tags} onChange={(e) => setForm({ ...form, tags: e.target.value })} placeholder="meet-prep, taper, accessories" />
           </div>
+          <WeightClassPicker
+            value={form.tags}
+            onChange={(next) => setForm({ ...form, tags: next })}
+          />
           <div>
             <Label>Notes</Label>
             <Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={2} />
@@ -712,6 +816,10 @@ function EditTemplateDetailsDialog({
               <Label>Tags (comma-separated)</Label>
               <Input value={form.tags} onChange={(e) => setForm({ ...form, tags: e.target.value })} placeholder="meet-prep, taper, accessories" />
             </div>
+            <WeightClassPicker
+              value={form.tags}
+              onChange={(next) => setForm({ ...form, tags: next })}
+            />
             <div>
               <Label>Notes <span className="font-normal text-muted-foreground">(internal — never shown to clients/members)</span></Label>
               <Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={3} />
@@ -860,6 +968,11 @@ function AssignDialog({ template, onClose }: { template: any; onClose: () => voi
   // The dialog then switches to a confirm view that lists every issue and
   // requires a second explicit "Assign anyway" click before running.
   const [pendingIssues, setPendingIssues] = useState<DayIssue[] | null>(null);
+  // Missing-maxes gate state. When the chosen client has no active 1RM/TM
+  // records, the dialog switches to a blocking view that requires the coach
+  // to either add one or explicitly notify the admin before continuing.
+  const [showMaxesGate, setShowMaxesGate] = useState(false);
+  const [notifying, setNotifying] = useState(false);
   const templateWeeks = template ? getTemplateWeeks(template) : 0;
 
   useEffect(() => {
@@ -888,6 +1001,14 @@ function AssignDialog({ template, onClose }: { template: any; onClose: () => voi
     queryKey: ["pl-days-week", weekId], enabled: !!weekId,
     queryFn: async () => (await (supabase as any).from("pl_days").select("*").eq("week_id", weekId).order("day_index")).data ?? [],
   });
+  const { data: clientMaxes = [], refetch: refetchMaxes } = useQuery({
+    queryKey: ["pl-client-maxes", clientId],
+    enabled: !!clientId,
+    queryFn: () => listClientMaxes(clientId),
+  });
+  const hasAnyMax = (clientMaxes as ClientMaxRow[]).some(
+    (m) => m.active && (m.one_rm != null || m.training_max != null),
+  );
   // Always re-fetch the template (with its full payload) so requirement
   // checks see fresh data — list rows may not have `payload` selected.
   const { data: fullTpl } = useQuery({
@@ -933,6 +1054,11 @@ function AssignDialog({ template, onClose }: { template: any; onClose: () => voi
       return toast.error(
         `Overlaps with "${conflict.name ?? "another block"}" (${conflict.start_date ?? "?"} – ${conflict.end_date ?? "?"}). Use the suggested start date.`,
       );
+    }
+    // Maxes gate — block assignment when client has no active 1RM/TM.
+    if (!hasAnyMax) {
+      setShowMaxesGate(true);
+      return;
     }
     // Requirement check: every day needs an exercise + sets + reps. If any
     // gaps exist, switch to a confirm view that lists each missing item.
@@ -1004,7 +1130,39 @@ function AssignDialog({ template, onClose }: { template: any; onClose: () => voi
   return (
     <Dialog open={!!template} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-lg">
-        {pendingIssues ? (
+        {showMaxesGate ? (
+          <MaxesGate
+            clientId={clientId}
+            clientName={(clients as any[]).find((c) => c.id === clientId)?.full_name ?? "this client"}
+            templateName={template.name}
+            notifying={notifying}
+            onCancel={() => setShowMaxesGate(false)}
+            onSaved={async () => {
+              await refetchMaxes();
+              toast.success("Max saved");
+              setShowMaxesGate(false);
+            }}
+            onNotifyAndContinue={async () => {
+              try {
+                setNotifying(true);
+                const res = await notifyMissingMaxesFn({ data: { clientId, templateName: template.name } });
+                const chans = (res?.channels ?? []) as string[];
+                if (chans.length === 0) {
+                  toast.warning("Logged a support alert. Email/SMS could not be sent — check sender settings.");
+                } else {
+                  toast.success(`Notified via ${chans.join(", ")}`);
+                }
+                setShowMaxesGate(false);
+                // Skip validation issues check too — coach already acknowledged.
+                await runAssignment();
+              } catch (e: any) {
+                toast.error(e?.message ?? "Could not notify");
+              } finally {
+                setNotifying(false);
+              }
+            }}
+          />
+        ) : pendingIssues ? (
           <>
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2 text-amber-600 dark:text-amber-300">
@@ -1212,5 +1370,120 @@ function AssignDialog({ template, onClose }: { template: any; onClose: () => voi
         )}
       </DialogContent>
     </Dialog>
+  );
+}
+
+// ------- Maxes gate (blocks assign when client has no 1RM / TM) -------
+function MaxesGate({
+  clientId, clientName, templateName, notifying,
+  onCancel, onSaved, onNotifyAndContinue,
+}: {
+  clientId: string;
+  clientName: string;
+  templateName: string;
+  notifying: boolean;
+  onCancel: () => void;
+  onSaved: () => void | Promise<void>;
+  onNotifyAndContinue: () => void | Promise<void>;
+}) {
+  const COMMON_LIFTS = ["Competition Squat", "Competition Bench Press", "Competition Deadlift"];
+  const [lift, setLift] = useState<string>(COMMON_LIFTS[0]);
+  const [oneRm, setOneRm] = useState<string>("");
+  const [tm, setTm] = useState<string>("");
+  const [unit, setUnit] = useState<"kg" | "lb">("kg");
+  const [saving, setSaving] = useState(false);
+
+  const save = async () => {
+    const orm = oneRm ? Number(oneRm) : null;
+    const trm = tm ? Number(tm) : null;
+    if (!lift.trim()) return toast.error("Pick a lift");
+    if (orm == null && trm == null) return toast.error("Enter 1RM or Training Max");
+    try {
+      setSaving(true);
+      await upsertClientMax({
+        client_id: clientId,
+        lift: lift.trim(),
+        one_rm: orm,
+        training_max: trm,
+        unit,
+        source: "manual",
+        active: true,
+        manual_override: false,
+        rounding_mode: "nearest",
+        rounding_step: unit === "kg" ? 2.5 : 5,
+      } as any);
+      await onSaved();
+    } catch (e: any) {
+      toast.error(e?.message ?? "Could not save max");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <>
+      <DialogHeader>
+        <DialogTitle className="flex items-center gap-2 text-amber-600 dark:text-amber-300">
+          <AlertTriangle className="h-4 w-4" />
+          Set 1RM / Training Max for {clientName}
+        </DialogTitle>
+      </DialogHeader>
+      <div className="space-y-3 text-sm">
+        <p>
+          <span className="font-semibold">{clientName}</span> has no 1RM or Training Max
+          on file. Percentage-based prescriptions in{" "}
+          <span className="font-semibold">"{templateName}"</span> won't calculate until at
+          least one is added.
+        </p>
+        <div className="rounded-md border border-border bg-secondary/30 p-3 space-y-2">
+          <div>
+            <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Lift</Label>
+            <Select value={lift} onValueChange={setLift}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {COMMON_LIFTS.map((l) => <SelectItem key={l} value={l}>{l}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            <div>
+              <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">1RM</Label>
+              <Input inputMode="decimal" value={oneRm} onChange={(e) => setOneRm(e.target.value)} placeholder="e.g. 200" />
+            </div>
+            <div>
+              <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Training Max</Label>
+              <Input inputMode="decimal" value={tm} onChange={(e) => setTm(e.target.value)} placeholder="e.g. 180" />
+            </div>
+            <div>
+              <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Unit</Label>
+              <Select value={unit} onValueChange={(v) => setUnit(v as "kg" | "lb")}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="kg">kg</SelectItem>
+                  <SelectItem value="lb">lb</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </div>
+        <p className="text-[11px] text-muted-foreground">
+          Need to add more lifts? Save this one first, then open the client's profile to add the rest.
+          Or skip & we'll email + SMS you so you don't forget.
+        </p>
+      </div>
+      <DialogFooter className="gap-2 sm:gap-2">
+        <Button variant="outline" onClick={onCancel} disabled={saving || notifying}>Back</Button>
+        <Button
+          variant="secondary"
+          onClick={onNotifyAndContinue}
+          disabled={saving || notifying}
+        >
+          {notifying ? "Notifying…" : "Skip & notify me"}
+        </Button>
+        <Button onClick={save} disabled={saving || notifying}>
+          {saving ? "Saving…" : "Save max"}
+        </Button>
+      </DialogFooter>
+    </>
   );
 }

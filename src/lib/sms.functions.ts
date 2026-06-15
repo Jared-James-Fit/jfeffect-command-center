@@ -122,6 +122,7 @@ export const sendManualSms = createServerFn({ method: "POST" })
 const UpdateSettings = z.object({
   enabled: z.boolean().optional(),
   from_phone: z.string().trim().max(40).nullable().optional(),
+  admin_notify_phone: z.string().trim().max(40).nullable().optional(),
   brand_name: z.string().trim().min(1).max(80).optional(),
   manual_default_template: z.string().trim().min(1).max(1000).optional(),
   rate_limit_per_hour: z.number().int().min(1).max(20).optional(),
@@ -141,6 +142,7 @@ export const updateSmsSettings = createServerFn({ method: "POST" })
     if (!(roles ?? []).some((r: any) => r.role === "admin")) throw new Error("Admin only");
     const patch: any = { ...data, updated_at: new Date().toISOString(), updated_by: userId };
     if (patch.from_phone !== undefined) patch.from_phone = normalizePhone(patch.from_phone);
+    if (patch.admin_notify_phone !== undefined) patch.admin_notify_phone = normalizePhone(patch.admin_notify_phone);
     const { error } = await supabase.from("sms_settings").update(patch).eq("singleton", true);
     if (error) throw new Error(error.message);
     return { ok: true };

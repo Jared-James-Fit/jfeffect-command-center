@@ -99,6 +99,7 @@ function SmsSettings() {
   const autosaveValue = useMemo(() => f ? ({
     enabled: !!f.enabled,
     from_phone: f.from_phone ?? null,
+    admin_notify_phone: f.admin_notify_phone ?? null,
     brand_name: f.brand_name ?? "",
     manual_default_template: f.manual_default_template ?? "",
     rate_limit_per_hour: Number(f.rate_limit_per_hour) || 3,
@@ -166,6 +167,17 @@ function SmsSettings() {
           <div className="space-y-1.5">
             <Label>From phone (Twilio E.164)</Label>
             <Input value={f.from_phone ?? ""} placeholder="+15551234567" onChange={(e) => setVal("from_phone", e.target.value)} />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Admin notify phone (E.164)</Label>
+            <Input
+              value={f.admin_notify_phone ?? ""}
+              placeholder="+15551234567"
+              onChange={(e) => setVal("admin_notify_phone", e.target.value)}
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Where system alerts text you — e.g. when a client is missing their 1RM/Training Max at program assignment.
+            </p>
           </div>
           <div className="space-y-1.5">
             <Label>Brand name in messages</Label>
