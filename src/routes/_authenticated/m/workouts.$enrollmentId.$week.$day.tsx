@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle2, Save } from "lucide-react";
+import { CheckCircle2, Save, StickyNote, ChevronDown, ChevronUp } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { ActionButton } from "@/components/action-button";
@@ -284,6 +284,9 @@ function WorkoutTracker() {
         workoutId={null}
         pageRoute={route}
       />
+      {dayObj?.notes && dayObj?.notes_client_visible && (
+        <WorkoutOverviewCard text={dayObj.notes} />
+      )}
       {rows.length === 0 && (
         <WorkoutEmptyCard
           clientId={null}
