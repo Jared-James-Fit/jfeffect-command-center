@@ -2367,6 +2367,20 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
   if (row.tempo) summaryParts.push(`tempo ${row.tempo}`);
   const restSummary = `rest ${fmtRestSeconds(effectiveRest)}`;
 
+  // Small aesthetic row-number badge. Hidden when no index is provided
+  // (e.g. the standalone single-row card view). Uses muted styling so it
+  // reads as a positional indicator, not part of the prescription.
+  const RowIndexBadge = index == null ? null : (
+    <span
+      className="inline-flex shrink-0 select-none items-center justify-center rounded-full border border-border/60 bg-background/80 px-1.5 text-[10px] font-semibold tabular-nums leading-none text-muted-foreground shadow-sm backdrop-blur-sm"
+      style={{ minWidth: "1.5rem", height: "1.25rem" }}
+      aria-label={`Exercise ${index + 1} of ${row.index_total ?? ""}`}
+      title={`Exercise ${index + 1}`}
+    >
+      {index + 1}
+    </span>
+  );
+
   return (
     <div
       data-pb-row
