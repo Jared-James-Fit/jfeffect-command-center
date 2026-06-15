@@ -1059,6 +1059,7 @@ function WorkoutDay() {
           clientId={client.id}
           dayId={dayId}
           existing={existingFeedback ?? null}
+          workoutDate={scheduledDate ? format(scheduledDate, "EEEE, MMMM d") : completion?.completed_at ? format(new Date(completion.completed_at), "EEEE, MMMM d") : null}
           onSubmitted={async (submitted) => {
             const wasFirstSubmit = !hasFeedback;
             if (submitted) setJustSubmittedFeedback(submitted);
