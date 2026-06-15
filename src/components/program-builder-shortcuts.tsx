@@ -221,8 +221,8 @@ export function ProgramBuilderShortcutsButton({ className }: { className?: strin
   }, [legendOpen]);
 
   const mod = mac ? "⌘" : "Ctrl";
+  const shift = "Shift";
   const alt = mac ? "⌥" : "Alt";
-  const del = mac ? "Delete" : "Backspace";
   const groups = buildShortcuts(mac);
 
   return (
@@ -267,7 +267,7 @@ export function ProgramBuilderShortcutsButton({ className }: { className?: strin
             </li>
             <li className="flex items-center justify-between gap-2">
               <span>Clear search</span>
-              <KeyCombo keys={[mod, del]} />
+              <KeyCombo keys={[mod, shift, "Z"]} />
             </li>
             <li className="flex items-center justify-between gap-2">
               <span>Refresh results</span>
