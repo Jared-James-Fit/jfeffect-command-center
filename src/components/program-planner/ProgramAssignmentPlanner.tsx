@@ -118,19 +118,6 @@ export function ProgramAssignmentPlanner({ clientId, templateId, onDone }: Props
     return { days: [], source: "none" };
   }, [client]);
 
-  // Workouts per week from the current selection — used to flag mismatches.
-  const workoutsPerWeek = useMemo(() => {
-    if (!payload) return 0;
-    const perWeek = new Map<string, number>();
-    for (const md of (preview?.placements ?? [])) {
-      const k = `${md.blockKey}::${md.weekIndex}`;
-      perWeek.set(k, (perWeek.get(k) ?? 0) + 1);
-    }
-    let max = 0;
-    for (const n of perWeek.values()) if (n > max) max = n;
-    return max || summary.days || 0;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [preview?.placements, summary.days, payload]);
   const [startDate, setStartDate] = useState<string | null>(initial.startDate);
   const [conflictDecisions, setConflictDecisions] = useState<Record<string, ConflictDecision>>(initial.conflictDecisions);
   const [publishStatus, setPublishStatus] = useState<PublishStatus>(initial.publishStatus);
