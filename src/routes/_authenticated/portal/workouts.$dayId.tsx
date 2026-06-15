@@ -1049,57 +1049,6 @@ function UnsupportedExerciseCard({ row }: { row: any }) {
   );
 }
 
-/**
- * Compact, collapsible card that surfaces the coach's optional day description
- * above the workout. Defaults collapsed to a single preview line so it never
- * dominates the screen; tap to expand the full text.
- */
-function CoachDescriptionCard({ text }: { text: string }) {
-  const [open, setOpen] = useState(false);
-  const trimmed = text.trim();
-  if (!trimmed) return null;
-  // "Short" = fits comfortably on two lines and has no manual line breaks; show full.
-  // Longer text gets a two-line preview with Read more / Show less.
-  const isShort = trimmed.length <= 140 && !trimmed.includes("\n");
-  return (
-    <Card className="border-border/60 bg-muted/30 p-3">
-      <div className="flex items-start gap-2">
-        <StickyNote className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-        <div className="min-w-0 flex-1">
-          <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-            Workout Overview
-          </div>
-          <div
-            className={cn(
-              "mt-0.5 text-sm text-foreground whitespace-pre-wrap",
-              !open && !isShort && "line-clamp-2",
-            )}
-          >
-            {trimmed}
-          </div>
-          {!isShort && (
-            <button
-              type="button"
-              onClick={() => setOpen((o) => !o)}
-              className="mt-1 inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline"
-            >
-              {open ? (
-                <>
-                  Show less <ChevronUp className="h-3 w-3" />
-                </>
-              ) : (
-                <>
-                  Read more <ChevronDown className="h-3 w-3" />
-                </>
-              )}
-            </button>
-          )}
-        </div>
-      </div>
-    </Card>
-  );
-}
-
 function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResults, existingNote, readonly = false, unit = "kg", onUnitChange, focusMode = false, onChange, onNoteChange, purposeLabel = null }: { row: any; dayId: string; dayTitle: string; clientId: string | undefined; blockId?: string | null; existingResults: any[]; existingNote?: any; readonly?: boolean; unit?: "kg" | "lb"; onUnitChange?: (u: "kg" | "lb") => void; focusMode?: boolean; onChange: () => void; onNoteChange: () => void; purposeLabel?: string | null }) {
   const name = row.exercises?.name ?? row.exercise_name_override ?? "Exercise";
   const exercise = row.exercises ?? null;
