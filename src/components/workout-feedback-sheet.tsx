@@ -182,6 +182,11 @@ export function WorkoutFeedbackSheet({ open, onOpenChange, completionId, clientI
                   ? "Update anything that changed."
                   : "Quick feedback — under 10 seconds."}
             </SheetDescription>
+            {workoutDate && (
+              <div className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+                {workoutDate}
+              </div>
+            )}
           </SheetHeader>
           {isLocked && (
             <div className="mt-3 flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
