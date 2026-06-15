@@ -2152,6 +2152,180 @@ export type Database = {
           },
         ]
       }
+      client_goals_setup: {
+        Row: {
+          available_weekdays: string[]
+          client_id: string
+          completed_at: string | null
+          created_at: string
+          equipment: string[]
+          equipment_by_location: Json
+          final_notes: string | null
+          food_restrictions_details: string | null
+          food_restrictions_has: boolean
+          goal_target: string | null
+          id: string
+          injuries_details: string | null
+          injuries_has: boolean
+          last_reviewed_at: string | null
+          last_reviewed_by: string | null
+          main_goal: string | null
+          main_goal_other: string | null
+          nutrition_challenges: string[]
+          nutrition_goal: string | null
+          nutrition_preference: string | null
+          training_days_per_week: number | null
+          training_experience: string | null
+          training_location: string | null
+          training_styles: string[]
+          update_request_message: string | null
+          update_requested_at: string | null
+          update_requested_by: string | null
+          updated_at: string
+          workout_length_minutes: number | null
+        }
+        Insert: {
+          available_weekdays?: string[]
+          client_id: string
+          completed_at?: string | null
+          created_at?: string
+          equipment?: string[]
+          equipment_by_location?: Json
+          final_notes?: string | null
+          food_restrictions_details?: string | null
+          food_restrictions_has?: boolean
+          goal_target?: string | null
+          id?: string
+          injuries_details?: string | null
+          injuries_has?: boolean
+          last_reviewed_at?: string | null
+          last_reviewed_by?: string | null
+          main_goal?: string | null
+          main_goal_other?: string | null
+          nutrition_challenges?: string[]
+          nutrition_goal?: string | null
+          nutrition_preference?: string | null
+          training_days_per_week?: number | null
+          training_experience?: string | null
+          training_location?: string | null
+          training_styles?: string[]
+          update_request_message?: string | null
+          update_requested_at?: string | null
+          update_requested_by?: string | null
+          updated_at?: string
+          workout_length_minutes?: number | null
+        }
+        Update: {
+          available_weekdays?: string[]
+          client_id?: string
+          completed_at?: string | null
+          created_at?: string
+          equipment?: string[]
+          equipment_by_location?: Json
+          final_notes?: string | null
+          food_restrictions_details?: string | null
+          food_restrictions_has?: boolean
+          goal_target?: string | null
+          id?: string
+          injuries_details?: string | null
+          injuries_has?: boolean
+          last_reviewed_at?: string | null
+          last_reviewed_by?: string | null
+          main_goal?: string | null
+          main_goal_other?: string | null
+          nutrition_challenges?: string[]
+          nutrition_goal?: string | null
+          nutrition_preference?: string | null
+          training_days_per_week?: number | null
+          training_experience?: string | null
+          training_location?: string | null
+          training_styles?: string[]
+          update_request_message?: string | null
+          update_requested_at?: string | null
+          update_requested_by?: string | null
+          updated_at?: string
+          workout_length_minutes?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_goals_setup_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: true
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      client_goals_setup_audit: {
+        Row: {
+          after: Json | null
+          before: Json | null
+          changed_by: string | null
+          changed_fields: string[]
+          client_id: string
+          created_at: string
+          id: number
+        }
+        Insert: {
+          after?: Json | null
+          before?: Json | null
+          changed_by?: string | null
+          changed_fields: string[]
+          client_id: string
+          created_at?: string
+          id?: number
+        }
+        Update: {
+          after?: Json | null
+          before?: Json | null
+          changed_by?: string | null
+          changed_fields?: string[]
+          client_id?: string
+          created_at?: string
+          id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_goals_setup_audit_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      client_goals_setup_notes: {
+        Row: {
+          author_id: string
+          body: string
+          client_id: string
+          created_at: string
+          id: string
+        }
+        Insert: {
+          author_id: string
+          body: string
+          client_id: string
+          created_at?: string
+          id?: string
+        }
+        Update: {
+          author_id?: string
+          body?: string
+          client_id?: string
+          created_at?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_goals_setup_notes_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       client_quick_links: {
         Row: {
           archived: boolean
@@ -14104,10 +14278,15 @@ export type Database = {
       is_active_coach: { Args: { _user_id: string }; Returns: boolean }
       is_admin_or_media_manager: { Args: { _uid: string }; Returns: boolean }
       is_assigned_coach: { Args: { _client_id: string }; Returns: boolean }
+      is_assigned_coach_for_client: {
+        Args: { _client_id: string }
+        Returns: boolean
+      }
       is_assigned_coach_for_member: {
         Args: { _member_id: string }
         Returns: boolean
       }
+      is_client_owner: { Args: { _client_id: string }; Returns: boolean }
       is_coach_or_admin: { Args: { _user_id: string }; Returns: boolean }
       is_group_admin: {
         Args: { _group_id: string; _user_id: string }
