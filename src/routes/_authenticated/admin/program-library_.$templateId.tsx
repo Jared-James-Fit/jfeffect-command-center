@@ -1636,6 +1636,9 @@ function DayEditor({ day, setDay, exercises, compact, dayKey }: { day: any; setD
     }
     return { withV, total: rows.length, missing: rows.length - withV };
   }, [rows, exercises]);
+  // Hard requirements for assignment — surface live so the coach sees gaps
+  // as they build (and we can also block assignment without confirmation).
+  const dayIssues = useMemo(() => validateDay(day), [day]);
   const [dragOver, setDragOver] = useState(false);
   const [dragRowIdx, setDragRowIdx] = useState<number | null>(null);
   const [dropTargetIdx, setDropTargetIdx] = useState<number | null>(null);
