@@ -167,15 +167,15 @@ export function QuickAssignTemplateDialog({ open, onOpenChange, clientId, client
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>Assign Program Template{clientName ? ` · ${clientName}` : ""}</DialogTitle>
+      <DialogContent className="max-w-md w-[calc(100vw-1.5rem)] [&>*]:min-w-0">
+        <DialogHeader className="min-w-0">
+          <DialogTitle className="truncate pr-8">Assign Program Template{clientName ? ` · ${clientName}` : ""}</DialogTitle>
         </DialogHeader>
-        <div className="space-y-3">
-          <div>
+        <div className="space-y-3 min-w-0">
+          <div className="min-w-0">
             <Label>Template</Label>
             <Select value={templateId} onValueChange={setTemplateId}>
-              <SelectTrigger><SelectValue placeholder={(templates as any[]).length ? "Choose from Program Library…" : "No templates yet"} /></SelectTrigger>
+              <SelectTrigger className="w-full min-w-0"><SelectValue placeholder={(templates as any[]).length ? "Choose from Program Library…" : "No templates yet"} /></SelectTrigger>
               <SelectContent>
                 {(templates as any[]).map((t) => (
                   <SelectItem key={t.id} value={t.id}>
