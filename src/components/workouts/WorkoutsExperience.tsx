@@ -124,6 +124,14 @@ export function WorkoutsExperience({
                 <span className="hidden sm:inline">Calendar</span>
               </Link>
             </Button>
+            {mode === "self" && (
+              <Button asChild size="sm" variant="outline" className="h-8 gap-1">
+                <Link to={"/portal/workouts/analytics" as any} aria-label="Open training analytics">
+                  <Activity className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Analytics</span>
+                </Link>
+              </Button>
+            )}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button size="sm" variant="ghost" className="h-8 w-8 p-0" aria-label="More actions">
