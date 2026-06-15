@@ -149,7 +149,7 @@ function ClientCheckInsList() {
             </div>
           </Card>
         ) : (
-          forms.map((f) => {
+          sortedForms.map((f) => {
             const subs = byForm.get(f.id) ?? [];
             const latest = subs[0];
             const status = (latest?.status ?? "not_started") as any;
