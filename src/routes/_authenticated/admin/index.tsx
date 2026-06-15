@@ -114,7 +114,7 @@ function TrainingIntelDashboardCard() {
     <Card className="border-border bg-card p-4 md:p-5">
       <SectionHeader title="Training Intelligence" icon={Activity} viewAll={{ to: "/admin/training-intelligence" }} />
       {attention.length === 0 ? (
-        <EmptyMini>No training flags right now.</EmptyMini>
+        <EmptyRow>No training flags right now.</EmptyRow>
       ) : (
         <ul className="divide-y divide-border">
           {attention.map((c: any) => (
@@ -589,7 +589,7 @@ function AdminDashboard() {
             <Card className="border-border bg-card p-4 md:p-5">
               <SectionHeader title="Needs Attention" icon={AlertTriangle} />
               {needsTop.length === 0 ? (
-                <EmptyMini>Nothing urgent right now.</EmptyMini>
+                <EmptyRow>Nothing urgent right now.</EmptyRow>
               ) : (
                 <ul className="divide-y divide-border">
                   {needsTop.map((n) => (
@@ -674,7 +674,7 @@ function AdminDashboard() {
             <Card className="border-border bg-card p-4 md:p-5">
               <SectionHeader title="Training Deadlines" icon={Timer} viewAll={{ to: "/admin/training-phases" }} />
               {deadlines.length === 0 ? (
-                <EmptyMini>No phases due this week. You're ahead.</EmptyMini>
+                <EmptyRow>No phases due this week. You're ahead.</EmptyRow>
               ) : (
                 <ul className="divide-y divide-border">
                   {deadlines.slice(0, 5).map((p) => (
@@ -743,7 +743,7 @@ function AdminDashboard() {
             <Card className="border-border bg-card p-4 md:p-5">
               <SectionHeader title="Recent Clients" icon={Users} viewAll={{ to: "/admin/clients" }} />
               {clients.length === 0 ? (
-                <EmptyMini>No clients yet.</EmptyMini>
+                <EmptyRow>No clients yet.</EmptyRow>
               ) : (
                 <ul className="divide-y divide-border">
                   {clients.slice(0, 5).map((c) => (
