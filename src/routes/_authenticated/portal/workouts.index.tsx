@@ -38,6 +38,7 @@ export const Route = createFileRoute("/_authenticated/portal/workouts/")({
     week: typeof s.week === "string" ? parseInt(s.week, 10) || undefined
       : typeof s.week === "number" ? s.week : undefined,
     day: typeof s.day === "string" && s.day ? s.day : undefined,
+    block: typeof s.block === "string" && s.block ? s.block : undefined,
   }),
   component: WorkoutsPage,
 });
@@ -84,10 +85,31 @@ function WorkoutsPage() {
   }
   const workoutItems = (items as any[]).filter((it) => it.day?.id);
 
-  // Treat the latest non-archived block (default ordering from getClientWorkouts)
-  // as the current block for the "All Workouts" tab.
+  // All visible (non-archived) blocks the client may navigate between.
   const blockList = [...blockGroups.values()];
-  const currentGroup = blockList[blockList.length - 1] ?? null;
+  const allBlocks = blockList.map((g) => g.block).filter(Boolean);
+
+  // Pick the "default" active block by date: the first block whose start
+  // date is in the past with an end date in the future (or today). Falls
+  // back to the latest assigned block if no dates are set.
+  const today = new Date();
+  const parseD = (s?: string | null) => (s ? new Date(s + "T00:00:00") : null);
+  const defaultBlock =
+    allBlocks.find((b: any) => {
+      const s = parseD(b?.start_date), e = parseD(b?.end_date);
+      if (!s) return false;
+      if (s > today) return false;
+      if (e && e < today) return false;
+      return true;
+    }) ?? allBlocks[allBlocks.length - 1] ?? null;
+
+  // ?block= wins, then derived default.
+  const selectedBlockId: string | null =
+    (search?.block && allBlocks.some((b: any) => b.id === search.block) ? search.block : null) ??
+    defaultBlock?.id ?? null;
+  const currentGroup = selectedBlockId
+    ? (blockGroups.get(selectedBlockId) ?? null)
+    : null;
   const currentBlockId: string | null = currentGroup?.block?.id ?? null;
   const currentBlockItems = workoutItems.filter((it) => it.block?.id === currentBlockId);
 
@@ -227,6 +249,22 @@ function WorkoutsPage() {
             {currentGroup ? (
               <ClientBlockView
                 block={currentGroup.block}
+                blocks={allBlocks}
+                selectedBlockId={currentBlockId}
+                onBlockChange={(bid) => {
+                  navigate({
+                    search: (prev: any) => ({
+                      ...prev,
+                      view: "block",
+                      block: bid,
+                      // Reset week/day so the new block defaults to its current/first week.
+                      week: undefined,
+                      day: undefined,
+                    }),
+                    replace: true,
+                    resetScroll: false,
+                  } as any);
+                }}
                 selectedWeekIndex={search?.week ?? null}
                 selectedDayId={search?.day ?? null}
                 onWeekChange={(idx) => {

@@ -8,7 +8,7 @@ import {
   ChevronLeft, ChevronRight, Clock, Play, RotateCcw, CheckCircle2,
   Eye, Lock, Crosshair, Dumbbell,
 } from "lucide-react";
-import { format, startOfDay } from "date-fns";
+import { format, parseISO, startOfDay } from "date-fns";
 import { cn } from "@/lib/utils";
 import { getBlockTree, durationRange } from "@/lib/pl-programs";
 import { supabase } from "@/integrations/supabase/client";
@@ -16,7 +16,7 @@ import {
   effectiveRestSeconds, resolveCategory, derivePurposeLabels, purposeLabelBadgeClass,
 } from "@/lib/exercise-metadata";
 import { weekDisplayRange, isCurrentWeek, formatWeekRange } from "@/lib/block-dates";
-import { isWeekLocked } from "@/lib/workout-today";
+import { isWeekLocked, dayScheduledDate } from "@/lib/workout-today";
 
 /* ──────────────────────────────────────────────────────────────────────────
    ClientBlockView
@@ -38,8 +38,47 @@ function fmtRest(sec: number | null | undefined): string {
 
 type Mode = "client" | "admin";
 
+/** Block lifecycle status derived from its dates + stored status. */
+type BlockStatus = "completed" | "current" | "upcoming" | "not-started";
+
+function parseBlockDate(s: string | null | undefined): Date | null {
+  if (!s) return null;
+  const d = parseISO(s);
+  return isNaN(d.getTime()) ? null : startOfDay(d);
+}
+
+export function blockLifecycleStatus(block: any, today: Date = startOfDay(new Date())): BlockStatus {
+  const status = String(block?.status ?? "").toLowerCase();
+  if (status === "completed" || block?.archived) return "completed";
+  const start = parseBlockDate(block?.start_date);
+  const end = parseBlockDate(block?.end_date);
+  if (!start && !end) return status === "active" ? "current" : "not-started";
+  if (end && end < today) return "completed";
+  if (start && start > today) return "upcoming";
+  return "current";
+}
+
+/**
+ * A block is "available to complete" when its start date has arrived (or no
+ * dates are set yet — i.e. legacy blocks). Upcoming blocks default to
+ * preview-only so a client can view the program without logging early.
+ * Coaches can override per-block by setting status="Active".
+ */
+export function isBlockAvailable(block: any, today: Date = startOfDay(new Date())): boolean {
+  if (!block) return false;
+  const status = String(block?.status ?? "").toLowerCase();
+  if (status === "active") return true;
+  if (status === "locked" || block?.archived) return false;
+  const start = parseBlockDate(block?.start_date);
+  if (!start) return true; // no start date -> treat as available (legacy)
+  return start <= today;
+}
+
 export function ClientBlockView({
   block,
+  blocks,
+  selectedBlockId,
+  onBlockChange,
   selectedWeekIndex,
   onWeekChange,
   selectedDayId,
@@ -47,6 +86,10 @@ export function ClientBlockView({
   mode = "client",
 }: {
   block: any;
+  /** Full list of visible blocks (current + next + previous). Optional for back-compat. */
+  blocks?: any[];
+  selectedBlockId?: string | null;
+  onBlockChange?: (blockId: string) => void;
   selectedWeekIndex: number | null;
   onWeekChange: (idx: number) => void;
   selectedDayId?: string | null;
@@ -54,6 +97,30 @@ export function ClientBlockView({
   mode?: Mode;
 }) {
   const blockId: string | null = block?.id ?? null;
+
+  // Today, computed once per render.
+  const today = startOfDay(new Date());
+
+  // ── Block list (sorted by start_date asc, with un-dated at the end) ───────
+  const orderedBlocks = useMemo(() => {
+    const list = (blocks && blocks.length ? blocks : block ? [block] : []).slice();
+    list.sort((a: any, b: any) => {
+      const da = parseBlockDate(a?.start_date)?.getTime() ?? Number.POSITIVE_INFINITY;
+      const db = parseBlockDate(b?.start_date)?.getTime() ?? Number.POSITIVE_INFINITY;
+      if (da !== db) return da - db;
+      return String(a?.created_at ?? "").localeCompare(String(b?.created_at ?? ""));
+    });
+    return list;
+  }, [blocks, block]);
+
+  const blockStatusFor = (b: any): BlockStatus => blockLifecycleStatus(b, today);
+  const blockAvailable = isBlockAvailable(block, today);
+  const blockStatus: BlockStatus = blockLifecycleStatus(block, today);
+
+  const currentBlockIdx = orderedBlocks.findIndex((b: any) => b?.id === blockId);
+  const prevBlock = currentBlockIdx > 0 ? orderedBlocks[currentBlockIdx - 1] : null;
+  const nextBlock = currentBlockIdx >= 0 && currentBlockIdx < orderedBlocks.length - 1
+    ? orderedBlocks[currentBlockIdx + 1] : null;
 
   // Single source of truth for tree (cached by react-query).
   const { data: tree, isLoading } = useQuery({
@@ -88,7 +155,6 @@ export function ClientBlockView({
     () => (tree?.weeks ?? []).slice().sort((a: any, b: any) => a.week_index - b.week_index),
     [tree?.weeks],
   );
-  const today = startOfDay(new Date());
 
   // Resolve the currently-selected week. Defaults to the "current" week
   // (date-anchored) or the first week if none matches.
@@ -129,15 +195,11 @@ export function ClientBlockView({
     return m;
   }, [tree?.rows]);
 
-  // Resolve per-day scheduled date (explicit > derived from week range).
-  const dayDate = (d: any): Date | null => {
-    if (d?.scheduled_date) return startOfDay(new Date(d.scheduled_date + "T00:00:00"));
-    if (!weekRange) return null;
-    const idx = Math.max(0, (d?.day_index ?? 1) - 1);
-    const dt = new Date(weekRange.start);
-    dt.setDate(dt.getDate() + Math.min(6, idx));
-    return startOfDay(dt);
-  };
+  // Canonical per-day scheduled date — same pipeline used by the Overview
+  // tab, SmartTodayCard, and workout-logger header. Honors explicit
+  // day.scheduled_date, then week.training_days, then a linear fallback.
+  const dayDate = (d: any): Date | null =>
+    resolvedWeek ? dayScheduledDate({ day: d, week: resolvedWeek, block, completion: null }) : null;
 
   // ── Selected day (URL-persisted via parent). Falls back to today, then the
   // first not-yet-completed day, then index 0. Invalid IDs fall back safely. ──
@@ -167,6 +229,7 @@ export function ClientBlockView({
   // Scroll the active day into view on mount / when activeDayIdx changes (mobile).
   const carouselRef = useRef<HTMLDivElement | null>(null);
   const weekStripRef = useRef<HTMLDivElement | null>(null);
+  const dayChipsRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     const root = weekStripRef.current;
     if (!root || !resolvedWeek?.id) return;
@@ -181,8 +244,15 @@ export function ClientBlockView({
     if (el && carouselRef.current && window.innerWidth < 768) {
       el.scrollIntoView({ behavior: "auto", inline: "start", block: "nearest" });
     }
+    // Keep the selected day chip fully visible — never let it sit clipped
+    // under the screen edge on small phones.
+    const chipRoot = dayChipsRef.current;
+    if (chipRoot) {
+      const chip = chipRoot.querySelector<HTMLElement>(`[data-day-chip-id="${d.id}"]`);
+      chip?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [resolvedWeek?.id]);
+  }, [resolvedWeek?.id, activeDayIdx, days]);
 
   // Observe which day is most-visible in the mobile carousel and sync the URL.
   useEffect(() => {
@@ -234,6 +304,18 @@ export function ClientBlockView({
   const curIdx = weeks.findIndex((w: any) => w.id === resolvedWeek?.id);
   const prevWeek = curIdx > 0 ? weeks[curIdx - 1] : null;
   const nextWeek = curIdx >= 0 && curIdx < weeks.length - 1 ? weeks[curIdx + 1] : null;
+  // Allow navigating from the last week of this block straight into the
+  // next block's week 1 (if a next block is visible).
+  const canAdvanceToNextBlock = !nextWeek && !!nextBlock && !!onBlockChange;
+  const canRecedeToPrevBlock = !prevWeek && !!prevBlock && !!onBlockChange;
+  const onWeekPrev = () => {
+    if (prevWeek) return onWeekChange(prevWeek.week_index);
+    if (canRecedeToPrevBlock && prevBlock) onBlockChange!(prevBlock.id);
+  };
+  const onWeekNext = () => {
+    if (nextWeek) return onWeekChange(nextWeek.week_index);
+    if (canAdvanceToNextBlock && nextBlock) onBlockChange!(nextBlock.id);
+  };
   const goCurrentWeek = () => {
     const cur = weeks.find((w: any) => isCurrentWeek(weekDisplayRange(block, w)));
     if (cur) onWeekChange(cur.week_index);
@@ -253,13 +335,88 @@ export function ClientBlockView({
 
   return (
     <section className="space-y-3">
+      {/* Block selector — current + next + previously assigned blocks. */}
+      {orderedBlocks.length > 1 && (
+        <div
+          className="-mx-3 flex snap-x snap-mandatory items-stretch gap-2 overflow-x-auto px-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          aria-label="Training blocks"
+        >
+          {orderedBlocks.map((b: any) => {
+            const isSel = b.id === blockId;
+            const st = blockStatusFor(b);
+            const start = parseBlockDate(b?.start_date);
+            const end = parseBlockDate(b?.end_date);
+            const range = start && end
+              ? `${format(start, "MMM d")} – ${format(end, "MMM d")}`
+              : start ? `from ${format(start, "MMM d")}` : null;
+            const weekCount = typeof b?.weeks === "number" ? b.weeks : null;
+            const statusLabel =
+              st === "current" ? "Current"
+              : st === "upcoming" ? "Upcoming"
+              : st === "completed" ? "Completed"
+              : "Not Started";
+            return (
+              <button
+                key={b.id}
+                type="button"
+                onClick={() => onBlockChange?.(b.id)}
+                disabled={!onBlockChange}
+                className={cn(
+                  "snap-start shrink-0 min-w-[10rem] max-w-[18rem] rounded-lg border px-3 py-2 text-left transition-colors",
+                  isSel
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "border-border bg-card text-foreground/85 hover:bg-secondary/60",
+                )}
+                aria-pressed={isSel}
+                aria-label={`${b.name ?? "Block"} — ${statusLabel}`}
+              >
+                <div className="flex items-center gap-1.5">
+                  <span className="truncate text-xs font-black uppercase tracking-wider">
+                    {b.name ?? `Block`}
+                  </span>
+                  {st === "current" && (
+                    <Badge className={cn("h-4 shrink-0 px-1 text-[9px] font-bold",
+                      isSel ? "bg-primary-foreground/20 text-primary-foreground" : "bg-primary/15 text-primary")}>
+                      Current
+                    </Badge>
+                  )}
+                  {st === "upcoming" && (
+                    <Badge variant="outline" className={cn("h-4 shrink-0 px-1 text-[9px] font-bold",
+                      isSel ? "border-primary-foreground/40 text-primary-foreground" : "border-amber-500/40 text-amber-500")}>
+                      Next
+                    </Badge>
+                  )}
+                  {st === "completed" && (
+                    <Badge variant="outline" className={cn("h-4 shrink-0 px-1 text-[9px] font-bold",
+                      isSel ? "border-primary-foreground/40 text-primary-foreground" : "border-emerald-500/40 text-emerald-500")}>
+                      Done
+                    </Badge>
+                  )}
+                </div>
+                <div className={cn("mt-0.5 text-[10px]",
+                  isSel ? "text-primary-foreground/80" : "text-foreground/65")}>
+                  {range ?? "Dates pending"}
+                  {weekCount ? ` · ${weekCount} wk${weekCount === 1 ? "" : "s"}` : null}
+                </div>
+                {st === "upcoming" && !isBlockAvailable(b, today) && (
+                  <div className={cn("mt-0.5 text-[10px] font-semibold",
+                    isSel ? "text-primary-foreground/85" : "text-amber-600")}>
+                    Preview · not available yet
+                  </div>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {/* Sticky week selector — sits below the app header */}
       <div className="sticky top-0 z-30 -mx-3 border-b border-border bg-background/95 px-3 py-2 backdrop-blur">
         <div className="flex items-center gap-2">
           <Button
             size="icon" variant="outline" className="h-8 w-8 shrink-0"
-            disabled={!prevWeek}
-            onClick={() => prevWeek && onWeekChange(prevWeek.week_index)}
+            disabled={!prevWeek && !canRecedeToPrevBlock}
+            onClick={onWeekPrev}
             aria-label="Previous week"
           >
             <ChevronLeft className="h-4 w-4" />
@@ -311,8 +468,8 @@ export function ClientBlockView({
 
           <Button
             size="icon" variant="outline" className="h-8 w-8 shrink-0"
-            disabled={!nextWeek}
-            onClick={() => nextWeek && onWeekChange(nextWeek.week_index)}
+            disabled={!nextWeek && !canAdvanceToNextBlock}
+            onClick={onWeekNext}
             aria-label="Next week"
           >
             <ChevronRight className="h-4 w-4" />
@@ -339,31 +496,49 @@ export function ClientBlockView({
           )}
         </div>
 
-        {/* Mobile day chips (snap-target navigation) */}
+        {/* Mobile day chips — horizontal snap row, bleeds past parent
+            padding so the last chip never sits clipped under the screen
+            edge. Compact two-line label keeps long day titles off-screen
+            (full title + date appear in the workout card below). */}
         {days.length > 0 && (
-          <div className="mt-2 flex gap-1.5 overflow-x-auto md:hidden" aria-label="Days in this week">
+          <div
+            ref={dayChipsRef}
+            className="-mx-3 mt-2 flex snap-x snap-mandatory gap-1.5 overflow-x-auto px-3 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:hidden"
+            aria-label="Days in this week"
+            style={{ scrollPaddingLeft: 12, scrollPaddingRight: 12 }}
+          >
             {days.map((d: any, i: number) => {
               const c = completionByDay.get(d.id);
               const done = !!c?.completed_at;
               const started = !!c && !done;
               const dd = dayDate(d);
               const isToday = !!dd && dd.getTime() === today.getTime();
+              const isSel = activeDayIdx === i;
               return (
                 <button
                   key={d.id}
                   type="button"
+                  data-day-chip-id={d.id}
                   onClick={() => selectDay(d.id, i)}
                   className={cn(
-                    "shrink-0 rounded-full border px-2.5 py-1 text-xs font-semibold whitespace-nowrap",
-                    activeDayIdx === i
+                    "snap-start shrink-0 rounded-lg border px-2.5 py-1 text-left text-[11px] font-semibold leading-tight min-h-[44px] min-w-[64px]",
+                    isSel
                       ? "border-primary bg-primary text-primary-foreground"
-                      : "border-border bg-card text-foreground/80",
-                    isToday && activeDayIdx !== i && "ring-1 ring-primary/40",
+                      : "border-border bg-card text-foreground/85",
+                    isToday && !isSel && "ring-1 ring-primary/40",
                   )}
+                  aria-pressed={isSel}
+                  aria-label={`Day ${d.day_index}${dd ? `, ${format(dd, "EEEE, MMMM d")}` : ""}${done ? ", completed" : started ? ", in progress" : ""}`}
                 >
-                  {d.title || `Day ${d.day_index}`}
-                  {done && <CheckCircle2 className="ml-1 inline h-3 w-3 text-emerald-500" />}
-                  {started && !done && <span className="ml-1 text-[9px] text-amber-500">●</span>}
+                  <div className="flex items-center gap-1 whitespace-nowrap">
+                    <span className="font-black uppercase tracking-wide">Day {d.day_index}</span>
+                    {done && <CheckCircle2 className="h-3 w-3 text-emerald-500" />}
+                    {started && !done && <span className="text-[9px] text-amber-500">●</span>}
+                  </div>
+                  <div className={cn("mt-0.5 text-[10px] font-medium whitespace-nowrap",
+                    isSel ? "text-primary-foreground/80" : "text-foreground/60")}>
+                    {dd ? format(dd, "EEE · MMM d") : "—"}
+                  </div>
                 </button>
               );
             })}
@@ -406,10 +581,25 @@ export function ClientBlockView({
                   <Button size="sm" className="w-full"><Eye className="mr-1 h-3.5 w-3.5" /> Open in builder</Button>
                 </Link>
               );
-              const label = done ? "Review Workout" : started ? "Continue Workout" : (weekLocked || (isPast === false && !isToday && dd)) ? (isToday ? "Start Workout" : (weekLocked ? "Locked" : "View Workout")) : "Start Workout";
-              const Icon = done ? RotateCcw : started ? Play : weekLocked ? Lock : Play;
-              const disabled = weekLocked && !done && !started;
-              const variant = done ? "outline" : "default";
+              // Upcoming block: visible for preview, but Start is gated until
+              // the block's start date arrives (or coach sets status=Active).
+              const previewOnly = !blockAvailable && !done && !started;
+              const label = done
+                ? "Review Workout"
+                : started
+                ? "Continue Workout"
+                : previewOnly
+                ? "Not available yet"
+                : weekLocked
+                ? "Locked"
+                : isToday
+                ? "Start Workout"
+                : isPast === false && !isToday && dd
+                ? "View Workout"
+                : "Start Workout";
+              const Icon = done ? RotateCcw : started ? Play : (weekLocked || previewOnly) ? Lock : Play;
+              const disabled = (weekLocked || previewOnly) && !done && !started;
+              const variant = done ? "outline" : previewOnly ? "outline" : "default";
               return (
                 <Link
                   to="/portal/workouts/$dayId"
@@ -435,7 +625,7 @@ export function ClientBlockView({
                   "w-[calc(100vw-3rem)] max-w-[380px] shrink-0",
                   // Desktop/tablet grid cards fill their column instead of forcing horizontal overflow.
                   "md:w-full md:max-w-none md:shrink md:snap-none",
-                  isToday && !done && "border-primary ring-2 ring-primary/40",
+                  isToday && !done && blockStatus === "current" && "border-primary ring-2 ring-primary/40",
                 )}
               >
                 {/* Sticky day header inside the column */}
@@ -446,9 +636,14 @@ export function ClientBlockView({
                         <h3 className="min-w-0 break-words text-sm font-black uppercase tracking-wide">
                           {d.title || `Day ${d.day_index}`}
                         </h3>
-                        {isToday && !done && (
+                        {isToday && !done && blockStatus === "current" && (
                           <Badge className="h-4 shrink-0 whitespace-nowrap border-primary/40 bg-primary/15 px-1 text-[9px] font-bold text-primary hover:bg-primary/20">
                             Today
+                          </Badge>
+                        )}
+                        {blockStatus === "upcoming" && !done && (
+                          <Badge variant="outline" className="h-4 shrink-0 whitespace-nowrap border-amber-500/40 bg-amber-500/10 px-1 text-[9px] font-bold text-amber-500">
+                            Upcoming
                           </Badge>
                         )}
                       </div>
@@ -456,7 +651,7 @@ export function ClientBlockView({
                         <p className="mt-0.5 break-words text-[11px] text-foreground/70">{d.focus}</p>
                       )}
                       <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-foreground/70">
-                        {dd && <span className="shrink-0 whitespace-nowrap">{format(dd, "EEE · MMM d")}</span>}
+                        {dd && <span className="shrink-0 whitespace-nowrap">{format(dd, "EEEE, MMM d")}</span>}
                         <span className="inline-flex min-w-0 items-center gap-1 whitespace-nowrap"><Clock className="h-3 w-3 shrink-0" />{duration}</span>
                         <span className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap"><Dumbbell className="h-3 w-3 shrink-0" />{rows.length} ex</span>
                       </div>
@@ -474,7 +669,7 @@ export function ClientBlockView({
                         <Badge variant="outline" className="text-[10px]">
                           <Lock className="mr-0.5 h-3 w-3" /> Locked
                         </Badge>
-                      ) : isPast ? (
+                      ) : isPast && blockStatus === "current" ? (
                         <Badge variant="outline" className="border-destructive/40 bg-destructive/10 text-[10px] text-destructive">
                           Missed
                         </Badge>
