@@ -5,6 +5,8 @@ import { Inbox, RefreshCw, Send } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
 import { notifyCoachOfWorkoutFailure } from "@/lib/support-alerts.functions";
 import { runJob } from "@/lib/progress-jobs";
+import { useState } from "react";
+import { toast } from "sonner";
 
 /**
  * Distinct UI for "workout loaded but has no exercises". Different from
@@ -23,9 +25,23 @@ export function WorkoutEmptyCard({
   clientName: string | null;
   workoutId: string | null;
   route: string;
-  onRetry: () => void;
+  onRetry: () => void | Promise<unknown>;
 }) {
   const notifyFn = useServerFn(notifyCoachOfWorkoutFailure);
+  const [retrying, setRetrying] = useState(false);
+  const handleRetry = async () => {
+    if (retrying) return;
+    setRetrying(true);
+    try {
+      await Promise.resolve(onRetry());
+      toast.success("Refreshed", { description: "Pulled the latest workout data." });
+    } catch (err: any) {
+      toast.error("Retry failed", { description: err?.message ?? "Reloading the page…" });
+      if (typeof window !== "undefined") window.location.reload();
+    } finally {
+      setRetrying(false);
+    }
+  };
   return (
     <Card className="space-y-4 border-amber-500/30 bg-amber-500/5 p-6">
       <div className="flex items-start gap-3">
@@ -73,8 +89,9 @@ export function WorkoutEmptyCard({
         >
           Notify Coach
         </ActionButton>
-        <Button variant="outline" onClick={onRetry}>
-          <RefreshCw className="mr-2 h-4 w-4" /> Try Again
+        <Button type="button" variant="outline" onClick={handleRetry} disabled={retrying}>
+          <RefreshCw className={"mr-2 h-4 w-4" + (retrying ? " animate-spin" : "")} />
+          {retrying ? "Retrying…" : "Try Again"}
         </Button>
       </div>
     </Card>
