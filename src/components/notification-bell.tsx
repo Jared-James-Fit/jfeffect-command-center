@@ -16,7 +16,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { listUpcomingForBell, listMyPortalAppointments } from "@/lib/appointments.functions";
 
 type BellItem = {
-  kind: "message" | "lift_video" | "agreement" | "exercise_note" | "group_message" | "check_in_review" | "appointment";
+  kind: "message" | "lift_video" | "agreement" | "exercise_note" | "group_message" | "check_in_review" | "appointment" | "workout_feedback";
   clientId: string;
   groupId?: string;
   videoId?: string;
@@ -24,6 +24,7 @@ type BellItem = {
   noteId?: string;
   reviewId?: string;
   appointmentId?: string;
+  dayId?: string;
   meetLink?: string | null;
   name: string;
   title: string;
@@ -331,6 +332,48 @@ export function NotificationBell() {
             created_at: r.created_at,
           });
         }
+        // Workouts that need post-workout feedback (the gate to "complete").
+        // We surface either:
+        //   • completions started but never finalized (completed_at null,
+        //     started_at set, > 30 min old), or
+        //   • completions marked complete in the last 7 days that still have
+        //     no pl_workout_feedback row.
+        try {
+          const sinceIso = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+          const { data: pending } = await (supabase.from("pl_day_completions") as any)
+            .select("id, day_id, started_at, completed_at, in_progress_at")
+            .eq("client_id", client.id)
+            .or(`completed_at.gte.${sinceIso},and(completed_at.is.null,started_at.gte.${sinceIso})`)
+            .order("started_at", { ascending: false })
+            .limit(20);
+          const completionIds = (pending ?? []).map((p: any) => p.id);
+          let feedbackIds = new Set<string>();
+          if (completionIds.length) {
+            const { data: fbs } = await (supabase.from("pl_workout_feedback") as any)
+              .select("completion_id")
+              .in("completion_id", completionIds);
+            feedbackIds = new Set((fbs ?? []).map((f: any) => f.completion_id));
+          }
+          for (const c of (pending ?? []) as any[]) {
+            if (feedbackIds.has(c.id)) continue;
+            const startedAt = c.started_at ?? c.in_progress_at;
+            if (!startedAt) continue;
+            const ageMin = (Date.now() - new Date(startedAt).getTime()) / 60000;
+            // Skip very fresh in-progress sessions (< 30 min) — likely active.
+            if (!c.completed_at && ageMin < 30) continue;
+            items.push({
+              kind: "workout_feedback",
+              clientId: client.id,
+              dayId: c.day_id,
+              name: "Workout feedback",
+              title: c.completed_at
+                ? "Add feedback to mark your workout complete"
+                : "Submit feedback to finish your workout",
+              body: "Tap to open the workout and submit your feedback.",
+              created_at: c.completed_at ?? startedAt,
+            });
+          }
+        } catch { /* ignore */ }
         items.sort((a, b) => +new Date(b.created_at) - +new Date(a.created_at));
         // Group chat unreads for this client
         const groupItems = await fetchUnreadGroupItems(user!.id);
@@ -397,11 +440,15 @@ export function NotificationBell() {
                   ? "/portal"
                   : it.kind === "appointment"
                   ? (role === "admin" ? "/admin/appointments" : "/portal/appointments")
+                  : it.kind === "workout_feedback"
+                  ? "/portal/workouts/$dayId"
                   : (role === "admin" ? "/admin/messages" : "/portal/messages")
               }
               params={
                 role === "admin" && (it.kind === "agreement" || it.kind === "exercise_note")
                   ? { id: it.clientId }
+                  : it.kind === "workout_feedback" && it.dayId
+                  ? { dayId: it.dayId }
                   : undefined as any
               }
               search={

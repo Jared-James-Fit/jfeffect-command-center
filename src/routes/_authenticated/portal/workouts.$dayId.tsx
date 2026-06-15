@@ -582,6 +582,15 @@ function WorkoutDay() {
 
   // Post-workout feedback sheet state.
   const [feedbackOpen, setFeedbackOpen] = useState(false);
+  // When the client clicks "Finish", we stage the completion payload and
+  // open the feedback sheet. The workout is NOT marked complete until the
+  // feedback is actually submitted — feedback is now a hard gate.
+  const [pendingFinalize, setPendingFinalize] = useState<null | {
+    completionId?: string;
+    startedAt: string;
+    durationMin: number;
+    notes: string | null;
+  }>(null);
   const { data: existingFeedback } = useQuery({
     queryKey: ["pl-workout-feedback", completion?.id],
     enabled: !!completion?.id,
@@ -818,8 +827,8 @@ function WorkoutDay() {
             />
             <ActionButton
               loadingLabel="Saving…"
-              successLabel="Complete"
-              successToast="Workout marked complete"
+              successLabel="Submit Feedback"
+              successToast="Submit feedback to mark complete"
               icon={<CheckCircle2 className="h-4 w-4" />}
               onAction={async () => {
                 if (!client?.id) return;
@@ -829,29 +838,45 @@ function WorkoutDay() {
                 const durationMin = actualMin
                   ? parseInt(actualMin)
                   : completion?.actual_duration_min ?? Math.max(1, Math.round((new Date(completedAt).getTime() - new Date(startedAt).getTime()) / 60000));
+                // Stage the completion as in-progress (NOT completed_at yet).
+                // The workout is finalized only after feedback is submitted.
+                const noteValue = notes.length > 0 ? notes : (completion?.client_notes ?? null);
                 const payload = {
                   day_id: dayId,
                   client_id: client.id,
-                  client_notes: notes.length > 0 ? notes : (completion?.client_notes ?? null),
+                  client_notes: noteValue,
                   actual_duration_min: durationMin,
                   started_at: startedAt,
-                  completed_at: completedAt,
-                  completion_method: "manual",
+                  in_progress_at: completion?.in_progress_at ?? startedAt,
+                  completed_at: null,
                 };
-                if (completion) await sb.from("pl_day_completions").update(payload).eq("id", completion.id);
-                else await sb.from("pl_day_completions").insert(payload);
+                let cid = completion?.id ?? null;
+                if (completion) {
+                  await sb.from("pl_day_completions").update(payload).eq("id", completion.id);
+                } else {
+                  const { data: inserted } = await sb.from("pl_day_completions").insert(payload).select("id").maybeSingle();
+                  cid = inserted?.id ?? null;
+                }
                 if (draftKey) clearLocalDraft(draftKey);
-                setNotes("");
-                setActualMin("");
                 refresh();
-                // Open the post-workout feedback sheet. Workout completion has
-                // already saved above — feedback is a best-effort follow-up.
+                // Stash everything the feedback-submit handler needs to flip
+                // completed_at on, then open the sheet.
+                setPendingFinalize({
+                  completionId: cid ?? undefined,
+                  startedAt,
+                  durationMin,
+                  notes: noteValue,
+                });
                 setFeedbackOpen(true);
+                toast.info("One more step — submit your feedback to mark this workout complete.");
               }}
             >
-              Mark Workout Complete
+              Finish & Submit Feedback
             </ActionButton>
           </div>
+          <p className="text-[11px] text-muted-foreground">
+            Submitting your feedback marks the workout as complete. If you skip it, we'll remind you in your notification bell.
+          </p>
         </Card>
         )}
 
@@ -893,7 +918,28 @@ function WorkoutDay() {
           clientId={client.id}
           dayId={dayId}
           existing={existingFeedback ?? null}
-          onSubmitted={() => qc.invalidateQueries({ queryKey: ["pl-workout-feedback", completion?.id] })}
+          onSubmitted={async () => {
+            qc.invalidateQueries({ queryKey: ["pl-workout-feedback", completion?.id] });
+            // Feedback is the gate — flip completed_at on once it lands.
+            const targetId = pendingFinalize?.completionId ?? completion?.id ?? null;
+            if (targetId && !completion?.completed_at) {
+              const completedAt = new Date().toISOString();
+              await sb.from("pl_day_completions").update({
+                completed_at: completedAt,
+                completion_method: "manual",
+                ...(pendingFinalize ? {
+                  actual_duration_min: pendingFinalize.durationMin,
+                  client_notes: pendingFinalize.notes,
+                  started_at: pendingFinalize.startedAt,
+                } : {}),
+              }).eq("id", targetId);
+              setPendingFinalize(null);
+              setNotes("");
+              setActualMin("");
+              refresh();
+              toast.success("Workout marked complete");
+            }
+          }}
         />
       )}
     </>
