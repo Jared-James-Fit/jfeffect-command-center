@@ -140,8 +140,9 @@ export function ProgramAssignmentPlanner({ clientId, templateId, onDone }: Props
     saveDraft(clientId, templateId, {
       step, selection, method, trainingDays, startDate, manualDateMap: {},
       conflictDecisions, publishStatus, publishAt, idempotencyKey, updatedAt: Date.now(),
+      programName,
     });
-  }, [step, selection, method, trainingDays, startDate, conflictDecisions, publishStatus, publishAt, clientId, templateId, idempotencyKey]);
+  }, [step, selection, method, trainingDays, startDate, conflictDecisions, publishStatus, publishAt, clientId, templateId, idempotencyKey, programName]);
 
   const summary = useMemo(() => (payload ? summarize(payload, selection) : { blocks:0, weeks:0, days:0, exercises:0 }), [payload, selection]);
 
