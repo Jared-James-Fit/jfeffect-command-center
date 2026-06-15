@@ -348,6 +348,7 @@ function NativeAnswers({
   submissionId: string;
   formId: string | null;
 }) {
+  const qc = useQueryClient();
   const { data, isLoading } = useQuery({
     queryKey: ["intake-native-detail", submissionId, formId],
     queryFn: async () => {
@@ -371,46 +372,136 @@ function NativeAnswers({
     },
   });
 
+  const answers = data?.answers ?? [];
+  const questions = data?.questions ?? [];
+  const byId = useMemo(
+    () => new Map(questions.map((q: any) => [q.id, q])),
+    [questions],
+  );
+
+  // Build editable rows: one per question (so empty answers are editable too).
+  const rows = useMemo(() => {
+    const answerByQ = new Map(answers.map((a: any) => [a.question_id, a]));
+    const list = questions.length
+      ? questions.map((q: any) => ({
+          questionId: q.id,
+          label: q.label,
+          type: q.question_type,
+          order: q.order_index ?? 9999,
+          answer: answerByQ.get(q.id) ?? null,
+        }))
+      : answers.map((a: any) => ({
+          questionId: a.question_id,
+          label: "Question",
+          type: "long_text",
+          order: 9999,
+          answer: a,
+        }));
+    return list.sort((a, b) => a.order - b.order);
+  }, [answers, questions]);
+
+  const [values, setValues] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
+  const [original, setOriginal] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    const next: Record<string, string> = {};
+    for (const r of rows) {
+      const a = r.answer;
+      next[r.questionId] =
+        (a?.value_text as string | null) ??
+        (a?.value_number != null ? String(a.value_number) : "") ??
+        (a?.value_json != null ? formatValue(a.value_json) : "");
+    }
+    setValues(next);
+    setOriginal(next);
+  }, [rows]);
+
+  const dirty = useMemo(
+    () => Object.keys(values).some((k) => (values[k] ?? "") !== (original[k] ?? "")),
+    [values, original],
+  );
+
+  async function save() {
+    setSaving(true);
+    try {
+      const changed = Object.entries(values).filter(
+        ([k, v]) => (v ?? "") !== (original[k] ?? ""),
+      );
+      for (const [questionId, v] of changed) {
+        const q = byId.get(questionId) as any;
+        const isNumber = q?.question_type === "number" || q?.question_type === "rating";
+        const payload: any = {
+          submission_id: submissionId,
+          question_id: questionId,
+          value_text: isNumber ? null : v || null,
+          value_number: isNumber ? (v === "" ? null : Number(v)) : null,
+          value_json: null,
+        };
+        const { error } = await (supabase as any)
+          .from("nf_answers")
+          .upsert(payload, { onConflict: "submission_id,question_id" });
+        if (error) throw error;
+      }
+      toast.success("Answers updated");
+      qc.invalidateQueries({ queryKey: ["intake-native-detail", submissionId] });
+      qc.invalidateQueries({ queryKey: ["intake-native"] });
+    } catch (e: any) {
+      toast.error(e?.message ?? "Could not save changes");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   if (isLoading) {
     return <div className="text-xs text-muted-foreground">Loading answers…</div>;
   }
-  const answers = data?.answers ?? [];
-  const questions = data?.questions ?? [];
-  if (answers.length === 0) {
+  if (rows.length === 0) {
     return (
       <div className="text-xs text-muted-foreground">
         No answers recorded yet for this submission.
       </div>
     );
   }
-  const byId = new Map(questions.map((q: any) => [q.id, q]));
-  const ordered = [...answers].sort((a, b) => {
-    const oa = (byId.get(a.question_id) as any)?.order_index ?? 9999;
-    const ob = (byId.get(b.question_id) as any)?.order_index ?? 9999;
-    return oa - ob;
-  });
   return (
     <div className="space-y-2">
-      {ordered.map((a: any) => {
-        const q = byId.get(a.question_id) as any;
-        const value =
-          a.value_text ??
-          (a.value_number != null ? String(a.value_number) : null) ??
-          (a.value_json != null ? formatValue(a.value_json) : null);
+      {rows.map((r) => {
+        const isNumber = r.type === "number" || r.type === "rating";
         return (
           <div
-            key={a.id}
+            key={r.questionId}
             className="rounded-md border border-border bg-card p-2.5"
           >
             <div className="text-xs font-semibold text-muted-foreground">
-              {q?.label ?? "Question"}
+              {r.label ?? "Question"}
             </div>
-            <div className="mt-1 whitespace-pre-wrap text-sm">
-              {value ?? <span className="text-muted-foreground">—</span>}
-            </div>
+            {isNumber ? (
+              <Input
+                type="number"
+                className="mt-1 text-sm"
+                value={values[r.questionId] ?? ""}
+                onChange={(e) =>
+                  setValues((prev) => ({ ...prev, [r.questionId]: e.target.value }))
+                }
+              />
+            ) : (
+              <Textarea
+                className="mt-1 min-h-[44px] text-sm"
+                value={values[r.questionId] ?? ""}
+                onChange={(e) =>
+                  setValues((prev) => ({ ...prev, [r.questionId]: e.target.value }))
+                }
+              />
+            )}
           </div>
         );
       })}
+      <div className="flex justify-end pt-1">
+        <Button size="sm" onClick={save} disabled={!dirty || saving}>
+          <Save className="mr-1.5 h-3.5 w-3.5" />
+          {saving ? "Saving…" : "Save changes"}
+        </Button>
+      </div>
     </div>
   );
 }
