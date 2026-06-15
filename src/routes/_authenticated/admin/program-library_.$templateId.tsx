@@ -1940,7 +1940,23 @@ function DayEditor({ day, setDay, exercises, compact, dayKey }: { day: any; setD
           />
         </div>
       )}
-      <Textarea className={cn("mt-2", compact && "text-xs")} placeholder="Day notes" value={day.notes ?? ""} onChange={(e) => setDay({ ...day, notes: e.target.value })} rows={compact ? 1 : 2} />
+      <div className="mt-2 space-y-1">
+        <div className="flex items-center justify-between">
+          <Label className={cn("text-xs font-semibold", compact && "text-[11px]")}>
+            Description <span className="font-normal text-muted-foreground">(optional)</span>
+          </Label>
+          <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+            Visible to client / member
+          </span>
+        </div>
+        <Textarea
+          className={cn(compact && "text-xs")}
+          placeholder="Add context, intent, or instructions — your client will see this above their workout."
+          value={day.notes ?? ""}
+          onChange={(e) => setDay({ ...day, notes: e.target.value })}
+          rows={compact ? 2 : 3}
+        />
+      </div>
     </div>
   );
 }

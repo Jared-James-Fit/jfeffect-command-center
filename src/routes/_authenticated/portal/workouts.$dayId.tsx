@@ -782,7 +782,7 @@ function WorkoutDay() {
           </Card>
         )}
 
-        {day.notes && <Card className="p-4 text-sm whitespace-pre-wrap bg-secondary/30">{day.notes}</Card>}
+        {day.notes && <CoachDescriptionCard text={day.notes} />}
 
         <WorkoutLoadBoundary clientId={client?.id ?? null} clientName={(client as any)?.full_name ?? null} dayId={dayId} route={`/portal/workouts/${dayId}`}>
           <div className="space-y-4 rounded-lg bg-builder-canvas p-3 sm:p-4 ring-1 ring-builder-card-border/40">
@@ -1047,6 +1047,49 @@ function UnsupportedExerciseCard({ row }: { row: any }) {
           </Link>
         </div>
       </div>
+    </Card>
+  );
+}
+
+/**
+ * Compact, collapsible card that surfaces the coach's optional day description
+ * above the workout. Defaults collapsed to a single preview line so it never
+ * dominates the screen; tap to expand the full text.
+ */
+function CoachDescriptionCard({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+  const trimmed = text.trim();
+  if (!trimmed) return null;
+  const isShort = trimmed.length <= 90 && !trimmed.includes("\n");
+  return (
+    <Card className="border-primary/20 bg-primary/5 p-3">
+      <button
+        type="button"
+        onClick={() => !isShort && setOpen((o) => !o)}
+        className="flex w-full items-start gap-2 text-left"
+      >
+        <StickyNote className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+        <div className="min-w-0 flex-1">
+          <div className="text-[10px] font-semibold uppercase tracking-wide text-primary/80">
+            From your coach
+          </div>
+          <div
+            className={cn(
+              "mt-0.5 text-sm text-foreground whitespace-pre-wrap",
+              !open && !isShort && "line-clamp-1",
+            )}
+          >
+            {trimmed}
+          </div>
+        </div>
+        {!isShort && (
+          open ? (
+            <ChevronUp className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+          ) : (
+            <ChevronDown className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+          )
+        )}
+      </button>
     </Card>
   );
 }
