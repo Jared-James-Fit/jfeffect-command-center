@@ -770,8 +770,8 @@ export async function applyProgression(blockId: string, rule: ProgressionRule): 
 // ---------- Analytics / PRs ----------
 // e1RM math lives in the unified analytics module; re-exported here for
 // backward compatibility with existing callers.
-export { epley1RM } from "@/lib/analytics/e1rm";
 import { epley1RM } from "@/lib/analytics/e1rm";
+export { epley1RM };
 
 export interface LiftResultPoint {
   date: string;
