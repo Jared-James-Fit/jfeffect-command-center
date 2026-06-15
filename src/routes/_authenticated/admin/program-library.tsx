@@ -1130,7 +1130,39 @@ function AssignDialog({ template, onClose }: { template: any; onClose: () => voi
   return (
     <Dialog open={!!template} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-lg">
-        {pendingIssues ? (
+        {showMaxesGate ? (
+          <MaxesGate
+            clientId={clientId}
+            clientName={(clients as any[]).find((c) => c.id === clientId)?.full_name ?? "this client"}
+            templateName={template.name}
+            notifying={notifying}
+            onCancel={() => setShowMaxesGate(false)}
+            onSaved={async () => {
+              await refetchMaxes();
+              toast.success("Max saved");
+              setShowMaxesGate(false);
+            }}
+            onNotifyAndContinue={async () => {
+              try {
+                setNotifying(true);
+                const res = await notifyMissingMaxesFn({ data: { clientId, templateName: template.name } });
+                const chans = (res?.channels ?? []) as string[];
+                if (chans.length === 0) {
+                  toast.warning("Logged a support alert. Email/SMS could not be sent — check sender settings.");
+                } else {
+                  toast.success(`Notified via ${chans.join(", ")}`);
+                }
+                setShowMaxesGate(false);
+                // Skip validation issues check too — coach already acknowledged.
+                await runAssignment();
+              } catch (e: any) {
+                toast.error(e?.message ?? "Could not notify");
+              } finally {
+                setNotifying(false);
+              }
+            }}
+          />
+        ) : pendingIssues ? (
           <>
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2 text-amber-600 dark:text-amber-300">
