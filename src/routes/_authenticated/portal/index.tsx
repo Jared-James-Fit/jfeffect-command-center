@@ -105,9 +105,6 @@ function PortalHome() {
       return data as ClientGoalsSetupRow | null;
     },
   });
-      return (data ?? []) as TrainingPhase[];
-    },
-  });
 
   // Coach response surfaces — power "Today / This Week" cards so clients see
   // when their coach has replied to anything (messages, lift reviews, check-ins).
