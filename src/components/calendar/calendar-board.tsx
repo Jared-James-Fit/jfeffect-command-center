@@ -412,6 +412,13 @@ function EventDetailSheet({
                   <Button size="sm" variant="outline" className="w-full">Join call <ExternalLink className="ml-2 h-3.5 w-3.5" /></Button>
                 </a>
               )}
+              {item.raw?.external_url && !item.raw?.meet_link && (
+                <a href={item.raw.external_url} target="_blank" rel="noreferrer">
+                  <Button size="sm" variant="outline" className="w-full">
+                    {item.kind === "google_event" ? "Open in Google Calendar" : "Open"} <ExternalLink className="ml-2 h-3.5 w-3.5" />
+                  </Button>
+                </a>
+              )}
               {item.href && (
                 <Link to={item.href.to as any} params={item.href.params as any} onClick={onClose}>
                   <Button size="sm" className="w-full bg-gradient-primary font-bold uppercase">{ctaLabel(item)}</Button>
