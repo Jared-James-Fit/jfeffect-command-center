@@ -82,6 +82,7 @@ export function ProgramAssignmentPlanner({ clientId, templateId, onDone }: Props
       publishAt: null,
       idempotencyKey: newIdempotencyKey(),
       updatedAt: Date.now(),
+      programName: null,
     };
   }, [clientId, templateId]);
 
@@ -123,6 +124,7 @@ export function ProgramAssignmentPlanner({ clientId, templateId, onDone }: Props
   const [publishStatus, setPublishStatus] = useState<PublishStatus>(initial.publishStatus);
   const [publishAt, setPublishAt] = useState<string | null>(initial.publishAt);
   const [idempotencyKey] = useState<string>(initial.idempotencyKey);
+  const [programName, setProgramName] = useState<string | null>(initial.programName);
   const [committing, setCommitting] = useState(false);
 
   // Default-select all once payload loads if user has no prior selection.
@@ -138,8 +140,9 @@ export function ProgramAssignmentPlanner({ clientId, templateId, onDone }: Props
     saveDraft(clientId, templateId, {
       step, selection, method, trainingDays, startDate, manualDateMap: {},
       conflictDecisions, publishStatus, publishAt, idempotencyKey, updatedAt: Date.now(),
+      programName,
     });
-  }, [step, selection, method, trainingDays, startDate, conflictDecisions, publishStatus, publishAt, clientId, templateId, idempotencyKey]);
+  }, [step, selection, method, trainingDays, startDate, conflictDecisions, publishStatus, publishAt, clientId, templateId, idempotencyKey, programName]);
 
   const summary = useMemo(() => (payload ? summarize(payload, selection) : { blocks:0, weeks:0, days:0, exercises:0 }), [payload, selection]);
 
@@ -212,6 +215,7 @@ export function ProgramAssignmentPlanner({ clientId, templateId, onDone }: Props
       const result = await commitServer({ data: {
         clientId, templateId, selection, method, startDate, trainingDays,
         conflictDecisions, publishStatus, publishAt, idempotencyKey,
+        programName,
       } as any });
       clearDraft(clientId, templateId);
       toast.success(
@@ -241,9 +245,14 @@ export function ProgramAssignmentPlanner({ clientId, templateId, onDone }: Props
       {/* Header / progress */}
       <Card className="p-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <div className="text-xs uppercase tracking-wide text-muted-foreground">Assign</div>
-            <div className="text-base font-bold">{tpl.name} → {client?.full_name ?? "client"}</div>
+          <div className="min-w-0 flex-1">
+            <div className="text-xs uppercase tracking-wide text-muted-foreground">Assign to {client?.full_name ?? "client"}</div>
+            <Input
+              className="h-8 max-w-md border-transparent bg-transparent px-0 text-base font-bold hover:bg-secondary/30 focus:bg-background focus:border-input"
+              value={programName ?? tpl.name}
+              onChange={(e) => setProgramName(e.target.value || null)}
+              placeholder="Program title"
+            />
           </div>
           <div className="flex flex-wrap items-center gap-1">
             {STEPS.map((s, i) => (

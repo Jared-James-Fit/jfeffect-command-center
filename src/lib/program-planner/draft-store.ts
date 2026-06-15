@@ -16,6 +16,7 @@ export interface PlannerDraft {
   publishAt: string | null;
   idempotencyKey: string;
   updatedAt: number;
+  programName: string | null;
 }
 
 function keyFor(clientId: string, templateId: string) {

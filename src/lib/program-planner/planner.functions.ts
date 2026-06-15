@@ -231,6 +231,7 @@ interface CommitInput extends PlannerInput {
   publishStatus: PublishStatus;
   publishAt: string | null;
   idempotencyKey: string;
+  programName?: string | null;
 }
 
 function validateCommitInput(d: any): CommitInput {
@@ -244,6 +245,7 @@ function validateCommitInput(d: any): CommitInput {
     publishStatus,
     publishAt: typeof d?.publishAt === "string" ? d.publishAt : null,
     idempotencyKey: typeof d?.idempotencyKey === "string" && d.idempotencyKey ? d.idempotencyKey : newIdempotencyKey(),
+    programName: typeof d?.programName === "string" && d.programName ? d.programName : null,
   };
 }
 
@@ -359,7 +361,7 @@ export const commitAssignmentFn = createServerFn({ method: "POST" })
       p_template_id: data.templateId,
       p_client_id: data.clientId,
       p_placement: placement as any,
-      p_name: null,
+      p_name: data.programName ?? null,
       p_client_visible: visible,
       p_start_date: startDate,
       p_end_date: endDate,
