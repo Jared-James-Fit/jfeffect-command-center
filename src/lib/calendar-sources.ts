@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { getClientWorkouts } from "@/lib/pl-programs";
 import { dayScheduledDate } from "@/lib/workout-today";
+import { listGoogleEventsRange, getGoogleConnectionStatus } from "@/lib/google-cal.functions";
 
 /**
  * Phase 1 calendar item — a single chip rendered on the calendar grid.
@@ -14,7 +15,9 @@ export type CalendarKind =
   | "appointment"
   | "pt_session"
   | "workout"
-  | "check_in";
+  | "check_in"
+  | "google_event"
+  | "membership_event";
 
 export type CalendarItem = {
   id: string;             // stable unique id (kind-prefixed)
@@ -40,6 +43,8 @@ export const KIND_META: Record<CalendarKind, { label: string; chip: string; dot:
   pt_session:     { label: "PT Session",   chip: "bg-violet-500/15 text-violet-300 border-violet-500/30",       dot: "bg-violet-400" },
   workout:        { label: "Workout",      chip: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30",    dot: "bg-emerald-400" },
   check_in:       { label: "Check-In",     chip: "bg-rose-500/15 text-rose-300 border-rose-500/30",             dot: "bg-rose-400" },
+  google_event:   { label: "Google",       chip: "bg-sky-500/15 text-sky-300 border-sky-500/30",                dot: "bg-sky-400" },
+  membership_event: { label: "Membership", chip: "bg-fuchsia-500/15 text-fuchsia-300 border-fuchsia-500/30",    dot: "bg-fuchsia-400" },
 };
 
 /** Per-kind action label so clients/admins see the *thing they can do*, not just "Open". */
@@ -50,6 +55,8 @@ export const CTA_LABELS: Record<CalendarKind, string> = {
   pt_session:     "View Session Details",
   workout:        "Open Workout",
   check_in:       "Submit Check-In",
+  google_event:   "Open in Google",
+  membership_event: "Open Member",
 };
 export function ctaLabel(item: { kind: CalendarKind; raw?: any }): string {
   if (item.kind === "event") {
