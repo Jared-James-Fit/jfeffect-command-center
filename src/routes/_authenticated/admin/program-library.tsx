@@ -158,7 +158,8 @@ type FilterChip =
   | { kind: "all" }
   | { kind: "type"; v: TemplateType }
   | { kind: "style"; v: TrainingStyle }
-  | { kind: "archived" };
+  | { kind: "archived" }
+  | { kind: "status"; v: "ready" | "incomplete" };
 
 export function ProgramLibrary({ embedded = false }: { embedded?: boolean } = {}) {
   const qc = useQueryClient();
@@ -186,12 +187,22 @@ export function ProgramLibrary({ embedded = false }: { embedded?: boolean } = {}
   });
 
   const filteredTemplates = useMemo(() => {
-    if (!weightClass) return templates as any[];
-    const wc = weightClass.toLowerCase();
-    return (templates as any[]).filter((t) =>
-      (t.tags ?? []).some((tag: string) => String(tag).toLowerCase() === wc),
-    );
-  }, [templates, weightClass]);
+    let rows = templates as any[];
+    if (weightClass) {
+      const wc = weightClass.toLowerCase();
+      rows = rows.filter((t) =>
+        (t.tags ?? []).some((tag: string) => String(tag).toLowerCase() === wc),
+      );
+    }
+    if (chip.kind === "status") {
+      const wantReady = chip.v === "ready";
+      rows = rows.filter((t) => {
+        const issues = validateTemplatePayload(t);
+        return wantReady ? issues.length === 0 : issues.length > 0;
+      });
+    }
+    return rows;
+  }, [templates, weightClass, chip]);
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ["pl-templates"] });
 
@@ -295,6 +306,9 @@ function FilterChips({ chip, setChip }: { chip: FilterChip; setChip: (c: FilterC
           {s.label}
         </Chip>
       ))}
+      <span className="mx-1 text-muted-foreground">·</span>
+      <Chip active={chip.kind === "status" && chip.v === "ready"} onClick={() => setChip({ kind: "status", v: "ready" })}>Ready</Chip>
+      <Chip active={chip.kind === "status" && chip.v === "incomplete"} onClick={() => setChip({ kind: "status", v: "incomplete" })}>Incomplete</Chip>
       <span className="mx-1 text-muted-foreground">·</span>
       <Chip active={chip.kind === "archived"} onClick={() => setChip({ kind: "archived" })}>Archived</Chip>
     </div>
