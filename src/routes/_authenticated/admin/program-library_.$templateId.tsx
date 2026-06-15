@@ -33,6 +33,7 @@ import { ActionButton } from "@/components/action-button";
 import { copyRows, useClip } from "@/lib/program-builder-clipboard";
 import { parseDurationInput, formatDuration } from "@/lib/duration";
 import { CountdownTimerButton } from "@/components/countdown-timer-button";
+import { DurationInput } from "@/components/duration-input";
 import { ExerciseBlocksEditor } from "@/components/exercise-blocks-editor";
 import { useMultiBlockBuilderFlag } from "@/lib/admin-flags";
 import { Layers } from "lucide-react";
