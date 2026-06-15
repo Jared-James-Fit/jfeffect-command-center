@@ -64,16 +64,15 @@ type ShortcutGroup = { heading: string; items: ShortcutRow[] };
 
 function buildShortcuts(mac: boolean): ShortcutGroup[] {
   const mod = mac ? "⌘" : "Ctrl";
-  const alt = mac ? "⌥" : "Alt";
-  const del = mac ? "Delete" : "Backspace";
+  const shift = "Shift";
   return [
     {
       heading: "Exercise Search",
       items: [
         { label: "Open search", combos: [["/"], [mod, "K"]] },
         { label: "Close search", combos: [["Esc"]] },
-        { label: "Clear search", combos: [[mod, del]] },
-        { label: "Refresh results", combos: [[alt, "R"]] },
+        { label: "Clear / reset search", combos: [[mod, shift, "Z"]] },
+        { label: "Refresh results", combos: [["⌥", "R"]] },
       ],
     },
     {
