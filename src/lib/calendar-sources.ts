@@ -269,6 +269,7 @@ export function useClientCalendarSources(clientId: string | null | undefined) {
 export type AdminCalendarFilters = {
   clientId?: string | "all";
   kinds?: Set<CalendarKind>;
+  includeGoogle?: boolean;
 };
 
 export function useAdminCalendarSources(filters: AdminCalendarFilters) {
@@ -317,6 +318,23 @@ export function useAdminCalendarSources(filters: AdminCalendarFilters) {
       const { data } = await (supabase.from("important_dates") as any)
         .select("id,title,date_type,custom_type,target_date,status,client_id");
       return (data ?? []) as any[];
+    },
+  });
+
+  // Google Calendar overlay — only fetched when explicitly toggled on.
+  const googleQ = useQuery({
+    queryKey: ["cal-admin-google"],
+    enabled: !!filters.includeGoogle,
+    staleTime: 60_000,
+    queryFn: async () => {
+      const now = new Date();
+      const timeMin = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString();
+      const timeMax = new Date(now.getFullYear(), now.getMonth() + 3, 0, 23, 59, 59).toISOString();
+      try {
+        return await listGoogleEventsRange({ data: { timeMin, timeMax } as any });
+      } catch {
+        return [];
+      }
     },
   });
 
@@ -429,18 +447,50 @@ export function useAdminCalendarSources(filters: AdminCalendarFilters) {
       });
     }
 
+    // Google Calendar overlay items — only present when toggled and not client-filtered.
+    if (filters.includeGoogle && !filterClient) {
+      for (const g of (googleQ.data ?? []) as any[]) {
+        if (!g.start) continue;
+        const startISO = g.allDay ? `${g.start}T00:00:00` : g.start;
+        out.push({
+          id: `gcal:${g.id}`,
+          kind: "google_event",
+          date: toLocalDate(startISO),
+          startsAt: g.allDay ? null : g.start,
+          endsAt: g.allDay ? null : g.end,
+          title: g.summary || "(busy)",
+          subtitle: g.location || (g.allDay ? "All day" : null),
+          status: null,
+          clientId: null,
+          clientName: "Google Calendar",
+          href: null,
+          raw: { ...g, html_link: g.htmlLink, meet_link: g.hangoutLink ?? null, external_url: g.htmlLink },
+        });
+      }
+    }
+
     const filtered = filters.kinds && filters.kinds.size > 0
       ? out.filter((i) => filters.kinds!.has(i.kind))
       : out;
 
     return filtered.sort((a, b) => (a.date + (a.startsAt ?? "")).localeCompare(b.date + (b.startsAt ?? "")));
-  }, [filters.clientId, filters.kinds, eventsQ.data, eventAssignsQ.data, apptsQ.data, ptQ.data, importantQ.data, clientById]);
+  }, [filters.clientId, filters.kinds, filters.includeGoogle, eventsQ.data, eventAssignsQ.data, apptsQ.data, ptQ.data, importantQ.data, googleQ.data, clientById]);
 
   return {
     items,
     clients: clientsQ.data ?? [],
     isLoading:
       eventsQ.isLoading || eventAssignsQ.isLoading || apptsQ.isLoading ||
-      ptQ.isLoading || importantQ.isLoading || clientsQ.isLoading,
+      ptQ.isLoading || importantQ.isLoading || clientsQ.isLoading ||
+      (!!filters.includeGoogle && googleQ.isLoading),
   };
+}
+
+/** Hook: returns Google Calendar connection status for the current user. */
+export function useGoogleCalendarStatus() {
+  return useQuery({
+    queryKey: ["gcal-status"],
+    queryFn: () => getGoogleConnectionStatus(),
+    staleTime: 60_000,
+  });
 }
