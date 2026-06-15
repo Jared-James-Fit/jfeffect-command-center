@@ -1,5 +1,8 @@
 import { Button } from "@/components/ui/button";
-import { ArrowRight, MessageCircle, Calendar, ClipboardCheck, Target } from "lucide-react";
+import {
+  MessageCircle, ClipboardCheck, Target,
+  Utensils,
+} from "lucide-react";
 import type { ReactNode } from "react";
 
 /**
@@ -21,57 +24,73 @@ export function CoachingHero({
   image?: string | null;
 }) {
   return (
-    <section className="relative overflow-hidden border-b border-border/60">
-      {/* warmer coaching glow vs membership's cool radial */}
-      <div className="absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_30%_20%,_hsl(var(--primary)/0.18),_transparent_55%),radial-gradient(ellipse_at_80%_85%,_hsl(25_95%_55%/0.10),_transparent_60%)]" />
-      <div className="absolute inset-0 -z-10 bg-[linear-gradient(to_bottom,transparent,hsl(var(--background)))]" />
+    <section className="relative isolate overflow-hidden border-b border-white/10 bg-[#0a0a0a] text-white">
+      {/* Cinematic image-led hero: full-bleed photo on the right with a deep
+          left-to-right gradient that keeps the copy column readable. */}
+      {image && (
+        <div className="pointer-events-none absolute inset-0 -z-10">
+          <img
+            src={image}
+            alt=""
+            loading="eager"
+            className="absolute inset-0 h-full w-full object-cover object-[70%_center] opacity-70 lg:opacity-90"
+          />
+          <div className="absolute inset-0 bg-[linear-gradient(90deg,#0a0a0a_0%,#0a0a0a_38%,rgba(10,10,10,0.85)_55%,rgba(10,10,10,0.35)_80%,rgba(10,10,10,0.15)_100%)] lg:bg-[linear-gradient(90deg,#0a0a0a_0%,#0a0a0a_28%,rgba(10,10,10,0.78)_48%,rgba(10,10,10,0.25)_75%,rgba(10,10,10,0)_100%)]" />
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_18%_30%,_color-mix(in_oklab,var(--primary)_22%,transparent),transparent_55%)]" />
+        </div>
+      )}
 
-      <div className="container mx-auto grid gap-12 px-4 py-16 md:py-24 lg:grid-cols-[1.05fr_1fr] lg:items-center">
-        <div>
+      <div className="container mx-auto grid gap-12 px-4 py-20 md:py-28 lg:grid-cols-[1.05fr_1fr] lg:items-center">
+        <div className="relative">
           {eyebrow && (
-            <div className="inline-flex items-center gap-2 rounded-full border border-primary/40 bg-primary/10 px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.18em] text-primary">
+            <div className="inline-flex items-center gap-2 rounded-full border border-primary/50 bg-primary/15 px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.18em] text-primary">
               <span className="h-1.5 w-1.5 rounded-full bg-primary" />
               {eyebrow}
             </div>
           )}
-          <h1 className="mt-5 text-4xl font-black leading-[1.02] tracking-tight md:text-6xl lg:text-7xl">
+          <h1 className="mt-6 max-w-[22ch] text-4xl font-black leading-[1.02] tracking-tight md:text-6xl lg:text-[4.25rem]">
             {headline}
           </h1>
-          <p className="mt-5 max-w-xl text-base text-muted-foreground md:text-lg">{sub}</p>
+          <p className="mt-5 max-w-xl text-base text-white/75 md:text-lg">{sub}</p>
 
-          <div className="mt-7 flex flex-wrap gap-3">
+          <ul className="mt-8 grid max-w-xl gap-4 sm:grid-cols-2">
+            {[
+              { Icon: Target, title: "Individualized Programming", body: "Training built around your goals, experience, schedule, equipment and limitations." },
+              { Icon: ClipboardCheck, title: "Weekly Check-Ins & Adjustments", body: "Your progress is reviewed and your plan is adjusted when needed." },
+              { Icon: Utensils, title: "Nutrition Guidance", body: "Practical nutrition targets and strategies built around your lifestyle." },
+              { Icon: MessageCircle, title: "Direct Coach Support", body: "Ask questions, submit updates and get support inside the JF Effect coaching system." },
+            ].map(({ Icon, title, body }) => (
+              <li key={title} className="flex items-start gap-3">
+                <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-white/15 bg-white/5 text-primary">
+                  <Icon className="h-4 w-4" />
+                </div>
+                <div>
+                  <div className="text-sm font-bold text-white">{title}</div>
+                  <div className="text-sm text-white/65">{body}</div>
+                </div>
+              </li>
+            ))}
+          </ul>
+
+          <div className="mt-8 flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:gap-5">
             {primary}
             {secondary}
           </div>
-
-          <div className="mt-8 grid max-w-md grid-cols-2 gap-x-6 gap-y-3 text-xs text-muted-foreground">
-            <div className="flex items-center gap-2"><Target className="h-3.5 w-3.5 text-primary" /> Individualized programming</div>
-            <div className="flex items-center gap-2"><ClipboardCheck className="h-3.5 w-3.5 text-primary" /> Weekly check-ins & adjustments</div>
-            <div className="flex items-center gap-2"><MessageCircle className="h-3.5 w-3.5 text-primary" /> Direct coach messaging</div>
-            <div className="flex items-center gap-2"><Calendar className="h-3.5 w-3.5 text-primary" /> Consultation before you commit</div>
-          </div>
-
-          <div className="mt-6 flex items-center gap-2 text-[11px] uppercase tracking-widest text-muted-foreground/80">
-            <ArrowRight className="h-3 w-3" />
-            <span>Application-based · By approval only</span>
-          </div>
+          <p className="mt-4 text-[11px] uppercase tracking-[0.22em] text-white/55">
+            Application required · Limited client capacity
+          </p>
         </div>
 
-        {/* Right column — coach interaction tableau (no fake phone, no AI persona) */}
-        <div className="relative">
-          <div className="absolute -inset-6 -z-10 rounded-[2rem] bg-gradient-to-br from-primary/20 via-transparent to-orange-500/10 blur-2xl" />
+        {/* Spacer column on lg+ so copy column never overlaps photo subjects. */}
+        <div className="hidden lg:block" />
+      </div>
 
-          {image ? (
-            <img
-              src={image}
-              alt=""
-              loading="eager"
-              className="w-full rounded-2xl border border-border shadow-2xl shadow-primary/20"
-            />
-          ) : (
+      {/* Photo-less fallback retains the original layered coach UI cards. */}
+      {!image && (
+        <div className="container mx-auto -mt-16 px-4 pb-16 md:pb-24">
+          <div className="relative mx-auto max-w-md">
             <div className="relative">
-              {/* Stacked, layered "coach process" cards. Pure UI — no synthetic client data shown. */}
-              <div className="rounded-2xl border border-border/80 bg-card/70 p-5 shadow-2xl shadow-primary/10 backdrop-blur">
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-5 shadow-2xl shadow-primary/10 backdrop-blur">
                 <div className="flex items-start gap-3">
                   <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-gradient-to-br from-primary to-orange-500 text-sm font-black text-primary-foreground">
                     JF
@@ -81,48 +100,18 @@ export function CoachingHero({
                       <div className="text-sm font-bold">Your coach</div>
                       <div className="text-[10px] uppercase tracking-widest text-primary">online</div>
                     </div>
-                    <div className="mt-2 rounded-2xl rounded-tl-sm bg-primary/15 px-3 py-2 text-sm leading-relaxed text-foreground">
+                    <div className="mt-2 rounded-2xl rounded-tl-sm bg-primary/15 px-3 py-2 text-sm leading-relaxed">
                       Reviewed your check-in — pushing top set on Wednesday up to a 7 RPE.
                       Calories holding for this week.
                     </div>
-                    <div className="mt-1 text-[10px] text-muted-foreground">Adjusts your plan weekly</div>
+                    <div className="mt-1 text-[10px] text-white/55">Adjusts your plan weekly</div>
                   </div>
                 </div>
-              </div>
-
-              <div className="-mt-2 ml-6 rounded-2xl border border-border/80 bg-card/70 p-4 shadow-2xl shadow-primary/10 backdrop-blur">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">
-                    <ClipboardCheck className="h-3.5 w-3.5 text-primary" /> Weekly check-in
-                  </div>
-                  <div className="text-[10px] rounded-full bg-emerald-500/15 px-2 py-0.5 font-bold uppercase tracking-widest text-emerald-300">Reviewed</div>
-                </div>
-                <div className="mt-3 grid grid-cols-3 gap-2">
-                  {["Training", "Nutrition", "Recovery"].map((l) => (
-                    <div key={l} className="rounded-lg border border-border/70 bg-background/60 p-2 text-center">
-                      <div className="text-[10px] uppercase tracking-widest text-muted-foreground">{l}</div>
-                      <div className="mt-1 h-1.5 w-full rounded-full bg-muted">
-                        <div className="h-1.5 rounded-full bg-gradient-to-r from-primary to-orange-500" style={{ width: l === "Recovery" ? "60%" : "85%" }} />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="-mt-2 ml-12 rounded-2xl border border-border/80 bg-card/70 p-4 shadow-2xl shadow-primary/10 backdrop-blur">
-                <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">
-                  <Target className="h-3.5 w-3.5 text-primary" /> Plan adjustment
-                </div>
-                <div className="mt-2 text-sm">
-                  <span className="text-muted-foreground line-through">Squat 4×5 @ RPE 7</span>
-                  <span className="ml-2 font-semibold text-foreground">→ 4×4 @ RPE 8</span>
-                </div>
-                <div className="mt-1 text-[10px] text-muted-foreground">Updated by coach · Today</div>
               </div>
             </div>
-          )}
+          </div>
         </div>
-      </div>
+      )}
     </section>
   );
 }

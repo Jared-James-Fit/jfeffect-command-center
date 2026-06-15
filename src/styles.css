@@ -172,6 +172,33 @@
 @utility text-balance { text-wrap: balance; }
 
 /* ============================================================
+   Scoped light theme — opt-in via .theme-light on any wrapper.
+   Used by the /membership sales page so it reads as a bright,
+   product-led surface while the rest of the app stays dark.
+   Primary stays JF Effect red.
+   ============================================================ */
+.theme-light {
+  --background: oklch(0.99 0.003 80);
+  --foreground: oklch(0.18 0.01 280);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.18 0.01 280);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.18 0.01 280);
+  --secondary: oklch(0.96 0.005 80);
+  --secondary-foreground: oklch(0.18 0.01 280);
+  --muted: oklch(0.96 0.005 80);
+  --muted-foreground: oklch(0.45 0.01 280);
+  --accent: oklch(0.95 0.01 25);
+  --accent-foreground: oklch(0.30 0.18 25);
+  --border: oklch(0.90 0.005 80);
+  --input: oklch(0.93 0.005 80);
+  --ring: oklch(0.62 0.22 25);
+  background-color: var(--background);
+  color: var(--foreground);
+  color-scheme: light;
+}
+
+/* ============================================================
    Premium micro-interactions (lightweight, GPU-friendly)
    ============================================================ */
 @keyframes jf-page-in {

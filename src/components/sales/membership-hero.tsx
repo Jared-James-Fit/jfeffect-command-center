@@ -1,5 +1,8 @@
 import { Button } from "@/components/ui/button";
-import { Smartphone, TrendingUp, Dumbbell, Apple, BookOpen, CheckCircle2 } from "lucide-react";
+import {
+  Smartphone, TrendingUp, Dumbbell, Apple, BookOpen,
+  ListChecks, LineChart, Sparkles,
+} from "lucide-react";
 import type { ReactNode } from "react";
 
 /**
@@ -32,37 +35,54 @@ export function MembershipHero({
   heroImage?: string | null;
 }) {
   return (
-    <section className="relative overflow-hidden border-b border-border/60">
-      {/* Cool product glow — distinct from coaching's warm radial. */}
-      <div className="absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_85%_15%,_hsl(var(--primary)/0.16),_transparent_55%),radial-gradient(ellipse_at_15%_90%,_hsl(220_90%_60%/0.10),_transparent_60%)]" />
-      <div className="absolute inset-0 -z-10 bg-[linear-gradient(to_bottom,transparent,hsl(var(--background)))]" />
+    <section className="relative overflow-hidden border-b border-border">
+      {/* Soft product wash — light, airy, with a single brand-red glow. */}
+      <div className="absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_90%_-10%,_color-mix(in_oklab,var(--primary)_14%,transparent),transparent_55%)]" />
+      <div className="absolute inset-0 -z-10 bg-[linear-gradient(to_bottom,transparent,var(--background))]" />
 
-      <div className="container mx-auto grid gap-12 px-4 py-14 md:py-20 lg:grid-cols-[1fr_1.05fr] lg:items-center">
+      <div className="container mx-auto grid gap-12 px-4 py-14 md:py-20 lg:grid-cols-[1.05fr_1fr] lg:items-center">
         {/* LEFT — copy + offer */}
         <div className="min-w-0">
-          <div className="inline-flex items-center gap-2 rounded-full border border-primary/40 bg-primary/10 px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.18em] text-primary">
+          <div className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/8 px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.18em] text-primary">
             <Smartphone className="h-3 w-3" />
             JF Membership · {priceChip}
           </div>
-          <h1 className="mt-5 text-4xl font-black leading-[1.04] tracking-tight md:text-6xl">
+          <h1 className="mt-5 max-w-[18ch] text-4xl font-black leading-[1.05] tracking-tight text-foreground md:text-5xl lg:text-[3.4rem]">
             {headline}
           </h1>
           <p className="mt-5 max-w-xl text-base text-muted-foreground md:text-lg">{sub}</p>
 
-          <ul className="mt-6 grid gap-2 text-sm">
+          <ul className="mt-7 grid gap-4">
             {[
-              "Self-guided training plans you start the moment you join",
-              "Workout logger, exercise demos, PRs and analytics in one app",
-              "Recipes, nutrition and education resources updated continuously",
-            ].map((line) => (
-              <li key={line} className="flex items-start gap-2 text-foreground/90">
-                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-                <span>{line}</span>
+              {
+                Icon: ListChecks,
+                title: "Follow a proven system",
+                body: "Choose a training plan and know exactly what to do each time you train.",
+              },
+              {
+                Icon: LineChart,
+                title: "Track your progress",
+                body: "Log workouts, monitor personal records and see your training analytics inside the app.",
+              },
+              {
+                Icon: Sparkles,
+                title: "Get more than workouts",
+                body: "Access exercise demonstrations, recipes, nutrition education, resources and member-only updates.",
+              },
+            ].map(({ Icon, title, body }) => (
+              <li key={title} className="flex items-start gap-3">
+                <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-primary/25 bg-primary/10 text-primary">
+                  <Icon className="h-4 w-4" />
+                </div>
+                <div>
+                  <div className="text-sm font-bold text-foreground">{title}</div>
+                  <div className="text-sm text-muted-foreground">{body}</div>
+                </div>
               </li>
             ))}
           </ul>
 
-          <div className="mt-7 flex flex-wrap gap-2">
+          <div className="mt-8 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
             {primary}
             {secondary}
           </div>
@@ -76,7 +96,7 @@ export function MembershipHero({
           <PhoneFrame heroImage={heroImage ?? null} />
 
           {/* Floating analytics card — top right */}
-          <div className="pointer-events-none absolute -right-2 top-6 hidden w-[200px] animate-[heroFloat_6s_ease-in-out_infinite] rounded-2xl border border-border/80 bg-card/95 p-3 shadow-2xl shadow-primary/10 backdrop-blur md:block">
+          <div className="pointer-events-none absolute -right-2 top-6 hidden w-[200px] animate-[heroFloat_6s_ease-in-out_infinite] rounded-2xl border border-border bg-card p-3 shadow-2xl shadow-foreground/5 backdrop-blur md:block">
             <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
               <TrendingUp className="h-3 w-3 text-primary" /> Weekly volume
             </div>
@@ -93,7 +113,7 @@ export function MembershipHero({
           </div>
 
           {/* Floating program card — bottom left */}
-          <div className="pointer-events-none absolute -left-2 bottom-8 hidden w-[210px] animate-[heroFloat_7s_ease-in-out_infinite_reverse] rounded-2xl border border-border/80 bg-card/95 p-3 shadow-2xl shadow-primary/10 backdrop-blur md:block" style={{ animationDelay: "-2s" }}>
+          <div className="pointer-events-none absolute -left-2 bottom-8 hidden w-[210px] animate-[heroFloat_7s_ease-in-out_infinite_reverse] rounded-2xl border border-border bg-card p-3 shadow-2xl shadow-foreground/5 backdrop-blur md:block" style={{ animationDelay: "-2s" }}>
             <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
               <Dumbbell className="h-3 w-3 text-primary" /> Today's session
             </div>
@@ -117,9 +137,9 @@ export function MembershipHero({
  */
 function PhoneFrame({ heroImage }: { heroImage: string | null }) {
   return (
-    <div className="relative mx-auto aspect-[9/19] w-[280px] rounded-[2.4rem] border border-border/80 bg-card p-2 shadow-[0_30px_80px_-20px_hsl(var(--primary)/0.35)] md:w-[320px]">
+    <div className="relative mx-auto aspect-[9/19] w-[280px] rounded-[2.4rem] border border-border bg-card p-2 shadow-[0_30px_80px_-20px_color-mix(in_oklab,var(--foreground)_25%,transparent)] md:w-[320px]">
       {/* notch */}
-      <div className="absolute left-1/2 top-2 z-10 h-5 w-24 -translate-x-1/2 rounded-b-2xl bg-background/95" />
+      <div className="absolute left-1/2 top-2 z-10 h-5 w-24 -translate-x-1/2 rounded-b-2xl bg-foreground/90" />
       {/* screen */}
       <div className="relative h-full w-full overflow-hidden rounded-[2rem] bg-background">
         {heroImage ? (
@@ -139,7 +159,7 @@ function PhoneFrame({ heroImage }: { heroImage: string | null }) {
 
 function SyntheticAppPreview() {
   return (
-    <div className="flex h-full w-full flex-col bg-gradient-to-b from-background via-background to-card">
+    <div className="flex h-full w-full flex-col bg-gradient-to-b from-background via-background to-muted/50">
       {/* header */}
       <div className="px-4 pb-2 pt-8">
         <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">JF Effect</div>
