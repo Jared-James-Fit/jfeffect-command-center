@@ -1557,6 +1557,7 @@ function DayEditor({ day, setDay, exercises, compact }: { day: any; setDay: (d: 
   const [dragOver, setDragOver] = useState(false);
   const [dragRowIdx, setDragRowIdx] = useState<number | null>(null);
   const [dropTargetIdx, setDropTargetIdx] = useState<number | null>(null);
+  const pbDragging = usePbDragging();
   const clip = useClip();
   const addRow = () => setDay({
     ...day,
@@ -1604,8 +1605,9 @@ function DayEditor({ day, setDay, exercises, compact }: { day: any; setDay: (d: 
   return (
     <div
       className={cn(
-        "space-y-3 rounded-lg bg-builder-canvas p-3 sm:p-4 ring-1 ring-builder-card-border/40 transition-colors",
-        dragOver && "ring-2 ring-primary ring-offset-1 ring-offset-background bg-primary/5",
+        "relative space-y-3 rounded-lg bg-builder-canvas p-3 sm:p-4 ring-1 ring-builder-card-border/40 transition-all",
+        pbDragging === "exercise" && !dragOver && "ring-2 ring-dashed ring-primary/40",
+        dragOver && "ring-4 ring-primary ring-offset-2 ring-offset-background bg-primary/10 shadow-[0_0_0_4px_hsl(var(--primary)/0.15)]",
       )}
       onDragOver={(e) => {
         if (Array.from(e.dataTransfer.types).includes(DND_EXERCISE)) {
@@ -1626,6 +1628,11 @@ function DayEditor({ day, setDay, exercises, compact }: { day: any; setDay: (d: 
         }
       }}
     >
+      {dragOver && (
+        <div className="pointer-events-none absolute -top-3 left-1/2 z-20 -translate-x-1/2 rounded-full bg-primary px-3 py-1 text-[11px] font-semibold text-primary-foreground shadow-lg">
+          Drop to add to this day
+        </div>
+      )}
       <div className="flex items-center justify-between text-[11px] text-muted-foreground">
         <span className="inline-flex items-center gap-1"><Clock className="h-3 w-3" /> Est {durationRange(dayMin)}</span>
         <div className="flex items-center gap-1">
@@ -1639,7 +1646,7 @@ function DayEditor({ day, setDay, exercises, compact }: { day: any; setDay: (d: 
       </div>
       {rows.length === 0 ? (
         <p className="rounded-md border border-dashed border-builder-card-border p-4 text-center text-xs text-muted-foreground">
-          {dragOver ? "Drop exercise here" : "Drag exercises from the library, or click + Row"}
+          {dragOver ? "Release to drop here" : pbDragging === "exercise" ? "Drop the exercise anywhere in this card" : "Drag exercises from the library, or click + Row"}
         </p>
       ) : (
         <div className="space-y-3" data-pb-day>
@@ -1663,8 +1670,9 @@ function DayEditor({ day, setDay, exercises, compact }: { day: any; setDay: (d: 
                 e.dataTransfer.setData("application/x-pb-row-reorder", String(i));
                 e.dataTransfer.effectAllowed = "move";
                 setDragRowIdx(i);
+                beginPbDrag("row");
               }}
-              onDragEnd={() => { setDragRowIdx(null); setDropTargetIdx(null); }}
+              onDragEnd={() => { setDragRowIdx(null); setDropTargetIdx(null); endPbDrag(); }}
               onDragOver={(e) => {
                 if (dragRowIdx == null) return;
                 e.preventDefault();
@@ -1682,11 +1690,13 @@ function DayEditor({ day, setDay, exercises, compact }: { day: any; setDay: (d: 
                 moveRow(dragRowIdx, target);
                 setDragRowIdx(null);
                 setDropTargetIdx(null);
+                endPbDrag();
               }}
               className={cn(
-                "cursor-grab active:cursor-grabbing",
-                dropTargetIdx === i && "border-t-2 border-t-primary",
-                dropTargetIdx === i + 1 && "border-b-2 border-b-primary",
+                "cursor-grab active:cursor-grabbing rounded-md transition-all",
+                dragRowIdx === i && "opacity-40 scale-[0.99]",
+                dropTargetIdx === i && "shadow-[0_-3px_0_0_hsl(var(--primary))]",
+                dropTargetIdx === i + 1 && "shadow-[0_3px_0_0_hsl(var(--primary))]",
               )}
             >
               <RowEditor
@@ -1701,8 +1711,9 @@ function DayEditor({ day, setDay, exercises, compact }: { day: any; setDay: (d: 
                   e.dataTransfer.setData("application/x-pb-row-reorder", String(i));
                   e.dataTransfer.effectAllowed = "move";
                   setDragRowIdx(i);
+                  beginPbDrag("row");
                 }}
-                onDragEndRow={() => { setDragRowIdx(null); setDropTargetIdx(null); }}
+                onDragEndRow={() => { setDragRowIdx(null); setDropTargetIdx(null); endPbDrag(); }}
                 isDragging={dragRowIdx === i}
                 exercises={exercises}
                 compact={compact !== false}
