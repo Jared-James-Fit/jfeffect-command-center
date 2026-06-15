@@ -321,12 +321,12 @@ export function MoveWorkoutSheet({
                   <AlertTriangle className="mt-0.5 h-4 w-4 text-amber-500" />
                   <div className="flex-1">
                     <div>{c.message}</div>
-                    {c.kind === "sameDayWorkout" && c.payload?.otherDayId && (
+                    {c.kind === "sameDayWorkout" && typeof c.payload?.otherDayId === "string" && (
                       <Button
                         size="sm"
                         variant="outline"
                         className="mt-2 h-7"
-                        onClick={() => swapMutation.mutate(String(c.payload!.otherDayId))}
+                        onClick={() => swapMutation.mutate(c.payload!.otherDayId as string)}
                         disabled={swapMutation.isPending}
                       >
                         <Replace className="mr-1 h-3.5 w-3.5" /> Swap workouts
