@@ -233,7 +233,13 @@ function AvailabilityStep({ value, setField }: StepProps) {
         <ChipGrid
           options={WEEKDAYS}
           value={(value.available_weekdays ?? []) as any}
-          onChange={(v) => setField("available_weekdays", v)}
+          onChange={(v) => {
+            const order = WEEKDAYS as readonly string[];
+            const sorted = [...(v as string[])].sort(
+              (a, b) => order.indexOf(a) - order.indexOf(b),
+            );
+            setField("available_weekdays", sorted as any);
+          }}
           multi
           labelFor={(d) => WEEKDAY_LABELS[d as keyof typeof WEEKDAY_LABELS]}
         />
