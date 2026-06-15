@@ -123,7 +123,11 @@ function WorkoutTracker() {
           clientName={null}
           workoutId={null}
           route={route}
-          onRetry={() => refetchEnr()}
+          onRetry={() => Promise.all([
+            refetchEnr(),
+            qc.refetchQueries({ queryKey: ["m-completion", enrollmentId, weekIndex, dayIndex] }),
+            qc.refetchQueries({ queryKey: ["m-set-logs", enrollmentId, weekIndex, dayIndex] }),
+          ])}
         />
       </div>
     );
@@ -290,7 +294,11 @@ function WorkoutTracker() {
           clientName={null}
           workoutId={null}
           route={route}
-          onRetry={() => qc.invalidateQueries({ queryKey: ["m-enrollment", enrollmentId] })}
+          onRetry={() => Promise.all([
+            qc.refetchQueries({ queryKey: ["m-enrollment", enrollmentId] }),
+            qc.refetchQueries({ queryKey: ["m-completion", enrollmentId, weekIndex, dayIndex] }),
+            qc.refetchQueries({ queryKey: ["m-set-logs", enrollmentId, weekIndex, dayIndex] }),
+          ])}
         />
       )}
       {rows.map((row: any, ei: number) => {
