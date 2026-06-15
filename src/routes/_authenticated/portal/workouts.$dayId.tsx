@@ -1218,6 +1218,8 @@ function ExerciseBlock({ row, dayId, dayTitle, clientId, blockId, existingResult
           manualOverride: row.manual_override,
           rpe: row.rpe,
           rir: row.rir,
+          measurementType: (row as any).measurement_type === "time" ? "time" : "reps",
+          durationSeconds: (row as any).duration_seconds ?? null,
         })}
         {row.tempo && <span className="ml-2 text-xs font-normal text-muted-foreground">tempo {row.tempo}</span>}
       </div>
