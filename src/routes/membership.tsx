@@ -187,11 +187,11 @@ function SignupJf() {
       ) : (
       <MembershipHero
         priceChip={settings?.monthly_price_display ?? "$29/month USD"}
-        headline={p?.hero_headline ?? "Train with the JF Effect system\u2014without paying for private coaching."}
-        sub={p?.hero_subheadline ?? "Get structured workout plans, exercise demos, workout tracking, progress analytics, nutrition resources and member-only updates\u2014all inside the JF Effect app. Start immediately. Train on your schedule. Follow the system at your own pace."}
-        heroImage={p?.hero_image_url ?? null}
-        primary={<MemberHeroCta onClick={scrollToForm}>{p?.primary_cta_label ?? `Start ${trialDays}-Day Free Trial`}</MemberHeroCta>}
-        secondary={<MemberHeroGhost onClick={scrollToFeatures}>{p?.secondary_cta_label ?? "See What's Included"}</MemberHeroGhost>}
+        headline={"Train with the JF Effect system\u2014without paying for private coaching."}
+        sub={"Get structured workout plans, exercise demos, workout tracking, progress analytics, nutrition resources and member-only updates\u2014all inside the JF Effect app. Start immediately. Train on your schedule. Follow the system at your own pace."}
+        heroImage={null}
+        primary={<MemberHeroCta onClick={scrollToForm}>{`Start ${trialDays}-Day Free Trial`}</MemberHeroCta>}
+        secondary={<MemberHeroGhost onClick={scrollToFeatures}>See What's Included</MemberHeroGhost>}
         trialNote={`${trialDays}-day free trial · Then ${settings?.monthly_price_display ?? "$29/month USD"} · Cancel anytime`}
       />
       )}
