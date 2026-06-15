@@ -1,4 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router'
+import type { ComponentType } from 'react'
 
 const EMAIL_SUBJECTS: Record<string, string> = {
   signup: 'Confirm your email',
@@ -146,7 +147,7 @@ export const Route = createFileRoute("/lovable/email/auth/webhook")({
         // Render React Email to HTML and plain text
         const React = await import('react')
         const { render } = await import('@react-email/components')
-        const element = React.createElement(EmailTemplate as React.ComponentType<any>, templateProps)
+        const element = React.createElement(EmailTemplate as ComponentType<any>, templateProps)
         const html = await render(element)
         const text = await render(element, { plainText: true })
 

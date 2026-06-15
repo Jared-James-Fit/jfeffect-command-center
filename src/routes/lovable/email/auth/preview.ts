@@ -1,4 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router'
+import type { ComponentType } from 'react'
 
 async function loadEmailTemplate(type: string) {
   switch (type) {
@@ -104,7 +105,7 @@ export const Route = createFileRoute("/lovable/email/auth/preview")({
         const sampleData = SAMPLE_DATA[type] || {}
         const React = await import('react')
         const { render } = await import('@react-email/components')
-        const html = await render(React.createElement(EmailTemplate as React.ComponentType<any>, sampleData))
+        const html = await render(React.createElement(EmailTemplate as ComponentType<any>, sampleData))
 
         return new Response(html, {
           status: 200,
