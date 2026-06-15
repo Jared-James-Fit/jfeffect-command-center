@@ -1724,6 +1724,14 @@ function DayEditor({ day, setDay, exercises, compact }: { day: any; setDay: (d: 
 }
 
 function SwapExerciseButton({ row, setRow, exercises }: { row: any; setRow: (r: any) => void; exercises: any[] }) {
+
+/**
+ * Slim "+" rendered between exercise rows. Click opens a tiny popover with a
+ * search box; choosing a result inserts a new row at that position. Stays
+ * low-profile (hairline divider + invisible button) until the user hovers it.
+ */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const _InlineAddExerciseButtonAnchor = null;
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const filtered = useMemo(() => {
