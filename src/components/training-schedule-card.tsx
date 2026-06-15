@@ -124,6 +124,8 @@ export function TrainingScheduleCard({ client, editable = true, compact = false,
               <span className="text-muted-foreground"> · </span>
               {(client.committed_training_days ?? [])
                 .filter((d): d is WeekDay => (WEEK_DAYS as readonly string[]).includes(d))
+                .slice()
+                .sort((a, b) => WEEK_DAYS.indexOf(a) - WEEK_DAYS.indexOf(b))
                 .map((d) => SHORT_DAY[d as WeekDay])
                 .join(" / ")}
             </div>
