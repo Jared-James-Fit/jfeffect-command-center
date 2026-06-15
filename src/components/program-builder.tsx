@@ -8,6 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Search, Star, GripVertical, Check, Loader2, AlertCircle, Circle, Plus, Link as LinkIcon, Unlink, CloudOff, AlertTriangle, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { QuickAddExerciseDialog } from "@/components/quick-add-exercise-dialog";
 
 // ---------------- Drag & drop payload helpers ----------------
 
@@ -517,6 +518,7 @@ export function ExerciseLibraryPanel({
   const [filter, setFilter] = useState<string | null>(null);
   const [favs, setFavs] = useState<Set<string>>(() => readFavs());
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const [quickAddOpen, setQuickAddOpen] = useState(false);
 
   // Global keyboard shortcuts:
   //   "/"   → focus the search input (and expand if collapsed)
@@ -646,11 +648,26 @@ export function ExerciseLibraryPanel({
             </Button>
           )}
         </div>
-        {(selectedDayLabel || onQuickAdd) && (
-          <div className="px-2 pb-1 text-[10px] text-muted-foreground">
-            {selectedDayLabel ? <>Adds to <span className="font-semibold text-foreground">{selectedDayLabel}</span></> : <>Click a day to select an add target</>}
+        <div className="flex items-center justify-between gap-2 px-2 pb-1.5">
+          <div className="text-[10px] text-muted-foreground">
+            {selectedDayLabel ? (
+              <>Adds to <span className="font-semibold text-foreground">{selectedDayLabel}</span></>
+            ) : onQuickAdd ? (
+              <>Click a day to select an add target</>
+            ) : null}
           </div>
-        )}
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-6 gap-1 px-2 text-[10px]"
+            onClick={() => setQuickAddOpen(true)}
+            title="Create a new exercise in the library"
+          >
+            <Plus className="h-3 w-3" />
+            New
+          </Button>
+        </div>
       </div>
       <div className="flex flex-wrap gap-1 border-b border-border p-2">
         <button
@@ -692,7 +709,19 @@ export function ExerciseLibraryPanel({
         )}
         <Section label={q || filter ? "Results" : "Library"}>
           {filtered.length === 0 ? (
-            <div className="p-3 text-center text-[11px] text-muted-foreground">No exercises.</div>
+            <div className="space-y-2 p-3 text-center text-[11px] text-muted-foreground">
+              <div>No exercises{q ? <> matching “{q}”</> : null}.</div>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-7 gap-1 text-[11px]"
+                onClick={() => setQuickAddOpen(true)}
+              >
+                <Plus className="h-3 w-3" />
+                Add {q ? `"${q}"` : "new exercise"} to library
+              </Button>
+            </div>
           ) : (
             filtered.map((e) => (
               <ExerciseItem key={e.id} ex={e} fav={favs.has(e.id)} onFav={toggleFav} onPick={onPick} onQuickAdd={onQuickAdd} />
@@ -700,6 +729,19 @@ export function ExerciseLibraryPanel({
           )}
         </Section>
       </div>
+      <QuickAddExerciseDialog
+        open={quickAddOpen}
+        onOpenChange={setQuickAddOpen}
+        defaultName={q}
+        onCreated={(id) => {
+          // Drop the search/filter so the new exercise is visible,
+          // and auto-add it to the currently selected day when possible.
+          setQ("");
+          setFilter(null);
+          if (onQuickAdd) onQuickAdd(id);
+          else onPick?.(id);
+        }}
+      />
     </div>
   );
 }
