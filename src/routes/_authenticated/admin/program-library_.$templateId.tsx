@@ -2168,7 +2168,7 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
     ? (exMeta.video_url || exMeta.youtube_url || exMeta.vimeo_url || null)
     : null;
   const videoBadgeCls = cn(
-    "inline-flex shrink-0 items-center gap-0.5 rounded-full border px-1 py-0 text-[9px] font-bold uppercase tracking-wide",
+    "inline-flex shrink-0 items-center justify-center rounded-full border p-0.5",
     rowHasVideo
       ? "border-emerald-400/40 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20"
       : "border-amber-400/50 bg-amber-500/10 text-amber-300",
