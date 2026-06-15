@@ -233,7 +233,7 @@ export function IntakeAnswersDialog({
                   </AccordionTrigger>
                   <AccordionContent className="border-t border-border bg-secondary/20 px-3 py-3">
                     {r.source === "fillout" ? (
-                      <FilloutAnswers responseJson={r.responseJson} />
+                      <FilloutAnswers submissionId={r.id} responseJson={r.responseJson} />
                     ) : (
                       <NativeAnswers submissionId={r.id} formId={r.formId ?? null} />
                     )}
@@ -248,19 +248,97 @@ export function IntakeAnswersDialog({
   );
 }
 
-function FilloutAnswers({ responseJson }: { responseJson: any }) {
-  return <FilloutEditableAnswers responseJson={responseJson} />;
-}
-
-function FilloutEditableAnswers({
+function FilloutAnswers({
   submissionId,
   responseJson,
 }: {
-  submissionId?: string;
+  submissionId: string;
   responseJson: any;
 }) {
-  // Hoisted helper component: receives the submission id via closure below.
-  return <FilloutEditor responseJson={responseJson} />;
+  const qc = useQueryClient();
+  const initial: any[] = useMemo(
+    () => (Array.isArray(responseJson?.questions) ? responseJson.questions : []),
+    [responseJson],
+  );
+  const [values, setValues] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    const next: Record<string, string> = {};
+    initial.forEach((q: any, i: number) => {
+      const key = String(q.id ?? i);
+      next[key] = formatValue(q.value);
+    });
+    setValues(next);
+  }, [initial]);
+
+  const dirty = useMemo(
+    () =>
+      initial.some((q: any, i: number) => {
+        const key = String(q.id ?? i);
+        return (values[key] ?? "") !== formatValue(q.value);
+      }),
+    [initial, values],
+  );
+
+  if (!initial.length) {
+    return (
+      <pre className="overflow-auto rounded bg-background p-2 text-xs">
+        {responseJson ? JSON.stringify(responseJson, null, 2) : "No response data."}
+      </pre>
+    );
+  }
+
+  async function save() {
+    setSaving(true);
+    try {
+      const updatedQuestions = initial.map((q: any, i: number) => {
+        const key = String(q.id ?? i);
+        const newVal = values[key] ?? "";
+        return { ...q, value: newVal };
+      });
+      const nextJson = { ...(responseJson ?? {}), questions: updatedQuestions };
+      const { error } = await (supabase as any)
+        .from("fillout_submissions")
+        .update({ response_json: nextJson })
+        .eq("id", submissionId);
+      if (error) throw error;
+      toast.success("Answers updated");
+      qc.invalidateQueries({ queryKey: ["intake-fillout"] });
+    } catch (e: any) {
+      toast.error(e?.message ?? "Could not save changes");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="space-y-2">
+      {initial.map((q: any, i: number) => {
+        const key = String(q.id ?? i);
+        return (
+          <div key={key} className="rounded-md border border-border bg-card p-2.5">
+            <div className="text-xs font-semibold text-muted-foreground">
+              {q.name || `Question ${i + 1}`}
+            </div>
+            <Textarea
+              className="mt-1 min-h-[44px] text-sm"
+              value={values[key] ?? ""}
+              onChange={(e) =>
+                setValues((prev) => ({ ...prev, [key]: e.target.value }))
+              }
+            />
+          </div>
+        );
+      })}
+      <div className="flex justify-end pt-1">
+        <Button size="sm" onClick={save} disabled={!dirty || saving}>
+          <Save className="mr-1.5 h-3.5 w-3.5" />
+          {saving ? "Saving…" : "Save changes"}
+        </Button>
+      </div>
+    </div>
+  );
 }
 
 function NativeAnswers({
