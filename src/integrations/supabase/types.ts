@@ -13652,6 +13652,18 @@ export type Database = {
       }
     }
     Functions: {
+      admin_clients_directory: {
+        Args: {
+          p_coach_id?: string
+          p_coaching_type?: string
+          p_limit?: number
+          p_offset?: number
+          p_search?: string
+          p_sort?: string
+          p_status?: string
+        }
+        Returns: Json
+      }
       apply_default_member_access: {
         Args: { _member_id: string }
         Returns: number
