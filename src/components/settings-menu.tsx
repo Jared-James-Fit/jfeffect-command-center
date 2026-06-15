@@ -42,13 +42,17 @@ export function SettingsMenu({
   const [picOpen, setPicOpen] = useState(false);
   const [viewOpen, setViewOpen] = useState(false);
 
-  // Settings/account-style items only (Account group + any account/settings route).
+  // Settings/account-style items — Account group, account/settings routes,
+  // plus billing/purchases so clients & members can reach payment info from
+  // the gear icon.
   const settingItems = items.filter(
     (i) =>
       i.group === "Account" ||
       i.to.endsWith("/account") ||
       i.to.endsWith("/account-settings") ||
-      i.to.endsWith("/settings"),
+      i.to.endsWith("/settings") ||
+      i.to.endsWith("/billing") ||
+      i.to.endsWith("/purchases"),
   );
 
   const { data: signedPic } = useQuery({
