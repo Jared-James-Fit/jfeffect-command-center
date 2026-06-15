@@ -586,6 +586,13 @@ function ClientDetail() {
         />
 
         <TabsContent value="summary" className="grid gap-6 md:grid-cols-3">
+        <div className="md:col-span-3">
+          <IntakeAnswersBigButton
+            clientId={id}
+            clientName={form.full_name ?? null}
+            subtitle="See every intake & in-app questionnaire this client filled out"
+          />
+        </div>
         <Card className="border-border bg-card p-6 md:col-span-2 space-y-4">
           <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Profile</h3>
           <div className="grid grid-cols-2 gap-3">
