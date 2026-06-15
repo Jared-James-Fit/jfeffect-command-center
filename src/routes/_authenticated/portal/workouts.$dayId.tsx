@@ -756,13 +756,81 @@ function WorkoutDay() {
             {/* Global KG/LB toggle removed — per-exercise unit controls remain
                 the single source of truth for unit selection. */}
             {!readonly && (
-              <Button size="sm" variant="outline" onClick={() => setFocusMode(true)}>
-                <Maximize2 className="mr-1 h-4 w-4" /> Full Screen
+              <Button
+                size="lg"
+                onClick={() => setFocusMode(true)}
+                className="h-11 gap-2 bg-gradient-to-r from-primary to-primary/80 px-5 text-base font-bold text-primary-foreground shadow-lg shadow-primary/30 hover:from-primary/90 hover:to-primary/70 hover:shadow-primary/40"
+              >
+                <Maximize2 className="h-5 w-5" /> Full Screen
               </Button>
             )}
             <SaveStatus state={metaSave.state} savedAt={metaSave.savedAt} />
           </div>
         </div>
+
+        {isImpersonating && client?.id && (
+          <Card className="border-primary/30 bg-primary/5 p-3">
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="border-primary/40 bg-primary/10 text-primary">Admin</Badge>
+                <div className="text-sm font-semibold">Set workout status</div>
+              </div>
+              <div className="ml-auto inline-flex overflow-hidden rounded-lg border border-border bg-background shadow-sm">
+                {([
+                  { key: "not_started", label: "Not started", active: !completion?.started_at && !completion?.in_progress_at && !completion?.completed_at },
+                  { key: "in_progress", label: "In progress", active: !!(completion && !completion.completed_at && (completion.in_progress_at || completion.started_at)) },
+                  { key: "completed", label: "Completed", active: !!completion?.completed_at },
+                ] as const).map((opt) => (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    onClick={async () => {
+                      const now = new Date().toISOString();
+                      try {
+                        if (opt.key === "not_started") {
+                          if (completion?.id) {
+                            await sb.from("pl_day_completions").update({ started_at: null, in_progress_at: null, completed_at: null }).eq("id", completion.id);
+                          }
+                        } else if (opt.key === "in_progress") {
+                          if (completion?.id) {
+                            await sb.from("pl_day_completions").update({ started_at: completion.started_at ?? now, in_progress_at: now, completed_at: null }).eq("id", completion.id);
+                          } else {
+                            await sb.from("pl_day_completions").insert({ day_id: dayId, client_id: client.id, started_at: now, in_progress_at: now, completed_at: null });
+                          }
+                        } else if (opt.key === "completed") {
+                          if (completion?.id) {
+                            await sb.from("pl_day_completions").update({ started_at: completion.started_at ?? now, in_progress_at: completion.in_progress_at ?? now, completed_at: now }).eq("id", completion.id);
+                          } else {
+                            await sb.from("pl_day_completions").insert({ day_id: dayId, client_id: client.id, started_at: now, in_progress_at: now, completed_at: now });
+                          }
+                        }
+                        await qc.invalidateQueries({ queryKey: ["pl-day-completion", dayId] });
+                        toast.success(`Status set: ${opt.label}`);
+                      } catch (err: any) {
+                        toast.error("Could not update status", { description: err?.message });
+                      }
+                    }}
+                    className={
+                      "px-3 py-1.5 text-xs font-semibold transition-colors " +
+                      (opt.active
+                        ? (opt.key === "completed"
+                            ? "bg-emerald-500 text-white"
+                            : opt.key === "in_progress"
+                              ? "bg-amber-500 text-white"
+                              : "bg-muted-foreground text-background")
+                        : "text-muted-foreground hover:bg-secondary hover:text-foreground")
+                    }
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="mt-1.5 text-[11px] text-muted-foreground">
+              Changes the client's progress for this workout. Visible only to admins/coaches in POV mode.
+            </div>
+          </Card>
+        )}
 
         {client?.id && (
           <div className="flex flex-wrap gap-2">
