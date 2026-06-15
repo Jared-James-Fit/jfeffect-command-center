@@ -3758,6 +3758,7 @@ export type Database = {
           created_at: string
           cues: string | null
           default_load_unit: string | null
+          default_measurement_type: string
           difficulty: string | null
           equipment: string | null
           exercise_category: string
@@ -3805,6 +3806,7 @@ export type Database = {
           created_at?: string
           cues?: string | null
           default_load_unit?: string | null
+          default_measurement_type?: string
           difficulty?: string | null
           equipment?: string | null
           exercise_category?: string
@@ -3852,6 +3854,7 @@ export type Database = {
           created_at?: string
           cues?: string | null
           default_load_unit?: string | null
+          default_measurement_type?: string
           difficulty?: string | null
           equipment?: string | null
           exercise_category?: string
@@ -7099,6 +7102,7 @@ export type Database = {
       member_set_logs: {
         Row: {
           block_id: string | null
+          completed_duration_seconds: number | null
           created_at: string
           day_index: number
           drop_stage_id: string | null
@@ -7123,6 +7127,7 @@ export type Database = {
         }
         Insert: {
           block_id?: string | null
+          completed_duration_seconds?: number | null
           created_at?: string
           day_index: number
           drop_stage_id?: string | null
@@ -7147,6 +7152,7 @@ export type Database = {
         }
         Update: {
           block_id?: string | null
+          completed_duration_seconds?: number | null
           created_at?: string
           day_index?: number
           drop_stage_id?: string | null
@@ -9432,6 +9438,7 @@ export type Database = {
           amrap: boolean
           block_id: string
           created_at: string
+          duration_seconds: number | null
           id: string
           load_unit: string | null
           load_value: number | null
@@ -9445,6 +9452,7 @@ export type Database = {
           amrap?: boolean
           block_id: string
           created_at?: string
+          duration_seconds?: number | null
           id?: string
           load_unit?: string | null
           load_value?: number | null
@@ -9458,6 +9466,7 @@ export type Database = {
           amrap?: boolean
           block_id?: string
           created_at?: string
+          duration_seconds?: number | null
           id?: string
           load_unit?: string | null
           load_value?: number | null
@@ -10084,6 +10093,8 @@ export type Database = {
           card_color: string | null
           created_at: string
           day_id: string
+          duration_seconds: number | null
+          duration_seconds_backup: number | null
           estimated_seconds: number | null
           estimated_seconds_override: number | null
           exercise_id: string | null
@@ -10094,6 +10105,7 @@ export type Database = {
           load_lb: number | null
           load_unit: string | null
           manual_override: boolean
+          measurement_type: string
           notes: string | null
           override_of_pct: number | null
           percentage: number | null
@@ -10101,6 +10113,7 @@ export type Database = {
           progression_method: string | null
           purpose_label: string | null
           reps_text: string | null
+          reps_text_backup: string | null
           rest_seconds: number | null
           rest_seconds_override: number | null
           rir: string | null
@@ -10116,6 +10129,8 @@ export type Database = {
           card_color?: string | null
           created_at?: string
           day_id: string
+          duration_seconds?: number | null
+          duration_seconds_backup?: number | null
           estimated_seconds?: number | null
           estimated_seconds_override?: number | null
           exercise_id?: string | null
@@ -10126,6 +10141,7 @@ export type Database = {
           load_lb?: number | null
           load_unit?: string | null
           manual_override?: boolean
+          measurement_type?: string
           notes?: string | null
           override_of_pct?: number | null
           percentage?: number | null
@@ -10133,6 +10149,7 @@ export type Database = {
           progression_method?: string | null
           purpose_label?: string | null
           reps_text?: string | null
+          reps_text_backup?: string | null
           rest_seconds?: number | null
           rest_seconds_override?: number | null
           rir?: string | null
@@ -10148,6 +10165,8 @@ export type Database = {
           card_color?: string | null
           created_at?: string
           day_id?: string
+          duration_seconds?: number | null
+          duration_seconds_backup?: number | null
           estimated_seconds?: number | null
           estimated_seconds_override?: number | null
           exercise_id?: string | null
@@ -10158,6 +10177,7 @@ export type Database = {
           load_lb?: number | null
           load_unit?: string | null
           manual_override?: boolean
+          measurement_type?: string
           notes?: string | null
           override_of_pct?: number | null
           percentage?: number | null
@@ -10165,6 +10185,7 @@ export type Database = {
           progression_method?: string | null
           purpose_label?: string | null
           reps_text?: string | null
+          reps_text_backup?: string | null
           rest_seconds?: number | null
           rest_seconds_override?: number | null
           rir?: string | null
@@ -10307,6 +10328,7 @@ export type Database = {
           actual_rpe_num: number | null
           client_id: string
           completed_at: string | null
+          completed_duration_seconds: number | null
           created_at: string
           entered_unit: string | null
           entered_value: number | null
@@ -10330,6 +10352,7 @@ export type Database = {
           actual_rpe_num?: number | null
           client_id: string
           completed_at?: string | null
+          completed_duration_seconds?: number | null
           created_at?: string
           entered_unit?: string | null
           entered_value?: number | null
@@ -10353,6 +10376,7 @@ export type Database = {
           actual_rpe_num?: number | null
           client_id?: string
           completed_at?: string | null
+          completed_duration_seconds?: number | null
           created_at?: string
           entered_unit?: string | null
           entered_value?: number | null
