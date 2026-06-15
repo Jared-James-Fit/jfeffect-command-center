@@ -8,7 +8,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { PlayCircle, RotateCcw } from "lucide-react";
+import { PlayCircle, RotateCcw, BookOpen } from "lucide-react";
 import { restartPlan } from "@/lib/member-plans.functions";
 import { toast } from "sonner";
 
