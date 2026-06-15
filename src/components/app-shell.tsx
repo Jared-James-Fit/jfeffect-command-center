@@ -13,7 +13,6 @@ import { useKeyboardOpen } from "@/hooks/use-keyboard-open";
 import { UserAvatar } from "@/components/user-avatar";
 import { SettingsMenu } from "@/components/settings-menu";
 import { listTemplates } from "@/lib/pl-programs";
-import { globalSearchFn, type GlobalSearchHit } from "@/lib/global-search.functions";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
