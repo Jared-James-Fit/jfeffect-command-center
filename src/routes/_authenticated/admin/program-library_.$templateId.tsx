@@ -1451,7 +1451,7 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
               ref={weekHeaderScrollRef}
               onScroll={syncWeekScroll("header")}
               className={cn(
-                "sticky top-10 z-20 -mx-2 overflow-x-auto border-b border-primary/20 bg-[color-mix(in_oklab,var(--primary)_6%,var(--background))] px-3 py-2 shadow-sm backdrop-blur scroll-smooth",
+                "sticky top-10 z-20 -mx-2 overflow-x-auto overscroll-x-contain border-b border-primary/20 bg-[color-mix(in_oklab,var(--primary)_6%,var(--background))] px-3 py-2 shadow-sm backdrop-blur",
                 "[scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
               )}
             >
@@ -1503,7 +1503,7 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
             ref={weekCardsScrollRef}
             onScroll={syncWeekScroll("cards")}
             className={cn(
-            "snap-x snap-proximity overflow-x-auto overflow-y-visible pb-3 scroll-smooth",
+            "snap-x snap-proximity overflow-x-auto overflow-y-visible overscroll-x-contain pb-3",
             compact ? "px-2 scroll-pl-2" : "px-3 scroll-pl-3",
           )}>
             <div className={cn("flex w-max items-start", compact ? "gap-2" : "gap-3")}>
