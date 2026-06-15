@@ -631,6 +631,29 @@ export function ExerciseLibraryPanel({
   const { favs, toggle: toggleFav } = useFavoriteExercises();
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [quickAddOpen, setQuickAddOpen] = useState(false);
+  // When set, the next render that actually mounts the search input will
+  // focus + select it. This makes `/` reliable even when the panel was
+  // collapsed (input wasn't in the DOM at keydown time).
+  const [pendingFocus, setPendingFocus] = useState(false);
+
+  useEffect(() => {
+    if (!pendingFocus || collapsed) return;
+    let cancelled = false;
+    const tryFocus = (attemptsLeft: number) => {
+      if (cancelled) return;
+      const el = inputRef.current;
+      if (el) {
+        el.focus();
+        try { el.select(); } catch {}
+        setPendingFocus(false);
+        return;
+      }
+      if (attemptsLeft > 0) requestAnimationFrame(() => tryFocus(attemptsLeft - 1));
+      else setPendingFocus(false);
+    };
+    tryFocus(8);
+    return () => { cancelled = true; };
+  }, [pendingFocus, collapsed]);
 
   // Global keyboard shortcuts:
   //   "/"   → focus the search input (and expand if collapsed)
@@ -643,8 +666,7 @@ export function ExerciseLibraryPanel({
       if (e.key === "/" && !typing && !e.metaKey && !e.ctrlKey && !e.altKey) {
         e.preventDefault();
         if (collapsed) onToggleCollapse?.();
-        // wait a tick in case we just expanded
-        setTimeout(() => inputRef.current?.focus(), 0);
+        setPendingFocus(true);
       } else if (e.key === "Escape" && document.activeElement === inputRef.current) {
         setQ("");
         (document.activeElement as HTMLElement)?.blur();
@@ -658,11 +680,11 @@ export function ExerciseLibraryPanel({
   useEffect(() => {
     const focus = () => {
       if (collapsed) onToggleCollapse?.();
-      setTimeout(() => inputRef.current?.focus(), 0);
+      setPendingFocus(true);
     };
     const clear = () => {
       setQ("");
-      inputRef.current?.focus();
+      setPendingFocus(true);
     };
     const close = () => {
       if (document.activeElement === inputRef.current) {
