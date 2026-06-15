@@ -6,6 +6,15 @@ import { useState } from "react";
 import { format } from "date-fns";
 import { getRecentPlannedVsActual } from "@/lib/analytics/planned-vs-actual";
 
+function fmtDuration(secs: number): string {
+  if (!secs || secs <= 0) return "—";
+  const m = Math.floor(secs / 60);
+  const s = Math.round(secs % 60);
+  if (m === 0) return `${s}s`;
+  if (s === 0) return `${m}m`;
+  return `${m}m ${s}s`;
+}
+
 function toneFor(pct: number | null): string {
   if (pct == null) return "bg-muted text-muted-foreground";
   if (pct >= 90) return "bg-emerald-500/15 text-emerald-500";
@@ -96,24 +105,32 @@ export function PlannedVsActualCard({
               </button>
               {open && (
                 <ul className="border-t border-border bg-muted/20 px-4 py-2">
-                  {d.rows.map((r) => (
-                    <li key={r.rowId} className="flex items-center justify-between py-1.5 text-xs">
-                      <div className="min-w-0 flex-1 truncate">
-                        <span className="font-medium">{r.exerciseName}</span>{" "}
-                        <span className="text-muted-foreground">
-                          · planned {r.plannedSets ?? "?"}×{r.plannedRepsText ?? "?"}
-                        </span>
-                      </div>
-                      <div className="ml-2 shrink-0 text-muted-foreground">
-                        {r.actualSets} sets · {r.actualRepsTotal} reps
-                        {r.repsHitPct != null && (
-                          <span className={`ml-2 ${toneFor(r.repsHitPct).split(" ")[1]}`}>
-                            {r.repsHitPct}%
-                          </span>
-                        )}
-                      </div>
-                    </li>
-                  ))}
+                  {d.rows.map((r) => {
+                    const isTime = r.measurementType === "time";
+                    const plannedLabel = isTime
+                      ? `${r.plannedSets ?? "?"}×${fmtDuration(r.plannedDurationSeconds ?? 0)}`
+                      : `${r.plannedSets ?? "?"}×${r.plannedRepsText ?? "?"}`;
+                    const actualLabel = isTime
+                      ? `${r.actualSets} sets · ${fmtDuration(r.actualDurationTotalSeconds)} total`
+                      : `${r.actualSets} sets · ${r.actualRepsTotal} reps`;
+                    const hitPct = isTime ? r.durationHitPct : r.repsHitPct;
+                    return (
+                      <li key={r.rowId} className="flex items-center justify-between py-1.5 text-xs">
+                        <div className="min-w-0 flex-1 truncate">
+                          <span className="font-medium">{r.exerciseName}</span>{" "}
+                          <span className="text-muted-foreground">· planned {plannedLabel}</span>
+                        </div>
+                        <div className="ml-2 shrink-0 text-muted-foreground">
+                          {actualLabel}
+                          {hitPct != null && (
+                            <span className={`ml-2 ${toneFor(hitPct).split(" ")[1]}`}>
+                              {hitPct}%
+                            </span>
+                          )}
+                        </div>
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
             </li>
