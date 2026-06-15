@@ -35,6 +35,56 @@ import {
 import { ShareProgramSheet } from "@/components/programs/share-program-sheet";
 import { DestinationBadges } from "@/components/programs/destination-badges";
 import { listShares, summarizeShares, type TemplateShare } from "@/lib/programs/sharing";
+import { listClientMaxes, upsertClientMax, type ClientMaxRow } from "@/lib/pl-maxes";
+import { notifyMissingMaxesFn } from "@/lib/missing-maxes.functions";
+
+// Quick-pick weight class tags (admin-only). Free-form tags still supported in the input.
+const WEIGHT_CLASS_TAGS: string[] = [
+  "47kg", "52kg", "57kg", "59kg", "63kg", "66kg", "69kg", "74kg",
+  "76kg", "83kg", "84kg", "84kg+", "93kg", "105kg", "120kg", "120kg+",
+];
+
+function tagListFromString(s: string): string[] {
+  return s.split(",").map((x) => x.trim()).filter(Boolean);
+}
+function tagsStringWithToggle(s: string, tag: string): string {
+  const list = tagListFromString(s);
+  const i = list.findIndex((t) => t.toLowerCase() === tag.toLowerCase());
+  if (i >= 0) list.splice(i, 1); else list.push(tag);
+  return list.join(", ");
+}
+
+function WeightClassPicker({
+  value, onChange,
+}: { value: string; onChange: (next: string) => void }) {
+  const active = new Set(tagListFromString(value).map((t) => t.toLowerCase()));
+  return (
+    <div className="space-y-1">
+      <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">
+        Weight class quick-pick
+      </Label>
+      <div className="flex flex-wrap gap-1">
+        {WEIGHT_CLASS_TAGS.map((t) => {
+          const on = active.has(t.toLowerCase());
+          return (
+            <button
+              key={t}
+              type="button"
+              onClick={() => onChange(tagsStringWithToggle(value, t))}
+              className={`rounded-full border px-2.5 py-1 text-[11px] transition-colors ${
+                on
+                  ? "border-primary bg-primary/10 text-primary"
+                  : "border-border text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {t}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 export const Route = createFileRoute("/_authenticated/admin/program-library")({ component: ProgramLibraryRedirect });
 
