@@ -370,7 +370,7 @@ function NewTemplateDialog({ open, onOpenChange, onCreated }: { open: boolean; o
   const navigate = useNavigate();
   const [form, setForm] = useState({
     name: "", template_type: "block" as TemplateType, training_style: "powerlifting" as TrainingStyle,
-    training_focus: "", weeks: 4, days_per_week: 4, est_duration_min: 60, notes: "", tags: "",
+    training_focus: "", weeks: 4, days_per_week: 4, notes: "", tags: "",
     blocks: 1,
     blockFocuses: [""] as string[],
   });
