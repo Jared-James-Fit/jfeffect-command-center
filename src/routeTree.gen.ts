@@ -164,6 +164,7 @@ import { Route as LovableEmailAuthPreviewRouteImport } from './routes/lovable/em
 import { Route as ApiPublicHooksSmsRemindersRouteImport } from './routes/api/public/hooks/sms-reminders'
 import { Route as ApiPublicHooksScheduledSendWorkerRouteImport } from './routes/api/public/hooks/scheduled-send-worker'
 import { Route as ApiPublicHooksScheduledMessagesWorkerRouteImport } from './routes/api/public/hooks/scheduled-messages-worker'
+import { Route as ApiPublicHooksNutritionTickRouteImport } from './routes/api/public/hooks/nutrition-tick'
 import { Route as ApiPublicHooksMediaArchiveRouteImport } from './routes/api/public/hooks/media-archive'
 import { Route as ApiPublicHooksLiftArchiveTickRouteImport } from './routes/api/public/hooks/lift-archive-tick'
 import { Route as ApiPublicHooksFilloutRouteImport } from './routes/api/public/hooks/fillout'
@@ -1111,6 +1112,12 @@ const ApiPublicHooksScheduledMessagesWorkerRoute =
     path: '/api/public/hooks/scheduled-messages-worker',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicHooksNutritionTickRoute =
+  ApiPublicHooksNutritionTickRouteImport.update({
+    id: '/api/public/hooks/nutrition-tick',
+    path: '/api/public/hooks/nutrition-tick',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicHooksMediaArchiveRoute =
   ApiPublicHooksMediaArchiveRouteImport.update({
     id: '/api/public/hooks/media-archive',
@@ -1703,6 +1710,7 @@ export interface FileRoutesByFullPath {
   '/api/public/hooks/fillout': typeof ApiPublicHooksFilloutRoute
   '/api/public/hooks/lift-archive-tick': typeof ApiPublicHooksLiftArchiveTickRoute
   '/api/public/hooks/media-archive': typeof ApiPublicHooksMediaArchiveRoute
+  '/api/public/hooks/nutrition-tick': typeof ApiPublicHooksNutritionTickRoute
   '/api/public/hooks/scheduled-messages-worker': typeof ApiPublicHooksScheduledMessagesWorkerRoute
   '/api/public/hooks/scheduled-send-worker': typeof ApiPublicHooksScheduledSendWorkerRoute
   '/api/public/hooks/sms-reminders': typeof ApiPublicHooksSmsRemindersRoute
@@ -1920,6 +1928,7 @@ export interface FileRoutesByTo {
   '/api/public/hooks/fillout': typeof ApiPublicHooksFilloutRoute
   '/api/public/hooks/lift-archive-tick': typeof ApiPublicHooksLiftArchiveTickRoute
   '/api/public/hooks/media-archive': typeof ApiPublicHooksMediaArchiveRoute
+  '/api/public/hooks/nutrition-tick': typeof ApiPublicHooksNutritionTickRoute
   '/api/public/hooks/scheduled-messages-worker': typeof ApiPublicHooksScheduledMessagesWorkerRoute
   '/api/public/hooks/scheduled-send-worker': typeof ApiPublicHooksScheduledSendWorkerRoute
   '/api/public/hooks/sms-reminders': typeof ApiPublicHooksSmsRemindersRoute
@@ -2144,6 +2153,7 @@ export interface FileRoutesById {
   '/api/public/hooks/fillout': typeof ApiPublicHooksFilloutRoute
   '/api/public/hooks/lift-archive-tick': typeof ApiPublicHooksLiftArchiveTickRoute
   '/api/public/hooks/media-archive': typeof ApiPublicHooksMediaArchiveRoute
+  '/api/public/hooks/nutrition-tick': typeof ApiPublicHooksNutritionTickRoute
   '/api/public/hooks/scheduled-messages-worker': typeof ApiPublicHooksScheduledMessagesWorkerRoute
   '/api/public/hooks/scheduled-send-worker': typeof ApiPublicHooksScheduledSendWorkerRoute
   '/api/public/hooks/sms-reminders': typeof ApiPublicHooksSmsRemindersRoute
@@ -2368,6 +2378,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/fillout'
     | '/api/public/hooks/lift-archive-tick'
     | '/api/public/hooks/media-archive'
+    | '/api/public/hooks/nutrition-tick'
     | '/api/public/hooks/scheduled-messages-worker'
     | '/api/public/hooks/scheduled-send-worker'
     | '/api/public/hooks/sms-reminders'
@@ -2585,6 +2596,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/fillout'
     | '/api/public/hooks/lift-archive-tick'
     | '/api/public/hooks/media-archive'
+    | '/api/public/hooks/nutrition-tick'
     | '/api/public/hooks/scheduled-messages-worker'
     | '/api/public/hooks/scheduled-send-worker'
     | '/api/public/hooks/sms-reminders'
@@ -2808,6 +2820,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/fillout'
     | '/api/public/hooks/lift-archive-tick'
     | '/api/public/hooks/media-archive'
+    | '/api/public/hooks/nutrition-tick'
     | '/api/public/hooks/scheduled-messages-worker'
     | '/api/public/hooks/scheduled-send-worker'
     | '/api/public/hooks/sms-reminders'
@@ -2864,6 +2877,7 @@ export interface RootRouteChildren {
   ApiPublicHooksFilloutRoute: typeof ApiPublicHooksFilloutRoute
   ApiPublicHooksLiftArchiveTickRoute: typeof ApiPublicHooksLiftArchiveTickRoute
   ApiPublicHooksMediaArchiveRoute: typeof ApiPublicHooksMediaArchiveRoute
+  ApiPublicHooksNutritionTickRoute: typeof ApiPublicHooksNutritionTickRoute
   ApiPublicHooksScheduledMessagesWorkerRoute: typeof ApiPublicHooksScheduledMessagesWorkerRoute
   ApiPublicHooksScheduledSendWorkerRoute: typeof ApiPublicHooksScheduledSendWorkerRoute
   ApiPublicHooksSmsRemindersRoute: typeof ApiPublicHooksSmsRemindersRoute
@@ -3958,6 +3972,13 @@ declare module '@tanstack/react-router' {
       path: '/api/public/hooks/scheduled-messages-worker'
       fullPath: '/api/public/hooks/scheduled-messages-worker'
       preLoaderRoute: typeof ApiPublicHooksScheduledMessagesWorkerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/hooks/nutrition-tick': {
+      id: '/api/public/hooks/nutrition-tick'
+      path: '/api/public/hooks/nutrition-tick'
+      fullPath: '/api/public/hooks/nutrition-tick'
+      preLoaderRoute: typeof ApiPublicHooksNutritionTickRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/public/hooks/media-archive': {
@@ -5106,6 +5127,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicHooksFilloutRoute: ApiPublicHooksFilloutRoute,
   ApiPublicHooksLiftArchiveTickRoute: ApiPublicHooksLiftArchiveTickRoute,
   ApiPublicHooksMediaArchiveRoute: ApiPublicHooksMediaArchiveRoute,
+  ApiPublicHooksNutritionTickRoute: ApiPublicHooksNutritionTickRoute,
   ApiPublicHooksScheduledMessagesWorkerRoute:
     ApiPublicHooksScheduledMessagesWorkerRoute,
   ApiPublicHooksScheduledSendWorkerRoute:
