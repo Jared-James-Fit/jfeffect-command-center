@@ -255,7 +255,15 @@ function WorkoutDay() {
   const blockEnded = block?.end_date ? new Date(block.end_date) < today : false;
   const blockCompleted = block?.status === "Completed" || block?.status === "Archived";
   const { isImpersonating } = useClientImpersonation();
-  const readonly = search.readonly === 1 || blockEnded || blockCompleted || isImpersonating;
+  // "Auto" readonly = past/closed workouts the client would otherwise be locked
+  // out of. The client can opt-in to editing a past workout via the Edit button
+  // below (`unlocked` flips this off). Impersonation always stays read-only so
+  // coaches don't edit while viewing as the client.
+  const [unlocked, setUnlocked] = useState(false);
+  const autoReadonly = search.readonly === 1 || blockEnded || blockCompleted;
+  const readonly = (autoReadonly && !unlocked) || isImpersonating;
+  // Reset the unlock when navigating to a different workout.
+  useEffect(() => { setUnlocked(false); }, [dayId]);
 
   const { data: rows = [], isSuccess: rowsLoaded } = useQuery({
     queryKey: ["pl-day-rows", dayId],
@@ -686,6 +694,16 @@ function WorkoutDay() {
           <Badge variant="outline"><Clock className="mr-1 h-3 w-3" /> {durationRange(day.duration_override_min ?? day.duration_estimate_min ?? 60)}</Badge>
           {completion && <Badge variant="outline" className="text-green-500 border-green-500/30 bg-green-500/10"><CheckCircle2 className="mr-1 h-3 w-3" /> Completed</Badge>}
           {readonly && <Badge variant="outline" className="border-muted-foreground/30 bg-muted/30 text-muted-foreground"><Lock className="mr-1 h-3 w-3" /> Read-only</Badge>}
+          {autoReadonly && !isImpersonating && !unlocked && (
+            <Button size="sm" variant="outline" onClick={() => { setUnlocked(true); toast.success("Editing enabled — your changes will save"); }}>
+              Edit previous workout
+            </Button>
+          )}
+          {autoReadonly && !isImpersonating && unlocked && (
+            <Button size="sm" variant="ghost" onClick={() => setUnlocked(false)}>
+              <Lock className="mr-1 h-3 w-3" /> Lock again
+            </Button>
+          )}
           <div className="ml-auto flex items-center gap-2">
             {/* Global KG/LB toggle removed — per-exercise unit controls remain
                 the single source of truth for unit selection. */}
@@ -725,7 +743,18 @@ function WorkoutDay() {
         {readonly && (
           <Card className="flex items-start gap-2 border-border bg-secondary/30 p-3 text-xs">
             <Lock className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-            <div>Viewing a past workout. Logs are read-only.</div>
+            <div>
+              Viewing a past workout. Logs are read-only.
+              {autoReadonly && !isImpersonating && (
+                <> Tap <strong>Edit previous workout</strong> above to update any set.</>
+              )}
+            </div>
+          </Card>
+        )}
+        {autoReadonly && unlocked && !isImpersonating && (
+          <Card className="flex items-start gap-2 border-amber-500/30 bg-amber-500/5 p-3 text-xs">
+            <Info className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+            <div>You're editing a previous workout. Changes save automatically.</div>
           </Card>
         )}
 
