@@ -798,6 +798,12 @@ function ClientDetail() {
         </div>
         </TabsContent>
 
+        <TabsContent value="goals-setup" className="grid gap-6">
+          <Suspense fallback={<TabFallback />}>
+            <GoalsSetupPanel clientId={id} />
+          </Suspense>
+        </TabsContent>
+
         <TabsContent value="training" className="grid gap-6 md:grid-cols-3">
           <Suspense fallback={<TabFallback />}>
             <div className="md:col-span-3"><TrainingScheduleCard client={form} /></div>
