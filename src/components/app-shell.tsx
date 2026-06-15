@@ -4,7 +4,7 @@ import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import {
   LogOut, ChevronLeft, ChevronRight, ChevronDown, Search, Settings as SettingsIcon, ArrowLeft, MoreHorizontal,
-  Star, Pin, ChevronsDownUp, ChevronsUpDown, BookOpen,
+  Star, Pin, ChevronsDownUp, ChevronsUpDown, BookOpen, Users, UserCog, IdCard,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { NotificationBell } from "@/components/notification-bell";
@@ -13,6 +13,8 @@ import { useKeyboardOpen } from "@/hooks/use-keyboard-open";
 import { UserAvatar } from "@/components/user-avatar";
 import { SettingsMenu } from "@/components/settings-menu";
 import { listTemplates } from "@/lib/pl-programs";
+import { globalSearchFn, type GlobalSearchHit } from "@/lib/global-search.functions";
+import { useServerFn } from "@tanstack/react-start";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { ClientPovQuickPicker } from "@/components/client-pov-quick-picker";
