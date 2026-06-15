@@ -24,6 +24,7 @@ import { WorkoutListCard } from "@/components/workout-list-card";
 import { ClientPreviousBlocks } from "@/components/client-previous-blocks";
 import { WeekScheduleView } from "@/components/week-schedule-view";
 import { ProgressComparison } from "@/components/progress-comparison";
+import { TrainingAnalyticsPreviewCard } from "@/components/training-analytics-preview-card";
 
 export const Route = createFileRoute("/_authenticated/portal/workouts/")({
   validateSearch: (s: Record<string, unknown>) => ({
