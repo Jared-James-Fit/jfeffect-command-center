@@ -165,6 +165,7 @@ export const coachNav: NavItem[] = [
 
 export const clientNav: NavItem[] = [
   { to: "/portal", label: "Home", icon: LayoutDashboard },
+  { to: "/portal/goals-setup", label: "Goals & Setup", icon: ClipboardCheck },
   { to: "/portal/messages", label: "Messages", icon: MessageCircle },
   { to: "/portal/workouts", label: "Workouts", icon: Activity },
   { to: "/portal/lift-videos", label: "Lift Review Upload", icon: Video },
