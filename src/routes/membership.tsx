@@ -18,6 +18,7 @@ import { FeatureTabs } from "@/components/sales/feature-tabs";
 import { FeatureGrid } from "@/components/sales/feature-grid";
 import { IncludedNotIncluded } from "@/components/sales/included-not-included";
 import { ComparisonCard } from "@/components/sales/comparison";
+import { OfferComparison } from "@/components/sales/offer-comparison";
 import { ProofWall } from "@/components/sales/proof-wall";
 import { FaqAccordion } from "@/components/sales/faq-accordion";
 import { StickyMobileCta } from "@/components/sales/sticky-mobile-cta";
@@ -154,8 +155,11 @@ function SignupJf() {
 
   const s = p?.sections ?? {};
   const trialDays = settings?.trial_days ?? 3;
-  const ctaLabel = p?.primary_cta_label ?? "Start My Membership";
+  const ctaLabel = p?.primary_cta_label ?? `Start ${trialDays}-Day Free Trial`;
   const pausedLabel = "Signups Temporarily Paused";
+
+  const featuresRef = useRef<HTMLDivElement>(null);
+  const scrollToFeatures = () => featuresRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
 
   useEffect(() => {
     setFirstChargeLabel(
@@ -177,25 +181,22 @@ function SignupJf() {
   }
 
   return (
-    <SalesPageShell pageId="membership-join">
+    <SalesPageShell pageId="membership-join" theme="light">
       {p === undefined ? (
         <HeroSkeleton />
       ) : (
       <MembershipHero
         priceChip={settings?.monthly_price_display ?? "$29/month USD"}
-        headline={p?.hero_headline ?? "JF Effect Membership"}
-        sub={p?.hero_subheadline ?? "Structured training, progress tracking, and fitness resources without the cost of private coaching. No application. No 1:1 coaching. Start immediately."}
+        headline={p?.hero_headline ?? "Train with the JF Effect system\u2014without paying for private coaching."}
+        sub={p?.hero_subheadline ?? "Get structured workout plans, exercise demos, workout tracking, progress analytics, nutrition resources and member-only updates\u2014all inside the JF Effect app. Start immediately. Train on your schedule. Follow the system at your own pace."}
         heroImage={p?.hero_image_url ?? null}
-        primary={<MemberHeroCta onClick={scrollToForm}>{p?.primary_cta_label ?? "Start My Membership"}</MemberHeroCta>}
-        secondary={
-          <Link to="/coaching">
-            <MemberHeroGhost>{p?.secondary_cta_label ?? "Looking for Private Coaching?"}</MemberHeroGhost>
-          </Link>
-        }
-        trialNote={`${trialDays}-day free trial · ${settings?.monthly_price_display ?? "$29/month USD"} after · cancel anytime`}
+        primary={<MemberHeroCta onClick={scrollToForm}>{p?.primary_cta_label ?? `Start ${trialDays}-Day Free Trial`}</MemberHeroCta>}
+        secondary={<MemberHeroGhost onClick={scrollToFeatures}>{p?.secondary_cta_label ?? "See What's Included"}</MemberHeroGhost>}
+        trialNote={`${trialDays}-day free trial · Then ${settings?.monthly_price_display ?? "$29/month USD"} · Cancel anytime`}
       />
       )}
 
+      <div ref={featuresRef} id="features" />
       <Reveal><FeatureTabs /></Reveal>
 
       {Array.isArray(s.features) && s.features.length > 0 && (
@@ -212,6 +213,8 @@ function SignupJf() {
       {s.comparison?.left && s.comparison?.right && (
         <Reveal><ComparisonCard left={s.comparison.left} right={s.comparison.right} /></Reveal>
       )}
+
+      <Reveal><OfferComparison accent="membership" /></Reveal>
 
       <Reveal><ProofWall
         testimonials={p?.testimonials ?? []}
