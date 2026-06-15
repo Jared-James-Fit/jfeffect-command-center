@@ -141,13 +141,29 @@ export function NutritionUpdatePanel() {
             </div>
             {s.sub ? <p className="text-sm mt-1 opacity-80">{s.sub}</p> : null}
           </div>
-          <Button size="lg" className="font-black bg-gradient-primary hidden sm:inline-flex" disabled={isSubmitted} onClick={() => setOpen(true)}>
-            {isSubmitted ? "Waiting…" : "Submit Update"}
-          </Button>
+          {nutritionForm ? (
+            <Button asChild size="lg" className="font-black bg-gradient-primary hidden sm:inline-flex" disabled={isSubmitted}>
+              <Link to="/portal/check-ins/$formId" params={{ formId: nutritionForm.id }}>
+                {isSubmitted ? "Waiting…" : "Submit Update"}
+              </Link>
+            </Button>
+          ) : (
+            <Button size="lg" className="font-black bg-gradient-primary hidden sm:inline-flex" disabled={isSubmitted} onClick={() => setOpen(true)}>
+              {isSubmitted ? "Waiting…" : "Submit Update"}
+            </Button>
+          )}
         </div>
-        <Button size="lg" className="font-black bg-gradient-primary w-full mt-3 sm:hidden" disabled={isSubmitted} onClick={() => setOpen(true)}>
-          {isSubmitted ? "Waiting on coach…" : "Submit Nutrition Update"}
-        </Button>
+        {nutritionForm ? (
+          <Button asChild size="lg" className="font-black bg-gradient-primary w-full mt-3 sm:hidden" disabled={isSubmitted}>
+            <Link to="/portal/check-ins/$formId" params={{ formId: nutritionForm.id }}>
+              {isSubmitted ? "Waiting on coach…" : "Submit Nutrition Update"}
+            </Link>
+          </Button>
+        ) : (
+          <Button size="lg" className="font-black bg-gradient-primary w-full mt-3 sm:hidden" disabled={isSubmitted} onClick={() => setOpen(true)}>
+            {isSubmitted ? "Waiting on coach…" : "Submit Nutrition Update"}
+          </Button>
+        )}
         {ts === "published" && lastPub?.coach_note ? (
           <div className="mt-3 rounded border border-violet-500/30 bg-violet-500/5 p-3 text-sm">
             <div className="text-[10px] uppercase opacity-70 mb-1">Coach note</div>
