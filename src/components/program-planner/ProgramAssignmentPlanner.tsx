@@ -20,6 +20,8 @@ import { ChevronRight, ChevronLeft, Loader2, AlertTriangle, CheckCircle2, XCircl
 import { toast } from "sonner";
 
 import { normalizeTemplatePayload, getActiveTemplateBlocks } from "@/lib/pl-template-blocks";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Progress } from "@/components/ui/progress";
 import {
   selectAll, clearAll, setNode, getNodeState, summarize,
   dayKey as makeDayKey,
@@ -126,6 +128,9 @@ export function ProgramAssignmentPlanner({ clientId, templateId, onDone }: Props
   const [idempotencyKey] = useState<string>(initial.idempotencyKey);
   const [programName, setProgramName] = useState<string | null>(initial.programName);
   const [committing, setCommitting] = useState(false);
+  const [commitProgress, setCommitProgress] = useState(0);
+  const [commitStage, setCommitStage] = useState<string>("");
+  const [successInfo, setSuccessInfo] = useState<null | { added: number; idempotent: boolean; programName: string }>(null);
 
   // Default-select all once payload loads if user has no prior selection.
   useEffect(() => {
@@ -211,26 +216,46 @@ export function ProgramAssignmentPlanner({ clientId, templateId, onDone }: Props
   const commit = async () => {
     if (!preview) return;
     setCommitting(true);
+    setCommitProgress(8);
+    setCommitStage("Preparing assignment…");
+    const toastId = toast.loading("Assigning program…", { description: "Uploading workouts to the client account." });
+    // Indeterminate-ish progress animation so users see motion during long server calls.
+    const tick = setInterval(() => {
+      setCommitProgress((p) => {
+        if (p < 35) { setCommitStage("Uploading workouts…"); return p + 3; }
+        if (p < 70) { setCommitStage("Scheduling sessions…"); return p + 2; }
+        if (p < 92) { setCommitStage("Finalising on client account…"); return p + 1; }
+        return p;
+      });
+    }, 250);
     try {
       const result = await commitServer({ data: {
         clientId, templateId, selection, method, startDate, trainingDays,
         conflictDecisions, publishStatus, publishAt, idempotencyKey,
         programName,
       } as any });
+      clearInterval(tick);
+      setCommitProgress(100);
+      setCommitStage("Done");
       clearDraft(clientId, templateId);
       toast.success(
         result.idempotent
           ? "Already assigned (idempotent)"
           : `Assigned ${result.counts.added} workout${result.counts.added === 1 ? "" : "s"}`,
+        { id: toastId, description: `Saved to ${client?.full_name ?? "client"}.`, duration: 6000 },
       );
       qc.invalidateQueries({ queryKey: ["pl-blocks", clientId] });
       qc.invalidateQueries({ queryKey: ["pl-preps", clientId] });
       qc.invalidateQueries({ queryKey: ["assigned-blocks", clientId] });
       qc.invalidateQueries({ queryKey: ["planner-existing-cal", clientId] });
-      if (onDone) onDone();
-      else navigate({ to: "/admin/client-programs/$clientId", params: { clientId } });
+      setSuccessInfo({
+        added: result.counts.added,
+        idempotent: !!result.idempotent,
+        programName: programName ?? tpl?.name ?? "Program",
+      });
     } catch (e: any) {
-      toast.error(e?.message ?? "Assignment failed");
+      clearInterval(tick);
+      toast.error(e?.message ?? "Assignment failed", { id: toastId, duration: 8000 });
     } finally {
       setCommitting(false);
     }
@@ -345,6 +370,65 @@ export function ProgramAssignmentPlanner({ clientId, templateId, onDone }: Props
           )}
         </div>
       </div>
+
+      {/* Committing overlay: clear progress + stage text */}
+      {committing && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-background/80 backdrop-blur-sm">
+          <Card className="w-[min(420px,92vw)] p-6 shadow-xl">
+            <div className="flex items-center gap-3">
+              <Loader2 className="h-5 w-5 animate-spin text-primary" />
+              <div className="text-sm font-semibold">Assigning program to {client?.full_name ?? "client"}…</div>
+            </div>
+            <div className="mt-4 space-y-2">
+              <Progress value={commitProgress} />
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <span>{commitStage}</span>
+                <span>{Math.min(99, Math.round(commitProgress))}%</span>
+              </div>
+            </div>
+            <p className="mt-3 text-[11px] text-muted-foreground">
+              Please keep this window open. Large programs can take a few seconds to finalise.
+            </p>
+          </Card>
+        </div>
+      )}
+
+      {/* Success confirmation dialog */}
+      <Dialog
+        open={!!successInfo}
+        onOpenChange={(v) => {
+          if (!v) {
+            setSuccessInfo(null);
+            if (onDone) onDone();
+            else navigate({ to: "/admin/client-programs/$clientId", params: { clientId } });
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+              Program assigned
+            </DialogTitle>
+            <DialogDescription>
+              {successInfo?.idempotent
+                ? <>“{successInfo?.programName}” was already assigned to {client?.full_name ?? "this client"} — no duplicates were created.</>
+                : <><span className="font-medium text-foreground">{successInfo?.added ?? 0}</span> workout{(successInfo?.added ?? 0) === 1 ? "" : "s"} from <span className="font-medium text-foreground">“{successInfo?.programName}”</span> have been added to {client?.full_name ?? "this client"}’s account.</>}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              onClick={() => {
+                setSuccessInfo(null);
+                if (onDone) onDone();
+                else navigate({ to: "/admin/client-programs/$clientId", params: { clientId } });
+              }}
+            >
+              Done
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
