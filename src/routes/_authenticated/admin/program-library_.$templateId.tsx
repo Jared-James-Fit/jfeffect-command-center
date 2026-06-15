@@ -221,7 +221,7 @@ function focusField(el: HTMLElement | null) {
   if (el instanceof HTMLInputElement && (el.type === "text" || el.type === "number" || !el.type)) {
     try { el.select(); } catch {}
   }
-  el.scrollIntoView({ block: "nearest", inline: "nearest" });
+  el.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
 }
 
 function fieldsInRow(row: Element): HTMLElement[] {
@@ -311,10 +311,25 @@ export function handleRowFieldNav(
     const nextRow = rows[ri + delta];
     if (!nextRow) return false;
     const fieldName = target.getAttribute("data-pb-field");
-    const peer = nextRow.querySelector<HTMLElement>(`[data-pb-field="${fieldName}"]`)
-      ?? fieldsInRow(nextRow)[Math.min(idx, fieldsInRow(nextRow).length - 1)];
+    const findPeer = () =>
+      nextRow.querySelector<HTMLElement>(`[data-pb-field="${fieldName}"]`)
+      ?? fieldsInRow(nextRow)[Math.min(idx, Math.max(fieldsInRow(nextRow).length - 1, 0))]
+      ?? null;
+    const peer = findPeer();
     if (peer) { e.preventDefault(); focusField(peer); return true; }
-    return false;
+    // Target row is collapsed → expand it by simulating a click, then focus
+    // the same column on the next frame once inputs have mounted. This is
+    // what made arrow-key nav feel "glitchy" — collapsed cards swallowed the
+    // jump because their inputs weren't in the DOM yet.
+    e.preventDefault();
+    (nextRow as HTMLElement).click();
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const after = findPeer();
+        if (after) focusField(after);
+      });
+    });
+    return true;
   };
 
   if (e.key === "Enter" && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey) {
