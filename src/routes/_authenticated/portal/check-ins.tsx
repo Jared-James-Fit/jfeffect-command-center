@@ -69,6 +69,20 @@ function ClientCheckInsList() {
     return map;
   }, [submissions]);
 
+  const sortedForms = useMemo(() => {
+    const weekly = pickWeeklyCheckInForm(forms);
+    const nutrition = pickNutritionUpdateForm(forms);
+    return [...forms].sort((a, b) => {
+      // Weekly check-in always first
+      if (a.id === weekly?.id) return -1;
+      if (b.id === weekly?.id) return 1;
+      // Nutrition update always after weekly but before other forms if needed
+      if (a.id === nutrition?.id) return 1;
+      if (b.id === nutrition?.id) return -1;
+      return a.title.localeCompare(b.title);
+    });
+  }, [forms]);
+
   if (client === null) {
     return (
       <>
