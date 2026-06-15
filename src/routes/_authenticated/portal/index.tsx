@@ -25,7 +25,6 @@ import { listMyPortalAppointments } from "@/lib/appointments.functions";
 import { useServerFn } from "@tanstack/react-start";
 import { format, parseISO, isToday, isTomorrow } from "date-fns";
 import { forwardRef, useImperativeHandle } from "react";
-import { BodyweightSummaryCard } from "@/components/portal/bodyweight-summary-card";
 
 export const Route = createFileRoute("/_authenticated/portal/")({ component: PortalHome });
 
