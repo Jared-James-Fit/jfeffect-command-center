@@ -13,6 +13,8 @@ import {
   listSubmissionsForClient,
   statusLabel,
   statusTone,
+  pickWeeklyCheckInForm,
+  pickNutritionUpdateForm,
   type NfForm,
 } from "@/lib/native-forms";
 import { listManualReviewsForClient, sourceLabel } from "@/lib/manual-check-in-reviews";
@@ -66,6 +68,20 @@ function ClientCheckInsList() {
     }
     return map;
   }, [submissions]);
+
+  const sortedForms = useMemo(() => {
+    const weekly = pickWeeklyCheckInForm(forms);
+    const nutrition = pickNutritionUpdateForm(forms);
+    return [...forms].sort((a, b) => {
+      // Weekly check-in always first
+      if (a.id === weekly?.id) return -1;
+      if (b.id === weekly?.id) return 1;
+      // Nutrition update always after weekly but before other forms if needed
+      if (a.id === nutrition?.id) return 1;
+      if (b.id === nutrition?.id) return -1;
+      return a.title.localeCompare(b.title);
+    });
+  }, [forms]);
 
   if (client === null) {
     return (
@@ -133,7 +149,7 @@ function ClientCheckInsList() {
             </div>
           </Card>
         ) : (
-          forms.map((f) => {
+          sortedForms.map((f) => {
             const subs = byForm.get(f.id) ?? [];
             const latest = subs[0];
             const status = (latest?.status ?? "not_started") as any;
