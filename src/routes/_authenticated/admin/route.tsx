@@ -83,7 +83,6 @@ function AdminLayout() {
           { ...pick("/admin/lift-videos"), label: "Lifts" },
         ],
       },
-      { ...pick("/admin/tasks"), label: "Tasks" },
     ];
   }, [isCoach, nav]);
 
