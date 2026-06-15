@@ -392,6 +392,13 @@ function writePrefs(p: EditorPrefs) {
   try { window.localStorage.setItem(PREFS_KEY, JSON.stringify(p)); } catch {}
 }
 
+// True when the exercise has at least one demo video link (any provider).
+function hasExerciseVideo(ex: any): boolean {
+  if (!ex) return false;
+  const fields = [ex.video_url, ex.youtube_url, ex.vimeo_url];
+  return fields.some((v) => typeof v === "string" && v.trim().length > 0);
+}
+
 // Append a row into the first day reachable inside any template payload shape.
 export function appendRowToFirstDay(payload: any, type: string, row: any) {
   // New rows default to NO suggested load (percentage_basis="none").
