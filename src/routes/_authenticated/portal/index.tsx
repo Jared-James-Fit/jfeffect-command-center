@@ -586,7 +586,9 @@ const BodyweightSummaryCardWithRef = forwardRef<
   }));
   return (
     <div ref={containerRef}>
-      <BodyweightSummaryCard clientId={clientId} defaultUnit={defaultUnit} />
+      <Suspense fallback={null}>
+        <BodyweightSummaryCard clientId={clientId} defaultUnit={defaultUnit} />
+      </Suspense>
     </div>
   );
 });
