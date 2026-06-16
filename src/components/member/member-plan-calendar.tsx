@@ -53,15 +53,15 @@ export function MemberPlanCalendar({
   const selDate = selected ? format(selected, "yyyy-MM-dd") : null;
   const entries = selDate ? (byDate.get(selDate) ?? []) : [];
 
-  const scheduledDays = useMemo(() => Array.from(byDate.keys()).map((s) => parseLocalDate(s)), [byDate]);
+  const scheduledDays = useMemo(() => Array.from(byDate.keys()).map((s) => parseLocalDate(s)!), [byDate]);
   const doneDays = useMemo(
-    () => schedule.filter((s) => doneSet.has(`${s.week}:${s.day}`)).map((s) => parseLocalDate(s.date)),
+    () => schedule.filter((s) => doneSet.has(`${s.week}:${s.day}`)).map((s) => parseLocalDate(s.date)!),
     [schedule, doneSet],
   );
   const missedDays = useMemo(
     () => schedule
-      .filter((s) => !doneSet.has(`${s.week}:${s.day}`) && parseLocalDate(s.date) < today)
-      .map((s) => parseLocalDate(s.date)),
+      .filter((s) => !doneSet.has(`${s.week}:${s.day}`) && parseLocalDate(s.date)! < today)
+      .map((s) => parseLocalDate(s.date)!),
     [schedule, doneSet, today],
   );
 
@@ -111,7 +111,7 @@ export function MemberPlanCalendar({
         ) : (
           entries.map((e) => {
             const done = doneSet.has(`${e.week}:${e.day}`);
-            const dateObj = parseLocalDate(e.date);
+            const dateObj = parseLocalDate(e.date)!;
             const isToday = isSameDay(dateObj, today);
             const isPast = dateObj < today && !done;
             return (
@@ -157,7 +157,7 @@ export function MemberPlanCalendar({
         )}
       </div>
 
-      <Sheet open={!!moving} onOpenChange={(o) => !o && setMoving(null)}>
+      <Sheet open={!moving} onOpenChange={(o) => !o && setMoving(null)}>
         <SheetContent side="bottom" className="max-h-[90vh]">
           <SheetHeader>
             <SheetTitle>Move {moving?.title}</SheetTitle>
