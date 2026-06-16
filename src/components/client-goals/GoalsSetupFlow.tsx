@@ -20,6 +20,11 @@ import {
   type ClientGoalsSetupRow,
 } from "@/lib/client-goals/schema";
 import { saveGoalsSetupFn } from "@/lib/client-goals/goals.functions";
+import {
+  classifyLocation,
+  EQUIPMENT_GROUPS,
+  REAL_EQUIPMENT_ITEMS,
+} from "@/lib/client-goals/equipment-flow";
 
 type Props = {
   clientId: string;
