@@ -15,6 +15,7 @@ import { Route as StaffSetupRouteImport } from './routes/staff-setup'
 import { Route as SitemapRouteImport } from './routes/sitemap'
 import { Route as SetupRouteImport } from './routes/setup'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
+import { Route as RecoverRouteImport } from './routes/recover'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as MembershipRouteImport } from './routes/membership'
 import { Route as MemberSetupRouteImport } from './routes/member-setup'
@@ -273,6 +274,11 @@ const SetupRoute = SetupRouteImport.update({
 const ResetPasswordRoute = ResetPasswordRouteImport.update({
   id: '/reset-password',
   path: '/reset-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RecoverRoute = RecoverRouteImport.update({
+  id: '/recover',
+  path: '/recover',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PrivacyRoute = PrivacyRouteImport.update({
@@ -1611,6 +1617,7 @@ export interface FileRoutesByFullPath {
   '/member-setup': typeof MemberSetupRoute
   '/membership': typeof MembershipRoute
   '/privacy': typeof PrivacyRoute
+  '/recover': typeof RecoverRoute
   '/reset-password': typeof ResetPasswordRoute
   '/setup': typeof SetupRoute
   '/sitemap': typeof SitemapRoute
@@ -1847,6 +1854,7 @@ export interface FileRoutesByTo {
   '/member-setup': typeof MemberSetupRoute
   '/membership': typeof MembershipRoute
   '/privacy': typeof PrivacyRoute
+  '/recover': typeof RecoverRoute
   '/reset-password': typeof ResetPasswordRoute
   '/setup': typeof SetupRoute
   '/sitemap': typeof SitemapRoute
@@ -2080,6 +2088,7 @@ export interface FileRoutesById {
   '/member-setup': typeof MemberSetupRoute
   '/membership': typeof MembershipRoute
   '/privacy': typeof PrivacyRoute
+  '/recover': typeof RecoverRoute
   '/reset-password': typeof ResetPasswordRoute
   '/setup': typeof SetupRoute
   '/sitemap': typeof SitemapRoute
@@ -2318,6 +2327,7 @@ export interface FileRouteTypes {
     | '/member-setup'
     | '/membership'
     | '/privacy'
+    | '/recover'
     | '/reset-password'
     | '/setup'
     | '/sitemap'
@@ -2554,6 +2564,7 @@ export interface FileRouteTypes {
     | '/member-setup'
     | '/membership'
     | '/privacy'
+    | '/recover'
     | '/reset-password'
     | '/setup'
     | '/sitemap'
@@ -2786,6 +2797,7 @@ export interface FileRouteTypes {
     | '/member-setup'
     | '/membership'
     | '/privacy'
+    | '/recover'
     | '/reset-password'
     | '/setup'
     | '/sitemap'
@@ -3024,6 +3036,7 @@ export interface RootRouteChildren {
   MemberSetupRoute: typeof MemberSetupRoute
   MembershipRoute: typeof MembershipRoute
   PrivacyRoute: typeof PrivacyRoute
+  RecoverRoute: typeof RecoverRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   SetupRoute: typeof SetupRoute
   SitemapRoute: typeof SitemapRoute
@@ -3100,6 +3113,13 @@ declare module '@tanstack/react-router' {
       path: '/reset-password'
       fullPath: '/reset-password'
       preLoaderRoute: typeof ResetPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/recover': {
+      id: '/recover'
+      path: '/recover'
+      fullPath: '/recover'
+      preLoaderRoute: typeof RecoverRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/privacy': {
@@ -5414,6 +5434,7 @@ const rootRouteChildren: RootRouteChildren = {
   MemberSetupRoute: MemberSetupRoute,
   MembershipRoute: MembershipRoute,
   PrivacyRoute: PrivacyRoute,
+  RecoverRoute: RecoverRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   SetupRoute: SetupRoute,
   SitemapRoute: SitemapRoute,
