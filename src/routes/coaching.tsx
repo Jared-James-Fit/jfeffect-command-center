@@ -112,7 +112,6 @@ function CoachingPage() {
         eyebrow="Private 1:1 Coaching · By Application"
         headline={"You already know what to do. You just stopped doing it."}
         sub={"Private coaching for men and women who are done starting over. A plan built around your life, a coach who actually looks at your numbers, and accountability that doesn't let you quietly slip. This isn't another app — it's me, in your corner."}
-        image={coachingHeroImg}
         primary={<HeroCta onClick={handleApply}>Apply for Private Coaching</HeroCta>}
         secondary={
           <Link
