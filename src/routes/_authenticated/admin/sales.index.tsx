@@ -9,6 +9,7 @@ import { PaymentLinksPage } from "./payment-links";
 import { PaymentsPage } from "./payments";
 import { PurchasesPage } from "./purchases";
 import { PromoCodesPage } from "./promo-codes";
+import { DiscountCodesPage } from "./discount-codes";
 
 type TabKey = "pipeline" | "products-payments" | "sales-pages" | "promotions";
 
@@ -97,7 +98,7 @@ function SalesWorkspace() {
         {activeTab === "pipeline" && <PipelinePanel />}
         {activeTab === "products-payments" && <ProductsPaymentsPanel sub={sub} onSub={setSub} />}
         {activeTab === "sales-pages" && <SalesPagesPanel sub={sub} onSub={setSub} />}
-        {activeTab === "promotions" && <PromoCodesPage embedded />}
+        {activeTab === "promotions" && <PromotionsPanel sub={sub} onSub={setSub} />}
       </div>
     </>
   );
@@ -142,6 +143,22 @@ function SalesPagesPanel({ sub, onSub }: { sub?: string; onSub: (s: string) => v
       <div className="p-4 md:p-6">
         <SalesPageEditor pageKey={active === "membership" ? "join" : "coaching"} />
       </div>
+    </div>
+  );
+}
+
+const PROMO_SUBS = [
+  { value: "codes", label: "Discount Codes" },
+  { value: "redemptions", label: "Redemption History" },
+] as const;
+
+function PromotionsPanel({ sub, onSub }: { sub?: string; onSub: (s: string) => void }) {
+  const active = (PROMO_SUBS.find((s) => s.value === sub)?.value) ?? "codes";
+  return (
+    <div>
+      <SubTabs items={PROMO_SUBS as any} active={active} onChange={onSub} />
+      {active === "codes" && <DiscountCodesPage embedded />}
+      {active === "redemptions" && <PromoCodesPage embedded />}
     </div>
   );
 }
