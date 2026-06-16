@@ -36,6 +36,7 @@ import {
   type NfQuestion,
 } from "@/lib/native-forms";
 import { buildFilloutUrl } from "@/lib/fillout";
+import { useUnsavedWarning } from "@/hooks/use-unsaved-warning";
 
 export const Route = createFileRoute("/_authenticated/portal/check-ins/$formId")({
   component: ClientFormRenderer,
@@ -134,6 +135,12 @@ function ClientFormRenderer() {
   }
 
   const [busyQ, setBusyQ] = useState<Record<string, "uploading" | "removing" | "replacing" | undefined>>({});
+
+  // Warn before leaving while a file upload/replace is in flight — those are
+  // not idempotent and losing them mid-upload would corrupt the answer.
+  useUnsavedWarning(
+    !readOnly && Object.values(busyQ).some((v) => v === "uploading" || v === "replacing"),
+  );
 
   async function handleFileUpload(q: NfQuestion, file: File) {
     if (!submission || !client) return;
