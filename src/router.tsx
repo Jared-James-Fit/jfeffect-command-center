@@ -1,6 +1,7 @@
 import { QueryClient } from "@tanstack/react-query";
 import { createRouter } from "@tanstack/react-router";
 import { routeTree } from "./routeTree.gen";
+import { RouterErrorFallback } from "./components/router-error-fallback";
 
 export const getRouter = () => {
   // Sensible defaults so the same data doesn't get refetched on every mount,
@@ -23,6 +24,7 @@ export const getRouter = () => {
     context: { queryClient },
     scrollRestoration: true,
     defaultPreloadStaleTime: 0,
+    defaultErrorComponent: RouterErrorFallback,
   });
 
   return router;
