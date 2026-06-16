@@ -153,7 +153,7 @@ function useSetupChecklistData() {
       to: "/m/my-plans",
       cta: "Start training",
     },
-  ], [setupComplete, isInstalled, notifGranted]);
+  ], [setupComplete, isInstalled, notifGranted, notif.denied, notif.unsupported]);
 
   return { items, isDismissed, setupComplete, isInstalled, dismissChecklist: async (hours: number) => {
     await fireDismiss({ data: { hours } }).catch(() => {});
@@ -209,6 +209,9 @@ export function SetupChecklist({ activeEnrollment }: { activeEnrollment?: any })
                   <div className={`truncate text-sm font-medium ${it.done ? "text-muted-foreground line-through" : ""}`}>
                     {it.label}
                   </div>
+                  {it.description && !it.done ? (
+                    <div className="truncate text-xs text-muted-foreground">{it.description}</div>
+                  ) : null}
                 </div>
               </div>
               <div className="flex shrink-0 items-center gap-1 text-sm font-medium text-primary">
@@ -218,6 +221,9 @@ export function SetupChecklist({ activeEnrollment }: { activeEnrollment?: any })
           );
           if (it.done) {
             return <li key={it.key} className="opacity-70">{inner}</li>;
+          }
+          if (it.disabled) {
+            return <li key={it.key} className="opacity-60">{inner}</li>;
           }
           return (
             <li key={it.key}>
