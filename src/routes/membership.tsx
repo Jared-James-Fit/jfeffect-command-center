@@ -50,15 +50,15 @@ export const Route = createFileRoute("/membership")({
   component: SignupJf,
   head: () => ({
     meta: [
-      { title: "The JF Effect Training App | Self-Guided Membership" },
-      { name: "description", content: "The full JF Effect system in your pocket. Structured plans, tracking, demos, analytics and nutrition\u2014train on your schedule. 3-day free trial, then $29/month." },
-      { property: "og:title", content: "JF Effect — Self-Guided Membership" },
-      { property: "og:description", content: "The full JF Effect system in your pocket. Structured plans, tracking, demos, analytics and nutrition. 3-day free trial, then $29/month." },
+      { title: "Every Program You Need. One System. | JF Effect Membership" },
+      { name: "description", content: "Training built by a national-level coach — strength, muscle, fat loss. Open the app and follow the plan. Free trial · Cancel anytime." },
+      { property: "og:title", content: "Every Program You Need. One System. | JF Effect Membership" },
+      { property: "og:description", content: "Training built by a national-level coach — strength, muscle, fat loss. Open the app and follow the plan. Free trial · Cancel anytime." },
       { property: "og:type", content: "website" },
       { property: "og:url", content: "https://jfeffect.com/membership" },
       { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:title", content: "JF Effect — Self-Guided Membership" },
-      { name: "twitter:description", content: "The full JF Effect system in your pocket. Structured plans, tracking, demos, analytics and nutrition. 3-day free trial, then $29/month." },
+      { name: "twitter:title", content: "Every Program You Need. One System. | JF Effect Membership" },
+      { name: "twitter:description", content: "Training built by a national-level coach — strength, muscle, fat loss. Open the app and follow the plan. Free trial · Cancel anytime." },
     ],
     links: [{ rel: "canonical", href: "https://jfeffect.com/membership" }],
   }),
@@ -193,8 +193,8 @@ function SignupJf() {
       ) : (
       <MembershipHero
         priceChip={settings?.monthly_price_display ?? "$29/month USD"}
-        headline={"Stop winging it. Start training with a plan."}
-        sub={"The same training systems hundreds of JF Effect members use to get stronger, build muscle, and actually stay consistent\u2014programs, demos, tracking, and education, all in one app. You open it, the plan's already there, and you always know exactly what to do next."}
+        headline={"Every program you need. One system."}
+        sub={"Training built by a national-level coach — strength, muscle, fat loss. Open the app and follow the plan."}
         heroImage={null}
         decisionArea={
           <HeroDecisionArea
@@ -205,7 +205,7 @@ function SignupJf() {
         secondary={
           <MemberHeroGhost onClick={scrollToFeatures}>See What's Included</MemberHeroGhost>
         }
-        trialNote={`${trialDays}-day free trial · Then ${settings?.monthly_price_display ?? "$29/month USD"} · Cancel anytime`}
+        trialNote={`${trialDays}-day free trial · Cancel anytime`}
         detailsLink={<MemberDetailsLink onClick={scrollToFeatures} />}
       />
       )}
@@ -274,8 +274,8 @@ function SignupJf() {
       {/* 7. App preview */}
       <Reveal>
         <AppPreviewGrid
-          title="Here's exactly what you get when you log in."
-          sub="Previews are illustrations of the live app interface."
+          title="Inside the app"
+          sub="Dashboard, logging, library, programs, tracking — all in one place."
           items={(() => {
             const cms = Array.isArray(s.app_previews) && s.app_previews.length > 0 ? s.app_previews : null;
             if (!cms) return DEFAULT_APP_PREVIEWS;
@@ -298,8 +298,8 @@ function SignupJf() {
       <Reveal><OfferComparison accent="membership" /></Reveal>
       <Section className="!pt-0">
         <p className="mx-auto max-w-3xl text-center text-sm text-muted-foreground md:text-base">
-          Most people are in the right place right here. But if you want a plan built specifically for you, with weekly check-ins and a coach in your corner, that's{" "}
-          <Link to="/coaching" className="font-semibold text-primary underline underline-offset-2 hover:text-primary/80">Private Coaching</Link> — application only.
+          Most people are set right here. Want a plan built just for you, with weekly check-ins? That's{" "}
+          <Link to="/coaching" className="font-semibold text-primary underline underline-offset-2 hover:text-primary/80">Coaching</Link> — by application.
         </p>
       </Section>
 
@@ -309,10 +309,10 @@ function SignupJf() {
       {/* 11. Final CTA */}
       <Reveal>
         <FinalCta
-          headline="Stop starting over."
+          headline="Start training with a system."
           primary={
             <Button size="lg" onClick={scrollToForm} className="h-12 px-6 text-base font-bold">
-              {`Start ${trialDays}-Day Free Trial`}
+              Start Free Trial
             </Button>
           }
           secondary={
@@ -529,95 +529,72 @@ function FieldError({ children }: { children: React.ReactNode }) {
 /* ---------------- Defaults (CMS-overridable) ---------------- */
 
 const DEFAULT_FEATURES = [
-  { title: "Program Library", body: "Powerlifting, bodybuilding, fat loss, strength, muscle, home workouts. Beginner to advanced. Pick a plan and start training today." },
-  { title: "Exercise Demo Library", body: "Clear technique videos built right into your workouts, so you're never guessing how a lift should look or feel." },
-  { title: "Progress Tracking", body: "Log every set, track your strength, watch your PRs climb, and actually see whether the work is paying off." },
-  { title: "Education", body: "Training, recovery, nutrition, and performance content so you understand the why behind the plan — not just the what." },
-  { title: "Future Updates", body: "New programs, resources, and features added regularly. Your membership gets better while you use it." },
+  { title: "Program library", body: "Powerlifting, bodybuilding, fat loss, home. Every level." },
+  { title: "Exercise demos", body: "Clear technique in every workout." },
+  { title: "Progress tracking", body: "Log sets, watch PRs climb." },
+  { title: "Education", body: "The reasoning behind the plan." },
+  { title: "Always growing", body: "New programs added often." },
 ];
 
 type LibraryCategory = { name: string; icon?: string; subtypes: string[] };
 const DEFAULT_LIBRARY: LibraryCategory[] = [
-  { name: "Powerlifting", icon: "trophy", subtypes: ["Beginner", "Intermediate", "Advanced", "Competition Prep"] },
-  { name: "Bodybuilding", icon: "dumbbell", subtypes: ["Push/Pull/Legs", "Upper/Lower", "Full Body", "Glute Focused"] },
+  { name: "Powerlifting", icon: "trophy", subtypes: ["Beginner", "Intermediate", "Advanced", "Comp Prep"] },
+  { name: "Bodybuilding", icon: "dumbbell", subtypes: ["PPL", "Upper/Lower", "Full Body", "Glute Focus"] },
   { name: "Fat Loss", icon: "flame", subtypes: ["Beginner", "Intermediate", "Advanced"] },
-  { name: "Home / Minimal Equipment", icon: "home", subtypes: ["Bodyweight", "Dumbbells Only", "At-Home Strength"] },
+  { name: "Home", icon: "home", subtypes: ["Bodyweight", "Dumbbells", "At-Home Strength"] },
 ];
 
 const DEFAULT_WHO_FOR = [
-  "You're driven and you want structure, not a hype video",
-  "You're beginner, intermediate, or advanced — the library covers all of it",
-  "You want to build muscle, lose fat, or get stronger on a real plan",
-  "You're happy to train on your own — you just want the right plan to follow",
-  "You're done restarting and want something that compounds",
+  "Any level. Muscle, fat loss, or strength.",
+  "For people who'll train on their own with the right plan to follow.",
 ];
 
 const DEFAULT_NOT_FOR = [
-  "You want a one-week quick fix",
-  "You need motivation to carry you every day",
-  "You won't actually follow a plan",
-  "You want someone to do the thinking for you (that's coaching)",
+  "Not for one-week fixes.",
 ];
 
 const DEFAULT_APP_PREVIEWS = [
-  { label: "Dashboard — today's session at a glance", url: appPreviewDashboard },
-  { label: "Workout logging — tap to log reps, load, RPE", url: appPreviewLogging },
-  { label: "Exercise library — every movement, every demo", url: appPreviewLibrary },
-  { label: "Program library — switch focus anytime", url: appPreviewPrograms },
-  { label: "Progress tracking — volume, PRs, trends", url: appPreviewProgress },
+  { label: "Dashboard — today's session and what's next", url: appPreviewDashboard },
+  { label: "Logging — tap to log; last session auto-fills", url: appPreviewLogging },
+  { label: "Exercise library — every movement, demo included", url: appPreviewLibrary },
+  { label: "Programs — browse by goal, switch anytime", url: appPreviewPrograms },
+  { label: "Tracking — PRs and trends, visualized", url: appPreviewProgress },
 ];
 
 const DEFAULT_FAQ = [
-  { q: "Is this coaching?", a: "No. Membership is the self-guided app — proven programs, demos, tracking, and education you run on your own. Coaching is 1:1, built for you, with weekly check-ins and direct access to me. Want that? Apply for coaching." },
-  { q: "Can beginners join?", a: "Absolutely. There are beginner programs in every category, with demos for every movement so you're never lost." },
-  { q: "Can I train at home?", a: "Yes — there's a whole home/minimal-equipment section, from bodyweight to dumbbells-only to at-home strength." },
-  { q: "Can I use this for powerlifting?", a: "Yes. Powerlifting is the founder's sport — beginner through competition prep is in the library." },
-  { q: "Can I use this for bodybuilding?", a: "Yes — PPL, upper/lower, full body, and glute-focused splits are all included." },
-  { q: "How often are new programs added?", a: "Regularly. New programs, resources, and features get added while you're a member — the library keeps growing." },
-  { q: "Can I cancel anytime?", a: "Yes. Cancel anytime from your billing page; access runs to the end of your current period. No games." },
+  { q: "Is this coaching?", a: "No — self-guided app. Coaching is 1:1." },
+  { q: "Beginner?", a: "Yes, every level." },
+  { q: "Home training?", a: "Yes." },
+  { q: "Powerlifting?", a: "Yes." },
+  { q: "Bodybuilding?", a: "Yes." },
+  { q: "New programs?", a: "Added often." },
+  { q: "Cancel anytime?", a: "Yes." },
 ];
 
 /* ---------------- Sections ---------------- */
 
 function CompareAloneSection() {
-  const left = [
-    "Random workouts pulled from wherever",
-    "Conflicting advice from ten directions",
-    "No real structure week to week",
-    "No way to track if it's working",
-    "Restarting every few weeks",
-  ];
-  const right = [
-    "Proven programs built by a national-level coach",
-    "One organized system, no second-guessing",
-    "Built-in progress tracking",
-    "Exercise demos so form isn't a mystery",
-    "A clear path you can actually stick to",
+  const lines = [
+    "Proven programs for every goal.",
+    "One organized system.",
+    "Progress tracked as you train.",
+    "A plan you'll stay with.",
   ];
   return (
     <Section>
-      <SectionTitle title="The difference is structure." />
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card className="border-border bg-card p-6">
-          <div className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3">Figuring it out yourself</div>
-          <ul className="space-y-2 text-sm text-muted-foreground">
-            {left.map((x) => (
-              <li key={x} className="flex items-start gap-2"><XCircle className="mt-0.5 h-4 w-4 shrink-0 text-rose-400/80" />{x}</li>
-            ))}
-          </ul>
-        </Card>
-        <Card className="border-primary/40 bg-primary/5 p-6">
-          <div className="text-xs font-bold uppercase tracking-widest text-primary mb-3">JF Effect Membership</div>
-          <ul className="space-y-2 text-sm">
-            {right.map((x) => (
-              <li key={x} className="flex items-start gap-2"><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />{x}</li>
+      <SectionTitle eyebrow="The system" title="Structure, built in." />
+      <div className="mx-auto max-w-3xl">
+        <Card className="border-primary/30 bg-primary/5 p-6 md:p-8">
+          <ul className="grid gap-3 sm:grid-cols-2">
+            {lines.map((x) => (
+              <li key={x} className="flex items-start gap-3 text-sm md:text-base">
+                <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-400" />
+                <span className="font-medium">{x}</span>
+              </li>
             ))}
           </ul>
         </Card>
       </div>
-      <p className="mx-auto mt-6 max-w-3xl text-center text-sm text-muted-foreground md:text-base">
-        You've already tried winging it. You know where it goes. This is the version where the work compounds instead of resetting.
-      </p>
     </Section>
   );
 }
@@ -636,9 +613,9 @@ function ProgramLibraryShowcase({ categories, programCount }: { categories: Libr
   return (
     <Section>
       <SectionTitle
-        eyebrow="The full library"
-        title="Pick your goal. The plan's already built."
-        sub={count ? `${count}+ programs across every goal and level, all included — switch anytime.` : "Programs across every goal and level, all included — switch anytime."}
+        eyebrow="The library"
+        title="Pick your goal. The plan's built."
+        sub={count ? `${count}+ programs, every level, all included.` : "Programs across every level, all included."}
       />
       <div className="grid gap-3 sm:grid-cols-2">
         {categories.map((c) => {
@@ -670,15 +647,12 @@ function WhyStickSection() {
   return (
     <Section>
       <div className="mx-auto max-w-3xl text-center">
-        <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-primary">Why this works when nothing else did</div>
+        <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-primary">Why it works</div>
         <h2 className="mt-2 text-3xl font-black tracking-tight md:text-4xl">
-          You don't have a willpower problem. You have a structure problem.
+          Progress that compounds.
         </h2>
         <p className="mt-5 text-base text-muted-foreground md:text-lg">
-          Most people don't fail because they're lazy. They fail because they jump between programs, follow random advice, and never run anything long enough for it to work. So they restart. Again.
-        </p>
-        <p className="mt-4 text-base text-muted-foreground md:text-lg">
-          The membership kills that loop. One organized system, a clear plan every session, tracking that shows progress, and a library deep enough that you never need to go hunting for the next thing. You just keep showing up — and for once, it adds up.
+          One system, followed consistently, beats endless restarting. A clear plan every session — and it adds up.
         </p>
       </div>
     </Section>
