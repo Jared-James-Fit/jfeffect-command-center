@@ -7686,6 +7686,44 @@ export type Database = {
           },
         ]
       }
+      member_plan_day_schedule: {
+        Row: {
+          created_at: string
+          day_index: number
+          enrollment_id: string
+          id: string
+          scheduled_date: string
+          updated_at: string
+          week_index: number
+        }
+        Insert: {
+          created_at?: string
+          day_index: number
+          enrollment_id: string
+          id?: string
+          scheduled_date: string
+          updated_at?: string
+          week_index: number
+        }
+        Update: {
+          created_at?: string
+          day_index?: number
+          enrollment_id?: string
+          id?: string
+          scheduled_date?: string
+          updated_at?: string
+          week_index?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "member_plan_day_schedule_enrollment_id_fkey"
+            columns: ["enrollment_id"]
+            isOneToOne: false
+            referencedRelation: "member_plan_enrollments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       member_plan_enrollments: {
         Row: {
           completed_at: string | null
