@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { clientGoalsSetupSchema } from "@/lib/client-goals/schema";
+import { clientGoalsSetupSchema, EDITABLE_GOALS_FIELDS } from "@/lib/client-goals/schema";
 
 const clientIdInput = z.object({ clientId: z.string().uuid() });
 
@@ -43,17 +43,26 @@ export const saveGoalsSetupFn = createServerFn({ method: "POST" })
     await assertClientOwnerOrCoachOrAdmin(context, data.clientId);
 
     const { completed, ...patch } = data.patch;
-    const body: Record<string, unknown> = {
-      client_id: data.clientId,
-      ...patch,
-    };
+    // Strict whitelist — never trust the client to send server-owned
+    // columns (id/timestamps/audit). This is a defence in depth on top
+    // of the zod validator above.
+    const body: Record<string, unknown> = { client_id: data.clientId };
+    for (const key of EDITABLE_GOALS_FIELDS) {
+      if (key in patch) body[key] = (patch as any)[key];
+    }
     if (completed) body.completed_at = new Date().toISOString();
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { error } = await supabaseAdmin
       .from("client_goals_setup")
       .upsert(body as any, { onConflict: "client_id" });
-    if (error) throw new Error(error.message);
+    if (error) {
+      // Log raw error for ops; return a safe, human message to the client.
+      console.error("[saveGoalsSetupFn] upsert failed", {
+        clientId: data.clientId, error,
+      });
+      throw new Error("We couldn't save your answers. Please try again.");
+    }
     return { ok: true };
   });
 
