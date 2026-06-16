@@ -37,6 +37,7 @@ export const adminNav: NavItem[] = [
   { to: "/admin/chat-sounds", label: "Chat Sound Library", icon: Sparkles, group: "Communication" },
   // MEMBERSHIP
   { to: "/admin/members", label: "App Members", icon: UserPlus, group: "Membership" },
+  { to: "/admin/onboarding", label: "Onboarding", icon: ClipboardCheck, group: "Membership", keywords: ["install","setup","not signed in","checklist"] },
   { to: "/admin/member-plans", label: "Membership Workout Library", icon: Library, group: "Membership", keywords: ["membership library","workout library","plan library","publish program"] },
   { to: "/admin/member-resources", label: "Resources & Tools", icon: FolderOpen, group: "Membership" },
   // PROGRAMMING
