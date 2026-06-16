@@ -12,6 +12,9 @@ export type LibrarySectionId =
   | "beginner"
   | "bodybuilding"
   | "glutes"
+  | "powerbuilding"
+  | "powerlifting"
+  | "athome"
   | "archived";
 
 export type LibrarySection<T> = {
@@ -98,6 +101,31 @@ export function groupTemplates<T extends TemplateLike>(rows: T[]): LibrarySectio
       nameIncludes(r.name, "glute")
     ),
   );
+  const powerbuilding = rows.filter(
+    (r) => !r.archived && (
+      String(r.training_style ?? "").toLowerCase() === "powerbuilding" ||
+      hasTag(r.tags, "powerbuilding") ||
+      nameIncludes(r.name, "powerbuilding")
+    ),
+  );
+  const powerlifting = rows.filter(
+    (r) => !r.archived && (
+      String(r.training_style ?? "").toLowerCase() === "powerlifting" ||
+      hasTag(r.tags, "powerlifting")
+    ),
+  );
+  const athome = rows.filter(
+    (r) => !r.archived && (
+      hasTag(r.tags, "at home") ||
+      hasTag(r.tags, "at-home") ||
+      hasTag(r.tags, "home") ||
+      hasTag(r.tags, "no equipment") ||
+      hasTag(r.tags, "bodyweight") ||
+      nameIncludes(r.name, "at home") ||
+      nameIncludes(r.name, "at-home")
+    ),
+  );
+  const archived = rows.filter((r) => !!r.archived);
 
   return [
     { id: "recent", label: "Recently edited", description: "Updated in the last 2 weeks", items: recent },
@@ -108,6 +136,10 @@ export function groupTemplates<T extends TemplateLike>(rows: T[]): LibrarySectio
     { id: "beginner", label: "Beginner", description: "Beginner difficulty", items: beginner },
     { id: "bodybuilding", label: "Bodybuilding", description: "Training style: bodybuilding", items: bodybuilding },
     { id: "glutes", label: "Glute focused", description: "Focus or name mentions glutes", items: glutes },
+    { id: "powerbuilding", label: "Powerbuilding", description: "Style: powerbuilding", items: powerbuilding },
+    { id: "powerlifting", label: "Powerlifting", description: "Style: powerlifting", items: powerlifting },
+    { id: "athome", label: "At home", description: "No-equipment, bodyweight, or home programs", items: athome },
+    { id: "archived", label: "Archived", description: "Hidden from members", items: archived },
   ];
 }
 
