@@ -156,7 +156,7 @@ export function SetupChecklistBanner({ clientId, userId }: Props) {
     <Card className="relative overflow-hidden border-primary/30 bg-primary/5 p-4 sm:p-5">
       <button
         type="button"
-        aria-label="Remind me later"
+        aria-label="Hide for now"
         onClick={() => { snoozeNow(); setDismissed(true); }}
         className="absolute right-2 top-2 grid h-8 w-8 place-items-center rounded-full text-muted-foreground hover:bg-background/60 hover:text-foreground"
       >
