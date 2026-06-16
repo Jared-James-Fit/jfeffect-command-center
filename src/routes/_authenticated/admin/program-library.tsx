@@ -40,6 +40,8 @@ import { listShares, summarizeShares, type TemplateShare } from "@/lib/programs/
 import { listClientMaxes, upsertClientMax, type ClientMaxRow } from "@/lib/pl-maxes";
 import { notifyMissingMaxesFn } from "@/lib/missing-maxes.functions";
 import { todayLocalISO } from "@/lib/today";
+import { LibrarySection } from "@/components/library-section";
+import { groupTemplates } from "@/lib/library-grouping";
 
 // Quick-pick weight class tags (admin-only). Free-form tags still supported in the input.
 const WEIGHT_CLASS_TAGS: string[] = [
@@ -254,17 +256,31 @@ export function ProgramLibrary({ embedded = false }: { embedded?: boolean } = {}
             </p>
           </Card>
         ) : (
-          <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-            {filteredTemplates.map((t: any) => (
-              <TemplateCard
-                key={t.id}
-                tpl={t}
-                onPreview={() => setPreviewId(t.id)}
-                onAssign={() => setAssignTpl(t)}
-                onShare={() => setShareTpl(t)}
-                onChanged={invalidate}
-              />
-            ))}
+          <div className="space-y-2">
+            {groupTemplates(filteredTemplates as any[])
+              .filter((s) => s.id !== "archived")
+              .map((s, i) => (
+                <LibrarySection
+                  key={s.id}
+                  label={s.label}
+                  description={s.description}
+                  count={s.items.length}
+                  defaultOpen={i < 3 && s.items.length > 0}
+                >
+                  <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+                    {s.items.map((t: any) => (
+                      <TemplateCard
+                        key={t.id}
+                        tpl={t}
+                        onPreview={() => setPreviewId(t.id)}
+                        onAssign={() => setAssignTpl(t)}
+                        onShare={() => setShareTpl(t)}
+                        onChanged={invalidate}
+                      />
+                    ))}
+                  </div>
+                </LibrarySection>
+              ))}
           </div>
         )}
       </div>
