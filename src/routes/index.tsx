@@ -6,10 +6,10 @@ import { AuthSplash } from "@/components/auth-splash";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "JF Effect — Private Coaching OS" },
-      { name: "description", content: "Your private hub for coaching, check-ins, training, nutrition, progress, payments, and communication." },
-      { property: "og:title", content: "JF Effect — Private Coaching OS" },
-      { property: "og:description", content: "Your private hub for coaching, check-ins, training, nutrition, progress, payments, and communication." },
+      { title: "JF Effect — Private Coaching & Training System" },
+      { name: "description", content: "Structured training, nutrition, progress tracking, and private coaching for men who are done starting over." },
+      { property: "og:title", content: "JF Effect — Private Coaching & Training System" },
+      { property: "og:description", content: "Structured training, nutrition, progress tracking, and private coaching for men who are done starting over." },
     ],
   }),
   component: IndexRedirect,
