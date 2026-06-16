@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { getBookingLinkPublic, computeAvailableSlots, bookSlotPublic } from "@/lib/booking-links.functions";
 import { Card } from "@/components/ui/card";
@@ -8,14 +8,24 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Calendar as CalendarIcon, Clock, CheckCircle2, Video } from "lucide-react";
+import { Calendar as CalendarIcon, Clock, CheckCircle2, Video, Lock } from "lucide-react";
 import { toast } from "sonner";
 import { todayLocalISO } from "@/lib/today";
 
-export const Route = createFileRoute("/book/$slug")({ component: BookingPage });
+export const Route = createFileRoute("/book/$slug")({
+  component: BookingPage,
+  // Accept prefill query params from the coaching application flow.
+  validateSearch: (search: Record<string, unknown>) => ({
+    name: typeof search.name === "string" ? search.name : "",
+    email: typeof search.email === "string" ? search.email : "",
+    phone: typeof search.phone === "string" ? search.phone : "",
+    application_id: typeof search.application_id === "string" ? search.application_id : "",
+  }),
+});
 
 function BookingPage() {
   const { slug } = Route.useParams();
+  const prefill = Route.useSearch();
   const getFn = useServerFn(getBookingLinkPublic);
   const slotsFn = useServerFn(computeAvailableSlots);
   const bookFn = useServerFn(bookSlotPublic);
@@ -23,7 +33,20 @@ function BookingPage() {
   const { data: info, isLoading } = useQuery({ queryKey: ["public-link", slug], queryFn: () => getFn({ data: { slug } }) });
   const [date, setDate] = useState(() => todayLocalISO());
   const [selected, setSelected] = useState<string | null>(null);
-  const [form, setForm] = useState({ name: "", email: "", phone: "", notes: "" });
+  const [form, setForm] = useState({
+    name: prefill.name ?? "",
+    email: prefill.email ?? "",
+    phone: prefill.phone ?? "",
+    notes: "",
+  });
+  useEffect(() => {
+    setForm((f) => ({
+      ...f,
+      name: prefill.name || f.name,
+      email: prefill.email || f.email,
+      phone: prefill.phone || f.phone,
+    }));
+  }, [prefill.name, prefill.email, prefill.phone]);
   const [success, setSuccess] = useState<{ time: string; meet: string | null } | null>(null);
 
   const { data: slotData, isLoading: loadingSlots } = useQuery({
@@ -32,8 +55,15 @@ function BookingPage() {
     enabled: !!info,
   });
 
+  const isPrefilled = !!(prefill.name && prefill.email);
+
   const book = useMutation({
-    mutationFn: () => bookFn({ data: { slug, starts_at: selected!, ...form } as any }),
+    mutationFn: () => bookFn({
+      data: {
+        slug, starts_at: selected!, ...form,
+        application_id: prefill.application_id || undefined,
+      } as any,
+    }),
     onSuccess: (r: any) => {
       const t = new Date(r.starts_at).toLocaleString(undefined, { weekday: "long", month: "long", day: "numeric", hour: "numeric", minute: "2-digit" });
       setSuccess({ time: t, meet: r.meet_link ?? null });
@@ -52,7 +82,7 @@ function BookingPage() {
     <div className="min-h-screen flex items-center justify-center p-6">
       <Card className="p-10 text-center max-w-md border-border bg-card">
         <CheckCircle2 className="mx-auto mb-3 h-10 w-10 text-emerald-400" />
-        <h1 className="text-xl font-bold mb-2">You're booked</h1>
+        <h1 className="text-xl font-bold mb-2">Your call is booked.</h1>
         <p className="text-sm text-muted-foreground mb-4">{success.time}</p>
         {success.meet && (
           <a href={success.meet} target="_blank" rel="noreferrer">
@@ -104,16 +134,28 @@ function BookingPage() {
             </div>
 
             <div className="space-y-3">
-              <div><Label>Your name</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
-              <div><Label>Email</Label><Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
-              {link.collect_phone && <div><Label>Phone (for SMS reminders)</Label><Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></div>}
+              {isPrefilled ? (
+                <div className="rounded-lg border border-border bg-muted/30 p-3 text-sm">
+                  <div className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+                    <Lock className="h-3 w-3" /> Booking as
+                  </div>
+                  <div className="font-semibold">{form.name}</div>
+                  <div className="text-xs text-muted-foreground">{form.email}{form.phone ? ` · ${form.phone}` : ""}</div>
+                </div>
+              ) : (
+                <>
+                  <div><Label>Your name</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
+                  <div><Label>Email</Label><Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
+                  {link.collect_phone && <div><Label>Phone (for SMS reminders)</Label><Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></div>}
+                </>
+              )}
               {link.collect_notes && <div><Label>Anything you want to share?</Label><Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={3} /></div>}
               <Button
                 className="w-full bg-gradient-primary"
                 disabled={!selected || !form.name || !form.email || book.isPending}
                 onClick={() => book.mutate()}
               >
-                {book.isPending ? "Booking…" : selected ? "Confirm booking" : "Pick a time first"}
+                {book.isPending ? "Booking…" : selected ? "Confirm & Book Call" : "Pick a time first"}
               </Button>
             </div>
           </div>
