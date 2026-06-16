@@ -527,6 +527,57 @@ function SignupJf() {
 
             {/* Compact billing summary */}
             {!checkoutBlocked && (
+              <div className="rounded-lg border border-border bg-card/40 p-3">
+                <Label className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Have a code? (optional)</Label>
+                <div className="mt-2 flex gap-2">
+                  <Input
+                    placeholder="Enter discount or referral code"
+                    value={codeInput}
+                    onChange={(e) => { setCodeInput(e.target.value); setCodeError(null); }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") { e.preventDefault(); applyCode(codeInput); }
+                    }}
+                    disabled={codeBusy || appliedCodes.length >= 2}
+                    autoCapitalize="characters"
+                    className="font-mono text-sm uppercase"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => applyCode(codeInput)}
+                    disabled={codeBusy || !codeInput.trim() || appliedCodes.length >= 2}
+                  >
+                    {codeBusy ? "Checking…" : "Apply"}
+                  </Button>
+                </div>
+                {codeError && <p className="mt-2 text-[11px] font-medium text-rose-400">{codeError}</p>}
+                {appliedCodes.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {appliedCodes.map((c) => (
+                      <span
+                        key={c.id}
+                        className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold text-emerald-300"
+                      >
+                        <Check className="h-3 w-3" />
+                        {codeChipLabel(c)}
+                        <button
+                          type="button"
+                          aria-label={`Remove ${c.code}`}
+                          onClick={() => removeCode(c.id)}
+                          className="ml-1 rounded-full p-0.5 text-emerald-300/80 hover:bg-emerald-500/20 hover:text-emerald-100"
+                        >
+                          <XIcon className="h-3 w-3" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <p className="mt-2 text-[10px] leading-relaxed text-muted-foreground">
+                  You can combine one promotion code with one ambassador or client referral code.
+                </p>
+              </div>
+            )}
+            {!checkoutBlocked && (
               <div className="rounded-lg border border-border bg-muted/30 p-3">
                 <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
                   <Receipt className="h-3.5 w-3.5" /> Billing
