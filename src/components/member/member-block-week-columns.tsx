@@ -122,7 +122,7 @@ export function MemberBlockWeekColumns({
                   >
                     <div>
                       <div className="text-sm font-semibold">{d.title || `Day ${d.day_index}`}</div>
-                      <div className="text-xs text-muted-foreground">{date ? format(parseLocalDate(date), "EEE, MMM d") : "—"}</div>
+                      <div className="text-xs text-muted-foreground">{date ? format(parseLocalDate(date)!, "EEE, MMM d") : "—"}</div>
                     </div>
                     {!isSelf && <ArrowLeftRight className="h-4 w-4 text-primary" />}
                   </button>
@@ -194,7 +194,7 @@ export function MemberBlockWeekColumns({
                 {days.map((d: any) => {
                   const key = `${week.week_index}:${d.day_index}`;
                   const dateStr = dateFor.get(key);
-                  const date = dateStr ? startOfDay(parseLocalDate(dateStr)) : null;
+                  const date = dateStr ? startOfDay(parseLocalDate(dateStr)!) : null;
                   const done = doneSet.has(key);
                   const isToday = !!date && date.getTime() === today.getTime();
                   const isPast = !!date && date < today;

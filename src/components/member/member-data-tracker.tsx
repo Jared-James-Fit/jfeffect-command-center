@@ -33,7 +33,7 @@ export function MemberDataTracker({ enrollmentId, enrollment }: { enrollmentId: 
   const pct = Math.round((done / Math.max(total, 1)) * 100);
 
   // streak: consecutive days back from today with at least one completion
-  const completedDays = new Set(completions.map((c) => format(parseLocalDate(c.completed_at), "yyyy-MM-dd")));
+  const completedDays = new Set(completions.map((c) => format(parseLocalDate(c.completed_at)!, "yyyy-MM-dd")));
   let streak = 0;
   for (let i = 0; i < 365; i++) {
     const d = new Date(); d.setDate(d.getDate() - i);
@@ -45,7 +45,7 @@ export function MemberDataTracker({ enrollmentId, enrollment }: { enrollmentId: 
   const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
   const weekEnd = endOfWeek(new Date(), { weekStartsOn: 1 });
   const thisWeek = completions.filter((c) => {
-    const d = parseLocalDate(c.completed_at);
+    const d = parseLocalDate(c.completed_at)!;
     return d >= weekStart && d <= weekEnd;
   }).length;
 
@@ -53,7 +53,7 @@ export function MemberDataTracker({ enrollmentId, enrollment }: { enrollmentId: 
   const setsLogged = logs.length;
 
   const lastSession = completions[0];
-  const daysSince = lastSession ? differenceInCalendarDays(new Date(), parseLocalDate(lastSession.completed_at)) : null;
+  const daysSince = lastSession ? differenceInCalendarDays(new Date(), parseLocalDate(lastSession.completed_at)!) : null;
 
   return (
     <div className="space-y-4">
@@ -82,7 +82,7 @@ export function MemberDataTracker({ enrollmentId, enrollment }: { enrollmentId: 
             {completions.slice(0, 8).map((c) => (
               <li key={`${c.week_index}:${c.day_index}:${c.completed_at}`} className="flex items-center justify-between py-2 text-sm">
                 <span>Week {c.week_index} · Day {c.day_index}</span>
-                <span className="text-xs text-muted-foreground">{format(parseLocalDate(c.completed_at), "EEE, MMM d")}</span>
+                <span className="text-xs text-muted-foreground">{format(parseLocalDate(c.completed_at)!, "EEE, MMM d")}</span>
               </li>
             ))}
           </ul>

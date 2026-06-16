@@ -1,3 +1,4 @@
+import { parseLocalDate } from "@/lib/today";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -10,7 +11,7 @@ import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Play, LayoutGrid, CalendarDays, LineChart } from "lucide-react";
-import { format, parseISO, startOfDay } from "date-fns";
+import { format, startOfDay } from "date-fns";
 import { MemberBlockWeekColumns } from "@/components/member/member-block-week-columns";
 import { MemberPlanCalendar } from "@/components/member/member-plan-calendar";
 import { MemberDataTracker } from "@/components/member/member-data-tracker";
@@ -61,7 +62,7 @@ function EnrollmentView() {
   // Find today's workout, or the next un-done future one
   const todayKey = format(today, "yyyy-MM-dd");
   const todayEntry = schedule.find((s) => s.date === todayKey && !doneSet.has(`${s.week}:${s.day}`));
-  const nextEntry = todayEntry ?? schedule.find((s) => parseISO(s.date) >= today && !doneSet.has(`${s.week}:${s.day}`));
+  const nextEntry = todayEntry ?? schedule.find((s) => parseLocalDate(s.date) >= today && !doneSet.has(`${s.week}:${s.day}`));
 
   const pct = Math.round(((enr.workouts_completed ?? 0) / Math.max(enr.workouts_total ?? 1, 1)) * 100);
   const nextTitle = nextEntry
@@ -82,7 +83,7 @@ function EnrollmentView() {
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="min-w-0">
               <div className="text-[11px] font-bold uppercase tracking-wider text-primary">
-                {nextEntry.date === todayKey ? "Today's workout" : `Up next · ${format(parseISO(nextEntry.date), "EEE, MMM d")}`}
+                {nextEntry.date === todayKey ? "Today's workout" : `Up next · ${format(parseLocalDate(nextEntry.date), "EEE, MMM d")}`}
               </div>
               <div className="mt-0.5 truncate text-lg font-black">{nextTitle}</div>
             </div>
