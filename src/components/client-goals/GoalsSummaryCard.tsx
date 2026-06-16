@@ -31,6 +31,42 @@ function chips(items: string[] | null | undefined) {
   );
 }
 
+function EquipmentSummary({ row }: { row: ClientGoalsSetupRow }) {
+  const [open, setOpen] = useState(false);
+  const line = getEquipmentSummary(row);
+  const byLoc = row.equipment_by_location ?? {};
+  const locKeys = Object.keys(byLoc);
+  const hasDetail =
+    (row.equipment?.length ?? 0) > 0 || locKeys.length > 0;
+  return (
+    <div className="space-y-1">
+      <button
+        type="button"
+        className="inline-flex items-center gap-1 text-sm hover:underline disabled:no-underline disabled:cursor-default"
+        onClick={() => hasDetail && setOpen((o) => !o)}
+        disabled={!hasDetail}
+      >
+        {hasDetail ? (
+          open ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />
+        ) : null}
+        <span>{line}</span>
+      </button>
+      {open && hasDetail && (
+        <div className="space-y-1 pt-1">
+          {locKeys.length === 0
+            ? chips(row.equipment)
+            : locKeys.map((k) => (
+                <div key={k}>
+                  <div className="text-[10px] uppercase text-muted-foreground">{k}</div>
+                  {chips(byLoc[k]) ?? <div className="text-xs text-muted-foreground">—</div>}
+                </div>
+              ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function GoalsSummaryCard({ clientId }: { clientId: string }) {
   const { data, isLoading } = useQuery({
     queryKey: ["client-goals-setup", clientId],
