@@ -169,6 +169,7 @@ export const clientNav: NavItem[] = [
   { to: "/portal/messages", label: "Messages", icon: MessageCircle },
   { to: "/portal/workouts", label: "Workouts", icon: Activity },
   { to: "/portal/lift-videos", label: "Lift Review Upload", icon: Video },
+  { to: "/m/plans", label: "Program Library", icon: BookOpen },
   { to: "/portal/nutrition-targets", label: "Nutrition", icon: Apple },
   { to: "/portal/recipes", label: "Recipes", icon: ChefHat },
   { to: "/portal/check-ins", label: "Check-Ins & Forms", icon: ClipboardCheck },
