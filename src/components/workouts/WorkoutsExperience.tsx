@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, lazy, Suspense } from "react";
+import { useEffect, useMemo, useRef, useState, lazy, Suspense } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -176,11 +176,6 @@ export function WorkoutsExperience({
       />
 
       <div className="space-y-4 p-4 pb-32 md:p-6">
-        {mode === "self" && (
-          <Suspense fallback={null}>
-            <TrainingAnalyticsPreviewCard clientId={clientId} />
-          </Suspense>
-        )}
         {inProgress && (
           <ResumeBanner item={inProgress} />
         )}
@@ -262,6 +257,10 @@ export function WorkoutsExperience({
             )}
           </TabsContent>
         </Tabs>
+
+        {mode === "self" && (
+          <DeferredAnalytics clientId={clientId} />
+        )}
       </div>
 
       <ScheduleHistoryDrawer
@@ -270,6 +269,53 @@ export function WorkoutsExperience({
         onOpenChange={setHistoryOpen}
       />
     </>
+  );
+}
+
+/* ---------------------------------------------------------------------- */
+/* Deferred analytics — only mounts when scrolled near viewport, so the   */
+/* recharts bundle + data query never block the initial workouts paint.   */
+/* ---------------------------------------------------------------------- */
+
+function DeferredAnalytics({ clientId }: { clientId: string }) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    if (visible) return;
+    const el = ref.current;
+    if (!el) return;
+    if (typeof IntersectionObserver === "undefined") {
+      setVisible(true);
+      return;
+    }
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          setVisible(true);
+          io.disconnect();
+        }
+      },
+      { rootMargin: "300px 0px" },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [visible]);
+
+  return (
+    <div ref={ref} className="min-h-[220px]">
+      {visible ? (
+        <Suspense
+          fallback={
+            <Card className="h-[220px] animate-pulse bg-muted/30" aria-hidden />
+          }
+        >
+          <TrainingAnalyticsPreviewCard clientId={clientId} />
+        </Suspense>
+      ) : (
+        <Card className="h-[220px] bg-muted/20" aria-hidden />
+      )}
+    </div>
   );
 }
 
