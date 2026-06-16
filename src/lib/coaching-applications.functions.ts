@@ -332,6 +332,27 @@ export const listCoachingApplications = createServerFn({ method: "GET" })
     return { applications: data ?? [] };
   });
 
+/** Lightweight dashboard metrics — admin only. */
+export const getCoachingApplicationsMetrics = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await assertAdmin(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    const { data, error } = await supabaseAdmin
+      .from("coaching_applications")
+      .select("id,created_at,status,call_status,lead_score,qualification_label")
+      .gte("created_at", since);
+    if (error) throw new Error(error.message);
+    const rows = data ?? [];
+    const total = rows.length;
+    const newCount = rows.filter((r: any) => r.status === "New").length;
+    const booked = rows.filter((r: any) => r.call_status === "booked" || r.call_status === "completed").length;
+    const hot = rows.filter((r: any) => (r.lead_score ?? 0) >= 80).length;
+    const conversionRate = total ? Math.round((booked / total) * 100) : 0;
+    return { total, newCount, booked, hot, conversionRate };
+  });
+
 export const updateCoachingApplication = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((i: unknown) =>
