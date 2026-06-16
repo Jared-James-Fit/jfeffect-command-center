@@ -20,6 +20,7 @@ import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as MembershipRouteImport } from './routes/membership'
 import { Route as MemberSetupRouteImport } from './routes/member-setup'
 import { Route as JoinRouteImport } from './routes/join'
+import { Route as InstallRouteImport } from './routes/install'
 import { Route as CoachingRouteImport } from './routes/coaching'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as ApplyRouteImport } from './routes/apply'
@@ -299,6 +300,11 @@ const MemberSetupRoute = MemberSetupRouteImport.update({
 const JoinRoute = JoinRouteImport.update({
   id: '/join',
   path: '/join',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InstallRoute = InstallRouteImport.update({
+  id: '/install',
+  path: '/install',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CoachingRoute = CoachingRouteImport.update({
@@ -1613,6 +1619,7 @@ export interface FileRoutesByFullPath {
   '/apply': typeof ApplyRoute
   '/auth': typeof AuthRoute
   '/coaching': typeof CoachingRouteWithChildren
+  '/install': typeof InstallRoute
   '/join': typeof JoinRoute
   '/member-setup': typeof MemberSetupRoute
   '/membership': typeof MembershipRoute
@@ -1850,6 +1857,7 @@ export interface FileRoutesByTo {
   '/apply': typeof ApplyRoute
   '/auth': typeof AuthRoute
   '/coaching': typeof CoachingRouteWithChildren
+  '/install': typeof InstallRoute
   '/join': typeof JoinRoute
   '/member-setup': typeof MemberSetupRoute
   '/membership': typeof MembershipRoute
@@ -2084,6 +2092,7 @@ export interface FileRoutesById {
   '/apply': typeof ApplyRoute
   '/auth': typeof AuthRoute
   '/coaching': typeof CoachingRouteWithChildren
+  '/install': typeof InstallRoute
   '/join': typeof JoinRoute
   '/member-setup': typeof MemberSetupRoute
   '/membership': typeof MembershipRoute
@@ -2323,6 +2332,7 @@ export interface FileRouteTypes {
     | '/apply'
     | '/auth'
     | '/coaching'
+    | '/install'
     | '/join'
     | '/member-setup'
     | '/membership'
@@ -2560,6 +2570,7 @@ export interface FileRouteTypes {
     | '/apply'
     | '/auth'
     | '/coaching'
+    | '/install'
     | '/join'
     | '/member-setup'
     | '/membership'
@@ -2793,6 +2804,7 @@ export interface FileRouteTypes {
     | '/apply'
     | '/auth'
     | '/coaching'
+    | '/install'
     | '/join'
     | '/member-setup'
     | '/membership'
@@ -3032,6 +3044,7 @@ export interface RootRouteChildren {
   ApplyRoute: typeof ApplyRoute
   AuthRoute: typeof AuthRoute
   CoachingRoute: typeof CoachingRouteWithChildren
+  InstallRoute: typeof InstallRoute
   JoinRoute: typeof JoinRoute
   MemberSetupRoute: typeof MemberSetupRoute
   MembershipRoute: typeof MembershipRoute
@@ -3148,6 +3161,13 @@ declare module '@tanstack/react-router' {
       path: '/join'
       fullPath: '/join'
       preLoaderRoute: typeof JoinRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/install': {
+      id: '/install'
+      path: '/install'
+      fullPath: '/install'
+      preLoaderRoute: typeof InstallRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/coaching': {
@@ -5430,6 +5450,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApplyRoute: ApplyRoute,
   AuthRoute: AuthRoute,
   CoachingRoute: CoachingRouteWithChildren,
+  InstallRoute: InstallRoute,
   JoinRoute: JoinRoute,
   MemberSetupRoute: MemberSetupRoute,
   MembershipRoute: MembershipRoute,
