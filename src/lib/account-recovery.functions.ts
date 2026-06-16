@@ -253,8 +253,8 @@ async function dispatchSmsReset(
     const { sid } = await sendViaTwilio(phoneE164, settings.from_phone, recoverySmsBody(link));
     await supabaseAdmin.from("sms_log").insert({
       to_phone: phoneE164,
-      body: recoverySmsBody("[reset link redacted]"),
-      kind: "password_reset",
+      body: "[password reset link redacted]",
+      kind: "manual",
       status: "sent",
       twilio_sid: sid,
     });
@@ -263,7 +263,7 @@ async function dispatchSmsReset(
     await supabaseAdmin.from("sms_log").insert({
       to_phone: phoneE164,
       body: "[password reset link redacted]",
-      kind: "password_reset",
+      kind: "manual",
       status: "failed",
       error: e?.message ?? String(e),
     });
