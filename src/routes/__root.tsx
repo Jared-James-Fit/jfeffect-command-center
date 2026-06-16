@@ -204,12 +204,13 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
   head: () => ({
     meta: [
       { charSet: "utf-8" },
-      { name: "viewport", content: "width=device-width, initial-scale=1" },
+      { name: "viewport", content: "width=device-width, initial-scale=1, viewport-fit=cover" },
       { title: "JF Effect" },
       { name: "description", content: "The JF Effect system — structured training, nutrition, progress tracking, and private coaching for men who are done starting over." },
       { name: "author", content: "JF Effect" },
-      { name: "theme-color", content: "#0F172A" },
+      { name: "theme-color", content: "#0a0a0a" },
       { name: "apple-mobile-web-app-capable", content: "yes" },
+      { name: "mobile-web-app-capable", content: "yes" },
       { name: "apple-mobile-web-app-title", content: "JF Effect" },
       { name: "apple-mobile-web-app-status-bar-style", content: "black-translucent" },
       { property: "og:title", content: "JF Effect" },
