@@ -1,127 +1,97 @@
-# JF Effect PWA — Phased Build Plan
+# Discount / Promo / Ambassador / Referral Code Foundation
 
-This brief is large enough that doing it as one change would be unsafe (touches auth, caching, sign-out, workouts, onboarding, admin). I'll ship it in 5 verifiable phases. Each phase is independently testable and publishable, and none of them touch existing programs, workouts, payments, or RLS.
+## Scope guardrails (from your brief)
+- **No live Stripe activation** in this step. `FIRSTMONTHFREE` stays in Draft/Test until expiry + Stripe verification.
+- **No duplicate systems.** Extend the existing `promo-codes` admin page, `membership.promo-tools`, `join.tsx`, and stripe-webhook route rather than building parallel ones.
+- **No customer charges, no public messaging, no changes to existing subscriptions.**
+- Server-side validation is the source of truth; client UI is for UX only.
 
-I'd like your approval on the phase breakdown before I start — especially Phase 1, which is the foundation everything else builds on.
+## Phase 0 — Inventory (read-only, before any edit)
+Inspect and document the current state of:
+- `src/routes/_authenticated/admin/promo-codes.tsx` and `membership.promo-tools.tsx`
+- `src/routes/_authenticated/admin/sales.index.tsx` (nav surface for Sales → Promotions)
+- `src/routes/join.tsx` (URL code capture)
+- `src/routes/api/public/stripe-webhook.ts` (attribution hooks)
+- Existing DB tables for codes/redemptions/ambassador fields (`promo_code_redemptions` already exists per schema; check `clients`, `coaches`, `app_members` for any referral-code columns)
+- Existing membership checkout component(s)
 
----
+I'll produce a short "what exists / what's missing" note at the top of the handoff report so the next agent doesn't rediscover it.
 
-## Phase 1 — Installable PWA foundation (this turn, if approved)
+## Phase 1 — Database foundation (single migration, awaits your approval)
+New / extended tables in `public`:
 
-Goal: real install on iPhone + Android, real JF Effect branding, no Lovable placeholders, zero risk to existing portal.
+1. **`discount_codes`** — master code record
+   - internal_name, public_code (citext unique), category (enum: promotion|ambassador|client_referral|retention|manual), description
+   - discount_type (percentage|fixed), discount_value, subscription_duration (once|forever|repeating), duration_months
+   - eligible_product_ids (uuid[]), new_customers_only, existing_customers_only, min_purchase_cents
+   - start_at, expires_at, time_zone (default `America/Winnipeg`)
+   - status (draft|scheduled|active|paused|expired)
+   - total_usage_limit, per_customer_limit
+   - pairing_allowed, pairable_category, max_promo_codes (default 1), max_referral_codes (default 1), max_total_codes (default 2), excluded_code_ids
+   - linked_ambassador_id, linked_client_id (nullable FKs)
+   - stripe_coupon_id, stripe_promotion_code_id, stripe_test_mode_synced, stripe_live_mode_synced
+   - created_by, updated_by, timestamps
+2. **`discount_code_redemptions`** — extends/replaces use of existing `promo_code_redemptions` if compatible; otherwise new table with: customer_id, email, promo_code_id, referral_code_id, referring_user_id, product_id, checkout_id, subscription_id, original_cents, promo_discount_cents, referral_discount_cents, final_cents, subscription_status, stripe_sync_status, mode (test|live), redeemed_at
+3. **`discount_code_audit_log`** — actor, action (created/edited/activated/paused/expired/applied/rejected/invalid_pair/redemption_completed/attribution_recorded/admin_override), code_id, metadata jsonb, timestamp. **Never** logs card / secret / token data.
+4. **`referral_attribution`** — separates promo attribution from ambassador attribution so `FIRSTMONTHFREE` never displaces the referring ambassador.
 
-1. **Manifest** at `public/manifest.webmanifest`: name "JF Effect", short_name "JF Effect", `start_url: "/"`, `scope: "/"`, `display: "standalone"`, `orientation: "portrait-primary"`, theme color (brand), background `#0a0a0a`, description, `id: "/"`.
-2. **Icons** (generated from existing JF Effect mark): 192, 512, 192-maskable, 512-maskable, apple-touch-icon 180, favicon. Uploaded via `lovable-assets`.
-3. **Head tags** in `src/routes/__root.tsx`: `manifest`, `theme-color`, `apple-touch-icon`, `apple-mobile-web-app-capable`, `apple-mobile-web-app-status-bar-style: black-translucent`, `apple-mobile-web-app-title: JF Effect`, viewport with `viewport-fit=cover`.
-4. **Safe-area CSS**: global `env(safe-area-inset-*)` padding utilities for header, bottom nav, sticky buttons.
-5. **No service worker yet.** Manifest-only install is enough for "Add to Home Screen" on iOS and Android's native install prompt — and it carries zero risk of breaking the live site for existing users. The SW lands in Phase 4 with a kill-switch-ready design.
+Indexes on public_code (unique citext), status, expires_at, linked_ambassador_id, linked_client_id.
 
-Verification: Playwright check of `/manifest.webmanifest`, icon URLs 200, head tags rendered, lighthouse-style manifest validation, screenshots of the install sheet on a simulated iPhone viewport.
+RLS: all tables enabled. Admin-only write via `has_role(auth.uid(),'admin')`. Authenticated SELECT scoped per table (e.g. customers see only their own redemptions). Service role full access for webhook + server fns. Explicit `GRANT`s per public-schema rules.
 
-## Phase 2 — Install flow + device-aware instructions ✅ DONE
+Server-side validation function `public.validate_code_combination(codes text[], customer_id uuid, product_id uuid)` (SECURITY DEFINER) returns structured `{ ok, applied[], rejected[], reason }` enforcing all pairing rules.
 
-- New route `/install` (and a "Install JF Effect" entry from member home).
-- `usePlatform()` hook: detects iOS Safari, Android Chrome, in-app browser (FB/IG/Gmail), desktop, already-installed (`display-mode: standalone` + `navigator.standalone`), `beforeinstallprompt` availability.
-- iOS: visual Share → Add to Home Screen walkthrough with "I Added JF Effect" confirm + standalone re-check on next open.
-- Android: native prompt via captured `beforeinstallprompt`; fallback to menu instructions.
-- In-app browser: "Open in Safari/Chrome" guidance.
-- Desktop: QR code (qrcode lib) + copy link + short mobile instructions.
-- "Install dismissed" + "Install confirmed" persisted in `app_members` (new columns) so admins can see it.
+## Phase 2 — Server functions
+In `src/lib/discount-codes.functions.ts` (client-safe path):
+- `listDiscountCodes` (admin, paginated, filterable)
+- `getDiscountCode`, `upsertDiscountCode` (admin, audit-logged)
+- `setCodeStatus` (activate/pause/expire/reactivate)
+- `validateCodesForCheckout` — public, calls the RPC above, returns sanitized messages
+- `recordRedemption` — called by stripe-webhook on `invoice.payment_succeeded` / `checkout.session.completed`
+- `listRedemptions`, `getReferralStatsForUser`
 
-## Phase 3 — Setup checklist + admin visibility (non-blocking) — IN PROGRESS
+All admin fns use `requireSupabaseAuth` + role check. Public validation fn is rate-limited and never returns raw DB/Stripe errors.
 
-Done this turn:
-- New `app_members` columns: `notifications_status`, `setup_dismissed_until`, `last_setup_error`, `first_workout_opened_at` (install columns landed in Phase 2).
-- Member home checklist card "Finish setting up JF Effect" with 5 items (profile, install, notifications, pick program, open first workout), progress bar, dismiss-for-now (4h) and remind-tomorrow (24h).
-- Browser notification permission prompt wired through the checklist; result persisted to `app_members.notifications_status`.
-- Admin route `/admin/onboarding` with counts, 7 filters (all / not signed in / not installed / setup incomplete / notifications off / errors / ready), search, paginated rows with status pills and a View action linking to the member detail page.
-- Admin nav entry under Membership group.
+## Phase 3 — Admin UI (extend existing pages)
+- **Sales → Promotions** tabs: Discount Codes (primary), Ambassador & Referral Codes, Redemption History, Promotion Analytics
+- Extend `promo-codes.tsx` into the full table view (filters: All / Active / Draft / Scheduled / Paused / Expired / Promotions / Ambassadors / Client Referrals / Expiring Soon; search by code/name/email)
+- **Create/Edit form** with the exact sections you listed (Basic / Discount / Eligibility / Pairing). No "all products" default — admin must pick.
+- **Expiration controls**: date + time + tz picker (default 11:59 PM America/Winnipeg), Extend / Shorten / Pause / Reactivate / Expire Immediately with confirmation dialogs.
+- **Per-profile panel** "Referral & Discount Code" on ambassador/client admin profiles, with copy code / copy link / paired link / view customers / view redemptions.
 
-Done in the latest Phase 3 turn:
-- New email template `setup-reminder` (branded, mirrors membership-onboarding styling) registered in the template registry.
-- `sendSetupReminderEmail` server helper — enqueues on `transactional_emails` with a per-day idempotency key (admin can override with `force`).
-- Admin server fns: `sendSetupReminder` (email + optional SMS via Twilio, stamps `last_setup_reminder_at`), `getMemberInstallLink`, `clearMemberSetupError`, `setMemberBrowserOnly`.
-- Admin row actions on `/admin/onboarding`: "Send setup reminder…" dialog (email/SMS toggles, custom note, force override), Copy install link, Clear setup error, Mark/Unmark browser-only.
-- `app_members` gained `last_setup_reminder_at` + `setup_browser_only`; row UI shows "Last reminder: …" and a "Browser only" badge.
+Mobile-responsive, paginated, no full-Stripe-load on initial render.
 
-Done in this turn (Goals & Setup save bug audit + fix):
-- Trigger `cgs_audit_and_notify` is now `BEFORE INSERT OR UPDATE` and scrubs `food_restrictions_details` / `injuries_details` when the user said "No".
-- Completing setup auto-clears the "please update your answers" banner (trigger + server fn).
-- Coach notification tasks are deduplicated: subsequent step saves within 24h refresh the existing open task instead of spawning a new one per step.
-- Client `GoalsSetupFlow` now persists local edits to `localStorage` (`goals-setup-draft:<clientId>`), survives reloads and network failures, re-hydrates when `clientId` changes, and shows an inline "last save didn't reach the server" amber strip with a Retry-now button (separate from the existing Finish-failed card).
-- Misleading "Saves automatically" badge replaced with "Saves on each step".
+## Phase 4 — Seed records (data-only, via insert tool, all in test/draft)
+- `FIRSTMONTHFREE` — Promotion, 100%, repeating 1 month, Membership product, new-customer-only, pairable with referral, **status=draft** until expiry chosen.
+- Ambassador/referral codes for existing ambassadors/clients (e.g. `COLBY`, `CEDRIC`) — 5% off membership, repeating, pairable with promotion only. Skip any that already exist; resolve first-name collisions with last-initial suffix.
 
-Still to do for Phase 3:
-- (none)
+No live Stripe coupon created.
 
-- `member_setup_state` table (or columns on `app_members`) tracking: account_created_at, first_signin_at, install_detected_at, install_platform, goals_setup_status, profile_status, notifications_status, first_workout_opened_at, last_reminder_sent_at, last_setup_error.
-- Home checklist card "Finish Setting Up JF Effect" with progress, 5 items, one CTA per item, dismiss-for-now + remind-tomorrow.
-- **Never blocks** Workouts, Messages, Nutrition, Account, Help, Sign Out.
-- Admin page `/admin/onboarding` with filters (not signed in / not installed / setup incomplete / goals incomplete / notifications off / errors / ready), pagination, actions (Send Reminder, Copy Link, View Client, Resend Instructions, Clear Error, Mark Browser-Only).
-- Email + SMS templates: "Set up your JF Effect app" using existing email infra (no new provider).
-- Goals & Setup save bug: audit + fix the existing submit flow — reliable save, empty/N/A/No/long answers, retry, Save & Continue Later, persistent completion.
+## Phase 5 — Checkout interface (extend existing membership checkout)
+- "Promo or Ambassador Code" section with Apply → applied chips → "Add another eligible code" (max 2, enforced server-side).
+- Friendly messages exactly as you specified for promo-applied / referral-applied / both / invalid second referral / invalid second promo.
+- Calls `validateCodesForCheckout` — UI never claims a Stripe discount was applied unless the server confirms (during this phase, server returns `mode: 'test'` for `FIRSTMONTHFREE` and the UI shows a "Test mode — not yet live" badge in admin preview).
 
-## Phase 4 — Service worker, updates, sign-out cache clearing — IN PROGRESS
+## Phase 6 — Shareable links + attribution
+- `join.tsx` accepts `?code=`, `?promo=`, `?ref=`; persists to sessionStorage; preserves across signup / verify / login / checkout / refresh.
+- URL manipulation cannot bypass pairing rules — validation runs server-side at checkout.
+- Stripe webhook handler writes `referral_attribution` separately from promo attribution.
 
-Done this turn:
-- `vite-plugin-pwa` (`generateSW`, `registerType: autoUpdate`) generates `/sw.js`. Manifest stays hand-managed (Phase 1).
-- Guarded register wrapper in `src/lib/pwa/register-sw.ts` — refuses to register in dev, iframe, `id-preview--*`, `preview--*`, `*.lovableproject.com`, `*.lovableproject-dev.com`, `*.beta.lovable.dev`, or `?sw=off`, and unregisters any matching `/sw.js` or `/service-worker.js` when refused.
-- `NetworkFirst` for HTML navigations (4s timeout); `CacheFirst` for hashed `/assets/*`; `StaleWhileRevalidate` for images. `/~oauth`, `/api/`, `/_serverFn/`, `/_server/` excluded from navigation fallback.
-- "JF Effect has been updated" toast with Update / Later, with a heuristic unsaved-work check (`[data-unsaved="true"]`).
-- Online/offline banner at the root.
-- Sign-out (`auth.signOut`) clears `jf-*` caches and `jf-*` IndexedDB databases so the next user never sees the previous user's cached data.
+## Phase 7 — Build, fix, publish
+- Run typecheck, fix errors, smoke-test admin nav + mobile + checkout-without-codes + checkout-with-codes.
+- Publish to https://jfeffect.com.
 
-Still to do for Phase 4:
-- (none — draft persistence already lives in `useAutosave` with offline queueing and exponential backoff. `data-unsaved` markers landed in Phase 5 via `useUnsavedWarning` on the workout day, message thread, group thread, native-form check-in, and nutrition update panel.)
+## Phase 8 — Handoff report
+Concise markdown report covering every item in your section 19, plus the explicit list of files needing Stripe live-mode verification.
 
-- `vite-plugin-pwa` with `generateSW`, `registerType: "autoUpdate"`, `NetworkFirst` for HTML, `CacheFirst` for hashed assets, OAuth + Supabase API excluded.
-- **Hard guards**: SW never registers in dev, iframe, `id-preview--*`, `preview--*`, `*.lovableproject.com`, `?sw=off`. Kill-switch worker ready at `/sw.js` if we need to disable.
-- "JF Effect Has Been Updated" toast → Update App / Later, with unsaved-work check (workout logger, forms, uploads, message composer, nutrition entry).
-- Sign-out clears user-scoped caches + IndexedDB drafts.
-- Workout / form draft persistence with idempotency keys.
-- Online/offline banner, retry, no false "saved" confirmations.
+## What I will NOT do without further confirmation
+- Touch live Stripe (no coupon/promotion_code creation in live mode).
+- Send any customer email or in-app announcement.
+- Modify existing active subscriptions or existing working discount logic.
+- Overwrite ambassador/client codes that already exist.
 
-## Phase 5 — Polish, audit, future-native scaffolding — IN PROGRESS
-
-Done this turn:
-- Deep-link router: `_authenticated` guard now redirects unauthenticated users to `/auth?next=<path>`; `/auth` validates the `next` search param and routes the user to their intended destination after sign-in (rejects external/protocol URLs to avoid open-redirect).
-- Platform service abstractions under `src/platform/`: `notifications`, `share`, `haptics`, `camera`, `storage` — all web impls with the same shape Capacitor will swap in. `isStandalone()` helper exported from the index.
-- `useNotificationPermission()` hook + `requestNotificationPermission()` — gated behind explicit user action, respects denial, never auto-prompts.
-- `useUnsavedWarning(when)` hook — wires `beforeunload` and marks `<body data-unsaved="true">` so the existing PWA update toast defers updates while edits are in flight.
-- Global mobile polish: `touch-action: manipulation` + transparent tap highlight on actionable controls, horizontal-overflow guard on phones.
-
-Still to do for Phase 5 (next pass):
-- Mobile layout audit sweep (notch, double headers, sticky composers, tap-target ≥44px) across remaining screens — ongoing.
-
-Done in this turn:
-- `useUnsavedWarning` extended to ref-counted `data-unsaved` marker with an opt-out `warnOnUnload: false` so chat composers can defer PWA updates without firing a leave-page prompt every time the member taps away.
-- Applied to: workout day route (meta autosave saving/offline/error), message thread + group thread composers (draft in textarea), native-form check-in (file uploads in flight), nutrition update dialog (any non-empty field, uploads, submit).
-- `useNotificationPermission` was already wired into the setup checklist's notifications step (`src/components/member/setup-checklist-card.tsx`) — no change needed.
-- Capacitor scaffolding: `src/platform/README.md` documents per-module plugin swaps, init steps, and the rule that components must never bypass `@/platform/*`.
-
-- Mobile layout audit pass: notch, home indicator, bottom nav, sticky buttons, keyboard, tap targets ≥44px, no 16px-input zoom, no horizontal overflow, no double headers.
-- Back-button behaviour + unsaved-work confirmation.
-- Deep-link router that preserves intent through sign-in.
-- Thin service abstractions (`platform/notifications.ts`, `platform/camera.ts`, etc.) with web impls only — Capacitor-ready, but no Capacitor install.
-- Notification permission prompt gated behind explicit user action + value explanation, never on first load, respects denial.
-
----
-
-## What I will NOT touch
-
-Existing routes, RLS, payments, Stripe, programs, workout logs, messages, agreements, member tiers, auth, $29 trial logic, jfeffect.com checkout, existing analytics, legal records, SEO metadata.
-
-## Security fixes
-
-- broadcast-media storage bucket: removed the "any authenticated user can read" policy. New policy restricts reads to admins/coaches and to users who can see the parent broadcast (matched by `voice_path` / `video_path`), reusing `user_can_see_broadcast`.
-
-## Technical notes
-
-- Stack is TanStack Start on Cloudflare Workers. Service worker rules per Lovable PWA skill (no SW in preview/dev, kill-switch design, `NetworkFirst` for HTML).
-- New DB columns/tables added via migrations with GRANTs + RLS in the same migration.
-- Icons go through `lovable-assets` (CDN), not committed binaries.
-- Each phase ships behind feature checks so a broken phase can't take down the live portal.
-
----
-
-**Please confirm**: should I proceed phase-by-phase starting with Phase 1 (manifest + icons + head tags + safe areas)? Or do you want me to bundle Phase 1+2 (install + instructions) into the first deploy?
+## Open questions (please answer before I start — keeps the migration right the first time)
+1. **Reuse vs replace existing `promo_code_redemptions` table?** It has 27 columns and 1 policy already. If it's already wired into a working flow I'll extend it; otherwise I'll add `discount_code_redemptions` and migrate. Do you know which it is, or should I treat it as existing-and-extend?
+2. **Ambassador/client code list beyond COLBY and CEDRIC** — should I auto-generate codes from `clients` / `coaches` rows that have an "ambassador" flag, or only seed the two you named and leave the rest to a separate bulk step?
+3. **`FIRSTMONTHFREE` expiry date** — you said it can't go live without one. Pick a date now (e.g. 2026-12-31 23:59 America/Winnipeg) or leave it null and force the admin to set one in the UI before status can become `active`?
+4. **Membership product ID** — there are `coaching_products`, `member_plans`, and `offers` tables. Which one represents "JF Effect Membership" for `eligible_product_ids`? (I'll inspect and pick if you don't know, but a quick pointer saves a round trip.)
