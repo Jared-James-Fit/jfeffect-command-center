@@ -16,15 +16,18 @@ import {
 } from "@/lib/onboarding.functions";
 import { supabase } from "@/integrations/supabase/client";
 import { usePwaInstall } from "@/hooks/use-pwa-install";
+import { useNotificationPermission } from "@/hooks/use-notification-permission";
 
 type Item = {
   key: string;
   label: string;
+  description?: string;
   icon: any;
   done: boolean;
   to?: string;
   onClick?: () => void;
   cta: string;
+  disabled?: boolean;
 };
 
 function useSetupChecklistData() {
@@ -33,6 +36,7 @@ function useSetupChecklistData() {
   const fireNotif = useServerFn(recordNotificationStatus);
   const qc = useQueryClient();
   const install = usePwaInstall();
+  const notif = useNotificationPermission();
 
   const { data: status } = useQuery({
     queryKey: ["m-setup-status"],
@@ -59,14 +63,14 @@ function useSetupChecklistData() {
   const dismissedUntil = me?.setup_dismissed_until ? new Date(me.setup_dismissed_until).getTime() : 0;
   const isDismissed = dismissedUntil > Date.now();
 
-  // Detect notification permission status on mount.
+  // Sync detected permission to the server when it diverges from stored status.
   useEffect(() => {
-    if (typeof window === "undefined" || typeof Notification === "undefined") return;
-    const perm = Notification.permission as "granted" | "denied" | "default";
-    if (me && me.notifications_status !== perm) {
-      fireNotif({ data: { status: perm } }).catch(() => {});
+    if (!me) return;
+    if (notif.state === "unsupported") return;
+    if (me.notifications_status !== notif.state) {
+      fireNotif({ data: { status: notif.state } }).catch(() => {});
     }
-  }, [me, fireNotif]);
+  }, [me, notif.state, fireNotif]);
 
   // Auto-record install detection.
   useEffect(() => {
@@ -78,26 +82,27 @@ function useSetupChecklistData() {
 
   const setupComplete = status?.complete === true;
   const isInstalled = !!me?.install_detected_at || install.isStandalone;
-  const notifGranted = me?.notifications_status === "granted"
-    || (typeof Notification !== "undefined" && Notification.permission === "granted");
+  const notifGranted = notif.granted || me?.notifications_status === "granted";
 
   async function requestNotifications() {
-    if (typeof Notification === "undefined") {
+    if (notif.unsupported) {
       await fireNotif({ data: { status: "unsupported" } }).catch(() => {});
       toast.info("Notifications aren't supported on this browser.");
       return;
     }
-    try {
-      const result = await Notification.requestPermission();
-      await fireNotif({ data: { status: result as any } }).catch(() => {});
-      if (result === "granted") {
-        toast.success("Notifications enabled.");
-        qc.invalidateQueries({ queryKey: ["m-setup-status"] });
-      } else {
-        toast.info("You can turn notifications on later in your browser settings.");
-      }
-    } catch {
-      toast.error("Couldn't request notifications.");
+    if (notif.denied) {
+      toast.info("Notifications are blocked. Enable them in your browser settings, then refresh.");
+      return;
+    }
+    const result = await notif.request();
+    await fireNotif({ data: { status: result } }).catch(() => {});
+    if (result === "granted") {
+      toast.success("Notifications enabled — we'll only ping you about workouts, replies, and reminders.");
+      qc.invalidateQueries({ queryKey: ["m-setup-status"] });
+    } else if (result === "denied") {
+      toast.info("No problem — you can turn them on later in your browser settings.");
+    } else {
+      toast.info("You can enable notifications anytime from this checklist.");
     }
   }
 
@@ -121,10 +126,16 @@ function useSetupChecklistData() {
     {
       key: "notifications",
       label: "Turn on notifications",
+      description: notif.denied
+        ? "Blocked — enable in your browser settings"
+        : notif.unsupported
+          ? "Not supported on this browser"
+          : "Workout reminders, coach replies, and check-ins",
       icon: Bell,
       done: notifGranted,
       onClick: requestNotifications,
-      cta: notifGranted ? "On" : "Enable",
+      cta: notifGranted ? "On" : notif.denied ? "Blocked" : notif.unsupported ? "Unavailable" : "Enable",
+      disabled: notif.unsupported,
     },
     {
       key: "plan",
@@ -142,7 +153,7 @@ function useSetupChecklistData() {
       to: "/m/my-plans",
       cta: "Start training",
     },
-  ], [setupComplete, isInstalled, notifGranted]);
+  ], [setupComplete, isInstalled, notifGranted, notif.denied, notif.unsupported]);
 
   return { items, isDismissed, setupComplete, isInstalled, dismissChecklist: async (hours: number) => {
     await fireDismiss({ data: { hours } }).catch(() => {});
@@ -198,6 +209,9 @@ export function SetupChecklist({ activeEnrollment }: { activeEnrollment?: any })
                   <div className={`truncate text-sm font-medium ${it.done ? "text-muted-foreground line-through" : ""}`}>
                     {it.label}
                   </div>
+                  {it.description && !it.done ? (
+                    <div className="truncate text-xs text-muted-foreground">{it.description}</div>
+                  ) : null}
                 </div>
               </div>
               <div className="flex shrink-0 items-center gap-1 text-sm font-medium text-primary">
@@ -207,6 +221,9 @@ export function SetupChecklist({ activeEnrollment }: { activeEnrollment?: any })
           );
           if (it.done) {
             return <li key={it.key} className="opacity-70">{inner}</li>;
+          }
+          if (it.disabled) {
+            return <li key={it.key} className="opacity-60">{inner}</li>;
           }
           return (
             <li key={it.key}>
