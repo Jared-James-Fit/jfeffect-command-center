@@ -11,7 +11,8 @@ export type LibrarySectionId =
   | "coaching"
   | "beginner"
   | "bodybuilding"
-  | "glutes";
+  | "glutes"
+  | "archived";
 
 export type LibrarySection<T> = {
   id: LibrarySectionId;
@@ -167,6 +168,6 @@ export function groupPlans<T extends PlanLike>(rows: T[]): LibrarySection<T>[] {
     { id: "beginner", label: "Beginner", description: "Beginner difficulty", items: beginner },
     { id: "bodybuilding", label: "Bodybuilding", description: "Training style: bodybuilding", items: bodybuilding },
     { id: "glutes", label: "Glute focused", description: "Focus or name mentions glutes", items: glutes },
-    { id: "drafts" as any, label: "Archived", description: "Hidden from members", items: archived },
+    { id: "archived", label: "Archived", description: "Hidden from members", items: archived },
   ];
 }
