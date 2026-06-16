@@ -1,5 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 import type { ComponentType } from 'react'
+import { timingSafeEqual } from 'node:crypto'
 
 async function loadEmailTemplate(type: string) {
   switch (type) {
@@ -76,9 +77,15 @@ export const Route = createFileRoute("/lovable/email/auth/preview")({
           )
         }
 
-        // Verify the caller is authorized with LOVABLE_API_KEY
-        const authHeader = request.headers.get('Authorization')
-        if (!authHeader || authHeader !== `Bearer ${apiKey}`) {
+        // Verify the caller is authorized with LOVABLE_API_KEY using a
+        // constant-time comparison to prevent timing-oracle attacks.
+        const authHeader = request.headers.get('Authorization') ?? ''
+        const expected = Buffer.from(`Bearer ${apiKey}`)
+        const provided = Buffer.from(authHeader)
+        if (
+          expected.length !== provided.length ||
+          !timingSafeEqual(expected, provided)
+        ) {
           return Response.json({ error: 'Unauthorized' }, { status: 401 })
         }
 
