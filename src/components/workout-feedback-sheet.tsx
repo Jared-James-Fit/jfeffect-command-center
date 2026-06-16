@@ -113,7 +113,7 @@ export function WorkoutFeedbackSheet({ open, onOpenChange, completionId, clientI
       session_rpe: rpe!,
       pain: pain!,
       pain_level: pain ? painLevel : null,
-      pain_area: pain ? painArea : null,
+      pain_area: pain ? (painArea.length > 0 ? painArea.join(", ") : null) : null,
       pain_note: pain && painNote.trim() ? painNote.trim() : null,
       client_note: note.trim() ? note.trim() : null,
     };
