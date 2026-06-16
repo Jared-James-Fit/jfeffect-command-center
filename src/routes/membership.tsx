@@ -12,18 +12,18 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { Eye, EyeOff, Receipt, Check, X as XIcon } from "lucide-react";
-import { SalesPageShell, Section } from "@/components/sales/sales-page-shell";
+import { SalesPageShell, Section, SectionTitle } from "@/components/sales/sales-page-shell";
 import { MembershipHero, MemberHeroCta, MemberHeroGhost, HeroDecisionArea, MemberDetailsLink } from "@/components/sales/membership-hero";
-import { FeatureTabs } from "@/components/sales/feature-tabs";
 import { FeatureGrid } from "@/components/sales/feature-grid";
 import { IncludedNotIncluded } from "@/components/sales/included-not-included";
-import { ComparisonCard } from "@/components/sales/comparison";
 import { OfferComparison } from "@/components/sales/offer-comparison";
 import { ProofWall } from "@/components/sales/proof-wall";
 import { FaqAccordion } from "@/components/sales/faq-accordion";
 import { StickyMobileCta } from "@/components/sales/sticky-mobile-cta";
+import { AppPreviewGrid } from "@/components/sales/app-preview-grid";
+import { FinalCta } from "@/components/sales/final-cta";
 import { Reveal } from "@/components/sales/reveal";
-import { ArrowRight, Headphones } from "lucide-react";
+import { ArrowRight, Headphones, CheckCircle2, XCircle, Library, PlayCircle, LineChart as LineChartIcon, BookOpen, Sparkles, Dumbbell, Home as HomeIcon, Flame, Trophy } from "lucide-react";
 import { normalizePhoneToE164 } from "@/lib/phone-e164";
 
 function HeroSkeleton() {
@@ -188,19 +188,17 @@ function SignupJf() {
       ) : (
       <MembershipHero
         priceChip={settings?.monthly_price_display ?? "$29/month USD"}
-        headline={"Stop winging it. Start training like it matters."}
-        sub={"The same system I use with my own clients\u2014structured plans, tracking, exercise demos, analytics and nutrition, all in the app. You show up, the plan's already there, and you always know exactly what to do next."}
+        headline={"Stop winging it. Start training with a plan."}
+        sub={"The same training systems hundreds of JF Effect members use to get stronger, build muscle, and actually stay consistent\u2014programs, demos, tracking, and education, all in one app. You open it, the plan's already there, and you always know exactly what to do next."}
         heroImage={null}
         decisionArea={
           <HeroDecisionArea
             onCoachingClick={() => { window.location.href = "/coaching"; }}
           />
         }
-        primary={<MemberHeroCta onClick={scrollToForm}>{`Start ${trialDays}-Day Free Trial`}</MemberHeroCta>}
+        primary={<MemberHeroCta onClick={scrollToForm}>Start Free Trial</MemberHeroCta>}
         secondary={
-          <Link to="/coaching">
-            <MemberHeroGhost>Explore Private Coaching</MemberHeroGhost>
-          </Link>
+          <MemberHeroGhost onClick={scrollToFeatures}>See What's Included</MemberHeroGhost>
         }
         trialNote={`${trialDays}-day free trial · Then ${settings?.monthly_price_display ?? "$29/month USD"} · Cancel anytime`}
         detailsLink={<MemberDetailsLink onClick={scrollToFeatures} />}
@@ -240,58 +238,74 @@ function SignupJf() {
       </Section>
 
       {/* Offer comparison surfaced early so visitors see both paths within 5s. */}
-      <Reveal><OfferComparison accent="membership" /></Reveal>
-
+      {/* 2. Compare to doing it alone */}
       <div ref={featuresRef} id="features" />
-      <Reveal><FeatureTabs /></Reveal>
+      <Reveal><CompareAloneSection /></Reveal>
 
-      {Array.isArray(s.features) && s.features.length > 0 && (
-        <Reveal><FeatureGrid title="What's inside Membership" items={s.features} /></Reveal>
-      )}
+      {/* 3. What's included — premium feature cards */}
+      <Reveal>
+        <FeatureGrid
+          title="What's included"
+          items={Array.isArray(s.features) && s.features.length > 0 ? s.features : DEFAULT_FEATURES}
+        />
+      </Reveal>
 
-      <Reveal><IncludedNotIncluded
-        includedTitle="What's included"
-        notIncludedTitle="Not included"
-        included={s.included ?? []}
-        notIncluded={s.not_included ?? []}
-      /></Reveal>
+      {/* 4. Program library showcase */}
+      <Reveal><ProgramLibraryShowcase categories={Array.isArray(s.library_categories) && s.library_categories.length > 0 ? s.library_categories : DEFAULT_LIBRARY} programCount={s.program_count ?? ""} /></Reveal>
 
-      {s.comparison?.left && s.comparison?.right && (
-        <Reveal><ComparisonCard left={s.comparison.left} right={s.comparison.right} /></Reveal>
-      )}
+      {/* 5. Why people stick with it */}
+      <Reveal><WhyStickSection /></Reveal>
 
+      {/* 6. Who it's for / not for */}
+      <Reveal>
+        <IncludedNotIncluded
+          includedTitle="This is for you if"
+          notIncludedTitle="This is NOT for you if"
+          included={Array.isArray(s.who_for) && s.who_for.length > 0 ? s.who_for : DEFAULT_WHO_FOR}
+          notIncluded={Array.isArray(s.not_for) && s.not_for.length > 0 ? s.not_for : DEFAULT_NOT_FOR}
+        />
+      </Reveal>
+
+      {/* 7. App preview */}
+      <Reveal>
+        <AppPreviewGrid
+          title="Here's exactly what you get when you log in."
+          sub="Previews are illustrations of the live app interface."
+          items={Array.isArray(s.app_previews) && s.app_previews.length > 0 ? s.app_previews : DEFAULT_APP_PREVIEWS}
+        />
+      </Reveal>
+
+      {/* 8. Proof wall */}
       <Reveal><ProofWall
         testimonials={p?.testimonials ?? []}
         images={(p?.visuals ?? []).filter((v) => v.slot === "proof")}
       /></Reveal>
 
-      <Reveal><FaqAccordion items={mergeTaxFaq(s.faq ?? [])} /></Reveal>
+      {/* 9. Coaching vs Membership */}
+      <Reveal><OfferComparison accent="membership" /></Reveal>
+      <Section className="!pt-0">
+        <p className="mx-auto max-w-3xl text-center text-sm text-muted-foreground md:text-base">
+          Most people are in the right place right here. But if you want a plan built specifically for you, with weekly check-ins and a coach in your corner, that's{" "}
+          <Link to="/coaching" className="font-semibold text-primary underline underline-offset-2 hover:text-primary/80">Private Coaching</Link> — application only.
+        </p>
+      </Section>
 
-      {/* Lower coaching CTA before form / footer. */}
-      <Reveal as={Section}>
-        <div className="mx-auto max-w-3xl rounded-2xl border border-white/10 bg-gradient-to-br from-[#111318] to-[#0B0D12] p-6 md:p-8 text-center">
-          <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-primary">
-            Know You Need More Than an App?
-          </div>
-          <h3 className="mt-2 text-2xl font-black tracking-tight md:text-3xl">
-            Private Coaching may be the better fit.
-          </h3>
-          <p className="mt-3 text-sm text-muted-foreground md:text-base">
-            If you want a plan built for you and someone holding the standard when you don't feel like it, apply for coaching.
-          </p>
-          <div className="mt-5 flex flex-col items-center justify-center gap-3 sm:flex-row">
-            <Link to="/coaching/apply">
-              <Button size="lg" className="h-12 px-6 text-base font-bold">Apply for Private Coaching</Button>
-            </Link>
-            <button
-              type="button"
-              onClick={scrollToForm}
-              className="text-sm font-semibold text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
-            >
-              Continue With Membership →
-            </button>
-          </div>
-        </div>
+      {/* 10. FAQ */}
+      <Reveal><FaqAccordion items={mergeTaxFaq(Array.isArray(s.faq) && s.faq.length > 0 ? s.faq : DEFAULT_FAQ)} /></Reveal>
+
+      {/* 11. Final CTA */}
+      <Reveal>
+        <FinalCta
+          headline="Stop starting over."
+          primary={
+            <Button size="lg" onClick={scrollToForm} className="h-12 px-6 text-base font-bold">
+              {`Start ${trialDays}-Day Free Trial`}
+            </Button>
+          }
+          secondary={
+            <span className="ml-1 text-xs text-muted-foreground">{trialDays}-day free trial · Cancel anytime</span>
+          }
+        />
       </Reveal>
 
       {/* Signup form */}
@@ -497,4 +511,163 @@ function SignupJf() {
 
 function FieldError({ children }: { children: React.ReactNode }) {
   return <p className="mt-1 text-[11px] font-medium text-rose-400">{children}</p>;
+}
+
+/* ---------------- Defaults (CMS-overridable) ---------------- */
+
+const DEFAULT_FEATURES = [
+  { title: "Program Library", body: "Powerlifting, bodybuilding, fat loss, strength, muscle, home workouts. Beginner to advanced. Pick a plan and start training today." },
+  { title: "Exercise Demo Library", body: "Clear technique videos built right into your workouts, so you're never guessing how a lift should look or feel." },
+  { title: "Progress Tracking", body: "Log every set, track your strength, watch your PRs climb, and actually see whether the work is paying off." },
+  { title: "Education", body: "Training, recovery, nutrition, and performance content so you understand the why behind the plan — not just the what." },
+  { title: "Future Updates", body: "New programs, resources, and features added regularly. Your membership gets better while you use it." },
+];
+
+type LibraryCategory = { name: string; icon?: string; subtypes: string[] };
+const DEFAULT_LIBRARY: LibraryCategory[] = [
+  { name: "Powerlifting", icon: "trophy", subtypes: ["Beginner", "Intermediate", "Advanced", "Competition Prep"] },
+  { name: "Bodybuilding", icon: "dumbbell", subtypes: ["Push/Pull/Legs", "Upper/Lower", "Full Body", "Glute Focused"] },
+  { name: "Fat Loss", icon: "flame", subtypes: ["Beginner", "Intermediate", "Advanced"] },
+  { name: "Home / Minimal Equipment", icon: "home", subtypes: ["Bodyweight", "Dumbbells Only", "At-Home Strength"] },
+];
+
+const DEFAULT_WHO_FOR = [
+  "You're driven and you want structure, not a hype video",
+  "You're beginner, intermediate, or advanced — the library covers all of it",
+  "You want to build muscle, lose fat, or get stronger on a real plan",
+  "You're happy to train on your own — you just want the right plan to follow",
+  "You're done restarting and want something that compounds",
+];
+
+const DEFAULT_NOT_FOR = [
+  "You want a one-week quick fix",
+  "You need motivation to carry you every day",
+  "You won't actually follow a plan",
+  "You want someone to do the thinking for you (that's coaching)",
+];
+
+const DEFAULT_APP_PREVIEWS = [
+  { label: "Dashboard — today's session at a glance" },
+  { label: "Workout logging — tap to log reps, load, RPE" },
+  { label: "Exercise library — every movement, every demo" },
+  { label: "Program library — switch focus anytime" },
+  { label: "Progress tracking — volume, PRs, trends" },
+];
+
+const DEFAULT_FAQ = [
+  { q: "Is this coaching?", a: "No. Membership is the self-guided app — proven programs, demos, tracking, and education you run on your own. Coaching is 1:1, built for you, with weekly check-ins and direct access to me. Want that? Apply for coaching." },
+  { q: "Can beginners join?", a: "Absolutely. There are beginner programs in every category, with demos for every movement so you're never lost." },
+  { q: "Can I train at home?", a: "Yes — there's a whole home/minimal-equipment section, from bodyweight to dumbbells-only to at-home strength." },
+  { q: "Can I use this for powerlifting?", a: "Yes. Powerlifting is the founder's sport — beginner through competition prep is in the library." },
+  { q: "Can I use this for bodybuilding?", a: "Yes — PPL, upper/lower, full body, and glute-focused splits are all included." },
+  { q: "How often are new programs added?", a: "Regularly. New programs, resources, and features get added while you're a member — the library keeps growing." },
+  { q: "Can I cancel anytime?", a: "Yes. Cancel anytime from your billing page; access runs to the end of your current period. No games." },
+];
+
+/* ---------------- Sections ---------------- */
+
+function CompareAloneSection() {
+  const left = [
+    "Random workouts pulled from wherever",
+    "Conflicting advice from ten directions",
+    "No real structure week to week",
+    "No way to track if it's working",
+    "Restarting every few weeks",
+  ];
+  const right = [
+    "Proven programs built by a national-level coach",
+    "One organized system, no second-guessing",
+    "Built-in progress tracking",
+    "Exercise demos so form isn't a mystery",
+    "A clear path you can actually stick to",
+  ];
+  return (
+    <Section>
+      <SectionTitle title="The difference is structure." />
+      <div className="grid gap-4 md:grid-cols-2">
+        <Card className="border-border bg-card p-6">
+          <div className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3">Figuring it out yourself</div>
+          <ul className="space-y-2 text-sm text-muted-foreground">
+            {left.map((x) => (
+              <li key={x} className="flex items-start gap-2"><XCircle className="mt-0.5 h-4 w-4 shrink-0 text-rose-400/80" />{x}</li>
+            ))}
+          </ul>
+        </Card>
+        <Card className="border-primary/40 bg-primary/5 p-6">
+          <div className="text-xs font-bold uppercase tracking-widest text-primary mb-3">JF Effect Membership</div>
+          <ul className="space-y-2 text-sm">
+            {right.map((x) => (
+              <li key={x} className="flex items-start gap-2"><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />{x}</li>
+            ))}
+          </ul>
+        </Card>
+      </div>
+      <p className="mx-auto mt-6 max-w-3xl text-center text-sm text-muted-foreground md:text-base">
+        You've already tried winging it. You know where it goes. This is the version where the work compounds instead of resetting.
+      </p>
+    </Section>
+  );
+}
+
+function ProgramLibraryShowcase({ categories, programCount }: { categories: LibraryCategory[]; programCount?: string | number }) {
+  const iconFor = (key?: string) => {
+    switch ((key ?? "").toLowerCase()) {
+      case "trophy": return Trophy;
+      case "dumbbell": return Dumbbell;
+      case "flame": return Flame;
+      case "home": return HomeIcon;
+      default: return Library;
+    }
+  };
+  const count = (programCount ?? "").toString().trim();
+  return (
+    <Section>
+      <SectionTitle
+        eyebrow="The full library"
+        title="Pick your goal. The plan's already built."
+        sub={count ? `${count}+ programs across every goal and level, all included — switch anytime.` : "Programs across every goal and level, all included — switch anytime."}
+      />
+      <div className="grid gap-3 sm:grid-cols-2">
+        {categories.map((c) => {
+          const Icon = iconFor(c.icon);
+          return (
+            <div key={c.name} className="rounded-2xl border border-border bg-card p-5 transition hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-lg hover:shadow-primary/10">
+              <div className="flex items-center gap-3">
+                <div className="grid h-10 w-10 place-items-center rounded-xl border border-primary/35 bg-primary/15 text-primary">
+                  <Icon className="h-5 w-5" />
+                </div>
+                <div className="text-base font-black tracking-tight">{c.name}</div>
+              </div>
+              <div className="mt-4 flex flex-wrap gap-2">
+                {c.subtypes.map((s) => (
+                  <span key={s} className="rounded-full border border-border bg-muted/40 px-2.5 py-1 text-[11px] font-semibold text-foreground/85">
+                    {s}
+                  </span>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </Section>
+  );
+}
+
+function WhyStickSection() {
+  return (
+    <Section>
+      <div className="mx-auto max-w-3xl text-center">
+        <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-primary">Why this works when nothing else did</div>
+        <h2 className="mt-2 text-3xl font-black tracking-tight md:text-4xl">
+          You don't have a willpower problem. You have a structure problem.
+        </h2>
+        <p className="mt-5 text-base text-muted-foreground md:text-lg">
+          Most people don't fail because they're lazy. They fail because they jump between programs, follow random advice, and never run anything long enough for it to work. So they restart. Again.
+        </p>
+        <p className="mt-4 text-base text-muted-foreground md:text-lg">
+          The membership kills that loop. One organized system, a clear plan every session, tracking that shows progress, and a library deep enough that you never need to go hunting for the next thing. You just keep showing up — and for once, it adds up.
+        </p>
+      </div>
+    </Section>
+  );
 }
