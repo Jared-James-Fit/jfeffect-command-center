@@ -282,12 +282,12 @@ function JaredStory() {
         <div className="text-center">
           <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-primary">The story</div>
           <h2 className="mt-2 text-3xl font-black tracking-tight md:text-4xl">
-            Earned, not borrowed.
+            How JF Effect started.
           </h2>
         </div>
         <div className="mt-8 space-y-5 text-sm leading-relaxed text-muted-foreground md:text-base">
           <p>
-            JF Effect was built from the ground up, under real pressure. The same discipline that took my own lifting to the competitive level runs through every plan I write. After years of coaching and 100+ clients, the principle is simple: structure and standards outlast motivation. That's what coaching delivers — a plan, and someone who holds the line.
+            JF Effect was built from the ground up, under real pressure — founded by Jared James out of a simple belief: structure and standards outlast motivation. The same discipline that took his own lifting to the competitive level now runs through how the whole team coaches. After years of coaching and 100+ clients, that belief hasn't changed. We build the plan, and we hold the line.
           </p>
         </div>
       </div>
