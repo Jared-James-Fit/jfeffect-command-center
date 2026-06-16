@@ -58,6 +58,7 @@ export default defineConfig({
         devOptions: { enabled: false },
         workbox: {
           navigateFallback: "/",
+          maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
           navigateFallbackDenylist: [
             /^\/~oauth/,         // Supabase OAuth callback — must hit network
             /^\/api\//,
