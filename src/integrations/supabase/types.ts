@@ -3743,10 +3743,17 @@ export type Database = {
           public_code: string
           start_at: string | null
           status: Database["public"]["Enums"]["discount_code_status"]
+          stripe_active: boolean
           stripe_coupon_id: string | null
+          stripe_last_sync_at: string | null
+          stripe_last_sync_error: string | null
+          stripe_live_coupon_id: string | null
           stripe_live_mode_synced: boolean
+          stripe_live_promotion_code_id: string | null
           stripe_promotion_code_id: string | null
+          stripe_test_coupon_id: string | null
           stripe_test_mode_synced: boolean
+          stripe_test_promotion_code_id: string | null
           subscription_duration: Database["public"]["Enums"]["discount_code_duration"]
           time_zone: string
           total_usage_limit: number | null
@@ -3783,10 +3790,17 @@ export type Database = {
           public_code: string
           start_at?: string | null
           status?: Database["public"]["Enums"]["discount_code_status"]
+          stripe_active?: boolean
           stripe_coupon_id?: string | null
+          stripe_last_sync_at?: string | null
+          stripe_last_sync_error?: string | null
+          stripe_live_coupon_id?: string | null
           stripe_live_mode_synced?: boolean
+          stripe_live_promotion_code_id?: string | null
           stripe_promotion_code_id?: string | null
+          stripe_test_coupon_id?: string | null
           stripe_test_mode_synced?: boolean
+          stripe_test_promotion_code_id?: string | null
           subscription_duration?: Database["public"]["Enums"]["discount_code_duration"]
           time_zone?: string
           total_usage_limit?: number | null
@@ -3823,10 +3837,17 @@ export type Database = {
           public_code?: string
           start_at?: string | null
           status?: Database["public"]["Enums"]["discount_code_status"]
+          stripe_active?: boolean
           stripe_coupon_id?: string | null
+          stripe_last_sync_at?: string | null
+          stripe_last_sync_error?: string | null
+          stripe_live_coupon_id?: string | null
           stripe_live_mode_synced?: boolean
+          stripe_live_promotion_code_id?: string | null
           stripe_promotion_code_id?: string | null
+          stripe_test_coupon_id?: string | null
           stripe_test_mode_synced?: boolean
+          stripe_test_promotion_code_id?: string | null
           subscription_duration?: Database["public"]["Enums"]["discount_code_duration"]
           time_zone?: string
           total_usage_limit?: number | null
