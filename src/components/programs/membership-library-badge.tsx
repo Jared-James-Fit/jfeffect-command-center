@@ -1,32 +1,25 @@
 import { Badge } from "@/components/ui/badge";
-import { Library, XCircle } from "lucide-react";
+import { Radio } from "lucide-react";
 import type { DestinationSummary } from "@/lib/programs/sharing";
 
 /**
- * Dedicated Membership Library status badge for program template cards.
- * Always visible so admins can immediately see whether a program is published.
+ * Membership Library status badge for program template cards.
+ * Shows only when the program is published to the membership library
+ * (pl_template_shares destination = "membership" AND status = "shared").
  */
 export function MembershipLibraryBadge({
   summary,
 }: {
   summary: DestinationSummary;
 }) {
-  if (summary.membershipPublished) {
-    const { version, hasUpdate } = summary.membershipPublished;
-    return (
-      <Badge variant="default" className="gap-1 text-[10px]">
-        <Library className="h-3 w-3" />
-        In Membership Library
-        {version != null && <span className="opacity-80">v{version}</span>}
-        {hasUpdate && <span className="opacity-80">· update available</span>}
-      </Badge>
-    );
+  if (!summary.membershipPublished) {
+    return null;
   }
 
   return (
-    <Badge variant="outline" className="gap-1 text-[10px] text-muted-foreground">
-      <XCircle className="h-3 w-3" />
-      Not in Membership Library
+    <Badge className="gap-1 border-transparent bg-emerald-500 text-white text-[10px] shadow hover:bg-emerald-500/80">
+      <Radio className="h-3 w-3" />
+      Membership Live
     </Badge>
   );
 }
