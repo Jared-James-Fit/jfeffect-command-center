@@ -1,92 +1,93 @@
-This is a large request that touches the admin program library, the admin recipe library, the member recipe/nutrition experience, recipe access/RLS, and the member bottom navigation. I'm going to lay out the plan in phases so we can ship and verify each piece before moving to the next, rather than landing 10 sweeping changes in one drop.
+# Quick Apply for Coaching — Implementation Plan
 
-I'd recommend approving phase by phase. I can do them in order, but trying to do all of it in one turn would be risky for a system with this much live data (programs, recipes, member access, RLS).
+## What already exists (reuse, do not duplicate)
 
----
+- **CRM lead source of truth**: `clients` table + `upsertApplicantClient` in `src/lib/crm.functions.ts` (email/phone dedupe, conflict flag, activity log via `client_crm_activities`).
+- **Applications**: `coaching_applications` table (41 cols incl. `client_id`, `appointment_id`, `booking_link_slug`, `lead_score`, `lead_temperature`, `application_status`, `summary`, `submitted_at`) + `submitCoachingApplication` server fn.
+- **Public form**: `/coaching/apply` (current desktop-style long form — being replaced).
+- **Booking**: `booking_links` + `/book/$slug` route + `appointments` table.
+- **SMS**: Twilio integration via `src/lib/sms.functions.ts`, `sms-trigger.server.ts`, allowlist/dry-run controls in `sms_settings`.
+- **Coaching offers**: `coaching_products` table (active offers loadable for Step 5).
+- **Admin pages**: `/admin/sales/coaching-applications`, `/admin/settings/sms`, `/admin/crm.index`.
+- **Org settings**: `app_settings` already holds `coaching_apply.booking_link_slug` and `coaching_apply.allow_cold_booking`.
 
-## Phase 1 — Investigate & confirm before any destructive change
+I will extend these, not duplicate them.
 
-Before I touch anything, I'll:
+## What I'll build
 
-1. Read the current admin program library (`admin/program-library.tsx`, 1530 lines) and capture how templates, drafts, archives, membership vs coaching, and metadata are stored today (table: `pl_templates`, plus `pl_template_shares`, `member_plans`).
-2. Read `admin/recipes.tsx`, `m/nutrition.tsx`, `m/nutrition.$recipeId.tsx`, and the `recipes` / `recipe_client_access` / `recipe_notifications` tables — and find out **why member-facing recipes are missing**. Likely causes: missing GRANT to `authenticated`, an RLS policy requiring a row in `recipe_client_access` that was never inserted, or a `status != 'published'` filter on the member query. I'll confirm with a direct DB read.
-3. Audit `m/resources.tsx` + `resources.$slug.tsx` + the `resources` / `member_resources` / `resource_*` tables and every link in the codebase that points at `/m/resources`, onboarding emails, notification templates, etc. Output: a short list of what (if anything) needs to be migrated before Resources can be removed.
+### Phase A — Public quiz UX (the bulk of the work)
 
-Deliverable of this phase: a short written summary in chat (no code yet) of: recipe bug root cause, what Resources currently contains, and any sharp edges (e.g. a notification that deep-links into `/m/resources/...`).
+Rewrite `src/routes/coaching.apply.tsx` end-to-end as a step-based mobile quiz:
 
-## Phase 2 — Fix the broken member recipe access (highest priority)
+- One question (or up to 3 tightly related) per screen, large tap-card answers, single-choice auto-advance, sticky Continue for multi-select / text steps, progress bar, Back button, session-only progress preserved in `sessionStorage`.
+- Exactly two free-text boxes (`target_outcome`, `why_now`), 250-char limit each, char counter, voice-input compatible.
+- Steps match the spec: 1 Main goal → 2 Desired result → 3 Biggest obstacle (with optional 80-char "other") → 4 Training (location, days/week, start timeline) → 5 Coaching fit (interest from live `coaching_products`, readiness, tracking, investment readiness — never asks for exact income) → 6 Why now (chips that prefill) → 7 Contact (name, mobile, email, optional IG, preferred channel, best time, **un-pre-checked** consent with Privacy/Terms links) → Final compact review with `Submit Application`.
+- Mobile keyboards: `type="tel"`, `inputMode="email"`, `autocomplete` hints.
+- Honeypot field + simple per-IP rate limit on the server fn (already runs through `supabaseAdmin`).
 
-This is the "members can't see recipes" bug and should ship first, independent of any UI redesign.
+### Phase B — Coaching page CTAs
 
-- Apply whatever the root cause turns out to be (likely: add a migration that grants `SELECT` to `authenticated` and adds/loosens an RLS policy like `published = true AND visibility = 'membership'`, OR backfill missing `recipe_client_access` rows for published membership recipes).
-- Confirm via a logged-in member query that previously-created published recipes now return.
-- No UI changes in this phase — purely data/access correctness.
+Add a shared `<ApplyForCoachingCTA />` button to `src/routes/coaching.tsx` in **four** positions (top hero, after explanation, near offers, near bottom) with supporting copy: "Answer a few quick questions, then book a call if coaching looks right for you." All link to `/coaching/apply`.
 
-## Phase 3 — Member "Nutrition & Recipes" page + bottom nav
+### Phase C — Server-side score rewrite + new fields
 
-- Rename `m/nutrition.tsx` heading and page title to **Nutrition & Recipes** everywhere it's referenced.
-- Update the member bottom-nav item currently labeled "Resources" to **Nutrition** with a nutrition icon, pointing at `/m/nutrition`. Keep the same nav slot — no new tab.
-- Inside Nutrition & Recipes, lay out:
-  - Nutrition targets card (if assigned to this member — read from `nutrition_targets`)
-  - **Recommended for You** strip (Phase 4 fills it in; ship a stub first)
-  - Category chips (Recommended, Breakfast, Lunch, …, All Recipes)
-  - Compact filter panel (Calories / Protein / Carbs / Fat / Meal type / Goal / Prep time / Dietary preference / Food restrictions / Difficulty), with active filters shown as removable chips
-  - Recipe grid using a slimmed-down card (name, photo, category, calories, protein, prep time, short description, tags, View / Save)
-  - Saved recipes section
-- Pagination or "load more" — never load every recipe at once.
+- Extend the `submitSchema` in `src/lib/coaching-applications.functions.ts` with new fields: `obstacle`, `obstacle_other`, `training_location`, `coaching_interest`, `readiness`, `tracking_willingness`, `investment_readiness`, `preferred_contact`, `best_time`, `consent_contact`, `why_now_tags[]`, `honeypot`.
+- Reject if honeypot is filled; require consent boolean.
+- Rebuild `scoreLead` to return **category scores** (goal/service fit, readiness, willingness, investment fit, urgency, contact completeness) totaling 0–100, plus an `explanation` array. Never reads protected traits.
+- Migration adds the new columns + a `scoring` JSONB (category breakdown, version, explanation), `qualification_label` text, `consent_contact_at` timestamptz, `preferred_contact`, `best_time`, `obstacle`, `obstacle_other`, `training_location`, `coaching_interest`, `readiness`, `tracking_willingness`, `investment_readiness`, `application_source` (e.g. `quick_apply_v1`). Keeps legacy columns intact for back-compat.
 
-## Phase 4 — Personalized recipe recommendations
+### Phase D — Notification recipients
 
-- Read the member's `client_goals_setup` (goal, nutrition preference, food restrictions, biggest challenge).
-- Server function that returns 3–5 recipes matched by goal/preference, **filtered to exclude anything that conflicts with food restrictions** (safety filter — hard exclude, not just deprioritize).
-- If `client_goals_setup` is incomplete, render the "Complete your Goals & Setup to get personalized nutrition recommendations" CTA instead.
-- Each recommendation shows a short reason chip ("High protein", "Matches your nutrition goal", etc.).
+Migration: new `coaching_app_notification_recipients` table:
+`id, name, role, phone, email, receive_application_sms, receive_booking_sms, receive_application_email, receive_booking_email, priority_only, paused, phone_verified_at, email_verified_at, created_at, updated_at`. RLS: admin-only; GRANTs included.
 
-## Phase 5 — Remove the Resources page safely
+Seed two rows:
+1. **Primary Admin** — reads phone/email from `app_settings` (`org.primary_phone`, `org.primary_email`); if absent, leaves blank with a TODO badge in the UI.
+2. **Yannick Ring** — `+13435714378`, role "Media Manager / Team Member", application SMS on, booking SMS on, email off until set.
 
-Only after Phase 1 confirms nothing critical depends on it:
+New admin page `src/routes/_authenticated/admin/settings_.notifications.coaching-applications.tsx`: list + add/edit/remove, pause toggle, priority-only toggle, "Send test SMS" / "Send test email" buttons (uses existing SMS allowlist/dry-run controls — no bypass), quiet-hours field, immediate-vs-digest selector.
 
-- Delete `m/resources.tsx` and `m/resources.$slug.tsx`.
-- Remove the nav entry (already replaced in Phase 3).
-- Remove dead imports / dead components / dead server fns that were only used by Resources.
-- Leave shared tables and storage buckets alone if any other feature still touches them.
-- Migrate anything Phase 1 surfaced (nutrition→Nutrition & Recipes, workout→Training, exercise education→Exercise Library, agreements→Agreements, account info→Account).
+### Phase E — Notify on submit + booking
 
-## Phase 6 — Admin Program Library reorganization
+- After successful insert in `submitCoachingApplication`, enqueue SMS + email to all matching recipients using the existing SMS/email infrastructure. Idempotency key: `coaching_app_submit:{id}` (prevents double-send on retry).
+- SMS body never includes free-text answers — only: name, qualification label, score, main goal, start timeline, secure admin review link (`/admin/sales/coaching-applications#{id}`, authenticated).
+- Email uses Lovable Emails: new template `coaching-application-admin.tsx` registered in `email-templates/registry.ts`.
+- Booking notification: when an appointment is created against a coaching application (detect via `appointment.application_id`), fire `coaching_app_booked:{appt_id}` SMS + email to recipients with `receive_booking_*` on.
 
-Rebuild `admin/program-library.tsx` UI (no schema change to programs):
+### Phase F — Post-submission booking screen
 
-- Section chips: Recently edited, Drafts, Published, Membership, Coaching, Beginner, Bodybuilding, Glute focused, Powerbuilding, Powerlifting, At home, Archived.
-- Compact filter panel: Goal / Training style / Experience level / Days per week / Workout length / Gym or home / Equipment / Duration / Draft or published / Membership or coaching / Active or archived.
-- Toolbar: Search, Sort, Clear filters, result count, **Create new program**.
-- Pagination / lazy loading (server-side via TanStack Query `useInfiniteQuery` against `pl_templates`).
-- Card shows: full name (no truncation), category, goal, experience level, days/week, duration, gym/home, draft/published, membership/coaching, last updated.
-- Card actions: Open, Edit, Duplicate, Preview as member, Publish/Unpublish, Archive.
-- Add an **Edit metadata** dialog so the admin can update category/goal/tags/access without rebuilding blocks/weeks/exercises.
+Replace current `<Success>` with a dominant **Book Your Call** screen:
+- Compact "Application received" hero, single big red `Book Your Call` button, quieter `Finish Without Booking` link.
+- On click, push to existing `/book/$slug` with prefilled contact via query params (`?name=…&email=…&phone=…&application_id=…`). `book.$slug.tsx` already exists — I'll extend it to read those params, skip the name/email/phone step, and stamp `appointments.application_id` + `coaching_applications.appointment_id` + move CRM stage to "Call Booked" on confirm.
+- Confirm button label: **"Confirm & Book Call"** (not "Submit").
+- On failure: keep application saved, show retry, log `call_status='not_booked'`.
 
-## Phase 7 — Admin Recipe Library reorganization
+### Phase G — Admin enhancements
 
-Inside the nutrition area (new route: `admin/nutrition.recipes.tsx` or keep `admin/recipes.tsx` and restructure):
+- `/admin/sales/coaching-applications` list: add columns Score, Qualification, Goal, Start, Coaching interest, Preferred contact, Call status, Appt time, Assigned, Stage, Follow-up; filters + CSV export.
+- Application detail panel: quick actions (Call / Text / Email / Send Booking Link / Book For Lead / Reschedule / Assign / Create Follow-Up / Convert to Client / Close); shows score breakdown from `scoring` JSONB.
+- Admin home cards: "New Coaching Applications" (unreviewed count) and "Calls Booked" (last 7d) added to `/admin/index.tsx`.
 
-- Sections: Recently edited, Drafts, Published, Membership, Coaching-only, Archived.
-- Toolbar: Search, Filters, Sort, Create recipe, Duplicate, Preview as member, Publish/Unpublish, Archive.
-- Card shows: name, category, calories, protein, goal tags, dietary tags, draft/published, membership/coaching, last updated.
-- Confirm required metadata exists on the `recipes` table: meal category, goal, calories, protein, carbs, fat, prep time, difficulty, dietary tags, food restriction tags, membership availability, published status. If any column is missing, add it via migration (no destructive changes to existing recipes).
+### Phase H — Acceptance verification
 
----
+Run the spec's acceptance tests via Playwright (mobile viewport): full quiz under 120s, double-tap no duplicate, abandoned booking preserves application, booking does not re-ask for contact, SMS/email queued, no protected-trait inputs.
 
-## Technical notes
+## Out of scope (call out)
 
-- **Data layer**: all reads via TanStack Query + `createServerFn`. Member-side reads use `requireSupabaseAuth` so RLS scopes per user. Admin-side reads use `requireSupabaseAuth` + role check (`has_role(auth.uid(), 'admin')`).
-- **No bulk loads**: program library and recipe library both use cursor-based pagination (~24 per page).
-- **Food restrictions are a safety filter**, not a ranking signal — implemented as a hard `NOT EXISTS` against the member's restriction tags.
-- **No schema drops, no recipe/program data rewrites.** Any new columns will be added with safe defaults. Any RLS changes will be additive (allow members to read published membership recipes), never broadening access to coaching-only content.
-- **Mobile-first**: all new layouts tested at 375px so cards/buttons aren't clipped by the bottom nav.
+- Round-robin assignment (spec says "if supported later") — recipients table includes `role` for future use, but Jared remains the default assignee.
+- Marketing-style nurture sequences — only the one configurable reminder for "submitted but not booked" is included.
+- Editing the existing `book.$slug` time-slot picker visual design beyond prefill — only adds query-param prefill and application linking.
 
----
+## Technical details
 
-## What I need from you
+- Migrations: 1 file adding new application columns + `coaching_app_notification_recipients` (with GRANTs, RLS admin-only, service_role full).
+- New files (~10): mobile quiz component split (`src/components/coaching-apply/*` — step container, progress bar, card-answer, review), notification-recipients page + server fns, email template, score-breakdown helper, admin home metric cards.
+- Modified files (~6): `coaching.apply.tsx`, `coaching.tsx`, `coaching-applications.functions.ts`, `book.$slug.tsx`, `sales.coaching-applications.tsx`, `admin/index.tsx`, `email-templates/registry.ts`, `start.ts` (no change expected — `attachSupabaseAuth` already wired).
+- SMS path: continues to use existing dry-run / allowlist; submission alerts are queued, not sent inline, to satisfy the "save first, notify after" rule.
+- All `coaching_applications` writes stay through the existing server fn; no new write paths.
+- Single-question screens use auto-advance with 180 ms delay so users see their selection animate before transition.
+- Estimated build: ~15 file changes, 1 migration, ~1200 LOC net.
 
-1. **Approval to proceed phase by phase** (preferred), or tell me to bundle phases.
-2. Confirm priority — if Phase 2 (recipes not showing up for members) is the most painful right now, I'll ship that first and pause for you to verify before moving to UI.
-3. Anything in the existing Resources page you already know we must preserve? If you can name it now it'll save me a round trip during Phase 1.
+## Approval
+
+This is a big surface area. If you approve as-is I'll execute end-to-end in one go and come back with the completion report (screenshots, test results, files changed, DB changes, recipient list). If you want to slice it — e.g., ship Phases A+B+F (the user-facing quiz + CTAs + booking screen) first, then C–G as a follow-up — say the word and I'll do that instead.
