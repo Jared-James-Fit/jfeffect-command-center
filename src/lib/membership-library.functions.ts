@@ -19,6 +19,64 @@ function countWorkouts(payload: any): number {
   return n;
 }
 
+/**
+ * Auto-create a Published Membership-Library listing (member_plans row) for
+ * every template that has been shared to membership via pl_template_shares
+ * but doesn't yet have a corresponding member_plans entry. Members browse
+ * member_plans, so without this bridge any template shared directly via
+ * pl_template_shares stays invisible on /m/plans.
+ */
+async function syncSharedTemplatesToLibrary(supabaseAdmin: any) {
+  const { data: shares } = await supabaseAdmin
+    .from("pl_template_shares")
+    .select("template_id, shared_version")
+    .eq("destination", "membership")
+    .eq("status", "shared");
+  if (!shares || shares.length === 0) return;
+  const templateIds = shares.map((s: any) => s.template_id);
+  const { data: existing } = await supabaseAdmin
+    .from("member_plans")
+    .select("source_template_id")
+    .in("source_template_id", templateIds);
+  const have = new Set((existing ?? []).map((r: any) => r.source_template_id));
+  const missing = templateIds.filter((id: string) => !have.has(id));
+  if (missing.length === 0) return;
+  const { data: templates } = await supabaseAdmin
+    .from("pl_templates")
+    .select("id, name, description, training_style, training_focus, weeks, days_per_week, est_duration_min, goal, tags, payload, payload_revision")
+    .in("id", missing);
+  if (!templates || templates.length === 0) return;
+  const nowIso = new Date().toISOString();
+  const rows = templates.map((t: any) => {
+    const payload = t.payload ?? { weeks_data: [] };
+    const weeks = t.weeks ?? (payload?.weeks_data?.length ?? 4);
+    const days = t.days_per_week ?? (payload?.weeks_data?.[0]?.days?.length ?? 3);
+    return {
+      name: t.name,
+      public_title: t.name,
+      description: t.description ?? null,
+      training_style: t.training_style ?? "custom",
+      goal: t.goal ?? t.training_focus ?? null,
+      difficulty: "All Levels",
+      weeks,
+      days_per_week: days,
+      est_minutes_per_workout: t.est_duration_min ?? null,
+      tags: t.tags ?? [],
+      required_access_level: "app_membership",
+      audience_mode: "access_level",
+      source_template_id: t.id,
+      published_payload: payload,
+      workouts_total: countWorkouts(payload),
+      status: "Published",
+      membership_status: "live",
+      published_version: 1,
+      last_published_version: t.payload_revision ?? null,
+      published_at: nowIso,
+    };
+  });
+  await supabaseAdmin.from("member_plans").insert(rows as any);
+}
+
 /* ---------- Admin: linked listing for a program template ---------- */
 
 export const getLinkedLibraryPlan = createServerFn({ method: "POST" })
