@@ -20,6 +20,7 @@ import { IntakeAnswersBigButton } from "@/components/clients/intake-answers-dial
 import { ActionCentre, type ActionItem } from "@/components/portal/action-centre";
 import { TrainingBlockCard } from "@/components/portal/training-block-card";
 import { BodyweightSummaryCard } from "@/components/portal/bodyweight-summary-card";
+import { SetupChecklistBanner } from "@/components/portal/setup-checklist-banner";
 import { useEffect, useRef, useState } from "react";
 import { listMyPortalAppointments } from "@/lib/appointments.functions";
 import { useServerFn } from "@tanstack/react-start";
@@ -375,6 +376,12 @@ function PortalHome() {
         {/* 2 — Profile-missing fallback (workouts moved off the dashboard
             for perf — clients reach training via Quick Actions / nav). */}
         {clientSettled && !client ? <NoProfileCard /> : null}
+
+        {/* 2b — Non-blocking onboarding checklist (replaces the old hard-lock
+            gates for profile picture / basic info / training schedule / goals). */}
+        {client?.id && portalUserId && (
+          <SetupChecklistBanner clientId={client.id} userId={portalUserId} />
+        )}
 
         {/* 3 — Quick Actions */}
         {client && (
