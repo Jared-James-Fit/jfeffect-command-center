@@ -133,26 +133,23 @@ export const createAppMember = createServerFn({ method: "POST" })
       const origin = getOrigin();
       const link = `${origin}/member-setup?token=${setup_token}`;
       const dedupeKey = `membership_onboarding:${row.id}:sms`;
-      const { data: alreadySent } = await supabaseAdmin
+      // Atomically claim the dedupe slot before firing. If a row already exists
+      // the INSERT conflicts and we skip the send.
+      const { data: claimed, error: claimErr } = await supabaseAdmin
         .from("notification_dedupe")
-        .select("key")
-        .eq("key", dedupeKey).eq("channel", "sms").maybeSingle();
-      if (!alreadySent) {
+        .insert({
+          key: dedupeKey,
+          channel: "sms",
+          member_id: row.id,
+          metadata: { trigger: "account_created" },
+        })
+        .select("key");
+      if (!claimErr && claimed && claimed.length > 0) {
         await fireAutomationTrigger(supabaseAdmin, {
           trigger: "account_created",
           memberId: row.id,
           vars: { setup_link: link },
         });
-        // Claim the onboarding SMS slot so subscription_purchased can't double-send.
-        await supabaseAdmin
-          .from("notification_dedupe")
-          .insert({
-            key: dedupeKey,
-            channel: "sms",
-            member_id: row.id,
-            metadata: { trigger: "account_created" },
-          })
-          .then(() => {}, () => {});
       }
     } catch (e) {
       console.error("[createAppMember] automation trigger failed", e);
