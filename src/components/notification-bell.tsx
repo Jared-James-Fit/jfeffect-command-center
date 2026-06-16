@@ -439,7 +439,7 @@ function destinationFor(it: BellItem, role: string | null) {
   }
 }
 
-function markItem(it: BellItem, role: string | null) {
+export function markItem(it: BellItem, role: string | null) {
   if (it.kind === "message") {
     markRead(it.clientId, role === "admin" ? "admin" : "client").catch(() => {});
   } else if (it.kind === "lift_video" && it.videoId) {
@@ -454,7 +454,7 @@ function markItem(it: BellItem, role: string | null) {
   }
 }
 
-async function markAllRead(items: BellItem[], role: string | null, _userId: string | undefined) {
+export async function markAllRead(items: BellItem[], role: string | null, _userId: string | undefined) {
   const isAdmin = role === "admin";
   const messageClients = new Set<string>();
   const videoIds = new Set<string>();
@@ -495,7 +495,7 @@ function groupByDate(items: BellItem[]): Array<{ label: string; items: BellItem[
   return out;
 }
 
-function NotificationPanel({
+export function NotificationPanel({
   items, role, count, onItemClick, onMarkAllRead, onViewAll,
 }: {
   items: BellItem[];
