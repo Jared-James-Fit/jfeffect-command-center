@@ -157,7 +157,7 @@ export function MemberPlanCalendar({
         )}
       </div>
 
-      <Sheet open={!moving} onOpenChange={(o) => !o && setMoving(null)}>
+      <Sheet open={!!moving} onOpenChange={(o) => !o && setMoving(null)}>
         <SheetContent side="bottom" className="max-h-[90vh]">
           <SheetHeader>
             <SheetTitle>Move {moving?.title}</SheetTitle>
