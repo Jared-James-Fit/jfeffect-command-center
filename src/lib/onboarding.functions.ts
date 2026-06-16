@@ -62,7 +62,7 @@ export const listOnboardingMembers = createServerFn({ method: "POST" })
     let q = supabaseAdmin
       .from("app_members")
       .select(
-        "id,email,full_name,account_type,status,created_at,last_signed_in_at,setup_completed_at,install_detected_at,install_platform,install_dismissed_at,notifications_status,last_setup_error,setup_dismissed_until,first_workout_opened_at",
+        "id,email,full_name,account_type,status,created_at,last_signed_in_at,setup_completed_at,install_detected_at,install_platform,install_dismissed_at,notifications_status,last_setup_error,setup_dismissed_until,first_workout_opened_at,phone,sms_opt_out,last_setup_reminder_at,setup_browser_only",
         { count: "exact" },
       )
       .eq("account_type", "jf_member")
