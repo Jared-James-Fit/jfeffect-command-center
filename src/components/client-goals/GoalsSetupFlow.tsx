@@ -20,6 +20,11 @@ import {
   type ClientGoalsSetupRow,
 } from "@/lib/client-goals/schema";
 import { saveGoalsSetupFn } from "@/lib/client-goals/goals.functions";
+import {
+  classifyLocation,
+  EQUIPMENT_GROUPS,
+  REAL_EQUIPMENT_ITEMS,
+} from "@/lib/client-goals/equipment-flow";
 
 type Props = {
   clientId: string;
@@ -520,9 +525,29 @@ function handleEquipmentChange(
 
 /* ---------- Step 4: Gym & equipment ---------- */
 function EquipmentStep({ value, setField }: StepProps) {
-  const multiLoc = value.training_location === "Multiple locations";
+  const kind = classifyLocation(value.training_location);
+  const multiLoc = kind === "multi";
   const byLoc = (value.equipment_by_location as Record<string, string[]>) ?? {};
   const locKeys = Object.keys(byLoc);
+  const [showAll, setShowAll] = useState(false);
+
+  const eq = value.equipment ?? [];
+  const toggleItem = (item: string) => {
+    const has = eq.includes(item);
+    const next = has ? eq.filter((x) => x !== item) : [...eq, item];
+    setField("equipment", next);
+  };
+  const setBodyweightOnly = () => {
+    setField("equipment", ["Bodyweight only"]);
+  };
+  const autofillFullGym = () => {
+    const otherText = getOtherText(eq);
+    const next = [...REAL_EQUIPMENT_ITEMS];
+    if (hasOther(eq)) {
+      next.push(otherText ? `${OTHER_PREFIX}${otherText}` : OTHER);
+    }
+    setField("equipment", next);
+  };
 
   const renameLoc = (oldKey: string, newKey: string) => {
     if (!newKey.trim() || newKey === oldKey) return;
@@ -556,9 +581,79 @@ function EquipmentStep({ value, setField }: StepProps) {
         />
       </div>
 
-      {!multiLoc ? (
+      {multiLoc ? null : kind === "full_gym" && !showAll ? (
         <div className="space-y-3">
-          <Q>What equipment do you have access to?</Q>
+          <Q>Equipment</Q>
+          <Sub>Most commercial gyms cover everything. You can auto-fill the standard list or customize.</Sub>
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="outline" onClick={autofillFullGym}>
+              Auto-fill: full gym
+            </Button>
+            <Button type="button" variant="ghost" onClick={() => setShowAll(true)}>
+              Customize equipment
+            </Button>
+          </div>
+          {eq.length > 0 && (
+            <p className="text-xs text-muted-foreground">
+              {eq.filter((x) => x !== OTHER && !x.startsWith(OTHER_PREFIX)).length} item(s) selected.
+            </p>
+          )}
+        </div>
+      ) : kind === "home" && !showAll ? (
+        <div className="space-y-4">
+          <div>
+            <Q>What equipment do you have at home?</Q>
+            <Sub>Tick anything you have access to. Skip anything you don't.</Sub>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="ghost" size="sm" onClick={setBodyweightOnly}>
+              Bodyweight only
+            </Button>
+            <Button type="button" variant="ghost" size="sm" onClick={() => setField("equipment", [])}>
+              Clear all
+            </Button>
+            <Button type="button" variant="ghost" size="sm" onClick={() => setShowAll(true)}>
+              Show all options
+            </Button>
+          </div>
+          {EQUIPMENT_GROUPS.map((group) => (
+            <div key={group.label} className="space-y-2">
+              <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                {group.label}
+              </div>
+              <ChipGrid
+                options={group.items}
+                value={group.items.filter((i) => eq.includes(i))}
+                onChange={(v) => {
+                  // Replace this group's items in the equipment array
+                  const others = eq.filter((x) => !group.items.includes(x));
+                  setField("equipment", [...others, ...v]);
+                }}
+                multi
+              />
+            </div>
+          ))}
+          {hasOther(eq) && (
+            <Input
+              value={getOtherText(eq)}
+              onChange={(e) => setField("equipment", setOtherText(eq, e.target.value))}
+              placeholder="Other equipment"
+            />
+          )}
+          <Button type="button" variant="ghost" size="sm" onClick={() => toggleItem(OTHER)}>
+            {hasOther(eq) ? "Remove other" : "Add other equipment"}
+          </Button>
+        </div>
+      ) : !multiLoc ? (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <Q>What equipment do you have access to?</Q>
+            {(kind === "full_gym" || kind === "home") && (
+              <Button type="button" variant="ghost" size="sm" onClick={() => setShowAll(false)}>
+                Back to simple view
+              </Button>
+            )}
+          </div>
           <Sub>Select all that apply.</Sub>
           <ChipGrid
             options={EQUIPMENT_OPTIONS}
@@ -580,7 +675,9 @@ function EquipmentStep({ value, setField }: StepProps) {
             />
           )}
         </div>
-      ) : (
+      ) : null}
+
+      {multiLoc && (
         <div className="space-y-4">
           <div>
             <Q>Equipment per location</Q>
