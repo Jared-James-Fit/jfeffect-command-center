@@ -188,19 +188,17 @@ function SignupJf() {
       ) : (
       <MembershipHero
         priceChip={settings?.monthly_price_display ?? "$29/month USD"}
-        headline={"Stop winging it. Start training like it matters."}
-        sub={"The same system I use with my own clients\u2014structured plans, tracking, exercise demos, analytics and nutrition, all in the app. You show up, the plan's already there, and you always know exactly what to do next."}
+        headline={"Stop winging it. Start training with a plan."}
+        sub={"The same training systems hundreds of JF Effect members use to get stronger, build muscle, and actually stay consistent\u2014programs, demos, tracking, and education, all in one app. You open it, the plan's already there, and you always know exactly what to do next."}
         heroImage={null}
         decisionArea={
           <HeroDecisionArea
             onCoachingClick={() => { window.location.href = "/coaching"; }}
           />
         }
-        primary={<MemberHeroCta onClick={scrollToForm}>{`Start ${trialDays}-Day Free Trial`}</MemberHeroCta>}
+        primary={<MemberHeroCta onClick={scrollToForm}>Start Free Trial</MemberHeroCta>}
         secondary={
-          <Link to="/coaching">
-            <MemberHeroGhost>Explore Private Coaching</MemberHeroGhost>
-          </Link>
+          <MemberHeroGhost onClick={scrollToFeatures}>See What's Included</MemberHeroGhost>
         }
         trialNote={`${trialDays}-day free trial · Then ${settings?.monthly_price_display ?? "$29/month USD"} · Cancel anytime`}
         detailsLink={<MemberDetailsLink onClick={scrollToFeatures} />}
