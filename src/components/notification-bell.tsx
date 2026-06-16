@@ -107,40 +107,27 @@ export function NotificationBell() {
   // Realtime invalidation
   useEffect(() => {
     if (!user) return;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const invalidate = () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        qc.invalidateQueries({ queryKey: ["unread-counts"] });
+      }, 300);
+    };
     const ch = supabase
       .channel("bell-messages")
-      .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, () => {
-        qc.invalidateQueries({ queryKey: ["unread-counts"] });
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "conversation_state" }, () => {
-        qc.invalidateQueries({ queryKey: ["unread-counts"] });
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "lift_videos" }, () => {
-        qc.invalidateQueries({ queryKey: ["unread-counts"] });
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "lift_video_comments" }, () => {
-        qc.invalidateQueries({ queryKey: ["unread-counts"] });
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "agreements" }, () => {
-        qc.invalidateQueries({ queryKey: ["unread-counts"] });
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "pl_exercise_notes" }, () => {
-        qc.invalidateQueries({ queryKey: ["unread-counts"] });
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "group_messages" }, () => {
-        qc.invalidateQueries({ queryKey: ["unread-counts"] });
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "chat_group_members" }, () => {
-        qc.invalidateQueries({ queryKey: ["unread-counts"] });
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "manual_check_in_reviews" }, () => {
-        qc.invalidateQueries({ queryKey: ["unread-counts"] });
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "appointments" }, () => {
-        qc.invalidateQueries({ queryKey: ["unread-counts"] });
-      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, invalidate)
+      .on("postgres_changes", { event: "*", schema: "public", table: "conversation_state" }, invalidate)
+      .on("postgres_changes", { event: "*", schema: "public", table: "lift_videos" }, invalidate)
+      .on("postgres_changes", { event: "*", schema: "public", table: "lift_video_comments" }, invalidate)
+      .on("postgres_changes", { event: "*", schema: "public", table: "agreements" }, invalidate)
+      .on("postgres_changes", { event: "*", schema: "public", table: "pl_exercise_notes" }, invalidate)
+      .on("postgres_changes", { event: "*", schema: "public", table: "group_messages" }, invalidate)
+      .on("postgres_changes", { event: "*", schema: "public", table: "chat_group_members" }, invalidate)
+      .on("postgres_changes", { event: "*", schema: "public", table: "manual_check_in_reviews" }, invalidate)
+      .on("postgres_changes", { event: "*", schema: "public", table: "appointments" }, invalidate)
       .subscribe();
-    return () => { supabase.removeChannel(ch); };
+    return () => { if (timer) clearTimeout(timer); supabase.removeChannel(ch); };
   }, [user, qc]);
 
   const { data } = useQuery({
