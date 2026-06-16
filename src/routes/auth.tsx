@@ -1,5 +1,6 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { z } from "zod";
 import {
   Mail,
   Lock,
@@ -20,6 +21,7 @@ import { toast } from "sonner";
 
 export const Route = createFileRoute("/auth")({
   head: () => ({ meta: [{ title: "JF Effect — Private Coaching OS" }] }),
+  validateSearch: z.object({ next: z.string().optional() }),
   component: AuthPage,
 });
 
@@ -33,16 +35,24 @@ const FEATURES = [
 function AuthPage() {
   const { user, role, loading } = useAuth();
   const navigate = useNavigate();
+  const { next } = Route.useSearch();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     if (!loading && user && role) {
-      const to = role === "member" ? "/m" : role === "client" ? "/portal" : "/admin";
-      navigate({ to, replace: true });
+      const fallback = role === "member" ? "/m" : role === "client" ? "/portal" : "/admin";
+      // Only honor in-app relative paths to prevent open-redirect.
+      const safeNext =
+        next && next.startsWith("/") && !next.startsWith("//") ? next : null;
+      if (safeNext) {
+        navigate({ to: safeNext, replace: true });
+      } else {
+        navigate({ to: fallback, replace: true });
+      }
     }
-  }, [user, role, loading, navigate]);
+  }, [user, role, loading, navigate, next]);
 
   // Avoid flashing the login form while the session is still restoring,
   // or while an authenticated user is being routed to their dashboard.
