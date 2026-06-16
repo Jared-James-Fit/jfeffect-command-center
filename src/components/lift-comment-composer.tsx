@@ -14,6 +14,8 @@ import { GifPicker } from "@/components/gif-picker";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { LiftCommentAttachment } from "@/lib/lift-videos";
+import { compressImage } from "@/lib/image-compress";
+import { withRetry, isTransientError } from "@/lib/retry";
 
 type Props = {
   clientId: string;
@@ -35,19 +37,29 @@ function fileType(f: File): LiftCommentAttachment["type"] {
   return "file";
 }
 
-async function uploadToBucket(clientId: string, file: File): Promise<LiftCommentAttachment> {
-  const ext = file.name.includes(".") ? file.name.split(".").pop() : "";
+async function uploadToBucket(clientId: string, fileIn: File): Promise<LiftCommentAttachment> {
+  // Compress images client-side to make uploads faster & smaller; non-images pass through.
+  const file = fileIn.type.startsWith("image/")
+    ? ((await compressImage(fileIn, { maxDimension: 1800, quality: 0.82 })) as File)
+    : fileIn;
+  const name = (file as File).name ?? fileIn.name;
+  const ext = name.includes(".") ? name.split(".").pop() : "";
   const path = `${clientId}/lift/${Date.now()}-${Math.random().toString(36).slice(2, 8)}${ext ? "." + ext : ""}`;
-  const { error } = await supabase.storage
-    .from("message-attachments")
-    .upload(path, file, { cacheControl: "3600", upsert: false, contentType: file.type || undefined });
-  if (error) throw error;
+  await withRetry(
+    async () => {
+      const { error } = await supabase.storage
+        .from("message-attachments")
+        .upload(path, file, { cacheControl: "3600", upsert: false, contentType: file.type || undefined });
+      if (error) throw error;
+    },
+    { retries: 2, shouldRetry: (err) => isTransientError(err) }
+  );
   return {
-    type: fileType(file),
+    type: fileType(fileIn),
     storage_path: path,
-    name: file.name,
+    name: fileIn.name,
     size: file.size,
-    mime: file.type,
+    mime: file.type || fileIn.type,
   };
 }
 

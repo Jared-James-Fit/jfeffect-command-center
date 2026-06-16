@@ -4,6 +4,9 @@ import { Camera, RefreshCw, Upload, X, AlertTriangle, Loader2, ShieldCheck } fro
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
+import { compressImage } from "@/lib/image-compress";
+import { withRetry, isTransientError } from "@/lib/retry";
+import { Progress } from "@/components/ui/progress";
 
 interface Props {
   userId: string;
@@ -39,6 +42,7 @@ export function ProfilePictureCapture({
   const [opening, setOpening] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState(0);
   const [signedUrl, setSignedUrl] = useState<string | null>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
 
@@ -142,11 +146,26 @@ export function ProfilePictureCapture({
   const upload = async () => {
     if (!preview) return;
     setBusy(true);
+    setProgress(5);
     try {
-      const blob = await (await fetch(preview)).blob();
+      const raw = await (await fetch(preview)).blob();
+      const compressed = await compressImage(raw, { maxDimension: 1200, quality: 0.85 });
       const path = `${userId}/avatar-${Date.now()}.jpg`;
-      const { error } = await supabase.storage.from("avatars").upload(path, blob, { contentType: "image/jpeg", upsert: true });
-      if (error) throw error;
+      setProgress(35);
+      await withRetry(
+        async () => {
+          const { error } = await supabase.storage
+            .from("avatars")
+            .upload(path, compressed, { contentType: "image/jpeg", upsert: true });
+          if (error) throw error;
+        },
+        {
+          retries: 2,
+          shouldRetry: (err) => isTransientError(err),
+          onRetry: () => setProgress(35),
+        }
+      );
+      setProgress(100);
       onUploaded(path);
       onMeta?.({ source: source ?? (isClient ? "camera" : "upload"), takenAt: new Date().toISOString() });
       toast.success("Profile picture updated");
@@ -155,6 +174,7 @@ export function ProfilePictureCapture({
       toast.error(e?.message ?? "Upload failed");
     } finally {
       setBusy(false);
+      setProgress(0);
     }
   };
 
@@ -287,6 +307,9 @@ export function ProfilePictureCapture({
             <Button type="button" size="lg" onClick={upload} disabled={busy}>
               {busy ? "Uploading…" : isClient ? "Save Profile Picture" : "Save photo"}
             </Button>
+            {busy && progress > 0 && (
+              <Progress value={progress} className="h-1.5" />
+            )}
             <Button type="button" variant="outline" onClick={retake}>
               <RefreshCw className="mr-2 h-4 w-4" />
               Retake
