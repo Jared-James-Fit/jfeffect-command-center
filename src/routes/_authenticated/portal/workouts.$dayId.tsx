@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { Component, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -49,9 +49,7 @@ import { enqueueOfflineWrite, registerQueueHandler } from "@/lib/workout-offline
 import { ActiveRestTimerProvider, useRestTimer } from "@/components/active-rest-timer";
 import { ExerciseHistoryButton } from "@/components/exercise-history-sheet";
 import { convertWeight } from "@/lib/progress-metrics";
-import { WorkoutFeedbackSheet, WorkoutFeedbackReminder, WorkoutFeedbackEditButton } from "@/components/workout-feedback-sheet";
-import { PostWorkoutLiftPrompt } from "@/components/post-workout-lift-prompt";
-import { WorkoutSummaryDialog } from "@/components/workout-summary-dialog";
+import { WorkoutCompleteSheet, type WorkoutCompletePayload } from "@/components/workout-complete-sheet";
 import { WorkoutTimerSheet, QuickConfirmDuration, type TimerCompletionPayload } from "@/components/workout-timer-sheet";
 import { formatDuration } from "@/lib/duration";
 import { Timer } from "lucide-react";
@@ -598,48 +596,21 @@ function WorkoutDay() {
     markInProgress();
   };
 
-  // Post-workout feedback sheet state.
-  const [feedbackOpen, setFeedbackOpen] = useState(false);
-  // Celebratory summary dialog shown right after first feedback submit.
-  const [summaryOpen, setSummaryOpen] = useState(false);
-  // After first feedback submit, gently offer a lift upload. Fully optional.
-  const [liftPromptOpen, setLiftPromptOpen] = useState(false);
-  const [justSubmittedFeedback, setJustSubmittedFeedback] = useState<{ overall_rating: number; session_rpe: number } | null>(null);
-  // When the client clicks "Finish", we stage the completion payload and
-  // open the feedback sheet. The workout is NOT marked complete until the
-  // feedback is actually submitted — feedback is now a hard gate.
-  const [pendingFinalize, setPendingFinalize] = useState<null | {
-    completionId?: string;
-    startedAt: string;
-    durationMin: number;
-    notes: string | null;
-  }>(null);
-  const { data: existingFeedback } = useQuery({
-    queryKey: ["pl-workout-feedback", completion?.id],
-    enabled: !!completion?.id,
-    queryFn: async () =>
-      (await (sb as any)
-        .from("pl_workout_feedback")
-        .select("id, overall_rating, session_rpe, pain, pain_level, pain_area, pain_note, client_note, reviewed_at, reviewed_by")
-        .eq("completion_id", completion!.id)
-        .maybeSingle()).data,
-  });
-  const hasFeedback = !!existingFeedback;
-  const feedbackLocked = !!(existingFeedback?.reviewed_at || existingFeedback?.reviewed_by);
-  // Honor ?review=1 by auto-opening the feedback sheet as soon as we have
-  // a completion row to attach it to. Notification deep-links use this.
+  // Quick "Workout Complete" sheet state. The long review flow has been removed.
+  const navigate = useNavigate();
+  const [completeOpen, setCompleteOpen] = useState(false);
+  const [completeSubmitting, setCompleteSubmitting] = useState(false);
+  // Notifications can deep-link with ?review=1 to nudge the member to finish
+  // an in-progress workout. Auto-open the quick popup once it lands.
   const reviewParam = search.review === 1;
   const autoOpenedReviewRef = useRef(false);
   useEffect(() => {
     if (!reviewParam) { autoOpenedReviewRef.current = false; return; }
     if (autoOpenedReviewRef.current) return;
-    if (!completion?.id) return;
-    if (feedbackLocked) return;
+    if (completion?.completed_at) return;
     autoOpenedReviewRef.current = true;
-    setFeedbackOpen(true);
-  }, [reviewParam, completion?.id, feedbackLocked]);
-  const feedbackSkipped = !!(completion?.id && typeof window !== "undefined"
-    && localStorage.getItem(`lov.wfb.skip:${completion.id}`));
+    setCompleteOpen(true);
+  }, [reviewParam, completion?.completed_at]);
 
   const refreshNotes = () => {
     qc.invalidateQueries({ queryKey: ["pl-day-exercise-notes", dayId] });
@@ -927,8 +898,8 @@ function WorkoutDay() {
             />
             <ActionButton
               loadingLabel="Saving…"
-              successLabel="Submit Feedback"
-              successToast="Submit feedback to mark complete"
+              successLabel="Finish Workout"
+              successToast="Tap to finish"
               icon={<CheckCircle2 className="h-4 w-4" />}
               onAction={async () => {
                 if (!client?.id) return;
@@ -938,8 +909,6 @@ function WorkoutDay() {
                 const durationMin = actualMin
                   ? parseInt(actualMin)
                   : completion?.actual_duration_min ?? Math.max(1, Math.round((new Date(completedAt).getTime() - new Date(startedAt).getTime()) / 60000));
-                // Stage the completion as in-progress (NOT completed_at yet).
-                // The workout is finalized only after feedback is submitted.
                 const noteValue = notes.length > 0 ? notes : (completion?.client_notes ?? null);
                 const payload = {
                   day_id: dayId,
@@ -950,32 +919,21 @@ function WorkoutDay() {
                   in_progress_at: completion?.in_progress_at ?? startedAt,
                   completed_at: null,
                 };
-                let cid = completion?.id ?? null;
                 if (completion) {
                   await sb.from("pl_day_completions").update(payload).eq("id", completion.id);
                 } else {
-                  const { data: inserted } = await sb.from("pl_day_completions").insert(payload).select("id").maybeSingle();
-                  cid = inserted?.id ?? null;
+                  await sb.from("pl_day_completions").insert(payload).select("id").maybeSingle();
                 }
                 if (draftKey) clearLocalDraft(draftKey);
                 refresh();
-                // Stash everything the feedback-submit handler needs to flip
-                // completed_at on, then open the sheet.
-                setPendingFinalize({
-                  completionId: cid ?? undefined,
-                  startedAt,
-                  durationMin,
-                  notes: noteValue,
-                });
-                setFeedbackOpen(true);
-                toast.info("One more step — submit your feedback to mark this workout complete.");
+                setCompleteOpen(true);
               }}
             >
-              Finish & Submit Feedback
+              Finish Workout
             </ActionButton>
           </div>
           <p className="text-[11px] text-muted-foreground">
-            Submitting your feedback marks the workout as complete. If you skip it, we'll remind you in your notification bell.
+            One quick rating and you're done.
           </p>
         </Card>
         )}
@@ -989,20 +947,6 @@ function WorkoutDay() {
             )}
           </Card>
         )}
-
-        {/* Subtle reminder when the client completed but skipped feedback. */}
-        {!readonly && completion?.completed_at && !hasFeedback && feedbackSkipped && (
-          <WorkoutFeedbackReminder onOpen={() => setFeedbackOpen(true)} />
-        )}
-        {/* Always offer view/edit after feedback has been submitted. */}
-        {!readonly && completion?.completed_at && hasFeedback && (
-          <WorkoutFeedbackEditButton locked={feedbackLocked} onOpen={() => setFeedbackOpen(true)} />
-        )}
-        {/* Read-only viewer for past/locked workouts — clients can always
-            review what they submitted; editing still requires Unlock. */}
-        {readonly && completion?.completed_at && hasFeedback && !isImpersonating && (
-          <WorkoutFeedbackEditButton locked onOpen={() => setFeedbackOpen(true)} />
-        )}
       </div>
 
       {/* Sticky general-notes shortcut */}
@@ -1014,70 +958,63 @@ function WorkoutDay() {
       </div>
       )}
 
-      {/* Post-workout feedback sheet. Client POV (readonly) never opens it. */}
+      {/* Minimal post-workout completion sheet. Readonly (admin POV) never opens it. */}
       {client?.id && !isImpersonating && (
-        <WorkoutFeedbackSheet
-          open={feedbackOpen && !!completion?.id}
-          onOpenChange={setFeedbackOpen}
-          completionId={completion?.id ?? null}
-          clientId={client.id}
-          dayId={dayId}
-          existing={existingFeedback ?? null}
-          workoutDate={scheduledDate ? format(scheduledDate, "EEEE, MMMM d") : completion?.completed_at ? format(new Date(completion.completed_at), "EEEE, MMMM d") : null}
-          onSubmitted={async (submitted) => {
-            const wasFirstSubmit = !hasFeedback;
-            if (submitted) setJustSubmittedFeedback(submitted);
-            qc.invalidateQueries({ queryKey: ["pl-workout-feedback", completion?.id] });
-            // Feedback is the gate — flip completed_at on once it lands.
-            const targetId = pendingFinalize?.completionId ?? completion?.id ?? null;
-            if (targetId && !completion?.completed_at) {
+        <WorkoutCompleteSheet
+          open={completeOpen}
+          onOpenChange={setCompleteOpen}
+          defaultUnit="lb"
+          submitting={completeSubmitting}
+          initial={completion ? {
+            session_rating: (completion as any).session_rating ?? undefined,
+            session_weight_total: (completion as any).session_weight_total ?? undefined,
+            session_weight_unit: (completion as any).session_weight_unit ?? undefined,
+            client_notes: completion.client_notes ?? undefined,
+          } : undefined}
+          onSubmit={async (payload: WorkoutCompletePayload) => {
+            if (!client?.id) return;
+            setCompleteSubmitting(true);
+            try {
+              await metaSave.flush();
+              const startedAt = completion?.started_at ?? new Date().toISOString();
               const completedAt = new Date().toISOString();
-              await sb.from("pl_day_completions").update({
+              const durationMin = completion?.actual_duration_min ?? Math.max(
+                1,
+                Math.round((new Date(completedAt).getTime() - new Date(startedAt).getTime()) / 60000),
+              );
+              const baseRow: any = {
+                day_id: dayId,
+                client_id: client.id,
+                started_at: startedAt,
+                in_progress_at: completion?.in_progress_at ?? startedAt,
                 completed_at: completedAt,
+                actual_duration_min: durationMin,
                 completion_method: "manual",
-                ...(pendingFinalize ? {
-                  actual_duration_min: pendingFinalize.durationMin,
-                  client_notes: pendingFinalize.notes,
-                  started_at: pendingFinalize.startedAt,
-                } : {}),
-              }).eq("id", targetId);
-              setPendingFinalize(null);
+                client_notes: payload.client_notes ?? completion?.client_notes ?? null,
+                session_rating: payload.session_rating,
+                session_weight_total: payload.session_weight_total,
+                session_weight_unit: payload.session_weight_unit,
+              };
+              if (completion) {
+                const { error } = await sb.from("pl_day_completions").update(baseRow).eq("id", completion.id);
+                if (error) throw error;
+              } else {
+                const { error } = await sb.from("pl_day_completions").insert(baseRow);
+                if (error) throw error;
+              }
+              if (draftKey) clearLocalDraft(draftKey);
               setNotes("");
               setActualMin("");
-              refresh();
-              toast.success("Workout marked complete");
-            }
-            if (wasFirstSubmit) setSummaryOpen(true);
-          }}
-        />
-      )}
-
-      {client?.id && (
-        <WorkoutSummaryDialog
-          open={summaryOpen}
-          onOpenChange={(v) => {
-            setSummaryOpen(v);
-            // When the celebratory summary closes after a fresh submit,
-            // chain into the optional lift-upload prompt seamlessly.
-            if (!v && justSubmittedFeedback && !isImpersonating) {
-              setLiftPromptOpen(true);
+              await qc.invalidateQueries({ queryKey: ["pl-day-completion", dayId] });
+              setCompleteOpen(false);
+              toast.success("Workout submitted");
+              navigate({ to: "/portal/workouts" });
+            } catch (err: any) {
+              toast.error("Could not submit workout", { description: err?.message });
+            } finally {
+              setCompleteSubmitting(false);
             }
           }}
-          rows={rows as any[]}
-          results={results as any[]}
-          feedback={existingFeedback ?? (justSubmittedFeedback
-            ? { overall_rating: justSubmittedFeedback.overall_rating, session_rpe: justSubmittedFeedback.session_rpe }
-            : null)}
-          durationMin={completion?.actual_duration_min ?? pendingFinalize?.durationMin ?? null}
-        />
-      )}
-      {client?.id && !isImpersonating && (
-        <PostWorkoutLiftPrompt
-          open={liftPromptOpen}
-          onOpenChange={setLiftPromptOpen}
-          clientId={client.id}
-          clientName={(client as any).full_name}
-          userId={portalUserId ?? null}
         />
       )}
       <MoveWorkoutSheet

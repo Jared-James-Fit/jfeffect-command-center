@@ -332,45 +332,37 @@ export function NotificationBell() {
             created_at: r.created_at,
           });
         }
-        // Workouts that need post-workout feedback (the gate to "complete").
-        // We surface either:
-        //   • completions started but never finalized (completed_at null,
-        //     started_at set, > 30 min old), or
-        //   • completions marked complete in the last 7 days that still have
-        //     no pl_workout_feedback row.
+        // Workout reminders are now ONLY for abandoned in-progress sessions
+        // (started but never finished, > 30 min old). Completed workouts are
+        // never re-nudged: the long review flow has been removed.
         try {
           const sinceIso = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
           const { data: pending } = await (supabase.from("pl_day_completions") as any)
             .select("id, day_id, started_at, completed_at, in_progress_at")
             .eq("client_id", client.id)
-            .or(`completed_at.gte.${sinceIso},and(completed_at.is.null,started_at.gte.${sinceIso})`)
+            .is("completed_at", null)
+            .gte("started_at", sinceIso)
             .order("started_at", { ascending: false })
             .limit(20);
-          const completionIds = (pending ?? []).map((p: any) => p.id);
-          let feedbackIds = new Set<string>();
-          if (completionIds.length) {
-            const { data: fbs } = await (supabase.from("pl_workout_feedback") as any)
-              .select("completion_id")
-              .in("completion_id", completionIds);
-            feedbackIds = new Set((fbs ?? []).map((f: any) => f.completion_id));
-          }
+          // Deduplicate by day so each unfinished workout produces at most
+          // one reminder, even if multiple draft completion rows exist.
+          const seenDayIds = new Set<string>();
           for (const c of (pending ?? []) as any[]) {
-            if (feedbackIds.has(c.id)) continue;
+            if (seenDayIds.has(c.day_id)) continue;
             const startedAt = c.started_at ?? c.in_progress_at;
             if (!startedAt) continue;
             const ageMin = (Date.now() - new Date(startedAt).getTime()) / 60000;
             // Skip very fresh in-progress sessions (< 30 min) — likely active.
-            if (!c.completed_at && ageMin < 30) continue;
+            if (ageMin < 30) continue;
+            seenDayIds.add(c.day_id);
             items.push({
               kind: "workout_feedback",
               clientId: client.id,
               dayId: c.day_id,
-              name: "Workout review",
-              title: c.completed_at
-                ? "Reminder: leave your workout review"
-                : "Finish your workout — submit your review",
-              body: "You haven't submitted your workout review yet. Tap to add it now.",
-              created_at: c.completed_at ?? startedAt,
+              name: "Workout",
+              title: "Finish your workout",
+              body: "You started a workout but didn't finish. Tap to wrap it up.",
+              created_at: startedAt,
             });
           }
         } catch { /* ignore */ }

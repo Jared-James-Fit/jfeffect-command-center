@@ -10730,6 +10730,9 @@ export type Database = {
           day_id: string
           id: string
           in_progress_at: string | null
+          session_rating: number | null
+          session_weight_total: number | null
+          session_weight_unit: string | null
           started_at: string | null
           updated_at: string
         }
@@ -10743,6 +10746,9 @@ export type Database = {
           day_id: string
           id?: string
           in_progress_at?: string | null
+          session_rating?: number | null
+          session_weight_total?: number | null
+          session_weight_unit?: string | null
           started_at?: string | null
           updated_at?: string
         }
@@ -10756,6 +10762,9 @@ export type Database = {
           day_id?: string
           id?: string
           in_progress_at?: string | null
+          session_rating?: number | null
+          session_weight_total?: number | null
+          session_weight_unit?: string | null
           started_at?: string | null
           updated_at?: string
         }
