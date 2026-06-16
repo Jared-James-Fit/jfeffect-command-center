@@ -25,7 +25,7 @@ export function MembershipLibraryBadge({
 
   return (
     <Badge variant="outline" className="gap-1 text-[10px] text-muted-foreground">
-      <LibraryX className="h-3 w-3" />
+      <XCircle className="h-3 w-3" />
       Not in Membership Library
     </Badge>
   );
