@@ -156,3 +156,58 @@ export function deriveFacets(row: ProgramRowLike): ProgramFacets {
     rawTags: tags,
   };
 }
+
+/** Alias kept for back-compat with earlier component imports. */
+export type FacetSource = ProgramRowLike;
+
+const GOAL_LABELS: Record<ProgramGoal, string> = {
+  fat_loss: "Fat Loss",
+  muscle: "Muscle",
+  glutes: "Glutes",
+  strength: "Strength",
+  powerlifting: "Powerlifting",
+  powerbuilding: "Powerbuilding",
+  general: "General",
+};
+
+export function goalLabel(g: ProgramGoal): string {
+  return GOAL_LABELS[g] ?? "General";
+}
+
+const LEVEL_LABELS: Record<ProgramLevel, string> = {
+  beginner: "Beginner",
+  novice: "Novice",
+  intermediate: "Intermediate",
+  advanced: "Advanced",
+  elite: "Elite",
+};
+
+const LOCATION_LABELS: Record<ProgramLocation, string> = {
+  gym: "Gym",
+  home: "Home",
+  limited: "Limited equipment",
+  mixed: "Mixed",
+};
+
+const LENGTH_LABELS: Record<ProgramLengthBucket, string> = {
+  short: "≤40 min",
+  medium: "40–70 min",
+  long: ">70 min",
+};
+
+/**
+ * Short, human-readable chips for ProgramCard / picker rows. Order is
+ * level → days → location → primary goal → length → style, capped by caller.
+ */
+export function facetChips(f: ProgramFacets): string[] {
+  const out: string[] = [];
+  if (f.level) out.push(LEVEL_LABELS[f.level]);
+  if (f.daysPerWeek) out.push(`${f.daysPerWeek}d/wk`);
+  if (f.location) out.push(LOCATION_LABELS[f.location]);
+  const primary = f.goals.find((g) => g !== "general");
+  if (primary) out.push(goalLabel(primary));
+  if (f.lengthBucket) out.push(LENGTH_LABELS[f.lengthBucket]);
+  if (f.style && !out.some((c) => c.toLowerCase() === f.style!.toLowerCase())) out.push(f.style);
+  return out;
+}
+
