@@ -351,3 +351,30 @@ export const updateCoachingApplication = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return { ok: true };
   });
+
+/** CSV export — admin only. Returns rows ready to be CSV-encoded on the client. */
+export const exportCoachingApplicationsCsv = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await assertAdmin(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data, error } = await supabaseAdmin
+      .from("coaching_applications").select("*")
+      .order("created_at", { ascending: false });
+    if (error) throw new Error(error.message);
+    const columns = [
+      "created_at","status","call_status","lead_score","qualification_label",
+      "first_name","last_name","email","phone","instagram",
+      "main_goal","target_outcome","obstacle","training_location","days_per_week",
+      "timeline","coaching_interest","readiness","tracking_willingness","investment_readiness",
+      "why_now","preferred_contact","best_time",
+    ];
+    const esc = (v: any) => {
+      if (v === null || v === undefined) return "";
+      const s = typeof v === "string" ? v : Array.isArray(v) ? v.join("; ") : String(v);
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const header = columns.join(",");
+    const rows = (data ?? []).map((r: any) => columns.map((c) => esc(r[c])).join(","));
+    return { csv: [header, ...rows].join("\n"), count: rows.length };
+  });
