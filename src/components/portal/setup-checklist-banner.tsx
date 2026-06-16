@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle2, Circle, ChevronRight, Camera, IdCard, CalendarClock, Target, X } from "lucide-react";
+import { CheckCircle2, Circle, ChevronRight, Camera, IdCard, CalendarClock, Target } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { isBasicInfoComplete } from "@/lib/basic-info";
 import { isGoalsSetupComplete, type ClientGoalsSetupRow } from "@/lib/client-goals/schema";
@@ -26,46 +26,15 @@ type Item = {
   done: boolean;
 };
 
-const SNOOZE_KEY = "jf:setup-snooze:session";
-
-/**
- * Session-scoped dismissal: the checklist hides for the rest of this
- * browser session, but reappears the next time the client opens the app.
- * sessionStorage is cleared when the tab/PWA window closes, which matches
- * "appears every time they exit the app and return".
- */
-function isSnoozed(): boolean {
-  if (typeof window === "undefined") return false;
-  try {
-    return window.sessionStorage.getItem(SNOOZE_KEY) === "1";
-  } catch {
-    return false;
-  }
-}
-
-function snoozeNow() {
-  if (typeof window === "undefined") return;
-  try {
-    window.sessionStorage.setItem(SNOOZE_KEY, "1");
-  } catch {
-    // ignore
-  }
-}
-
 /**
  * Non-blocking Home checklist that replaces the four hard-lock portal
  * gates (profile picture / basic info / training schedule / goals setup).
  *
  * Rules:
  *  - Never covers the screen. Inline card only.
- *  - Hidden once every item is complete.
- *  - "Remind me later" hides the card for the rest of this session only;
- *    it returns the next time the client reopens the app.
- *  - Auto-dismisses on the dashboard only; other routes never see it.
+ *  - Hidden only once every item is complete. Cannot be dismissed.
  */
 export function SetupChecklistBanner({ clientId, userId }: Props) {
-  const [dismissed, setDismissed] = useState<boolean>(() => isSnoozed());
-
   const { data: client } = useQuery({
     queryKey: ["setup-banner-client", userId],
     enabled: !!userId,
@@ -93,11 +62,6 @@ export function SetupChecklistBanner({ clientId, userId }: Props) {
       return data as ClientGoalsSetupRow | null;
     },
   });
-
-  useEffect(() => {
-    // Re-read snooze when the component mounts (handles tab focus).
-    setDismissed(isSnoozed());
-  }, []);
 
   const items = useMemo<Item[]>(() => {
     const c = client as any;
@@ -147,23 +111,13 @@ export function SetupChecklistBanner({ clientId, userId }: Props) {
 
   if (!clientId || !userId) return null;
   if (allDone) return null;
-  if (dismissed) return null;
 
   // Find the next incomplete item to feature as the primary CTA.
   const nextItem = items.find((i) => !i.done) ?? items[0];
 
   return (
     <Card className="relative overflow-hidden border-primary/30 bg-primary/5 p-4 sm:p-5">
-      <button
-        type="button"
-        aria-label="Hide for now"
-        onClick={() => { snoozeNow(); setDismissed(true); }}
-        className="absolute right-2 top-2 grid h-8 w-8 place-items-center rounded-full text-muted-foreground hover:bg-background/60 hover:text-foreground"
-      >
-        <X className="h-4 w-4" />
-      </button>
-
-      <div className="flex flex-wrap items-start justify-between gap-3 pr-8">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 space-y-1">
           <div className="flex items-center gap-2">
             <h2 className="text-base font-black tracking-tight sm:text-lg">Complete your setup</h2>
@@ -215,13 +169,6 @@ export function SetupChecklistBanner({ clientId, userId }: Props) {
       <div className="mt-4 flex flex-wrap gap-2">
         <Button asChild size="sm">
           <Link to={nextItem.to}>Continue setup</Link>
-        </Button>
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={() => { snoozeNow(); setDismissed(true); }}
-        >
-          Hide for now
         </Button>
       </div>
     </Card>
