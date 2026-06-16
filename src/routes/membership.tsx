@@ -12,18 +12,18 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { Eye, EyeOff, Receipt, Check, X as XIcon } from "lucide-react";
-import { SalesPageShell, Section } from "@/components/sales/sales-page-shell";
+import { SalesPageShell, Section, SectionTitle } from "@/components/sales/sales-page-shell";
 import { MembershipHero, MemberHeroCta, MemberHeroGhost, HeroDecisionArea, MemberDetailsLink } from "@/components/sales/membership-hero";
-import { FeatureTabs } from "@/components/sales/feature-tabs";
 import { FeatureGrid } from "@/components/sales/feature-grid";
 import { IncludedNotIncluded } from "@/components/sales/included-not-included";
-import { ComparisonCard } from "@/components/sales/comparison";
 import { OfferComparison } from "@/components/sales/offer-comparison";
 import { ProofWall } from "@/components/sales/proof-wall";
 import { FaqAccordion } from "@/components/sales/faq-accordion";
 import { StickyMobileCta } from "@/components/sales/sticky-mobile-cta";
+import { AppPreviewGrid } from "@/components/sales/app-preview-grid";
+import { FinalCta } from "@/components/sales/final-cta";
 import { Reveal } from "@/components/sales/reveal";
-import { ArrowRight, Headphones } from "lucide-react";
+import { ArrowRight, Headphones, CheckCircle2, XCircle, Library, PlayCircle, LineChart as LineChartIcon, BookOpen, Sparkles, Dumbbell, Home as HomeIcon, Flame, Trophy } from "lucide-react";
 import { normalizePhoneToE164 } from "@/lib/phone-e164";
 
 function HeroSkeleton() {
