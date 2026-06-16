@@ -89,6 +89,7 @@ import { Route as AuthenticatedMToolsRouteImport } from './routes/_authenticated
 import { Route as AuthenticatedMSupportRouteImport } from './routes/_authenticated/m/support'
 import { Route as AuthenticatedMResourcesRouteImport } from './routes/_authenticated/m/resources'
 import { Route as AuthenticatedMPlansRouteImport } from './routes/_authenticated/m/plans'
+import { Route as AuthenticatedMNutritionRouteImport } from './routes/_authenticated/m/nutrition'
 import { Route as AuthenticatedMMyPlansRouteImport } from './routes/_authenticated/m/my-plans'
 import { Route as AuthenticatedMBillingRouteImport } from './routes/_authenticated/m/billing'
 import { Route as AuthenticatedMAnnouncementsRouteImport } from './routes/_authenticated/m/announcements'
@@ -688,6 +689,11 @@ const AuthenticatedMResourcesRoute = AuthenticatedMResourcesRouteImport.update({
 const AuthenticatedMPlansRoute = AuthenticatedMPlansRouteImport.update({
   id: '/plans',
   path: '/plans',
+  getParentRoute: () => AuthenticatedMRouteRoute,
+} as any)
+const AuthenticatedMNutritionRoute = AuthenticatedMNutritionRouteImport.update({
+  id: '/nutrition',
+  path: '/nutrition',
   getParentRoute: () => AuthenticatedMRouteRoute,
 } as any)
 const AuthenticatedMMyPlansRoute = AuthenticatedMMyPlansRouteImport.update({
@@ -1758,6 +1764,7 @@ export interface FileRoutesByFullPath {
   '/m/announcements': typeof AuthenticatedMAnnouncementsRoute
   '/m/billing': typeof AuthenticatedMBillingRoute
   '/m/my-plans': typeof AuthenticatedMMyPlansRouteWithChildren
+  '/m/nutrition': typeof AuthenticatedMNutritionRoute
   '/m/plans': typeof AuthenticatedMPlansRouteWithChildren
   '/m/resources': typeof AuthenticatedMResourcesRouteWithChildren
   '/m/support': typeof AuthenticatedMSupportRoute
@@ -1997,6 +2004,7 @@ export interface FileRoutesByTo {
   '/m/announcements': typeof AuthenticatedMAnnouncementsRoute
   '/m/billing': typeof AuthenticatedMBillingRoute
   '/m/my-plans': typeof AuthenticatedMMyPlansRouteWithChildren
+  '/m/nutrition': typeof AuthenticatedMNutritionRoute
   '/m/plans': typeof AuthenticatedMPlansRouteWithChildren
   '/m/resources': typeof AuthenticatedMResourcesRouteWithChildren
   '/m/support': typeof AuthenticatedMSupportRoute
@@ -2243,6 +2251,7 @@ export interface FileRoutesById {
   '/_authenticated/m/announcements': typeof AuthenticatedMAnnouncementsRoute
   '/_authenticated/m/billing': typeof AuthenticatedMBillingRoute
   '/_authenticated/m/my-plans': typeof AuthenticatedMMyPlansRouteWithChildren
+  '/_authenticated/m/nutrition': typeof AuthenticatedMNutritionRoute
   '/_authenticated/m/plans': typeof AuthenticatedMPlansRouteWithChildren
   '/_authenticated/m/resources': typeof AuthenticatedMResourcesRouteWithChildren
   '/_authenticated/m/support': typeof AuthenticatedMSupportRoute
@@ -2489,6 +2498,7 @@ export interface FileRouteTypes {
     | '/m/announcements'
     | '/m/billing'
     | '/m/my-plans'
+    | '/m/nutrition'
     | '/m/plans'
     | '/m/resources'
     | '/m/support'
@@ -2728,6 +2738,7 @@ export interface FileRouteTypes {
     | '/m/announcements'
     | '/m/billing'
     | '/m/my-plans'
+    | '/m/nutrition'
     | '/m/plans'
     | '/m/resources'
     | '/m/support'
@@ -2973,6 +2984,7 @@ export interface FileRouteTypes {
     | '/_authenticated/m/announcements'
     | '/_authenticated/m/billing'
     | '/_authenticated/m/my-plans'
+    | '/_authenticated/m/nutrition'
     | '/_authenticated/m/plans'
     | '/_authenticated/m/resources'
     | '/_authenticated/m/support'
@@ -3722,6 +3734,13 @@ declare module '@tanstack/react-router' {
       path: '/plans'
       fullPath: '/m/plans'
       preLoaderRoute: typeof AuthenticatedMPlansRouteImport
+      parentRoute: typeof AuthenticatedMRouteRoute
+    }
+    '/_authenticated/m/nutrition': {
+      id: '/_authenticated/m/nutrition'
+      path: '/nutrition'
+      fullPath: '/m/nutrition'
+      preLoaderRoute: typeof AuthenticatedMNutritionRouteImport
       parentRoute: typeof AuthenticatedMRouteRoute
     }
     '/_authenticated/m/my-plans': {
@@ -5337,6 +5356,7 @@ interface AuthenticatedMRouteRouteChildren {
   AuthenticatedMAnnouncementsRoute: typeof AuthenticatedMAnnouncementsRoute
   AuthenticatedMBillingRoute: typeof AuthenticatedMBillingRoute
   AuthenticatedMMyPlansRoute: typeof AuthenticatedMMyPlansRouteWithChildren
+  AuthenticatedMNutritionRoute: typeof AuthenticatedMNutritionRoute
   AuthenticatedMPlansRoute: typeof AuthenticatedMPlansRouteWithChildren
   AuthenticatedMResourcesRoute: typeof AuthenticatedMResourcesRouteWithChildren
   AuthenticatedMSupportRoute: typeof AuthenticatedMSupportRoute
@@ -5351,6 +5371,7 @@ const AuthenticatedMRouteRouteChildren: AuthenticatedMRouteRouteChildren = {
   AuthenticatedMAnnouncementsRoute: AuthenticatedMAnnouncementsRoute,
   AuthenticatedMBillingRoute: AuthenticatedMBillingRoute,
   AuthenticatedMMyPlansRoute: AuthenticatedMMyPlansRouteWithChildren,
+  AuthenticatedMNutritionRoute: AuthenticatedMNutritionRoute,
   AuthenticatedMPlansRoute: AuthenticatedMPlansRouteWithChildren,
   AuthenticatedMResourcesRoute: AuthenticatedMResourcesRouteWithChildren,
   AuthenticatedMSupportRoute: AuthenticatedMSupportRoute,
