@@ -191,6 +191,25 @@ export const validateDiscountCodesFn = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => ValidateInput.parse(input))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
+    // Dual-billing safeguard: discount codes apply only to JF Effect Stripe
+    // purchases. A legacy Trainerize client must never redeem a code that
+    // could trigger a new charge or override their existing external billing.
+    const { data: legacy } = await (supabase as any)
+      .from("clients")
+      .select("billing_source")
+      .eq("user_id", userId)
+      .eq("billing_source", "trainerize_legacy")
+      .maybeSingle();
+    if (legacy) {
+      return {
+        ok: false,
+        applied: [],
+        rejected: (data.codes ?? []).map((code: string) => ({
+          code,
+          reason: "Discount codes only apply to JF Effect Stripe billing. Your current plan is billed through the legacy Trainerize account and is unaffected.",
+        })),
+      };
+    }
     const { data: result, error } = await (supabase as any).rpc("validate_discount_codes", {
       _codes: data.codes,
       _customer_id: userId,
