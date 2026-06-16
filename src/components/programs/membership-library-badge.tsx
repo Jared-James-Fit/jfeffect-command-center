@@ -1,5 +1,5 @@
 import { Badge } from "@/components/ui/badge";
-import { Library, LibraryX } from "lucide-react";
+import { Library, XCircle } from "lucide-react";
 import type { DestinationSummary } from "@/lib/programs/sharing";
 
 /**
