@@ -35,6 +35,7 @@ import {
 import { ShareProgramSheet } from "@/components/programs/share-program-sheet";
 import { DestinationBadges } from "@/components/programs/destination-badges";
 import { ProgramStatusBadge } from "@/components/programs/program-status-badge";
+import { MembershipLibraryBadge } from "@/components/programs/membership-library-badge";
 import { listShares, summarizeShares, type TemplateShare } from "@/lib/programs/sharing";
 import { listClientMaxes, upsertClientMax, type ClientMaxRow } from "@/lib/pl-maxes";
 import { notifyMissingMaxesFn } from "@/lib/missing-maxes.functions";
