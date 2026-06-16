@@ -77,6 +77,7 @@ export function GroupMessageThread({
   const [preview, setPreview] = useState<{ blob: Blob; url: string; duration: number; peaks: number[] } | null>(null);
   const previewAudioRef = useRef<HTMLAudioElement | null>(null);
   const [previewPlaying, setPreviewPlaying] = useState(false);
+  useUnsavedWarning(body.trim().length > 0 || sending || uploading, { warnOnUnload: false });
 
   // Editing / actions
   const [editingId, setEditingId] = useState<string | null>(null);
