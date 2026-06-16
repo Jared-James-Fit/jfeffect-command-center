@@ -27,7 +27,7 @@ type Item = {
   cta: string;
 };
 
-export function SetupChecklistCard() {
+function useSetupChecklistData() {
   const fetchStatus = useServerFn(getMySetupStatus);
   const fireDismiss = useServerFn(dismissSetupChecklist);
   const fireNotif = useServerFn(recordNotificationStatus);
@@ -152,7 +152,7 @@ export function SetupChecklistCard() {
 }
 
 export function SetupChecklist({ activeEnrollment }: { activeEnrollment?: any }) {
-  const data = SetupChecklistCard();
+  const data = useSetupChecklistData();
   if (data.isDismissed) return null;
 
   // Patch dynamic completion based on caller-supplied data.
