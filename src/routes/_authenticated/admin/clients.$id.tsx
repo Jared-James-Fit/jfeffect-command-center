@@ -41,6 +41,13 @@ import { listForms as listNativeForms, type NfForm } from "@/lib/native-forms";
 import { replaceClientNativeFormAssignments } from "@/lib/native-forms.functions";
 import { ActionButton } from "@/components/action-button";
 import { IntakeAnswersBigButton } from "@/components/clients/intake-answers-dialog";
+import {
+  IdentityCard,
+  ContactCard,
+  PersonalDetailsCard,
+  AddressCard,
+  EmergencyContactCard,
+} from "@/components/admin/client-profile/personal-info-cards";
 
 // Heavy panels — code-split so visiting a client only loads the active tab's code.
 const lazyDefault = <T,>(loader: () => Promise<{ [k: string]: T }>, name: string) =>
