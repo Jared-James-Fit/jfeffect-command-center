@@ -197,7 +197,7 @@ export const validateDiscountCodesFn = createServerFn({ method: "POST" })
     const { data: legacy } = await (supabase as any)
       .from("clients")
       .select("billing_source")
-      .eq("auth_user_id", userId)
+      .eq("user_id", userId)
       .eq("billing_source", "trainerize_legacy")
       .maybeSingle();
     if (legacy) {
