@@ -38,7 +38,7 @@ export const Route = createFileRoute("/coaching")({
   head: () => ({
     meta: [
       { title: "Private Coaching · By Application | JF Effect" },
-      { name: "description", content: "A plan built around your life. A coach who knows your numbers. Real progress, held to a standard. By application — limited spots." },
+      { name: "description", content: "A plan built around your life. A coaching team that knows your numbers. Real progress, held to a standard. By application — limited spots." },
       { property: "og:title", content: "Private Coaching · By Application | JF Effect" },
       { property: "og:description", content: "A plan built around your life. A coaching team that knows your numbers. Real progress, held to a standard. By application — limited spots." },
       { property: "og:type", content: "website" },
