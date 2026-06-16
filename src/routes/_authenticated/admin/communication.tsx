@@ -59,12 +59,15 @@ function CommunicationWorkspace() {
   };
 
   return (
-    <>
+    <div
+      className="flex flex-col"
+      style={{ height: "calc(100dvh - var(--bottom-nav-clearance, 0px))" }}
+    >
       <PageHeader
         title="Communication"
         subtitle="Manage messages, broadcasts, support, chat assets, and in-app communication."
       />
-      <div className="border-b border-border bg-background/50">
+      <div className="shrink-0 border-b border-border bg-background/50">
         <div className="-mb-px flex gap-1 overflow-x-auto px-2 md:px-4">
           {TABS.map((t) => {
             const active = t.value === tab;
@@ -87,7 +90,7 @@ function CommunicationWorkspace() {
           })}
         </div>
       </div>
-      <div>
+      <div className="min-h-0 flex-1 overflow-hidden">
         {tab === "messages" && <MessagesInbox initialClient={client} embedded />}
         {tab === "broadcasts" && <AdminBroadcasts embedded />}
         {tab === "support-inbox" && <SupportInbox embedded />}
@@ -95,7 +98,7 @@ function CommunicationWorkspace() {
         {tab === "media-libraries" && <MediaLibrariesPanel sub={sub} />}
         {tab === "popups" && <PopupsManager embedded />}
       </div>
-    </>
+    </div>
   );
 }
 
