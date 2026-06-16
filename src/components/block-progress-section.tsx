@@ -17,7 +17,8 @@ import {
   getBlockAnalytics, buildExerciseSeries, movementCategory, analyticsToCSV,
   type BlockAnalytics,
 } from "@/lib/block-analytics";
-import { exportBlockPDF } from "@/lib/block-pdf";
+// block-pdf pulls in jsPDF (~250KB) — load it on demand so it's not in
+// the main workouts bundle.
 
 type Mode = "admin" | "client";
 type BlockMetric = "volume" | "workouts_completed" | "avg_rpe" | "top_set" | "est_1rm" | "completion_pct";
@@ -101,7 +102,14 @@ export function BlockProgressSection({ blockId, mode }: { blockId: string; mode:
             <Button size="sm" variant="outline" onClick={handleExportCsv}>
               <Download className="mr-1 h-3.5 w-3.5" /> Export CSV
             </Button>
-            <Button size="sm" variant="outline" onClick={() => exportBlockPDF(a)}>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={async () => {
+                const { exportBlockPDF } = await import("@/lib/block-pdf");
+                await exportBlockPDF(a);
+              }}
+            >
               <Download className="mr-1 h-3.5 w-3.5" /> Export PDF
             </Button>
           </div>
