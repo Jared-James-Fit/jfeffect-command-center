@@ -440,6 +440,7 @@ export type Database = {
           emergency_contact_name: string | null
           emergency_contact_phone: string | null
           experience_level: string | null
+          first_workout_opened_at: string | null
           full_name: string | null
           goals: string | null
           goals_tags: string[]
@@ -455,14 +456,17 @@ export type Database = {
           last_grace_warning_at: string | null
           last_invoice_status: string | null
           last_restart_attempt_at: string | null
+          last_setup_error: string | null
           last_signed_in_at: string | null
           messaging_permission: string
+          notifications_status: string | null
           paused_until: string | null
           payment_failed_at: string | null
           payment_recovered_at: string | null
           phone: string | null
           profile_picture_required: boolean
           setup_completed_at: string | null
+          setup_dismissed_until: string | null
           setup_token: string | null
           setup_token_expires_at: string | null
           signup_ip: string | null
@@ -505,6 +509,7 @@ export type Database = {
           emergency_contact_name?: string | null
           emergency_contact_phone?: string | null
           experience_level?: string | null
+          first_workout_opened_at?: string | null
           full_name?: string | null
           goals?: string | null
           goals_tags?: string[]
@@ -520,14 +525,17 @@ export type Database = {
           last_grace_warning_at?: string | null
           last_invoice_status?: string | null
           last_restart_attempt_at?: string | null
+          last_setup_error?: string | null
           last_signed_in_at?: string | null
           messaging_permission?: string
+          notifications_status?: string | null
           paused_until?: string | null
           payment_failed_at?: string | null
           payment_recovered_at?: string | null
           phone?: string | null
           profile_picture_required?: boolean
           setup_completed_at?: string | null
+          setup_dismissed_until?: string | null
           setup_token?: string | null
           setup_token_expires_at?: string | null
           signup_ip?: string | null
@@ -570,6 +578,7 @@ export type Database = {
           emergency_contact_name?: string | null
           emergency_contact_phone?: string | null
           experience_level?: string | null
+          first_workout_opened_at?: string | null
           full_name?: string | null
           goals?: string | null
           goals_tags?: string[]
@@ -585,14 +594,17 @@ export type Database = {
           last_grace_warning_at?: string | null
           last_invoice_status?: string | null
           last_restart_attempt_at?: string | null
+          last_setup_error?: string | null
           last_signed_in_at?: string | null
           messaging_permission?: string
+          notifications_status?: string | null
           paused_until?: string | null
           payment_failed_at?: string | null
           payment_recovered_at?: string | null
           phone?: string | null
           profile_picture_required?: boolean
           setup_completed_at?: string | null
+          setup_dismissed_until?: string | null
           setup_token?: string | null
           setup_token_expires_at?: string | null
           signup_ip?: string | null
