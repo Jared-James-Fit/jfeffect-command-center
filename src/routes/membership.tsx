@@ -274,8 +274,8 @@ function SignupJf() {
       {/* 7. App preview */}
       <Reveal>
         <AppPreviewGrid
-          title="Here's exactly what you get when you log in."
-          sub="Previews are illustrations of the live app interface."
+          title="Inside the app"
+          sub="Dashboard, logging, library, programs, tracking — all in one place."
           items={(() => {
             const cms = Array.isArray(s.app_previews) && s.app_previews.length > 0 ? s.app_previews : null;
             if (!cms) return DEFAULT_APP_PREVIEWS;
