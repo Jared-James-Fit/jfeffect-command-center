@@ -17,6 +17,9 @@ import { supabase } from "../integrations/supabase/client";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
+// Side-effect import: registers the global beforeinstallprompt listener early
+// so the install prompt can be captured before the user reaches /install.
+import "@/hooks/use-pwa-install";
 
 function NotFoundComponent() {
   return (
