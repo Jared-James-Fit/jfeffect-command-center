@@ -983,28 +983,48 @@ function ClientDetail() {
         </TabsContent>
 
         <TabsContent value="info" className="grid gap-6 md:grid-cols-3">
-          <Card className="border-border bg-card p-6 md:col-span-2 space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">Personal Information</h3>
-              <div className="flex gap-2">
-                {form.info_update_requested ? (
-                  <Button size="sm" variant="outline" className="min-h-[44px]" onClick={clearUpdateRequest}>Clear update request</Button>
-                ) : (
-                  <Button size="sm" variant="outline" className="min-h-[44px]" onClick={requestUpdate}><BellRing className="mr-2 h-4 w-4" />Request Update</Button>
-                )}
-                <Button size="sm" className="min-h-[44px] bg-gradient-primary uppercase font-bold" onClick={saveAccountInfo}><Save className="mr-2 h-4 w-4" />Save</Button>
+          <div className="md:col-span-2 space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-card/60 px-4 py-3">
+              <div>
+                <h2 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">Personal Information</h2>
+                <p className="text-xs text-muted-foreground">Edit each section independently — each card saves on its own.</p>
               </div>
+              {form.info_update_requested ? (
+                <Button size="sm" variant="outline" className="min-h-[44px]" onClick={clearUpdateRequest}>
+                  Clear update request
+                </Button>
+              ) : (
+                <Button size="sm" variant="outline" className="min-h-[44px]" onClick={requestUpdate}>
+                  <BellRing className="mr-2 h-4 w-4" />Request Profile Info Update
+                </Button>
+              )}
             </div>
-            <div className="md:col-span-2">
-              <Label>Email</Label>
-              <Input className="min-h-[44px]" type="email" inputMode="email" autoComplete="email" value={form.email ?? ""} onChange={(e) => set("email", e.target.value)} />
-            </div>
-            <Suspense fallback={<TabFallback />}>
-              <BasicInfoForm
-                values={form}
-                onChange={(p: Record<string, any>) => setForm({ ...form, ...p })}
-              />
-            </Suspense>
+            {(() => {
+              const savePersonal = async (patch: Record<string, any>) => {
+                const updatedFields = Object.keys(patch).filter((k) => k !== "full_name");
+                const fullPatch = {
+                  ...patch,
+                  info_last_updated_at: new Date().toISOString(),
+                  info_last_updated_by: "admin",
+                  info_last_updated_fields: updatedFields,
+                };
+                const { error } = await supabase.from("clients").update(fullPatch).eq("id", id);
+                if (error) throw new Error(error.message);
+                toast.success("Saved");
+                setForm({ ...form, ...fullPatch });
+                qc.invalidateQueries({ queryKey: ["client", id] });
+                qc.invalidateQueries({ queryKey: ["clients"] });
+              };
+              return (
+                <>
+                  <IdentityCard form={form} onSave={savePersonal} />
+                  <ContactCard form={form} onSave={savePersonal} />
+                  <PersonalDetailsCard form={form} onSave={savePersonal} />
+                  <AddressCard form={form} onSave={savePersonal} />
+                  <EmergencyContactCard form={form} onSave={savePersonal} />
+                </>
+              );
+            })()}
             <div className="grid gap-2 rounded-md border border-border bg-secondary/30 p-3 text-xs md:grid-cols-2">
               <div><span className="text-muted-foreground">Last account info update:</span> {fmtDate(form.info_last_updated_at)}</div>
               <div><span className="text-muted-foreground">Updated by:</span> {form.info_last_updated_by ?? "—"}</div>
@@ -1014,7 +1034,7 @@ function ClientDetail() {
               <div><span className="text-muted-foreground">Update requested:</span> {form.info_update_requested ? `Yes (${fmtDate(form.info_update_requested_at)})` : "No"}</div>
               <div><span className="text-muted-foreground">Basic info completed:</span> {fmtDate(form.basic_info_completed_at)}</div>
             </div>
-          </Card>
+          </div>
 
           <Card className="border-border bg-card p-6 space-y-3">
             <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Profile Picture</h3>
