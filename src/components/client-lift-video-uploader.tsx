@@ -487,7 +487,7 @@ export function ClientLiftVideoUploader({ clientId, clientName, userId, onSaved 
 
   return (
     <>
-      <div className="rounded-2xl border border-border bg-card p-4 sm:p-5 space-y-4">
+      <div className="rounded-2xl border border-border bg-card p-4 sm:p-5 space-y-4 min-w-0 max-w-full overflow-hidden">
         {/* Header */}
         <div className="space-y-0.5">
           <div className="text-base font-semibold">Send Lift Video</div>
