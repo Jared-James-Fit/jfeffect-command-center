@@ -69,11 +69,19 @@ export async function sendMembershipOnboardingEmail(
   try {
     const dedupeKey = `membership_onboarding:${member.id}:email`
 
-    // 0. Dedupe — skip if already sent
-    const { data: dupe } = await supabaseAdmin
+    // 0. Atomically claim dedupe slot — on conflict skip the send.
+    const { data: claimed, error: claimErr } = await supabaseAdmin
       .from('notification_dedupe')
-      .select('key').eq('key', dedupeKey).eq('channel', 'email').maybeSingle()
-    if (dupe) return { sent: false, reason: 'already_sent' }
+      .insert({
+        key: dedupeKey,
+        channel: 'email',
+        member_id: member.id,
+        metadata: { template: 'membership-onboarding' },
+      })
+      .select('key')
+    if (claimErr || !claimed || claimed.length === 0) {
+      return { sent: false, reason: 'already_sent' }
+    }
 
     // 1. Load admin-editable content / toggle
     const { data: settings } = await supabaseAdmin
@@ -186,13 +194,12 @@ export async function sendMembershipOnboardingEmail(
       return { sent: false, reason: 'failed', error: enqueueError.message }
     }
 
-    // 8. Claim dedupe slot
-    await supabaseAdmin.from('notification_dedupe').insert({
-      key: dedupeKey,
-      channel: 'email',
-      member_id: member.id,
-      metadata: { template: 'membership-onboarding', message_id: messageId },
-    }).then(() => {}, () => {})
+    // 8. Backfill dedupe metadata with message_id (slot was claimed at step 0).
+    await supabaseAdmin
+      .from('notification_dedupe')
+      .update({ metadata: { template: 'membership-onboarding', message_id: messageId } })
+      .eq('key', dedupeKey)
+      .then(() => {}, () => {})
 
     return { sent: true, queued: true, messageId }
   } catch (e: any) {
