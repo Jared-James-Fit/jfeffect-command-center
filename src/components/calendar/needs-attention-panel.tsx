@@ -75,28 +75,6 @@ export function AdminNeedsAttentionPanel({ items }: { items: CalendarItem[] }) {
     staleTime: 60_000,
   });
 
-  const missingFeedbackQ = useQuery({
-    queryKey: ["admin-missing-feedback"],
-    queryFn: async () => {
-      // pl_day_completions in last 14 days lacking matching pl_workout_feedback
-      const since = new Date(Date.now() - 14 * 86400000).toISOString();
-      const { data: comps } = await (supabase.from("pl_day_completions") as any)
-        .select("id,day_id,client_id,completed_at")
-        .not("completed_at", "is", null)
-        .gte("completed_at", since)
-        .limit(500);
-      const rows = (comps ?? []) as any[];
-      if (rows.length === 0) return 0;
-      const dayIds = Array.from(new Set(rows.map((r) => r.day_id)));
-      const { data: fb } = await (supabase.from("pl_workout_feedback") as any)
-        .select("day_id,client_id")
-        .in("day_id", dayIds);
-      const fbSet = new Set(((fb ?? []) as any[]).map((f) => `${f.day_id}:${f.client_id}`));
-      return rows.filter((r) => !fbSet.has(`${r.day_id}:${r.client_id}`)).length;
-    },
-    staleTime: 60_000,
-  });
-
   const tiles: AdminTile[] = [
     {
       icon: <ClipboardCheck className="h-4 w-4" />,
@@ -104,14 +82,6 @@ export function AdminNeedsAttentionPanel({ items }: { items: CalendarItem[] }) {
       label: "Overdue Check-Ins",
       count: overdueCheckinsQ.data ?? 0,
       href: "/admin/check-ins",
-    },
-    {
-      icon: <MessageSquareWarning className="h-4 w-4" />,
-      tone: "amber",
-      label: "Missing Workout Feedback",
-      hint: "Last 14 days",
-      count: missingFeedbackQ.data ?? 0,
-      href: "/admin/programs",
     },
     {
       icon: <CalendarClock className="h-4 w-4" />,
