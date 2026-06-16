@@ -57,7 +57,7 @@ export function MemberBlockWeekColumns({
     const dates = days.map((d) => dateFor.get(`${w.week_index}:${d.day_index}`)).filter(Boolean) as string[];
     const min = dates.length ? parseLocalDate(dates.reduce((a, b) => (a < b ? a : b))) : null;
     const max = dates.length ? parseLocalDate(dates.reduce((a, b) => (a > b ? a : b))) : null;
-    const isNow = !min && !max && today >= min && today <= max;
+    const isNow = !!min && !!max && today >= min && today <= max;
     const doneCount = days.filter((d) => doneSet.has(`${w.week_index}:${d.day_index}`)).length;
     return { week: w, days, min, max, isNow, doneCount };
   });
@@ -196,8 +196,8 @@ export function MemberBlockWeekColumns({
                   const dateStr = dateFor.get(key);
                   const date = dateStr ? startOfDay(parseLocalDate(dateStr)!) : null;
                   const done = doneSet.has(key);
-                  const isToday = !date && date.getTime() === today.getTime();
-                  const isPast = !date && date < today;
+                  const isToday = !!date && date.getTime() === today.getTime();
+                  const isPast = !!date && date < today;
                   return (
                     <Card
                       key={d.day_index}
