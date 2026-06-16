@@ -109,6 +109,10 @@ Still to do for Phase 5 (next pass):
 
 Existing routes, RLS, payments, Stripe, programs, workout logs, messages, agreements, member tiers, auth, $29 trial logic, jfeffect.com checkout, existing analytics, legal records, SEO metadata.
 
+## Security fixes
+
+- broadcast-media storage bucket: removed the "any authenticated user can read" policy. New policy restricts reads to admins/coaches and to users who can see the parent broadcast (matched by `voice_path` / `video_path`), reusing `user_can_see_broadcast`.
+
 ## Technical notes
 
 - Stack is TanStack Start on Cloudflare Workers. Service worker rules per Lovable PWA skill (no SW in preview/dev, kill-switch design, `NetworkFirst` for HTML).
