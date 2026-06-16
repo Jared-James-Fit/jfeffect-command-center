@@ -169,7 +169,6 @@ export const clientNav: NavItem[] = [
   { to: "/portal/messages", label: "Messages", icon: MessageCircle },
   { to: "/portal/workouts", label: "Workouts", icon: Activity },
   { to: "/portal/lift-videos", label: "Lift Review Upload", icon: Video },
-  { to: "/m/plans", label: "Program Library", icon: BookOpen },
   { to: "/portal/nutrition-targets", label: "Nutrition", icon: Apple },
   { to: "/portal/recipes", label: "Recipes", icon: ChefHat },
   { to: "/portal/check-ins", label: "Check-Ins & Forms", icon: ClipboardCheck },
@@ -207,4 +206,14 @@ export const memberNav: NavItem[] = [
   { to: "/m/support", label: "Support", icon: HelpCircle },
   { to: "/m/billing", label: "Billing", icon: CreditCard },
   { to: "/m/account", label: "My Account", icon: UserCog },
+];
+
+// Mobile bottom-tab nav for the App Member portal. Five short labels max so
+// nothing wraps and Program Library always stays one tap away on phones.
+export const memberBottomNav: NavItem[] = [
+  { to: "/m", label: "Home", icon: LayoutDashboard },
+  { to: "/m/my-plans", label: "My Plans", icon: ClipboardCheck },
+  { to: "/m/plans", label: "Library", icon: BookOpen },
+  { to: "/m/resources", label: "Resources", icon: FolderOpen },
+  { to: "/m/account", label: "Account", icon: UserCog },
 ];
