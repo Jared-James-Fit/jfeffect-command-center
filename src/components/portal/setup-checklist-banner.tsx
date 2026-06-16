@@ -35,7 +35,7 @@ type Item = {
  *  - Hidden only once every item is complete. Cannot be dismissed.
  */
 export function SetupChecklistBanner({ clientId, userId }: Props) {
-  const { data: client } = useQuery({
+  const { data: client, isPending: clientPending, isFetched: clientFetched } = useQuery({
     queryKey: ["setup-banner-client", userId],
     enabled: !!userId,
     staleTime: 60_000,
@@ -49,7 +49,7 @@ export function SetupChecklistBanner({ clientId, userId }: Props) {
     },
   });
 
-  const { data: goals } = useQuery({
+  const { data: goals, isPending: goalsPending, isFetched: goalsFetched } = useQuery({
     queryKey: ["client-goals-setup", clientId],
     enabled: !!clientId,
     staleTime: 60_000,
@@ -110,6 +110,11 @@ export function SetupChecklistBanner({ clientId, userId }: Props) {
   const allDone = done === total;
 
   if (!clientId || !userId) return null;
+  // Avoid a flash for already-complete clients: don't render until both
+  // queries have resolved at least once. Mirrors how MemberSetupGate waits
+  // for its setup-status query before showing anything.
+  if (clientPending || goalsPending) return null;
+  if (!clientFetched || !goalsFetched) return null;
   if (allDone) return null;
 
   // Find the next incomplete item to feature as the primary CTA.
