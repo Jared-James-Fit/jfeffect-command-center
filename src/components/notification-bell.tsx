@@ -16,7 +16,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { listUpcomingForBell, listMyPortalAppointments } from "@/lib/appointments.functions";
 
 type BellItem = {
-  kind: "message" | "lift_video" | "agreement" | "exercise_note" | "group_message" | "check_in_review" | "appointment" | "workout_feedback";
+  kind: "message" | "lift_video" | "agreement" | "exercise_note" | "group_message" | "check_in_review" | "appointment";
   clientId: string;
   groupId?: string;
   videoId?: string;
@@ -24,7 +24,6 @@ type BellItem = {
   noteId?: string;
   reviewId?: string;
   appointmentId?: string;
-  dayId?: string;
   meetLink?: string | null;
   name: string;
   title: string;
@@ -332,40 +331,6 @@ export function NotificationBell() {
             created_at: r.created_at,
           });
         }
-        // Workout reminders are now ONLY for abandoned in-progress sessions
-        // (started but never finished, > 30 min old). Completed workouts are
-        // never re-nudged: the long review flow has been removed.
-        try {
-          const sinceIso = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-          const { data: pending } = await (supabase.from("pl_day_completions") as any)
-            .select("id, day_id, started_at, completed_at, in_progress_at")
-            .eq("client_id", client.id)
-            .is("completed_at", null)
-            .gte("started_at", sinceIso)
-            .order("started_at", { ascending: false })
-            .limit(20);
-          // Deduplicate by day so each unfinished workout produces at most
-          // one reminder, even if multiple draft completion rows exist.
-          const seenDayIds = new Set<string>();
-          for (const c of (pending ?? []) as any[]) {
-            if (seenDayIds.has(c.day_id)) continue;
-            const startedAt = c.started_at ?? c.in_progress_at;
-            if (!startedAt) continue;
-            const ageMin = (Date.now() - new Date(startedAt).getTime()) / 60000;
-            // Skip very fresh in-progress sessions (< 30 min) — likely active.
-            if (ageMin < 30) continue;
-            seenDayIds.add(c.day_id);
-            items.push({
-              kind: "workout_feedback",
-              clientId: client.id,
-              dayId: c.day_id,
-              name: "Workout",
-              title: "Finish your workout",
-              body: "You started a workout but didn't finish. Tap to wrap it up.",
-              created_at: startedAt,
-            });
-          }
-        } catch { /* ignore */ }
         items.sort((a, b) => +new Date(b.created_at) - +new Date(a.created_at));
         // Group chat unreads for this client
         const groupItems = await fetchUnreadGroupItems(user!.id);
