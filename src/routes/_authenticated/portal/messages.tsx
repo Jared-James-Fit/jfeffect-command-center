@@ -126,7 +126,6 @@ function ClientMessages() {
             <MessageSquare className="h-4 w-4" />
           </Button>
         )}
-        <NotificationBell />
       </header>
 
       {/* Coach Chat | Group Chats toggle — only when the client has groups */}
