@@ -89,12 +89,12 @@ export function WorkoutFeedbackSheet({ open, onOpenChange, completionId, clientI
       setRpe(existing.session_rpe ?? null);
       setPain(existing.pain ?? null);
       setPainLevel(existing.pain_level ?? null);
-      setPainArea(existing.pain_area ?? "");
+      setPainArea(existing.pain_area ? existing.pain_area.split(", ") : []);
       setPainNote(existing.pain_note ?? "");
       setNote(existing.client_note ?? "");
     } else {
       setRating(null); setRpe(null); setPain(null);
-      setPainLevel(null); setPainArea(""); setPainNote(""); setNote("");
+      setPainLevel(null); setPainArea([]); setPainNote(""); setNote("");
     }
     setSubmitting(false);
   }, [open, completionId, existing?.id]);
