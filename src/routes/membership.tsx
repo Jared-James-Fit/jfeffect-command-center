@@ -298,8 +298,8 @@ function SignupJf() {
       <Reveal><OfferComparison accent="membership" /></Reveal>
       <Section className="!pt-0">
         <p className="mx-auto max-w-3xl text-center text-sm text-muted-foreground md:text-base">
-          Most people are in the right place right here. But if you want a plan built specifically for you, with weekly check-ins and a coach in your corner, that's{" "}
-          <Link to="/coaching" className="font-semibold text-primary underline underline-offset-2 hover:text-primary/80">Private Coaching</Link> — application only.
+          Most people are set right here. Want a plan built just for you, with weekly check-ins? That's{" "}
+          <Link to="/coaching" className="font-semibold text-primary underline underline-offset-2 hover:text-primary/80">Coaching</Link> — by application.
         </p>
       </Section>
 
@@ -309,10 +309,10 @@ function SignupJf() {
       {/* 11. Final CTA */}
       <Reveal>
         <FinalCta
-          headline="Stop starting over."
+          headline="Start training with a system."
           primary={
             <Button size="lg" onClick={scrollToForm} className="h-12 px-6 text-base font-bold">
-              {`Start ${trialDays}-Day Free Trial`}
+              Start Free Trial
             </Button>
           }
           secondary={
