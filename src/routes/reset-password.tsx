@@ -1,12 +1,18 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
+import { Check, X } from "lucide-react";
+import { validatePassword, passwordIsValid } from "@/lib/account-recovery.constants";
+import {
+  consumeRecoveryToken,
+  validateRecoveryToken,
+} from "@/lib/account-recovery.functions";
 
 export const Route = createFileRoute("/reset-password")({
   head: () => ({ meta: [{ title: "Reset password — JF Effect" }] }),
@@ -15,12 +21,18 @@ export const Route = createFileRoute("/reset-password")({
 
 function ResetPage() {
   const navigate = useNavigate();
-  const [phase, setPhase] = useState<"loading" | "confirm" | "ready" | "expired" | "done">("loading");
+  const [phase, setPhase] = useState<
+    "loading" | "confirm" | "ready" | "expired" | "done"
+  >("loading");
   const [verifying, setVerifying] = useState(false);
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [busy, setBusy] = useState(false);
   const [recoveryEmail, setRecoveryEmail] = useState<string>("");
+  // SMS-token flow state
+  const [smsToken, setSmsToken] = useState<string | null>(null);
+  const validate = useServerFn(validateRecoveryToken);
+  const consume = useServerFn(consumeRecoveryToken);
 
   useEffect(() => {
     // SECURITY: Never trust a pre-existing session on this page. If an admin
@@ -31,11 +43,12 @@ function ResetPage() {
     (async () => {
       const params = new URLSearchParams(window.location.search);
       const hasQueryToken = !!params.get("token_hash");
+      const rt = params.get("rt");
       const hash = window.location.hash || "";
       const hashParams = new URLSearchParams(hash.startsWith("#") ? hash.slice(1) : hash);
       const isRecoveryHash = hashParams.get("type") === "recovery" && !!hashParams.get("access_token");
 
-      if (!hasQueryToken && !isRecoveryHash) {
+      if (!hasQueryToken && !isRecoveryHash && !rt) {
         // No valid recovery token in the URL — do not allow password change.
         await supabase.auth.signOut({ scope: "local" }).catch(() => {});
         if (!cancelled) setPhase("expired");
@@ -45,6 +58,24 @@ function ResetPage() {
       // Clear any existing session so verifyOtp / hash exchange installs the
       // correct user, never the previously-signed-in one.
       await supabase.auth.signOut({ scope: "local" }).catch(() => {});
+
+      if (rt) {
+        // SMS recovery token path — validate server-side.
+        try {
+          const res = await validate({ data: { token: rt } });
+          if (!cancelled) {
+            if (res.valid) {
+              setSmsToken(rt);
+              setPhase("ready");
+            } else {
+              setPhase("expired");
+            }
+          }
+        } catch {
+          if (!cancelled) setPhase("expired");
+        }
+        return;
+      }
 
       if (hasQueryToken) {
         if (!cancelled) setPhase("confirm");
@@ -86,8 +117,30 @@ function ResetPage() {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!password) return toast.error("Please enter a password");
+    if (!passwordIsValid(password)) {
+      return toast.error("Password does not meet all requirements");
+    }
     if (password !== confirm) return toast.error("Passwords don't match");
+
+    // SMS token branch — call server fn to consume + update password.
+    if (smsToken) {
+      setBusy(true);
+      try {
+        await consume({ data: { token: smsToken, newPassword: password } });
+        setPhase("done");
+        toast.success(
+          "Your password has been updated. You can now log in with your new password.",
+        );
+        setTimeout(() => navigate({ to: "/auth", replace: true }), 800);
+      } catch (err: any) {
+        toast.error(err?.message ?? "Reset failed");
+        setPhase("expired");
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
+
     // SECURITY: Make sure the current session is the recovery session we just
     // installed. Refuse if no user, or if the email unexpectedly changed.
     const { data: u } = await supabase.auth.getUser();
@@ -99,10 +152,22 @@ function ResetPage() {
     const { error } = await supabase.auth.updateUser({ password });
     setBusy(false);
     if (error) return toast.error(error.message);
+    // Revoke other devices for the email flow as well.
+    try {
+      await supabase.auth.signOut({ scope: "others" as any });
+    } catch {
+      /* non-fatal */
+    }
     setPhase("done");
-    toast.success("Password updated.");
-    setTimeout(() => navigate({ to: "/portal", replace: true }), 600);
+    toast.success(
+      "Your password has been updated. You can now log in with your new password.",
+    );
+    setTimeout(() => navigate({ to: "/auth", replace: true }), 800);
   };
+
+  const rules = validatePassword(password);
+  const allOk = rules.length && rules.upper && rules.lower && rules.digit && rules.special;
+  const matches = password.length > 0 && password === confirm;
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-background text-foreground">
@@ -130,37 +195,87 @@ function ResetPage() {
             )}
             {phase === "expired" && (
               <div className="space-y-4 text-center">
-                <h2 className="text-xl font-black">This reset link has expired</h2>
-                <p className="text-sm text-muted-foreground">Please request a new password reset link.</p>
-                <a href="mailto:jaredjamesfit@gmail.com?subject=New%20password%20reset%20request">
-                  <Button className="w-full bg-gradient-primary font-bold uppercase tracking-wider">
-                    Request new reset link
+                <h2 className="text-xl font-black">Link no longer valid</h2>
+                <p className="text-sm text-muted-foreground">
+                  This recovery link is no longer valid. Request a new password reset to continue.
+                </p>
+                <Link to="/recover">
+                  <Button className="w-full bg-gradient-primary py-6 font-bold uppercase tracking-[0.15em] shadow-glow">
+                    Send a New Recovery Link
                   </Button>
-                </a>
+                </Link>
               </div>
             )}
             {phase === "ready" && (
               <>
                 <div className="text-center">
-                  <h2 className="text-xl font-black tracking-tight">Reset your password</h2>
-                  <p className="mt-1 text-xs text-muted-foreground">Set a new password for your coaching dashboard.</p>
+                  <h2 className="text-xl font-black tracking-tight">Create a New Password</h2>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Pick something strong — at least 10 characters with a mix of letters, numbers and symbols.
+                  </p>
                 </div>
                 <form onSubmit={submit} className="mt-6 w-full space-y-4">
                   <div>
                     <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">New password</Label>
-                    <PasswordInput required value={password} onChange={(e) => setPassword(e.target.value)} className="mt-1.5" placeholder="Pick any password" />
+                    <PasswordInput
+                      required
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="mt-1.5 py-6"
+                      autoComplete="new-password"
+                    />
                   </div>
                   <div>
                     <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Confirm new password</Label>
-                    <PasswordInput required value={confirm} onChange={(e) => setConfirm(e.target.value)} className="mt-1.5" />
+                    <PasswordInput
+                      required
+                      value={confirm}
+                      onChange={(e) => setConfirm(e.target.value)}
+                      className="mt-1.5 py-6"
+                      autoComplete="new-password"
+                    />
+                    {confirm.length > 0 && !matches && (
+                      <p className="mt-1 text-[11px] text-destructive">Passwords must match.</p>
+                    )}
                   </div>
-                  <Button type="submit" disabled={busy} className="w-full bg-gradient-primary py-6 text-sm font-bold uppercase tracking-[0.15em] shadow-glow">
-                    {busy ? "Resetting…" : "Reset password"}
+                  <ul className="space-y-1 rounded-md border border-border/60 bg-muted/30 p-3 text-[11px]">
+                    {[
+                      { ok: rules.length, label: "At least 10 characters" },
+                      { ok: rules.upper, label: "One uppercase letter" },
+                      { ok: rules.lower, label: "One lowercase letter" },
+                      { ok: rules.digit, label: "One number" },
+                      { ok: rules.special, label: "One special character" },
+                    ].map((r) => (
+                      <li key={r.label} className="flex items-center gap-2">
+                        {r.ok ? (
+                          <Check className="h-3 w-3 text-primary" />
+                        ) : (
+                          <X className="h-3 w-3 text-muted-foreground/60" />
+                        )}
+                        <span className={r.ok ? "text-foreground" : "text-muted-foreground"}>
+                          {r.label}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                  <Button
+                    type="submit"
+                    disabled={busy || !allOk || !matches}
+                    className="w-full bg-gradient-primary py-6 text-sm font-bold uppercase tracking-[0.15em] shadow-glow"
+                  >
+                    {busy ? "Updating…" : "Update Password"}
                   </Button>
                 </form>
               </>
             )}
-            {phase === "done" && <p className="text-center text-sm text-muted-foreground">Taking you to your dashboard…</p>}
+            {phase === "done" && (
+              <div className="space-y-3 text-center">
+                <h2 className="text-xl font-black tracking-tight">All set</h2>
+                <p className="text-sm text-muted-foreground">
+                  Your password has been updated. You can now log in with your new password.
+                </p>
+              </div>
+            )}
           </Card>
         </div>
       </div>
