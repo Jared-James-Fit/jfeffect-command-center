@@ -69,11 +69,11 @@ export function SendPasswordResetDialog({
           ? "Delivery failed"
           : res.outcome === "partial"
           ? "Partially delivered"
-          : res.outcome === "rate_limited"
-          ? "Rate limited"
           : res.outcome === "email_sent"
           ? "Email sent"
-          : "SMS sent";
+          : res.outcome === "sms_sent"
+          ? "SMS sent"
+          : "Sent";
       toast.success(`Password reset: ${label}`);
     } catch (err: any) {
       toast.error(err?.message ?? "Failed to send reset");
