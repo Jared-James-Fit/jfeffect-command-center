@@ -808,6 +808,46 @@ function ClientDetail() {
             <Link to="/admin/clients/$id" params={{ id }} search={{ tab: "account" }}><Button variant="outline" size="sm" className="w-full justify-start">Account & Access</Button></Link>
           </div>
         </Card>
+        <Card className="border-border bg-card p-6 space-y-3">
+          <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Billing & Access</h3>
+          {(() => {
+            const src = (form as any).billing_source as string | null;
+            const locked = !!(form as any).billing_source_locked;
+            const isLegacy = src === "trainerize_legacy";
+            const label =
+              src === "trainerize_legacy" ? "Legacy — JF Effect Trainerize"
+              : src === "jfeffect_stripe" ? "JF Effect Stripe"
+              : src === "manual_external" ? "External / Manual"
+              : src === "complimentary" ? "Complimentary"
+              : "Not connected";
+            const tone =
+              src === "trainerize_legacy" ? "bg-amber-500/10 text-amber-700 border-amber-500/30"
+              : src === "jfeffect_stripe" ? "bg-emerald-500/10 text-emerald-700 border-emerald-500/30"
+              : src === "manual_external" ? "bg-sky-500/10 text-sky-700 border-sky-500/30"
+              : src === "complimentary" ? "bg-purple-500/10 text-purple-700 border-purple-500/30"
+              : "bg-muted text-muted-foreground";
+            return (
+              <>
+                <div className="flex items-center gap-2">
+                  <span className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[11px] font-medium ${tone}`}>{label}</span>
+                  {locked && <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Locked</span>}
+                </div>
+                {isLegacy ? (
+                  <p className="text-[11px] text-muted-foreground">
+                    Billing remains in the legacy Trainerize Stripe account. This app will not create, modify, or duplicate any charge for this client.
+                  </p>
+                ) : src === "none" || !src ? (
+                  <p className="text-[11px] text-muted-foreground">
+                    No billing source classified. Mark this client to keep webhooks and checkout safe.
+                  </p>
+                ) : null}
+                <Link to="/admin/billing-sources">
+                  <Button variant="outline" size="sm" className="w-full justify-start">Open Billing & Legacy Migration</Button>
+                </Link>
+              </>
+            );
+          })()}
+        </Card>
         <div className="md:col-span-3">
           <ClientDriveFolderPanel clientId={id} />
         </div>
